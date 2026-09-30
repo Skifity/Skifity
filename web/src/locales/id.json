@@ -303,7 +303,8 @@
       "app.promoted": "Versi dipromosikan",
       "database.tunnel_opened": "Terowongan database dibuka",
       "app.process_set": "Proses diubah",
-      "app.process_removed": "Proses dihapus"
+      "app.process_removed": "Proses dihapus",
+      "environment.previews_changed": "Pratinjau environment diubah"
     }
   },
   "projects": {
@@ -555,7 +556,9 @@
       "failed": "Pembaruan ke {{image}} berhenti dan tidak ada yang diubah: {{reason}}",
       "started": "Sedang mencadangkan; pembaruan di-deploy setelah pencadangan selesai.",
       "upToDate": "Sudah sesuai dengan templat."
-    }
+    },
+    "previewSeed": "Seed untuk pratinjau",
+    "previewSeedHelp": "Dijalankan sekali di setiap pratinjau baru, setelah deploy pertamanya, untuk mengisi database kosongnya dengan sesuatu untuk dilihat. Tidak di environment ini, dan tidak lagi pada push berikutnya."
   },
   "deploy": {
     "title": "Deployment",
@@ -2550,7 +2553,9 @@
     "podSecurity": {
       "restricted": "Paling ketat",
       "baseline": "Terima image root"
-    }
+    },
+    "previewStack": "Pratinjau menyalin seluruh environment",
+    "previewStackHelp": "Pratinjau pull request mendapat salinan setiap aplikasi di sini, bukan hanya yang dibangun dari repositorinya. Yang lain menjalankan versi yang berjalan di sini, dan aplikasi yang berbagi database berbagi salinan database pratinjau."
   },
   "firewall": {
     "title": "Firewall",

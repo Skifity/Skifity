@@ -311,7 +311,8 @@
       "app.promoted": "Version promoted",
       "database.tunnel_opened": "Database tunnel opened",
       "app.process_set": "Process changed",
-      "app.process_removed": "Process removed"
+      "app.process_removed": "Process removed",
+      "environment.previews_changed": "Previews of the environment changed"
     }
   },
   "projects": {
@@ -565,7 +566,9 @@
       "failed": "The update to {{image}} stopped and nothing was changed: {{reason}}",
       "started": "Backing up; the update deploys when the backups finish.",
       "upToDate": "Up to date with the template."
-    }
+    },
+    "previewSeed": "Seed for previews",
+    "previewSeedHelp": "Runs once in each new preview, after its first deploy, to fill its empty database with something to look at. Not in this environment, and not again on later pushes."
   },
   "deploy": {
     "title": "Deployments",
@@ -2564,7 +2567,9 @@
     "podSecurity": {
       "restricted": "Strictest",
       "baseline": "Accepts root images"
-    }
+    },
+    "previewStack": "Previews copy the whole environment",
+    "previewStackHelp": "A pull request's preview gets a copy of every app here, not only the ones its repository builds. The others run the version they run here, and apps sharing a database share the preview's copy of it."
   },
   "firewall": {
     "title": "Firewall",

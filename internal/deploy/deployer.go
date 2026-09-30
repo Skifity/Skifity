@@ -272,6 +272,7 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 		d.fail(ctx, deployment, errdoc.From(err))
 		return
 	}
+	d.runSeed(ctx, deployment, app, env)
 
 	d.appendLog(ctx, deployment.ID, "Deployed.")
 	_ = d.db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeploySucceeded, "", "", "")

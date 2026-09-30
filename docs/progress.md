@@ -5245,6 +5245,47 @@ Procfile's names; the CLI's `--` and count-only changes.
 
 Not executed: a worker in a real cluster.
 
+## Phase 107 — previews of the whole environment, seeded
+
+The rest of gap 8. A preview was a copy of the apps its repository builds and
+nothing else: a front end's preview called an API that was not there, a Compose
+stack's cache was missing, and a preview's database was empty with nothing to
+show. Vercel, Netlify, Railway, Render and Coolify each have some of this;
+Railway copies the whole environment, Render runs an initial deploy hook, and
+Heroku a review app's `postdeploy`.
+
+An environment's **Previews copy the whole environment** (`preview_stack`,
+migration 0033, an admin's, audited) makes a new preview a copy of every app in
+it. The previewed app and any other app its pull request builds are built from
+the pull request; every other app is deployed at the image its last successful
+deployment ran, with that deployment's fingerprint and commit and nothing
+rebuilt, and is left with deploy on push and previews off so it stays there.
+The copying is one routine for both, `previewCopy`: the app with one instance
+and no autoscaling, its variables as each says, its password, its processes at
+one instance, and databases of its own — which are now shared when two apps
+link the same one, found by name and engine in the preview, where each used to
+get an empty database the other never saw. An app never deployed is left out.
+It happens once, when the preview environment is made; later pushes build only
+their own apps.
+
+An app's **Seed for previews** (`preview_seed`) runs once in each new preview
+after its first successful deploy, as a Job of its own kind in the preview's
+image and variables, after the release command. `seeded_at` is claimed with a
+conditional update before it starts, so two deploys finishing together seed
+once, and a failure is not retried: a half-run seed run again is duplicated
+rows. It does not fail the deploy; the log has its output and the `skifity run`
+command for trying again.
+
+Tested: a preview of an environment with the setting — web built from the pull
+request, the API at its running image, the cache pulling its own, an app never
+deployed left out, the copies frozen at one instance and still internal, the
+seed copied, one database for the two apps sharing one, and a second push
+copying nothing again; without the setting, only its own app; the setting an
+admin's, audited, not on a preview, and the confinement level still changing on
+its own; the seed kept, and claimed once.
+
+Not executed: a seed Job in a real cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

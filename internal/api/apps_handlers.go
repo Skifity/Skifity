@@ -582,6 +582,8 @@ type updateAppRequest struct {
 	StaticDir      *string `json:"static_dir,omitempty"`
 	StartCommand   *string `json:"start_command,omitempty"`
 	ReleaseCommand *string `json:"release_command,omitempty"`
+	// PreviewSeed runs once in each new preview of the app.
+	PreviewSeed    *string `json:"preview_seed,omitempty"`
 	WatchPaths     *string `json:"watch_paths,omitempty"`
 	Internal       *bool   `json:"internal,omitempty"`
 	AutoDeploy     *bool   `json:"auto_deploy,omitempty"`
@@ -617,6 +619,7 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	assignString(&app.StaticDir, req.StaticDir)
 	assignString(&app.StartCommand, req.StartCommand)
 	assignString(&app.ReleaseCommand, req.ReleaseCommand)
+	assignString(&app.PreviewSeed, req.PreviewSeed)
 	if req.WatchPaths != nil {
 		watch, err := watchPaths(*req.WatchPaths)
 		if err != nil {

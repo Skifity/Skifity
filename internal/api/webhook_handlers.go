@@ -239,6 +239,7 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 	}
 
 	ref := previewRef(event)
+	created := false
 	env, err := s.db.FindEnvironmentBySourceRef(r.Context(), project.ID, ref)
 	if err != nil {
 		// First push to this pull request: make the environment.
@@ -259,82 +260,142 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 				return "", err
 			}
 		}
+		created = true
 	}
 
 	// One app per preview environment, copied from the app being previewed.
-	previewApps, err := s.db.ListApps(r.Context(), env.ID)
+	previewApp, err := s.previewCopy(r, env, app, event.SourceBranch, event.Fork)
 	if err != nil {
 		return "", err
 	}
-	var previewApp store.App
-	for _, candidate := range previewApps {
-		if candidate.Slug == app.Slug {
-			previewApp = candidate
-			break
-		}
-	}
-	if previewApp.ID == "" {
-		previewApp = app
-		previewApp.ID = ""
-		previewApp.EnvironmentID = env.ID
-		previewApp.Branch = event.SourceBranch
-		previewApp.PreviewDeploys = false
-		// A preview is throwaway, so it never autoscales and asks for little.
-		previewApp.Autoscale = false
-		previewApp.Replicas = 1
-		if err := s.db.CreateApp(r.Context(), &previewApp); err != nil {
-			return "", err
-		}
-		links, err := s.db.ListLinksForApp(r.Context(), app.ID)
-		if err != nil {
-			return "", err
-		}
-		linked := map[string]bool{}
-		for _, link := range links {
-			linked[link.VarName] = true
-		}
-		if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, event.Fork, linked); err != nil {
-			return "", err
-		}
-		s.previewDatabases(r, env, previewApp, links, event.Fork)
-		if event.Fork {
-			s.log.Info("a preview from a fork was given no secrets",
-				"app", previewApp.ID, "pull_request", event.PullRequest)
-		}
-		// A preview of a site behind a password is behind the same one. Left
-		// out, a staging site somebody locked would have every pull request's
-		// copy of it open to whoever guessed the address. Only the hash is
-		// copied, so a fork's preview learns nothing it could not already.
-		if password, ok, err := s.db.GetAppPassword(r.Context(), app.ID); err != nil {
-			return "", err
-		} else if ok {
-			password.AppID = previewApp.ID
-			if err := s.db.SetAppPassword(r.Context(), password, "webhook"); err != nil {
-				return "", err
-			}
-		}
-		// Its processes too, one instance each: a pull request that changes
-		// a job is tried out by a preview whose worker runs that job. One the
-		// app has stopped stays stopped.
-		processes, err := s.db.ListProcesses(r.Context(), app.ID)
-		if err != nil {
-			return "", err
-		}
-		for _, process := range processes {
-			process.AppID, process.Instances = previewApp.ID, min(process.Instances, 1)
-			if err := s.db.SetProcess(r.Context(), &process); err != nil {
-				return "", err
-			}
-		}
-	}
-
 	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
 		AppID: previewApp.ID, Trigger: "preview", CommitSHA: event.CommitSHA, CreatedBy: "webhook",
 	})
 	if err != nil {
 		return "", err
 	}
+	if created && sourceEnv.PreviewStack {
+		s.previewStack(r, sourceEnv, env, app, event.Fork)
+	}
 	return deployment.ID, nil
+}
+
+// previewCopy is an app's copy in a preview environment: the one already
+// there, or a new one with the app's variables, databases of its own, its
+// password and its processes.
+func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.App, branch string, fork bool) (store.App, error) {
+	previewApps, err := s.db.ListApps(r.Context(), env.ID)
+	if err != nil {
+		return store.App{}, err
+	}
+	for _, candidate := range previewApps {
+		if candidate.Slug == app.Slug {
+			return candidate, nil
+		}
+	}
+
+	previewApp := app
+	previewApp.ID = ""
+	previewApp.EnvironmentID = env.ID
+	previewApp.Branch = branch
+	previewApp.PreviewDeploys = false
+	previewApp.SeededAt = ""
+	// A preview is throwaway, so it never autoscales and asks for little.
+	previewApp.Autoscale = false
+	previewApp.Replicas = 1
+	if err := s.db.CreateApp(r.Context(), &previewApp); err != nil {
+		return store.App{}, err
+	}
+	links, err := s.db.ListLinksForApp(r.Context(), app.ID)
+	if err != nil {
+		return store.App{}, err
+	}
+	linked := map[string]bool{}
+	for _, link := range links {
+		linked[link.VarName] = true
+	}
+	if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, fork, linked); err != nil {
+		return store.App{}, err
+	}
+	s.previewDatabases(r, env, previewApp, links, fork)
+	if fork {
+		s.log.Info("a preview from a fork was given no secrets", "app", previewApp.ID)
+	}
+	// A preview of a site behind a password is behind the same one. Left
+	// out, a staging site somebody locked would have every pull request's
+	// copy of it open to whoever guessed the address. Only the hash is
+	// copied, so a fork's preview learns nothing it could not already.
+	if password, ok, err := s.db.GetAppPassword(r.Context(), app.ID); err != nil {
+		return store.App{}, err
+	} else if ok {
+		password.AppID = previewApp.ID
+		if err := s.db.SetAppPassword(r.Context(), password, "webhook"); err != nil {
+			return store.App{}, err
+		}
+	}
+	// Its processes too, one instance each: a pull request that changes a job
+	// is tried out by a preview whose worker runs that job. One the app has
+	// stopped stays stopped.
+	processes, err := s.db.ListProcesses(r.Context(), app.ID)
+	if err != nil {
+		return store.App{}, err
+	}
+	for _, process := range processes {
+		process.AppID, process.Instances = previewApp.ID, min(process.Instances, 1)
+		if err := s.db.SetProcess(r.Context(), &process); err != nil {
+			return store.App{}, err
+		}
+	}
+	return previewApp, nil
+}
+
+// previewStack copies the rest of an environment into a new preview of it,
+// for an environment that asks for that: the API the front end calls, the
+// service a Compose file named, the app another repository builds. Each runs
+// the version it runs in the environment it came from — only the pull
+// request's own repository is built from the pull request — and stays there:
+// it neither deploys on push nor previews itself.
+//
+// Best effort, app by app. A copy that cannot be made or deployed is in the
+// panel's log, and the rest of the preview is still worth having.
+func (s *Server) previewStack(r *http.Request, sourceEnv, env store.Environment, previewed store.App, fork bool) {
+	apps, err := s.db.ListApps(r.Context(), sourceEnv.ID)
+	if err != nil {
+		s.log.Warn("could not list the environment a preview copies", "environment", sourceEnv.ID, "error", err)
+		return
+	}
+	for _, app := range apps {
+		// The previewed app is there already, and an app its pull request
+		// builds is copied by that app's own delivery of the same event.
+		if app.ID == previewed.ID || (app.RepoURL != "" && app.RepoURL == previewed.RepoURL && app.AutoDeploy && app.PreviewDeploys) {
+			continue
+		}
+		request := DeployRequest{Trigger: "preview", CreatedBy: "webhook"}
+		if app.SourceType != "image" {
+			last, err := s.db.LatestSuccessfulDeployment(r.Context(), app.ID)
+			if err != nil {
+				s.log.Info("an app a preview would copy has never been deployed", "app", app.ID)
+				continue
+			}
+			request.Image, request.Fingerprint = last.Image, last.BuildFingerprint
+			request.CommitSHA, request.CommitMessage, request.CommitAuthor = last.CommitSHA, last.CommitMessage, last.CommitAuthor
+			// Its own settings, copied: nothing here was built differently.
+			request.Force = true
+		}
+		copied, err := s.previewCopy(r, env, app, app.Branch, fork)
+		if err != nil {
+			s.log.Warn("could not copy an app into a preview", "app", app.ID, "error", err)
+			continue
+		}
+		copied.AutoDeploy = false
+		if err := s.db.UpdateApp(r.Context(), &copied); err != nil {
+			s.log.Warn("could not settle an app copied into a preview", "app", copied.ID, "error", err)
+		}
+		request.AppID = copied.ID
+		if _, err := s.deployer.Deploy(r.Context(), request); err != nil {
+			s.log.Warn("could not deploy an app copied into a preview", "app", copied.ID, "error", err)
+		}
+	}
 }
 
 // copyPreviewVariables duplicates an app's variables into a preview copy.
@@ -426,18 +487,24 @@ func (s *Server) previewDatabases(r *http.Request, env store.Environment, previe
 			s.log.Warn("could not read a linked database for a preview", "database", link.DatabaseID, "error", err)
 			continue
 		}
-		record, err := s.databases.Create(r.Context(), env, CreateDatabaseRequest{
-			Name: source.Name, Engine: source.Engine, Version: source.EngineVersion,
-			// A throwaway copy for a pull request: one instance, the least
-			// storage, whatever production asked for.
-			StorageGB: 1, Instances: 1,
-		})
-		if err != nil {
-			s.log.Warn("could not create a database for a preview",
-				"app", previewApp.ID, "engine", source.Engine, "error", err)
-			continue
+		// Two apps sharing a database share the preview's copy of it: the
+		// API and its worker, the web and the admin. A copy each would be a
+		// worker taking jobs from a queue nobody fills.
+		record, found := s.previewDatabaseFor(r, env, source)
+		if !found {
+			record, err = s.databases.Create(r.Context(), env, CreateDatabaseRequest{
+				Name: source.Name, Engine: source.Engine, Version: source.EngineVersion,
+				// A throwaway copy for a pull request: one instance, the least
+				// storage, whatever production asked for.
+				StorageGB: 1, Instances: 1,
+			})
+			if err != nil {
+				s.log.Warn("could not create a database for a preview",
+					"app", previewApp.ID, "engine", source.Engine, "error", err)
+				continue
+			}
+			s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
 		}
-		s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
 		if err := s.databases.Link(r.Context(), record.ID, previewApp.ID, link.VarName); err != nil {
 			s.log.Warn("could not link a preview's database",
 				"app", previewApp.ID, "database", record.ID, "error", err)
@@ -445,6 +512,21 @@ func (s *Server) previewDatabases(r *http.Request, env store.Environment, previe
 		}
 		s.audit(r, teamID, "database.linked", "database", record.ID, previewApp.Name+" as "+link.VarName)
 	}
+}
+
+// previewDatabaseFor finds the preview's copy of a database another app in
+// it already made, by the name and engine it was made with.
+func (s *Server) previewDatabaseFor(r *http.Request, env store.Environment, source store.Database) (store.Database, bool) {
+	existing, err := s.db.ListDatabases(r.Context(), env.ID)
+	if err != nil {
+		return store.Database{}, false
+	}
+	for _, record := range existing {
+		if record.Name == source.Name && record.Engine == source.Engine {
+			return record, true
+		}
+	}
+	return store.Database{}, false
 }
 
 // cleanupPreviewFor removes the preview environment for a closed pull request or

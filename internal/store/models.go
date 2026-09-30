@@ -124,8 +124,11 @@ type Environment struct {
 	// FromFork is true for a preview of a pull request from a fork. Nothing
 	// secret is given to one: anybody can open such a pull request, and its
 	// code decides what runs.
-	FromFork  bool      `json:"from_fork,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	FromFork bool `json:"from_fork,omitempty"`
+	// PreviewStack makes a pull request's preview of an app here a copy of
+	// every app here, the others at the version they run.
+	PreviewStack bool      `json:"preview_stack"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // ServerStatus is the lifecycle of a machine the panel manages.
@@ -303,7 +306,12 @@ type App struct {
 	WatchPaths string `json:"watch_paths"`
 	// Internal is reachable by name from the environment's other apps and
 	// from nowhere else: no automatic address, no Ingress.
-	Internal  bool      `json:"internal"`
+	Internal bool `json:"internal"`
+	// PreviewSeed is run once in each new preview of this app, after its
+	// first deploy: the data an empty preview database needs.
+	PreviewSeed string `json:"preview_seed"`
+	// SeededAt is when a preview's seed ran; empty until it has.
+	SeededAt  string    `json:"seeded_at,omitempty"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -303,7 +303,8 @@
       "app.promoted": "已提升版本",
       "database.tunnel_opened": "已打开数据库隧道",
       "app.process_set": "进程已修改",
-      "app.process_removed": "进程已删除"
+      "app.process_removed": "进程已删除",
+      "environment.previews_changed": "环境的预览设置已修改"
     }
   },
   "projects": {
@@ -555,7 +556,9 @@
       "failed": "更新到 {{image}} 已停止，未做任何更改：{{reason}}",
       "started": "正在备份；备份完成后将部署更新。",
       "upToDate": "与模板保持一致。"
-    }
+    },
+    "previewSeed": "预览的种子数据",
+    "previewSeedHelp": "在每个新预览第一次部署后运行一次，给它空的数据库填上可以看的内容。不会在这个环境里运行，之后的推送也不会再运行。"
   },
   "deploy": {
     "title": "部署记录",
@@ -2550,7 +2553,9 @@
     "podSecurity": {
       "restricted": "最严格",
       "baseline": "接受 root 镜像"
-    }
+    },
+    "previewStack": "预览复制整个环境",
+    "previewStackHelp": "拉取请求的预览会得到这里每个应用的副本，而不只是它的仓库构建的那些。其他应用运行它们在这里运行的版本，共用一个数据库的应用在预览里也共用它的同一个副本。"
   },
   "firewall": {
     "title": "防火墙",

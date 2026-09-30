@@ -162,6 +162,52 @@ func (d *Deployer) runRelease(ctx context.Context, deployment store.Deployment, 
 	return nil
 }
 
+// runSeed runs a preview's seed command, once, after its first deploy that
+// succeeds: the demo data an empty preview database needs, the way Heroku's
+// postdeploy script fills a review app.
+//
+// After the rollout rather than before it, because a seed is written against
+// the schema the release command has just migrated to, and often through the
+// app's own code. Once, even when it fails: a seed that half ran and is run
+// again is duplicated rows, and the log says how to run it by hand. A failed
+// seed does not fail the deploy, which has already happened.
+func (d *Deployer) runSeed(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment) {
+	command := strings.TrimSpace(app.PreviewSeed)
+	if env.Kind != store.EnvPreview || command == "" || app.SeededAt != "" {
+		return
+	}
+	if first, err := d.db.MarkAppSeeded(ctx, app.ID); err != nil || !first {
+		return
+	}
+	again := "Run it again with `skifity run --app " + app.ID + " -- " + command + "`."
+	name := kube.RunJobName(app.Slug, kube.RunKindSeed, shortID(deployment.ID))
+	if err := d.startSeed(ctx, app, env, deployment.Image, name, command); err != nil {
+		d.appendLog(ctx, deployment.ID, "The seed command could not be started: "+err.Error()+". "+again)
+		return
+	}
+	d.appendLog(ctx, deployment.ID, "Seeding this preview, once: "+command)
+	if err := d.streamRun(ctx, deployment, env.Namespace, name); err != nil {
+		d.appendLog(ctx, deployment.ID, "The seed command did not succeed; its output is above. The preview is up. "+again)
+		return
+	}
+	d.appendLog(ctx, deployment.ID, "The seed command finished.")
+}
+
+// startSeed applies the Job a seed command runs in.
+func (d *Deployer) startSeed(ctx context.Context, app store.App, env store.Environment, image, name, command string) error {
+	spec, err := d.cluster.SpecFor(ctx, app, env, image)
+	if err != nil {
+		return err
+	}
+	job, err := kube.BuildRunJob(kube.RunSpec{
+		App: spec, Name: name, Command: command, Kind: kube.RunKindSeed, TimeoutSeconds: 15 * 60,
+	})
+	if err != nil {
+		return err
+	}
+	return d.cluster.Client().Applier().Apply(ctx, job)
+}
+
 // streamRun follows a release Job's log into the deployment's own log and
 // reports whether it succeeded.
 func (d *Deployer) streamRun(ctx context.Context, deployment store.Deployment, namespace, name string) error {

@@ -565,7 +565,10 @@ func (s *Server) handleGetEnvironment(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateEnvironmentRequest struct {
-	PodSecurity string `json:"pod_security"`
+	PodSecurity string `json:"pod_security,omitempty"`
+	// PreviewStack makes a pull request's preview a copy of the whole
+	// environment rather than of the apps its repository builds.
+	PreviewStack *bool `json:"preview_stack,omitempty"`
 }
 
 // handleUpdateEnvironment changes how strictly an environment confines its pods.
@@ -588,6 +591,22 @@ func (s *Server) handleUpdateEnvironment(w http.ResponseWriter, r *http.Request)
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, r, err)
 		return
+	}
+	if req.PreviewStack != nil {
+		if env.Kind == store.EnvPreview {
+			writeError(w, r, errdoc.BadRequest("A preview has no previews of its own; set this on the environment it copies."))
+			return
+		}
+		if err := s.db.SetEnvironmentPreviewStack(r.Context(), env.ID, *req.PreviewStack); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		env.PreviewStack = *req.PreviewStack
+		s.audit(r, project.TeamID, "environment.previews_changed", "environment", env.ID, env.Name)
+		if req.PodSecurity == "" {
+			writeJSON(w, http.StatusOK, env)
+			return
+		}
 	}
 	if !kube.ValidPodSecurity(req.PodSecurity) {
 		writeError(w, r, errdoc.BadRequest(

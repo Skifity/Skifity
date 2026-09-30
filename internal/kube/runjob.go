@@ -33,6 +33,9 @@ const RunKindRelease = "release"
 // RunKindScheduled is a command that runs on a schedule.
 const RunKindScheduled = "scheduled"
 
+// RunKindSeed is a preview's seed command, run once after its first deploy.
+const RunKindSeed = "seed"
+
 // RunSpec is a one-off command in an app's own environment.
 type RunSpec struct {
 	// App is the app the command borrows its image, variables, namespace and
@@ -192,8 +195,11 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 // RunJobName builds a unique, valid name for a run.
 func RunJobName(appSlug, kind, id string) string {
 	prefix := appSlug + "-run"
-	if kind == RunKindRelease {
+	switch kind {
+	case RunKindRelease:
 		prefix = appSlug + "-release"
+	case RunKindSeed:
+		prefix = appSlug + "-seed"
 	}
 	if len(id) > 10 {
 		id = id[:10]

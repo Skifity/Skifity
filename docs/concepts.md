@@ -520,6 +520,46 @@ you can see it, rather than quietly connecting somewhere it should not.
 A pull request from a fork gets no database and no secret variables, since
 anybody can open one.
 
+Two apps linked to one database — an API and its admin, a web app and a worker
+that is an app of its own — share the preview's copy of it, rather than each
+getting an empty one of its own that the other never sees.
+
+### Seeding a preview
+
+An empty database is a preview with nothing to click on. An app's **Seed for
+previews** (under Settings, once previews are on) is a command run once in each
+new preview, after its first deploy — `npm run seed`, `bin/rails db:seed`,
+`python manage.py loaddata demo` — which is what Heroku's `postdeploy` script
+does for a review app. It runs after the release command, so against the schema
+the pull request migrated to, in the preview's own image and variables.
+
+Once, even when it fails: a seed that half ran and runs again is duplicated
+rows. A failed seed does not fail the deploy, which has already happened; its
+output is in the deployment's log, with the `skifity run` command that runs it
+again. It never runs outside a preview.
+
+### Previewing the whole environment
+
+By default a pull request's preview has the apps its repository builds. A front
+end whose API is another repository gets a preview that calls nothing, and a
+Compose stack's database admin or cache is not there. Turn on **Previews copy
+the whole environment** on the project page, beside the environment's
+confinement level, and a new preview gets a copy of every app in it:
+
+* The apps the pull request's repository builds are built from the pull
+  request, as before.
+* Every other app runs the version it runs in the environment it came from —
+  the same image, nothing rebuilt — and stays at that version: it does not
+  deploy on push, and it has no preview of its own.
+* Each gets what any preview copy gets: the variables (as each says), databases
+  of its own (shared, as above), its password, its processes at one instance,
+  and one instance of itself. An internal app stays internal, reached by the
+  same name as here.
+* An app that has never been deployed is left out, having nothing to run.
+
+It applies to previews made after it is turned on. The preview goes with its
+pull request, all of it.
+
 ### A preview's variables
 
 A preview starts with the app's variables — unless the app says otherwise, one

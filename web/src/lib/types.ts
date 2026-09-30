@@ -63,6 +63,8 @@ export type Environment = {
   source_ref?: string
   /** How strictly this environment's pods are confined. */
   pod_security: PodSecurity
+  /** A pull request's preview copies every app here, not only its own. */
+  preview_stack: boolean
   created_at: string
 }
 
@@ -169,6 +171,10 @@ export type App = {
   preview_deploys: boolean
   /** The paths a push has to change to deploy the app, one per line. */
   watch_paths: string
+  /** Run once in each new preview of the app, after its first deploy. */
+  preview_seed: string
+  /** When a preview's seed ran; absent until it has. */
+  seeded_at?: string
   status: string
   created_at: string
   updated_at: string

@@ -17,6 +17,7 @@ import {
 
 import { EmptyState } from "@/components/empty-state"
 import { EnvironmentConfinement } from "@/components/environment-confinement"
+import { EnvironmentPreviews } from "@/components/environment-previews"
 import { EnvironmentQuota } from "@/components/environment-quota"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
@@ -227,9 +228,8 @@ export function ProjectDetailPage() {
             <Skeleton className="h-40" />
           ) : environmentId ? (
             <>
-              {chosenEnvironment && (
-                <EnvironmentConfinement environment={chosenEnvironment} />
-              )}
+              {chosenEnvironment && <EnvironmentConfinement environment={chosenEnvironment} />}
+              {chosenEnvironment && <EnvironmentPreviews environment={chosenEnvironment} />}
               <EnvironmentServices environmentId={environmentId} />
             </>
           ) : null}

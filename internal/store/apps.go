@@ -12,7 +12,7 @@ const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_so
 	root_dir, builder, dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas,
 	autoscale, min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero,
 	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal,
-	status, created_at, updated_at`
+	preview_seed, seeded_at, status, created_at, updated_at`
 
 // appDestinations is where each of appColumns is scanned to, in order. One
 // list, for every query that selects appColumns: ListDeployedApps had its own
@@ -22,7 +22,7 @@ func appDestinations(a *App, created, updated *string) []any {
 		&a.Branch, &a.RootDir, &a.Builder, &a.DockerfilePath, &a.BuildCommand, &a.StaticDir, &a.Image, &a.Port, &a.HealthPath,
 		&a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas, &a.CPUTarget,
 		&a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM, &a.MemRequestMB, &a.MemLimitMB,
-		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.Internal, &a.Status, created, updated}
+		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.Internal, &a.PreviewSeed, &a.SeededAt, &a.Status, created, updated}
 }
 
 func scanApp(row interface{ Scan(...any) error }) (App, error) {
@@ -50,13 +50,13 @@ func (db *DB) CreateApp(ctx context.Context, a *App) error {
 		(id, environment_id, name, slug, source_type, git_source_id, repo_url, branch, root_dir, builder,
 		 dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas, autoscale,
 		 min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero, cpu_request_m, cpu_limit_m,
-		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal, status, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal, preview_seed, status, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.EnvironmentID, a.Name, a.Slug, defaultStr(a.SourceType, "git"), NullString(a.GitSourceID),
 		a.RepoURL, a.Branch, a.RootDir, defaultStr(a.Builder, "auto"), a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image,
 		a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale, a.MinReplicas, a.MaxReplicas,
 		a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM, a.CPULimitM, a.MemRequestMB,
-		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, defaultStr(a.Status, "created"), now, now)
+		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, a.PreviewSeed, defaultStr(a.Status, "created"), now, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this environment already has an app named %s", ErrConflict, a.Name)
@@ -181,12 +181,12 @@ func (db *DB) UpdateApp(ctx context.Context, a *App) error {
 		name=?, slug=?, source_type=?, git_source_id=?, repo_url=?, branch=?, root_dir=?, builder=?,
 		dockerfile_path=?, build_command=?, static_dir=?, image=?, port=?, health_path=?, start_command=?, release_command=?, replicas=?, autoscale=?,
 		min_replicas=?, max_replicas=?, cpu_target=?, memory_target=?, scale_to_zero=?, cpu_request_m=?,
-		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?, internal=?, status=?, updated_at=?
+		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?, internal=?, preview_seed=?, status=?, updated_at=?
 		WHERE id=?`,
 		a.Name, a.Slug, a.SourceType, NullString(a.GitSourceID), a.RepoURL, a.Branch, a.RootDir, a.Builder,
 		a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image, a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale,
 		a.MinReplicas, a.MaxReplicas, a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM,
-		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, a.Status, now, a.ID)
+		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, a.PreviewSeed, a.Status, now, a.ID)
 	if err != nil {
 		return fmt.Errorf("update app: %w", err)
 	}
@@ -843,4 +843,16 @@ func (db *DB) DeleteAppJob(ctx context.Context, appID, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// MarkAppSeeded records that a preview's seed command has run, so a later
+// deploy of the same preview does not run it again. It reports whether this
+// call was the one that marked it: two deploys finishing together seed once.
+func (db *DB) MarkAppSeeded(ctx context.Context, id string) (bool, error) {
+	result, err := db.Exec(ctx, `UPDATE apps SET seeded_at = ? WHERE id = ? AND seeded_at = ''`, Now(), id)
+	if err != nil {
+		return false, fmt.Errorf("record the seed of %s: %w", id, err)
+	}
+	n, _ := result.RowsAffected()
+	return n == 1, nil
 }

@@ -357,13 +357,13 @@ func (db *DB) DeleteProject(ctx context.Context, id string) error {
 
 // --- environments ---
 
-const envColumns = `id, project_id, name, slug, kind, namespace, source_ref, pod_security, from_fork, created_at`
+const envColumns = `id, project_id, name, slug, kind, namespace, source_ref, pod_security, from_fork, preview_stack, created_at`
 
 func scanEnvironment(row interface{ Scan(...any) error }) (Environment, error) {
 	var e Environment
 	var created string
 	err := row.Scan(&e.ID, &e.ProjectID, &e.Name, &e.Slug, &e.Kind, &e.Namespace, &e.SourceRef,
-		&e.PodSecurity, &e.FromFork, &created)
+		&e.PodSecurity, &e.FromFork, &e.PreviewStack, &created)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return e, ErrNotFound
@@ -458,6 +458,19 @@ func (db *DB) SetEnvironmentPodSecurity(ctx context.Context, id, level string) e
 	res, err := db.Exec(ctx, `UPDATE environments SET pod_security = ? WHERE id = ?`, level, id)
 	if err != nil {
 		return fmt.Errorf("set the pod security level: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetEnvironmentPreviewStack sets whether a pull request's preview of an app
+// in this environment copies every app in it.
+func (db *DB) SetEnvironmentPreviewStack(ctx context.Context, id string, on bool) error {
+	res, err := db.Exec(ctx, `UPDATE environments SET preview_stack = ? WHERE id = ?`, on, id)
+	if err != nil {
+		return fmt.Errorf("set whether previews copy the environment: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound

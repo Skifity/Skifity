@@ -42,6 +42,7 @@ export function SettingsTab({ app }: { app: App }) {
   const [releaseCommand, setReleaseCommand] = useState(app.release_command)
   const [autoDeploy, setAutoDeploy] = useState(app.auto_deploy)
   const [previewDeploys, setPreviewDeploys] = useState(app.preview_deploys)
+  const [previewSeed, setPreviewSeed] = useState(app.preview_seed)
   const [watchPaths, setWatchPaths] = useState(app.watch_paths)
   const [internal, setInternal] = useState(app.internal)
 
@@ -60,6 +61,7 @@ export function SettingsTab({ app }: { app: App }) {
         release_command: releaseCommand.trim(),
         auto_deploy: autoDeploy,
         preview_deploys: previewDeploys,
+        preview_seed: previewSeed.trim(),
         watch_paths: watchPaths,
         internal,
       }),
@@ -256,6 +258,20 @@ export function SettingsTab({ app }: { app: App }) {
                 </FieldContent>
                 <Switch checked={previewDeploys} onCheckedChange={setPreviewDeploys} />
               </Field>
+              {previewDeploys && (
+                <Field>
+                  <FieldLabel htmlFor="settings-preview-seed">{t("apps.previewSeed")}</FieldLabel>
+                  <Input
+                    id="settings-preview-seed"
+                    value={previewSeed}
+                    onChange={(event) => setPreviewSeed(event.target.value)}
+                    placeholder="npm run seed"
+                    className="font-mono"
+                    spellCheck={false}
+                  />
+                  <FieldDescription>{t("apps.previewSeedHelp")}</FieldDescription>
+                </Field>
+              )}
             </>
           )}
 
