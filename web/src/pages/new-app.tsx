@@ -7,6 +7,7 @@ import {
   ContainerIcon,
   FolderIcon,
   GitBranchIcon,
+  ShieldAlertIcon,
   SparklesIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -27,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -771,6 +772,28 @@ function DetectionSummary({ detection }: { detection: Detection }) {
       {detection.truncated && (
         <p className="mt-1.5 text-xs text-muted-foreground">{t("apps.detectedPartly")}</p>
       )}
+      {/*
+        The versions platforms refused to deploy. Said here, before anything
+        exists, and again in the build log of every deploy that installs one.
+      */}
+      {detection.advisories?.map((advisory) => (
+        <Alert
+          key={`${advisory.package}-${advisory.version}-${advisory.id}`}
+          variant="warning"
+          className="mt-3"
+        >
+          <ShieldAlertIcon />
+          <AlertTitle>
+            {t("apps.advisoryTitle", { name: advisory.package, version: advisory.version })}
+          </AlertTitle>
+          <AlertDescription>
+            <p>{t("apps.advisoryBody", { id: advisory.id, fixed: advisory.fixed_in })}</p>
+            <a href={advisory.url} target="_blank" rel="noreferrer" className="underline">
+              {t("apps.advisoryLink")}
+            </a>
+          </AlertDescription>
+        </Alert>
+      ))}
     </div>
   )
 }

@@ -511,7 +511,10 @@
     },
     "watchPaths": "Watch paths",
     "watchPathsHelp": "Deploy on a push only when it changes one of these. One path or pattern per line, from the repository's root; a line starting with ! leaves something out. Empty deploys on every push.",
-    "watchPathsUseRoot": "Watch {{dir}}"
+    "watchPathsUseRoot": "Watch {{dir}}",
+    "advisoryTitle": "{{name}} {{version}} has a critical vulnerability",
+    "advisoryBody": "{{id}} is fixed in {{fixed}} and later on that line. The app deploys either way, and every deploy's build log says this until it is upgraded.",
+    "advisoryLink": "Read the advisory"
   },
   "deploy": {
     "title": "Deployments",

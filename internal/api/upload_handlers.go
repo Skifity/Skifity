@@ -118,8 +118,8 @@ func (s *Server) handleDetectUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // detectReadLimit bounds one file read for detection. The files it reads are
-// manifests, which are small.
-const detectReadLimit = 256 << 10
+// manifests, which are small, and lockfiles, which are a megabyte or so.
+const detectReadLimit = 2 << 20
 
 // refusalProblem says why an archive was turned down, in words that can be
 // translated.

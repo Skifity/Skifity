@@ -41,8 +41,9 @@ type sizedEntry struct {
 }
 
 // readLimit bounds a file read for detection. The files it reads are
-// manifests, which are small; one that is not is not one worth reading.
-const readLimit = 256 << 10
+// manifests, which are small, and lockfiles, which are a megabyte or so; one
+// larger than this is not one worth reading.
+const readLimit = 2 << 20
 
 // fixedTime is every entry's modification time. With a real one, touching a
 // file without changing it would change the archive, the archive's hash, and

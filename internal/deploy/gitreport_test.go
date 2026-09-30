@@ -24,6 +24,8 @@ type recordingHost struct {
 	mu       sync.Mutex
 	statuses []gitsrc.StatusRequest
 	comments []gitsrc.CommentRequest
+	reads    []gitsrc.TreeRequest
+	tree     gitsrc.FileTree
 	refuse   error
 }
 
@@ -39,6 +41,13 @@ func (h *recordingHost) UpsertComment(_ context.Context, req gitsrc.CommentReque
 	defer h.mu.Unlock()
 	h.comments = append(h.comments, req)
 	return h.refuse
+}
+
+func (h *recordingHost) ReadTree(_ context.Context, req gitsrc.TreeRequest) (gitsrc.FileTree, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.reads = append(h.reads, req)
+	return h.tree, h.refuse
 }
 
 // connectRepository gives the app a Git connection with a sealed token, the way

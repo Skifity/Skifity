@@ -71,6 +71,9 @@ type Detection struct {
 	// the settings its .env.example lists, and data kept in a file that the
 	// next deploy erases. See needs.go.
 	Needs []Need `json:"needs,omitempty"`
+	// Advisories are critical vulnerabilities in the framework versions the
+	// source installs. See advisories.go.
+	Advisories []Advisory `json:"advisories,omitempty"`
 }
 
 // Tree is the subset of a repository the detector needs: the list of paths, and
@@ -136,6 +139,7 @@ func (t Tree) Read(name string) string { return t.Contents[name] }
 func Detect(tree Tree) Detection {
 	d := detectBuild(tree)
 	d.Needs = DetectNeeds(tree)
+	d.Advisories = FindAdvisories(tree)
 	return d
 }
 

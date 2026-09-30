@@ -503,7 +503,10 @@
     },
     "watchPaths": "监视路径",
     "watchPathsHelp": "仅当推送更改了其中之一时才部署。每行一个路径或模式，从仓库根目录开始；以 ! 开头的行用于排除内容。留空则每次推送都部署。",
-    "watchPathsUseRoot": "监视 {{dir}}"
+    "watchPathsUseRoot": "监视 {{dir}}",
+    "advisoryTitle": "{{name}} {{version}} 存在严重漏洞",
+    "advisoryBody": "{{id}} 已在同一版本线的 {{fixed}} 及更高版本中修复。应用照常部署，在升级之前，每次部署的构建日志都会提示这一点。",
+    "advisoryLink": "阅读安全公告"
   },
   "deploy": {
     "title": "部署记录",

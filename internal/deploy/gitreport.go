@@ -35,6 +35,7 @@ const gitReportTimeout = 15 * time.Second
 type gitHost interface {
 	ReportStatus(context.Context, gitsrc.StatusRequest) error
 	UpsertComment(context.Context, gitsrc.CommentRequest) error
+	ReadTree(context.Context, gitsrc.TreeRequest) (gitsrc.FileTree, error)
 }
 
 type realGitHost struct{}
@@ -45,6 +46,10 @@ func (realGitHost) ReportStatus(ctx context.Context, req gitsrc.StatusRequest) e
 
 func (realGitHost) UpsertComment(ctx context.Context, req gitsrc.CommentRequest) error {
 	return gitsrc.UpsertComment(ctx, req)
+}
+
+func (realGitHost) ReadTree(ctx context.Context, req gitsrc.TreeRequest) (gitsrc.FileTree, error) {
+	return gitsrc.ReadTree(ctx, req)
 }
 
 func (d *Deployer) git() gitHost {

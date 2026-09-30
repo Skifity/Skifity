@@ -291,6 +291,33 @@ the app's **Settings**.
 
 Nothing from the repository's own `.git` directory ever reaches a served image.
 
+### Versions with a known critical vulnerability
+
+When a version of a framework can be taken over from the internet — the
+React Server Components hole of December 2025, CVE-2025-55182, was a remote
+code execution in every affected Next.js app — hosted platforms stopped
+deploying it within a day, and people running their own servers found out from
+the news. Skifity checks for the same short list:
+
+| Package | Advisory | Fixed in |
+|---|---|---|
+| `next` | [CVE-2025-29927](https://github.com/vercel/next.js/security/advisories/GHSA-f82v-jwr5-mffw), middleware authorization bypass | 12.3.5, 13.5.9, 14.2.25, 15.2.3 |
+| `next` | [CVE-2025-55182](https://github.com/vercel/next.js/security/advisories/GHSA-9qr9-h5gf-34mp), remote code execution | 15.0.5, 15.1.9, 15.2.6, 15.3.6, 15.4.8, 15.5.7, 16.0.7 |
+| `react-server-dom-webpack`, `-parcel`, `-turbopack` | [CVE-2025-55182](https://github.com/facebook/react/security/advisories/GHSA-fv66-9v8q-g76r) | 19.0.1, 19.1.2, 19.2.1 |
+
+The version is read from the lockfile — `package-lock.json`, `pnpm-lock.yaml`,
+`yarn.lock` or `bun.lock` — because that is what gets installed; from
+`package.json` only when it names one exact version. Canary and other
+pre-release versions are not checked.
+
+It is said in three places: the new-app form, `skifity up`, and the build log of
+every deploy of a commit that installs one, as a line starting with `Warning:`.
+It never stops a deploy: the version may be the step on the way to the fix,
+and a panel that refuses to deploy during an incident is worse than one that
+says so. The list is kept short on purpose, for holes that turn an app into
+somebody else's server; everything else is what `npm audit` and Dependabot are
+for.
+
 ## Deploying a folder instead
 
 Not every app has a repository. One an assistant wrote is usually a folder on

@@ -503,7 +503,10 @@
     },
     "watchPaths": "Path yang dipantau",
     "watchPathsHelp": "Deploy saat push hanya jika push itu mengubah salah satunya. Satu path atau pola per baris, dari root repositori; baris yang diawali ! mengecualikan sesuatu. Kosong berarti deploy pada setiap push.",
-    "watchPathsUseRoot": "Pantau {{dir}}"
+    "watchPathsUseRoot": "Pantau {{dir}}",
+    "advisoryTitle": "{{name}} {{version}} memiliki kerentanan kritis",
+    "advisoryBody": "{{id}} sudah diperbaiki di {{fixed}} dan versi setelahnya pada jalur yang sama. Aplikasi tetap di-deploy, dan log build setiap deploy akan menyebutkan ini sampai versinya dinaikkan.",
+    "advisoryLink": "Baca advisori"
   },
   "deploy": {
     "title": "Deployment",

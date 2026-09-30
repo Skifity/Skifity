@@ -54,6 +54,9 @@ var readableFiles = []string{
 	// template, never the real file. See the test that holds that line.
 	"prisma/schema.prisma", "schema.prisma",
 	".env.example", ".env.sample", ".env.template",
+	// What is installed, which is what a known vulnerability is about: a
+	// range in package.json does not say. See builder.FindAdvisories.
+	"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock",
 }
 
 // ReadableFiles is the same list, for a detector reading a folder on disk
@@ -75,6 +78,9 @@ type TreeRequest struct {
 	// Token authenticates, and is only sent to the host BaseURL names. A public
 	// repository needs none.
 	Token string
+	// Read, when set, is the files to fetch in place of the ones detection
+	// reads: a check that needs two files does not make fifteen requests.
+	Read []string
 }
 
 // FileTree is a repository's paths and the contents of the few files that
@@ -131,7 +137,11 @@ func ReadTree(ctx context.Context, req TreeRequest) (FileTree, error) {
 
 	tree.Files = narrow(tree.Files, req.RootDir)
 	tree.Contents = map[string]string{}
-	for _, name := range readableFiles {
+	wanted := readableFiles
+	if len(req.Read) > 0 {
+		wanted = req.Read
+	}
+	for _, name := range wanted {
 		if !contains(tree.Files, name) {
 			continue
 		}
@@ -316,10 +326,11 @@ func readFile(ctx context.Context, kind string, req TreeRequest, owner, repo, to
 
 // --- plumbing ---
 
-// maxFileBytes bounds one file. A package.json is a few kilobytes; anything
-// past this is not one, and reading it would be the same allocation problem as
-// an unbounded tree.
-const maxFileBytes = 512 * 1024
+// maxFileBytes bounds one file. A package.json is a few kilobytes and a
+// lockfile a megabyte or so; anything past this is neither, and reading it
+// would be the same allocation problem as an unbounded tree. A lockfile cut
+// short is still read: see builder.lockedVersions.
+const maxFileBytes = 2 << 20
 
 func getJSON(ctx context.Context, endpoint, token, scheme string, into any) error {
 	body, err := get(ctx, endpoint, token, scheme)

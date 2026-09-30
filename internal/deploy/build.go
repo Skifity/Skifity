@@ -134,6 +134,7 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		defer d.removeBuildVars(ctx, spec)
 	}
 
+	d.warnAboutAdvisories(ctx, deployment, app)
 	d.appendLog(ctx, deployment.ID, fmt.Sprintf("Building %s with the %s builder.", app.Name, chosen))
 	if err := d.cluster.Client().Applier().Apply(ctx, job); err != nil {
 		return "", fmt.Errorf("start the build: %w", err)

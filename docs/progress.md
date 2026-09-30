@@ -4854,6 +4854,43 @@ and refusing paths through the API.
 Not executed: a real webhook from each host. The payload shapes are the
 documented ones.
 
+## Phase 97 — saying when a framework version is known to be dangerous
+
+The other half of gap 18. When CVE-2025-55182 — remote code execution in React
+Server Components, and so in every affected Next.js app — was published in
+December 2025, Vercel and Netlify stopped deploying the affected versions
+within a day. A panel on somebody's own server said nothing, then or at any
+deploy since.
+
+`internal/builder/advisories.go` holds a short list, checked against the
+advisories themselves: Next.js CVE-2025-29927 and CVE-2025-55182, and React's
+`react-server-dom-*` packages for the second. The version comes from the
+lockfile — npm's, pnpm's (versions 5, 6 and 9), Yarn 1's and Berry's, Bun's
+text one — read with patterns rather than parsed, because a lockfile read
+through a Git host's API can be cut short and what arrived is still true; from
+`package.json` only when it pins one exact version, since a range says nothing
+about what was locked. Pre-releases are not checked. Lockfiles joined the
+files detection reads, and the read limits went from 256 or 512 kB to 2 MB so
+an ordinary lockfile fits.
+
+It is said in the new-app form, by `skifity up`, and in the build log of every
+deploy: before the build starts the panel reads `package.json` and the
+lockfiles at the commit being built, with the app's own Git connection and a
+ten-second limit (`TreeRequest.Read` fetches only those files), and writes a
+`Warning:` line per advisory. Never a refusal, and a repository that cannot be
+read adds nothing.
+
+Tested: every edge of every affected range, and a canary skipped; each
+lockfile format read, including neighbours like `next-auth` and `@next/env`
+not mistaken for `next`; a range alone not taken for a version, and a
+lockfile's fixed version overruling a pinned one; the deploy reading the right
+commit with the right token and logging both advisories; an unreadable
+repository, a fixed version and an upload adding nothing; and `skifity up`
+saying it.
+
+Not executed: a build log in a real cluster, and each Git host's API serving a
+lockfile. The reads are the ones the new-app form already makes.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

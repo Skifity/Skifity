@@ -5,12 +5,16 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"skifity/internal/builder"
 )
 
 // write puts files into a folder, creating the directories they need.
@@ -196,4 +200,27 @@ func TestAFolderNameBecomesAnAppName(t *testing.T) {
 func timeNowPlus(t *testing.T) (when time.Time) {
 	t.Helper()
 	return time.Now().Add(time.Hour)
+}
+
+// A folder's lockfile is read like a repository's, and a version with a known
+// critical advisory is said on every `up`.
+func TestUpSaysWhenAFolderInstallsAVulnerableFramework(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"package.json":      `{"dependencies": {"next": "^16.0.0"}}`,
+		"package-lock.json": `{"packages": {"node_modules/next": {"version": "16.0.6"}}}`,
+	})
+	folder, err := pack(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(folder.Archive) })
+
+	var said strings.Builder
+	describeDetection(builder.Detect(folder.Tree), func(format string, args ...any) {
+		fmt.Fprintf(&said, format, args...)
+	})
+	if !strings.Contains(said.String(), "next 16.0.6 has a critical vulnerability, CVE-2025-55182. Upgrade to 16.0.7") {
+		t.Fatalf("up said:\n%s", said.String())
+	}
 }

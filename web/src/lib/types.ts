@@ -594,6 +594,19 @@ export type Detection = {
    * from, so the form can say why.
    */
   needs?: AppNeed[]
+  /** Critical vulnerabilities in the framework versions the source installs. */
+  advisories?: Advisory[]
+}
+
+/** A known critical vulnerability in a version the source installs. */
+export type Advisory = {
+  package: string
+  version: string
+  /** The CVE. */
+  id: string
+  /** The first version on the same line that is not affected. */
+  fixed_in: string
+  url: string
 }
 
 /** One thing an app needs, and the evidence for it. */

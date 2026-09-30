@@ -387,6 +387,12 @@ func describeDetection(d builder.Detection, say func(string, ...any)) {
 				orDefault(need.Source, "a file"), need.Evidence)
 		}
 	}
+	// Said on every `up`, which is every deploy of a folder: the version that
+	// was fine last month is the one an advisory names this month.
+	for _, a := range d.Advisories {
+		say("  ! %s %s has a critical vulnerability, %s. Upgrade to %s or later on that line: %s\n",
+			a.Package, a.Version, a.ID, a.FixedIn, a.URL)
+	}
 }
 
 // initialDatabase is one database to create with a new app, in the shape the
