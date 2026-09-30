@@ -309,7 +309,9 @@
       "app.password_removed": "Пароль приложения убран",
       "auth.sso_linked": "Привязан единый вход",
       "auth.sso_unlinked": "Единый вход отвязан",
-      "panel.backed_up": "Сделана копия панели"
+      "panel.backed_up": "Сделана копия панели",
+      "variables.changed": "Переменные изменены",
+      "shared_variables.changed": "Общие переменные изменены"
     }
   },
   "projects": {

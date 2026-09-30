@@ -293,7 +293,9 @@
       "app.password_removed": "ऐप पासवर्ड हटाया गया",
       "auth.sso_linked": "सिंगल साइन-ऑन लिंक किया गया",
       "auth.sso_unlinked": "सिंगल साइन-ऑन अनलिंक किया गया",
-      "panel.backed_up": "पैनल का बैकअप लिया गया"
+      "panel.backed_up": "पैनल का बैकअप लिया गया",
+      "variables.changed": "वेरिएबल बदले गए",
+      "shared_variables.changed": "साझा वेरिएबल बदले गए"
     }
   },
   "projects": {

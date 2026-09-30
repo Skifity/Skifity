@@ -293,7 +293,9 @@
       "app.password_removed": "App password removed",
       "auth.sso_linked": "Linked single sign-on",
       "auth.sso_unlinked": "Unlinked single sign-on",
-      "panel.backed_up": "Panel backed up"
+      "panel.backed_up": "Panel backed up",
+      "variables.changed": "Variables changed",
+      "shared_variables.changed": "Shared variables changed"
     }
   },
   "projects": {

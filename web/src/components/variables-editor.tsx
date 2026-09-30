@@ -114,9 +114,16 @@ export function VariablesEditor({
       // they were stored as ordinary values that came back from the API and
       // sat on this page. Left out, the panel keeps a secret a secret and
       // decides a new one by the rule its log redaction uses.
-      for (const [key, value] of Object.entries(parseDotEnv(text))) {
-        await api.put(`${base}/variables`, { key, value, build_time: false })
-      }
+      //
+      // One request for the lot: all of them or none, and one rollout. One
+      // request per line rolled the app out once per line, each time with
+      // half a configuration.
+      const set = Object.entries(parseDotEnv(text)).map(([key, value]) => ({
+        key,
+        value,
+        build_time: false,
+      }))
+      if (set.length > 0) await api.post(`${base}/variables/batch`, { set })
     },
     onSuccess: () => {
       invalidate()

@@ -4579,6 +4579,42 @@ component, which the rule against hardcoded strings should have caught and
 could not, since they were data. They are translation keys now, with help text
 for the fields that need it, in all five languages.
 
+## Phase 89 — a .env in one rollout, and two queries that never ran
+
+Gap 17, from Dokku's `config:set` taking several pairs at once. The panel had a
+"paste a .env" box and the CLI took several `KEY=value` pairs, and both sent
+one request per variable. Each request rolled the app out, so thirty lines were
+thirty restarts, the first twenty-nine with half a configuration — and a line
+that failed halfway left an app with a configuration nobody wrote. For a
+project's shared variables it was worse: every line rolled out every app.
+
+`POST /api/apps/{app}/variables/batch` and the same under a project take
+`set` and `unset` lists, check the whole batch before writing any of it — a
+key that is not one, a key given twice, a key both set and removed, a
+build-time shared variable — store it in one transaction, roll out once, and
+write one audit event naming the keys. Secretness is decided the same way as
+for one variable. The panel's paste box and the CLI's `env set A=1 B=2` and
+`env unset` use it, and `skifity env import .env` is new. The smoke test
+imports a file.
+
+Writing the test for shared variables found that they had never rolled out
+anything. `ListAppsForProject` qualified `appColumns` with `prefixColumns`,
+which split the list at every comma, and `appColumns` holds a `COALESCE` with a
+comma in it: the SQL did not parse, and the handler logged nothing and moved on.
+The other query built the same way was `ListDeployedApps`, which is what the
+watcher reads every minute to notice an app that has stopped answering or a
+certificate that will not issue. It had failed on every call since it was
+written, so `app.unhealthy` and `certificate.failed` — two of the seven events a
+notification channel can ask for — were never sent. It also scanned into a
+hand-copied list of fields that had missed two columns added later.
+
+`prefixColumns` now splits only at commas outside parentheses and qualifies
+the column inside an expression; both queries scan through one shared list of
+destinations; and a test runs every column list in the store, plain and
+qualified, against the real schema. The watcher's own tests used a fake store,
+which is how a query that never worked went unnoticed; the new store test is
+the one that runs the SQL.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -285,7 +285,9 @@
       "app.password_removed": "已移除应用密码",
       "auth.sso_linked": "已关联单点登录",
       "auth.sso_unlinked": "已取消关联单点登录",
-      "panel.backed_up": "已备份面板"
+      "panel.backed_up": "已备份面板",
+      "variables.changed": "已更改变量",
+      "shared_variables.changed": "已更改共享变量"
     }
   },
   "projects": {

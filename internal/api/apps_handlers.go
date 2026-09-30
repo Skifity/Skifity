@@ -813,6 +813,188 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"variable": variable, "requires_rebuild": rebuilt})
 }
 
+type changeVariablesRequest struct {
+	Set   []setVariableRequest `json:"set"`
+	Unset []string             `json:"unset"`
+}
+
+// maxVariableChanges bounds one request. A .env is dozens of lines; thousands
+// is not a configuration.
+const maxVariableChanges = 500
+
+// handleChangeVariables sets and removes several variables at once: all of
+// them or none, and one rollout for the lot. Setting them one by one rolled
+// the app out once per line, so pasting a .env of thirty lines restarted the
+// app thirty times, and the first twenty-nine of those ran with half a
+// configuration.
+func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var req changeVariablesRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	existing, err := s.db.ListVariables(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	wasSecret := map[string]bool{}
+	for _, row := range existing {
+		wasSecret[row.Key] = row.IsSecret
+	}
+	batch, err := s.prepareVariableChanges(req, wasSecret, true,
+		func(key string) string { return variableContext(app.ID, key) })
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	if err := s.db.ChangeVariables(r.Context(), app.ID, batch.set, req.Unset); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if s.deployer != nil && batch.rollout {
+		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
+			s.log.Warn("could not apply variable changes", "app", app.ID, "error", err)
+		}
+	}
+
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	// Keys only, as for one variable: a value is never audited.
+	s.audit(r, teamID, "variables.changed", "app", app.ID, batch.label())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"set": batch.answer(), "unset": req.Unset, "requires_rebuild": batch.rebuild,
+	})
+}
+
+// handleChangeSharedVariables is handleChangeVariables for a project's shared
+// variables, which reach every app in it: one line at a time was one rollout
+// of every app per line.
+func (s *Server) handleChangeSharedVariables(w http.ResponseWriter, r *http.Request) {
+	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var req changeVariablesRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	existing, err := s.db.ListSharedVariables(r.Context(), project.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	wasSecret := map[string]bool{}
+	for _, row := range existing {
+		wasSecret[row.Key] = row.IsSecret
+	}
+	batch, err := s.prepareVariableChanges(req, wasSecret, false,
+		func(key string) string { return sharedVariableContext(project.ID, key) })
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	if err := s.db.ChangeSharedVariables(r.Context(), project.ID, batch.set, req.Unset); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if s.deployer != nil {
+		apps, err := s.db.ListAppsForProject(r.Context(), project.ID)
+		if err == nil {
+			for _, app := range apps {
+				if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
+					s.log.Warn("could not apply shared variables", "app", app.ID, "error", err)
+				}
+			}
+		}
+	}
+	s.audit(r, project.TeamID, "shared_variables.changed", "project", project.ID, batch.label())
+	writeJSON(w, http.StatusOK, map[string]any{"set": batch.answer(), "unset": req.Unset})
+}
+
+// variableBatch is a checked set of changes, ready to store.
+type variableBatch struct {
+	set     []store.VariableChange
+	keys    []string
+	rebuild bool
+	rollout bool
+}
+
+// label is what the audit log says: the keys, a removed one with a minus.
+func (b variableBatch) label() string { return truncate(strings.Join(b.keys, ", "), 255) }
+
+// answer is the variables as the response gives them back: never a value.
+func (b variableBatch) answer() []store.Variable {
+	out := make([]store.Variable, 0, len(b.set))
+	for _, change := range b.set {
+		change.Variable.Value = ""
+		out = append(out, change.Variable)
+	}
+	return out
+}
+
+// prepareVariableChanges checks a batch and seals its values, before anything
+// is written: a key that is not one, a key given twice, or a key both set and
+// removed refuses the whole batch.
+func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret map[string]bool,
+	buildTimeAllowed bool, sealContext func(key string) string) (variableBatch, error) {
+	var batch variableBatch
+	if len(req.Set)+len(req.Unset) == 0 {
+		return batch, errdoc.BadRequest("Give at least one variable to set or remove.")
+	}
+	if len(req.Set)+len(req.Unset) > maxVariableChanges {
+		return batch, errdoc.BadRequest(fmt.Sprintf("At most %d variables can be changed at once.", maxVariableChanges))
+	}
+	seen := map[string]bool{}
+	batch.rollout = len(req.Unset) > 0
+	for _, item := range req.Set {
+		key, err := kube.SanitiseEnvKey(item.Key)
+		if err != nil {
+			return batch, errdoc.BadRequest(err.Error())
+		}
+		if seen[key] {
+			return batch, errdoc.BadRequest(fmt.Sprintf("%s is given twice. Say which value it should have once.", key))
+		}
+		seen[key] = true
+		if item.BuildTime && !buildTimeAllowed {
+			return batch, errdoc.BadRequest("A shared variable is read when an app runs, never while it builds.")
+		}
+		sealed, err := s.keyring.Seal([]byte(item.Value), sealContext(key))
+		if err != nil {
+			return batch, err
+		}
+		batch.set = append(batch.set, store.VariableChange{
+			Variable: store.Variable{
+				Key: key, BuildTime: item.BuildTime,
+				IsSecret: secretness(item.IsSecret, wasSecret[key], key, item.Value),
+			},
+			Sealed: sealed,
+		})
+		if item.BuildTime {
+			batch.rebuild = true
+		} else {
+			batch.rollout = true
+		}
+		batch.keys = append(batch.keys, key)
+	}
+	for _, key := range req.Unset {
+		if seen[key] {
+			return batch, errdoc.BadRequest(fmt.Sprintf("%s is both set and removed. Say which.", key))
+		}
+		seen[key] = true
+		batch.keys = append(batch.keys, "-"+key)
+	}
+	return batch, nil
+}
+
 func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
 	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {

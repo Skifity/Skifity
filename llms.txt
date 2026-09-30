@@ -39,7 +39,8 @@ skifity init                      Write a skifity.toml in this directory
 skifity deploy                    Deploy this directory's app
 skifity status                    Is it running, and on what
 skifity logs --follow             Live logs
-skifity env set KEY=value         Set a variable
+skifity env set KEY=value         Set a variable (several at once roll out once)
+skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
 skifity scale --instances 3       Change how many copies run
 skifity rollback                  Go back to the previous version
@@ -137,6 +138,7 @@ GET    /api/apps/{app}/jobs                   scheduled commands
 POST   /api/apps/{app}/jobs                   add one (name, schedule, command)
 GET    /api/apps/{app}/variables              variables
 PUT    /api/apps/{app}/variables              set one
+POST   /api/apps/{app}/variables/batch        set and remove several, all or none, one rollout
 GET    /api/apps/{app}/domains                domains
 POST   /api/apps/{app}/domains                add one
 GET    /api/apps/{app}/scaling                scaling

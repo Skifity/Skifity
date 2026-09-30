@@ -238,6 +238,43 @@ func (db *DB) SetVariable(ctx context.Context, v *Variable, sealed string) error
 	return nil
 }
 
+// VariableChange is one variable to set, with its value already sealed.
+type VariableChange struct {
+	Variable Variable
+	Sealed   string
+}
+
+// ChangeVariables sets and removes several of an app's variables in one
+// transaction: all of them or none. A .env of thirty lines that stops at the
+// twelfth leaves an app with a configuration nobody wrote.
+func (db *DB) ChangeVariables(ctx context.Context, appID string, set []VariableChange, unset []string) error {
+	now := Now()
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		for i := range set {
+			v := &set[i].Variable
+			if v.ID == "" {
+				v.ID = NewID("var")
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?,?)
+				ON CONFLICT (app_id, key) DO UPDATE SET value_enc = excluded.value_enc,
+					is_secret = excluded.is_secret, build_time = excluded.build_time, updated_at = excluded.updated_at`,
+				v.ID, appID, v.Key, set[i].Sealed, v.IsSecret, v.BuildTime, now, now); err != nil {
+				return fmt.Errorf("set variable %s: %w", v.Key, err)
+			}
+			v.AppID = appID
+			v.UpdatedAt, _ = ParseTime(now)
+		}
+		for _, key := range unset {
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM app_variables WHERE app_id = ? AND key = ?`, appID, key); err != nil {
+				return fmt.Errorf("remove variable %s: %w", key, err)
+			}
+		}
+		return nil
+	})
+}
+
 // variableRow carries the sealed value alongside the model, because callers
 // decide whether to decrypt.
 type variableRow struct {
@@ -294,6 +331,35 @@ func (db *DB) SetSharedVariable(ctx context.Context, v *SharedVariable, sealed s
 		return fmt.Errorf("set shared variable: %w", err)
 	}
 	return nil
+}
+
+// ChangeSharedVariables is ChangeVariables for a project's shared variables:
+// all of them or none. Only the key, the secretness and the sealed value of
+// each change are used; a shared variable is never a build-time one.
+func (db *DB) ChangeSharedVariables(ctx context.Context, projectID string, set []VariableChange, unset []string) error {
+	now := Now()
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		for i := range set {
+			v := &set[i].Variable
+			if v.ID == "" {
+				v.ID = NewID("svar")
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO shared_variables (id, project_id, key, value_enc, is_secret, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?)
+				ON CONFLICT (project_id, key) DO UPDATE SET value_enc = excluded.value_enc,
+					is_secret = excluded.is_secret, updated_at = excluded.updated_at`,
+				v.ID, projectID, v.Key, set[i].Sealed, v.IsSecret, now, now); err != nil {
+				return fmt.Errorf("set shared variable %s: %w", v.Key, err)
+			}
+		}
+		for _, key := range unset {
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM shared_variables WHERE project_id = ? AND key = ?`, projectID, key); err != nil {
+				return fmt.Errorf("remove shared variable %s: %w", key, err)
+			}
+		}
+		return nil
+	})
 }
 
 type sharedVariableRow struct {

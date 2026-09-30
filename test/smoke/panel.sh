@@ -345,6 +345,15 @@ pass "a build-time variable says it will rebuild"
 "$BINARY" env --app "$APP_ID" list | grep -q 'LOG_LEVEL' || fail "the variable is not listed"
 pass "variables are listed"
 
+# A .env file goes in as one change, all of it or none of it.
+printf '# comment\nREGION=eu\nexport FEATURE_FLAGS="a,b"\n' >"$WORKDIR/import.env"
+"$BINARY" env import --app "$APP_ID" "$WORKDIR/import.env" | grep -q 'rolled out, once' \
+  || fail "importing a .env file did not say it rolled out once"
+LISTED=$("$BINARY" env --app "$APP_ID" list)
+echo "$LISTED" | grep -q 'REGION' || fail "an imported .env file's REGION is not listed"
+echo "$LISTED" | grep -q 'FEATURE_FLAGS' || fail "an imported .env file's FEATURE_FLAGS is not listed"
+pass "a .env file is imported in one change"
+
 # A secret must never be readable again.
 "$BINARY" env set --app "$APP_ID" --secret DB_PASSWORD=verysecret >/dev/null
 "$BINARY" env --app "$APP_ID" list | grep -q 'verysecret' && fail "a secret's value was shown"

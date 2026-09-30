@@ -285,7 +285,9 @@
       "app.password_removed": "Password app dihapus",
       "auth.sso_linked": "Single sign-on ditautkan",
       "auth.sso_unlinked": "Tautan single sign-on dilepas",
-      "panel.backed_up": "Panel dicadangkan"
+      "panel.backed_up": "Panel dicadangkan",
+      "variables.changed": "Variabel diubah",
+      "shared_variables.changed": "Variabel bersama diubah"
     }
   },
   "projects": {

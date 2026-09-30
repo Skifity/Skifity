@@ -263,6 +263,7 @@ func (s *Server) routes() chi.Router {
 				project.Post("/environments", s.handleCreateEnvironment)
 				project.Get("/variables", s.handleListSharedVariables)
 				project.Put("/variables", s.handleSetSharedVariable)
+				project.Post("/variables/batch", s.handleChangeSharedVariables)
 				project.Delete("/variables/{key}", s.handleDeleteSharedVariable)
 				project.Get("/canvas", s.handleProjectCanvas)
 			})
@@ -308,6 +309,8 @@ func (s *Server) routes() chi.Router {
 				app.Post("/restart", s.handleRestartApp)
 				app.Get("/variables", s.handleListVariables)
 				app.Put("/variables", s.handleSetVariable)
+				// Several at once, one rollout: a pasted .env, `env import`.
+				app.Post("/variables/batch", s.handleChangeVariables)
 				app.Delete("/variables/{key}", s.handleDeleteVariable)
 				app.Get("/domains", s.handleListDomains)
 				app.Post("/domains", s.handleAddDomain)

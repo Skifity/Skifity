@@ -112,7 +112,7 @@ Working with apps:
   deploy                Deploy the current directory's app
   status                Show an app's live state
   logs                  Show or follow an app's logs
-  env                   List, set or remove environment variables
+  env                   List, set, import or remove environment variables
   scale                 Change the number of instances or turn on autoscaling
   rollback              Go back to a previous deployment
   run                   Run a one-off command in the app's image
@@ -693,34 +693,74 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		}
 		return table.Flush()
 
-	case "set":
-		if len(values) == 0 {
-			return errdoc.BadRequest("Give at least one KEY=value pair.")
+	case "set", "import":
+		// Every pair in one request: all of them or none, and one rollout.
+		// One request each rolled the app out once per pair.
+		pairs := map[string]string{}
+		order := []string{}
+		if sub == "import" {
+			if len(values) != 1 {
+				return errdoc.BadRequest(fmt.Sprintf("Give the file to import, for example `%s env import .env`.", version.Binary))
+			}
+			text, err := os.ReadFile(values[0])
+			if err != nil {
+				return errdoc.BadRequest(fmt.Sprintf("Could not read %s: %v", values[0], err))
+			}
+			pairs = parseDotEnv(string(text))
+			for key := range pairs {
+				order = append(order, key)
+			}
+			sort.Strings(order)
+			if len(order) == 0 {
+				return errdoc.BadRequest(fmt.Sprintf("%s has no KEY=value lines.", values[0]))
+			}
+		} else {
+			if len(values) == 0 {
+				return errdoc.BadRequest("Give at least one KEY=value pair.")
+			}
+			for _, pair := range values {
+				key, value, found := strings.Cut(pair, "=")
+				if !found {
+					return errdoc.BadRequest(fmt.Sprintf("%q is not in the form KEY=value.", pair))
+				}
+				if _, again := pairs[key]; !again {
+					order = append(order, key)
+				}
+				pairs[key] = value
+			}
 		}
-		for _, pair := range values {
-			key, value, found := strings.Cut(pair, "=")
-			if !found {
-				return errdoc.BadRequest(fmt.Sprintf("%q is not in the form KEY=value.", pair))
-			}
-			body := map[string]any{"key": key, "value": value, "build_time": *buildTime}
-			// Only when --secret was actually given. Sending the flag's default
-			// said "not a secret" on every set, so overwriting an API key
-			// without remembering the flag turned it into a variable anybody
-			// could read back. Left out, the panel keeps a secret a secret and
-			// decides a new one by its name and value.
+		set := make([]map[string]any, 0, len(order))
+		for _, key := range order {
+			item := map[string]any{"key": key, "value": pairs[key], "build_time": *buildTime}
+			// Only when --secret was actually given. Sending the flag's
+			// default said "not a secret" on every set, so overwriting an API
+			// key without remembering the flag turned it into a variable
+			// anybody could read back. Left out, the panel keeps a secret a
+			// secret and decides a new one by its name and value.
 			if secretGiven {
-				body["is_secret"] = *secret
+				item["is_secret"] = *secret
 			}
-			var result struct {
-				RequiresRebuild bool `json:"requires_rebuild"`
-			}
-			if err := client.Do(ctx, "PUT", "/api/apps/"+app+"/variables", body, &result); err != nil {
-				return err
-			}
-			if result.RequiresRebuild {
-				fmt.Fprintf(out, "%s set. It is used during the build, so the next deploy will rebuild.\n", key)
-			} else {
-				fmt.Fprintf(out, "%s set and rolled out. No rebuild was needed.\n", key)
+			set = append(set, item)
+		}
+		var result struct {
+			Set             []store.Variable `json:"set"`
+			RequiresRebuild bool             `json:"requires_rebuild"`
+		}
+		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"set": set}, &result); err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeJSON(out, result)
+		}
+		names := strings.Join(order, ", ")
+		if result.RequiresRebuild {
+			fmt.Fprintf(out, "%s set. Used during the build, so the next deploy will rebuild.\n", names)
+		} else {
+			fmt.Fprintf(out, "%s set and rolled out, once. No rebuild was needed.\n", names)
+		}
+		for _, variable := range result.Set {
+			if variable.IsSecret {
+				fmt.Fprintf(out, "%s is stored as a secret: it will not be shown again.\n", variable.Key)
 			}
 		}
 		return nil
@@ -729,12 +769,13 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		if len(values) == 0 {
 			return errdoc.BadRequest("Give at least one variable name.")
 		}
-		for _, key := range values {
-			if err := client.Do(ctx, "DELETE", "/api/apps/"+app+"/variables/"+key, nil, nil); err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "%s removed.\n", key)
+		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"unset": values}, nil); err != nil {
+			return err
 		}
+		if *asJSON {
+			return writeJSON(out, map[string]any{"unset": values})
+		}
+		fmt.Fprintf(out, "%s removed.\n", strings.Join(values, ", "))
 		return nil
 
 	default:
@@ -757,6 +798,8 @@ func envSubcommand(positional []string) (sub string, values []string) {
 		return "set", positional[1:]
 	case "unset", "rm", "remove", "delete":
 		return "unset", positional[1:]
+	case "import":
+		return "import", positional[1:]
 	}
 	if strings.Contains(positional[0], "=") {
 		return "set", positional
