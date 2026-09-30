@@ -58,10 +58,12 @@ func TestAServersUsageIsBucketedWithItsDisk(t *testing.T) {
 		t.Fatalf("the latest disk is %+v", answer.Disk)
 	}
 
-	// Wider buckets keep the highest.
+	// Wider buckets keep the highest. A fixed hour, not the clock's: two
+	// minutes from now are in different hours whenever this runs at :59.
+	hour := time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC)
 	points := bucketServerSamples([]store.ServerSample{
-		{At: now, DiskUsedMB: 60, DiskCapacityMB: 100, MemoryMB: 10, MemoryCapacityMB: 100},
-		{At: now.Add(time.Minute), DiskUsedMB: 80, DiskCapacityMB: 100, MemoryMB: 90, MemoryCapacityMB: 100},
+		{At: hour.Add(20 * time.Minute), DiskUsedMB: 60, DiskCapacityMB: 100, MemoryMB: 10, MemoryCapacityMB: 100},
+		{At: hour.Add(21 * time.Minute), DiskUsedMB: 80, DiskCapacityMB: 100, MemoryMB: 90, MemoryCapacityMB: 100},
 	}, time.Hour)
 	if len(points) != 1 || *points[0].DiskPct != 80 || points[0].MemoryPct != 90 {
 		t.Fatalf("an hour's bucket is %+v", points)
