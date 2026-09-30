@@ -152,6 +152,9 @@ func (s *Server) routes() chi.Router {
 		// The panel hands out the binary it is itself running, which is also
 		// the CLI. See cli_handlers.go for why it is open.
 		api.Get("/cli/download", s.handleDownloadCLI)
+		// What every route here is, for a client generator. It describes the
+		// source, not anybody's data; see openapi.go.
+		api.Get("/openapi.json", s.handleOpenAPI)
 		api.Get("/setup/status", s.handleSetupStatus)
 		api.Post("/setup", s.handleSetupComplete)
 

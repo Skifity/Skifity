@@ -280,13 +280,14 @@ func TestEveryCommandTakesJSON(t *testing.T) {
 		source.Write(body)
 	}
 
-	// cmdAdmin only prints help and dispatches; its subcommands are checked.
-	exempt := map[string]bool{"cmdAdmin": true}
+	// cmdAdmin and cmdAPI only print help and dispatch; their subcommands are
+	// checked.
+	exempt := map[string]bool{"cmdAdmin": true, "cmdAPI": true}
 
 	checked := 0
 	for _, function := range strings.Split(source.String(), "\nfunc ") {
 		name, _, found := strings.Cut(function, "(")
-		if !found || (!strings.HasPrefix(name, "cmd") && !strings.HasPrefix(name, "admin")) {
+		if !found || (!strings.HasPrefix(name, "cmd") && !strings.HasPrefix(name, "admin") && !strings.HasPrefix(name, "api")) {
 			continue
 		}
 		if exempt[name] {

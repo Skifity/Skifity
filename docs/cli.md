@@ -197,6 +197,7 @@ skifity servers                   # the machines
 skifity db                        # the managed databases
 skifity db connect orders         # reach one from this computer; see below
 skifity export --out ./leaving    # the whole team, as JSON and Kubernetes YAML
+skifity api spec                  # the HTTP API, described in OpenAPI; see below
 ```
 
 Any command takes `--app <id>` to act on something other than the current
@@ -454,8 +455,9 @@ things that are not obvious, such as which variables cause a rebuild.
 
 `https://<panel>/api`, with `Authorization: Bearer <token>`.
 
-The endpoint list is in [llms.txt](../llms.txt). Lists come back as
-`{"items": [...], "total": n}`, and every error has the same shape:
+The main endpoints are listed in [llms.txt](../llms.txt), and every one of them
+is described in [the OpenAPI description](#the-openapi-description). Lists come
+back as `{"items": [...], "total": n}`, and every error has the same shape:
 
 ```json
 {
@@ -480,3 +482,25 @@ curl -N -H "Authorization: Bearer $SKIFITY_TOKEN" \
 Topics are `team:<id>`, `operation:<id>` and `deployment:<id>`. The browser
 reconnects and resumes from the last event it saw, so a dropped connection does
 not lose the middle of a build log.
+
+### The OpenAPI description
+
+Every route is described in OpenAPI 3.1 at `/api/openapi.json`: its parameters,
+the body it takes, what it answers, and which answers are streams. It needs no
+token, because it says what the routes are and holds none of anybody's data.
+Hand it to a client generator, import it into Postman or Bruno, or read it:
+
+```sh
+curl -fsS https://panel.example.com/api/openapi.json -o skifity-openapi.json
+skifity api spec > skifity-openapi.json   # the panel you are signed in to
+```
+
+It describes the panel that serves it, and `info.version` says which version
+that is, so generate a client from the panel it will talk to. The few actions
+that want a person rather than a token — creating a token, turning two-factor
+off, reading the recovery key, installing a plugin — list only the session
+cookie under `security`.
+
+It is kept by hand, in `internal/api/openapi.yaml` beside the router, and a test
+walks the router and fails when a route is added, moved or removed without it,
+so the description cannot fall behind the panel it ships in.

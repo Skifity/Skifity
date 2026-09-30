@@ -101,7 +101,9 @@ claude mcp add skifity -- skifity mcp
 ```
 
 [`llms.txt`](llms.txt) describes the whole product on one page, and the panel
-serves it at `/llms.txt`. See [the CLI guide](docs/cli.md).
+serves it at `/llms.txt`. Every route of the HTTP API is described in OpenAPI
+3.1 at `/api/openapi.json`, for a client generator, and a test fails the build
+when a route is added without it. See [the CLI guide](docs/cli.md).
 
 ## Five languages, properly
 

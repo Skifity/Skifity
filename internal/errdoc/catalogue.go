@@ -783,6 +783,19 @@ func CLIPlatformUnavailable(platform, available string) *Problem {
 		WithStatus(http.StatusNotFound)
 }
 
+// APIDescriptionUnreadable is the OpenAPI description built into the binary
+// failing to convert. Only a broken build can cause it: the file is not read
+// from disk, and a test parses it before anything ships.
+func APIDescriptionUnreadable(err error) *Problem {
+	return New("api.description_unreadable", "The API description could not be read").
+		WithCause("The OpenAPI description built into this panel is not valid YAML: %s", err).
+		WithImpact("Only the description is missing. Every route it describes works as before.").
+		WithFix("This build of Skifity is faulty. Report it with the version /api/meta names; the routes are also listed in llms.txt.").
+		WithDocs("/docs/cli#the-openapi-description").
+		WithStatus(http.StatusInternalServerError).
+		Wrap(err)
+}
+
 // --- domains and TLS ---
 
 // DNSNotPointing reports a custom domain whose DNS does not resolve to us.

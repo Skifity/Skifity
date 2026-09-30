@@ -2224,6 +2224,12 @@
         "impact": "Tidak ada yang diunduh. Men-deploy folder dari halaman Aplikasi baru di panel tetap bisa tanpanya.",
         "fix": "Buat dengan `make release` lalu salin ke direktori CLI panel, atau pakai image panel, yang membawa semua platform."
       },
+      "api_description_unreadable": {
+        "title": "Deskripsi API tidak dapat dibaca",
+        "cause": "Deskripsi OpenAPI yang tertanam di panel ini bukan YAML yang valid: {{0}}",
+        "impact": "Hanya deskripsinya yang hilang. Setiap rute yang dijelaskannya tetap berfungsi seperti biasa.",
+        "fix": "Build Skifity ini rusak. Laporkan dengan versi yang disebut /api/meta; rute-rutenya juga tercantum di llms.txt."
+      },
       "sso_last_way_in": {
         "title": "Single sign-on adalah satu-satunya jalan masuk akun ini",
         "cause": "Akun ini tidak punya kata sandi, jadi melepas tautan penyedia akan membuatnya tidak bisa dimasuki sama sekali.",

@@ -2224,6 +2224,12 @@
         "impact": "没有下载任何内容。在面板自己的“新建应用”页面部署文件夹不需要它。",
         "fix": "用 `make release` 构建并复制到面板的 CLI 目录，或使用包含所有平台的面板镜像。"
       },
+      "api_description_unreadable": {
+        "title": "无法读取 API 描述",
+        "cause": "此面板内置的 OpenAPI 描述不是有效的 YAML：{{0}}",
+        "impact": "只是缺少描述。它所描述的每个路由都照常工作。",
+        "fix": "这个 Skifity 构建有问题。请附上 /api/meta 显示的版本报告此问题；这些路由也列在 llms.txt 中。"
+      },
       "sso_last_way_in": {
         "title": "单点登录是此账号唯一的登录方式",
         "cause": "此账号没有密码，取消关联提供商后将无法登录。",

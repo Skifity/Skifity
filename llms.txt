@@ -48,6 +48,7 @@ skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
 skifity run -- npm run migrate    Run a command once, in the app's image
 skifity processes set worker -- <command>  A worker beside the app, same build
+skifity files set /etc/app.conf ./app.conf  A file the app reads, mounted at that path
 skifity plan                      What skifity.yaml would change in the environment
 skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
@@ -55,6 +56,7 @@ skifity apps                      List apps
 skifity servers                   List servers
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
+skifity api spec                  The HTTP API, described in OpenAPI 3.1
 ```
 
 Every command takes `--json`, including `open`, `logout` and the `admin`
@@ -118,8 +120,11 @@ status code.
 
 `https://<panel>/api`. Authenticate with `Authorization: Bearer <token>`.
 Session cookies also work and then need the CSRF header; a token does not.
+The table below is the part most worth knowing. `/api/openapi.json` describes
+every route, with its parameters, its body and its answers.
 
 ```
+GET    /api/openapi.json                      every route, described in OpenAPI 3.1 (no token needed)
 GET    /api/meta                              product, version, languages
 GET    /api/me                                the signed-in user and their teams
 GET    /api/teams/{team}/projects             projects
@@ -152,6 +157,8 @@ GET    /api/apps/{app}/variables              variables
 PUT    /api/apps/{app}/variables              set one
 POST   /api/apps/{app}/variables/batch        set and remove several, all or none, one rollout
 PUT    /api/apps/{app}/variables/{key}/preview what previews get: same, value, or none
+GET    /api/apps/{app}/files                  files it reads, mounted at their paths
+PUT    /api/apps/{app}/files                  save one (path, content, is_secret, executable)
 GET    /api/apps/{app}/domains                domains
 POST   /api/apps/{app}/domains                add one
 GET    /api/apps/{app}/scaling                scaling
@@ -166,6 +173,8 @@ GET    /api/environments/{env}/databases      databases
 GET    /api/databases/{db}/backups            backups
 POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
 GET    /api/events?topics=team:{team}         everything happening, as events
+GET    /api/teams/{team}/registries           private registries the team pulls from
+PUT    /api/teams/{team}/registries           save one; the registry is asked first
 GET    /api/plugins                           installed plugins
 POST   /api/plugins/inspect                   read a manifest, and say what it would be allowed to do
 POST   /api/plugins                           install one, with the permissions that were shown

@@ -32,6 +32,11 @@ var openOnPurpose = map[string]string{
 	// circle.
 	"GET /api/cli/download": "a public binary, needed before there is anybody to authenticate",
 
+	// The OpenAPI description says what the routes are and what shape their
+	// answers take, which the source already says to anybody. It holds no
+	// team's data, and a client is often generated before anybody has a token.
+	"GET /api/openapi.json": "a description of the API, from the source, with nobody's data in it",
+
 	// A webhook is authenticated by the signature in its body against the
 	// secret of the source it names, not by a session: the sender is GitHub,
 	// which has no account here.

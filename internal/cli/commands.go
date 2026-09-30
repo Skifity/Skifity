@@ -81,6 +81,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdOpen(ctx, rest, stdout)
 	case "admin":
 		err = cmdAdmin(ctx, rest, stdout)
+	case "api":
+		err = cmdAPI(ctx, rest, stdout)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return 0
@@ -244,6 +246,9 @@ Cluster:
 
 Leaving:
   export                Write this team out as JSON and Kubernetes objects
+
+Building on it:
+  api spec              Print the OpenAPI description of the panel's HTTP API
 
 On the panel's own server:
   admin                 Recover access when nobody can sign in

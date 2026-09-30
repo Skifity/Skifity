@@ -2238,6 +2238,12 @@
         "impact": "Nothing was downloaded. Deploying a folder from the panel's own New app page works without it.",
         "fix": "Build it with `make release` and copy it into the panel's CLI directory, or use the panel's image, which carries every platform."
       },
+      "api_description_unreadable": {
+        "title": "The API description could not be read",
+        "cause": "The OpenAPI description built into this panel is not valid YAML: {{0}}",
+        "impact": "Only the description is missing. Every route it describes works as before.",
+        "fix": "This build of Skifity is faulty. Report it with the version /api/meta names; the routes are also listed in llms.txt."
+      },
       "sso_last_way_in": {
         "title": "Single sign-on is this account's only way in",
         "cause": "This account has no password, so unlinking the provider would leave it with no way to sign in.",
