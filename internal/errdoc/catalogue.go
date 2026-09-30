@@ -791,6 +791,111 @@ func CrashLoop(app string, restarts int, logTail string) *Problem {
 		With("app", app).With("restarts", itoa(restarts)).With("log_tail", tail(logTail, 4000))
 }
 
+// --- scanning images for vulnerabilities ---
+
+// VulnerableImage is a deploy stopped because its image has a critical
+// vulnerability with a fixed version, and the panel is set to stop those.
+func VulnerableImage(app string, count int, packages string) *Problem {
+	return New("deploy.vulnerable", "This image has critical vulnerabilities that have a fix").
+		WithCause("%d critical vulnerabilities in the image of %s have a fixed version: %s.", count, app, packages).
+		WithImpact("Nothing was deployed. The version running now keeps running.").
+		WithFix("Move to the fixed versions — usually a newer base image or dependency — and deploy again. "+
+			"To deploy this image anyway, deploy it with the vulnerabilities accepted: Deploy anyway on the stopped "+
+			"deployment, or `%s deploy --accept-vulnerabilities`. That is recorded in the activity log.", version.Binary).
+		WithDocs("/docs/concepts#stopping-deploys-that-have-a-fix-waiting").
+		WithStatus(http.StatusConflict).
+		With("app", app).With("fixable_critical", itoa(count))
+}
+
+// ScanDatabaseUnavailable is a scanner that could not download the database
+// of known vulnerabilities it compares an image against.
+func ScanDatabaseUnavailable(detail string) *Problem {
+	return New("scan.database_unavailable", "The vulnerability database could not be downloaded").
+		WithCause("The scanner could not fetch its database: %s", detail).
+		WithImpact("This image was not scanned. Deploys are never held up by a scan that could not run.").
+		WithFix("The cluster needs to reach mirror.gcr.io or ghcr.io over HTTPS, where the database is published. " +
+			"On a cluster with no way out to the internet, turn scanning off under Settings, Image scanning.").
+		WithDocs("/docs/concepts#without-the-internet").
+		WithStatus(http.StatusBadGateway).
+		Retry()
+}
+
+// ScanPullFailed is a scanner that could not read the image it was given.
+func ScanPullFailed(image, detail string) *Problem {
+	return New("scan.pull_failed", "The scanner could not read the image").
+		WithCause("Reading %s failed: %s", image, detail).
+		WithImpact("This image was not scanned. The app is not affected.").
+		WithFix("For an image in a private registry, add the registry's credentials under Settings, Git, Private registries. "+
+			"For an image the panel built, deploy the app again: the registry keeps the last ten images of an app.").
+		WithDocs("/docs/concepts#private-registries").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("image", image)
+}
+
+// ScanTimedOut is a scan that did not finish in the time it has.
+func ScanTimedOut(image string) *Problem {
+	return New("scan.timeout", "The scan took too long and was stopped").
+		WithCause("Scanning %s did not finish within fifteen minutes.", image).
+		WithImpact("This image was not scanned. The app is not affected.").
+		WithFix("A very large image, or a slow way out to the internet the first time the database is downloaded, "+
+			"can take this long. Scan it again: the database is kept, so a second scan is quicker.").
+		WithDocs("/docs/concepts#scanning-every-image-for-vulnerabilities").
+		WithStatus(http.StatusGatewayTimeout).
+		Retry().
+		With("image", image)
+}
+
+// ScanFailed is a scan that ended without a report for any other reason.
+func ScanFailed(image, detail string) *Problem {
+	return New("scan.failed", "The image could not be scanned").
+		WithCause("Scanning %s failed: %s", image, detail).
+		WithImpact("This image was not scanned. The app is not affected, and deploys are never held up by it.").
+		WithFix("Scan it again. If it fails the same way, copy this error and open an issue.").
+		WithDocs("/docs/concepts#scanning-every-image-for-vulnerabilities").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("image", image)
+}
+
+// ScanReportUnreadable is a scan whose report the panel could not read.
+func ScanReportUnreadable(detail string) *Problem {
+	return New("scan.report_unreadable", "The scan's report could not be read").
+		WithCause("The scanner finished, and what it printed was not a report the panel can read: %s", detail).
+		WithImpact("Nothing was recorded for this scan. The app is not affected.").
+		WithFix("Scan it again. If it keeps happening, copy this error and open an issue: it is a bug in Skifity.").
+		WithStatus(http.StatusBadGateway).
+		Retry()
+}
+
+// ScanInterrupted is a scan the panel stopped in the middle of by restarting.
+func ScanInterrupted() *Problem {
+	return New("scan.interrupted", "The panel restarted during this scan").
+		WithCause("The scan was queued or running when the panel stopped.").
+		WithImpact("This image was not scanned this time. The app is not affected.").
+		WithFix("Scan it again with Scan now, or wait for the next scheduled scan.")
+}
+
+// ScanningDisabled is a scan asked for while scanning is switched off.
+func ScanningDisabled() *Problem {
+	return New("scan.disabled", "Image scanning is switched off").
+		WithCause("An administrator turned vulnerability scanning off for this panel.").
+		WithImpact("Nothing was scanned.").
+		WithFix("Turn it on under Settings, Image scanning.").
+		WithDocs("/docs/concepts#scanning-every-image-for-vulnerabilities").
+		WithStatus(http.StatusConflict)
+}
+
+// NothingToScan is a scan asked for of an app that has never been deployed.
+func NothingToScan(app string) *Problem {
+	return New("scan.no_image", "This app has no image to scan yet").
+		WithCause("%s has not been deployed, so there is no image to look at.", app).
+		WithImpact("Nothing was scanned.").
+		WithFix("Deploy it. Its image is scanned once it is built.").
+		WithStatus(http.StatusConflict).
+		With("app", app)
+}
+
 // --- deploying a folder ---
 
 // NoUpload reports a deploy of an app whose code comes from uploads, before

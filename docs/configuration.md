@@ -64,6 +64,7 @@ to get started.
 | **DNS** | A provider token, for wildcard certificates, which need a DNS challenge. |
 | **Email** | SMTP, for notifications. |
 | **Image registry** | Where built images go. An in-cluster registry is installed on first use if this is left empty. |
+| **Image scanning** | Whether every image an app runs is scanned for known vulnerabilities with Trivy (on by default), when running apps are scanned again (daily), and whether a deploy is stopped by a critical vulnerability that has a fix (off by default). See [Scanning every image for vulnerabilities](concepts.md#scanning-every-image-for-vulnerabilities). |
 | **Sign-in** | An OpenID Connect provider, so people sign in with the account they already have. See below. |
 | **Plugins** | The store the Plugins page reads, and the public key its index has to be signed by. See [Writing a Skifity plugin](plugins.md). |
 

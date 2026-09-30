@@ -33,6 +33,10 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if err := s.withVulnerabilities(r.Context(), env.ID, apps); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	writeList(w, apps)
 }
 

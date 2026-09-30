@@ -332,6 +332,12 @@ type App struct {
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// Vulnerabilities is what the newest scan of the app's image found, per
+	// severity. Worked out when an environment's apps are listed, so the list
+	// can say which of them has something critical; never stored here, and
+	// absent everywhere else and for an app that was never scanned.
+	Vulnerabilities *ScanCounts `json:"vulnerabilities,omitempty"`
 }
 
 // Variable is an environment variable, secret or not. Value is only populated
@@ -426,20 +432,24 @@ type Deployment struct {
 	Trigger string `json:"trigger"`
 	// RollbackOf is the deployment number a rollback went back to, and zero
 	// for every other trigger.
-	RollbackOf       int       `json:"rollback_of,omitempty"`
-	CommitSHA        string    `json:"commit_sha"`
-	CommitMessage    string    `json:"commit_message"`
-	CommitAuthor     string    `json:"commit_author"`
-	Image            string    `json:"image"`
-	BuildFingerprint string    `json:"build_fingerprint"`
-	RuntimeSpec      string    `json:"runtime_spec"`
-	ErrorCode        string    `json:"error_code,omitempty"`
-	ErrorMessage     string    `json:"error_message,omitempty"`
-	ErrorHint        string    `json:"error_hint,omitempty"`
-	CreatedBy        string    `json:"created_by"`
-	CreatedAt        time.Time `json:"created_at"`
-	StartedAt        time.Time `json:"started_at,omitzero"`
-	FinishedAt       time.Time `json:"finished_at,omitzero"`
+	RollbackOf       int    `json:"rollback_of,omitempty"`
+	CommitSHA        string `json:"commit_sha"`
+	CommitMessage    string `json:"commit_message"`
+	CommitAuthor     string `json:"commit_author"`
+	Image            string `json:"image"`
+	BuildFingerprint string `json:"build_fingerprint"`
+	RuntimeSpec      string `json:"runtime_spec"`
+	ErrorCode        string `json:"error_code,omitempty"`
+	ErrorMessage     string `json:"error_message,omitempty"`
+	ErrorHint        string `json:"error_hint,omitempty"`
+	CreatedBy        string `json:"created_by"`
+	// AcceptedVulnerabilities is a deploy somebody asked to go ahead even if
+	// its image has a critical vulnerability with a fix, when the panel is set
+	// to stop those. See migration 0048.
+	AcceptedVulnerabilities bool      `json:"accepted_vulnerabilities,omitempty"`
+	CreatedAt               time.Time `json:"created_at"`
+	StartedAt               time.Time `json:"started_at,omitzero"`
+	FinishedAt              time.Time `json:"finished_at,omitzero"`
 
 	// CanRollback is worked out when a list is built, not stored. The panel
 	// keeps far more deployment records than the registry keeps images, so an

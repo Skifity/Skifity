@@ -79,6 +79,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdPorts(ctx, rest, stdout)
 	case "preview":
 		err = cmdPreview(ctx, rest, stdout)
+	case "scan":
+		err = cmdScan(ctx, rest, stdout)
 	case "plan", "apply":
 		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
@@ -235,6 +237,7 @@ Working with apps:
   ports                 Open or close a port that is not HTTP, such as a game server's
   preview               Preview a branch without a pull request, or --close it
   rollback              Go back to a previous deployment
+  scan                  Show the known vulnerabilities in the app's image, or scan it now
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop
   run                   Run a one-off command in the app's image
@@ -647,6 +650,8 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	commit := flags.String("commit", "", "the commit to deploy; defaults to the branch tip")
 	force := flags.Bool("force", false, "rebuild even when nothing about the build has changed")
 	follow := flags.Bool("follow", true, "stream the build log until the deploy finishes")
+	accept := flags.Bool("accept-vulnerabilities", false,
+		"deploy even if the image has a critical vulnerability with a fix, when the panel stops those; recorded in the activity log")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -666,6 +671,9 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	body := map[string]any{"force": *force}
 	if *commit != "" {
 		body["commit_sha"] = *commit
+	}
+	if *accept {
+		body["accept_vulnerabilities"] = true
 	}
 	if err := client.Do(ctx, "POST", "/api/apps/"+app+"/deploy", body, &deployment); err != nil {
 		return err

@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -75,6 +76,34 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"id": "port_1", "app_id": "app_1", "port": 25565, "protocol": "tcp", "public_port": 25565,
 		"addresses": []string{"203.0.113.10:25565"},
 	}
+	// A report with more findings than the tool passes on, one of them
+	// critical with a fix, on an image the app has since moved on from.
+	findings := []any{map[string]any{
+		"id": "CVE-2026-0001", "package": "openssl", "installed": "3.0.2", "fixed_in": "3.0.15",
+		"severity": "CRITICAL", "title": "A made-up hole for a test", "url": "https://avd.aquasec.com/nvd/cve-2026-0001",
+	}}
+	for i := range 60 {
+		findings = append(findings, map[string]any{
+			"id": fmt.Sprintf("CVE-2026-1%03d", i), "package": "libfoo",
+			"installed": "1.0", "severity": "LOW",
+		})
+	}
+	vulnerabilities := map[string]any{
+		"enabled": true, "blocking": true, "image": "registry.example.test/acme/web:v2", "current": false,
+		"scan": map[string]any{
+			"id": "scan_1", "app_id": "app_1", "image": "registry.example.test/acme/web:v1", "trigger": "schedule",
+			"status": "succeeded", "counts": map[string]any{"critical": 1, "high": 0, "medium": 0, "low": 60, "unknown": 0},
+			"fixable": 1, "fixable_critical": 1, "findings": findings, "omitted": 0,
+			"scanner_version": "0.74.0", "created_at": "2026-09-30T04:23:00Z", "finished_at": "2026-09-30T04:24:10Z",
+		},
+		"latest": map[string]any{
+			"id": "scan_2", "app_id": "app_1", "image": "registry.example.test/acme/web:v2", "trigger": "deploy",
+			"status": "failed", "counts": map[string]any{"critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0},
+			"findings": []any{}, "error_code": "scan.database_unavailable",
+			"error_message": "The scanner could not fetch its database: no route to mirror.gcr.io",
+			"created_at":    "2026-09-30T09:00:00Z",
+		},
+	}
 	ok := map[string]any{"ok": true}
 	items := func(values ...any) map[string]any {
 		if values == nil {
@@ -137,6 +166,8 @@ func newFakePanel(t *testing.T) *fakePanel {
 
 		"PUT /api/apps/{app}/lock":    lock,
 		"DELETE /api/apps/{app}/lock": ok,
+
+		"GET /api/apps/{app}/vulnerabilities": vulnerabilities,
 
 		"GET /api/apps/{app}/volumes":                         items(map[string]any{"id": "vol_1", "app_id": "app_1", "name": "data", "mount_path": "/data", "size_gb": 1}),
 		"GET /api/apps/{app}/volumes/{volume}/backups":        items(),

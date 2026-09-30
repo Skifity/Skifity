@@ -12,6 +12,7 @@ import { AppPasswordProtection } from "@/components/app/password-protection"
 import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
+import { SecurityTab, vulnerabilitiesKey } from "@/components/app/security-tab"
 import { FilesCard } from "@/components/app/files"
 import { PortsCard } from "@/components/app/ports"
 import { ProcessesCard } from "@/components/app/processes"
@@ -99,6 +100,9 @@ export function AppDetailPage() {
       // caught at all, on the tab where somebody sits and waits for it.
       app: () => void queryClient.invalidateQueries({ queryKey: ["app-status", appId] }),
       domain: () => void queryClient.invalidateQueries({ queryKey: ["domains", appId] }),
+      // A scan of this app's image, or any other's: which one is not worth
+      // reading the event for, and a refetch of one report is cheap.
+      scan: () => void queryClient.invalidateQueries({ queryKey: vulnerabilitiesKey(appId) }),
     },
     Boolean(team),
   )
@@ -227,6 +231,7 @@ export function AppDetailPage() {
           <TabsTrigger value="variables">{t("apps.variables")}</TabsTrigger>
           <TabsTrigger value="domains">{t("apps.domains")}</TabsTrigger>
           <TabsTrigger value="firewall">{t("apps.firewall")}</TabsTrigger>
+          <TabsTrigger value="security">{t("apps.security")}</TabsTrigger>
           <TabsTrigger value="scaling">{t("apps.scaling")}</TabsTrigger>
           <TabsTrigger value="storage">{t("apps.storage")}</TabsTrigger>
           <TabsTrigger value="settings">{t("apps.settings")}</TabsTrigger>
@@ -263,6 +268,9 @@ export function AppDetailPage() {
         <TabsContent value="firewall" className="space-y-4 pt-4">
           <AppPasswordProtection appId={appId} />
           <AppFirewall appId={appId} />
+        </TabsContent>
+        <TabsContent value="security" className="pt-4">
+          <SecurityTab app={current} />
         </TabsContent>
         <TabsContent value="scaling" className="space-y-6 pt-4">
           <ScalingTab app={current} />

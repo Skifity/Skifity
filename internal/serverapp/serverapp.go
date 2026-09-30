@@ -22,6 +22,7 @@ import (
 	"skifity/internal/crypto"
 	"skifity/internal/dbsvc"
 	"skifity/internal/deploy"
+	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
@@ -156,7 +157,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		Channels: pluginChannels,
 		Config:   cfg, DB: db, Keyring: keyring, Auth: authService, Hub: hub, Logger: log,
 		Cluster: nilIfNil(clusterAdapter), Provisioner: provisioner, Deployer: deployer,
-		Databases: databases, Backups: backups, Plugins: pluginEvents,
+		Databases: databases, Backups: backups, Scanner: deployer, Plugins: pluginEvents,
 		Frontend: frontend, SetupToken: setupToken, Metrics: registry,
 		Uploads: uploads, Traffic: watcher,
 	})
@@ -177,7 +178,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	defer stopBackground()
 	go server.Background(background)
 	sweepUploads(ctx, db, uploads, log)
-	go runScheduler(background, db, backups, clusterAdapter, uploads, log)
+	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, log)
 	go watcher.Run(background)
 
 	httpServer := &http.Server{
@@ -386,6 +387,17 @@ func markInterruptedWork(ctx context.Context, db *store.DB, log *slog.Logger) er
 		log.Info("marked interrupted template updates as failed", "count", updates)
 	}
 
+	// A scan's goroutine went with the restart too. Only a scan: the app it
+	// was looking at is not affected, and the next one is at most a day away.
+	interrupted := errdoc.ScanInterrupted()
+	scans, err := db.FailInterruptedImageScans(ctx, interrupted.Code, interrupted.Cause, interrupted.Fix)
+	if err != nil {
+		return err
+	}
+	if scans > 0 {
+		log.Info("marked interrupted image scans as failed", "count", scans)
+	}
+
 	components, err := db.ResetInterruptedComponents(ctx)
 	if err != nil {
 		return err
@@ -415,8 +427,14 @@ func markInterruptedDeployments(ctx context.Context, db *store.DB, log *slog.Log
 	return nil
 }
 
+// rescanner queues the scheduled scans of every running app's image; the
+// deployer is one. See internal/deploy/scan.go.
+type rescanner interface {
+	RescanAt(ctx context.Context, minutes []time.Time) int
+}
+
 // runScheduler fires scheduled backups once a minute.
-func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, c *cluster.Cluster, uploads *upload.Store, log *slog.Logger) {
+func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store, log *slog.Logger) {
 	// Align to the start of the next minute so a schedule of "0 3 * * *" fires
 	// at 03:00 rather than at whatever second the panel happened to start.
 	timer := time.NewTimer(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
@@ -453,7 +471,11 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, c 
 		func() {
 			defer runsafe.Recover(log, "the minute tick", nil)
 			now := time.Now().UTC().Truncate(time.Minute)
-			backups.RunScheduledAt(ctx, minutesAfter(last, now))
+			minutes := minutesAfter(last, now)
+			backups.RunScheduledAt(ctx, minutes)
+			// Only queued here: the scans run one after another in the
+			// background, and a hundred of them must not hold up the tick.
+			scans.RescanAt(ctx, minutes)
 			last = now
 
 			pruneHistory(ctx, db, log)

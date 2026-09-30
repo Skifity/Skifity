@@ -188,6 +188,9 @@ skifity apply                     # and change it
 skifity rollback                  # back to the previous version
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
+skifity scan                      # known vulnerabilities in the image it runs
+skifity scan --now                # scan it again, and wait for the report
+skifity deploy --accept-vulnerabilities  # past the check for fixable criticals, when it is on; audited
 skifity maintenance on "Back at 14:00" --allow-me  # visitors see a page; you still see the app
 skifity maintenance off           # visitors see the app again
 skifity run -- npm run migrate    # run a one-off command in the app's image

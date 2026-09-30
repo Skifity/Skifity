@@ -214,6 +214,11 @@ export type App = {
   internal: boolean
   /** Present while visitors see the maintenance page instead of the app. */
   maintenance?: Maintenance
+  /**
+   * What the newest scan of its image counted, per severity. Only on an
+   * environment's list of apps, and only for an app that has been scanned.
+   */
+  vulnerabilities?: ScanCounts
 }
 
 export type Instance = {
@@ -260,6 +265,8 @@ export type Deployment = {
   error_message?: string
   error_hint?: string
   created_by: string
+  /** Deployed past the check that stops critical vulnerabilities with a fix. */
+  accepted_vulnerabilities?: boolean
   created_at: string
   started_at?: string
   finished_at?: string
@@ -272,6 +279,72 @@ export type Deployment = {
 }
 
 export type LogLine = { seq: number; stream: string; line: string; at: string }
+
+/** The severities a scan reports, most severe first. */
+export type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
+
+export type ScanCounts = {
+  critical: number
+  high: number
+  medium: number
+  low: number
+  unknown: number
+}
+
+/** One known vulnerability in one package of an image. */
+export type ScanFinding = {
+  id: string
+  package: string
+  installed: string
+  /** The version, or versions, that fix it; absent when there is no fix yet. */
+  fixed_in?: string
+  severity: Severity
+  title?: string
+  /** The advisory's page, always https. */
+  url?: string
+  target?: string
+}
+
+export type ImageScan = {
+  id: string
+  app_id: string
+  deployment_id?: string
+  image: string
+  digest?: string
+  trigger: "deploy" | "schedule" | "manual"
+  status: "queued" | "running" | "succeeded" | "failed"
+  counts: ScanCounts
+  fixable: number
+  fixable_critical: number
+  findings: ScanFinding[] | null
+  /** How many findings there were beyond those listed. */
+  omitted: number
+  scanner_version?: string
+  os?: string
+  error_code?: string
+  error_message?: string
+  error_hint?: string
+  created_at: string
+  started_at?: string
+  finished_at?: string
+}
+
+/** An app's Security tab, as GET /api/apps/{id}/vulnerabilities answers it. */
+export type VulnerabilityReport = {
+  enabled: boolean
+  /** Deploys are stopped by a critical vulnerability that has a fix. */
+  blocking: boolean
+  /** What the app runs now. */
+  image?: string
+  /** The newest report, or null when the app has never been scanned. */
+  scan: ImageScan | null
+  /** The report is of the image the app runs now. */
+  current: boolean
+  /** The report is of an image that has not gone out: its deploy is under way, or was stopped. */
+  undeployed: boolean
+  /** The newest scan when it is not the report: queued, running or failed. */
+  latest?: ImageScan
+}
 
 export type Variable = {
   id: string

@@ -8,11 +8,13 @@ import {
   GitCommitHorizontalIcon,
   RocketIcon,
   RotateCcwIcon,
+  ShieldAlertIcon,
   XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "cn"
 
+import { DeployAnywayButton } from "@/components/app/security-tab"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { StatusBadge } from "@/components/status-badge"
@@ -156,6 +158,15 @@ export function DeploymentsTab({ app }: { app: App }) {
                       {t("deploy.live")}
                     </Badge>
                   )}
+                  {deployment.accepted_vulnerabilities && (
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-destructive/40 text-destructive"
+                    >
+                      <ShieldAlertIcon className="size-3" />
+                      {t("deploy.acceptedVulnerabilities")}
+                    </Badge>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {deployment.commit_message || triggerLabel(t, deployment)}
                   </span>
@@ -244,6 +255,15 @@ export function DeploymentsTab({ app }: { app: App }) {
                   {deployment.error_hint && (
                     <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
                   )}
+                  {/* Only the newest: an older one stopped the same way was
+                      followed by something else, and deploying it now would
+                      go back past that. */}
+                  {deployment.error_code === "deploy.vulnerable" &&
+                    deployment.id === items[0]?.id && (
+                      <div className="mt-3">
+                        <DeployAnywayButton app={app} deployment={deployment} />
+                      </div>
+                    )}
                 </div>
               )}
 

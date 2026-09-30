@@ -48,6 +48,7 @@ skifity scale --instances 3       Change how many copies run
 skifity rollback                  Go back to the previous version
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
+skifity scan                      Known vulnerabilities in the app's image; --now scans it again
 skifity run -- npm run migrate    Run a command once, in the app's image
 skifity processes set worker -- <command>  A worker beside the app, same build
 skifity files set /etc/app.conf ./app.conf  A file the app reads, mounted at that path
@@ -136,6 +137,7 @@ Tools, in the order they are usually needed:
 | `rollback_app` | Restores a previous version's image and settings. |
 | `lock_deploys` | Stops every deploy and rollback of an app, with a reason, until it is unlocked. |
 | `unlock_deploys` | Lifts that. |
+| `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
 
 Two things are deliberately not tools. A database's password: an app gets its
@@ -178,6 +180,8 @@ POST   /api/apps/{app}/rollback/{deployment}  roll back
 GET    /api/apps/{app}/rollback/{deployment}/plan  what a rollback would change, and what it leaves
 PUT    /api/apps/{app}/lock                   lock deploys and rollbacks (reason)
 DELETE /api/apps/{app}/lock                   unlock them
+GET    /api/apps/{app}/vulnerabilities        known vulnerabilities in the image it runs, from the newest scan
+POST   /api/apps/{app}/vulnerabilities/scan   scan that image now
 GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events
 GET    /api/apps/{app}/logs?previous=true     the log of the container before the last restart
 POST   /api/apps/{app}/run                    run a command once in the app's image

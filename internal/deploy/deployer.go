@@ -57,6 +57,11 @@ type Deployer struct {
 
 	// slots queues builds past the panel's limit. See buildslots.go.
 	slots *buildSlots
+	// scans queues image scans, which run one at a time. See scan.go.
+	scans *buildSlots
+	// scanJob runs one scan. Nil is the Trivy Job in the cluster; a test puts
+	// a scanner of its own here.
+	scanJob func(context.Context, store.ImageScan) (store.ScanResult, error)
 }
 
 // New builds a Deployer. notifier may be nil, and then nothing is sent.
@@ -65,6 +70,7 @@ func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Clus
 		db: db, keyring: keyring, hub: hub, cluster: c, notifier: notifier, log: log,
 		running: map[string]context.CancelFunc{},
 		slots:   newBuildSlots(),
+		scans:   newBuildSlots(),
 	}
 }
 
@@ -139,13 +145,14 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	}
 
 	deployment := store.Deployment{
-		AppID:            app.ID,
-		Status:           store.DeployQueued,
-		Trigger:          req.Trigger,
-		CommitSHA:        commit,
-		BuildFingerprint: fingerprint,
-		RuntimeSpec:      runtimeSpec,
-		CreatedBy:        req.CreatedBy,
+		AppID:                   app.ID,
+		Status:                  store.DeployQueued,
+		Trigger:                 req.Trigger,
+		CommitSHA:               commit,
+		BuildFingerprint:        fingerprint,
+		RuntimeSpec:             runtimeSpec,
+		CreatedBy:               req.CreatedBy,
+		AcceptedVulnerabilities: req.AcceptVulnerabilities,
 	}
 
 	// The heart of ADR-0007: when the build inputs have not changed, the
@@ -250,6 +257,13 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 	} else {
 		d.appendLog(ctx, deployment.ID,
 			"Nothing to build: this version was already built, so the existing image is reused.")
+	}
+
+	// Before anything reaches the cluster, like the plugins below: a deploy
+	// stopped for a vulnerability with a fix changes nothing that is running.
+	if err := d.checkImage(ctx, deployment, app); err != nil {
+		d.fail(ctx, deployment, errdoc.From(err))
+		return
 	}
 
 	d.setStatus(ctx, &deployment, store.DeployDeploying)

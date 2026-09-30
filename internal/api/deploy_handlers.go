@@ -17,6 +17,10 @@ import (
 type deployRequestBody struct {
 	CommitSHA string `json:"commit_sha,omitempty"`
 	Force     bool   `json:"force,omitempty"`
+	// AcceptVulnerabilities deploys an image with a critical vulnerability
+	// that has a fix, when the panel is set to stop those. Recorded in the
+	// activity log and on the deployment.
+	AcceptVulnerabilities bool `json:"accept_vulnerabilities,omitempty"`
 }
 
 func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
@@ -39,11 +43,12 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
-		AppID:     app.ID,
-		Trigger:   "manual",
-		CommitSHA: strings.TrimSpace(req.CommitSHA),
-		CreatedBy: user.ID,
-		Force:     req.Force,
+		AppID:                 app.ID,
+		Trigger:               "manual",
+		CommitSHA:             strings.TrimSpace(req.CommitSHA),
+		CreatedBy:             user.ID,
+		Force:                 req.Force,
+		AcceptVulnerabilities: req.AcceptVulnerabilities,
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -51,6 +56,11 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 	}
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "app.deploy_started", "app", app.ID, app.Name)
+	if req.AcceptVulnerabilities {
+		// Its own entry, so going past the check is something the activity
+		// log can be searched for and not a detail of an ordinary deploy.
+		s.audit(r, teamID, "app.deploy_vulnerabilities_accepted", "app", app.ID, app.Name)
+	}
 	writeJSON(w, http.StatusAccepted, deployment)
 }
 

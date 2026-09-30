@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -143,6 +144,66 @@ func TestARaisedLimitStartsWaitingBuilds(t *testing.T) {
 		release()
 	case <-time.After(2 * time.Second):
 		t.Fatal("a raised limit did not start the waiting build")
+	}
+}
+
+// Work somebody is waiting on goes ahead of the queue, in the order it came,
+// and the queue keeps its own order behind it: a deploy's scan does not wait
+// for the nightly rescan of every app.
+func TestWorkSomebodyWaitsOnGoesFirst(t *testing.T) {
+	slots := newBuildSlots()
+	one := func() int { return 1 }
+	quiet := func(int, int) {}
+	held, err := slots.acquire(t.Context(), one, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	var started []string
+	releases := make(chan func(), 4)
+	join := func(name string, first bool) {
+		go func() {
+			acquire := slots.acquire
+			if first {
+				acquire = slots.acquireFirst
+			}
+			release, err := acquire(t.Context(), one, quiet)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			mu.Lock()
+			started = append(started, name)
+			mu.Unlock()
+			releases <- release
+		}()
+	}
+	queued := func(n int) func() bool {
+		return func() bool { slots.mu.Lock(); defer slots.mu.Unlock(); return len(slots.queue) == n }
+	}
+	join("nightly-1", false)
+	waitFor(t, queued(1))
+	join("nightly-2", false)
+	waitFor(t, queued(2))
+	join("deploy-1", true)
+	waitFor(t, queued(3))
+	join("deploy-2", true)
+	waitFor(t, queued(4))
+
+	held()
+	for range 4 {
+		select {
+		case release := <-releases:
+			release()
+		case <-time.After(2 * time.Second):
+			t.Fatalf("the queue stopped after %v", started)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(started, ", "); got != "deploy-1, deploy-2, nightly-1, nightly-2" {
+		t.Errorf("they started in the order %s", got)
 	}
 }
 

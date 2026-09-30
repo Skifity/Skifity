@@ -343,7 +343,9 @@
       "server.ssh_passwords_off": "已在服务器上关闭 SSH 密码登录",
       "domain.redirect_changed": "域名重定向已更改",
       "preview.started": "已启动分支预览",
-      "preview.closed": "已关闭分支预览"
+      "preview.closed": "已关闭分支预览",
+      "app.scan_started": "已开始镜像扫描",
+      "app.deploy_vulnerabilities_accepted": "在接受严重漏洞的情况下部署"
     }
   },
   "projects": {
@@ -642,7 +644,9 @@
       "unreachable": "Traefik 没有在其指标端口 9100 上应答，所以目前没有在统计请求。如果你自己配置 Traefik，请保持它的 Prometheus 指标开启。",
       "no_cluster": "面板没有连接到集群，所以没有可以统计请求的来源。"
     },
-    "alertsErrorsHelp": "只有在三分钟内总共至少有 20 个请求时才会判断服务器错误，所以访问量很小的应用偶尔失败一次不会触发警告。"
+    "alertsErrorsHelp": "只有在三分钟内总共至少有 20 个请求时才会判断服务器错误，所以访问量很小的应用偶尔失败一次不会触发警告。",
+    "security": "安全",
+    "criticalBadge": "严重：{{number}}"
   },
   "deploy": {
     "title": "部署记录",
@@ -714,7 +718,10 @@
     "promoteAnyway": "仍然提升",
     "promoted": "正在将 #{{number}} 提升到 {{environment}}",
     "promoteEnvironment": "要提升到的环境",
-    "noLogYet": "构建日志中还没有任何内容。"
+    "noLogYet": "构建日志中还没有任何内容。",
+    "deployAnyway": "仍然部署",
+    "deployAnywayConfirm": "即使镜像中有已提供修复的严重漏洞，也会部署它。此操作会连同你的名字记录在活动日志中。",
+    "acceptedVulnerabilities": "已接受漏洞"
   },
   "variables": {
     "title": "变量",
@@ -1486,6 +1493,18 @@
       "signin_api_allowed_networks": {
         "label": "API 令牌仅限来自",
         "help": "地址或网络，每行一个，例如 203.0.113.7 或 10.0.0.0/8。设置后，来自其他任何地方的 API 令牌（CLI、CI 任务、助手使用的）都会被拒绝，即使令牌有效。通过浏览器登录面板不受影响。留空则接受来自任何地方的令牌。"
+      },
+      "scanning_enabled": {
+        "label": "扫描镜像中的已知漏洞",
+        "help": "默认开启。应用运行的每个镜像都会在构建或部署时用 Trivy 扫描，之后再按下方的计划扫描，每个应用的“安全”标签页会列出发现的问题。Trivy 从 mirror.gcr.io 或 ghcr.io 下载其漏洞数据库；在无法访问互联网的集群上，请关闭此项。除非下方设置要求，扫描绝不会阻挡部署。"
+      },
+      "scanning_schedule": {
+        "label": "重新扫描运行中的应用",
+        "help": "何时重新扫描每个应用运行的镜像，使用 UTC 的 cron 计划，因为即使镜像无人改动，也会有新的漏洞被公布。留空则每天 04:23 扫描；off 则只在部署和“立即扫描”时进行。应用逐个扫描，过去十二小时内已扫描的会被跳过。"
+      },
+      "scanning_block_fixable_critical": {
+        "label": "阻止含有已提供修复的严重漏洞的部署",
+        "help": "默认关闭。开启后，部署会等待其镜像扫描完成；如果其中某个严重漏洞已有修复版本，部署会停止，并列出相关软件包和需要升级到的版本。仍可以通过接受这些漏洞来部署，这会记录在活动日志中。无法运行的扫描会放行部署，回滚也永远不会被阻止。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -1515,7 +1534,8 @@
     "componentUpgrade": "升级到 {{version}}",
     "componentUpgradeTitle": "升级 {{name}}？",
     "componentUpgradeConfirm": "版本 {{to}} 的清单会应用在 {{from}} 之上，这正是该项目自己文档里的升级方式。重启的是这个组件，不是你的应用。",
-    "componentVersionUnknown": "开始记录版本之前安装的版本"
+    "componentVersionUnknown": "开始记录版本之前安装的版本",
+    "scanning": "镜像扫描"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2872,6 +2892,66 @@
         "cause": "{{0}} 运行的是 {{1}}，Skifity 不为它做备份。",
         "impact": "没有做任何更改。",
         "fix": "把不能丢失的数据放在有备份的数据库中，例如 PostgreSQL，或者通过 `{{0}} db connect` 用该引擎自带的工具复制数据。"
+      },
+      "deploy_vulnerable": {
+        "title": "此镜像有已提供修复的严重漏洞",
+        "cause": "{{1}} 的镜像中有 {{0}} 个严重漏洞已有修复版本：{{2}}。",
+        "impact": "没有部署任何内容。当前运行的版本继续运行。",
+        "fix": "升级到已修复的版本（通常是更新的基础镜像或依赖）后重新部署。如仍要部署此镜像，请在接受漏洞的情况下部署：在被阻止的部署上点击“仍然部署”，或运行 `{{0}} deploy --accept-vulnerabilities`。此操作会记录在活动日志中。"
+      },
+      "scan_database_unavailable": {
+        "title": "无法下载漏洞数据库",
+        "cause": "扫描器无法获取其数据库：{{0}}",
+        "impact": "此镜像未被扫描。无法运行的扫描绝不会阻挡部署。",
+        "fix": "集群需要能通过 HTTPS 访问发布数据库的 mirror.gcr.io 或 ghcr.io。在无法访问互联网的集群上，请在“设置”的“镜像扫描”中关闭扫描。"
+      },
+      "scan_pull_failed": {
+        "title": "扫描器无法读取镜像",
+        "cause": "读取 {{0}} 失败：{{1}}",
+        "impact": "此镜像未被扫描。应用不受影响。",
+        "fix": "对于私有镜像仓库中的镜像，请在“设置”、“Git”、“私有镜像仓库”中添加仓库凭据。对于面板构建的镜像，请重新部署应用：镜像仓库会保留每个应用最近的十个镜像。"
+      },
+      "scan_timeout": {
+        "title": "扫描耗时过长，已被停止",
+        "cause": "扫描 {{0}} 未能在十五分钟内完成。",
+        "impact": "此镜像未被扫描。应用不受影响。",
+        "fix": "非常大的镜像，或首次下载数据库时网络较慢，都可能耗时这么久。请再次扫描：数据库会被保留，所以第二次扫描更快。"
+      },
+      "scan_failed": {
+        "title": "无法扫描镜像",
+        "cause": "扫描 {{0}} 失败：{{1}}",
+        "impact": "此镜像未被扫描。应用不受影响，部署也绝不会因此被阻挡。",
+        "fix": "请再次扫描。如果以同样方式失败，请复制此错误并提交 issue。"
+      },
+      "scan_report_unreadable": {
+        "title": "无法读取扫描报告",
+        "cause": "扫描器已完成，但输出的内容不是面板能读取的报告：{{0}}",
+        "impact": "本次扫描没有记录任何内容。应用不受影响。",
+        "fix": "请再次扫描。如果持续发生，请复制此错误并提交 issue：这是 Skifity 的缺陷。"
+      },
+      "scan_interrupted": {
+        "title": "扫描期间面板重启了",
+        "cause": "面板停止时，扫描正在排队或运行。",
+        "impact": "这次镜像未被扫描。应用不受影响。",
+        "fix": "点击“立即扫描”重新扫描，或等待下一次计划扫描。"
+      },
+      "scan_disabled": {
+        "title": "镜像扫描已关闭",
+        "cause": "管理员已为此面板关闭漏洞扫描。",
+        "impact": "没有扫描任何内容。",
+        "fix": "请在“设置”的“镜像扫描”中开启。"
+      },
+      "scan_no_image": {
+        "title": "此应用还没有可扫描的镜像",
+        "cause": "{{0}} 尚未部署，因此没有可检查的镜像。",
+        "impact": "没有扫描任何内容。",
+        "fix": "请先部署。镜像构建完成后即会扫描。"
+      },
+      "cli_scan_wait": {
+        "title": "扫描尚未完成",
+        "cause": "{{0}} 分钟后它仍在排队或运行。",
+        "impact": "应用没有问题。扫描会在面板中继续进行。",
+        "fix": "稍后运行 `{{0}} scan` 查看报告。"
       }
     }
   },
@@ -2952,7 +3032,8 @@
       "app.alert": "应用超过了用量阈值",
       "server.alert": "服务器超过了用量阈值",
       "backup.missed": "计划备份被错过，已延后执行",
-      "backup.succeeded": "备份成功"
+      "backup.succeeded": "备份成功",
+      "app.vulnerable": "应用的镜像中出现新的严重漏洞"
     },
     "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
     "field": {
@@ -3450,5 +3531,46 @@
     "previewBranchHelp": "此应用的副本，从该分支构建，位于独立的预览环境中并拥有自己的数据库——与该分支的拉取请求获得的预览相同，因此之后打开拉取请求会更新它，而不是再创建一个。",
     "previewBranchRemove": "它会一直保留，直到分支被删除、其拉取请求被关闭，或有人用 skifity preview --close 关闭它。",
     "start": "开始预览"
+  },
+  "security": {
+    "title": "已知漏洞",
+    "help": "此应用运行的镜像会用 Trivy 对照已发布的安全公告进行检查：在构建或部署时、之后每天一次，以及你随时要求时。",
+    "scanNow": "立即扫描",
+    "queued": "正在等待扫描器，它一次只检查一个镜像。",
+    "running": "正在扫描镜像，通常需要一两分钟。",
+    "disabled": "此面板已关闭镜像扫描。管理员可以在“设置”的“镜像扫描”中开启。",
+    "never": "此应用的镜像尚未扫描。",
+    "notDeployed": "此应用尚未部署。镜像构建完成后即会扫描。",
+    "failed": "上次扫描未完成",
+    "scannedAt": "扫描于 {{when}}",
+    "scanner": "Trivy {{version}}",
+    "notCurrent": "此报告针对的不是应用当前运行的镜像。点击“立即扫描”检查当前运行的镜像。",
+    "undeployed": "此报告针对的镜像尚未上线：其部署仍在进行中，或已被阻止。",
+    "countBadge": "{{severity}}：{{number}}",
+    "fixable": "有修复：{{number}}",
+    "clean": "此镜像中未发现已知漏洞。",
+    "onlyFixable": "仅显示有修复的",
+    "noneFixable": "这些漏洞都还没有修复。",
+    "severityHeading": "严重程度",
+    "package": "软件包",
+    "installed": "已安装版本",
+    "fixedIn": "修复版本",
+    "noFix": "暂无修复",
+    "advisory": "公告",
+    "more": "另有 {{number}} 个较不严重的漏洞未保留在报告中。",
+    "blocked": "此镜像的部署已被阻止",
+    "blockedHelp": "此面板会阻止镜像中含有已提供修复的严重漏洞的部署，而此镜像有 {{number}} 个。请升级到已修复的版本后重新部署，或在被阻止的部署上使用“仍然部署”；此操作会记录在活动日志中。",
+    "severity": {
+      "critical": "严重",
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "unknown": "未知"
+    },
+    "trigger": {
+      "deploy": "部署后",
+      "schedule": "按每日计划",
+      "manual": "按请求"
+    }
   }
 }

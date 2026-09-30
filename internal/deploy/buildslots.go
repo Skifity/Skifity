@@ -20,12 +20,17 @@ type buildSlots struct {
 	// queue is the tickets waiting, oldest first. Only the head may start.
 	queue []uint64
 	next  uint64
+	// urgent are the tickets that joined at the front, which are always the
+	// first len(urgent) of queue, in the order they came. See acquireFirst.
+	urgent map[uint64]bool
 	// changed is closed, and replaced, whenever a slot frees or the queue
 	// moves, which is what a waiting build wakes on.
 	changed chan struct{}
 }
 
-func newBuildSlots() *buildSlots { return &buildSlots{changed: make(chan struct{})} }
+func newBuildSlots() *buildSlots {
+	return &buildSlots{changed: make(chan struct{}), urgent: map[uint64]bool{}}
+}
 
 // recheck is how often a waiting build reads the limit again, so a limit
 // raised in the settings starts builds without waiting for one to finish.
@@ -36,10 +41,30 @@ const recheck = 15 * time.Second
 // it stands. waiting is called once, with how many are running, when the
 // build has to wait at all.
 func (b *buildSlots) acquire(ctx context.Context, limit func() int, waiting func(running, ahead int)) (func(), error) {
+	return b.join(ctx, false, limit, waiting)
+}
+
+// acquireFirst waits for a slot ahead of everything that joined with acquire,
+// and behind anything else that joined this way.
+//
+// For work somebody is waiting on, in a queue that is otherwise filled by work
+// nobody is: a deploy whose image has to be scanned before it goes out, behind
+// the nightly rescan of every app in the panel.
+func (b *buildSlots) acquireFirst(ctx context.Context, limit func() int, waiting func(running, ahead int)) (func(), error) {
+	return b.join(ctx, true, limit, waiting)
+}
+
+func (b *buildSlots) join(ctx context.Context, first bool, limit func() int, waiting func(running, ahead int)) (func(), error) {
 	b.mu.Lock()
 	b.next++
 	ticket := b.next
-	b.queue = append(b.queue, ticket)
+	if first {
+		at := len(b.urgent)
+		b.queue = append(b.queue[:at], append([]uint64{ticket}, b.queue[at:]...)...)
+		b.urgent[ticket] = true
+	} else {
+		b.queue = append(b.queue, ticket)
+	}
 	b.mu.Unlock()
 
 	told := false
@@ -48,6 +73,7 @@ func (b *buildSlots) acquire(ctx context.Context, limit func() int, waiting func
 		allowed := max(limit(), 1)
 		if b.queue[0] == ticket && b.running < allowed {
 			b.queue = b.queue[1:]
+			delete(b.urgent, ticket)
 			b.running++
 			b.wake()
 			b.mu.Unlock()
@@ -89,6 +115,7 @@ func (b *buildSlots) leave(ticket uint64) {
 			break
 		}
 	}
+	delete(b.urgent, ticket)
 	b.wake()
 }
 

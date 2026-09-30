@@ -48,6 +48,9 @@ type Server struct {
 	deployer    Deployer
 	databases   DatabaseManager
 	backups     BackupManager
+	// scanner looks for known vulnerabilities in the images apps run. Nil
+	// is a panel with no cluster, where Scan now says so.
+	scanner Scanner
 
 	// plugins is how installed plugins hear about what happened here. A value
 	// with no Targets sends nothing, so nil is a working configuration.
@@ -90,6 +93,7 @@ type Options struct {
 	Deployer    Deployer
 	Databases   DatabaseManager
 	Backups     BackupManager
+	Scanner     Scanner
 	Plugins     plugins.Dispatcher
 	// Channels is the installed plugins that provide a notification channel.
 	// Nil is a panel with no plugins, and every built-in channel still works.
@@ -124,6 +128,7 @@ func New(opts Options) *Server {
 		deployer:    opts.Deployer,
 		databases:   opts.Databases,
 		backups:     opts.Backups,
+		scanner:     opts.Scanner,
 		plugins:     opts.Plugins,
 		channels:    opts.Channels,
 		uploads:     opts.Uploads,
@@ -400,6 +405,10 @@ func (s *Server) routes() chi.Router {
 				app.Get("/volumes/{volumeID}/backup-policy", s.handleGetVolumeBackupPolicy)
 				app.Put("/volumes/{volumeID}/backup-policy", s.handleSetVolumeBackupPolicy)
 				app.Get("/advanced", s.handleAppAdvanced)
+				// What the image it runs is known to be vulnerable to; see
+				// scan_handlers.go.
+				app.Get("/vulnerabilities", s.handleGetVulnerabilities)
+				app.Post("/vulnerabilities/scan", s.handleScanApp)
 			})
 
 			authed.Route("/databases/{databaseID}", func(dbr chi.Router) {

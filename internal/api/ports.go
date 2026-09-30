@@ -279,6 +279,10 @@ type DeployRequest struct {
 	CommitMessage string
 	CommitAuthor  string
 	Fingerprint   string
+	// AcceptVulnerabilities lets the deploy go ahead when its image has a
+	// critical vulnerability with a fix and the panel is set to stop those.
+	// The handler that sets it records it in the activity log.
+	AcceptVulnerabilities bool
 }
 
 // RunHandle identifies a one-off command that has been started.
@@ -307,6 +311,13 @@ type Deployer interface {
 	// RunResult says how a run ended, waiting a little for its container to
 	// stop once its output has.
 	RunResult(ctx context.Context, appID, name string) (RunResult, error)
+}
+
+// Scanner looks for known vulnerabilities in the images apps run.
+type Scanner interface {
+	// Scan queues a scan of the image an app runs now, or answers the one
+	// already queued or running.
+	Scan(ctx context.Context, appID, requestedBy string) (store.ImageScan, error)
 }
 
 // ScalingFinding is one reason an app may not survive being scaled out.

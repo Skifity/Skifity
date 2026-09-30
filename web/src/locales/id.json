@@ -343,7 +343,9 @@
       "server.ssh_passwords_off": "Kata sandi SSH dimatikan di server",
       "domain.redirect_changed": "Pengalihan domain diubah",
       "preview.started": "Pratinjau sebuah branch dimulai",
-      "preview.closed": "Pratinjau sebuah branch ditutup"
+      "preview.closed": "Pratinjau sebuah branch ditutup",
+      "app.scan_started": "Pemindaian image dimulai",
+      "app.deploy_vulnerabilities_accepted": "Di-deploy dengan kerentanan kritis diterima"
     }
   },
   "projects": {
@@ -642,7 +644,9 @@
       "unreachable": "Traefik tidak menjawab di port metriknya, 9100, jadi permintaan sedang tidak dihitung. Jika Anda mengatur Traefik sendiri, biarkan metrik Prometheus-nya menyala.",
       "no_cluster": "Panel tidak terhubung ke cluster, jadi tidak ada sumber untuk menghitung permintaan."
     },
-    "alertsErrorsHelp": "Error server hanya dinilai selama tiga menit yang berisi setidaknya 20 permintaan, jadi satu permintaan gagal di app yang sepi tidak menjadi peringatan."
+    "alertsErrorsHelp": "Error server hanya dinilai selama tiga menit yang berisi setidaknya 20 permintaan, jadi satu permintaan gagal di app yang sepi tidak menjadi peringatan.",
+    "security": "Keamanan",
+    "criticalBadge": "Kritis: {{number}}"
   },
   "deploy": {
     "title": "Deployment",
@@ -714,7 +718,10 @@
     "promoteAnyway": "Tetap promosikan",
     "promoted": "Mempromosikan #{{number}} ke {{environment}}",
     "promoteEnvironment": "Environment tujuan promosi",
-    "noLogYet": "Belum ada yang ditulis ke log build."
+    "noLogYet": "Belum ada yang ditulis ke log build.",
+    "deployAnyway": "Tetap deploy",
+    "deployAnywayConfirm": "Ini men-deploy image tersebut meskipun ada kerentanan kritis yang sudah punya perbaikan. Tindakan ini dicatat di log aktivitas, dengan nama Anda.",
+    "acceptedVulnerabilities": "Kerentanan diterima"
   },
   "variables": {
     "title": "Variabel",
@@ -1486,6 +1493,18 @@
       "signin_api_allowed_networks": {
         "label": "Token API hanya dari",
         "help": "Alamat atau jaringan, satu per baris, seperti 203.0.113.7 atau 10.0.0.0/8. Jika diisi, token API — milik CLI, pekerjaan CI, atau asisten — ditolak dari tempat lain, meskipun tokennya valid. Masuk ke panel lewat peramban tidak terpengaruh. Kosongkan untuk menerima token dari mana saja."
+      },
+      "scanning_enabled": {
+        "label": "Pindai image untuk kerentanan yang diketahui",
+        "help": "Menyala secara bawaan. Setiap image yang dijalankan app dipindai dengan Trivy saat di-build atau di-deploy, dan lagi sesuai jadwal di bawah, lalu tab Keamanan tiap app menampilkan temuannya. Trivy mengunduh basis data kerentanannya dari mirror.gcr.io atau ghcr.io; di klaster yang tidak punya akses ke internet, matikan ini. Pemindaian tidak pernah menahan deploy kecuali pengaturan di bawah memintanya."
+      },
+      "scanning_schedule": {
+        "label": "Pindai ulang app yang berjalan",
+        "help": "Kapan image yang dijalankan setiap app dipindai lagi, sebagai jadwal cron dalam UTC, karena kerentanan baru terus dipublikasikan untuk image yang tidak diubah siapa pun. Kosong berarti setiap hari pukul 04:23; off menyerahkannya pada deploy dan Pindai sekarang. App dipindai satu per satu, dan yang sudah dipindai dalam dua belas jam terakhir dilewati."
+      },
+      "scanning_block_fixable_critical": {
+        "label": "Hentikan deploy dengan kerentanan kritis yang punya perbaikan",
+        "help": "Mati secara bawaan. Jika menyala, deploy menunggu image-nya dipindai dan berhenti bila ada kerentanan kritis yang punya versi perbaikan, dengan menyebut paket dan versi tujuannya. Seseorang tetap bisa men-deploy-nya dengan menerima kerentanan tersebut, dan itu dicatat di log aktivitas. Pemindaian yang tidak bisa berjalan membiarkan deploy lewat, dan rollback tidak pernah dihentikan."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -1515,7 +1534,8 @@
     "componentUpgrade": "Tingkatkan ke {{version}}",
     "componentUpgradeTitle": "Tingkatkan {{name}}?",
     "componentUpgradeConfirm": "Manifest versi {{to}} diterapkan di atas {{from}}, sesuai cara proyek itu mendokumentasikan peningkatannya. Komponennya dimulai ulang; aplikasi Anda tidak.",
-    "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat"
+    "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat",
+    "scanning": "Pemindaian image"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2872,6 +2892,66 @@
         "cause": "{{0}} menjalankan {{1}}, yang tidak dicadangkan oleh Skifity.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Simpan data yang tidak boleh hilang di database yang dicadangkan, seperti PostgreSQL, atau salin dengan alat bawaan engine-nya melalui `{{0}} db connect`."
+      },
+      "deploy_vulnerable": {
+        "title": "Image ini punya kerentanan kritis yang sudah ada perbaikannya",
+        "cause": "{{0}} kerentanan kritis di image {{1}} punya versi perbaikan: {{2}}.",
+        "impact": "Tidak ada yang di-deploy. Versi yang berjalan sekarang tetap berjalan.",
+        "fix": "Pindah ke versi yang sudah diperbaiki — biasanya lewat base image atau dependensi yang lebih baru — lalu deploy lagi. Untuk tetap men-deploy image ini, deploy dengan menerima kerentanannya: Tetap deploy pada deployment yang dihentikan, atau `{{0}} deploy --accept-vulnerabilities`. Itu dicatat di log aktivitas."
+      },
+      "scan_database_unavailable": {
+        "title": "Basis data kerentanan tidak bisa diunduh",
+        "cause": "Pemindai tidak bisa mengambil basis datanya: {{0}}",
+        "impact": "Image ini tidak dipindai. Deploy tidak pernah ditahan oleh pemindaian yang gagal berjalan.",
+        "fix": "Klaster perlu menjangkau mirror.gcr.io atau ghcr.io lewat HTTPS, tempat basis data itu dipublikasikan. Di klaster tanpa akses ke internet, matikan pemindaian di Pengaturan, Pemindaian image."
+      },
+      "scan_pull_failed": {
+        "title": "Pemindai tidak bisa membaca image",
+        "cause": "Membaca {{0}} gagal: {{1}}",
+        "impact": "Image ini tidak dipindai. App tidak terpengaruh.",
+        "fix": "Untuk image di registry privat, tambahkan kredensial registry di Pengaturan, Git, Registry privat. Untuk image yang di-build panel, deploy app lagi: registry menyimpan sepuluh image terakhir sebuah app."
+      },
+      "scan_timeout": {
+        "title": "Pemindaian terlalu lama dan dihentikan",
+        "cause": "Memindai {{0}} tidak selesai dalam lima belas menit.",
+        "impact": "Image ini tidak dipindai. App tidak terpengaruh.",
+        "fix": "Image yang sangat besar, atau koneksi internet yang lambat saat basis data diunduh pertama kali, bisa selama ini. Pindai lagi: basis data disimpan, jadi pemindaian kedua lebih cepat."
+      },
+      "scan_failed": {
+        "title": "Image tidak bisa dipindai",
+        "cause": "Memindai {{0}} gagal: {{1}}",
+        "impact": "Image ini tidak dipindai. App tidak terpengaruh, dan deploy tidak pernah ditahan olehnya.",
+        "fix": "Pindai lagi. Jika gagal dengan cara yang sama, salin error ini dan buka issue."
+      },
+      "scan_report_unreadable": {
+        "title": "Laporan pemindaian tidak bisa dibaca",
+        "cause": "Pemindai selesai, tetapi yang dicetaknya bukan laporan yang bisa dibaca panel: {{0}}",
+        "impact": "Tidak ada yang dicatat untuk pemindaian ini. App tidak terpengaruh.",
+        "fix": "Pindai lagi. Jika terus terjadi, salin error ini dan buka issue: ini bug di Skifity."
+      },
+      "scan_interrupted": {
+        "title": "Panel dimulai ulang saat pemindaian ini",
+        "cause": "Pemindaian sedang antre atau berjalan ketika panel berhenti.",
+        "impact": "Image ini tidak dipindai kali ini. App tidak terpengaruh.",
+        "fix": "Pindai lagi dengan Pindai sekarang, atau tunggu pemindaian terjadwal berikutnya."
+      },
+      "scan_disabled": {
+        "title": "Pemindaian image dimatikan",
+        "cause": "Seorang administrator mematikan pemindaian kerentanan untuk panel ini.",
+        "impact": "Tidak ada yang dipindai.",
+        "fix": "Nyalakan di Pengaturan, Pemindaian image."
+      },
+      "scan_no_image": {
+        "title": "App ini belum punya image untuk dipindai",
+        "cause": "{{0}} belum di-deploy, jadi belum ada image untuk diperiksa.",
+        "impact": "Tidak ada yang dipindai.",
+        "fix": "Deploy dulu. Image-nya dipindai setelah di-build."
+      },
+      "cli_scan_wait": {
+        "title": "Pemindaian belum selesai",
+        "cause": "Pemindaian masih antre atau berjalan setelah {{0}} menit.",
+        "impact": "Tidak ada masalah dengan app. Pemindaian terus berjalan di panel.",
+        "fix": "Jalankan `{{0}} scan` nanti untuk membaca laporannya."
       }
     }
   },
@@ -2952,7 +3032,8 @@
       "app.alert": "Sebuah app melewati ambang pemakaian",
       "server.alert": "Sebuah server melewati ambang pemakaian",
       "backup.missed": "Pencadangan terjadwal terlewat dan diambil terlambat",
-      "backup.succeeded": "Pencadangan berhasil"
+      "backup.succeeded": "Pencadangan berhasil",
+      "app.vulnerable": "Image sebuah app punya kerentanan kritis baru"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {
@@ -3450,5 +3531,46 @@
     "previewBranchHelp": "Salinan aplikasi ini, dibangun dari branch tersebut, di lingkungan pratinjau sendiri dengan database sendiri — pratinjau yang sama dengan yang didapat pull request dari branch itu, jadi membuka pull request nanti akan memperbaruinya, bukan membuat yang baru.",
     "previewBranchRemove": "Pratinjau tetap ada sampai branch dihapus, pull request-nya ditutup, atau seseorang menutupnya dengan skifity preview --close.",
     "start": "Mulai pratinjau"
+  },
+  "security": {
+    "title": "Kerentanan yang diketahui",
+    "help": "Image yang dijalankan app ini, diperiksa dengan Trivy terhadap advisori yang dipublikasikan: saat di-build atau di-deploy, lagi setiap hari, dan kapan pun Anda minta.",
+    "scanNow": "Pindai sekarang",
+    "queued": "Menunggu pemindai, yang memeriksa satu image dalam satu waktu.",
+    "running": "Memindai image. Biasanya butuh satu atau dua menit.",
+    "disabled": "Pemindaian image dimatikan untuk panel ini. Administrator bisa menyalakannya di Pengaturan, Pemindaian image.",
+    "never": "Image app ini belum pernah dipindai.",
+    "notDeployed": "App ini belum di-deploy. Image-nya dipindai setelah di-build.",
+    "failed": "Pemindaian terakhir tidak selesai",
+    "scannedAt": "Dipindai {{when}}",
+    "scanner": "Trivy {{version}}",
+    "notCurrent": "Laporan ini tentang image lain, bukan yang sedang dijalankan app. Pindai sekarang untuk memeriksa yang sedang berjalan.",
+    "undeployed": "Laporan ini tentang image yang belum keluar: deploy-nya masih berjalan, atau dihentikan.",
+    "countBadge": "{{severity}}: {{number}}",
+    "fixable": "Punya perbaikan: {{number}}",
+    "clean": "Tidak ada kerentanan yang diketahui di image ini.",
+    "onlyFixable": "Hanya yang punya perbaikan",
+    "noneFixable": "Belum ada yang punya perbaikan.",
+    "severityHeading": "Tingkat",
+    "package": "Paket",
+    "installed": "Terpasang",
+    "fixedIn": "Diperbaiki di",
+    "noFix": "Belum ada perbaikan",
+    "advisory": "Advisori",
+    "more": "{{number}} lagi, yang kurang parah, tidak disimpan dalam laporan.",
+    "blocked": "Deploy image ini dihentikan",
+    "blockedHelp": "Panel ini menghentikan deploy yang image-nya punya kerentanan kritis dengan perbaikan, dan image ini punya {{number}}. Pindah ke versi yang sudah diperbaiki lalu deploy lagi, atau gunakan Tetap deploy pada deployment yang dihentikan; itu dicatat di log aktivitas.",
+    "severity": {
+      "critical": "Kritis",
+      "high": "Tinggi",
+      "medium": "Sedang",
+      "low": "Rendah",
+      "unknown": "Tidak diketahui"
+    },
+    "trigger": {
+      "deploy": "setelah deploy",
+      "schedule": "sesuai jadwal harian",
+      "manual": "atas permintaan"
+    }
   }
 }

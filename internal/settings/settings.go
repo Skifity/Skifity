@@ -115,6 +115,7 @@ const (
 	GroupCluster       = "cluster"
 	GroupSignIn        = "signin"
 	GroupPlugins       = "plugins"
+	GroupScanning      = "scanning"
 )
 
 // Keys used elsewhere in the panel. Referring to a constant rather than a string
@@ -165,6 +166,9 @@ const (
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
+	KeyScanEnabled           = "scanning.enabled"
+	KeyScanSchedule          = "scanning.schedule"
+	KeyScanBlockCritical     = "scanning.block_fixable_critical"
 
 	// Written by the panel rather than by a person: when the registry was last
 	// swept, and how long finished records are kept. They are settings because
@@ -281,6 +285,28 @@ var Definitions = []Definition{
 		Placeholder: "2",
 		Kind:        KindNumber,
 		Validate:    validateBuildConcurrency,
+	},
+	{
+		Key: KeyScanEnabled, Label: "Scan images for known vulnerabilities", Group: GroupScanning,
+		Help: "On by default. Every image an app runs is scanned with Trivy when it is built or deployed, and again on the schedule below, " +
+			"and each app's Security tab lists what was found. Trivy downloads its database of vulnerabilities from mirror.gcr.io or ghcr.io; " +
+			"on a cluster with no way out to the internet, turn this off. A scan never holds up a deploy unless the setting below says so.",
+		Kind: KindBool, Validate: validateBool,
+	},
+	{
+		Key: KeyScanSchedule, Label: "Scan running apps again", Group: GroupScanning,
+		Help: "When to scan the image every app runs again, as a cron schedule in UTC, because new vulnerabilities are published about " +
+			"images nobody has changed. Empty scans every day at 04:23; off leaves it to deploys and Scan now. " +
+			"Apps are scanned one at a time, and one scanned in the last twelve hours is skipped.",
+		Placeholder: DefaultScanSchedule,
+		Validate:    validatePanelBackupSchedule,
+	},
+	{
+		Key: KeyScanBlockCritical, Label: "Stop deploys with a critical vulnerability that has a fix", Group: GroupScanning,
+		Help: "Off by default. When on, a deploy waits for its image to be scanned and stops if a critical vulnerability in it has a fixed version, " +
+			"naming the packages and the versions to move to. Somebody can still deploy it by accepting the vulnerabilities, which is recorded " +
+			"in the activity log. A scan that cannot run lets the deploy through, and a rollback is never stopped.",
+		Kind: KindBool, Validate: validateBool,
 	},
 	{
 		Key: KeyDeploymentHistory, Label: "Deployment records to keep, per app", Group: GroupCluster,
@@ -791,6 +817,11 @@ func validateInt(value string) error {
 
 // DefaultBuildConcurrency is how many builds run at once when nobody said.
 const DefaultBuildConcurrency = 2
+
+// DefaultScanSchedule is when running apps are scanned again when nobody
+// said: once a day, at a minute nobody else picked, in the quiet hours of
+// most of the places this runs.
+const DefaultScanSchedule = "23 4 * * *"
 
 func validateBuildConcurrency(value string) error {
 	if value == "" {

@@ -40,9 +40,9 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 	if err := db.SetVariable(ctx, &v, "SKF1.sealed"); err != nil {
 		t.Fatalf("SetVariable: %v", err)
 	}
-	d := Deployment{AppID: app.ID}
-	if err := db.CreateDeployment(ctx, &d); err != nil {
-		t.Fatalf("CreateDeployment: %v", err)
+	d := Deployment{ID: NewID("dep"), AppID: app.ID}
+	if err := insertDeploymentAtVersion15(ctx, db, d); err != nil {
+		t.Fatalf("insert the deployment: %v", err)
 	}
 	// Before 0016 there is no such source.
 	early := App{ID: NewID("app"), EnvironmentID: env.ID, Name: "early", Slug: "early", SourceType: "upload"}
@@ -90,6 +90,14 @@ func insertAppAtVersion15(ctx context.Context, db *DB, a App) error {
 		(id, environment_id, name, slug, source_type, repo_url, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?)`,
 		a.ID, a.EnvironmentID, a.Name, a.Slug, a.SourceType, a.RepoURL, now, now)
+	return err
+}
+
+// insertDeploymentAtVersion15 writes a deployment the way the schema before
+// 0016 takes one, for the reason the environment below is written by hand.
+func insertDeploymentAtVersion15(ctx context.Context, db *DB, d Deployment) error {
+	_, err := db.Exec(ctx, `INSERT INTO deployments (id, app_id, number, status, created_at)
+		VALUES (?,?,1,'queued',?)`, d.ID, d.AppID, Now())
 	return err
 }
 

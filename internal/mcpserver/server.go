@@ -499,6 +499,7 @@ func (s *Server) register() {
 	s.registerDatabases()
 	s.registerDomains()
 	s.registerLocks()
+	s.registerVulnerabilities()
 }
 
 // --- handlers ---

@@ -351,7 +351,9 @@
       "server.ssh_passwords_off": "SSH passwords turned off on a server",
       "domain.redirect_changed": "Domain redirect changed",
       "preview.started": "Preview of a branch started",
-      "preview.closed": "Preview of a branch closed"
+      "preview.closed": "Preview of a branch closed",
+      "app.scan_started": "Image scan started",
+      "app.deploy_vulnerabilities_accepted": "Deployed with critical vulnerabilities accepted"
     }
   },
   "projects": {
@@ -652,7 +654,9 @@
       "unreachable": "Traefik did not answer on its metrics port, 9100, so requests are not being counted. If you configure Traefik yourself, keep its Prometheus metrics on.",
       "no_cluster": "The panel is not connected to a cluster, so there is nothing to count requests from."
     },
-    "alertsErrorsHelp": "Server errors are only judged over three minutes with at least 20 requests between them, so one failed request on a quiet app is not a warning."
+    "alertsErrorsHelp": "Server errors are only judged over three minutes with at least 20 requests between them, so one failed request on a quiet app is not a warning.",
+    "security": "Security",
+    "criticalBadge": "Critical: {{number}}"
   },
   "deploy": {
     "title": "Deployments",
@@ -724,7 +728,10 @@
     "promoteAnyway": "Promote anyway",
     "promoted": "Promoting #{{number}} to {{environment}}",
     "promoteEnvironment": "The environment to promote to",
-    "noLogYet": "Nothing has been written to the build log yet."
+    "noLogYet": "Nothing has been written to the build log yet.",
+    "deployAnyway": "Deploy anyway",
+    "deployAnywayConfirm": "This deploys the image although it has critical vulnerabilities that have a fix. It is recorded in the activity log, with your name.",
+    "acceptedVulnerabilities": "Vulnerabilities accepted"
   },
   "variables": {
     "title": "Variables",
@@ -1500,6 +1507,18 @@
       "signin_api_allowed_networks": {
         "label": "API tokens only from",
         "help": "Addresses or networks, one per line, such as 203.0.113.7 or 10.0.0.0/8. When set, an API token — the CLI's, a CI job's, an assistant's — is refused from anywhere else, even though it is valid. Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere."
+      },
+      "scanning_enabled": {
+        "label": "Scan images for known vulnerabilities",
+        "help": "On by default. Every image an app runs is scanned with Trivy when it is built or deployed, and again on the schedule below, and each app's Security tab lists what was found. Trivy downloads its database of vulnerabilities from mirror.gcr.io or ghcr.io; on a cluster with no way out to the internet, turn this off. A scan never holds up a deploy unless the setting below says so."
+      },
+      "scanning_schedule": {
+        "label": "Scan running apps again",
+        "help": "When to scan the image every app runs again, as a cron schedule in UTC, because new vulnerabilities are published about images nobody has changed. Empty scans every day at 04:23; off leaves it to deploys and Scan now. Apps are scanned one at a time, and one scanned in the last twelve hours is skipped."
+      },
+      "scanning_block_fixable_critical": {
+        "label": "Stop deploys with a critical vulnerability that has a fix",
+        "help": "Off by default. When on, a deploy waits for its image to be scanned and stops if a critical vulnerability in it has a fixed version, naming the packages and the versions to move to. Somebody can still deploy it by accepting the vulnerabilities, which is recorded in the activity log. A scan that cannot run lets the deploy through, and a rollback is never stopped."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -1529,7 +1548,8 @@
     "componentUpgrade": "Upgrade to {{version}}",
     "componentUpgradeTitle": "Upgrade {{name}}?",
     "componentUpgradeConfirm": "The manifest of version {{to}} is applied over {{from}}, which is how the project documents its own upgrade. The component restarts; your apps do not.",
-    "componentVersionUnknown": "the version installed before versions were recorded"
+    "componentVersionUnknown": "the version installed before versions were recorded",
+    "scanning": "Image scanning"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2886,6 +2906,66 @@
         "cause": "{{0}} runs {{1}}, which Skifity does not back up.",
         "impact": "Nothing was changed.",
         "fix": "Keep data you cannot lose in a database that is backed up, such as PostgreSQL, or copy it with the engine's own tools through `{{0}} db connect`."
+      },
+      "deploy_vulnerable": {
+        "title": "This image has critical vulnerabilities that have a fix",
+        "cause": "{{0}} critical vulnerabilities in the image of {{1}} have a fixed version: {{2}}.",
+        "impact": "Nothing was deployed. The version running now keeps running.",
+        "fix": "Move to the fixed versions — usually a newer base image or dependency — and deploy again. To deploy this image anyway, deploy it with the vulnerabilities accepted: Deploy anyway on the stopped deployment, or `{{0}} deploy --accept-vulnerabilities`. That is recorded in the activity log."
+      },
+      "scan_database_unavailable": {
+        "title": "The vulnerability database could not be downloaded",
+        "cause": "The scanner could not fetch its database: {{0}}",
+        "impact": "This image was not scanned. Deploys are never held up by a scan that could not run.",
+        "fix": "The cluster needs to reach mirror.gcr.io or ghcr.io over HTTPS, where the database is published. On a cluster with no way out to the internet, turn scanning off under Settings, Image scanning."
+      },
+      "scan_pull_failed": {
+        "title": "The scanner could not read the image",
+        "cause": "Reading {{0}} failed: {{1}}",
+        "impact": "This image was not scanned. The app is not affected.",
+        "fix": "For an image in a private registry, add the registry's credentials under Settings, Git, Private registries. For an image the panel built, deploy the app again: the registry keeps the last ten images of an app."
+      },
+      "scan_timeout": {
+        "title": "The scan took too long and was stopped",
+        "cause": "Scanning {{0}} did not finish within fifteen minutes.",
+        "impact": "This image was not scanned. The app is not affected.",
+        "fix": "A very large image, or a slow way out to the internet the first time the database is downloaded, can take this long. Scan it again: the database is kept, so a second scan is quicker."
+      },
+      "scan_failed": {
+        "title": "The image could not be scanned",
+        "cause": "Scanning {{0}} failed: {{1}}",
+        "impact": "This image was not scanned. The app is not affected, and deploys are never held up by it.",
+        "fix": "Scan it again. If it fails the same way, copy this error and open an issue."
+      },
+      "scan_report_unreadable": {
+        "title": "The scan's report could not be read",
+        "cause": "The scanner finished, and what it printed was not a report the panel can read: {{0}}",
+        "impact": "Nothing was recorded for this scan. The app is not affected.",
+        "fix": "Scan it again. If it keeps happening, copy this error and open an issue: it is a bug in Skifity."
+      },
+      "scan_interrupted": {
+        "title": "The panel restarted during this scan",
+        "cause": "The scan was queued or running when the panel stopped.",
+        "impact": "This image was not scanned this time. The app is not affected.",
+        "fix": "Scan it again with Scan now, or wait for the next scheduled scan."
+      },
+      "scan_disabled": {
+        "title": "Image scanning is switched off",
+        "cause": "An administrator turned vulnerability scanning off for this panel.",
+        "impact": "Nothing was scanned.",
+        "fix": "Turn it on under Settings, Image scanning."
+      },
+      "scan_no_image": {
+        "title": "This app has no image to scan yet",
+        "cause": "{{0}} has not been deployed, so there is no image to look at.",
+        "impact": "Nothing was scanned.",
+        "fix": "Deploy it. Its image is scanned once it is built."
+      },
+      "cli_scan_wait": {
+        "title": "The scan has not finished yet",
+        "cause": "It was still queued or running after {{0}} minutes.",
+        "impact": "Nothing is wrong with the app. The scan carries on in the panel.",
+        "fix": "Run `{{0}} scan` later to read its report."
       }
     }
   },
@@ -2966,7 +3046,8 @@
       "app.alert": "An app crossed a usage threshold",
       "server.alert": "A server crossed a usage threshold",
       "backup.missed": "A scheduled backup was missed and taken late",
-      "backup.succeeded": "A backup succeeded"
+      "backup.succeeded": "A backup succeeded",
+      "app.vulnerable": "An app's image has a new critical vulnerability"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {
@@ -3466,5 +3547,46 @@
     "previewBranchHelp": "A copy of this app, built from the branch, in a preview environment of its own with its own databases — the same preview a pull request from that branch gets, so opening one later updates this instead of making another.",
     "previewBranchRemove": "It stays until the branch is deleted, its pull request is closed, or somebody closes it with skifity preview --close.",
     "start": "Start the preview"
+  },
+  "security": {
+    "title": "Known vulnerabilities",
+    "help": "The image this app runs, checked with Trivy against published advisories: when it is built or deployed, again every day, and whenever you ask.",
+    "scanNow": "Scan now",
+    "queued": "Waiting for the scanner, which looks at one image at a time.",
+    "running": "Scanning the image. This usually takes a minute or two.",
+    "disabled": "Image scanning is switched off for this panel. An administrator can turn it on under Settings, Image scanning.",
+    "never": "This app's image has not been scanned yet.",
+    "notDeployed": "The app has not been deployed yet. Its image is scanned once it is built.",
+    "failed": "The last scan did not finish",
+    "scannedAt": "Scanned {{when}}",
+    "scanner": "Trivy {{version}}",
+    "notCurrent": "This report is of another image than the one the app runs now. Scan now to check the one it runs.",
+    "undeployed": "This report is of an image that has not gone out: its deploy is under way, or was stopped.",
+    "countBadge": "{{severity}}: {{number}}",
+    "fixable": "With a fix: {{number}}",
+    "clean": "No known vulnerabilities were found in this image.",
+    "onlyFixable": "Only those with a fix",
+    "noneFixable": "None of these has a fix yet.",
+    "severityHeading": "Severity",
+    "package": "Package",
+    "installed": "Installed",
+    "fixedIn": "Fixed in",
+    "noFix": "No fix yet",
+    "advisory": "Advisory",
+    "more": "{{number}} more, less severe, were not kept in the report.",
+    "blocked": "Deploys of this image are stopped",
+    "blockedHelp": "This panel stops a deploy whose image has a critical vulnerability with a fix, and this image has {{number}}. Move to the fixed versions and deploy again, or use Deploy anyway on the stopped deployment; that is recorded in the activity log.",
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "unknown": "Unknown"
+    },
+    "trigger": {
+      "deploy": "after a deploy",
+      "schedule": "on the daily schedule",
+      "manual": "on request"
+    }
   }
 }

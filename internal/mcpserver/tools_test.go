@@ -100,6 +100,8 @@ var exampleCalls = map[string]map[string]any{
 
 	"lock_deploys":   {"app_id": "app_1", "reason": "launch day"},
 	"unlock_deploys": {"app_id": "app_1"},
+
+	"get_vulnerabilities": {"app_id": "app_1"},
 }
 
 // Every tool, once, against a panel that hands over every secret it holds.

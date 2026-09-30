@@ -16,6 +16,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 
+import { CriticalBadge } from "@/components/app/security-tab"
 import { EmptyState } from "@/components/empty-state"
 import { CloneEnvironmentDialog } from "@/components/environment-clone"
 import { EnvironmentConfinement } from "@/components/environment-confinement"
@@ -108,6 +109,8 @@ export function ProjectDetailPage() {
       "app.created": () => void queryClient.invalidateQueries({ queryKey: ["apps"] }),
       "app.deleted": () => void queryClient.invalidateQueries({ queryKey: ["apps"] }),
       database: () => void queryClient.invalidateQueries({ queryKey: ["databases"] }),
+      // The list says which app has something critical, from its newest scan.
+      scan: () => void queryClient.invalidateQueries({ queryKey: ["apps"] }),
     },
     // A member limited to some projects is refused the team's stream — it
     // carries every project's events — so the lists below are asked again
@@ -459,6 +462,7 @@ function AppRow({ app }: { app: App }) {
               {status.data.ready_replicas}/{status.data.desired_replicas}
             </span>
           )}
+          <CriticalBadge counts={app.vulnerabilities} />
           <StatusBadge status={phase} label={t(`apps.phase.${phase}`, { defaultValue: phase })} />
         </ItemActions>
       </Link>

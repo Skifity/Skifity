@@ -74,13 +74,20 @@ const (
 	// EventServerAlert is a server crossing one of its thresholds — disk,
 	// memory, CPU — and coming back under it.
 	EventServerAlert = "server.alert"
+	// EventAppVulnerable is a scan of an app's image finding a critical
+	// vulnerability the scan before it did not. On by default, like
+	// app.unhealthy and unlike backup.succeeded: it is about an app that can
+	// be broken into, it is sent once per new finding rather than every time
+	// the image is scanned, and a channel that hears about every other
+	// problem with an app would be wrong to stay quiet about this one.
+	EventAppVulnerable = "app.vulnerable"
 )
 
 // AllEvents is what the UI offers when configuring a channel.
 var AllEvents = []string{
 	EventDeploySucceeded, EventDeployFailed, EventAppUnhealthy,
 	EventServerAdded, EventServerLost, EventBackupFailed, EventBackupSucceeded, EventBackupMissed,
-	EventCertificate, EventAppAlert, EventServerAlert,
+	EventCertificate, EventAppAlert, EventServerAlert, EventAppVulnerable,
 }
 
 // optIn are the events a channel receives only when it names them. A channel

@@ -3143,6 +3143,45 @@ paths:
                   manifests: {type: string, description: 'Multi-document YAML.'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/apps/{appID}/vulnerabilities:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    get:
+      operationId: getVulnerabilities
+      tags: [Apps]
+      summary: The known vulnerabilities in the image an app runs
+      description: >-
+        Viewer. The newest report on the app's image, with a count per severity and the most severe
+        findings, and the newest scan when it is still running or failed. Images are scanned with Trivy
+        when they are built or deployed and again on a daily schedule.
+      responses:
+        '200':
+          description: The report, and how scanning is set up.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VulnerabilityReport'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/vulnerabilities/scan:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: scanApp
+      tags: [Apps]
+      summary: Scan the image an app runs now
+      description: >-
+        Member. Queues a scan of the image of the app's newest successful deployment and answers at once;
+        read the report from the route above when it has finished. When a scan of the app is already
+        queued or running, that one is answered instead of starting another. scan.disabled when scanning
+        is switched off, scan.no_image for an app that has never been deployed.
+      responses:
+        '202':
+          description: The scan, queued or already running.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageScan'}
+        default: {$ref: '#/components/responses/Error'}
+
   # --- databases ---
 
   /api/databases/{databaseID}:
@@ -5205,6 +5244,9 @@ components:
         status: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+        vulnerabilities:
+          $ref: '#/components/schemas/ScanCounts'
+          description: 'What the newest scan of its image counted. Only in an environment''s list of apps, and only for an app that has been scanned.'
 
     AppList:
       type: object
@@ -5736,6 +5778,7 @@ components:
         error_message: {type: string}
         error_hint: {type: string}
         created_by: {type: string}
+        accepted_vulnerabilities: {type: boolean, description: 'Deployed with critical vulnerabilities that have a fix accepted, past the check that stops those.'}
         created_at: {type: string, format: date-time}
         started_at: {type: string, format: date-time}
         finished_at: {type: string, format: date-time}
@@ -5754,6 +5797,81 @@ components:
       properties:
         commit_sha: {type: string, description: 'The branch''s latest commit when left out.'}
         force: {type: boolean, description: 'Rebuild even when nothing that goes into the image changed.'}
+        accept_vulnerabilities:
+          type: boolean
+          description: >-
+            Deploy even when the image has a critical vulnerability with a fix and the panel is set to stop
+            those. Recorded on the deployment and in the activity log.
+
+    ScanCounts:
+      type: object
+      required: [critical, high, medium, low, unknown]
+      properties:
+        critical: {type: integer}
+        high: {type: integer}
+        medium: {type: integer}
+        low: {type: integer}
+        unknown: {type: integer, description: 'Not rated by anybody yet.'}
+
+    ScanFinding:
+      type: object
+      required: [id, package, installed, severity]
+      properties:
+        id: {type: string, description: 'The advisory: a CVE, a GHSA, or a distribution''s own.'}
+        package: {type: string}
+        installed: {type: string}
+        fixed_in: {type: string, description: 'The version, or versions, that fix it. Missing when there is no fix yet.'}
+        severity: {type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN]}
+        title: {type: string}
+        url: {type: string, description: 'The advisory''s page. Always https.'}
+        target: {type: string, description: 'Where in the image the package was found.'}
+
+    ImageScan:
+      type: object
+      required: [id, app_id, image, trigger, status, counts, fixable, fixable_critical, findings, omitted, created_at]
+      properties:
+        id: {type: string}
+        app_id: {type: string}
+        deployment_id: {type: string, description: 'The deployment whose image was scanned.'}
+        image: {type: string}
+        digest: {type: string, description: 'The image''s manifest digest, sha256:..., when the report named one.'}
+        trigger: {type: string, enum: [deploy, schedule, manual]}
+        status: {type: string, enum: [queued, running, succeeded, failed]}
+        counts: {$ref: '#/components/schemas/ScanCounts'}
+        fixable: {type: integer, description: 'Findings, of any severity, with a fixed version.'}
+        fixable_critical: {type: integer, description: 'Critical findings with a fixed version: what stops a deploy when the panel is set to.'}
+        findings:
+          type: [array, 'null']
+          description: The most severe first, and those with a fix first among equals. At most 200.
+          items: {$ref: '#/components/schemas/ScanFinding'}
+        omitted: {type: integer, description: 'How many findings there were beyond those listed.'}
+        scanner_version: {type: string, description: 'The Trivy version that wrote the report.'}
+        os: {type: string, description: 'The image''s operating system, such as debian 12.7.'}
+        error_code: {type: string}
+        error_message: {type: string}
+        error_hint: {type: string}
+        requested_by: {type: string, description: 'The user who asked for it, or who deployed the image.'}
+        created_at: {type: string, format: date-time}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+
+    VulnerabilityReport:
+      type: object
+      required: [enabled, blocking, scan, current, undeployed]
+      properties:
+        enabled: {type: boolean, description: 'Scanning is switched on for this panel.'}
+        blocking: {type: boolean, description: 'A deploy is stopped by a critical vulnerability with a fix.'}
+        image: {type: string, description: 'What the app runs now: its newest successful deployment''s image.'}
+        scan:
+          description: The newest report, or null when the app has never been scanned.
+          oneOf:
+            - {$ref: '#/components/schemas/ImageScan'}
+            - {type: 'null'}
+        current: {type: boolean, description: 'The report is of the image the app runs now.'}
+        undeployed: {type: boolean, description: 'The report is of an image that has not gone out: its deploy is under way, or was stopped.'}
+        latest:
+          $ref: '#/components/schemas/ImageScan'
+          description: The newest scan, when it is not the report above - queued, running, or failed and saying why.
 
     DeploymentLogs:
       type: object

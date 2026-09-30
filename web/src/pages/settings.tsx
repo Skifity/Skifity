@@ -96,6 +96,7 @@ import type {
 const GROUPS: { key: string; label: string }[] = [
   { key: "general", label: "settings.general" },
   { key: "cluster", label: "settings.cluster" },
+  { key: "scanning", label: "settings.scanning" },
   { key: "domains", label: "settings.domains" },
   { key: "git", label: "settings.git" },
   { key: "storage", label: "settings.storage" },

@@ -211,6 +211,7 @@ kubeconfigs.
 |---|---|
 | `install.sh` | k3s server, the panel, cert-manager, and the panel's own directories on the host: its database and its master key |
 | First build | in-cluster registry + rootless BuildKit |
+| First image scan | a volume for Trivy's vulnerability database, in the build namespace; each scan is a Job that ends |
 | First PostgreSQL | CloudNativePG operator |
 | First MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached | nothing: each is a StatefulSet from the engine's official image |
 | Scale-to-zero enabled | KEDA + http-add-on |

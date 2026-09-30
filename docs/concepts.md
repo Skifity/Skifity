@@ -558,6 +558,92 @@ says so. The list is kept short on purpose, for holes that turn an app into
 somebody else's server; everything else is what `npm audit` and Dependabot are
 for.
 
+### Scanning every image for vulnerabilities
+
+The list above catches a handful of framework holes before anything is built.
+Everything else in an image — the distribution's packages under the app, the
+libraries in `node_modules`, a jar somebody copied in — is checked once the image
+exists, with [Trivy](https://trivy.dev), against the published advisories. An
+image is scanned:
+
+* **when it is deployed.** A build's image as soon as it is pushed; a prebuilt
+  image, a template's, a promoted or a rolled-back version when it is deployed,
+  unless the same image was scanned in the last twelve hours.
+* **every day,** at 04:23 UTC unless **Scan running apps again** under Settings,
+  Image scanning, says otherwise: the image each app runs, because advisories are
+  published about images nobody has changed. An app scanned in the last twelve
+  hours is skipped.
+* **when somebody asks,** with **Scan now** on the app's Security tab, or
+  `skifity scan --now`.
+
+A scan never holds up a rollout: the deploy goes out while its image is being
+scanned, unless the setting in the next section says otherwise. Scans run one at
+a time, as a Job in the build namespace, with Trivy 0.74.0 pinned by its digest.
+The Job runs as an unprivileged user, with no capabilities, a read-only
+filesystem and no service account token, and is stopped after fifteen minutes.
+
+The app's **Security** tab shows how many were found of each severity, when and
+with which Trivy the image was scanned, and the findings: the package, the
+version installed, the version that fixes it, and a link to the advisory, the
+most severe first and those with a fix first among equals. An app with something
+critical says so in its project's list of apps. What is kept is a summary — the
+counts, and at most two hundred findings a scan, with how many more there were —
+and each app keeps its last twenty scans.
+
+**Being told.** A scan that finds a critical vulnerability the app's previous
+scan did not have sends `app.vulnerable` to the notification channels that follow
+the app's project. It is on by default, like `app.unhealthy`, and it is sent once
+per finding: a critical still there tomorrow is not news tomorrow.
+
+**Private images** are pulled with the team's credentials for their registry,
+from [Private registries](#private-registries), or with the panel's own external
+registry's. The registry inside the cluster is reached by its cluster address,
+which Trivy reads over plain HTTP because it is a private one. Trivy's
+`--insecure` is never used: it would also stop checking the certificate of the
+database download.
+
+From the command line, `skifity scan` prints the newest report, `--now` scans
+again and waits for it, and `--json` is the report as the panel answers it. An
+assistant reads the same with the `get_vulnerabilities` tool.
+
+#### Stopping deploys that have a fix waiting
+
+Off by default. With **Stop deploys with a critical vulnerability that has a
+fix** on, a deploy waits for its image to be scanned — ahead of anything the
+daily rescan has queued — and stops when a critical vulnerability in it has a
+fixed version. The deployment fails with `deploy.vulnerable`, naming the packages
+and the versions to move to; nothing reaches the cluster, and the version running
+keeps running. A critical vulnerability nobody has fixed yet stops nothing: there
+is nothing to move to, and refusing the deploy would only refuse the next fix of
+something else.
+
+To deploy the image anyway, press **Deploy anyway** on the stopped deployment,
+or:
+
+```sh
+skifity deploy --accept-vulnerabilities
+```
+
+Either is recorded in the activity log as an entry of its own, and on the
+deployment, which the history marks. A rollback is never stopped, and neither is
+a deploy whose scan could not run. An assistant cannot accept vulnerabilities:
+`deploy_app` has no way to, because going past a security check is a person's
+decision.
+
+#### Without the internet
+
+Trivy downloads its database of vulnerabilities from `mirror.gcr.io`, or from
+`ghcr.io` when that fails, and keeps it on a volume in the build namespace,
+refreshing it when it is a day old; an image with jars in it also needs the Java
+database, from the same places. On a cluster with no way out to the internet
+every scan fails with `scan.database_unavailable`. That is shown on the Security
+tab and stops no deploy, but there is no point to it: turn scanning off under
+Settings, Image scanning.
+
+The volume lives on the server the first scan ran on. If that server is removed,
+the next scan finds it cannot start there, drops the volume, and the one after
+that starts a new one wherever it lands.
+
 ## Deploying a folder instead
 
 Not every app has a repository. One an assistant wrote is usually a folder on
