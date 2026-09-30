@@ -174,6 +174,19 @@ func (c *Cluster) guardConfig(ctx context.Context) (guard.Config, error) {
 		config.Sets[row.Hostname] = guard.Protected{AppID: row.AppID, RuleSet: set}
 	}
 
+	// An app in maintenance is judged by its rules first, if it has any, and
+	// then answered with its page.
+	maintenance, err := c.db.MaintenanceHostnames(ctx)
+	if err != nil {
+		return guard.Config{}, err
+	}
+	for _, row := range maintenance {
+		protected := config.Sets[row.Hostname]
+		protected.AppID = row.AppID
+		protected.Maintenance = &guard.Maintenance{Message: row.Message, Allow: row.Allow}
+		config.Sets[row.Hostname] = protected
+	}
+
 	if value, _, err := c.db.GetSetting(ctx, settings.KeyTrustedProxies); err == nil && value != "" {
 		config.TrustedProxies = []string{value}
 	}

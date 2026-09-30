@@ -4891,6 +4891,48 @@ saying it.
 Not executed: a build log in a real cluster, and each Git host's API serving a
 lockfile. The reads are the ones the new-app form already makes.
 
+## Phase 98 — maintenance, answered by the guard
+
+The last of gap 19. DigitalOcean, Kamal, Easypanel and Netlify can put an app into
+maintenance; here the only ways to keep visitors out while somebody fixed data
+by hand were to scale the app to nothing — a Traefik error page, and a cold
+start afterwards — or to write a firewall rule that refused everybody with a
+bare 403.
+
+The firewall's guard already stands in front of a protected app as Traefik's
+forward-auth, and whatever it answers other than a 2xx is what the visitor
+gets, headers and body. So maintenance is one more answer there
+(`internal/guard/maintenance.go`): a 503 with `Retry-After: 300` and a page
+holding the team's message and nothing else — no English chrome, because the
+visitor's language is not known and the team wrote the message in theirs. It is
+decided after the rules, so a visitor the firewall refuses is refused rather
+than told when the site is back. Listed addresses and ranges reach the app, so
+the work can be checked first; an entry that does not parse allows nobody.
+
+The app is not touched: no scaling, no redeploy, so ending it is immediate.
+Migration 0027 (`app_maintenance`) holds the message, the allow list and who
+started it. The guard's config gains `maintenance` per hostname, an app in it
+gets the middleware whether or not it has rules, and its namespace gets the
+middleware object. The guard is installed the first time an app is put into
+maintenance, the way scale to zero installs KEDA; if it cannot be, nothing is
+recorded, because maintenance nobody sees is not maintenance. An app with no
+domain is refused.
+
+`GET/PUT/DELETE /api/apps/{app}/maintenance` (viewer to read, member to change,
+like a deploy lock), audited; the app's own answer carries it for a notice at
+the top of its page; the Settings tab has the form and offers the caller's own
+public address; `skifity maintenance on|off [--allow] [--allow-me]`.
+
+Tested: the page, its status, header and escaping; the firewall still first;
+an allowed address and range through, and an allow list belonging to its own
+app; allow-list parsing; the guard config and the middleware for an app in
+maintenance, alongside rules and after its end; and the API's validation, the
+guard installed once, the message changed without losing who started it, the
+audit, and nothing recorded when the guard cannot be installed.
+
+Not executed: Traefik passing the guard's 503 page through to a browser. Its
+forward-auth documentation says a non-2xx answer is returned as it is.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

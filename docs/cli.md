@@ -174,6 +174,8 @@ skifity scale --auto --max 5      # or automatically
 skifity rollback                  # back to the previous version
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
+skifity maintenance on "Back at 14:00" --allow-me  # visitors see a page; you still see the app
+skifity maintenance off           # visitors see the app again
 skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment

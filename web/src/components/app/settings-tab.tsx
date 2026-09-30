@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { useMutation } from "@tanstack/react-query"
 import { Trash2Icon } from "lucide-react"
 
+import { MaintenanceCard } from "@/components/app/maintenance"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
@@ -255,6 +256,10 @@ export function SettingsTab({ app }: { app: App }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* A folder sent with `skifity up` or an image can be in maintenance
+          as much as a repository can: it is about visitors, not the source. */}
+      <MaintenanceCard app={app} />
 
       <Card className="border-destructive/30">
         <CardHeader>

@@ -294,7 +294,9 @@
       "variable.preview_set": "Isi variabel untuk preview diubah",
       "app.deploys_locked": "Deploy dikunci",
       "app.deploys_unlocked": "Kunci deploy dibuka",
-      "app.alerts_changed": "Peringatan pemakaian diubah"
+      "app.alerts_changed": "Peringatan pemakaian diubah",
+      "app.maintenance_started": "Pemeliharaan dimulai",
+      "app.maintenance_ended": "Pemeliharaan diakhiri"
     }
   },
   "projects": {
@@ -506,7 +508,20 @@
     "watchPathsUseRoot": "Pantau {{dir}}",
     "advisoryTitle": "{{name}} {{version}} memiliki kerentanan kritis",
     "advisoryBody": "{{id}} sudah diperbaiki di {{fixed}} dan versi setelahnya pada jalur yang sama. Aplikasi tetap di-deploy, dan log build setiap deploy akan menyebutkan ini sampai versinya dinaikkan.",
-    "advisoryLink": "Baca advisori"
+    "advisoryLink": "Baca advisori",
+    "maintenanceTitle": "Mode pemeliharaan",
+    "maintenanceHelp": "Pengunjung mendapat halaman berisi pesan Anda, bukan aplikasinya, dengan status yang memberi tahu browser dan mesin pencari bahwa ini sementara. Alamat yang Anda cantumkan tetap bisa mengakses aplikasi, jadi Anda bisa memeriksanya lebih dulu. Aplikasi tetap berjalan.",
+    "maintenanceMessage": "Pesan",
+    "maintenanceMessageHelp": "Ditampilkan persis seperti yang ditulis, jadi tulislah dalam bahasa yang dibaca pengunjung Anda.",
+    "maintenanceDefaultMessage": "Kami sedang melakukan pemeliharaan dan akan segera kembali.",
+    "maintenanceAllow": "Alamat yang tetap bisa mengakses aplikasi",
+    "maintenanceAllowHelp": "Satu alamat atau rentang per baris, misalnya 203.0.113.7 atau 203.0.113.0/24.",
+    "maintenanceAddMine": "Tambahkan alamat saya ({{address}})",
+    "maintenanceStart": "Mulai pemeliharaan",
+    "maintenanceEnd": "Akhiri pemeliharaan",
+    "maintenanceNoDomain": "Aplikasi ini tidak punya domain, jadi tidak ada tempat untuk menampilkan halamannya. Tambahkan dulu di tab Domain.",
+    "maintenanceActive": "Sedang dalam pemeliharaan",
+    "maintenanceActiveBy": "Pengunjung melihat pesan Anda. {{who}} memulainya {{when}}."
   },
   "deploy": {
     "title": "Deployment",
@@ -2199,6 +2214,24 @@
         "cause": "Satu aplikasi bisa memantau paling banyak {{0}} path atau pola.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Gunakan pola yang mencakup beberapa path sekaligus, misalnya apps/** atau packages/*/src."
+      },
+      "app_maintenance_message": {
+        "title": "Tulis pesan yang akan dibaca pengunjung",
+        "cause": "Halaman pemeliharaan hanya menampilkan pesan itu, jadi pesan tidak boleh kosong atau lebih dari {{0}} karakter.",
+        "impact": "Tidak ada yang diubah. Aplikasi tidak dalam pemeliharaan.",
+        "fix": "Tulis satu atau dua kalimat dalam bahasa yang dibaca pengunjung Anda: apa yang sedang terjadi, dan kapan aplikasi kembali."
+      },
+      "app_maintenance_address": {
+        "title": "Itu bukan alamat yang bisa diloloskan",
+        "cause": "{{0}} bukan alamat atau rentang, atau jumlahnya lebih dari {{1}}.",
+        "impact": "Tidak ada yang diubah. Aplikasi tidak dalam pemeliharaan.",
+        "fix": "Tulis satu alamat, seperti 203.0.113.7, atau satu rentang, seperti 203.0.113.0/24, per baris."
+      },
+      "app_maintenance_no_domain": {
+        "title": "Aplikasi ini tidak punya alamat untuk menampilkan halaman",
+        "cause": "Pemeliharaan adalah halaman yang ditampilkan di domain aplikasi, dan aplikasi ini tidak punya domain.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tambahkan domain di tab Domain terlebih dahulu. Aplikasi tanpa alamat tidak punya pengunjung untuk diberi halaman."
       }
     }
   },

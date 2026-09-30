@@ -55,6 +55,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdLock(ctx, rest, stdout)
 	case "unlock":
 		err = cmdUnlock(ctx, rest, stdout)
+	case "maintenance":
+		err = cmdMaintenance(ctx, rest, stdout)
 	case "run":
 		err = cmdRun(ctx, rest, stdout)
 	case "status":
@@ -120,6 +122,7 @@ Working with apps:
   scale                 Change the number of instances or turn on autoscaling
   rollback              Go back to a previous deployment
   lock, unlock          Stop every deploy and rollback of an app, and start them again
+  maintenance           Show visitors a page instead of the app, and stop
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
   open                  Print an app's URLs

@@ -76,6 +76,9 @@ type Protected struct {
 	// something the panel can look up.
 	AppID   string            `json:"app_id"`
 	RuleSet edgerules.RuleSet `json:"rules"`
+	// Maintenance, when set, answers every request the rules let through
+	// with a page, except those from an allowed address. See maintenance.go.
+	Maintenance *Maintenance `json:"maintenance,omitempty"`
 }
 
 // Options configure a guard.
@@ -287,6 +290,12 @@ func (g *Guard) Handler() http.Handler {
 			// not protecting anything and the operator has to find out.
 			g.log.Warn("rules were skipped because something they test is not known",
 				"host", judged.Host, "rules", strings.Join(decision.Skipped, ", "))
+		}
+		// After the rules, never before: somebody the firewall refuses is
+		// refused whether or not the app is in maintenance.
+		if page := g.maintenanceFor(judged); page != nil {
+			serveMaintenance(w, page)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 	})

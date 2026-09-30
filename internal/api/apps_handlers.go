@@ -471,12 +471,23 @@ func (s *Server) handleGetApp(w http.ResponseWriter, r *http.Request) {
 	type appWithLock struct {
 		store.App
 		DeployLock *store.DeployLock `json:"deploy_lock,omitempty"`
+		// Maintenance goes with it for the same reason: the page says so
+		// at the top, where nobody can miss that visitors see a notice.
+		Maintenance *store.Maintenance `json:"maintenance,omitempty"`
 	}
 	answer := appWithLock{App: app}
 	lock, err := s.db.GetDeployLock(r.Context(), app.ID)
 	switch {
 	case err == nil:
 		answer.DeployLock = &lock
+	case !errors.Is(err, store.ErrNotFound):
+		writeError(w, r, err)
+		return
+	}
+	maintenance, err := s.db.GetMaintenance(r.Context(), app.ID)
+	switch {
+	case err == nil:
+		answer.Maintenance = &maintenance
 	case !errors.Is(err, store.ErrNotFound):
 		writeError(w, r, err)
 		return

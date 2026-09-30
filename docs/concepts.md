@@ -487,6 +487,33 @@ Two other things stop an app on purpose, and both say so first: restoring a
 volume backup, and scale to zero, where the first request after an idle period
 waits for an instance to start.
 
+## Maintenance
+
+When the work needs the app to be left alone — a migration run by hand, a data
+fix, a move to another database — put it into maintenance from its
+**Settings** tab or with `skifity maintenance on "Back at 14:00"`. Visitors to
+every one of its domains get a page with your message and nothing else, with a
+`503` and `Retry-After`, which is what tells a browser and a search engine that
+it is temporary: a crawler keeps the page indexed rather than dropping it.
+
+The message is shown exactly as written, so write it in the language your
+visitors read. The addresses you list — one address or range per line, and
+the form offers the one you are using — still reach the app, so you can check
+the work before anybody else sees it. `skifity maintenance on --allow-me` does
+the same from the command line.
+
+The app keeps running the whole time; nothing about it is stopped or
+redeployed, so ending maintenance is immediate. The page is answered by the
+firewall's guard, which already stands in front of an app for its rules, and it
+is installed the first time an app is put into maintenance. An app with
+firewall rules keeps them: somebody the rules refuse is refused, not shown the
+page. An app with no domain has nowhere to show a page and cannot be put into
+maintenance.
+
+Maintenance is not a [deploy lock](#deployments-and-rollback): a push still
+deploys while visitors see the page, which is usually the point. Lock deploys as
+well if it should not.
+
 ## Instances and scaling
 
 An app runs one instance by default. You can set a fixed number, or let Skifity

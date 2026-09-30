@@ -97,7 +97,8 @@ func (db *DB) ProtectedHostnames(ctx context.Context) ([]ProtectedHostname, erro
 }
 
 // ProtectedNamespaces lists the namespaces holding at least one app whose
-// firewall is switched on, which is where the guard's middleware has to exist.
+// firewall is switched on or that is in maintenance, which is where the
+// guard's middleware has to exist.
 //
 // Distinct namespaces rather than apps: a middleware is one object per
 // namespace however many protected apps are in it, and applying the same object
@@ -105,10 +106,12 @@ func (db *DB) ProtectedHostnames(ctx context.Context) ([]ProtectedHostname, erro
 func (db *DB) ProtectedNamespaces(ctx context.Context) ([]string, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT DISTINCT e.namespace
-		FROM app_firewalls f
-		JOIN apps a ON a.id = f.app_id
+		FROM apps a
 		JOIN environments e ON e.id = a.environment_id
-		WHERE f.enabled = 1
+		WHERE a.id IN (
+			SELECT app_id FROM app_firewalls WHERE enabled = 1
+			UNION
+			SELECT app_id FROM app_maintenance)
 		ORDER BY e.namespace`)
 	if err != nil {
 		return nil, fmt.Errorf("list the protected namespaces: %w", err)

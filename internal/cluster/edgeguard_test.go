@@ -11,6 +11,7 @@ import (
 	"skifity/internal/edgerules"
 	"skifity/internal/guard"
 	"skifity/internal/kube"
+	"skifity/internal/store"
 )
 
 func guardParts(t *testing.T, objects []any) (*corev1.ConfigMap, *appsv1.Deployment, *corev1.Service) {
@@ -191,5 +192,60 @@ func TestTooManyRulesIsRefusedBeforeItIsApplied(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "too many") {
 		t.Errorf("the refusal does not say what is wrong: %v", err)
+	}
+}
+
+// An app in maintenance reaches the guard with its page and its allow list,
+// keeps whatever firewall rules it has, and gets the middleware in front of
+// its Ingress even with no rules at all.
+func TestAnAppInMaintenanceReachesTheGuard(t *testing.T) {
+	c, db, app, env, _ := autoDomainFixture(t)
+	ctx := t.Context()
+	if err := db.CreateDomain(ctx, &store.Domain{AppID: app.ID, Hostname: "shop.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+
+	spec, err := c.SpecFor(ctx, app, env, "registry.local/web:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Protected {
+		t.Fatal("an app with neither rules nor maintenance was put behind the guard")
+	}
+
+	maintenance := store.Maintenance{AppID: app.ID, Message: "Back at 14:00.", Allow: []string{"203.0.113.7"}, StartedBy: "ops@example.test"}
+	if err := db.StartMaintenance(ctx, &maintenance); err != nil {
+		t.Fatal(err)
+	}
+	config, err := c.guardConfig(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := config.Sets["shop.example.com"].Maintenance
+	if page == nil || page.Message != "Back at 14:00." || len(page.Allow) != 1 || page.Allow[0] != "203.0.113.7" {
+		t.Fatalf("the guard was given %+v", config.Sets["shop.example.com"])
+	}
+	if spec, _ := c.SpecFor(ctx, app, env, "registry.local/web:1"); !spec.Protected {
+		t.Fatal("an app in maintenance has no middleware in front of it, so the guard is never asked")
+	}
+	if namespaces, _ := db.ProtectedNamespaces(ctx); len(namespaces) != 1 || namespaces[0] != env.Namespace {
+		t.Fatalf("the middleware goes into %v", namespaces)
+	}
+
+	// The rules stay in force alongside it.
+	if err := db.SetAppFirewall(ctx, store.AppFirewall{AppID: app.ID, Enabled: true, Rules: `{"default":"block"}`}, ""); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = c.guardConfig(ctx)
+	if got := config.Sets["shop.example.com"]; got.RuleSet.Default != edgerules.ActionBlock || got.Maintenance == nil {
+		t.Fatalf("rules and maintenance together became %+v", got)
+	}
+
+	if err := db.EndMaintenance(ctx, app.ID); err != nil {
+		t.Fatal(err)
+	}
+	config, _ = c.guardConfig(ctx)
+	if config.Sets["shop.example.com"].Maintenance != nil {
+		t.Fatal("maintenance outlived its end")
 	}
 }

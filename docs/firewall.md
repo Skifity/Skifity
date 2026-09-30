@@ -142,6 +142,14 @@ The hash is bcrypt with a lower work factor than a sign-in page would use,
 because Traefik checks it on every request — every image and script a page
 loads — rather than once per visit.
 
+## Maintenance
+
+The same guard answers for an app in [maintenance](concepts.md#maintenance):
+visitors get a page with the team's message and a 503, and the addresses listed
+reach the app. It runs after the rules, so somebody the firewall refuses is
+refused rather than shown the page, and putting an app into maintenance installs
+the guard if it is not running yet. What it costs below applies to it too.
+
 ## What it costs, and what it cannot do
 
 * **If the firewall's own pods are all down, protected sites return an error.**

@@ -174,6 +174,8 @@ export type App = {
   updated_at: string
   /** Present while deploys are locked: who, why and since when. */
   deploy_lock?: { reason: string; locked_by: string; locked_at: string }
+  /** Present while visitors see the maintenance page instead of the app. */
+  maintenance?: Maintenance
 }
 
 export type Instance = {
@@ -723,4 +725,21 @@ export type WebhookStatus = {
   registered: boolean
   url?: string
   reason?: string
+}
+
+/** An app answering visitors with a page instead of itself. */
+export type Maintenance = {
+  message: string
+  /** Addresses and ranges that still reach the app. */
+  allow: string[]
+  started_by: string
+  started_at: string
+}
+
+/** What the maintenance card reads: the state, where it shows, and who is asking. */
+export type MaintenanceView = Maintenance & {
+  active: boolean
+  hostnames: string[]
+  /** The caller's public address, the one to let through. */
+  your_address?: string
 }

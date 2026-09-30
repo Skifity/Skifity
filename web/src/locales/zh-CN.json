@@ -294,7 +294,9 @@
       "variable.preview_set": "已更改变量在预览中的取值",
       "app.deploys_locked": "已锁定部署",
       "app.deploys_unlocked": "已解锁部署",
-      "app.alerts_changed": "已更改用量警告"
+      "app.alerts_changed": "已更改用量警告",
+      "app.maintenance_started": "开始维护",
+      "app.maintenance_ended": "结束维护"
     }
   },
   "projects": {
@@ -506,7 +508,20 @@
     "watchPathsUseRoot": "监视 {{dir}}",
     "advisoryTitle": "{{name}} {{version}} 存在严重漏洞",
     "advisoryBody": "{{id}} 已在同一版本线的 {{fixed}} 及更高版本中修复。应用照常部署，在升级之前，每次部署的构建日志都会提示这一点。",
-    "advisoryLink": "阅读安全公告"
+    "advisoryLink": "阅读安全公告",
+    "maintenanceTitle": "维护模式",
+    "maintenanceHelp": "访客看到的是带有您留言的页面而不是应用，并附带告知浏览器和搜索引擎这是临时状态的状态码。您列出的地址仍可访问应用，方便您先行检查。应用会继续运行。",
+    "maintenanceMessage": "留言",
+    "maintenanceMessageHelp": "按原样显示，所以请用访客阅读的语言书写。",
+    "maintenanceDefaultMessage": "我们正在进行维护，很快就会回来。",
+    "maintenanceAllow": "仍可访问应用的地址",
+    "maintenanceAllowHelp": "每行一个地址或网段，例如 203.0.113.7 或 203.0.113.0/24。",
+    "maintenanceAddMine": "添加我的地址（{{address}}）",
+    "maintenanceStart": "开始维护",
+    "maintenanceEnd": "结束维护",
+    "maintenanceNoDomain": "此应用没有域名，所以无处显示页面。请先在“域名”标签页添加一个。",
+    "maintenanceActive": "维护中",
+    "maintenanceActiveBy": "访客正在看到您的留言。{{who}} 于 {{when}} 开始。"
   },
   "deploy": {
     "title": "部署记录",
@@ -2199,6 +2214,24 @@
         "cause": "一个应用最多可以监视 {{0}} 个路径或模式。",
         "impact": "没有做任何更改。",
         "fix": "使用能一次覆盖多个路径的模式，例如 apps/** 或 packages/*/src。"
+      },
+      "app_maintenance_message": {
+        "title": "请填写访客将看到的留言",
+        "cause": "维护页面只显示留言，因此留言不能为空，也不能超过 {{0}} 个字符。",
+        "impact": "没有做任何更改。应用未处于维护状态。",
+        "fix": "用访客阅读的语言写一两句话：发生了什么，以及应用何时恢复。"
+      },
+      "app_maintenance_address": {
+        "title": "这不是可以放行的地址",
+        "cause": "{{0}} 不是地址或网段，或者数量超过了 {{1}} 个。",
+        "impact": "没有做任何更改。应用未处于维护状态。",
+        "fix": "每行写一个地址（如 203.0.113.7）或一个网段（如 203.0.113.0/24）。"
+      },
+      "app_maintenance_no_domain": {
+        "title": "此应用没有可显示页面的地址",
+        "cause": "维护是显示在应用域名上的页面，而此应用没有域名。",
+        "impact": "没有做任何更改。",
+        "fix": "请先在“域名”标签页添加域名。没有地址的应用没有可以展示页面的访客。"
       }
     }
   },

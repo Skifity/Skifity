@@ -94,6 +94,37 @@ func TooManyWatchPaths(max int) *Problem {
 		WithDocs("/docs/concepts#only-the-paths-an-app-watches")
 }
 
+// MaintenanceMessage is a maintenance page with nothing to say, or too much.
+func MaintenanceMessage(max int) *Problem {
+	return New("app.maintenance_message", "Write the message visitors will read").
+		WithCause("The maintenance page shows the message and nothing else, so it cannot be empty or longer than %d characters.", max).
+		WithImpact("Nothing was changed. The app is not in maintenance.").
+		WithFix("Write a sentence or two in the language your visitors read: what is happening, and when the app is back.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#maintenance")
+}
+
+// MaintenanceAddress is an allow list entry that is not an address.
+func MaintenanceAddress(entry string, max int) *Problem {
+	return New("app.maintenance_address", "That is not an address to let through").
+		WithCause("%s is not an address or a range, or there are more than %d of them.", entry, max).
+		WithImpact("Nothing was changed. The app is not in maintenance.").
+		WithFix("Write one address, like 203.0.113.7, or one range, like 203.0.113.0/24, per line.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#maintenance").
+		With("entry", entry)
+}
+
+// MaintenanceNoDomain is maintenance for an app nobody can reach by name.
+func MaintenanceNoDomain() *Problem {
+	return New("app.maintenance_no_domain", "This app has no address to show a page at").
+		WithCause("Maintenance is a page shown at the app's domains, and this app has none.").
+		WithImpact("Nothing was changed.").
+		WithFix("Add a domain on the Domains tab first. An app with no address has no visitors to show a page to.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#maintenance")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

@@ -19,6 +19,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock"
+import { MaintenanceNotice } from "@/components/app/maintenance"
 import { UsageCard } from "@/components/app/usage-card"
 import { Page, PageHeader } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
@@ -189,6 +190,7 @@ export function AppDetailPage() {
 
       {restart.error != null && <ErrorDisplay error={restart.error} />}
       <DeployLockNotice app={current} />
+      <MaintenanceNotice app={current} />
 
       <Tabs
         value={tab}

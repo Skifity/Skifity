@@ -302,7 +302,9 @@
       "variable.preview_set": "What previews get for a variable changed",
       "app.deploys_locked": "Deploys locked",
       "app.deploys_unlocked": "Deploys unlocked",
-      "app.alerts_changed": "Usage warnings changed"
+      "app.alerts_changed": "Usage warnings changed",
+      "app.maintenance_started": "Maintenance started",
+      "app.maintenance_ended": "Maintenance ended"
     }
   },
   "projects": {
@@ -514,7 +516,20 @@
     "watchPathsUseRoot": "Watch {{dir}}",
     "advisoryTitle": "{{name}} {{version}} has a critical vulnerability",
     "advisoryBody": "{{id}} is fixed in {{fixed}} and later on that line. The app deploys either way, and every deploy's build log says this until it is upgraded.",
-    "advisoryLink": "Read the advisory"
+    "advisoryLink": "Read the advisory",
+    "maintenanceTitle": "Maintenance mode",
+    "maintenanceHelp": "Visitors get a page with your message instead of the app, with a status that tells browsers and search engines it is temporary. The addresses you list still reach the app, so you can check it first. The app keeps running.",
+    "maintenanceMessage": "Message",
+    "maintenanceMessageHelp": "Shown exactly as written, so write it in the language your visitors read.",
+    "maintenanceDefaultMessage": "We are doing some maintenance and will be back shortly.",
+    "maintenanceAllow": "Addresses that still reach the app",
+    "maintenanceAllowHelp": "One address or range per line, like 203.0.113.7 or 203.0.113.0/24.",
+    "maintenanceAddMine": "Add my address ({{address}})",
+    "maintenanceStart": "Start maintenance",
+    "maintenanceEnd": "End maintenance",
+    "maintenanceNoDomain": "This app has no domain, so there is nowhere to show the page. Add one on the Domains tab first.",
+    "maintenanceActive": "In maintenance",
+    "maintenanceActiveBy": "Visitors see your message. {{who}} started it {{when}}."
   },
   "deploy": {
     "title": "Deployments",
@@ -2211,6 +2226,24 @@
         "cause": "An app can watch at most {{0}} paths or patterns.",
         "impact": "Nothing was changed.",
         "fix": "Use a pattern that covers several paths at once, such as apps/** or packages/*/src."
+      },
+      "app_maintenance_message": {
+        "title": "Write the message visitors will read",
+        "cause": "The maintenance page shows the message and nothing else, so it cannot be empty or longer than {{0}} characters.",
+        "impact": "Nothing was changed. The app is not in maintenance.",
+        "fix": "Write a sentence or two in the language your visitors read: what is happening, and when the app is back."
+      },
+      "app_maintenance_address": {
+        "title": "That is not an address to let through",
+        "cause": "{{0}} is not an address or a range, or there are more than {{1}} of them.",
+        "impact": "Nothing was changed. The app is not in maintenance.",
+        "fix": "Write one address, like 203.0.113.7, or one range, like 203.0.113.0/24, per line."
+      },
+      "app_maintenance_no_domain": {
+        "title": "This app has no address to show a page at",
+        "cause": "Maintenance is a page shown at the app's domains, and this app has none.",
+        "impact": "Nothing was changed.",
+        "fix": "Add a domain on the Domains tab first. An app with no address has no visitors to show a page to."
       }
     }
   },

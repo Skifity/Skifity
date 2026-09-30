@@ -478,7 +478,13 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	if err != nil {
 		return spec, err
 	}
-	spec.Protected = protected
+	// Maintenance is answered by the same guard, so an app in it needs the
+	// middleware whether or not it has rules.
+	inMaintenance, err := c.db.AppInMaintenance(ctx, app.ID)
+	if err != nil {
+		return spec, err
+	}
+	spec.Protected = protected || inMaintenance
 
 	// The same reasoning for the password: read where the spec is made, so no
 	// caller can render the app's objects and quietly leave it open.
