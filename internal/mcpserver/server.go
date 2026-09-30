@@ -263,7 +263,7 @@ type setVariableInput struct {
 	// as a plain bool that became "not a secret", so a model overwriting an API
 	// key demoted it into a value the next list_variables handed straight back.
 	IsSecret  *bool `json:"is_secret,omitempty" jsonschema:"store it encrypted and never show it again; leave it out to keep an existing secret a secret and let the panel decide for a new one"`
-	BuildTime bool  `json:"build_time,omitempty" jsonschema:"the value is needed while building, so setting it causes a rebuild"`
+	BuildTime *bool `json:"build_time,omitempty" jsonschema:"the value is needed while building, so setting it causes a rebuild; leave it out to keep what the variable was"`
 }
 
 type setVariableOutput struct {
@@ -794,7 +794,10 @@ func (s *Server) listVariables(ctx context.Context, _ *mcp.CallToolRequest, in a
 }
 
 func (s *Server) setVariable(ctx context.Context, _ *mcp.CallToolRequest, in setVariableInput) (*mcp.CallToolResult, setVariableOutput, error) {
-	body := map[string]any{"key": in.Key, "value": in.Value, "build_time": in.BuildTime}
+	body := map[string]any{"key": in.Key, "value": in.Value}
+	if in.BuildTime != nil {
+		body["build_time"] = *in.BuildTime
+	}
 	if in.IsSecret != nil {
 		body["is_secret"] = *in.IsSecret
 	}

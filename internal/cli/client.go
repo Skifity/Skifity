@@ -78,10 +78,17 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("read %s: %w", path, readErr)
 	}
 
+	token := strings.TrimSpace(os.Getenv("SKIFITY_TOKEN"))
 	if url := strings.TrimSpace(os.Getenv("SKIFITY_URL")); url != "" {
+		// The stored token belongs to the stored panel. Pointed somewhere else
+		// with no token of its own, the CLI sent that token and team there — a
+		// typo, a staging panel or somebody else's server was handed it.
+		if token == "" && !samePanel(url, cfg.PanelURL) {
+			cfg.Token, cfg.TeamID, cfg.TeamName = "", "", ""
+		}
 		cfg.PanelURL = url
 	}
-	if token := strings.TrimSpace(os.Getenv("SKIFITY_TOKEN")); token != "" {
+	if token != "" {
 		cfg.Token = token
 	}
 	if team := strings.TrimSpace(os.Getenv("SKIFITY_TEAM")); team != "" {
@@ -94,6 +101,13 @@ func LoadConfig() (Config, error) {
 			version.Binary)
 	}
 	return cfg, nil
+}
+
+// samePanel reports whether two panel addresses name the same panel, a
+// trailing slash and the case of the host aside.
+func samePanel(a, b string) bool {
+	normal := func(u string) string { return strings.ToLower(strings.TrimRight(strings.TrimSpace(u), "/")) }
+	return normal(a) != "" && normal(a) == normal(b)
 }
 
 // SaveConfig writes the configuration with permissions that keep the token

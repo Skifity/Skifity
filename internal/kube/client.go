@@ -920,3 +920,27 @@ func (c *Client) DeleteNamespace(ctx context.Context, namespace string) error {
 	}
 	return nil
 }
+
+// RunOutcome reports how a run's Job ended: the exit status of its newest
+// pod's container, once that container has stopped.
+func (c *Client) RunOutcome(ctx context.Context, namespace, job string) (exitCode int, finished bool, err error) {
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + job})
+	if err != nil {
+		return 0, false, fmt.Errorf("read the command's pod: %w", err)
+	}
+	var newest *corev1.Pod
+	for i := range pods.Items {
+		if newest == nil || pods.Items[i].CreationTimestamp.After(newest.CreationTimestamp.Time) {
+			newest = &pods.Items[i]
+		}
+	}
+	if newest == nil {
+		return 0, false, nil
+	}
+	for _, status := range newest.Status.ContainerStatuses {
+		if terminated := status.State.Terminated; terminated != nil {
+			return int(terminated.ExitCode), true, nil
+		}
+	}
+	return 0, false, nil
+}

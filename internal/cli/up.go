@@ -107,7 +107,16 @@ func cmdUp(ctx context.Context, args []string, out io.Writer) error {
 	if !*follow {
 		return nil
 	}
-	if err := followDeployment(ctx, client, result.App.ID, result.Deployment.ID, out, *asJSON); err != nil {
+	final, err := followDeployment(ctx, client, result.App.ID, result.Deployment.ID, out, *asJSON)
+	if final.ID != "" {
+		result.Deployment = final
+	}
+	if *asJSON {
+		if writeErr := writeJSON(out, result); writeErr != nil {
+			return writeErr
+		}
+	}
+	if err != nil {
 		return err
 	}
 	printAddresses(ctx, client, result.App.ID, out, *asJSON)

@@ -5671,6 +5671,36 @@ Authorization and keys, the last of it:
   socket, past netguard, so the form could probe the panel's own machine and the
   metadata service. It goes through netguard now.
 
+The CLI, which a review ran against a fake panel:
+
+* **`skifity run` exited 0 on a failed migration.** The run's output had no exit
+  status, so a CI step running `npm run migrate` passed whatever happened. The
+  panel now waits for the command's container to stop and returns its status,
+  and `skifity run` exits with it; `--json` waits too, and includes it.
+* **`--json` was not JSON** for `deploy`, `rollback`, `up` and `init`: they
+  printed "started", the build log and "succeeded" around it, and `init` wrote
+  the webhook lines straight to standard output. Each prints one document now;
+  `logs --follow --json` prints one object a line.
+* **A deploy that failed at once was waited for for ever.** The event stream is
+  opened after the deploy starts and replays nothing, so a failure before it
+  connected was never heard. The deployment is also asked for every few seconds.
+* **Guessing.** With no `skifity.toml`, a command took the team's first project,
+  and `login` stored the first team; a rollback run in the wrong folder could
+  roll back another project's app. Several projects or environments are now a
+  question, and `login` asks which team, or takes `--team`. `panel =` in
+  `skifity.toml`, read and never used, now refuses to run against another panel.
+* **The stored token went wherever `SKIFITY_URL` pointed.** Set on its own, to a
+  typo or another panel, it sent that panel the stored token. It is only used
+  for the panel it was made on.
+* **Smaller.** `scale --max 8` without `--auto` sent nothing and exited 0; `--help`
+  exited 1 with "flag: help requested"; `status --explain CODE`, which every
+  error recommends, printed a pointer to the panel and now prints the error
+  itself, kept locally, for pasting. A new value for a build variable from `env
+  set` without `--build`, from bulk edit or from an assistant took it out of the
+  build; saying nothing now keeps what it was. The token form offers read-only
+  access and an expiry, which the API took and the form never asked for, and the
+  CLI's documentation says what the CLI does.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

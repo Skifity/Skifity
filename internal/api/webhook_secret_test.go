@@ -80,3 +80,38 @@ func TestAGitConnectionHasAWebhookSecretOfItsOwn(t *testing.T) {
 		t.Fatalf("an unknown connection answered %d", code)
 	}
 }
+
+// A new value for a variable the build reads, sent by a form or a command that
+// did not ask whether the build reads it, made it a runtime variable: the
+// next build went without NEXT_PUBLIC_API_URL.
+func TestANewValueKeepsAVariableInTheBuild(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	path := "/api/apps/" + app.ID + "/variables"
+	if status, body := h.do(acme, http.MethodPut, path, map[string]any{"key": "NEXT_PUBLIC_API_URL", "value": "https://a.example.test", "build_time": true}); status != http.StatusOK {
+		t.Fatalf("setting it answered %d: %s", status, body)
+	}
+	buildTime := func() bool {
+		rows, _ := h.db.ListVariables(t.Context(), app.ID)
+		for _, row := range rows {
+			if row.Key == "NEXT_PUBLIC_API_URL" {
+				return row.BuildTime
+			}
+		}
+		t.Fatal("the variable is gone")
+		return false
+	}
+	h.do(acme, http.MethodPut, path, map[string]any{"key": "NEXT_PUBLIC_API_URL", "value": "https://b.example.test"})
+	if !buildTime() {
+		t.Fatal("a new value on its own took the variable out of the build")
+	}
+	h.do(acme, http.MethodPost, path+"/batch", map[string]any{"set": []map[string]any{{"key": "NEXT_PUBLIC_API_URL", "value": "https://c.example.test"}}})
+	if !buildTime() {
+		t.Fatal("a batch with a new value took the variable out of the build")
+	}
+	h.do(acme, http.MethodPut, path, map[string]any{"key": "NEXT_PUBLIC_API_URL", "value": "https://d.example.test", "build_time": false})
+	if buildTime() {
+		t.Fatal("saying so did not take it out of the build")
+	}
+}

@@ -177,7 +177,16 @@
     "ssoOnlyWayIn": "Akun ini tidak punya password, jadi single sign-on adalah satu-satunya jalan masuk. Buat password dulu sebelum melepas tautannya.",
     "ssoLinkedNotice": "Single sign-on sudah tertaut. Mulai sekarang Anda bisa masuk dengannya.",
     "ssoTakenNotice": "Akun penyedia itu sudah tertaut ke akun lain di panel ini.",
-    "ssoFailedNotice": "Akun penyedia tidak bisa ditautkan. Coba lagi."
+    "ssoFailedNotice": "Akun penyedia tidak bisa ditautkan. Coba lagi.",
+    "tokenAccess": "Akses",
+    "tokenAccessFull": "Semua yang bisa Anda lakukan",
+    "tokenAccessRead": "Hanya baca",
+    "tokenExpiry": "Kedaluwarsa",
+    "tokenExpiryNever": "Tidak pernah",
+    "tokenExpiry30": "Dalam 30 hari",
+    "tokenExpiry90": "Dalam 90 hari",
+    "tokenExpiry365": "Dalam setahun",
+    "tokenExpiresOn": "kedaluwarsa {{date}}"
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -1489,7 +1498,7 @@
         "title": "Kamu tergabung di lebih dari satu tim",
         "cause": "Akun ini ada di {{0}} tim, jadi tidak jelas yang mana yang dimaksud.",
         "impact": "Tidak ada yang diubah.",
-        "fix": "Jalankan `{{0}} login` untuk memilih salah satu, atau set SKIFITY_TEAM ke id dari: {{1}}"
+        "fix": "Jalankan `{{0}} login --team NAMA` untuk memilih salah satu, atau atur SKIFITY_TEAM ke id dari: {{1}}"
       },
       "cli_unavailable": {
         "title": "Panel ini tidak bisa membagikan binernya sendiri",
@@ -2474,6 +2483,36 @@
         "cause": "{{0}} pada aplikasi ini adalah string koneksi database lain yang terhubung dengannya.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Hubungkan database ini dengan nama lain, atau putuskan database yang lain terlebih dahulu."
+      },
+      "run_outcome_unknown": {
+        "title": "Cara perintah itu berakhir tidak bisa dibaca",
+        "cause": "Output-nya sudah berakhir, dan panel tidak bisa membaca status keluarnya: {{0}} masih berjalan, atau pod-nya sudah tidak ada.",
+        "impact": "Perintah itu mungkin berhasil atau gagal; output di atas adalah semua yang ada.",
+        "fix": "Lihat tab Console aplikasi, atau jalankan lagi."
+      },
+      "cli_explain_unknown": {
+        "title": "Tidak ada error dengan kode itu untuk dijelaskan",
+        "cause": "Error terakhir yang dicetak CLI ini bukan {{0}}.",
+        "impact": "Tidak ada yang dicetak.",
+        "fix": "Jalankan perintahnya lagi, lalu `{{0}} status --explain` dengan kode yang dicetaknya. Error di panel punya tombol \"Salin error untuk AI\" di Aktivitas."
+      },
+      "cli_project_ambiguous": {
+        "title": "Proyek mana tidak jelas",
+        "cause": "Tidak ada {{0}} di sini, dan tim ini punya {{1}} proyek: {{2}}.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Jalankan perintah di tempat {{0}} aplikasi berada, sebutkan aplikasinya dengan --app, atau sebutkan environment-nya dengan --env."
+      },
+      "cli_environment_ambiguous": {
+        "title": "Environment mana tidak jelas",
+        "cause": "Proyek ini tidak punya environment production, dan punya {{0}} lainnya: {{1}}.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Jalankan perintah di tempat {{0}} aplikasi berada, sebutkan aplikasinya dengan --app, atau sebutkan environment-nya dengan --env."
+      },
+      "cli_wrong_panel": {
+        "title": "Aplikasi folder ini ada di panel lain",
+        "cause": "{{0}} menyebut aplikasinya ada di {{1}}, sedangkan Anda masuk ke {{2}}.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Masuk ke {{0}} dengan `{{1}} login`, atau atur SKIFITY_URL dan SKIFITY_TOKEN untuk panel itu."
       }
     }
   },

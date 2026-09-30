@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/runsafe"
 	"skifity/internal/store"
 	"skifity/internal/version"
 )
@@ -89,6 +91,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// The command's own --help printed its flags; that is what was asked.
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	var exit commandExit
+	if errors.As(err, &exit) {
+		fmt.Fprintf(stderr, "\nThe command exited with status %d.\n", exit.code)
+		return max(1, min(exit.code, 255))
+	}
 	if err != nil {
 		printError(stderr, err)
 		return 1
@@ -97,15 +108,98 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 // printError renders a failure with its cause, impact and fix.
+//
+// The problem is kept, too, so `status --explain CODE` can print it whole for
+// an AI assistant. That line used to promise an explanation and print a
+// pointer to the panel.
 func printError(w io.Writer, err error) {
 	var problem *errdoc.Problem
 	if errors.As(err, &problem) {
 		fmt.Fprintf(w, "\n%s\n", problem.Text())
-		fmt.Fprintf(w, "  Copy this for an AI assistant with: %s status --explain %s\n\n",
-			version.Binary, problem.Code)
+		if saveLastError(problem) == nil {
+			fmt.Fprintf(w, "  Copy this for an AI assistant with: %s status --explain %s\n\n",
+				version.Binary, problem.Code)
+		}
 		return
 	}
 	fmt.Fprintf(w, "\nError: %s\n\n", err.Error())
+}
+
+// lastErrorPath is where the last problem printed is kept, beside the
+// configuration and as private as it.
+func lastErrorPath() (string, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(path), "last-error.json"), nil
+}
+
+type lastError struct {
+	Problem *errdoc.Problem `json:"problem"`
+	Command []string        `json:"command"`
+	Version string          `json:"version"`
+	At      time.Time       `json:"at"`
+}
+
+func saveLastError(problem *errdoc.Problem) error {
+	path, err := lastErrorPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	data, err := json.Marshal(lastError{Problem: problem, Command: redactArgs(os.Args[1:]), Version: version.Full(), At: time.Now().UTC()})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// redactArgs keeps a command line fit to paste: a value given as KEY=value
+// keeps its key, never its value.
+func redactArgs(args []string) []string {
+	out := make([]string, len(args))
+	for i, arg := range args {
+		if key, _, ok := strings.Cut(arg, "="); ok && !strings.HasPrefix(arg, "-") {
+			arg = key + "=…"
+		}
+		out[i] = arg
+	}
+	return out
+}
+
+// explainError prints the last problem this CLI printed, when it is the one
+// asked about, as something to paste into an assistant.
+func explainError(out io.Writer, code string) error {
+	path, err := lastErrorPath()
+	if err != nil {
+		return err
+	}
+	var last lastError
+	data, err := os.ReadFile(path)
+	if err == nil {
+		err = json.Unmarshal(data, &last)
+	}
+	if err != nil || last.Problem == nil || last.Problem.Code != code {
+		return errdoc.New("cli.explain_unknown", "There is no error with that code to explain").
+			WithCause("The last error this CLI printed is not %s.", code).
+			WithImpact("Nothing was printed.").
+			WithFix("Run the command again, then `%s status --explain` with the code it prints. An error in the panel has a \"Copy error for AI\" button in Activity.", version.Binary)
+	}
+	p := last.Problem
+	fmt.Fprintf(out, "I ran `%s %s` (%s) and it failed.\n\n", version.Binary, strings.Join(last.Command, " "), last.Version)
+	fmt.Fprintf(out, "Error code: %s\nWhat happened: %s\n", p.Code, p.Title)
+	for _, part := range []struct{ label, text string }{
+		{"Cause", p.Cause}, {"Impact", p.Impact}, {"Suggested fix", p.Fix}, {"Documentation", p.DocsPath},
+	} {
+		if strings.TrimSpace(part.text) != "" {
+			fmt.Fprintf(out, "%s: %s\n", part.label, part.text)
+		}
+	}
+	fmt.Fprintf(out, "When: %s\n\nWhat should I do next?\n", last.At.Format(time.RFC3339))
+	return nil
 }
 
 func printUsage(w io.Writer) {
@@ -167,6 +261,7 @@ func cmdLogin(ctx context.Context, args []string, out io.Writer) error {
 	flags.SetOutput(out)
 	panelURL := flags.String("url", "", "the panel's address, for example https://panel.example.com")
 	token := flags.String("token", "", "an API token created in the panel under Account, then Tokens")
+	teamFlag := flags.String("team", "", "the team to use, by id, slug or name, when you are in more than one")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -200,10 +295,14 @@ func cmdLogin(ctx context.Context, args []string, out io.Writer) error {
 	if err := client.Do(ctx, "GET", "/api/me", nil, &me); err != nil {
 		return err
 	}
-	if len(me.Teams) > 0 {
-		cfg.TeamID = me.Teams[0].ID
-		cfg.TeamName = me.Teams[0].Name
+	// The first team, always, was the one stored, and every later command
+	// acted in it without saying so. One team is that team; more are asked
+	// about, or named with --team.
+	team, err := chooseTeam(me.Teams, *teamFlag, out)
+	if err != nil {
+		return err
 	}
+	cfg.TeamID, cfg.TeamName = team.ID, team.Name
 	if err := SaveConfig(cfg); err != nil {
 		return err
 	}
@@ -220,6 +319,44 @@ func cmdLogin(ctx context.Context, args []string, out io.Writer) error {
 	path, _ := ConfigPath()
 	fmt.Fprintf(out, "Token stored in %s.\n\n", path)
 	return nil
+}
+
+// chooseTeam picks the team login stores: the one named, the only one, or
+// the one picked from a list when there is somebody to ask. With several and
+// nobody to ask, none is stored, and each command says which to name.
+func chooseTeam(teams []store.Team, named string, out io.Writer) (store.Team, error) {
+	named = strings.TrimSpace(named)
+	if named != "" {
+		for _, team := range teams {
+			if team.ID == named || team.Slug == named || strings.EqualFold(team.Name, named) {
+				return team, nil
+			}
+		}
+		return store.Team{}, errdoc.BadRequest(fmt.Sprintf("You are not in a team called %s. You are in: %s.", named, teamNames(teams)))
+	}
+	switch {
+	case len(teams) == 1:
+		return teams[0], nil
+	case len(teams) == 0 || !isInteractive():
+		return store.Team{}, nil
+	}
+	fmt.Fprintln(out, "\nYou are in more than one team:")
+	for i, team := range teams {
+		fmt.Fprintf(out, "  %d. %s\n", i+1, team.Name)
+	}
+	answer := prompt(out, "Which one? ")
+	if n, err := strconv.Atoi(strings.TrimSpace(answer)); err == nil && n >= 1 && n <= len(teams) {
+		return teams[n-1], nil
+	}
+	return chooseTeam(teams, answer, out)
+}
+
+func teamNames(teams []store.Team) string {
+	names := make([]string, 0, len(teams))
+	for _, team := range teams {
+		names = append(names, team.Name+" ("+team.ID+")")
+	}
+	return strings.Join(names, ", ")
 }
 
 func cmdLogout(args []string, out io.Writer) error {
@@ -343,9 +480,7 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if *explain != "" {
-		fmt.Fprintf(out, "Error code %s. Open the panel's Activity view and press \"Copy error for AI\" "+
-			"to get the full context, including the logs.\n", *explain)
-		return nil
+		return explainError(out, *explain)
 	}
 
 	cfg, err := LoadConfig()
@@ -522,81 +657,144 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	if *asJSON && !*follow {
 		return writeJSON(out, deployment)
 	}
-	fmt.Fprintf(out, "Deployment #%d started.\n", deployment.Number)
+	if !*asJSON {
+		fmt.Fprintf(out, "Deployment #%d started.\n", deployment.Number)
+	}
 	if !*follow {
 		return nil
 	}
-	return followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
+	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
+	return printFollowed(out, *asJSON, final, err)
 }
 
-// followDeployment streams a build log and reports the outcome.
-func followDeployment(ctx context.Context, client *Client, appID, deploymentID string, out io.Writer, asJSON bool) error {
-	path := "/api/events" + Query("topics", "deployment:"+deploymentID)
+// followPoll is how often followDeployment asks for the deployment's state
+// while it streams. A variable, so a test need not wait for it.
+var followPoll = 5 * time.Second
 
-	finished := make(chan error, 1)
-	err := client.Stream(ctx, path, func(event, data string) bool {
+// followDeployment streams a build log until the deployment ends, and answers
+// with how it ended. With asJSON it prints nothing: the caller prints one JSON
+// document, which is what a script parses — build lines and "succeeded" in
+// the middle of it made --json output that was not JSON.
+//
+// The stream is opened after the deploy started, and the panel replays
+// nothing to a new subscriber, so a deploy that ended before the stream
+// connected was never heard of and this waited for ever. The deployment is
+// asked for every followPoll as well, which ends the wait whatever the stream
+// missed.
+func followDeployment(ctx context.Context, client *Client, appID, deploymentID string, out io.Writer, asJSON bool) (store.Deployment, error) {
+	path := "/api/events" + Query("topics", "deployment:"+deploymentID)
+	read := func(ctx context.Context) (store.Deployment, error) {
+		var deployment store.Deployment
+		err := client.Do(ctx, "GET", "/api/apps/"+appID+"/deployments/"+deploymentID, nil, &deployment)
+		return deployment, err
+	}
+
+	streaming, stop := context.WithCancel(ctx)
+	defer stop()
+	ended := make(chan store.Deployment, 2)
+	go func() {
+		defer runsafe.Recover(nil, "check a deployment's state", nil)
+		ticker := time.NewTicker(followPoll)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-streaming.Done():
+				return
+			case <-ticker.C:
+			}
+			if deployment, err := read(streaming); err == nil && deployment.Status.Terminal() {
+				select {
+				case ended <- deployment:
+				default:
+				}
+				stop()
+				return
+			}
+		}
+	}()
+
+	var failure *errdoc.Problem
+	err := client.Stream(streaming, path, func(event, data string) bool {
 		switch event {
 		case "log":
 			var line struct {
 				Line string `json:"line"`
 			}
-			if err := json.Unmarshal([]byte(data), &line); err == nil && line.Line != "" {
+			if err := json.Unmarshal([]byte(data), &line); err == nil && line.Line != "" && !asJSON {
 				fmt.Fprintln(out, line.Line)
 			}
 		case "deployment":
 			var deployment store.Deployment
-			if err := json.Unmarshal([]byte(data), &deployment); err != nil {
+			if err := json.Unmarshal([]byte(data), &deployment); err != nil || !deployment.Status.Terminal() {
 				return true
 			}
-			if !deployment.Status.Terminal() {
-				return true
-			}
-			if deployment.Status == store.DeploySucceeded {
-				fmt.Fprintf(out, "\nDeployment #%d succeeded.\n", deployment.Number)
-				finished <- nil
-			} else {
-				finished <- errdoc.New(deployment.ErrorCode, "The deployment failed").
-					WithCause("%s", deployment.ErrorMessage).
-					WithImpact("The previous version is still running.").
-					WithFix("%s", orDefault(deployment.ErrorHint, "Read the build log above for the cause."))
+			select {
+			case ended <- deployment:
+			default:
 			}
 			return false
 		case "failed":
 			var problem errdoc.Problem
 			if err := json.Unmarshal([]byte(data), &problem); err == nil {
-				finished <- &problem
+				failure = &problem
 				return false
 			}
 		}
 		return true
 	})
-	if err != nil {
-		return err
-	}
+	stop()
+
 	select {
-	case err := <-finished:
-		return err
+	case deployment := <-ended:
+		return deploymentOutcome(deployment, out, asJSON)
 	default:
-		// The stream ended without a terminal event, which happens if the
-		// connection dropped. Ask for the final state rather than guessing.
-		var deployment store.Deployment
-		if err := client.Do(ctx, "GET",
-			"/api/apps/"+appID+"/deployments/"+deploymentID, nil, &deployment); err != nil {
-			return err
-		}
-		if deployment.Status == store.DeploySucceeded {
-			fmt.Fprintf(out, "\nDeployment #%d succeeded.\n", deployment.Number)
-			return nil
-		}
-		if deployment.Status.Terminal() {
-			return errdoc.New(orDefault(deployment.ErrorCode, "deploy.failed"), "The deployment failed").
-				WithCause("%s", deployment.ErrorMessage).
-				WithFix("%s", orDefault(deployment.ErrorHint, "Read the build log for the cause."))
-		}
+	}
+	if failure != nil {
+		deployment, _ := read(ctx)
+		return deployment, failure
+	}
+	if err != nil && ctx.Err() != nil {
+		return store.Deployment{}, err
+	}
+	// The stream ended without a terminal event, which happens if the
+	// connection dropped. Ask for the final state rather than guessing.
+	deployment, readErr := read(ctx)
+	if readErr != nil {
+		return store.Deployment{}, readErr
+	}
+	if deployment.Status.Terminal() {
+		return deploymentOutcome(deployment, out, asJSON)
+	}
+	if !asJSON {
 		fmt.Fprintln(out, "\nThe connection dropped; the deployment is still running. Check it with `"+
 			version.Binary+" status`.")
-		return nil
 	}
+	return deployment, nil
+}
+
+// deploymentOutcome says how a finished deployment went.
+func deploymentOutcome(deployment store.Deployment, out io.Writer, asJSON bool) (store.Deployment, error) {
+	if deployment.Status == store.DeploySucceeded {
+		if !asJSON {
+			fmt.Fprintf(out, "\nDeployment #%d succeeded.\n", deployment.Number)
+		}
+		return deployment, nil
+	}
+	return deployment, errdoc.New(orDefault(deployment.ErrorCode, "deploy.failed"), "The deployment failed").
+		WithCause("%s", orDefault(deployment.ErrorMessage, "It ended "+string(deployment.Status)+".")).
+		WithImpact("The previous version is still running.").
+		WithFix("%s", orDefault(deployment.ErrorHint, "Read the build log for the cause."))
+}
+
+// printFollowed prints a followed deployment as JSON when asked, whatever the
+// outcome, and passes the outcome on.
+func printFollowed(out io.Writer, asJSON bool, deployment store.Deployment, err error) error {
+	if asJSON && deployment.ID != "" {
+		if writeErr := writeJSON(out, deployment); writeErr != nil {
+			return writeErr
+		}
+	}
+	return err
 }
 
 // --- logs ---
@@ -624,11 +822,19 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	if *follow {
+		// With --json, one JSON object a line: a stream has no end to put a
+		// document's closing bracket after.
+		encoder := json.NewEncoder(out)
 		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(
 			"follow", "true", "tail", strconv.Itoa(*tail), "process", *process),
 			func(event, data string) bool {
 				var line string
-				if err := json.Unmarshal([]byte(data), &line); err == nil {
+				if err := json.Unmarshal([]byte(data), &line); err != nil {
+					return true
+				}
+				if *asJSON {
+					_ = encoder.Encode(map[string]string{"line": line})
+				} else {
 					fmt.Fprintln(out, line)
 				}
 				return true
@@ -672,10 +878,13 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 
 	// Whether --secret was on the command line at all, as opposed to left at
 	// its default. See the set subcommand.
-	secretGiven := false
+	secretGiven, buildTimeGiven := false, false
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == "secret" {
 			secretGiven = true
+		}
+		if f.Name == "build" {
+			buildTimeGiven = true
 		}
 	})
 
@@ -755,7 +964,12 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		}
 		set := make([]map[string]any, 0, len(order))
 		for _, key := range order {
-			item := map[string]any{"key": key, "value": pairs[key], "build_time": *buildTime}
+			item := map[string]any{"key": key, "value": pairs[key]}
+			// Only when --build was given, as with --secret: sending false
+			// took a variable the build reads out of the build.
+			if buildTimeGiven {
+				item["build_time"] = *buildTime
+			}
 			// Only when --secret was actually given. Sending the flag's
 			// default said "not a secret" on every set, so overwriting an API
 			// key without remembering the flag turned it into a variable
@@ -858,21 +1072,28 @@ func cmdScale(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	body := map[string]any{}
+	limits := *minReplicas > 0 || *maxReplicas > 0 || *cpuTarget > 0
 	if *instances >= 0 {
+		if *auto || limits {
+			return errdoc.BadRequest("--instances is a fixed number, and --auto, --min, --max and --cpu are autoscaling. Give one or the other.")
+		}
 		body["replicas"] = *instances
 		body["autoscale"] = false
 	}
 	if *auto {
 		body["autoscale"] = true
-		if *minReplicas > 0 {
-			body["min_replicas"] = *minReplicas
-		}
-		if *maxReplicas > 0 {
-			body["max_replicas"] = *maxReplicas
-		}
-		if *cpuTarget > 0 {
-			body["cpu_target"] = *cpuTarget
-		}
+	}
+	// The limits on their own change them and nothing else: `scale --max 8`
+	// on an app that autoscales sent nothing, printed the settings and exited
+	// 0, as if it had worked.
+	if *minReplicas > 0 {
+		body["min_replicas"] = *minReplicas
+	}
+	if *maxReplicas > 0 {
+		body["max_replicas"] = *maxReplicas
+	}
+	if *cpuTarget > 0 {
+		body["cpu_target"] = *cpuTarget
 	}
 	if len(body) == 0 {
 		// With no arguments, show the current settings rather than doing nothing.
@@ -975,8 +1196,11 @@ func cmdRollback(ctx context.Context, args []string, out io.Writer) error {
 	if err := client.Do(ctx, "POST", "/api/apps/"+app+"/rollback/"+target, nil, &deployment); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Rolling back. Deployment #%d started.\n", deployment.Number)
-	return followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
+	if !*asJSON {
+		fmt.Fprintf(out, "Rolling back. Deployment #%d started.\n", deployment.Number)
+	}
+	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
+	return printFollowed(out, *asJSON, final, err)
 }
 
 func orDefault(v, fallback string) string {
@@ -1106,11 +1330,10 @@ func cmdRun(ctx context.Context, args []string, out io.Writer) error {
 		map[string]string{"command": command}, &started); err != nil {
 		return err
 	}
-	if *asJSON {
-		return writeJSON(out, started)
+	if !*asJSON {
+		fmt.Fprintf(out, "Running: %s\n", command)
+		fmt.Fprintf(out, "Waiting for it to finish. Ctrl-C stops the waiting, not the command.\n\n")
 	}
-	fmt.Fprintf(out, "Running: %s\n", command)
-	fmt.Fprintf(out, "Waiting for it to finish. Ctrl-C stops the waiting, not the command.\n\n")
 
 	// follow=true, and it is what makes this command do what it says. Without
 	// it the panel returns whatever the container had printed by the time the
@@ -1122,16 +1345,44 @@ func cmdRun(ctx context.Context, args []string, out io.Writer) error {
 	// still ends it; the command in the cluster carries on, and the output is
 	// there afterwards.
 	var logs struct {
-		Lines []string `json:"lines"`
+		Run      string   `json:"run"`
+		Lines    []string `json:"lines"`
+		Finished bool     `json:"finished"`
+		ExitCode *int     `json:"exit_code,omitempty"`
 	}
 	if err := client.DoLong(ctx, "GET",
 		"/api/apps/"+app+"/runs/"+started.Run+"/logs?follow=true", nil, &logs); err != nil {
 		return err
 	}
-	for _, line := range logs.Lines {
-		fmt.Fprintln(out, line)
+	if *asJSON {
+		if err := writeJSON(out, logs); err != nil {
+			return err
+		}
+	} else {
+		for _, line := range logs.Lines {
+			fmt.Fprintln(out, line)
+		}
+	}
+	// The command's own exit status is this one's, so a CI step that runs a
+	// migration fails when the migration does. It exited 0 whatever happened.
+	switch {
+	case !logs.Finished || logs.ExitCode == nil:
+		return errdoc.New("run.outcome_unknown", "How the command ended could not be read").
+			WithCause("Its output ended, and the panel could not read its exit status: %s is still running, or its pod is gone.", started.Run).
+			WithImpact("It may have succeeded or failed; the output above is all there is.").
+			WithFix("Look at the app's Console tab, or run it again.")
+	case *logs.ExitCode != 0:
+		return commandExit{code: *logs.ExitCode}
 	}
 	return nil
+}
+
+// commandExit is a command run in the cluster that ended with a status other
+// than zero, which becomes this process's own.
+type commandExit struct{ code int }
+
+func (e commandExit) Error() string {
+	return fmt.Sprintf("the command exited with status %d", e.code)
 }
 
 // --- lock ---

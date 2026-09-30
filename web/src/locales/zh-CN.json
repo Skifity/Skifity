@@ -177,7 +177,16 @@
     "ssoOnlyWayIn": "此账号没有密码，单点登录是唯一的登录方式。请先设置密码再取消关联。",
     "ssoLinkedNotice": "单点登录已关联。从现在起你可以用它登录。",
     "ssoTakenNotice": "该提供商账号已关联到此面板上的另一个账号。",
-    "ssoFailedNotice": "无法关联提供商账号。请重试。"
+    "ssoFailedNotice": "无法关联提供商账号。请重试。",
+    "tokenAccess": "权限",
+    "tokenAccessFull": "你能做的一切",
+    "tokenAccessRead": "只读",
+    "tokenExpiry": "过期时间",
+    "tokenExpiryNever": "永不",
+    "tokenExpiry30": "30 天后",
+    "tokenExpiry90": "90 天后",
+    "tokenExpiry365": "一年后",
+    "tokenExpiresOn": "{{date}} 过期"
   },
   "dashboard": {
     "title": "总览",
@@ -1489,7 +1498,7 @@
         "title": "你同时在多个团队里",
         "cause": "这个账户属于 {{0}} 个团队，不清楚该用哪一个。",
         "impact": "没有改动任何东西。",
-        "fix": "运行 `{{0}} login` 选一个，或把 SKIFITY_TEAM 设成其中之一的 id：{{1}}"
+        "fix": "运行 `{{0}} login --team NAME` 选择一个，或将 SKIFITY_TEAM 设为以下之一的 id：{{1}}"
       },
       "cli_unavailable": {
         "title": "这个面板拿不出自己的可执行文件",
@@ -2474,6 +2483,36 @@
         "cause": "此应用的 {{0}} 是与其关联的另一个数据库的连接字符串。",
         "impact": "未做任何更改。",
         "fix": "请用其他名称关联此数据库，或先取消关联另一个数据库。"
+      },
+      "run_outcome_unknown": {
+        "title": "无法读取命令的结束状态",
+        "cause": "它的输出已经结束，但面板无法读取其退出状态：{{0}} 仍在运行，或其 Pod 已不存在。",
+        "impact": "它可能成功也可能失败；上面的输出就是全部内容。",
+        "fix": "查看应用的 Console 标签页，或重新运行。"
+      },
+      "cli_explain_unknown": {
+        "title": "没有该代码对应的错误可以解释",
+        "cause": "此 CLI 最近打印的错误不是 {{0}}。",
+        "impact": "未打印任何内容。",
+        "fix": "重新运行该命令，然后用它打印的代码运行 `{{0}} status --explain`。面板中的错误可在“活动”中点击“复制错误给 AI”。"
+      },
+      "cli_project_ambiguous": {
+        "title": "不清楚是哪个项目",
+        "cause": "这里没有 {{0}}，而该团队有 {{1}} 个项目：{{2}}。",
+        "impact": "命令未运行。",
+        "fix": "在应用的 {{0}} 所在目录运行命令，用 --app 指定应用，或用 --env 指定环境。"
+      },
+      "cli_environment_ambiguous": {
+        "title": "不清楚是哪个环境",
+        "cause": "该项目没有 production 环境，另有 {{0}} 个其他环境：{{1}}。",
+        "impact": "命令未运行。",
+        "fix": "在应用的 {{0}} 所在目录运行命令，用 --app 指定应用，或用 --env 指定环境。"
+      },
+      "cli_wrong_panel": {
+        "title": "此文件夹的应用位于另一个面板",
+        "cause": "{{0}} 表示应用位于 {{1}}，而你登录的是 {{2}}。",
+        "impact": "命令未运行。",
+        "fix": "使用 `{{1}} login` 登录 {{0}}，或为其设置 SKIFITY_URL 和 SKIFITY_TOKEN。"
       }
     }
   },

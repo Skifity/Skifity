@@ -59,18 +59,19 @@ func (d *Deployer) RunOnce(ctx context.Context, appID, command string) (api.RunH
 	return api.RunHandle{Name: name, Namespace: env.Namespace}, nil
 }
 
-// RunLogs reads a run's output, following it until the Job ends.
-func (d *Deployer) RunLogs(ctx context.Context, appID, name string, follow bool) (io.ReadCloser, error) {
+// runNamespace finds the namespace of one of an app's runs, refusing a run
+// that is not the app's.
+func (d *Deployer) runNamespace(ctx context.Context, appID, name string) (string, error) {
 	if d.cluster == nil {
-		return nil, errdoc.ClusterUnreachable(nil)
+		return "", errdoc.ClusterUnreachable(nil)
 	}
 	app, err := d.db.GetApp(ctx, appID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	env, err := d.db.GetEnvironment(ctx, app.EnvironmentID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	// Which app a run belongs to is read off the Job rather than guessed from
 	// its name: the name is derived from the app's slug and can be shortened
@@ -80,8 +81,47 @@ func (d *Deployer) RunLogs(ctx context.Context, appID, name string, follow bool)
 		Get(ctx, name, metav1.GetOptions{})
 	if err != nil || job.Labels["app.kubernetes.io/name"] != app.Slug ||
 		job.Labels["app.kubernetes.io/component"] != "run" {
-		return nil, errdoc.NotFound("run", name)
+		return "", errdoc.NotFound("run", name)
 	}
+	return env.Namespace, nil
+}
+
+// runResultWait is how long RunResult waits for a run's container to stop
+// after its output has: a container that has closed its output is seconds
+// from being recorded as terminated, not minutes.
+const runResultWait = 30 * time.Second
+
+// RunResult says how a run ended: its container's exit status, once it has
+// stopped. A run still going after runResultWait is not finished.
+func (d *Deployer) RunResult(ctx context.Context, appID, name string) (api.RunResult, error) {
+	namespace, err := d.runNamespace(ctx, appID, name)
+	if err != nil {
+		return api.RunResult{}, err
+	}
+	deadline := time.Now().Add(runResultWait)
+	for {
+		code, finished, err := d.cluster.Client().RunOutcome(ctx, namespace, name)
+		if err != nil {
+			return api.RunResult{}, err
+		}
+		if finished || time.Now().After(deadline) {
+			return api.RunResult{Finished: finished, ExitCode: code}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return api.RunResult{}, ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+// RunLogs reads a run's output, following it until the Job ends.
+func (d *Deployer) RunLogs(ctx context.Context, appID, name string, follow bool) (io.ReadCloser, error) {
+	namespace, err := d.runNamespace(ctx, appID, name)
+	if err != nil {
+		return nil, err
+	}
+	env := store.Environment{Namespace: namespace}
 
 	podName, err := d.waitForBuildPod(ctx, env.Namespace, name)
 	if err != nil {

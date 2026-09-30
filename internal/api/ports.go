@@ -272,6 +272,9 @@ type Deployer interface {
 	RunOnce(ctx context.Context, appID, command string) (RunHandle, error)
 	// RunLogs reads a run's output.
 	RunLogs(ctx context.Context, appID, name string, follow bool) (io.ReadCloser, error)
+	// RunResult says how a run ended, waiting a little for its container to
+	// stop once its output has.
+	RunResult(ctx context.Context, appID, name string) (RunResult, error)
 }
 
 // ScalingFinding is one reason an app may not survive being scaled out.
@@ -349,4 +352,10 @@ type BackupManager interface {
 	// VerifyBackup downloads a backup, opens it and reads it through, in the
 	// background, and records the outcome on it.
 	VerifyBackup(ctx context.Context, backupID string) error
+}
+
+// RunResult is how a one-off command ended: its exit status, once it has.
+type RunResult struct {
+	Finished bool
+	ExitCode int
 }

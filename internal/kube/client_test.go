@@ -700,3 +700,29 @@ func TestABackupsSecretGoesWithItsJob(t *testing.T) {
 		t.Fatalf("the Secret's owners are %+v", got.OwnerReferences)
 	}
 }
+
+// A one-off command's exit status is its container's. `skifity run` had no
+// way to learn it and exited 0 on a migration that failed.
+func TestARunsOutcomeIsItsContainersExitStatus(t *testing.T) {
+	pod := func(name string, state corev1.ContainerState, created time.Time) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", Labels: map[string]string{"job-name": "web-run-abc"},
+				CreationTimestamp: metav1.NewTime(created)},
+			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{State: state}}},
+		}
+	}
+	now := time.Now()
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	c := &Client{clientset: fake.NewSimpleClientset(pod("a", running, now))}
+	if _, finished, err := c.RunOutcome(t.Context(), "ns", "web-run-abc"); err != nil || finished {
+		t.Fatalf("a running command finished: %t, %v", finished, err)
+	}
+
+	failed := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 3}}
+	succeeded := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}
+	// The newest attempt is the one that counts.
+	c = &Client{clientset: fake.NewSimpleClientset(pod("old", succeeded, now.Add(-time.Minute)), pod("new", failed, now))}
+	if code, finished, err := c.RunOutcome(t.Context(), "ns", "web-run-abc"); err != nil || !finished || code != 3 {
+		t.Fatalf("a failed command: exit %d, finished %t, %v", code, finished, err)
+	}
+}

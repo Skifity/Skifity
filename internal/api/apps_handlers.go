@@ -918,8 +918,21 @@ type setVariableRequest struct {
 	Value string `json:"value"`
 	// IsSecret is nil when the caller said nothing, which is not the same as
 	// saying no. See secretness.
-	IsSecret  *bool `json:"is_secret,omitempty"`
-	BuildTime bool  `json:"build_time,omitempty"`
+	IsSecret *bool `json:"is_secret,omitempty"`
+	// BuildTime is nil when the caller said nothing, which keeps what the
+	// variable was: a new value for NEXT_PUBLIC_API_URL from a form or a
+	// command that does not ask made it a runtime variable, and the next
+	// build went without it.
+	BuildTime *bool `json:"build_time,omitempty"`
+}
+
+// buildTimeness decides whether a variable is read by the build: what the
+// caller said, or what it was when the caller said nothing.
+func buildTimeness(asked *bool, was bool) bool {
+	if asked != nil {
+		return *asked
+	}
+	return was
 }
 
 // secretness decides whether a variable is stored as a secret.
@@ -968,14 +981,14 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	wasSecret := false
+	wasSecret, wasBuildTime := false, false
 	for _, row := range existing {
 		if row.Key == key {
-			wasSecret = row.IsSecret
+			wasSecret, wasBuildTime = row.IsSecret, row.BuildTime
 		}
 	}
 	variable := store.Variable{
-		AppID: app.ID, Key: key, BuildTime: req.BuildTime,
+		AppID: app.ID, Key: key, BuildTime: buildTimeness(req.BuildTime, wasBuildTime),
 		IsSecret: secretness(req.IsSecret, wasSecret, key, req.Value),
 	}
 	if err := s.db.SetVariable(r.Context(), &variable, sealed); err != nil {
@@ -985,7 +998,7 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 
 	// A build-time variable changes the build fingerprint, so it does rebuild.
 	// A runtime variable only rolls out. Either way the user is told which.
-	rebuilt := req.BuildTime
+	rebuilt := variable.BuildTime
 	if s.deployer != nil && !rebuilt {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
 			s.log.Warn("could not apply variable change", "app", app.ID, "error", err)
@@ -1029,11 +1042,11 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	wasSecret := map[string]bool{}
+	wasSecret, wasBuildTime := map[string]bool{}, map[string]bool{}
 	for _, row := range existing {
-		wasSecret[row.Key] = row.IsSecret
+		wasSecret[row.Key], wasBuildTime[row.Key] = row.IsSecret, row.BuildTime
 	}
-	batch, err := s.prepareVariableChanges(req, wasSecret, true,
+	batch, err := s.prepareVariableChanges(req, wasSecret, wasBuildTime, true,
 		func(key string) string { return variableContext(app.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1081,7 +1094,7 @@ func (s *Server) handleChangeSharedVariables(w http.ResponseWriter, r *http.Requ
 	for _, row := range existing {
 		wasSecret[row.Key] = row.IsSecret
 	}
-	batch, err := s.prepareVariableChanges(req, wasSecret, false,
+	batch, err := s.prepareVariableChanges(req, wasSecret, nil, false,
 		func(key string) string { return sharedVariableContext(project.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1130,7 +1143,7 @@ func (b variableBatch) answer() []store.Variable {
 // prepareVariableChanges checks a batch and seals its values, before anything
 // is written: a key that is not one, a key given twice, or a key both set and
 // removed refuses the whole batch.
-func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret map[string]bool,
+func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret, wasBuildTime map[string]bool,
 	buildTimeAllowed bool, sealContext func(key string) string) (variableBatch, error) {
 	var batch variableBatch
 	if len(req.Set)+len(req.Unset) == 0 {
@@ -1150,7 +1163,8 @@ func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret ma
 			return batch, errdoc.BadRequest(fmt.Sprintf("%s is given twice. Say which value it should have once.", key))
 		}
 		seen[key] = true
-		if item.BuildTime && !buildTimeAllowed {
+		buildTime := buildTimeness(item.BuildTime, wasBuildTime[key])
+		if buildTime && !buildTimeAllowed {
 			return batch, errdoc.BadRequest("A shared variable is read when an app runs, never while it builds.")
 		}
 		sealed, err := s.keyring.Seal([]byte(item.Value), sealContext(key))
@@ -1159,12 +1173,12 @@ func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret ma
 		}
 		batch.set = append(batch.set, store.VariableChange{
 			Variable: store.Variable{
-				Key: key, BuildTime: item.BuildTime,
+				Key: key, BuildTime: buildTime,
 				IsSecret: secretness(item.IsSecret, wasSecret[key], key, item.Value),
 			},
 			Sealed: sealed,
 		})
-		if item.BuildTime {
+		if buildTime {
 			batch.rebuild = true
 		} else {
 			batch.rollout = true

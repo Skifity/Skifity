@@ -185,7 +185,16 @@
     "ssoOnlyWayIn": "This account has no password, so single sign-on is its only way in. Set a password before unlinking it.",
     "ssoLinkedNotice": "Single sign-on is linked. You can sign in with it from now on.",
     "ssoTakenNotice": "That provider account is already linked to another account on this panel.",
-    "ssoFailedNotice": "The provider account could not be linked. Try again."
+    "ssoFailedNotice": "The provider account could not be linked. Try again.",
+    "tokenAccess": "Access",
+    "tokenAccessFull": "Everything you can do",
+    "tokenAccessRead": "Read only",
+    "tokenExpiry": "Expires",
+    "tokenExpiryNever": "Never",
+    "tokenExpiry30": "In 30 days",
+    "tokenExpiry90": "In 90 days",
+    "tokenExpiry365": "In a year",
+    "tokenExpiresOn": "expires {{date}}"
   },
   "dashboard": {
     "title": "Overview",
@@ -1503,7 +1512,7 @@
         "title": "You are in more than one team",
         "cause": "This account is in {{0}} teams, so the one to use is not obvious.",
         "impact": "Nothing was changed.",
-        "fix": "Run `{{0}} login` to choose one, or set SKIFITY_TEAM to the id of: {{1}}"
+        "fix": "Run `{{0}} login --team NAME` to choose one, or set SKIFITY_TEAM to the id of: {{1}}"
       },
       "cli_unavailable": {
         "title": "This panel cannot hand out its own binary",
@@ -2488,6 +2497,36 @@
         "cause": "This app's {{0}} is the connection string of another database linked to it.",
         "impact": "Nothing was changed.",
         "fix": "Link this database under another name, or unlink the other one first."
+      },
+      "run_outcome_unknown": {
+        "title": "How the command ended could not be read",
+        "cause": "Its output ended, and the panel could not read its exit status: {{0}} is still running, or its pod is gone.",
+        "impact": "It may have succeeded or failed; the output above is all there is.",
+        "fix": "Look at the app's Console tab, or run it again."
+      },
+      "cli_explain_unknown": {
+        "title": "There is no error with that code to explain",
+        "cause": "The last error this CLI printed is not {{0}}.",
+        "impact": "Nothing was printed.",
+        "fix": "Run the command again, then `{{0}} status --explain` with the code it prints. An error in the panel has a \"Copy error for AI\" button in Activity."
+      },
+      "cli_project_ambiguous": {
+        "title": "Which project is not clear",
+        "cause": "There is no {{0}} here, and the team has {{1}} projects: {{2}}.",
+        "impact": "The command did not run.",
+        "fix": "Run the command where the app's {{0}} is, name the app with --app, or name the environment with --env."
+      },
+      "cli_environment_ambiguous": {
+        "title": "Which environment is not clear",
+        "cause": "The project has no production environment, and {{0}} others: {{1}}.",
+        "impact": "The command did not run.",
+        "fix": "Run the command where the app's {{0}} is, name the app with --app, or name the environment with --env."
+      },
+      "cli_wrong_panel": {
+        "title": "This folder's app is on another panel",
+        "cause": "{{0}} says the app is on {{1}}, and you are signed in to {{2}}.",
+        "impact": "The command did not run.",
+        "fix": "Sign in to {{0}} with `{{1}} login`, or set SKIFITY_URL and SKIFITY_TOKEN for it."
       }
     }
   },

@@ -460,7 +460,8 @@ func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := chi.URLParam(r, "runID")
-	stream, err := s.deployer.RunLogs(r.Context(), app.ID, name, queryBool(r, "follow"))
+	follow := queryBool(r, "follow")
+	stream, err := s.deployer.RunLogs(r.Context(), app.ID, name, follow)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -473,7 +474,19 @@ func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
 	for scanner.Scan() {
 		lines = append(lines, logging.Scrub(scanner.Text()))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": name, "lines": lines})
+	answer := map[string]any{"run": name, "lines": lines, "finished": false}
+	// Followed to its end, the output is all of it, and how the command ended
+	// is what a script running it needs: a migration that failed printed its
+	// error and exited 0 as far as anybody could tell.
+	if follow {
+		result, err := s.deployer.RunResult(r.Context(), app.ID, name)
+		if err != nil {
+			s.log.Warn("could not read how a command ended", "app", app.ID, "run", name, "error", err)
+		} else if result.Finished {
+			answer["finished"], answer["exit_code"] = true, result.ExitCode
+		}
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // --- scheduled commands ---

@@ -41,12 +41,16 @@ are one binary, so `make build` in the repository produces all three too.
 skifity login
 ```
 
-It asks for the panel's address and opens a browser to create a token, or takes
-one you already have:
+It asks for the panel's address and for a token, which you create in the panel
+under Account, then Tokens. Or give both at once:
 
 ```sh
 skifity login --url https://panel.example.com --token skf_...
 ```
+
+In more than one team, it asks which one to use, or takes `--team` with the
+team's name, slug or id; with nobody to ask it stores none, and each command
+says which to name.
 
 The token is stored in your user configuration directory, never in a project, so
 it cannot be committed by accident.
@@ -156,7 +160,13 @@ name = "web"
 environment = "env_06gaqcxy21mdqsdb1z7g"
 ```
 
-It holds no secrets and belongs in version control.
+It holds no secrets and belongs in version control. `panel = "https://..."`
+says which panel the app is on; a command run in the folder while signed in to
+another panel is refused rather than sent to an app id that means nothing there.
+
+Without the file, a command works out the app from the team: its one project,
+that project's production environment, and the one app in it. When any of those
+is not one, it says so and asks for `--app` or `--env` rather than guessing.
 
 ## Everything else
 
@@ -211,9 +221,13 @@ reach, one connection at a time:
 ```sh
 $ skifity db connect orders
 orders (postgres) is reachable on 127.0.0.1:5432.
-Connect with: postgres://orders:...@127.0.0.1:5432/orders
+Connect with: postgres://orders:<password>@127.0.0.1:5432/orders
 Every connection goes through the panel and is in the team's activity log. Ctrl-C closes the tunnel.
 ```
+
+The connection string it prints has the real password in it, since that is what
+a client needs; the example above hides it. Do not run it where the output is
+kept, like a CI log.
 
 Point `psql`, TablePlus, DBeaver or a migration tool at that address. Each
 connection the client makes is carried through the panel over HTTPS to the
@@ -411,8 +425,8 @@ It is streamable HTTP and stateless: every request carries the token and is
 checked on its own, like any other API request, and each tool call is the same
 API requests the CLI would make with that token. So a viewer's token reads and
 changes nothing, a token limited to one project reaches that project, and a
-token scoped to `read` reads. A browser session is refused: the endpoint wants a
-token.
+read-only token — **Access: read only** when you create it under Account, Tokens
+— reads. A browser session is refused: the endpoint wants a token.
 
 One tool is missing there: `deploy_folder` reads files on the computer the
 server runs on, and over HTTP that is the panel's server. Deploy a folder with

@@ -23,6 +23,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -657,6 +664,16 @@ function SessionsCard() {
   )
 }
 
+type TokenAccess = "full" | "read"
+/** Never, or a number of days. */
+const TOKEN_EXPIRY = ["never", "30", "90", "365"] as const
+const EXPIRY_LABELS = {
+  never: "auth.tokenExpiryNever",
+  "30": "auth.tokenExpiry30",
+  "90": "auth.tokenExpiry90",
+  "365": "auth.tokenExpiry365",
+} as const
+
 function TokensCard() {
   const { t } = useTranslation()
   const confirmRevoke = useConfirm()
@@ -664,6 +681,11 @@ function TokensCard() {
   // to a team rather than to the account.
   const { team } = useSession()
   const [name, setName] = useState("")
+  // Read only is the "read" scope, and an expiry is ttl_hours: the API took
+  // both, and the form offered neither, so every token made here could do
+  // everything its owner can, for ever.
+  const [access, setAccess] = useState<TokenAccess>("full")
+  const [expiry, setExpiry] = useState<(typeof TOKEN_EXPIRY)[number]>("never")
   const [secret, setSecret] = useState<string | null>(null)
 
   const tokens = useQuery({
@@ -676,6 +698,8 @@ function TokensCard() {
       api.post<{ secret: string }>("/api/me/tokens", {
         name: name.trim(),
         team_id: team?.id,
+        scopes: access === "read" ? "read" : undefined,
+        ttl_hours: expiry === "never" ? undefined : Number(expiry) * 24,
       }),
     onSuccess: (data) => {
       setSecret(data.secret)
@@ -722,8 +746,19 @@ function TokensCard() {
               {tokens.data?.items.map((token) => (
                 <TableRow key={token.id}>
                   <TableCell>
-                    <div className="font-medium">{token.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{token.prefix}…</div>
+                    <div className="font-medium">
+                      {token.name}
+                      {token.scopes === "read" && (
+                        <Badge variant="secondary" className="ml-2 text-[10px]">
+                          {t("auth.tokenAccessRead")}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      {token.prefix}…
+                      {token.expires_at &&
+                        ` · ${t("auth.tokenExpiresOn", { date: formatDateTime(token.expires_at) })}`}
+                    </div>
                   </TableCell>
                   <TableCell className="hidden text-xs sm:table-cell">
                     {formatDateTime(token.created_at)}
@@ -776,6 +811,36 @@ function TokensCard() {
               onChange={(event) => setName(event.target.value)}
               required
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="token-access">{t("auth.tokenAccess")}</Label>
+            <Select value={access} onValueChange={(value) => setAccess(value as TokenAccess)}>
+              <SelectTrigger id="token-access" className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="full">{t("auth.tokenAccessFull")}</SelectItem>
+                <SelectItem value="read">{t("auth.tokenAccessRead")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="token-expiry">{t("auth.tokenExpiry")}</Label>
+            <Select
+              value={expiry}
+              onValueChange={(value) => setExpiry(value as (typeof TOKEN_EXPIRY)[number])}
+            >
+              <SelectTrigger id="token-expiry" className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TOKEN_EXPIRY.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {t(EXPIRY_LABELS[option])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button type="submit" disabled={!name.trim() || !team || create.isPending}>
             <PlusIcon className="size-4" />

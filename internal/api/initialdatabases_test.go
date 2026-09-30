@@ -89,6 +89,9 @@ func (f *fakeDeployer) ScalingReadiness(context.Context, string) ([]ScalingFindi
 func (f *fakeDeployer) RunOnce(context.Context, string, string) (RunHandle, error) {
 	return RunHandle{}, nil
 }
+func (f *fakeDeployer) RunResult(context.Context, string, string) (RunResult, error) {
+	return RunResult{Finished: true}, nil
+}
 func (f *fakeDeployer) RunLogs(context.Context, string, string, bool) (io.ReadCloser, error) {
 	return nil, nil
 }

@@ -27,7 +27,8 @@ type ProjectFile struct {
 	Name string `json:"name,omitempty" toml:"name"`
 	// Environment is the environment's id, used when creating an app.
 	Environment string `json:"environment,omitempty" toml:"environment"`
-	// Panel lets one directory target a panel other than the signed-in default.
+	// Panel is the panel the app is on. A command run here against another
+	// panel is refused rather than sent to an app id that means nothing there.
 	Panel string `json:"panel,omitempty" toml:"panel"`
 }
 
@@ -167,7 +168,9 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 				"This directory has no git remote, so there is nothing to deploy from. " +
 					"Push it to a Git host and try again, or use --image to run a prebuilt image.")
 		}
-		fmt.Fprintf(out, "Using the git remote %s.\n", repoURL)
+		if !*asJSON {
+			fmt.Fprintf(out, "Using the git remote %s.\n", repoURL)
+		}
 	}
 
 	environment := *envID
@@ -211,13 +214,15 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 		return appNotCreated()
 	}
 
-	if created.Webhook != nil && created.Webhook.URL != "" {
+	// To out, not straight to the process's standard output, and not at all
+	// with --json, where the webhook is part of the one document printed.
+	if created.Webhook != nil && created.Webhook.URL != "" && !*asJSON {
 		if created.Webhook.Registered {
-			fmt.Println("Deploy on push is set up: a push to this repository deploys it.")
+			fmt.Fprintln(out, "Deploy on push is set up: a push to this repository deploys it.")
 		} else {
-			fmt.Printf("Deploy on push needs a webhook adding by hand: %s\n", created.Webhook.URL)
+			fmt.Fprintf(out, "Deploy on push needs a webhook adding by hand: %s\n", created.Webhook.URL)
 			if created.Webhook.Reason != "" {
-				fmt.Printf("  (%s)\n", created.Webhook.Reason)
+				fmt.Fprintf(out, "  (%s)\n", created.Webhook.Reason)
 			}
 		}
 	}
@@ -230,7 +235,7 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 	}
 
 	if *asJSON {
-		return writeJSON(out, map[string]any{"app": app, "file": path})
+		return writeJSON(out, map[string]any{"app": app, "file": path, "webhook": created.Webhook})
 	}
 	fmt.Fprintf(out, "\nCreated the app %s.\nWrote %s.\n\nDeploy it with: %s deploy\n\n",
 		app.Name, path, version.Binary)
@@ -255,7 +260,15 @@ func resolveApp(ctx context.Context, client *Client, cfg Config, explicit string
 	if explicit != "" {
 		return explicit, nil
 	}
-	if file, _, err := LoadProjectFile(); err == nil && file.App != "" {
+	if file, path, err := LoadProjectFile(); err == nil && file.App != "" {
+		// A folder that says which panel its app is on is not run against
+		// another: the setting was read and written and never looked at.
+		if file.Panel != "" && !samePanel(file.Panel, cfg.PanelURL) {
+			return "", errdoc.New("cli.wrong_panel", "This folder's app is on another panel").
+				WithCause("%s says the app is on %s, and you are signed in to %s.", path, file.Panel, cfg.PanelURL).
+				WithImpact("The command did not run.").
+				WithFix("Sign in to %s with `%s login`, or set SKIFITY_URL and SKIFITY_TOKEN for it.", file.Panel, version.Binary)
+		}
 		return file.App, nil
 	}
 
@@ -323,15 +336,11 @@ func resolveTeam(ctx context.Context, client *Client, cfg Config) (string, error
 		return me.Teams[0].ID, nil
 	}
 
-	names := make([]string, 0, len(me.Teams))
-	for _, team := range me.Teams {
-		names = append(names, team.Name+" ("+team.ID+")")
-	}
 	return "", errdoc.New("cli.team_ambiguous", "You are in more than one team").
 		WithCause("This account is in %d teams, so the one to use is not obvious.", len(me.Teams)).
 		WithImpact("Nothing was changed.").
-		WithFix("Run `%s login` to choose one, or set SKIFITY_TEAM to the id of: %s",
-			version.Binary, strings.Join(names, ", "))
+		WithFix("Run `%s login --team NAME` to choose one, or set SKIFITY_TEAM to the id of: %s",
+			version.Binary, teamNames(me.Teams))
 }
 
 // resolveEnvironment finds the environment to work in.
@@ -356,6 +365,19 @@ func resolveEnvironment(ctx context.Context, client *Client, cfg Config) (string
 			WithImpact("The command did not run.").
 			WithFix("Create a project in the panel first.")
 	}
+	// The first project, always, was the one used: a rollback or an env unset
+	// run in the wrong folder acted on another project's app. More than one
+	// is a question, not a guess.
+	if len(projects.Items) > 1 {
+		names := make([]string, 0, len(projects.Items))
+		for _, project := range projects.Items {
+			names = append(names, project.Name)
+		}
+		return "", errdoc.New("cli.project_ambiguous", "Which project is not clear").
+			WithCause("There is no %s here, and the team has %d projects: %s.", ProjectFileName, len(projects.Items), strings.Join(names, ", ")).
+			WithImpact("The command did not run.").
+			WithFix("Run the command where the app's %s is, name the app with --app, or name the environment with --env.", ProjectFileName)
+	}
 
 	var environments struct {
 		Items []store.Environment `json:"items"`
@@ -364,15 +386,29 @@ func resolveEnvironment(ctx context.Context, client *Client, cfg Config) (string
 		"/api/projects/"+projects.Items[0].ID+"/environments", nil, &environments); err != nil {
 		return "", err
 	}
+	standard := make([]store.Environment, 0, len(environments.Items))
 	for _, env := range environments.Items {
 		if env.Slug == "production" {
 			return env.ID, nil
 		}
+		if env.Kind != store.EnvPreview {
+			standard = append(standard, env)
+		}
 	}
-	if len(environments.Items) > 0 {
-		return environments.Items[0].ID, nil
+	if len(standard) == 1 {
+		return standard[0].ID, nil
 	}
-	return "", errdoc.BadRequest("That project has no environments.")
+	if len(standard) == 0 {
+		return "", errdoc.BadRequest("That project has no environments.")
+	}
+	names := make([]string, 0, len(standard))
+	for _, env := range standard {
+		names = append(names, env.Name)
+	}
+	return "", errdoc.New("cli.environment_ambiguous", "Which environment is not clear").
+		WithCause("The project has no production environment, and %d others: %s.", len(standard), strings.Join(names, ", ")).
+		WithImpact("The command did not run.").
+		WithFix("Run the command where the app's %s is, name the app with --app, or name the environment with --env.", ProjectFileName)
 }
 
 // detectGitRemote reads the origin URL from .git/config without shelling out to
