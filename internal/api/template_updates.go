@@ -240,21 +240,54 @@ func (s *Server) finishTemplateUpdate(ctx context.Context, app store.App, backup
 	}
 }
 
-// applyTemplateUpdate switches the image and deploys it.
+// applyTemplateUpdate switches the image and deploys it. The update is
+// recorded as done only once the deploy is under way: a deploy refused — a
+// lock taken while the backups ran, a cluster that is down — puts the image
+// back and leaves the update to be tried again, rather than an app said to be
+// up to date and configured for an image it does not run.
 func (s *Server) applyTemplateUpdate(ctx context.Context, appID, image, userID string) (store.Deployment, error) {
 	app, err := s.db.GetApp(ctx, appID)
 	if err != nil {
 		return store.Deployment{}, err
 	}
-	app.Image = image
-	if err := s.db.UpdateApp(ctx, &app); err != nil {
-		return store.Deployment{}, err
+	var deployment store.Deployment
+	if s.deployer != nil {
+		deployment, err = s.withImage(ctx, app, image, func() (store.Deployment, error) {
+			return s.deployer.Deploy(ctx, DeployRequest{AppID: app.ID, Trigger: "template", CreatedBy: userID})
+		})
+		if err != nil {
+			return store.Deployment{}, err
+		}
+	} else {
+		app.Image = image
+		if err := s.db.UpdateApp(ctx, &app); err != nil {
+			return store.Deployment{}, err
+		}
 	}
 	if err := s.db.FinishTemplateUpdate(ctx, app.ID, image); err != nil {
 		return store.Deployment{}, err
 	}
-	if s.deployer == nil {
-		return store.Deployment{}, nil
+	return deployment, nil
+}
+
+// withImage sets an image app's image and deploys it, and puts the old one
+// back when the deploy is refused: the image is what a deploy reads, and also
+// what `skifity run` and the next unrelated deploy read, so one left set after
+// a refusal ships later without anybody deciding it should.
+func (s *Server) withImage(ctx context.Context, app store.App, image string, deploy func() (store.Deployment, error)) (store.Deployment, error) {
+	previous := app.Image
+	app.Image = image
+	if err := s.db.UpdateApp(ctx, &app); err != nil {
+		return store.Deployment{}, err
 	}
-	return s.deployer.Deploy(ctx, DeployRequest{AppID: app.ID, Trigger: "template", CreatedBy: userID})
+	deployment, err := deploy()
+	if err != nil {
+		app.Image = previous
+		if restoreErr := s.db.UpdateApp(context.WithoutCancel(ctx), &app); restoreErr != nil {
+			s.log.Error("could not put an app's image back after its deploy was refused",
+				"app", app.ID, "error", restoreErr)
+		}
+		return store.Deployment{}, err
+	}
+	return deployment, nil
 }

@@ -374,6 +374,17 @@ func markInterruptedWork(ctx context.Context, db *store.DB, log *slog.Logger) er
 			return err
 		}
 	}
+
+	// Nothing was changed yet: the image moves only after the backups, and
+	// the backups themselves were marked above.
+	updates, err := db.FailInterruptedTemplateUpdates(ctx,
+		"the panel restarted while this update was waiting for its backups; nothing was changed, so start it again")
+	if err != nil {
+		return err
+	}
+	if updates > 0 {
+		log.Info("marked interrupted template updates as failed", "count", updates)
+	}
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -959,6 +960,50 @@ func TestOnlyRecentVersionsCanBeRolledBackTo(t *testing.T) {
 	}
 	if list[len(list)-1].CanRollback {
 		t.Error("the oldest version is offered although its image is gone")
+	}
+}
+
+func TestFailedRolloutsTakeTheirPlaceInTheRollbackWindow(t *testing.T) {
+	// The registry keeps the images of an app's last few deployments that
+	// have one, failed or not. Three good versions and then three failed
+	// rollouts leave nothing good behind to go back to, and saying otherwise
+	// is a promotion or a rollback that ends in ImagePullBackOff.
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	var good string
+	for i, status := range []string{"succeeded", "succeeded", "succeeded", "failed", "failed", "failed"} {
+		d := Deployment{AppID: app.ID, Image: fmt.Sprintf("registry:5000/acme-prod/web:v%d", i)}
+		if err := db.CreateDeployment(ctx, &d); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, `UPDATE deployments SET status = ? WHERE id = ?`, status, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		if status == "succeeded" {
+			good = d.ID
+		}
+	}
+	kept, err := db.ImagesWorthKeeping(ctx, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(kept, "registry:5000/acme-prod/web:v2") {
+		t.Fatalf("the sweep keeps %v; this test's premise is wrong", kept)
+	}
+	if ok, err := db.WithinRollbackWindow(ctx, app.ID, good, 3); err != nil || ok {
+		t.Fatalf("a version whose image the sweep takes is offered (%v, %v)", ok, err)
+	}
+	list, _ := db.ListDeployments(ctx, app.ID, 100)
+	MarkRollbackTargets(list, 3)
+	for _, d := range list {
+		if d.CanRollback {
+			t.Fatalf("#%d (%s) is offered for rollback", d.Number, d.Status)
+		}
 	}
 }
 

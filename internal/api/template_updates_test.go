@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"skifity/internal/errdoc"
 	"skifity/internal/store"
 	"skifity/internal/templates"
 )
@@ -95,6 +96,37 @@ func TestAnAppFromATemplateIsOfferedItsUpdate(t *testing.T) {
 	_, body = h.do(acme, http.MethodGet, "/api/apps/"+plain.ID+"/template", nil)
 	if !strings.Contains(body, `"from_template":false`) {
 		t.Fatalf("an app with no template answered %s", body)
+	}
+}
+
+// refusingDeployer refuses every deploy, as a lock taken meanwhile does.
+type refusingDeployer struct{ fakeDeployer }
+
+func (*refusingDeployer) Deploy(context.Context, DeployRequest) (store.Deployment, error) {
+	return store.Deployment{}, errdoc.DeployLocked("ops@example.com", "release freeze")
+}
+
+func TestAnUpdateWhoseDeployIsRefusedChangesNothing(t *testing.T) {
+	// Said up to date and configured for an image it does not run was the
+	// app after this; the next unrelated deploy would have shipped it.
+	h := newHarness(t)
+	h.api.deployer = &refusingDeployer{fakeDeployer{log: &recorder{}}}
+	acme := h.newTenant("acme")
+	app := installedFrom(t, h, acme, "budget", "example/app:1.0", "example/app:1.0")
+	path := "/api/apps/" + app.ID + "/template/update"
+	if status, body := h.do(acme, http.MethodPost, path, map[string]any{}); status < 400 || !strings.Contains(body, "deploy.locked") {
+		t.Fatalf("a refused deploy answered %d: %s", status, truncate(body, 200))
+	}
+	after, _ := h.db.GetApp(t.Context(), app.ID)
+	record, _ := h.db.GetAppTemplate(t.Context(), app.ID)
+	if after.Image != "example/app:1.0" || record.InstalledImage != "example/app:1.0" {
+		t.Fatalf("after a refusal the app runs %s and is recorded at %s", after.Image, record.InstalledImage)
+	}
+
+	// And it can be tried again once the lock is gone.
+	h.api.deployer = &fakeDeployer{log: &recorder{}}
+	if status, body := h.do(acme, http.MethodPost, path, map[string]any{}); status != http.StatusOK {
+		t.Fatalf("trying again answered %d: %s", status, truncate(body, 200))
 	}
 }
 

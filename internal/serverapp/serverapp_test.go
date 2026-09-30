@@ -216,8 +216,23 @@ func TestARestartDoesNotLeaveABackupOrADatabaseInProgressForever(t *testing.T) {
 		t.Fatalf("create a backup: %v", err)
 	}
 
+	// A template update waiting for its backups, whose goroutine the restart
+	// took: left at backing_up, it refused every later update of the app.
+	if err := db.RecordAppTemplate(ctx, store.AppTemplate{AppID: app.ID, TemplateID: "budget",
+		Service: "app", InstalledImage: "example/app:1.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetTemplateUpdate(ctx, app.ID, store.TemplateUpdateBackingUp, "example/app:2.0", ""); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := markInterruptedWork(ctx, db, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatalf("markInterruptedWork: %v", err)
+	}
+
+	if record, err := db.GetAppTemplate(ctx, app.ID); err != nil || record.UpdateStatus != store.TemplateUpdateFailed ||
+		record.UpdateError == "" || record.InstalledImage != "example/app:1.0" {
+		t.Errorf("the interrupted template update is %+v (%v)", record, err)
 	}
 
 	after, err := db.GetBackup(ctx, interrupted.ID)

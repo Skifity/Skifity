@@ -319,33 +319,41 @@ func MarkRollbackTargets(deployments []Deployment, keep int) {
 	}
 	seen := 0
 	for i := range deployments {
-		if deployments[i].Status != DeploySucceeded || deployments[i].Image == "" {
+		if deployments[i].Image == "" {
 			continue
 		}
+		// Counted whether or not it succeeded, as the registry sweep counts:
+		// a failed rollout's image takes a place in what is kept.
 		seen++
-		deployments[i].CanRollback = seen <= keep
+		deployments[i].CanRollback = deployments[i].Status == DeploySucceeded && seen <= keep
 	}
 }
 
-// WithinRollbackWindow reports whether a deployment is one of the most recent
-// keep successful deployments of its app, which is the same question as whether
-// its image still exists.
+// WithinRollbackWindow reports whether a deployment succeeded and is among
+// the most recent keep deployments of its app that have an image, which is
+// what the registry sweep keeps (ImagesWorthKeeping): the same question as
+// whether its image still exists. Counting only the successful ones, as this
+// did, offered versions behind a run of failed rollouts whose images the sweep
+// had already taken.
 func (db *DB) WithinRollbackWindow(ctx context.Context, appID, deploymentID string, keep int) (bool, error) {
 	if keep < 1 {
 		keep = 1
 	}
-	var rank int
+	var (
+		rank   int
+		status string
+	)
 	err := db.QueryRowContext(ctx, `
-		SELECT rn FROM (
-			SELECT id, ROW_NUMBER() OVER (ORDER BY number DESC) AS rn
+		SELECT rn, status FROM (
+			SELECT id, status, ROW_NUMBER() OVER (ORDER BY number DESC) AS rn
 			FROM deployments
-			WHERE app_id = ? AND status = 'succeeded' AND image <> ''
-		) WHERE id = ?`, appID, deploymentID).Scan(&rank)
+			WHERE app_id = ? AND image <> ''
+		) WHERE id = ?`, appID, deploymentID).Scan(&rank, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("check whether a deployment can still be rolled back to: %w", err)
 	}
-	return rank <= keep, nil
+	return status == string(DeploySucceeded) && rank <= keep, nil
 }

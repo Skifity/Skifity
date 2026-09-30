@@ -67,6 +67,19 @@ func (db *DB) SetTemplateUpdate(ctx context.Context, appID, status, to, reason s
 	return nil
 }
 
+// FailInterruptedTemplateUpdates marks every update that was waiting for its
+// backups when the panel stopped as failed. The goroutine that would have
+// finished it went with the restart, and one left at backing_up refuses every
+// later update of that app for good.
+func (db *DB) FailInterruptedTemplateUpdates(ctx context.Context, reason string) (int64, error) {
+	result, err := db.Exec(ctx, `UPDATE app_templates SET update_status = ?, update_error = ? WHERE update_status = ?`,
+		TemplateUpdateFailed, reason, TemplateUpdateBackingUp)
+	if err != nil {
+		return 0, fmt.Errorf("fail interrupted template updates: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 // FinishTemplateUpdate records that an app now runs the template's image.
 func (db *DB) FinishTemplateUpdate(ctx context.Context, appID, image string) error {
 	if _, err := db.Exec(ctx, `UPDATE app_templates SET installed_image = ?, installed_at = ?,

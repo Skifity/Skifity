@@ -125,3 +125,30 @@ func TestOnlyADeployedVersionOfTheSameProjectIsPromoted(t *testing.T) {
 		t.Fatalf("another project answered %d: %s", status, truncate(body, 200))
 	}
 }
+
+func TestAPromotionRefusedLeavesTheImageAsItWas(t *testing.T) {
+	// An image app's image is set by promoting to it. A deploy refused by a
+	// lock left it set anyway, for `skifity run` and the next deploy to pick
+	// up without anybody deciding they should.
+	h := newHarness(t)
+	h.api.deployer = &refusingDeployer{fakeDeployer{log: &recorder{}}}
+	acme := h.newTenant("acme")
+	source, deployment := stagingOf(t, h, acme, "cache")
+	source.SourceType, source.Image = "image", deployment.Image
+	source.CPURequestM, source.MemRequestMB = 50, 128
+	if err := h.db.UpdateApp(t.Context(), &source); err != nil {
+		t.Fatal(err)
+	}
+	target := h.app(acme, "cache")
+	target.SourceType, target.Image = "image", "valkey/valkey:8"
+	if err := h.db.UpdateApp(t.Context(), &target); err != nil {
+		t.Fatal(err)
+	}
+	status, body := h.do(acme, http.MethodPost, "/api/apps/"+target.ID+"/promote", map[string]any{"deployment_id": deployment.ID})
+	if status < 400 || !strings.Contains(body, "deploy.locked") {
+		t.Fatalf("a refused promotion answered %d: %s", status, body)
+	}
+	if after, _ := h.db.GetApp(t.Context(), target.ID); after.Image != "valkey/valkey:8" {
+		t.Fatalf("after a refused promotion the app is set to run %s", after.Image)
+	}
+}

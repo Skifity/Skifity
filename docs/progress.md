@@ -5420,6 +5420,16 @@ it. What they found, and what changed:
   planned an app the panel then called taken. Each is fixed, a private
   repository can name the Git connection it is read through, and a plan made
   right after an apply is empty — tested through the real API with the real CLI.
+* **Promotion and template updates.** Both set an image app's image before the
+  deploy was asked for, and a deploy refused — a lock, a cluster that was down —
+  left it set, for `skifity run` and the next unrelated deploy to ship. It is now
+  put back. A template update was recorded as done before its deploy was
+  accepted, and one waiting for its backups when the panel restarted stayed
+  "backing up" for good and refused every later update; the first is recorded
+  once the deploy is under way, and the second is marked failed at startup. The
+  rollback window counted only successful deployments while the registry keeps
+  the images of the last ten of any outcome, so behind a run of failed rollouts
+  it offered versions whose images were already gone; the two now count alike.
 * **Words in the interface.** Detection's notes and the components' names were
   English in every language; they are now codes the interface translates.
 

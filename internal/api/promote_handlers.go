@@ -140,20 +140,22 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.ClusterUnreachable(nil))
 		return
 	}
-	// A prebuilt image is the app's own setting, and a deploy reads it from
-	// there; promoting one is setting it.
-	if target.SourceType == "image" {
-		target.Image = source.Image
-		if err := s.db.UpdateApp(r.Context(), &target); err != nil {
-			writeError(w, r, err)
-			return
-		}
+	deploy := func() (store.Deployment, error) {
+		return s.deployer.Deploy(r.Context(), DeployRequest{
+			AppID: target.ID, Trigger: "promote", CreatedBy: user.ID, Force: req.Force,
+			CommitSHA: source.CommitSHA, CommitMessage: source.CommitMessage, CommitAuthor: source.CommitAuthor,
+			Image: source.Image, Fingerprint: source.BuildFingerprint,
+		})
 	}
-	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
-		AppID: target.ID, Trigger: "promote", CreatedBy: user.ID, Force: req.Force,
-		CommitSHA: source.CommitSHA, CommitMessage: source.CommitMessage, CommitAuthor: source.CommitAuthor,
-		Image: source.Image, Fingerprint: source.BuildFingerprint,
-	})
+	var deployment store.Deployment
+	if target.SourceType == "image" {
+		// A prebuilt image is the app's own setting, and a deploy reads it
+		// from there; promoting one is setting it — and unsetting it when
+		// the deploy is refused, a lock say, so it does not ship later.
+		deployment, err = s.withImage(r.Context(), target, source.Image, deploy)
+	} else {
+		deployment, err = deploy()
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
