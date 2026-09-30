@@ -281,6 +281,12 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 		annotations["cert-manager.io/cluster-issuer"] = s.ClusterIssuer
 		middlewares = append(middlewares, s.Namespace+"-"+RedirectMiddleware+"@kubernetescrd")
 	}
+	// The password after the redirect, never before it. A browser answers a
+	// password prompt with the password, so asking on plain HTTP when HTTPS
+	// exists would send it in the clear one request before the redirect.
+	if s.PasswordUsers != "" {
+		middlewares = append(middlewares, s.Namespace+"-"+PasswordMiddlewareName(s.Name)+"@kubernetescrd")
+	}
 	if len(middlewares) > 0 {
 		annotations["traefik.ingress.kubernetes.io/router.middlewares"] = strings.Join(middlewares, ",")
 	}

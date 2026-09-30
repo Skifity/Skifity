@@ -275,7 +275,9 @@
       "auth.reauthenticated": "Confirmed who they are",
       "auth.sessions_revoked": "Signed out every other device",
       "git_source.webhook_registered": "Webhook registered on the repository",
-      "app.source_uploaded": "Uploaded the app's code"
+      "app.source_uploaded": "Uploaded the app's code",
+      "app.password_set": "App password set",
+      "app.password_removed": "App password removed"
     }
   },
   "projects": {
@@ -2132,6 +2134,23 @@
       "http.user_agent": "badbot",
       "http.header": "a value"
     }
+  },
+  "appPassword": {
+    "title": "Password",
+    "on": "On",
+    "help": "Ask everyone who opens this app for a username and password first. For a staging site, a preview or an internal tool.",
+    "current": "Anyone opening it signs in as {{username}}. Changed {{when}}.",
+    "change": "Change password",
+    "remove": "Remove password",
+    "removeTitle": "Remove the password?",
+    "removeDescription": "Anyone with the address will be able to open this app again.",
+    "plainHttp": "Some addresses have no HTTPS",
+    "plainHttpHelp": "On {{hostnames}} the password crosses the network readable by anyone on the way. Add a domain of your own to give the app a certificate.",
+    "username": "Username",
+    "password": "Password",
+    "save": "Save password",
+    "turnOn": "Turn on",
+    "previews": "Previews of this app's pull requests ask for the same password. Only an admin can change it."
   },
   "plugins": {
     "title": "Plugins",

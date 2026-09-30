@@ -8,6 +8,7 @@ import { DeployButton, DeploymentsTab } from "@/components/app/deployments-tab"
 import { SendFolderButton } from "@/components/folder-picker"
 import { DomainsTab } from "@/components/app/domains-tab"
 import { AppFirewall } from "@/components/app/firewall"
+import { AppPasswordProtection } from "@/components/app/password-protection"
 import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
@@ -223,7 +224,8 @@ export function AppDetailPage() {
         <TabsContent value="domains" className="pt-4">
           <DomainsTab app={current} />
         </TabsContent>
-        <TabsContent value="firewall" className="pt-4">
+        <TabsContent value="firewall" className="space-y-4 pt-4">
+          <AppPasswordProtection appId={appId} />
           <AppFirewall appId={appId} />
         </TabsContent>
         <TabsContent value="scaling" className="pt-4">

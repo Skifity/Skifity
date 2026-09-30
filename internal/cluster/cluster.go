@@ -170,6 +170,7 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 		kube.BuildDeployment(spec),
 		kube.BuildService(spec),
 		kube.BuildIngress(spec),
+		kube.BuildPasswordMiddleware(spec),
 		kube.BuildHPA(spec),
 		kube.BuildPDB(spec),
 		kube.BuildInterceptorService(spec),
@@ -219,6 +220,10 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 	fmt.Fprintf(&b, "---\n# Secret/%s holds this app's environment variables.\n"+
 		"# Its values are not shown here: secrets are write-only once set.\n",
 		kube.ResourceName(app.Slug, "env"))
+	if spec.PasswordUsers != "" {
+		fmt.Fprintf(&b, "---\n# Secret/%s holds the account the password middleware checks.\n",
+			kube.PasswordSecretName(spec.Name))
+	}
 	return b.String(), nil
 }
 
@@ -466,6 +471,16 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		return spec, err
 	}
 	spec.Protected = protected
+
+	// The same reasoning for the password: read where the spec is made, so no
+	// caller can render the app's objects and quietly leave it open.
+	password, hasPassword, err := c.db.GetAppPassword(ctx, app.ID)
+	if err != nil {
+		return spec, err
+	}
+	if hasPassword {
+		spec.PasswordUsers = password.Username + ":" + password.Hash
+	}
 
 	// The issuer only exists once an ACME email has been configured, and
 	// referencing a missing issuer leaves certificates stuck forever.

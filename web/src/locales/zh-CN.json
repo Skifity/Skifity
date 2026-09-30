@@ -267,7 +267,9 @@
       "auth.reauthenticated": "再次确认了身份",
       "auth.sessions_revoked": "退出了其他所有设备",
       "git_source.webhook_registered": "已在仓库上注册 webhook",
-      "app.source_uploaded": "上传了应用代码"
+      "app.source_uploaded": "上传了应用代码",
+      "app.password_set": "已设置应用密码",
+      "app.password_removed": "已移除应用密码"
     }
   },
   "projects": {
@@ -2120,6 +2122,23 @@
       "http.user_agent": "badbot",
       "http.header": "一个值"
     }
+  },
+  "appPassword": {
+    "title": "密码",
+    "on": "已开启",
+    "help": "打开此应用的每个人都要先输入用户名和密码。适用于预发布站点、预览或内部工具。",
+    "current": "所有人都以 {{username}} 登录，更改于 {{when}}。",
+    "change": "更改密码",
+    "remove": "移除密码",
+    "removeTitle": "移除密码？",
+    "removeDescription": "任何知道地址的人都将能再次打开此应用。",
+    "plainHttp": "部分地址没有 HTTPS",
+    "plainHttpHelp": "在 {{hostnames}} 上，密码以明文在网络上传输，途中任何人都能读取。添加你自己的域名即可为应用获取证书。",
+    "username": "用户名",
+    "password": "密码",
+    "save": "保存密码",
+    "turnOn": "开启",
+    "previews": "此应用的拉取请求预览会要求输入相同的密码。只有管理员可以更改。"
   },
   "plugins": {
     "title": "插件",

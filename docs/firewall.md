@@ -105,6 +105,43 @@ If you have a load balancer of your own in front of the cluster, add its address
 range to **Settings → Domains and HTTPS → Trusted proxies**. Add only ranges you
 control: a trusted range is one whose word is taken for who a visitor is.
 
+## A password instead
+
+Sometimes the right answer is not a rule about addresses at all. A client
+reviewing a staging site from a phone, a colleague whose address changes every
+day, an internal tool that simply should not be open to whoever finds the URL:
+for those, the same tab has **Password** above the rules.
+
+Set a username and a password and everyone who opens the app is asked for them
+before the app sees the request. It needs nothing installed — it is Traefik's
+own basic authentication, which k3s ships with — and it can be on with or
+without the firewall. When both are, the firewall decides first, then the
+request is sent to HTTPS, and only then is the password asked for, so a browser
+never answers the prompt over plain HTTP when HTTPS exists.
+
+A few things worth knowing:
+
+* **Only a hash is kept.** The password is never stored, never shown again and
+  never sent back by the API; changing it means typing a new one.
+* **Previews are locked too.** A pull request's preview of an app with a
+  password asks for the same one. Locking a staging site and leaving every copy
+  of it open would not be locking it.
+* **Plain HTTP means the password is readable on the way.** The free address an
+  app gets is served over HTTP (see [Concepts](concepts.md)), and the tab says
+  which addresses those are. Give the app a domain of your own for a
+  certificate.
+* **The app does not see it.** The `Authorization` header is taken off before
+  the request reaches the app, so an app that logs its headers does not write
+  the password into every line.
+* **It is one shared account,** not a sign-in system. It keeps a site out of
+  sight; it does not tell you who looked at it.
+* **Only an admin can change it**, like the rules below: it decides who may
+  reach a running site.
+
+The hash is bcrypt with a lower work factor than a sign-in page would use,
+because Traefik checks it on every request — every image and script a page
+loads — rather than once per visit.
+
 ## What it costs, and what it cannot do
 
 * **If the firewall's own pods are all down, protected sites return an error.**

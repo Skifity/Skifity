@@ -351,6 +351,49 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
   )
 })
 
+test("an app can be put behind a password, and the password never comes back", async ({ page }) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "staging", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  await page.goto(`/apps/${appID}?tab=firewall`)
+  await expect(page.getByText(/Ask everyone who opens this app/)).toBeVisible()
+
+  await page.getByLabel("Username", { exact: true }).fill("client")
+  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByRole("button", { name: "Turn on" }).click()
+  await expect(page.getByText(/signs in as client/)).toBeVisible()
+
+  // Only a hash is kept, and not even that is ever sent back.
+  const view = await (await page.request.get(`/api/apps/${appID}/password`)).text()
+  expect(view).toContain('"username":"client"')
+  expect(view).not.toContain("correct horse battery")
+  expect(view).not.toContain("$2")
+  await expect(page.getByText("correct horse battery")).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Remove password" }).click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove password" }).click()
+  await expect(page.getByRole("button", { name: "Turn on" })).toBeVisible()
+  expect(await (await page.request.get(`/api/apps/${appID}/password`)).text()).toContain(
+    '"enabled":false',
+  )
+})
+
 /** Signs in, unless this context already has a session. */
 async function signIn(page: Page) {
   await page.goto("/")

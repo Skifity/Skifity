@@ -276,6 +276,9 @@ func (s *Server) routes() chi.Router {
 				app.Get("/status", s.handleAppStatus)
 				app.Get("/firewall", s.handleGetFirewall)
 				app.Put("/firewall", s.handleSetFirewall)
+				app.Get("/password", s.handleGetPassword)
+				app.Put("/password", s.handleSetPassword)
+				app.Delete("/password", s.handleRemovePassword)
 				app.Post("/deploy", s.handleDeployApp)
 				// The code of an app with no repository, from `skifity up`.
 				app.Put("/source", s.handleUploadSource)

@@ -78,6 +78,9 @@ type AppSpec struct {
 	// Protected is true when this app has firewall rules switched on, which
 	// puts the guard's middleware in front of its Ingress.
 	Protected bool
+	// PasswordUsers is the htpasswd line of the one account allowed through
+	// the app's password, "user:bcrypt-hash". Empty means the app has none.
+	PasswordUsers string
 	// ImageBuiltHere is true when Skifity's own builder produced this image.
 	//
 	// It is the difference between knowing what is inside a container and

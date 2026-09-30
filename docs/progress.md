@@ -4131,6 +4131,42 @@ No real GitHub, GitLab or Gitea has been sent a status or a comment. The request
 shapes follow each host's documented API and are checked against fakes, which
 is not the same as the host accepting them.
 
+## Phase 75 — a password in front of an app
+
+Every product in the competitor research has some way to keep a site out of
+sight that is not an address rule: Vercel's deployment protection, Netlify's
+password, Coolify's and Dokploy's basic auth, CapRover's HTTP auth. Skifity had
+the firewall, which is the wrong tool for a client on a phone or a reviewer
+whose address changes.
+
+The app's **Firewall** tab now has **Password**: a username and a password, and
+everyone who opens the app is asked for them first. Traefik's own basicAuth, so
+nothing has to be installed.
+
+* **Only a bcrypt hash is kept**, in htpasswd's `$2y$` form, in its own table
+  (`app_passwords`) and in a Secret in the app's namespace. The API never sends
+  the hash or the password back, and the Playwright test checks both the page
+  and the response.
+* **After the redirect to HTTPS, never before it**, so a browser does not answer
+  the prompt over plain HTTP one request before it had to. The order — firewall,
+  redirect, password — is a test.
+* **`removeHeader`**, so the app never sees the password and an app that logs
+  its headers does not write it down.
+* **Previews inherit it.** A pull request's preview of a locked staging site is
+  locked with the same password; only the hash is copied, so a fork learns
+  nothing.
+* **Admin only**, like the firewall, and the plain-HTTP addresses it guards are
+  named on the tab, because the free sslip.io address is one of them.
+* **Work factor 6, not 10.** Traefik checks the hash on every request, so the
+  cost is paid per image and script, not per visit.
+
+### Not executed
+
+No Traefik has loaded the middleware or asked a browser for the password. The
+rendered objects, the middleware order, the stored hash (checked with bcrypt
+against the password and a wrong one), the API, the preview copy and the panel
+form are all tested; the prompt itself needs a cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -267,7 +267,9 @@
       "auth.reauthenticated": "Membuktikan identitasnya kembali",
       "auth.sessions_revoked": "Mengeluarkan semua perangkat lain",
       "git_source.webhook_registered": "Webhook didaftarkan di repositori",
-      "app.source_uploaded": "Mengunggah kode aplikasi"
+      "app.source_uploaded": "Mengunggah kode aplikasi",
+      "app.password_set": "Password app dipasang",
+      "app.password_removed": "Password app dihapus"
     }
   },
   "projects": {
@@ -2120,6 +2122,23 @@
       "http.user_agent": "badbot",
       "http.header": "sebuah nilai"
     }
+  },
+  "appPassword": {
+    "title": "Password",
+    "on": "Aktif",
+    "help": "Minta setiap orang yang membuka app ini memasukkan nama pengguna dan password terlebih dahulu. Untuk situs staging, preview, atau tool internal.",
+    "current": "Siapa pun yang membukanya masuk sebagai {{username}}. Diubah {{when}}.",
+    "change": "Ganti password",
+    "remove": "Hapus password",
+    "removeTitle": "Hapus password?",
+    "removeDescription": "Siapa pun yang tahu alamatnya akan bisa membuka app ini lagi.",
+    "plainHttp": "Beberapa alamat tidak memakai HTTPS",
+    "plainHttpHelp": "Di {{hostnames}} password melintasi jaringan dan bisa dibaca siapa pun di jalurnya. Tambahkan domain milik sendiri agar app mendapat sertifikat.",
+    "username": "Nama pengguna",
+    "password": "Password",
+    "save": "Simpan password",
+    "turnOn": "Aktifkan",
+    "previews": "Preview dari pull request app ini meminta password yang sama. Hanya admin yang bisa mengubahnya."
   },
   "plugins": {
     "title": "Plugin",

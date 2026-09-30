@@ -345,6 +345,10 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 
 	objects := []any{
 		kube.BuildEnvSecret(spec, variables),
+		// Before the Ingress that names them: a middleware that is missing
+		// when Traefik reads the Ingress is a route Traefik refuses to serve.
+		kube.BuildPasswordSecret(spec),
+		kube.BuildPasswordMiddleware(spec),
 	}
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
@@ -419,6 +423,19 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 		if err := applier.Delete(ctx, "policy/v1", "PodDisruptionBudget",
 			spec.Namespace, kube.ResourceName(spec.Name, "pdb")); err != nil {
 			d.log.Warn("could not remove the disruption budget", "app", app.ID, "error", err)
+		}
+	}
+	if spec.PasswordUsers == "" {
+		// The Ingress no longer names the middleware once the password is
+		// gone, so these are only tidying — but a Secret holding a hash of a
+		// password somebody took off is not something to leave lying around.
+		if err := applier.Delete(ctx, "traefik.io/v1alpha1", "Middleware",
+			spec.Namespace, kube.PasswordMiddlewareName(spec.Name)); err != nil {
+			d.log.Warn("could not remove the password middleware", "app", app.ID, "error", err)
+		}
+		if err := applier.Delete(ctx, "v1", "Secret",
+			spec.Namespace, kube.PasswordSecretName(spec.Name)); err != nil {
+			d.log.Warn("could not remove the password secret", "app", app.ID, "error", err)
 		}
 	}
 	if !kube.ScaleToZeroEnabled(spec) {

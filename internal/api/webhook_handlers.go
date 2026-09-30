@@ -278,6 +278,18 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 			s.log.Info("a preview from a fork was given no secrets",
 				"app", previewApp.ID, "pull_request", event.PullRequest)
 		}
+		// A preview of a site behind a password is behind the same one. Left
+		// out, a staging site somebody locked would have every pull request's
+		// copy of it open to whoever guessed the address. Only the hash is
+		// copied, so a fork's preview learns nothing it could not already.
+		if password, ok, err := s.db.GetAppPassword(r.Context(), app.ID); err != nil {
+			return "", err
+		} else if ok {
+			password.AppID = previewApp.ID
+			if err := s.db.SetAppPassword(r.Context(), password, "webhook"); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
