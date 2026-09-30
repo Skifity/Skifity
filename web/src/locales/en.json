@@ -2611,7 +2611,9 @@
       "backup.failed": "A backup failed",
       "certificate.failed": "A certificate could not be issued",
       "app.alert": "An app crossed a usage threshold",
-      "server.alert": "A server crossed a usage threshold"
+      "server.alert": "A server crossed a usage threshold",
+      "backup.missed": "A scheduled backup was missed and taken late",
+      "backup.succeeded": "A backup succeeded"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {
@@ -2650,7 +2652,8 @@
       "email": {
         "to": "To"
       }
-    }
+    },
+    "everyEvent": "Every event except successful backups"
   },
   "invite": {
     "title": "Join {{team}}",

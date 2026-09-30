@@ -214,3 +214,18 @@ func TestMain(m *testing.M) {
 	client = &http.Client{Timeout: 5 * time.Second}
 	os.Exit(m.Run())
 }
+
+// A backup that succeeded is news only to a channel that asked for it: a
+// channel that takes every event was never sent one per database per night,
+// and a new event must not start doing that unasked.
+func TestASucceededBackupReachesOnlyAChannelThatAskedForIt(t *testing.T) {
+	if subscribes("", EventBackupSucceeded) {
+		t.Error("a channel with no list is sent every successful backup")
+	}
+	if !subscribes("", EventBackupMissed) {
+		t.Error("a channel with no list is not told a backup was missed")
+	}
+	if !subscribes("backup.failed, backup.succeeded", EventBackupSucceeded) {
+		t.Error("a channel that asked for successful backups is not sent them")
+	}
+}

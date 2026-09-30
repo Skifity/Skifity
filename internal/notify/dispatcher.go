@@ -243,7 +243,7 @@ func PrepareEmail(ctx context.Context, db SettingsReader, keyring Keyring, log *
 func subscribes(events, event string) bool {
 	events = strings.TrimSpace(events)
 	if events == "" {
-		return true
+		return !optIn[event]
 	}
 	for _, candidate := range strings.Split(events, ",") {
 		if strings.TrimSpace(candidate) == event {

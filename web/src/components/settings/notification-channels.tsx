@@ -42,6 +42,8 @@ const EVENTS = [
   "server.added",
   "server.lost",
   "backup.failed",
+  "backup.missed",
+  "backup.succeeded",
   "certificate.failed",
   "app.alert",
   "server.alert",
@@ -185,7 +187,9 @@ export function NotificationChannels() {
                       .split(",")
                       .filter(Boolean)
                       .map((event) => t(`notifications.event.${event}`, { defaultValue: event }))
-                      .join(" · ") || t("common.none")}
+                      // No list is every event but the opt-in ones, which
+                      // is what the panel sends it; "None" said the opposite.
+                      .join(" · ") || t("notifications.everyEvent")}
                   </p>
                 </div>
                 <Button
@@ -246,7 +250,15 @@ function ChannelForm({ onDone }: { onDone: () => void }) {
   const [config, setConfig] = useState<Record<string, string>>({})
   // Failures are what people actually want to be told about; successes are
   // opt-in so the channel does not become noise nobody reads.
-  const [events, setEvents] = useState<string[]>(["deploy.failed", "app.unhealthy", "server.lost"])
+  // backup.failed among them: docs/backups.md said it was on by default,
+  // and it was not.
+  const [events, setEvents] = useState<string[]>([
+    "deploy.failed",
+    "app.unhealthy",
+    "server.lost",
+    "backup.failed",
+    "backup.missed",
+  ])
 
   const create = useMutation({
     mutationFn: () =>

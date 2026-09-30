@@ -2597,7 +2597,9 @@
       "backup.failed": "Pencadangan gagal",
       "certificate.failed": "Sertifikat gagal diterbitkan",
       "app.alert": "Sebuah app melewati ambang pemakaian",
-      "server.alert": "Sebuah server melewati ambang pemakaian"
+      "server.alert": "Sebuah server melewati ambang pemakaian",
+      "backup.missed": "Pencadangan terjadwal terlewat dan diambil terlambat",
+      "backup.succeeded": "Pencadangan berhasil"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {
@@ -2636,7 +2638,8 @@
       "email": {
         "to": "Kepada"
       }
-    }
+    },
+    "everyEvent": "Semua peristiwa kecuali pencadangan yang berhasil"
   },
   "invite": {
     "title": "Gabung ke {{team}}",

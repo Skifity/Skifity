@@ -123,8 +123,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		m.log.Error("backup failed", "backup", backup.ID, "database", record.ID, "error", err)
 		_ = m.db.FinishBackup(ctx, backup.ID, "failed", backup.Location, 0, problem.Error())
 		m.publish(ctx, record.ID)
-		m.notifyFailure(ctx, record, problem)
-		m.tellPlugins(ctx, backup, record.Name, problem)
+		m.finished(ctx, backup, record.Name, problem)
 	}
 	// A backup runs unattended, often at night. A panic here used to take the
 	// panel with it, so the first anybody knew was that the panel was gone.
@@ -194,7 +193,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		m.log.Warn("could not record the finished backup", "backup", backup.ID, "error", err)
 	}
 	m.publish(ctx, record.ID)
-	m.tellPlugins(ctx, backup, record.Name, nil)
+	m.finished(ctx, backup, record.Name, nil)
 	m.log.Info("backup finished", "backup", backup.ID, "database", record.Name, "bytes", size)
 
 	m.applyRetention(ctx, storage, "database", record.ID)
@@ -546,27 +545,61 @@ func (m *Manager) RunScheduledAt(ctx context.Context, minutes []time.Time) {
 	}
 }
 
-// tellPlugins says a backup finished, whichever way it went.
+// finished says a backup finished, whichever way it went: to the team's
+// notification channels and to its plugins.
 //
 // Four places finish one — a database and a volume, each succeeding and each
-// failing — and a plugin subscribed to backup.completed or backup.failed was
-// told by none of them. One helper rather than four call sites written out,
-// so a fifth kind of backup cannot quietly be added without an event.
-func (m *Manager) tellPlugins(ctx context.Context, backup store.Backup, name string, failure error) {
+// failing. A plugin subscribed to backup.completed or backup.failed was once
+// told by none of them, and a volume's failed backup still reached no
+// channel at all: only a database's did. One helper rather than four call
+// sites written out, so a fifth kind of backup cannot quietly be added
+// without either.
+func (m *Manager) finished(ctx context.Context, backup store.Backup, name string, failure error) {
 	teamID, err := m.teamForBackup(ctx, backup)
 	if err != nil || teamID == "" {
+		m.log.Warn("could not work out whose backup this was", "backup", backup.ID, "error", err)
 		return
 	}
 	data := map[string]any{
 		"backup_id": backup.ID, "target_type": backup.TargetType,
 		"target_id": backup.TargetID, "target": name, "kind": backup.Kind,
 	}
+	fields := map[string]string{"Backup of": name}
+	path := m.backupPath(ctx, backup)
 	if failure != nil {
-		data["error"] = errdoc.From(failure).Error()
+		problem := errdoc.From(failure)
+		data["error"] = problem.Error()
 		m.Plugins.Notify(ctx, plugins.EventBackupFailed, teamID, data)
+		if m.notifier != nil {
+			fields["Reason"] = problem.Code
+			m.notifier.Notify(ctx, teamID, notify.EventBackupFailed, notify.Message{
+				Title: "Backing up " + name + " failed", Body: problem.Error() + "\n\n" + problem.Fix,
+				Level: "error", Path: path, Fields: fields,
+			})
+		}
 		return
 	}
 	m.Plugins.Notify(ctx, plugins.EventBackupCompleted, teamID, data)
+	if m.notifier != nil {
+		m.notifier.Notify(ctx, teamID, notify.EventBackupSucceeded, notify.Message{
+			Title: name + " was backed up", Body: "The backup finished and is in storage.",
+			Level: "success", Path: path, Fields: fields,
+		})
+	}
+}
+
+// backupPath is the page a backup's notification links to: the database, or
+// the app whose volume it copied.
+func (m *Manager) backupPath(ctx context.Context, backup store.Backup) string {
+	switch backup.TargetType {
+	case "database":
+		return "/databases/" + backup.TargetID
+	case "volume":
+		if volume, err := m.db.GetVolume(ctx, backup.TargetID); err == nil {
+			return "/apps/" + volume.AppID
+		}
+	}
+	return ""
 }
 
 // teamForBackup resolves whose backup this was, through whichever kind of
@@ -583,28 +616,6 @@ func (m *Manager) teamForBackup(ctx context.Context, backup store.Backup) (strin
 		return m.db.TeamIDForApp(ctx, volume.AppID)
 	}
 	return "", nil
-}
-
-// notifyFailure tells the team a backup did not happen.
-//
-// A backup that silently fails is the worst kind: it is only discovered when a
-// restore is attempted, which is the moment it matters most.
-func (m *Manager) notifyFailure(ctx context.Context, record store.Database, problem *errdoc.Problem) {
-	if m.notifier == nil {
-		return
-	}
-	teamID, err := m.db.TeamIDForDatabase(ctx, record.ID)
-	if err != nil {
-		m.log.Warn("could not work out which team to notify", "database", record.ID, "error", err)
-		return
-	}
-	m.notifier.Notify(ctx, teamID, notify.EventBackupFailed, notify.Message{
-		Title:  "Backing up " + record.Name + " failed",
-		Body:   problem.Error() + "\n\n" + problem.Fix,
-		Level:  "error",
-		Path:   "/databases/" + record.ID,
-		Fields: map[string]string{"Database": record.Name, "Reason": problem.Code},
-	})
 }
 
 // runVolumeBackup copies an app's volume to storage.
@@ -660,8 +671,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 		m.log.Error("volume backup failed",
 			"backup", backup.ID, "volume", volume.ID, "app", app.ID, "error", err)
 		_ = m.db.FinishBackup(ctx, backup.ID, "failed", backup.Location, 0, problem.Error())
-		m.publish(ctx, app.ID)
-		m.tellPlugins(ctx, backup, app.Name+" / "+volume.Name, problem)
+		m.finished(ctx, backup, app.Name+" / "+volume.Name, problem)
 	}
 	defer runsafe.Recover(m.log, "volume backup "+backup.ID, fail)
 
@@ -717,8 +727,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 	if err := m.db.FinishBackup(ctx, backup.ID, "succeeded", backup.Location, size, ""); err != nil {
 		m.log.Warn("could not record the finished backup", "backup", backup.ID, "error", err)
 	}
-	m.publish(ctx, app.ID)
-	m.tellPlugins(ctx, backup, app.Name+" / "+volume.Name, nil)
+	m.finished(ctx, backup, app.Name+" / "+volume.Name, nil)
 	m.log.Info("volume backup finished",
 		"backup", backup.ID, "app", app.Name, "volume", volume.Name, "bytes", size)
 

@@ -28,7 +28,8 @@ import (
 // A backup is every row of a database, and it sits in a bucket somebody else
 // runs. Encrypting it with the storage provider's own keys protects it from
 // a stolen disk and from nobody else; this is encrypted with a passphrase the
-// provider never sees. Cloudron, Dokploy and Dokku offer the same.
+// provider never sees. Cloudron and Dokku offer the same; Coolify and
+// Dokploy upload the dump as it is.
 //
 // The format is a header and a stream of chunks:
 //

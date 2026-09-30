@@ -428,6 +428,15 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, c 
 	case <-timer.C:
 	}
 
+	// Before the first tick: the backups whose time passed while the panel
+	// was not running, which the tick cannot know about. After the aligned
+	// wait rather than at once, so the cluster connection startup recovery
+	// opens is there for them to use.
+	func() {
+		defer runsafe.Recover(log, "catching up on missed backups", nil)
+		backups.CatchUp(ctx, time.Now().UTC())
+	}()
+
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 

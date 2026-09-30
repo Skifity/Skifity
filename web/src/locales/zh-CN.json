@@ -2597,7 +2597,9 @@
       "backup.failed": "备份失败",
       "certificate.failed": "证书签发失败",
       "app.alert": "应用超过了用量阈值",
-      "server.alert": "服务器超过了用量阈值"
+      "server.alert": "服务器超过了用量阈值",
+      "backup.missed": "计划备份被错过，已延后执行",
+      "backup.succeeded": "备份成功"
     },
     "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
     "field": {
@@ -2636,7 +2638,8 @@
       "email": {
         "to": "收件人"
       }
-    }
+    },
+    "everyEvent": "除备份成功外的所有事件"
   },
   "invite": {
     "title": "加入 {{team}}",

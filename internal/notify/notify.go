@@ -47,7 +47,14 @@ const (
 	EventServerAdded     = "server.added"
 	EventServerLost      = "server.lost"
 	EventBackupFailed    = "backup.failed"
-	EventCertificate     = "certificate.failed"
+	// EventBackupSucceeded is every backup that finished. Opt-in: a channel
+	// that takes every event is not sent it, because a nightly "all is well"
+	// per database drowns the one message that matters.
+	EventBackupSucceeded = "backup.succeeded"
+	// EventBackupMissed is a scheduled backup whose time passed while the
+	// panel was not running. The panel takes it late, and says so.
+	EventBackupMissed = "backup.missed"
+	EventCertificate  = "certificate.failed"
 	// EventAppAlert is an app crossing one of its thresholds — memory, CPU,
 	// restarts — and coming back under it.
 	EventAppAlert = "app.alert"
@@ -59,9 +66,14 @@ const (
 // AllEvents is what the UI offers when configuring a channel.
 var AllEvents = []string{
 	EventDeploySucceeded, EventDeployFailed, EventAppUnhealthy,
-	EventServerAdded, EventServerLost, EventBackupFailed, EventCertificate, EventAppAlert,
-	EventServerAlert,
+	EventServerAdded, EventServerLost, EventBackupFailed, EventBackupSucceeded, EventBackupMissed,
+	EventCertificate, EventAppAlert, EventServerAlert,
 }
+
+// optIn are the events a channel receives only when it names them. A channel
+// with no list takes every other event, as it always has; one added later that
+// is this frequent would otherwise arrive unasked on every such channel.
+var optIn = map[string]bool{EventBackupSucceeded: true}
 
 // client is shared so notifications reuse connections and always time out.
 //

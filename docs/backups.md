@@ -85,6 +85,12 @@ with nothing.
 
 Times are UTC, not your local time.
 
+A backup due while the panel was not running — an upgrade, a node rebooting
+over 03:00 — is taken as soon as the panel is back, once, however many were
+missed, and the team is told it was late with `backup.missed`. It looks back a
+week. A backup started at or after the time it was due counts as taken, even
+one that failed: that failure was already reported.
+
 ## Restoring
 
 A restore replaces everything currently in the database with the contents of
@@ -102,7 +108,9 @@ Take a fresh backup first. The panel will offer.
 ## Failures
 
 A failed backup is worth knowing about immediately, which is why
-`backup.failed` is on by default in a new notification channel.
+`backup.failed` and `backup.missed` are on by default in a new notification
+channel — for volumes as well as databases. `backup.succeeded` is there for a
+channel that wants every one; a channel with no list of events is not sent it.
 
 **No storage configured.** Nothing has been backed up. Set it up under
 Settings → Backup storage.
