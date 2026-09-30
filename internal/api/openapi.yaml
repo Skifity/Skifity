@@ -1643,6 +1643,33 @@ paths:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/environments/{envID}/clone:
+    parameters:
+      - $ref: '#/components/parameters/envID'
+    post:
+      operationId: cloneEnvironment
+      tags: [Projects]
+      summary: Copy an environment into a new one beside it
+      description: >-
+        Member. The same apps, settings, variables, files, processes and
+        schedules, every secret resealed for the copy, and a new, empty
+        database of each kind linked the same way. A database's data, a
+        volume's contents, custom domains and public ports stay with the
+        original, and the copy does not deploy on push until that is turned
+        on. A preview cannot be cloned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CloneEnvironmentRequest'}
+      responses:
+        '201':
+          description: The new environment, what was made in it, and what was left behind.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClonedEnvironment'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/environments/{envID}/quota:
     parameters:
       - $ref: '#/components/parameters/envID'
@@ -4354,6 +4381,32 @@ components:
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/Environment'}}
         total: {type: integer}
+
+    CloneEnvironmentRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: 'The copy''s name, such as staging.'}
+        deploy: {type: boolean, description: 'Deploy each app once everything is copied.'}
+
+    ClonedEnvironment:
+      type: object
+      required: [environment, apps, databases, notes]
+      properties:
+        environment: {$ref: '#/components/schemas/Environment'}
+        apps: {type: array, items: {$ref: '#/components/schemas/App'}}
+        databases: {type: array, items: {$ref: '#/components/schemas/Database'}}
+        notes:
+          type: array
+          description: What the copy does not have, one app or database at a time.
+          items:
+            type: object
+            required: [name, code]
+            properties:
+              name: {type: string}
+              code: {type: string, enum: [volumes_empty, domains_kept, ports_kept, push_deploy_off, database_skipped, deploy_failed]}
+              detail: {type: string, description: 'Why, for deploy_failed.'}
 
     CreateEnvironmentRequest:
       type: object

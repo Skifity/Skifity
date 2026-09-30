@@ -337,7 +337,8 @@
       "port.closed": "关闭了一个端口",
       "app.job_run": "立即运行了一个计划命令",
       "auth.password_reset_requested": "申请了密码重置链接",
-      "auth.password_reset": "通过链接重置了密码"
+      "auth.password_reset": "通过链接重置了密码",
+      "environment.cloned": "环境已克隆"
     }
   },
   "projects": {
@@ -2772,7 +2773,22 @@
       "baseline": "接受 root 镜像"
     },
     "previewStack": "预览复制整个环境",
-    "previewStackHelp": "拉取请求的预览会得到这里每个应用的副本，而不只是它的仓库构建的那些。其他应用运行它们在这里运行的版本，共用一个数据库的应用在预览里也共用它的同一个副本。"
+    "previewStackHelp": "拉取请求的预览会得到这里每个应用的副本，而不只是它的仓库构建的那些。其他应用运行它们在这里运行的版本，共用一个数据库的应用在预览里也共用它的同一个副本。",
+    "clone": "克隆",
+    "cloneAction": "克隆 {{name}}",
+    "cloneTitle": "克隆 {{name}}",
+    "cloneHelp": "一个新环境，包含相同的应用、设置、变量、文件、进程和计划任务，并为每种数据库各创建一个新的空数据库，以相同方式关联。数据、卷内容、自定义域名和公共端口保留在原环境。",
+    "cloneDeploy": "复制完成后部署应用",
+    "cloneDeployHelp": "否则它们会等待第一次部署。",
+    "cloned": "{{name}} 已就绪：{{apps}} 个应用，{{databases}} 个数据库。",
+    "cloneNote": {
+      "volumes_empty": "{{name}} 已有卷，但为空：内容保留在原环境。",
+      "domains_kept": "{{name}} 的自定义域名保留在原环境；副本使用每个新应用都会获得的地址。",
+      "ports_kept": "{{name}} 的公共端口保留在原环境：每个端口在整个面板上只属于一个应用。",
+      "push_deploy_off": "{{name}} 在其设置中开启之前不会在推送时部署。",
+      "database_skipped": "数据库 {{name}} 未复制：此面板没有可用于创建它的集群。",
+      "deploy_failed": "{{name}} 暂时无法部署：{{detail}}"
+    }
   },
   "firewall": {
     "title": "防火墙",

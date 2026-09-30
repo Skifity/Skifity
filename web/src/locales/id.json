@@ -337,7 +337,8 @@
       "port.closed": "menutup sebuah port",
       "app.job_run": "menjalankan perintah terjadwal sekarang",
       "auth.password_reset_requested": "meminta tautan reset kata sandi",
-      "auth.password_reset": "mereset kata sandinya lewat tautan"
+      "auth.password_reset": "mereset kata sandinya lewat tautan",
+      "environment.cloned": "Lingkungan dikloning"
     }
   },
   "projects": {
@@ -2772,7 +2773,22 @@
       "baseline": "Terima image root"
     },
     "previewStack": "Pratinjau menyalin seluruh environment",
-    "previewStackHelp": "Pratinjau pull request mendapat salinan setiap aplikasi di sini, bukan hanya yang dibangun dari repositorinya. Yang lain menjalankan versi yang berjalan di sini, dan aplikasi yang berbagi database berbagi salinan database pratinjau."
+    "previewStackHelp": "Pratinjau pull request mendapat salinan setiap aplikasi di sini, bukan hanya yang dibangun dari repositorinya. Yang lain menjalankan versi yang berjalan di sini, dan aplikasi yang berbagi database berbagi salinan database pratinjau.",
+    "clone": "Kloning",
+    "cloneAction": "Kloning {{name}}",
+    "cloneTitle": "Kloning {{name}}",
+    "cloneHelp": "Lingkungan baru dengan aplikasi, pengaturan, variabel, file, proses, dan jadwal yang sama, serta database baru yang kosong untuk setiap jenis, ditautkan dengan cara yang sama. Data, isi volume, domain kustom, dan port publik tetap milik aslinya.",
+    "cloneDeploy": "Deploy aplikasi setelah disalin",
+    "cloneDeployHelp": "Jika tidak, aplikasi menunggu deploy pertamanya.",
+    "cloned": "{{name}} siap. Aplikasi disalin: {{apps}}. Database dibuat: {{databases}}.",
+    "cloneNote": {
+      "volumes_empty": "{{name}} memiliki volumenya, dalam keadaan kosong: isinya tetap di aslinya.",
+      "domains_kept": "Domain milik {{name}} tetap di aslinya; salinannya mendapat alamat yang didapat setiap aplikasi baru.",
+      "ports_kept": "Port publik {{name}} tetap di aslinya: setiap port milik satu aplikasi di seluruh panel.",
+      "push_deploy_off": "{{name}} tidak deploy saat push sampai diaktifkan di pengaturannya.",
+      "database_skipped": "Database {{name}} tidak disalin: panel ini tidak punya klaster untuk membuatnya.",
+      "deploy_failed": "{{name}} belum bisa di-deploy: {{detail}}"
+    }
   },
   "firewall": {
     "title": "Firewall",

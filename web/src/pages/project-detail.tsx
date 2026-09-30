@@ -6,6 +6,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   BoxIcon,
+  CopyIcon,
   DatabaseIcon,
   ExternalLinkIcon,
   FolderIcon,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
+import { CloneEnvironmentDialog } from "@/components/environment-clone"
 import { EnvironmentConfinement } from "@/components/environment-confinement"
 import { EnvironmentPreviews } from "@/components/environment-previews"
 import { EnvironmentQuota } from "@/components/environment-quota"
@@ -85,6 +87,7 @@ export function ProjectDetailPage() {
   const { team } = useSession()
   const [chosen, setChosen] = useState<string | null>(null)
   const [newEnvironment, setNewEnvironment] = useState(false)
+  const [cloning, setCloning] = useState(false)
 
   const project = useQuery({
     queryKey: ["project", projectId],
@@ -176,6 +179,12 @@ export function ProjectDetailPage() {
                   <PlusIcon className="size-4" />
                   {t("projects.newEnvironment")}
                 </DropdownMenuItem>
+                {chosenEnvironment?.kind === "standard" && (
+                  <DropdownMenuItem onSelect={() => setCloning(true)}>
+                    <CopyIcon className="size-4" />
+                    {t("environments.cloneAction", { name: chosenEnvironment.name })}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => {
@@ -256,6 +265,12 @@ export function ProjectDetailPage() {
         open={newEnvironment}
         onOpenChange={setNewEnvironment}
         onCreated={(environment) => setEnvironmentId(environment.id)}
+      />
+      <CloneEnvironmentDialog
+        environment={chosenEnvironment}
+        open={cloning}
+        onOpenChange={setCloning}
+        onCloned={(environment) => setEnvironmentId(environment.id)}
       />
     </Page>
   )

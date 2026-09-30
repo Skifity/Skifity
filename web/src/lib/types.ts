@@ -68,6 +68,25 @@ export type Environment = {
   created_at: string
 }
 
+/** What cloning an environment made, and what it left behind. */
+export type ClonedEnvironment = {
+  environment: Environment
+  apps: App[]
+  databases: Database[]
+  notes: {
+    /** The app's or the database's. */
+    name: string
+    code:
+      | "volumes_empty"
+      | "domains_kept"
+      | "ports_kept"
+      | "push_deploy_off"
+      | "database_skipped"
+      | "deploy_failed"
+    detail?: string
+  }[]
+}
+
 /** The Pod Security Admission level an environment's namespace enforces. */
 export type PodSecurity = "restricted" | "baseline"
 

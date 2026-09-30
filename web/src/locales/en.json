@@ -345,7 +345,8 @@
       "port.closed": "closed a port",
       "app.job_run": "ran a scheduled command now",
       "auth.password_reset_requested": "asked for a password reset link",
-      "auth.password_reset": "reset their password through a link"
+      "auth.password_reset": "reset their password through a link",
+      "environment.cloned": "Environment cloned"
     }
   },
   "projects": {
@@ -2786,7 +2787,22 @@
       "baseline": "Accepts root images"
     },
     "previewStack": "Previews copy the whole environment",
-    "previewStackHelp": "A pull request's preview gets a copy of every app here, not only the ones its repository builds. The others run the version they run here, and apps sharing a database share the preview's copy of it."
+    "previewStackHelp": "A pull request's preview gets a copy of every app here, not only the ones its repository builds. The others run the version they run here, and apps sharing a database share the preview's copy of it.",
+    "clone": "Clone",
+    "cloneAction": "Clone {{name}}",
+    "cloneTitle": "Clone {{name}}",
+    "cloneHelp": "A new environment with the same apps, settings, variables, files, processes and schedules, and a new, empty database of each kind, linked the same way. Data, volume contents, custom domains and public ports stay with the original.",
+    "cloneDeploy": "Deploy the apps once they are copied",
+    "cloneDeployHelp": "Otherwise they wait for their first deploy.",
+    "cloned": "{{name}} is ready. Apps copied: {{apps}}. Databases made: {{databases}}.",
+    "cloneNote": {
+      "volumes_empty": "{{name}} has its volumes, empty: their contents stay with the original.",
+      "domains_kept": "{{name}}'s own domains stay with the original; the copy has the address every new app gets.",
+      "ports_kept": "{{name}}'s public ports stay with the original: each belongs to one app on the whole panel.",
+      "push_deploy_off": "{{name}} does not deploy on push until that is turned on in its settings.",
+      "database_skipped": "The database {{name}} was not copied: this panel has no cluster to make one in.",
+      "deploy_failed": "{{name}} could not be deployed yet: {{detail}}"
+    }
   },
   "firewall": {
     "title": "Firewall",

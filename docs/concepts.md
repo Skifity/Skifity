@@ -34,6 +34,34 @@ Environments are isolated from each other: each is a namespace with
 default-deny networking, so an app in staging cannot reach production's database
 by accident.
 
+### Cloning an environment
+
+**Clone** in a project's menu makes a new environment from the one shown:
+staging from production, or a second customer set up like the first. The copy
+has the same apps with the same settings, variables, files, processes and
+schedules, and a new, empty database of each kind the original has, linked to
+the same apps under the same variable names. Every secret is sealed again for
+the copy, so neither environment can open the other's.
+
+Some things stay with the original, on purpose, and the panel lists which ones
+once the copy is made:
+
+* **A database's data.** Production's rows in staging are customers' records
+  somewhere nobody meant them to be. Take a backup and restore it into the
+  copy if that is what you want.
+* **A volume's contents,** for the same reason. The copy has its volumes,
+  empty.
+* **Custom domains,** which point at the original. Each copied app has the
+  address every new app gets.
+* **Public ports,** each of which belongs to one app on the whole panel.
+* **Deploying on push.** A copy that also deployed every push to production's
+  branch would be a second production. Turn it on in the app's settings, on a
+  different branch.
+
+The apps wait for their first deploy unless you ask for one while cloning. A
+preview cannot be cloned: it is a copy already, and it goes when its pull
+request closes.
+
 ### How strictly an environment confines its apps
 
 Each environment chooses one of two levels, and **Strictest** is the default.
