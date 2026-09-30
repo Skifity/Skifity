@@ -72,6 +72,28 @@ func DeployLocked(by, reason string) *Problem {
 		WithStatus(http.StatusConflict)
 }
 
+// WatchPathInvalid is a line in an app's watch paths that is not a pattern.
+func WatchPathInvalid(line string) *Problem {
+	return New("app.watch_path_invalid", "That is not a path the app can watch").
+		WithCause("%s is not a path or a pattern.", line).
+		WithImpact("Nothing was changed.").
+		WithFix("Write one path or pattern per line, starting at the repository's root: apps/web, "+
+			"apps/**/package.json, or !**/*.md to leave something out. A path cannot use .. to leave the repository.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#only-the-paths-an-app-watches").
+		With("line", line)
+}
+
+// TooManyWatchPaths is more watch paths than an app can have.
+func TooManyWatchPaths(max int) *Problem {
+	return New("app.too_many_watch_paths", "That is too many paths to watch").
+		WithCause("An app can watch at most %d paths or patterns.", max).
+		WithImpact("Nothing was changed.").
+		WithFix("Use a pattern that covers several paths at once, such as apps/** or packages/*/src.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#only-the-paths-an-app-watches")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

@@ -500,7 +500,10 @@
       "memory_pct": "Memori, % dari batas",
       "cpu_pct": "CPU, % dari batas",
       "restarts": "Restart dalam 10 menit"
-    }
+    },
+    "watchPaths": "Path yang dipantau",
+    "watchPathsHelp": "Deploy saat push hanya jika push itu mengubah salah satunya. Satu path atau pola per baris, dari root repositori; baris yang diawali ! mengecualikan sesuatu. Kosong berarti deploy pada setiap push.",
+    "watchPathsUseRoot": "Pantau {{dir}}"
   },
   "deploy": {
     "title": "Deployment",
@@ -2181,6 +2184,18 @@
         "cause": "{{0}} menguncinya: {{1}}",
         "impact": "Tidak ada yang di-deploy. Versi yang berjalan sekarang tetap berjalan.",
         "fix": "Buka kunci deploy di halaman app, atau dengan `{{0}} unlock`, setelah alasan penguncian selesai."
+      },
+      "app_watch_path_invalid": {
+        "title": "Itu bukan path yang bisa dipantau aplikasi",
+        "cause": "{{0}} bukan path atau pola.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tulis satu path atau pola per baris, dimulai dari root repositori: apps/web, apps/**/package.json, atau !**/*.md untuk mengecualikan sesuatu. Path tidak boleh memakai .. untuk keluar dari repositori."
+      },
+      "app_too_many_watch_paths": {
+        "title": "Terlalu banyak path untuk dipantau",
+        "cause": "Satu aplikasi bisa memantau paling banyak {{0}} path atau pola.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Gunakan pola yang mencakup beberapa path sekaligus, misalnya apps/** atau packages/*/src."
       }
     }
   },

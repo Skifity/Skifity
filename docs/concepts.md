@@ -330,6 +330,38 @@ you the URL to add yourself. It never fails creating the app over it.
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.
 
+### Only the paths an app watches
+
+In a monorepo several apps are built from one repository, and by default a push
+to the branch deploys every one of them. Give an app **Watch paths** in its
+settings and a push deploys it only when the push changed one of them. One per
+line, starting at the repository's root — not at the app's root directory,
+because what an app is built from is often outside it:
+
+```
+apps/web
+packages/ui/**
+!**/*.md
+```
+
+A plain path covers everything under it. `*` and `?` match inside one
+directory, `**` across any number of them. A line starting with `!` leaves
+matching files out, a later line wins over an earlier one, and a list of only
+`!` lines means "everything except these". Lines starting with `#` are
+comments. When the app has a root directory and no watch paths, the settings
+offer to watch the root directory.
+
+When Skifity cannot be sure which files a push changed, it deploys: the first
+push of a branch, a force push, a push of twenty or more commits (where hosts
+stop listing them), and a commit that changes no files — which is how
+`git commit --allow-empty` asks for a redeploy. GitLab and Gitea do not say
+when a push was forced, so a force push there that only takes changes away from
+an app's paths is not seen; press **Redeploy** for that. Pull requests are not
+filtered: their webhooks do not list files, and every one gets its preview.
+
+A skipped app is named in the webhook's answer, which your Git host shows in
+its delivery log: `web (nothing it watches changed)`.
+
 ### What the pull request sees
 
 Every deploy of a commit from a connected repository is reported back to it.

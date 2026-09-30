@@ -284,23 +284,26 @@ type App struct {
 	StartCommand string `json:"start_command"`
 	// ReleaseCommand runs after the build and before any traffic reaches the
 	// new version, which is where a migration belongs.
-	ReleaseCommand string    `json:"release_command"`
-	Replicas       int       `json:"replicas"`
-	Autoscale      bool      `json:"autoscale"`
-	MinReplicas    int       `json:"min_replicas"`
-	MaxReplicas    int       `json:"max_replicas"`
-	CPUTarget      int       `json:"cpu_target"`
-	MemoryTarget   int       `json:"memory_target"`
-	ScaleToZero    bool      `json:"scale_to_zero"`
-	CPURequestM    int       `json:"cpu_request_m"`
-	CPULimitM      int       `json:"cpu_limit_m"`
-	MemRequestMB   int       `json:"mem_request_mb"`
-	MemLimitMB     int       `json:"mem_limit_mb"`
-	AutoDeploy     bool      `json:"auto_deploy"`
-	PreviewDeploys bool      `json:"preview_deploys"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ReleaseCommand string `json:"release_command"`
+	Replicas       int    `json:"replicas"`
+	Autoscale      bool   `json:"autoscale"`
+	MinReplicas    int    `json:"min_replicas"`
+	MaxReplicas    int    `json:"max_replicas"`
+	CPUTarget      int    `json:"cpu_target"`
+	MemoryTarget   int    `json:"memory_target"`
+	ScaleToZero    bool   `json:"scale_to_zero"`
+	CPURequestM    int    `json:"cpu_request_m"`
+	CPULimitM      int    `json:"cpu_limit_m"`
+	MemRequestMB   int    `json:"mem_request_mb"`
+	MemLimitMB     int    `json:"mem_limit_mb"`
+	AutoDeploy     bool   `json:"auto_deploy"`
+	PreviewDeploys bool   `json:"preview_deploys"`
+	// WatchPaths are the patterns a push has to touch to deploy the app, one
+	// per line; empty means every push does. See gitsrc.ParseWatchPaths.
+	WatchPaths string    `json:"watch_paths"`
+	Status     string    `json:"status"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Variable is an environment variable, secret or not. Value is only populated

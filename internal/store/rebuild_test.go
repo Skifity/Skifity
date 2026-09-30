@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
@@ -31,9 +32,9 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 		t.Fatalf("migrate to 15: %v", err)
 	}
 	prj, env := seedAtVersion15(t, db)
-	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1, RepoURL: "https://example.test/a.git"}
-	if err := db.CreateApp(ctx, &app); err != nil {
-		t.Fatalf("CreateApp: %v", err)
+	app := App{ID: NewID("app"), EnvironmentID: env.ID, Name: "web", Slug: "web", SourceType: "git", RepoURL: "https://example.test/a.git"}
+	if err := insertAppAtVersion15(ctx, db, app); err != nil {
+		t.Fatalf("insert the app: %v", err)
 	}
 	v := Variable{AppID: app.ID, Key: "PORT"}
 	if err := db.SetVariable(ctx, &v, "SKF1.sealed"); err != nil {
@@ -44,8 +45,8 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 		t.Fatalf("CreateDeployment: %v", err)
 	}
 	// Before 0016 there is no such source.
-	early := App{EnvironmentID: env.ID, Name: "early", Slug: "early", SourceType: "upload", Replicas: 1}
-	if err := db.CreateApp(ctx, &early); err == nil {
+	early := App{ID: NewID("app"), EnvironmentID: env.ID, Name: "early", Slug: "early", SourceType: "upload"}
+	if err := insertAppAtVersion15(ctx, db, early); err == nil {
 		t.Fatal("the schema before 0016 already accepts an upload, so this test is not testing the rebuild")
 	}
 
@@ -79,6 +80,17 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 	if _, err := db.GetDeployment(ctx, d.ID); err == nil {
 		t.Fatal("deleting the project no longer removes its deployments")
 	}
+}
+
+// insertAppAtVersion15 writes an app by hand, for the same reason: CreateApp
+// writes every column apps has today.
+func insertAppAtVersion15(ctx context.Context, db *DB, a App) error {
+	now := Now()
+	_, err := db.Exec(ctx, `INSERT INTO apps
+		(id, environment_id, name, slug, source_type, repo_url, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		a.ID, a.EnvironmentID, a.Name, a.Slug, a.SourceType, a.RepoURL, now, now)
+	return err
 }
 
 // seedAtVersion15 makes a team, a project and an environment in the schema as

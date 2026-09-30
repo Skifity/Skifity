@@ -168,6 +168,13 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 				result.Skipped = append(result.Skipped, app.Name+" (watches "+branch+")")
 				continue
 			}
+			// A monorepo app whose paths the push did not touch has nothing
+			// new to build. The host shows this answer in its delivery log,
+			// which is where somebody looks for why a push did not deploy.
+			if patterns, _ := gitsrc.ParseWatchPaths(app.WatchPaths); !event.Touches(patterns) {
+				result.Skipped = append(result.Skipped, app.Name+" (nothing it watches changed)")
+				continue
+			}
 			if s.deployer == nil {
 				continue
 			}

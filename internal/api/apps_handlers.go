@@ -55,7 +55,10 @@ type createAppRequest struct {
 	HealthPath     string `json:"health_path,omitempty"`
 	StartCommand   string `json:"start_command,omitempty"`
 	ReleaseCommand string `json:"release_command,omitempty"`
-	Deploy         bool   `json:"deploy,omitempty"`
+	// WatchPaths are the patterns a push has to touch to deploy the app, one
+	// per line. Empty means every push.
+	WatchPaths string `json:"watch_paths,omitempty"`
+	Deploy     bool   `json:"deploy,omitempty"`
 	// Variables are set on the new app before its first deploy. This exists
 	// for the Compose form: a service's environment is most of what the file
 	// says, and creating the app and then losing it would make the import a
@@ -269,6 +272,11 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest("Source must be git, image or upload."))
 		return
 	}
+	watch, err := watchPaths(req.WatchPaths)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	// An app and a database in one environment share a namespace, and both
 	// render a Service under their slug. Two of them under one name is not two
@@ -300,6 +308,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		StaticDir:      strings.TrimSpace(req.StaticDir),
 		StartCommand:   strings.TrimSpace(req.StartCommand),
 		ReleaseCommand: strings.TrimSpace(req.ReleaseCommand),
+		WatchPaths:     watch,
 		// Safe defaults, per the product principles: one instance, modest
 		// limits, health checks on, deploy on push.
 		Replicas:     1,
@@ -536,6 +545,7 @@ type updateAppRequest struct {
 	StaticDir      *string `json:"static_dir,omitempty"`
 	StartCommand   *string `json:"start_command,omitempty"`
 	ReleaseCommand *string `json:"release_command,omitempty"`
+	WatchPaths     *string `json:"watch_paths,omitempty"`
 	AutoDeploy     *bool   `json:"auto_deploy,omitempty"`
 	PreviewDeploys *bool   `json:"preview_deploys,omitempty"`
 	CPURequestM    *int    `json:"cpu_request_m,omitempty"`
@@ -569,6 +579,14 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	assignString(&app.StaticDir, req.StaticDir)
 	assignString(&app.StartCommand, req.StartCommand)
 	assignString(&app.ReleaseCommand, req.ReleaseCommand)
+	if req.WatchPaths != nil {
+		watch, err := watchPaths(*req.WatchPaths)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		app.WatchPaths = watch
+	}
 	if req.Port != nil {
 		if *req.Port < 0 || *req.Port > 65535 {
 			writeError(w, r, errdoc.BadRequest("The port must be between 1 and 65535."))
@@ -1670,4 +1688,24 @@ func assignString(dst *string, src *string) {
 	if src != nil {
 		*dst = strings.TrimSpace(*src)
 	}
+}
+
+// watchPaths checks the patterns an app watches and returns them as stored:
+// one per line, comments kept, blank lines and surrounding space dropped.
+func watchPaths(text string) (string, error) {
+	_, err := gitsrc.ParseWatchPaths(text)
+	var bad *gitsrc.BadWatchPath
+	switch {
+	case errors.As(err, &bad):
+		return "", errdoc.WatchPathInvalid(bad.Line)
+	case err != nil:
+		return "", errdoc.TooManyWatchPaths(gitsrc.MaxWatchPaths)
+	}
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return strings.Join(lines, "\n"), nil
 }

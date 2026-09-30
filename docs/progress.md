@@ -4815,6 +4815,45 @@ thresholds' defaults, validation and audit.
 Not executed: numbers from a real metrics-server. Still open from gap 1: the
 same history for servers, and disk.
 
+## Phase 96 — a push deploys only the apps it touched
+
+Half of gap 18. In a monorepo every push to the branch rebuilt every app built
+from the repository, including the ones whose code the push never touched —
+minutes of build and a rollout for nothing, several times a day. Railway,
+Render and Coolify let an app name the paths it watches, and Vercel skips a
+project whose directory did not change.
+
+An app now has watch paths (migration 0026, `apps.watch_paths`, one pattern per
+line; empty is every push, which is what every existing app keeps). Patterns
+start at the repository's root rather than the app's root directory, since
+what an app is built from is often outside it; a plain path covers what is
+under it, `*` stays in one directory, `**` crosses any number, `!` leaves
+something out and a later line wins. A bare name does not match at any depth,
+the one `.gitignore` rule left out on purpose. `internal/gitsrc/paths.go` is
+the matcher; `..` and malformed patterns are refused when saved, with two new
+errors.
+
+The webhook parsers now read which files each push changed from GitHub's,
+GitLab's and Gitea's commit lists, and say when that list cannot be believed:
+a new branch, a GitHub force push, twenty or more commits (where hosts stop
+listing them, or say there were more), and a commit that names no files —
+`git commit --allow-empty` is how people ask for a redeploy. All of those
+deploy. A skipped app is named in the webhook's answer, which the host keeps in
+its delivery log. GitLab and Gitea do not mark a force push, so one that only
+takes changes away from an app's paths is not seen; the docs say to redeploy.
+
+The settings tab has the field while deploy on push is on, and offers the root
+directory when there is one and no paths yet.
+
+Tested: the matcher against the rules above; every malformed pattern refused;
+each host's payload read into files, and each uncertain case read as unknown;
+a push to a shared package deploying the two apps that watch it and naming the
+one it skipped; an unknown push deploying all three; and saving, normalising
+and refusing paths through the API.
+
+Not executed: a real webhook from each host. The payload shapes are the
+documented ones.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

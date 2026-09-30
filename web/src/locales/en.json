@@ -508,7 +508,10 @@
       "memory_pct": "Memory, % of the limit",
       "cpu_pct": "CPU, % of the limit",
       "restarts": "Restarts in 10 minutes"
-    }
+    },
+    "watchPaths": "Watch paths",
+    "watchPathsHelp": "Deploy on a push only when it changes one of these. One path or pattern per line, from the repository's root; a line starting with ! leaves something out. Empty deploys on every push.",
+    "watchPathsUseRoot": "Watch {{dir}}"
   },
   "deploy": {
     "title": "Deployments",
@@ -2193,6 +2196,18 @@
         "cause": "{{0}} locked them: {{1}}",
         "impact": "Nothing was deployed. The version running now keeps running.",
         "fix": "Unlock deploys on the app's page, or with `{{0}} unlock`, once what they were locked for is over."
+      },
+      "app_watch_path_invalid": {
+        "title": "That is not a path the app can watch",
+        "cause": "{{0}} is not a path or a pattern.",
+        "impact": "Nothing was changed.",
+        "fix": "Write one path or pattern per line, starting at the repository's root: apps/web, apps/**/package.json, or !**/*.md to leave something out. A path cannot use .. to leave the repository."
+      },
+      "app_too_many_watch_paths": {
+        "title": "That is too many paths to watch",
+        "cause": "An app can watch at most {{0}} paths or patterns.",
+        "impact": "Nothing was changed.",
+        "fix": "Use a pattern that covers several paths at once, such as apps/** or packages/*/src."
       }
     }
   },

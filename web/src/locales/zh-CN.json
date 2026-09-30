@@ -500,7 +500,10 @@
       "memory_pct": "内存，占上限的 %",
       "cpu_pct": "CPU，占上限的 %",
       "restarts": "10 分钟内的重启次数"
-    }
+    },
+    "watchPaths": "监视路径",
+    "watchPathsHelp": "仅当推送更改了其中之一时才部署。每行一个路径或模式，从仓库根目录开始；以 ! 开头的行用于排除内容。留空则每次推送都部署。",
+    "watchPathsUseRoot": "监视 {{dir}}"
   },
   "deploy": {
     "title": "部署记录",
@@ -2181,6 +2184,18 @@
         "cause": "{{0}} 锁定了部署：{{1}}",
         "impact": "没有部署任何内容。当前运行的版本继续运行。",
         "fix": "锁定原因结束后，在应用页面或用 `{{0}} unlock` 解锁部署。"
+      },
+      "app_watch_path_invalid": {
+        "title": "这不是应用可以监视的路径",
+        "cause": "{{0}} 不是路径或模式。",
+        "impact": "没有做任何更改。",
+        "fix": "每行写一个路径或模式，从仓库根目录开始：apps/web、apps/**/package.json，或用 !**/*.md 排除某些内容。路径不能用 .. 跳出仓库。"
+      },
+      "app_too_many_watch_paths": {
+        "title": "要监视的路径太多了",
+        "cause": "一个应用最多可以监视 {{0}} 个路径或模式。",
+        "impact": "没有做任何更改。",
+        "fix": "使用能一次覆盖多个路径的模式，例如 apps/** 或 packages/*/src。"
       }
     }
   },

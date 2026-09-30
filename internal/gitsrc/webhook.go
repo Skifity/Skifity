@@ -39,6 +39,66 @@ type PushEvent struct {
 	// one it targets — which means its author does not necessarily have write
 	// access, and its code must not be handed the project's secrets.
 	Fork bool
+	// ChangedFiles are the paths a push added, changed or removed, relative
+	// to the repository's root. They mean something only when FilesKnown is
+	// true.
+	ChangedFiles []string
+	// FilesKnown is false whenever the host's list might not be the whole
+	// story: a new branch, a force push, a list the host cut short, a commit
+	// that names no files. Not knowing is treated as "everything changed".
+	FilesKnown bool
+}
+
+// pushCommit is one commit in a push, as GitHub, GitLab and Gitea all describe
+// it.
+type pushCommit struct {
+	ID      string `json:"id"`
+	Message string `json:"message"`
+	Author  struct {
+		Name string `json:"name"`
+	} `json:"author"`
+	Added    []string `json:"added"`
+	Modified []string `json:"modified"`
+	Removed  []string `json:"removed"`
+}
+
+// listedCommitsCap is where a host may have stopped listing a push's commits.
+// GitLab lists twenty and says how many there were; Gitea lists fewer and
+// says too; GitHub's limit has changed over the years and is not in the
+// payload. A push that reaches it is treated as one whose files are unknown,
+// which costs at most a build.
+const listedCommitsCap = 20
+
+// changedFiles collects the files a push's commits touched, and whether that
+// list can be trusted to be complete.
+func changedFiles(commits []pushCommit, total int) ([]string, bool) {
+	if len(commits) == 0 || len(commits) >= listedCommitsCap || total > len(commits) {
+		return nil, false
+	}
+	seen := map[string]bool{}
+	var files []string
+	for _, c := range commits {
+		if len(c.Added)+len(c.Modified)+len(c.Removed) == 0 {
+			// An empty commit is how people ask for a redeploy, and a commit
+			// the host did not describe could have touched anything.
+			return nil, false
+		}
+		for _, list := range [][]string{c.Added, c.Modified, c.Removed} {
+			for _, file := range list {
+				if !seen[file] {
+					seen[file] = true
+					files = append(files, file)
+				}
+			}
+		}
+	}
+	return files, true
+}
+
+// zeroSHA reports whether a commit hash is the all-zero one hosts send for a
+// branch that did not exist before the push, or no longer exists after it.
+func zeroSHA(sha string) bool {
+	return sha != "" && strings.Trim(sha, "0") == ""
 }
 
 // ErrUnsupportedEvent is returned for events we deliberately ignore, such as a
@@ -121,10 +181,17 @@ func ParseWebhook(header http.Header, body []byte) (PushEvent, error) {
 }
 
 type githubPush struct {
-	Ref        string `json:"ref"`
-	After      string `json:"after"`
-	Deleted    bool   `json:"deleted"`
-	Repository struct {
+	Ref     string `json:"ref"`
+	Before  string `json:"before"`
+	After   string `json:"after"`
+	Created bool   `json:"created"`
+	Deleted bool   `json:"deleted"`
+	Forced  bool   `json:"forced"`
+	// TotalCommits is Gitea's: how many commits the push had, when it lists
+	// only some of them.
+	TotalCommits int          `json:"total_commits"`
+	Commits      []pushCommit `json:"commits"`
+	Repository   struct {
 		CloneURL string `json:"clone_url"`
 		HTMLURL  string `json:"html_url"`
 		FullName string `json:"full_name"`
@@ -193,6 +260,12 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 			ev.CommitMessage = firstLine(payload.HeadCommit.Message)
 			ev.CommitAuthor = payload.HeadCommit.Author.Name
 		}
+		// A new branch lists only the commits nothing else had, and a force
+		// push lists what it added but not what it took away — both of which
+		// can change files the list does not name.
+		if !payload.Created && !payload.Forced && !zeroSHA(payload.Before) {
+			ev.ChangedFiles, ev.FilesKnown = changedFiles(payload.Commits, payload.TotalCommits)
+		}
 		return ev, nil
 
 	case "pull_request":
@@ -236,20 +309,16 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 }
 
 type gitlabPush struct {
-	Ref      string `json:"ref"`
-	After    string `json:"after"`
-	UserName string `json:"user_name"`
-	Project  struct {
+	Ref               string `json:"ref"`
+	Before            string `json:"before"`
+	After             string `json:"after"`
+	UserName          string `json:"user_name"`
+	TotalCommitsCount int    `json:"total_commits_count"`
+	Project           struct {
 		GitHTTPURL string `json:"git_http_url"`
 		WebURL     string `json:"web_url"`
 	} `json:"project"`
-	Commits []struct {
-		ID      string `json:"id"`
-		Message string `json:"message"`
-		Author  struct {
-			Name string `json:"name"`
-		} `json:"author"`
-	} `json:"commits"`
+	Commits []pushCommit `json:"commits"`
 }
 
 type gitlabMergeRequest struct {
@@ -290,12 +359,15 @@ func parseGitLab(event string, body []byte) (PushEvent, error) {
 			Branch:    branch,
 			CommitSHA: payload.After,
 			// GitLab sends all zeroes for a deleted branch.
-			Deleted:      strings.Trim(payload.After, "0") == "",
+			Deleted:      zeroSHA(payload.After) || payload.After == "",
 			CommitAuthor: payload.UserName,
 		}
 		if len(payload.Commits) > 0 {
 			last := payload.Commits[len(payload.Commits)-1]
 			ev.CommitMessage = firstLine(last.Message)
+		}
+		if !zeroSHA(payload.Before) {
+			ev.ChangedFiles, ev.FilesKnown = changedFiles(payload.Commits, payload.TotalCommitsCount)
 		}
 		return ev, nil
 

@@ -167,6 +167,8 @@ export type App = {
   mem_limit_mb: number
   auto_deploy: boolean
   preview_deploys: boolean
+  /** The paths a push has to change to deploy the app, one per line. */
+  watch_paths: string
   status: string
   created_at: string
   updated_at: string

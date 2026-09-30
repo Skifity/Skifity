@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
 import type { App } from "@/lib/types"
@@ -39,6 +40,7 @@ export function SettingsTab({ app }: { app: App }) {
   const [releaseCommand, setReleaseCommand] = useState(app.release_command)
   const [autoDeploy, setAutoDeploy] = useState(app.auto_deploy)
   const [previewDeploys, setPreviewDeploys] = useState(app.preview_deploys)
+  const [watchPaths, setWatchPaths] = useState(app.watch_paths)
 
   const save = useMutation({
     mutationFn: () =>
@@ -55,6 +57,7 @@ export function SettingsTab({ app }: { app: App }) {
         release_command: releaseCommand.trim(),
         auto_deploy: autoDeploy,
         preview_deploys: previewDeploys,
+        watch_paths: watchPaths,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
   })
@@ -203,6 +206,35 @@ export function SettingsTab({ app }: { app: App }) {
                 </FieldContent>
                 <Switch checked={autoDeploy} onCheckedChange={setAutoDeploy} />
               </Field>
+              {/*
+                In a monorepo every push used to rebuild every app built from
+                it. The root directory is the usual answer, so it is offered.
+              */}
+              {autoDeploy && (
+                <Field>
+                  <FieldLabel htmlFor="settings-watch-paths">{t("apps.watchPaths")}</FieldLabel>
+                  <Textarea
+                    id="settings-watch-paths"
+                    value={watchPaths}
+                    onChange={(event) => setWatchPaths(event.target.value)}
+                    placeholder={"apps/web\npackages/ui"}
+                    rows={3}
+                    className="font-mono"
+                  />
+                  <FieldDescription>{t("apps.watchPathsHelp")}</FieldDescription>
+                  {rootDir.trim() !== "" && watchPaths.trim() === "" && (
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setWatchPaths(rootDir.trim().replace(/^\/+|\/+$/g, ""))}
+                      >
+                        {t("apps.watchPathsUseRoot", { dir: rootDir.trim() })}
+                      </Button>
+                    </div>
+                  )}
+                </Field>
+              )}
               <Field orientation="horizontal">
                 <FieldContent>
                   <FieldTitle>{t("apps.previewEnvironments")}</FieldTitle>
