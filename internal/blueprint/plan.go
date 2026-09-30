@@ -272,6 +272,7 @@ func createApp(name string, want App, envID, gitSource string) (Step, error) {
 		"branch": want.Branch, "root_dir": want.Root, "builder": want.Builder, "dockerfile_path": want.Dockerfile,
 		"build_command": want.Build, "static_dir": want.Static, "start_command": want.Start,
 		"release_command": want.Release, "health_path": want.Health, "watch_paths": strings.Join(want.Watch, "\n"),
+		"deploy_trigger": want.DeployTrigger, "tag_pattern": want.TagPattern,
 	} {
 		if value != "" {
 			body[key] = value
@@ -321,6 +322,8 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 		field("release", "release_command", want.Release, current.ReleaseCommand)
 		field("health", "health_path", want.Health, current.HealthPath)
 		field("watch", "watch_paths", strings.Join(want.Watch, "\n"), current.WatchPaths)
+		field("deploy trigger", "deploy_trigger", want.DeployTrigger, current.DeployTrigger)
+		field("tag pattern", "tag_pattern", want.TagPattern, current.TagPattern)
 		if want.Port != nil && *want.Port != current.Port {
 			patch["port"] = *want.Port
 			changed = append(changed, fmt.Sprintf("port %d → %d", current.Port, *want.Port))

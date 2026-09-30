@@ -60,6 +60,10 @@ type createAppRequest struct {
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
 	// per line. Empty means every push.
 	WatchPaths string `json:"watch_paths,omitempty"`
+	// DeployTrigger is branch, the default, or tag; TagPattern is the
+	// pattern a pushed tag has to match, v* when it is left out.
+	DeployTrigger string `json:"deploy_trigger,omitempty"`
+	TagPattern    string `json:"tag_pattern,omitempty"`
 	// Internal apps are reached by name from their environment only.
 	Internal bool `json:"internal,omitempty"`
 	Deploy   bool `json:"deploy,omitempty"`
@@ -296,6 +300,11 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	trigger, tagPattern, err := deployTrigger(req.DeployTrigger, req.TagPattern)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	processes, err := initialProcesses(req.Processes)
 	if err != nil {
 		writeError(w, r, err)
@@ -338,6 +347,8 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		ReleaseCommand: strings.TrimSpace(req.ReleaseCommand),
 		PreviewSeed:    strings.TrimSpace(req.PreviewSeed),
 		WatchPaths:     watch,
+		DeployTrigger:  trigger,
+		TagPattern:     tagPattern,
 		Internal:       req.Internal,
 		// Safe defaults, per the product principles: one instance, modest
 		// limits, health checks on, deploy on push.
@@ -616,6 +627,8 @@ type updateAppRequest struct {
 	// PreviewSeed runs once in each new preview of the app.
 	PreviewSeed    *string `json:"preview_seed,omitempty"`
 	WatchPaths     *string `json:"watch_paths,omitempty"`
+	DeployTrigger  *string `json:"deploy_trigger,omitempty"`
+	TagPattern     *string `json:"tag_pattern,omitempty"`
 	Internal       *bool   `json:"internal,omitempty"`
 	AutoDeploy     *bool   `json:"auto_deploy,omitempty"`
 	PreviewDeploys *bool   `json:"preview_deploys,omitempty"`
@@ -636,6 +649,7 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	deployedTags := app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag
 
 	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
 		app.Name = strings.TrimSpace(*req.Name)
@@ -673,6 +687,20 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		}
 		app.WatchPaths = watch
 	}
+	if req.DeployTrigger != nil || req.TagPattern != nil {
+		trigger, pattern := app.DeployTrigger, app.TagPattern
+		if req.DeployTrigger != nil {
+			trigger = *req.DeployTrigger
+		}
+		if req.TagPattern != nil {
+			pattern = *req.TagPattern
+		}
+		app.DeployTrigger, app.TagPattern, err = deployTrigger(trigger, pattern)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
 	if req.Port != nil {
 		if *req.Port < 0 || *req.Port > 65535 {
 			writeError(w, r, errdoc.BadRequest("The port must be between 1 and 65535."))
@@ -705,6 +733,16 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
 			s.log.Warn("could not apply app changes to the cluster", "app", app.ID, "error", err)
+		}
+	}
+
+	// GitLab delivers a tag only to a hook that asked for tags, and the
+	// hook this app's repository has may be older than tags were asked for.
+	// The same call that made it adds them, whenever the app starts deploying
+	// tags; it never fails the save.
+	if app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag && !deployedTags {
+		if hook := s.ensureWebhookFor(r, app); hook.Reason != "" {
+			s.log.Warn("the repository may not deliver tags", "app", app.ID, "reason", hook.Reason)
 		}
 	}
 
@@ -1818,6 +1856,30 @@ func watchPaths(text string) (string, error) {
 		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// deployTrigger checks what an app deploys on and the pattern a tag has to
+// match, and returns them as stored. An empty trigger is a branch and an
+// empty pattern is v*, which is what an app has before anybody chooses.
+//
+// The pattern is kept when the app deploys on its branch, so switching to tags
+// and back does not lose what was typed.
+func deployTrigger(trigger, pattern string) (string, string, error) {
+	trigger = strings.TrimSpace(trigger)
+	if trigger == "" {
+		trigger = gitsrc.DeployOnBranch
+	}
+	if trigger != gitsrc.DeployOnBranch && trigger != gitsrc.DeployOnTag {
+		return "", "", errdoc.DeployTriggerInvalid(trigger)
+	}
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		pattern = gitsrc.DefaultTagPattern
+	}
+	if err := gitsrc.ValidTagPattern(pattern); err != nil {
+		return "", "", errdoc.TagPatternInvalid(pattern)
+	}
+	return trigger, pattern, nil
 }
 
 // checkImageReference refuses an image this panel built for another

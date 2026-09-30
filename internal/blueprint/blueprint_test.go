@@ -432,3 +432,50 @@ func plannedDeploys(t *testing.T, file string, state State) string {
 	}
 	return strings.Join(deployed, " ")
 }
+
+// Deploying on a tag is a setting like the others: said in the file, checked
+// when the file is read, and changed only where the environment differs.
+func TestDeployingOnATagIsDescribedInTheFile(t *testing.T) {
+	file := strings.Replace(shop, "    preview_seed: npm run seed",
+		"    preview_seed: npm run seed\n    deploy_trigger: tag\n    tag_pattern: release-*", 1)
+	find := func(steps []Step, op, kind string) *Call {
+		for _, step := range steps {
+			if step.Op == op && step.Kind == kind && step.Name == "web" {
+				return step.Call
+			}
+		}
+		return nil
+	}
+
+	state := matching()
+	steps, err := Plan(mustParse(t, file), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := find(steps, "change", "settings")
+	if settings == nil || settings.Body["deploy_trigger"] != "tag" || settings.Body["tag_pattern"] != "release-*" {
+		t.Fatalf("the trigger was not planned: %+v", steps)
+	}
+
+	// Once the environment has it, there is nothing to do.
+	state.Apps[0].App.DeployTrigger, state.Apps[0].App.TagPattern = "tag", "release-*"
+	steps, _ = Plan(mustParse(t, file), state)
+	if find(steps, "change", "settings") != nil {
+		t.Fatalf("a trigger the app has was planned again: %+v", steps)
+	}
+
+	// A new app is made with it.
+	steps, err = Plan(mustParse(t, file), State{EnvironmentID: "env_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := find(steps, "create", "app")
+	if created == nil || created.Body["deploy_trigger"] != "tag" || created.Body["tag_pattern"] != "release-*" {
+		t.Fatalf("a new app was made without its trigger: %+v", created)
+	}
+
+	_, err = Parse([]byte("apps:\n  web:\n    repo: https://github.com/acme/shop\n    deploy_trigger: nightly\n    tag_pattern: \"v[\"\n"))
+	if err == nil || !strings.Contains(err.Error(), `not "nightly"`) || !strings.Contains(err.Error(), `tag_pattern "v["`) {
+		t.Fatalf("a wrong trigger and pattern: %v", err)
+	}
+}

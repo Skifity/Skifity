@@ -148,6 +148,47 @@ func TestGitLabHooksCarryTheTokenTheyAreVerifiedWith(t *testing.T) {
 	if created["merge_requests_events"] != true {
 		t.Error("the hook does not carry merge requests, so preview deploys never fire")
 	}
+	if created["tag_push_events"] != true {
+		t.Error("the hook does not carry tags, so an app that deploys on a tag never does")
+	}
+}
+
+// GitLab delivers a tag only to a hook that asked for tags, and the hooks made
+// before an app could deploy on one did not. Such a hook is given tags, and
+// nothing else about it is sent — its secret least of all.
+func TestAnOlderGitLabHookIsGivenTags(t *testing.T) {
+	var method, path string
+	var changed map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`[{"id": 41, "url": "https://panel.example.test/api/webhooks/git/src_1",
+				"push_events": true, "tag_push_events": false}]`))
+			return
+		}
+		method, path = r.Method, r.URL.EscapedPath()
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &changed)
+		_, _ = w.Write([]byte(`{"id": 41}`))
+	}))
+	defer server.Close()
+
+	request := HookRequest{
+		RepoURL: "https://gitlab.example.test/acme/site", Kind: "gitlab", BaseURL: server.URL,
+		Token: "a-token", DeliverTo: "https://panel.example.test/api/webhooks/git/src_1", Secret: "a-secret",
+	}
+	result := EnsureWebhook(t.Context(), request)
+	if !result.AlreadyThere || result.Created {
+		t.Fatalf("the existing hook was not kept as it is: %+v", result)
+	}
+	if method != http.MethodPut || !strings.HasSuffix(path, "/projects/acme%2Fsite/hooks/41") {
+		t.Fatalf("the hook was changed with %s %s", method, path)
+	}
+	if changed["tag_push_events"] != true {
+		t.Errorf("the hook was not given tags: %v", changed)
+	}
+	if _, sent := changed["token"]; sent {
+		t.Error("changing the hook sent its secret again, which would replace the one it verifies with")
+	}
 }
 
 // Nothing is attempted without the things a working hook needs.

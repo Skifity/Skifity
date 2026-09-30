@@ -582,7 +582,13 @@
     "runOutcomeUnknown": "无法读取命令的结束状态。它可能仍在运行；上面是它已打印的输出。",
     "logsQuiet": "还没有任何输出。应用写出新内容时会显示在这里。",
     "logsStreamFailed": "无法打开日志流：应用可能没有运行，或面板无法连接到集群。",
-    "logsReconnecting": "日志流已中断，正在重新连接…"
+    "logsReconnecting": "日志流已中断，正在重新连接…",
+    "deployOnPushHelp": "如果推送的最新提交写有 [skip ci] 或 [skip deploy]，这次推送不会部署任何东西。",
+    "deployTrigger": "触发部署的是",
+    "deployTriggerBranch": "每次推送到 {{branch}}",
+    "deployTriggerTag": "匹配某个模式的标签",
+    "tagPattern": "标签模式",
+    "tagPatternHelp": "推送的标签名称匹配时，会部署该标签指向的提交，此时推送到分支不会部署任何东西。* 匹配除斜杠以外的任意字符，? 匹配一个字符，[0-9] 匹配集合中的一个：v* 会部署 v1.4.0 和 v2.0.0-rc.1。"
   },
   "deploy": {
     "title": "部署记录",
@@ -620,7 +626,8 @@
       "push": "分支收到一次推送",
       "preview": "一个拉取请求的预览",
       "rollback": "一次回滚",
-      "promote": "从另一个环境提升"
+      "promote": "从另一个环境提升",
+      "tag": "推送了一个标签"
     },
     "rollbackTitle": "回滚到 #{{number}}",
     "rollbackFrom": "当前运行",
@@ -2567,6 +2574,30 @@
         "cause": "{{0}}/{{1}} 已在每台服务器上为此面板的另一个应用打开。",
         "impact": "端口未打开。",
         "fix": "选择另一个公共端口：应用仍可监听自己的端口，只有公共端改变。"
+      },
+      "app_deploy_trigger_invalid": {
+        "title": "应用从分支或标签部署",
+        "cause": "{{0}} 不是应用可以据以部署的东西。",
+        "impact": "没有做任何更改。",
+        "fix": "用 branch 部署推送到应用分支的每一次推送，或用 tag 只部署名称匹配其标签模式的标签。"
+      },
+      "app_tag_pattern_invalid": {
+        "title": "这不是标签模式",
+        "cause": "{{0}} 不是可以用来匹配标签名称的模式。",
+        "impact": "没有做任何更改。",
+        "fix": "写一个不超过 100 个字符的模式，例如 v* 或 release-*：* 匹配除斜杠外的任意一串字符，? 匹配一个字符，[0-9] 匹配集合中的一个。每个 [ 都要闭合。"
+      },
+      "git_listing_unsupported": {
+        "title": "这个 Git 连接无法列出仓库",
+        "cause": "{{0}} 是一个普通的 Git 连接：它有令牌，但没有面板知道如何询问的 API。",
+        "impact": "没有列出任何内容。仍然可以用它创建应用。",
+        "fix": "在表单中输入仓库的地址和分支。"
+      },
+      "git_listing_failed": {
+        "title": "Git 主机没有列出它有什么",
+        "cause": "通过 {{0}} 询问时，{{1}}。",
+        "impact": "没有列出任何内容。你仍然可以自己输入仓库地址和分支。",
+        "fix": "检查连接的令牌能否读取仓库——GitHub 上需要 repo 范围或 Contents 读取权限，GitLab 上需要 read_api，Gitea 上需要 read:repository——并确认面板能访问该 Git 主机。"
       }
     }
   },
@@ -2599,7 +2630,17 @@
     "webhookSecret": "Webhook 密钥",
     "webhookSecretHelp": "将此粘贴为 Webhook 的密钥。它只属于这个连接，因此可以交给仓库而不泄露令牌。",
     "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名。重新连接该账号即可为其生成独立密钥。",
-    "showWebhook": "Webhook"
+    "showWebhook": "Webhook",
+    "chooseRepository": "从 {{source}} 中选择",
+    "searchRepositories": "搜索仓库",
+    "readingRepositories": "正在读取仓库…",
+    "noRepositories": "没有匹配的仓库。",
+    "private": "私有",
+    "searchHost": "在整个 {{source}} 中搜索“{{query}}”",
+    "repositoriesTruncated": "只列出了最近活跃的 {{limit}} 个。输入名称的一部分来缩小范围，或粘贴其他仓库的地址。",
+    "chooseBranch": "选择分支",
+    "defaultBranch": "{{branch}}（默认）",
+    "readingBranches": "正在读取分支…"
   },
   "notifications": {
     "title": "通知",

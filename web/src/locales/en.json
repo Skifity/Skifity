@@ -592,7 +592,13 @@
     "runOutcomeUnknown": "How the command ended could not be read. It may still be running; the output above is what it had printed.",
     "logsQuiet": "Nothing has been printed yet. New lines appear here as the app writes them.",
     "logsStreamFailed": "The log stream could not be opened: the app may not be running, or the panel cannot reach the cluster.",
-    "logsReconnecting": "The log stream was interrupted. Reconnecting…"
+    "logsReconnecting": "The log stream was interrupted. Reconnecting…",
+    "deployOnPushHelp": "A push whose newest commit says [skip ci] or [skip deploy] deploys nothing.",
+    "deployTrigger": "What deploys",
+    "deployTriggerBranch": "Every push to {{branch}}",
+    "deployTriggerTag": "Tags that match a pattern",
+    "tagPattern": "Tag pattern",
+    "tagPatternHelp": "A pushed tag whose name matches deploys the commit it points at, and pushes to the branch deploy nothing. * matches anything but a slash, ? one character, [0-9] one of a set: v* deploys v1.4.0 and v2.0.0-rc.1."
   },
   "deploy": {
     "title": "Deployments",
@@ -630,7 +636,8 @@
       "push": "A push to the branch",
       "preview": "A preview of a pull request",
       "rollback": "A rollback",
-      "promote": "Promoted from another environment"
+      "promote": "Promoted from another environment",
+      "tag": "A pushed tag"
     },
     "rollbackTitle": "Roll back to #{{number}}",
     "rollbackFrom": "Running now",
@@ -2581,6 +2588,30 @@
         "cause": "{{0}}/{{1}} is open on every server already, for another app on this panel.",
         "impact": "The port was not opened.",
         "fix": "Choose another public port: the app can still listen on its own, and only the public side changes."
+      },
+      "app_deploy_trigger_invalid": {
+        "title": "An app deploys on a branch or on a tag",
+        "cause": "{{0}} is not something an app can deploy on.",
+        "impact": "Nothing was changed.",
+        "fix": "Use branch to deploy every push to the app's branch, or tag to deploy only the tags whose name matches its tag pattern."
+      },
+      "app_tag_pattern_invalid": {
+        "title": "That is not a tag pattern",
+        "cause": "{{0}} is not a pattern a tag's name can be matched against.",
+        "impact": "Nothing was changed.",
+        "fix": "Write one pattern of up to 100 characters, such as v* or release-*: * matches any run of characters except a slash, ? matches one character, and [0-9] one of a set. Close every [ you open."
+      },
+      "git_listing_unsupported": {
+        "title": "This Git connection cannot list repositories",
+        "cause": "{{0}} is a plain Git connection: it has a token and no API the panel knows how to ask.",
+        "impact": "Nothing was listed. Apps can still be created from it.",
+        "fix": "Type the repository's address and its branch into the form."
+      },
+      "git_listing_failed": {
+        "title": "The Git host did not list what it has",
+        "cause": "Asked through {{0}}, {{1}}.",
+        "impact": "Nothing was listed. You can still type the repository's address and branch yourself.",
+        "fix": "Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, read_api on GitLab, read:repository on Gitea — and that the panel can reach the Git host."
       }
     }
   },
@@ -2613,7 +2644,17 @@
     "webhookSecret": "Webhook secret",
     "webhookSecretHelp": "Paste this as the webhook's secret. It belongs to this connection alone, so it can be given to a repository without giving away the token.",
     "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token. Connect the account again to give it a secret of its own.",
-    "showWebhook": "Webhook"
+    "showWebhook": "Webhook",
+    "chooseRepository": "Choose from {{source}}",
+    "searchRepositories": "Search repositories",
+    "readingRepositories": "Reading the repositories…",
+    "noRepositories": "No repository matches.",
+    "private": "Private",
+    "searchHost": "Search all of {{source}} for “{{query}}”",
+    "repositoriesTruncated": "Only the {{limit}} most recently active are listed. Type part of a name to narrow them, or paste the address of any other.",
+    "chooseBranch": "Choose a branch",
+    "defaultBranch": "{{branch}} (default)",
+    "readingBranches": "Reading the branches…"
   },
   "notifications": {
     "title": "Notifications",

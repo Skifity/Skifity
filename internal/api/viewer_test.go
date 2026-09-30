@@ -26,6 +26,9 @@ var viewerMayNotRead = map[string]string{
 	"GET /api/apps/{appID}/advanced":                         "the Kubernetes objects are for administrators",
 	"GET /api/databases/{databaseID}/credentials":            "a database's password is for administrators",
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/webhook": "a webhook's secret starts deploys; administrators set webhooks up",
+	"GET /api/teams/{teamID}/git-sources/{sourceID}/repositories": "read with the team's token for creating an app, " +
+		"which a viewer does not; it names private repositories",
+	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches": "the same, for one repository's branches",
 }
 
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team

@@ -171,6 +171,9 @@ export type App = {
   preview_deploys: boolean
   /** The paths a push has to change to deploy the app, one per line. */
   watch_paths: string
+  /** Every push to the branch deploys, or only a pushed tag matching tag_pattern. */
+  deploy_trigger: "branch" | "tag"
+  tag_pattern: string
   /** Run once in each new preview of the app, after its first deploy. */
   preview_seed: string
   /** When a preview's seed ran; absent until it has. */
@@ -785,6 +788,20 @@ export type StoreCatalogue = {
   unsigned: boolean
   url: string
   installed: Record<string, string>
+}
+
+/** One repository a Git connection can read, as the create form offers it. */
+export type GitRepository = {
+  full_name: string
+  url: string
+  default_branch: string
+  private: boolean
+}
+
+/** A capped list from a Git host: truncated says there was more. */
+export type GitListing<T> = {
+  items: T[]
+  truncated: boolean
 }
 
 /** What the panel can say about deploy on push, after creating an app. */

@@ -94,6 +94,48 @@ func TooManyWatchPaths(max int) *Problem {
 		WithDocs("/docs/concepts#only-the-paths-an-app-watches")
 }
 
+// DeployTriggerInvalid is something other than a branch or a tag to deploy on.
+func DeployTriggerInvalid(value string) *Problem {
+	return New("app.deploy_trigger_invalid", "An app deploys on a branch or on a tag").
+		WithCause("%s is not something an app can deploy on.", value).
+		WithImpact("Nothing was changed.").
+		WithFix("Use branch to deploy every push to the app's branch, or tag to deploy only the tags whose name matches its tag pattern.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#deploying-a-tag")
+}
+
+// TagPatternInvalid is a tag pattern path.Match cannot read.
+func TagPatternInvalid(pattern string) *Problem {
+	return New("app.tag_pattern_invalid", "That is not a tag pattern").
+		WithCause("%s is not a pattern a tag's name can be matched against.", pattern).
+		WithImpact("Nothing was changed.").
+		WithFix("Write one pattern of up to 100 characters, such as v* or release-*: * matches any run of characters " +
+			"except a slash, ? matches one character, and [0-9] one of a set. Close every [ you open.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#deploying-a-tag")
+}
+
+// GitListingUnsupported is a Git connection with no API to list from.
+func GitListingUnsupported(connection string) *Problem {
+	return New("git.listing_unsupported", "This Git connection cannot list repositories").
+		WithCause("%s is a plain Git connection: it has a token and no API the panel knows how to ask.", connection).
+		WithImpact("Nothing was listed. Apps can still be created from it.").
+		WithFix("Type the repository's address and its branch into the form.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#choosing-the-repository")
+}
+
+// GitListingFailed is a Git host that did not answer with a list.
+func GitListingFailed(connection, reason string) *Problem {
+	return New("git.listing_failed", "The Git host did not list what it has").
+		WithCause("Asked through %s, %s.", connection, reason).
+		WithImpact("Nothing was listed. You can still type the repository's address and branch yourself.").
+		WithFix("Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, " +
+			"read_api on GitLab, read:repository on Gitea — and that the panel can reach the Git host.").
+		WithStatus(http.StatusBadGateway).
+		WithDocs("/docs/concepts#choosing-the-repository")
+}
+
 // MaintenanceMessage is a maintenance page with nothing to say, or too much.
 func MaintenanceMessage(max int) *Problem {
 	return New("app.maintenance_message", "Write the message visitors will read").

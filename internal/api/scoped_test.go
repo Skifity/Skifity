@@ -19,12 +19,14 @@ import (
 // team-wide route refuses them: authorizeTeam does, unless a handler chose
 // authorizeTeamMember, and this list is where that choice is written down.
 var limitedMemberMayUse = map[string]string{
-	"GET /api/teams/{teamID}":                "the team's name and their own place in it",
-	"GET /api/teams/{teamID}/members":        "who else is in the team; other people's limits name only projects they can see",
-	"GET /api/teams/{teamID}/projects":       "the projects they are limited to, and no others",
-	"GET /api/teams/{teamID}/git-sources":    "picking a repository is how an app is created in one of their projects",
-	"POST /api/teams/{teamID}/detect":        "looking at a repository creates nothing, and comes before creating an app",
-	"POST /api/teams/{teamID}/detect-upload": "the same, for uploaded code",
+	"GET /api/teams/{teamID}":                                     "the team's name and their own place in it",
+	"GET /api/teams/{teamID}/members":                             "who else is in the team; other people's limits name only projects they can see",
+	"GET /api/teams/{teamID}/projects":                            "the projects they are limited to, and no others",
+	"GET /api/teams/{teamID}/git-sources":                         "picking a repository is how an app is created in one of their projects",
+	"GET /api/teams/{teamID}/git-sources/{sourceID}/repositories": "the repositories that picking one is made from",
+	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches":     "and the branches of the one picked",
+	"POST /api/teams/{teamID}/detect":                             "looking at a repository creates nothing, and comes before creating an app",
+	"POST /api/teams/{teamID}/detect-upload":                      "the same, for uploaded code",
 }
 
 // otherProject makes a second project in a tenant's team, with an environment,
@@ -76,9 +78,17 @@ func TestAMemberLimitedToAProjectReachesNothingElse(t *testing.T) {
 		"appID":      h.app(secret, "hidden").ID,
 		"databaseID": h.database(secret, "hidden-db").ID,
 	}
+	// A connection of the team's own, so a route that lists through one is
+	// asked about something that exists. A plain one: it is answered without
+	// the panel asking a Git host anything.
+	plain := store.GitSource{TeamID: acme.team.ID, Kind: "generic", Name: "plain"}
+	if err := h.db.CreateGitSource(t.Context(), &plain); err != nil {
+		t.Fatal(err)
+	}
 	teamWide := map[string]string{
 		"teamID":   acme.team.ID,
 		"serverID": h.node(acme, "node-1").ID,
+		"sourceID": plain.ID,
 	}
 	// Their own project's app and database are made afresh for every route:
 	// a member may delete an app, and the walk does.
@@ -104,8 +114,8 @@ func TestAMemberLimitedToAProjectReachesNothingElse(t *testing.T) {
 	hidden, refused, reached := 0, 0, 0
 	err := chi.Walk(h.api.router, func(method, pattern string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		pattern = strings.TrimSuffix(pattern, "/")
-		if !strings.HasPrefix(pattern, "/api/") {
-			return nil
+		if !strings.HasPrefix(pattern, "/api/") || strings.HasPrefix(pattern, "/api/webhooks/") {
+			return nil // a webhook is authenticated by its signature, not by a team
 		}
 		route := method + " " + pattern
 

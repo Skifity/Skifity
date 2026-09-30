@@ -582,7 +582,13 @@
     "runOutcomeUnknown": "Cara perintah berakhir tidak bisa dibaca. Mungkin masih berjalan; output di atas adalah yang sudah dicetaknya.",
     "logsQuiet": "Belum ada yang dicetak. Baris baru muncul di sini saat aplikasi menulisnya.",
     "logsStreamFailed": "Aliran log tidak bisa dibuka: aplikasi mungkin tidak berjalan, atau panel tidak bisa menjangkau cluster.",
-    "logsReconnecting": "Aliran log terputus. Menyambung kembali…"
+    "logsReconnecting": "Aliran log terputus. Menyambung kembali…",
+    "deployOnPushHelp": "Push yang commit terbarunya berisi [skip ci] atau [skip deploy] tidak men-deploy apa pun.",
+    "deployTrigger": "Yang memicu deploy",
+    "deployTriggerBranch": "Setiap push ke {{branch}}",
+    "deployTriggerTag": "Tag yang cocok dengan pola",
+    "tagPattern": "Pola tag",
+    "tagPatternHelp": "Tag yang di-push dan namanya cocok akan men-deploy commit yang ditunjuknya, dan push ke branch tidak men-deploy apa pun. * cocok dengan apa saja kecuali garis miring, ? satu karakter, [0-9] satu dari sekumpulan: v* men-deploy v1.4.0 dan v2.0.0-rc.1."
   },
   "deploy": {
     "title": "Deployment",
@@ -620,7 +626,8 @@
       "push": "Push ke branch",
       "preview": "Pratinjau sebuah pull request",
       "rollback": "Sebuah rollback",
-      "promote": "Dipromosikan dari environment lain"
+      "promote": "Dipromosikan dari environment lain",
+      "tag": "Tag yang di-push"
     },
     "rollbackTitle": "Rollback ke #{{number}}",
     "rollbackFrom": "Berjalan sekarang",
@@ -2567,6 +2574,30 @@
         "cause": "{{0}}/{{1}} sudah terbuka di setiap server, untuk aplikasi lain di panel ini.",
         "impact": "Port tidak dibuka.",
         "fix": "Pilih port publik lain: aplikasi tetap bisa mendengarkan di port miliknya, hanya sisi publiknya yang berubah."
+      },
+      "app_deploy_trigger_invalid": {
+        "title": "Aplikasi di-deploy dari branch atau dari tag",
+        "cause": "{{0}} bukan sesuatu yang bisa memicu deploy aplikasi.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Gunakan branch untuk men-deploy setiap push ke branch aplikasi, atau tag untuk men-deploy hanya tag yang namanya cocok dengan pola tag-nya."
+      },
+      "app_tag_pattern_invalid": {
+        "title": "Itu bukan pola tag",
+        "cause": "{{0}} bukan pola yang bisa dicocokkan dengan nama tag.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tulis satu pola hingga 100 karakter, seperti v* atau release-*: * cocok dengan deretan karakter apa pun kecuali garis miring, ? cocok dengan satu karakter, dan [0-9] dengan satu dari sekumpulan. Tutup setiap [ yang kamu buka."
+      },
+      "git_listing_unsupported": {
+        "title": "Koneksi Git ini tidak bisa menampilkan daftar repositori",
+        "cause": "{{0}} adalah koneksi Git biasa: ia punya token dan tidak punya API yang bisa ditanyai panel.",
+        "impact": "Tidak ada yang ditampilkan. Aplikasi tetap bisa dibuat darinya.",
+        "fix": "Ketik alamat repositori dan branch-nya di formulir."
+      },
+      "git_listing_failed": {
+        "title": "Host Git tidak menampilkan daftar isinya",
+        "cause": "Ditanya lewat {{0}}, {{1}}.",
+        "impact": "Tidak ada yang ditampilkan. Kamu tetap bisa mengetik alamat repositori dan branch-nya sendiri.",
+        "fix": "Pastikan token koneksi bisa membaca repositori — scope repo atau akses baca Contents di GitHub, read_api di GitLab, read:repository di Gitea — dan panel bisa menjangkau host Git."
       }
     }
   },
@@ -2599,7 +2630,17 @@
     "webhookSecret": "Secret webhook",
     "webhookSecretHelp": "Tempel ini sebagai secret webhook. Secret ini hanya milik koneksi ini, jadi bisa diberikan ke repositori tanpa memberikan token.",
     "webhookSecretIsToken": "Koneksi ini dibuat sebelum setiap koneksi punya secret sendiri, jadi webhook-nya ditandatangani dengan token. Hubungkan akun lagi agar koneksi ini punya secret sendiri.",
-    "showWebhook": "Webhook"
+    "showWebhook": "Webhook",
+    "chooseRepository": "Pilih dari {{source}}",
+    "searchRepositories": "Cari repositori",
+    "readingRepositories": "Membaca repositori…",
+    "noRepositories": "Tidak ada repositori yang cocok.",
+    "private": "Privat",
+    "searchHost": "Cari “{{query}}” di seluruh {{source}}",
+    "repositoriesTruncated": "Hanya {{limit}} yang paling baru aktif yang ditampilkan. Ketik sebagian nama untuk mempersempitnya, atau tempel alamat repositori lain.",
+    "chooseBranch": "Pilih branch",
+    "defaultBranch": "{{branch}} (default)",
+    "readingBranches": "Membaca branch…"
   },
   "notifications": {
     "title": "Notifikasi",

@@ -133,15 +133,31 @@ func ensureGitLabHook(ctx context.Context, req HookRequest, owner, repo string) 
 	endpoint := fmt.Sprintf("%s/projects/%s/hooks", base, project)
 
 	var existing []struct {
-		URL string `json:"url"`
+		ID            int    `json:"id"`
+		URL           string `json:"url"`
+		TagPushEvents bool   `json:"tag_push_events"`
 	}
 	if err := getJSON(ctx, endpoint, req.Token, "bearer", &existing); err != nil {
 		return HookResult{Reason: err.Error()}
 	}
 	for _, hook := range existing {
-		if sameHookTarget(hook.URL, req.DeliverTo) {
-			return HookResult{AlreadyThere: true}
+		if !sameHookTarget(hook.URL, req.DeliverTo) {
+			continue
 		}
+		// GitHub and Gitea deliver a pushed tag as a push. GitLab delivers it
+		// only to a hook that asked for tags, which the hooks this panel made
+		// before an app could deploy on a tag did not, so an app switched to
+		// tags would wait for ever. Such a hook is given tags as well; only
+		// that field is sent, so its secret and the rest stay as they are.
+		if !hook.TagPushEvents && hook.ID != 0 {
+			result := sendHook(ctx, http.MethodPut, fmt.Sprintf("%s/%d", endpoint, hook.ID), req.Token, "bearer",
+				map[string]any{"url": hook.URL, "tag_push_events": true})
+			if result.Created {
+				return HookResult{AlreadyThere: true}
+			}
+			return result
+		}
+		return HookResult{AlreadyThere: true}
 	}
 
 	// GitLab sends the secret as a plain token header rather than a signature,
@@ -150,6 +166,7 @@ func ensureGitLabHook(ctx context.Context, req HookRequest, owner, repo string) 
 		"url":                     req.DeliverTo,
 		"token":                   req.Secret,
 		"push_events":             true,
+		"tag_push_events":         true,
 		"merge_requests_events":   true,
 		"enable_ssl_verification": true,
 	}
@@ -198,11 +215,16 @@ func sameHookTarget(a, b string) bool {
 
 // postHook creates the hook and turns whatever the host said into a reason.
 func postHook(ctx context.Context, endpoint, token, scheme string, body map[string]any) HookResult {
+	return sendHook(ctx, http.MethodPost, endpoint, token, scheme, body)
+}
+
+// sendHook creates or changes a hook. Created means the host accepted it.
+func sendHook(ctx context.Context, method, endpoint, token, scheme string, body map[string]any) HookResult {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return HookResult{Reason: err.Error()}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(encoded))
 	if err != nil {
 		return HookResult{Reason: err.Error()}
 	}

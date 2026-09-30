@@ -467,7 +467,7 @@ function triggerLabel(t: TFunction, deployment: Deployment): string {
   if (deployment.trigger === "rollback" && deployment.rollback_of) {
     return t("deploy.triggerRollbackTo", { number: deployment.rollback_of })
   }
-  const known = ["manual", "create", "template", "push", "preview", "rollback", "promote"]
+  const known = ["manual", "create", "template", "push", "tag", "preview", "rollback", "promote"]
   if (known.includes(deployment.trigger)) return t(`deploy.trigger.${deployment.trigger}`)
   return deployment.trigger
 }

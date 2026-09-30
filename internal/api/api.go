@@ -245,6 +245,9 @@ func (s *Server) routes() chi.Router {
 				team.Post("/git-sources", s.handleCreateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)
 				team.Get("/git-sources/{sourceID}/webhook", s.handleGetGitSourceWebhook)
+				// What a connection can read, so the app form offers it.
+				team.Get("/git-sources/{sourceID}/repositories", s.handleListGitRepositories)
+				team.Get("/git-sources/{sourceID}/branches", s.handleListGitBranches)
 
 				team.Get("/notifications/kinds", s.handleListNotificationKinds)
 				team.Get("/notifications", s.handleListNotificationChannels)

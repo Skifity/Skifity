@@ -178,6 +178,22 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 				result.Skipped = append(result.Skipped, app.Name+" (watches "+branch+")")
 				continue
 			}
+			// Instead of the branch, not as well: the tag is put on a commit
+			// the branch already had, and deploying both is the same code
+			// twice.
+			if app.DeployTrigger == gitsrc.DeployOnTag {
+				result.Skipped = append(result.Skipped, app.Name+" (deploys tags matching "+app.TagPattern+")")
+				continue
+			}
+			// Said in the delivery log like any other skip, and nothing else
+			// is recorded. Not the watched commit, because the app does not
+			// run this commit's changes and the next push has to bring them;
+			// not the commit it moved past, because a push that arrives late
+			// for that one would have deployed had it come in order.
+			if event.SkipMarker != "" {
+				result.Skipped = append(result.Skipped, app.Name+" (the commit says "+event.SkipMarker+")")
+				continue
+			}
 			if why := s.olderPush(r, app.ID, event); why != "" {
 				result.Skipped = append(result.Skipped, app.Name+" ("+why+")")
 				continue
@@ -215,6 +231,42 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 				continue
 			}
 			s.movedPast(r, app.ID, event)
+			result.Deployments = append(result.Deployments, deployment.ID)
+
+		case "tag":
+			if app.DeployTrigger != gitsrc.DeployOnTag {
+				result.Skipped = append(result.Skipped, app.Name+" (deploys pushes to its branch, not tags)")
+				continue
+			}
+			if !gitsrc.TagMatches(app.TagPattern, event.Tag) {
+				result.Skipped = append(result.Skipped, app.Name+" ("+event.Tag+" does not match "+app.TagPattern+")")
+				continue
+			}
+			// No "[skip ci]" here. A tag is somebody releasing on purpose,
+			// and release tools write that marker into the very commit they
+			// tag, so reading it would mean their releases never deploy.
+			//
+			// Nor the order pushes arrive in: a tag is a version somebody
+			// chose, and pushing an older one is how they go back to it. A
+			// delivery sent again is still recognised, by the commit.
+			if why := s.alreadyOn(r, app.ID, event.CommitSHA); why != "" {
+				result.Skipped = append(result.Skipped, app.Name+" ("+why+")")
+				continue
+			}
+			if s.deployer == nil {
+				continue
+			}
+			if _, err := s.db.GetDeployLock(r.Context(), app.ID); err == nil {
+				result.Skipped = append(result.Skipped, app.Name+" (deploys are locked)")
+				continue
+			}
+			deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
+				AppID: app.ID, Trigger: "tag", CommitSHA: event.CommitSHA, CreatedBy: "webhook",
+			})
+			if err != nil {
+				s.log.Error("could not start a deploy from a tag", "app", app.ID, "error", err)
+				continue
+			}
 			result.Deployments = append(result.Deployments, deployment.ID)
 
 		case "pull_request_opened":
@@ -274,19 +326,13 @@ func (s *Server) olderPush(r *http.Request, appID string, event gitsrc.PushEvent
 	if event.CommitSHA == "" {
 		return ""
 	}
-	short := event.CommitSHA[:min(len(event.CommitSHA), 7)]
-	if latest, err := s.db.ListDeployments(r.Context(), appID, 1); err == nil && len(latest) == 1 &&
-		latest[0].CommitSHA == event.CommitSHA {
-		switch {
-		case latest[0].Status == store.DeploySucceeded:
-			return "already runs " + short
-		case !latest[0].Status.Terminal():
-			return "already deploying " + short
-		}
+	if why := s.alreadyOn(r, appID, event.CommitSHA); why != "" {
+		return why
 	}
 	if event.Forced {
 		return ""
 	}
+	short := event.CommitSHA[:min(len(event.CommitSHA), 7)]
 	passed, err := s.db.CommitPassed(r.Context(), appID, event.CommitSHA)
 	if err != nil {
 		s.log.Warn("could not tell whether a push is older than the app", "app", appID, "error", err)
@@ -294,6 +340,27 @@ func (s *Server) olderPush(r *http.Request, appID string, event gitsrc.PushEvent
 	}
 	if passed {
 		return short + " is older than a commit already deployed"
+	}
+	return ""
+}
+
+// alreadyOn says why a commit must not deploy an app when the app's newest
+// deployment is of that commit, and running or on its way: the same delivery
+// sent again, which a Git host does whenever somebody presses Redeliver.
+func (s *Server) alreadyOn(r *http.Request, appID, commit string) string {
+	if commit == "" {
+		return ""
+	}
+	short := commit[:min(len(commit), 7)]
+	latest, err := s.db.ListDeployments(r.Context(), appID, 1)
+	if err != nil || len(latest) != 1 || latest[0].CommitSHA != commit {
+		return ""
+	}
+	switch {
+	case latest[0].Status == store.DeploySucceeded:
+		return "already runs " + short
+	case !latest[0].Status.Terminal():
+		return "already deploying " + short
 	}
 	return ""
 }

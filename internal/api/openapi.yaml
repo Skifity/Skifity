@@ -1091,6 +1091,68 @@ paths:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/git-sources/{sourceID}/repositories:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/sourceID'
+      - {name: q, in: query, required: false, description: 'Only the repositories whose name has this in it.', schema: {type: string, maxLength: 100}}
+    get:
+      operationId: listGitRepositories
+      tags: [Git]
+      summary: The repositories a Git connection can read
+      description: Member, including one limited to projects. At most 300, the most recently active first; truncated says whether there were more.
+      responses:
+        '200':
+          description: The repositories.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, truncated]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [full_name, url, default_branch, private]
+                      properties:
+                        full_name: {type: string}
+                        url: {type: string}
+                        default_branch: {type: string}
+                        private: {type: boolean}
+                  truncated: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/git-sources/{sourceID}/branches:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/sourceID'
+      - {name: repo, in: query, required: true, description: 'The repository, as owner/name.', schema: {type: string}}
+      - {name: q, in: query, required: false, description: 'Only the branches whose name has this in it.', schema: {type: string, maxLength: 100}}
+    get:
+      operationId: listGitBranches
+      tags: [Git]
+      summary: The branches of one repository
+      description: Member, including one limited to projects. At most 300.
+      responses:
+        '200':
+          description: The branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, truncated]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [name]
+                      properties:
+                        name: {type: string}
+                  truncated: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/git-sources/{sourceID}/webhook:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -4727,6 +4789,8 @@ components:
         auto_deploy: {type: boolean, description: 'Deploy on push.'}
         preview_deploys: {type: boolean, description: 'A preview for each pull request.'}
         watch_paths: {type: string, description: 'One pattern per line that a push has to touch to deploy. Empty is every push.'}
+        deploy_trigger: {type: string, enum: [branch, tag], description: 'What deploys the app on a push: its branch, or a tag matching tag_pattern.'}
+        tag_pattern: {type: string, description: 'The tags that deploy it, as a path.Match pattern such as v*.'}
         internal: {type: boolean, description: 'Reached by name from its environment only. No address of its own.'}
         preview_seed: {type: string, description: 'Runs once in each new preview.'}
         seeded_at: {type: string}
@@ -4774,6 +4838,8 @@ components:
         release_command: {type: string}
         preview_seed: {type: string}
         watch_paths: {type: string}
+        deploy_trigger: {type: string, enum: [branch, tag]}
+        tag_pattern: {type: string}
         internal: {type: boolean}
         deploy: {type: boolean, description: 'Deploy it straight away.'}
         variables:
@@ -4888,6 +4954,8 @@ components:
         release_command: {type: string}
         preview_seed: {type: string}
         watch_paths: {type: string}
+        deploy_trigger: {type: string, enum: [branch, tag]}
+        tag_pattern: {type: string}
         internal: {type: boolean}
         auto_deploy: {type: boolean}
         preview_deploys: {type: boolean}

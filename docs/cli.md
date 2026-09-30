@@ -194,6 +194,9 @@ skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment
 skifity servers                   # the machines
+skifity git                       # the team's Git connections
+skifity git repos acme-github     # what one can read; --search narrows it
+skifity git branches acme-github acme/shop  # one repository's branches
 skifity db                        # the managed databases
 skifity db connect orders         # reach one from this computer; see below
 skifity export --out ./leaving    # the whole team, as JSON and Kubernetes YAML
@@ -286,6 +289,8 @@ apps:
     port: 3000
     health: /healthz
     watch: [apps/web/**, packages/**]
+    deploy_trigger: branch  # or tag: deploy only pushed tags matching tag_pattern
+    tag_pattern: "v*"
     instances: 2            # or autoscale: {min: 1, max: 5, cpu: 70}
     resources: {cpu: 100, memory: 256}   # reserved: millicores, MB
     variables:

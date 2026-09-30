@@ -16,14 +16,18 @@ import (
 
 // PushEvent is what a webhook boils down to, whichever host sent it.
 type PushEvent struct {
-	// Kind is push, pull_request_opened, pull_request_closed or ping.
+	// Kind is push, tag, pull_request_opened, pull_request_closed or ping.
 	Kind string
 	// RepoURL is the canonical HTTPS clone URL, normalised so it matches what
 	// the app record stores.
 	RepoURL string
 	// Branch is the branch that was pushed, without refs/heads/.
 	Branch string
-	// CommitSHA is the commit now at the tip of that branch.
+	// Tag is the tag a tag event pushed, without refs/tags/.
+	Tag string
+	// CommitSHA is the commit now at the tip of that branch, or the commit a
+	// pushed tag points at — never an annotated tag's own object, which a
+	// build cannot check out as a commit.
 	CommitSHA string
 	// CommitMessage and CommitAuthor are for the deploy history.
 	CommitMessage string
@@ -58,6 +62,11 @@ type PushEvent struct {
 	// Forced is a push that rewrote the branch, which only GitHub says. Going
 	// back to an older commit that way is somebody meaning to.
 	Forced bool
+	// SkipMarker is the "[skip ci]", or another of the markers SkipMarker
+	// knows, in the whole message of the commit a push left at the tip of its
+	// branch: somebody asking for that push not to be deployed. Empty when
+	// there is none, and for anything that is not a push to a branch.
+	SkipMarker string
 }
 
 // pushCommit is one commit in a push, as GitHub, GitLab and Gitea all describe
@@ -104,6 +113,21 @@ func changedFiles(commits []pushCommit, total int) ([]string, bool) {
 		}
 	}
 	return files, true
+}
+
+// headCommit finds the commit a push left at the tip of its branch among the
+// ones it lists: the one whose id is "after", or else the last one listed,
+// which is where GitLab puts the newest.
+func headCommit(commits []pushCommit, after string) (pushCommit, bool) {
+	for _, c := range commits {
+		if after != "" && c.ID == after {
+			return c, true
+		}
+	}
+	if len(commits) == 0 {
+		return pushCommit{}, false
+	}
+	return commits[len(commits)-1], true
 }
 
 // zeroSHA reports whether a commit hash is the all-zero one hosts send for a
@@ -258,14 +282,31 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return PushEvent{}, fmt.Errorf("read push payload: %w", err)
 		}
+		repoURL := NormaliseRepoURL(firstNonEmpty(payload.Repository.CloneURL, payload.Repository.HTMLURL))
+		if tag, ok := strings.CutPrefix(payload.Ref, "refs/tags/"); ok {
+			// A tag taken away deploys nothing.
+			if payload.Deleted || payload.After == "" || zeroSHA(payload.After) {
+				return PushEvent{}, ErrUnsupportedEvent
+			}
+			ev := PushEvent{Kind: "tag", RepoURL: repoURL, Tag: tag, CommitSHA: payload.After}
+			// For an annotated tag "after" is the tag object, and the head
+			// commit is the commit it points at, which is what gets built.
+			if payload.HeadCommit != nil {
+				ev.CommitSHA = firstNonEmpty(payload.HeadCommit.ID, payload.After)
+				ev.CommitMessage = firstLine(payload.HeadCommit.Message)
+				ev.CommitAuthor = payload.HeadCommit.Author.Name
+			}
+			return ev, nil
+		}
 		branch, ok := strings.CutPrefix(payload.Ref, "refs/heads/")
 		if !ok {
-			// A tag push is not a branch update; ignoring it is correct.
+			// Any other kind of ref — a note, a review ref — is nothing an
+			// app is built from.
 			return PushEvent{}, ErrUnsupportedEvent
 		}
 		ev := PushEvent{
 			Kind:      "push",
-			RepoURL:   NormaliseRepoURL(firstNonEmpty(payload.Repository.CloneURL, payload.Repository.HTMLURL)),
+			RepoURL:   repoURL,
 			Branch:    branch,
 			CommitSHA: payload.After,
 			Deleted:   payload.Deleted,
@@ -275,6 +316,7 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 		if payload.HeadCommit != nil {
 			ev.CommitMessage = firstLine(payload.HeadCommit.Message)
 			ev.CommitAuthor = payload.HeadCommit.Author.Name
+			ev.SkipMarker = SkipMarker(payload.HeadCommit.Message)
 		}
 		// A new branch lists only the commits nothing else had, and a force
 		// push lists what it added but not what it took away — both of which
@@ -326,9 +368,15 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 }
 
 type gitlabPush struct {
-	Ref               string `json:"ref"`
-	Before            string `json:"before"`
-	After             string `json:"after"`
+	Ref    string `json:"ref"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+	// CheckoutSHA is the commit the ref points at now: for an annotated tag
+	// "after" is the tag object and this is its commit, and for a deleted ref
+	// it is null.
+	CheckoutSHA string `json:"checkout_sha"`
+	// Message is a tag's annotation, on a tag push.
+	Message           string `json:"message"`
 	UserName          string `json:"user_name"`
 	TotalCommitsCount int    `json:"total_commits_count"`
 	Project           struct {
@@ -368,6 +416,7 @@ func parseGitLab(event string, body []byte) (PushEvent, error) {
 		}
 		branch, ok := strings.CutPrefix(payload.Ref, "refs/heads/")
 		if !ok {
+			// A tag arrives as a Tag Push Hook of its own.
 			return PushEvent{}, ErrUnsupportedEvent
 		}
 		ev := PushEvent{
@@ -379,14 +428,34 @@ func parseGitLab(event string, body []byte) (PushEvent, error) {
 			Deleted:      zeroSHA(payload.After) || payload.After == "",
 			CommitAuthor: payload.UserName,
 		}
-		if len(payload.Commits) > 0 {
-			last := payload.Commits[len(payload.Commits)-1]
-			ev.CommitMessage = firstLine(last.Message)
+		if head, ok := headCommit(payload.Commits, payload.After); ok {
+			ev.CommitMessage = firstLine(head.Message)
+			ev.SkipMarker = SkipMarker(head.Message)
 		}
 		// No FilesKnown: GitLab does not say whether a push was forced, and a
 		// force push lists what it added and not what it took away.
 		ev.Before = payload.Before
 		return ev, nil
+
+	case "Tag Push Hook":
+		var payload gitlabPush
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return PushEvent{}, fmt.Errorf("read tag push payload: %w", err)
+		}
+		tag, ok := strings.CutPrefix(payload.Ref, "refs/tags/")
+		commit := firstNonEmpty(payload.CheckoutSHA, payload.After)
+		// A deleted tag comes with all zeroes and nothing to check out.
+		if !ok || commit == "" || zeroSHA(commit) || zeroSHA(payload.After) {
+			return PushEvent{}, ErrUnsupportedEvent
+		}
+		return PushEvent{
+			Kind:          "tag",
+			RepoURL:       NormaliseRepoURL(firstNonEmpty(payload.Project.GitHTTPURL, payload.Project.WebURL)),
+			Tag:           tag,
+			CommitSHA:     commit,
+			CommitMessage: firstLine(payload.Message),
+			CommitAuthor:  payload.UserName,
+		}, nil
 
 	case "Merge Request Hook":
 		var payload gitlabMergeRequest

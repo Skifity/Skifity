@@ -304,6 +304,11 @@ type App struct {
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
 	// per line; empty means every push does. See gitsrc.ParseWatchPaths.
 	WatchPaths string `json:"watch_paths"`
+	// DeployTrigger is what deploys the app when AutoDeploy is on: "branch",
+	// every push to Branch, or "tag", a pushed tag whose name matches
+	// TagPattern. See gitsrc.DeployOnBranch and migration 0041.
+	DeployTrigger string `json:"deploy_trigger"`
+	TagPattern    string `json:"tag_pattern"`
 	// Internal is reachable by name from the environment's other apps and
 	// from nowhere else: no automatic address, no Ingress.
 	Internal bool `json:"internal"`

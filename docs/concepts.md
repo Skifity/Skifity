@@ -536,6 +536,100 @@ you the URL to add yourself. It never fails creating the app over it.
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.
 
+### Choosing the repository
+
+With a GitHub, GitLab or Gitea account connected, the form that creates an app
+offers what that account can read. Pick the connection first; **Choose from**
+under the repository's address then lists its repositories, most recently
+active first, with a search box, and picking one fills in the address and
+offers its branches, the default one chosen. Typing an address and a branch by
+hand works exactly as before — the list is an offer, and a repository it does
+not show is one address away.
+
+The list stops at 300. Past that, type part of the name: for GitLab the list
+then offers to search all of its projects; GitHub and Gitea are searched among
+the 300 most recently active, and for anything older, type the address. A
+plain Git connection has no host API to ask, so it offers no list.
+
+The CLI reads the same lists:
+
+```sh
+skifity git                                  # the team's connections
+skifity git repos acme-github --search shop  # what one of them can read
+skifity git branches acme-github acme/shop   # one repository's branches
+```
+
+Both are read with the connection's token, from its own host and nowhere
+else, so the list is only shown to the team's members; a viewer creates no
+apps and is not shown it. If the token cannot list repositories — on GitHub it
+needs the `repo` scope or Contents read access, on GitLab `read_api`, on Gitea
+`read:repository` — the form says so and the address field still works.
+
+### Skipping a push
+
+A push whose newest commit says `[skip ci]`, `[ci skip]`, `[skip deploy]` or
+`[no deploy]` — anywhere in its message, in any case — deploys nothing. The
+first two are how every CI system is told a commit is not worth building; the
+last two say the same thing to Skifity alone, for a commit whose tests should
+still run.
+
+Only the commit at the tip of the push counts. A push of three commits whose
+first says `[skip ci]` deploys, because the newest one did not ask. And the
+next push that does deploy brings the skipped commit's changes with it: the app
+is not treated as though it ran them, so watch paths compare the next push with
+what the app actually runs.
+
+Deploying by hand — the **Deploy** button, `skifity deploy`, an assistant — is
+never skipped: the marker is about pushes.
+
+The skipped app is named in the webhook's answer, in your Git host's delivery
+log: `web (the commit says [skip ci])`.
+
+### Deploying a tag
+
+An app can deploy the tags you push instead of every push to its branch. In its
+settings, with **Deploy when I push** on, set **What deploys** to **Tags that
+match a pattern** and give the pattern a tag's name has to match — `v*` unless
+you say otherwise:
+
+```
+v*            v1.4.0, v2.0.0-rc.1
+release-*     release-2026-09
+v[0-9]*       v1, v12.3 — but not vnext
+```
+
+`*` matches any run of characters except a slash, `?` one character, and
+`[0-9]` one of a set. A pattern that is not one — a `[` never closed — is
+refused when it is saved.
+
+A tag that matches deploys the commit it points at, whichever branch that
+commit is on. Pushes to the branch then deploy nothing: the tag is put on a
+commit the branch already had, and deploying both would be the same code twice.
+A tag that does not match and a push to the branch are each named in the
+delivery log with the reason — `web (nightly-3 does not match v*)` — and a tag
+taken away is ignored.
+
+A few things follow from a tag being somebody releasing on purpose:
+
+* `[skip ci]` does not stop a tag. Release tools such as semantic-release write
+  it into the very commit they tag, so reading it would mean their releases
+  never deployed.
+* Pushing an older tag deploys it: that is how you go back to a version. A
+  delivery of the tag the app already runs, or is deploying, deploys nothing.
+* Push one release at a time. GitHub and GitLab send nothing at all for more
+  than three tags pushed together, and several that are sent arrive in no
+  particular order: the last one delivered is what runs.
+* Watch paths do not apply: a tag lists no files.
+* **Deploy** by hand still deploys the tip of the app's branch.
+
+GitHub and Gitea send a pushed tag to the webhook Skifity registered as they
+send any push. GitLab sends tags only to a hook that asked for them; the hooks
+Skifity registers do, and one registered before this is given tags when an app
+is switched to deploying them. A hook you added yourself needs **Tag push
+events** ticked.
+
+In a `skifity.yaml` it is `deploy_trigger: tag` and `tag_pattern: "v*"`.
+
 ### Only the paths an app watches
 
 In a monorepo several apps are built from one repository, and by default a push

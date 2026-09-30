@@ -249,7 +249,8 @@ func TestRestoringDoesNotMigrateTheBackup(t *testing.T) {
 	_, target, keyPath, keyring := restoreHarness(t)
 	source := filepath.Join(t.TempDir(), "backup.db")
 	panelDatabase(t, source, "from-backup@example.test", keyring)
-	older := gzipped(t, dropNewestMigration(t, source))
+	olderPath, olderVersion := dropNewestMigration(t, source)
+	older := gzipped(t, olderPath)
 
 	if err := adminRestoreDatabase(context.Background(),
 		[]string{"--database", target, "--master-key", keyPath, "--yes", older}, &bytes.Buffer{}); err != nil {
@@ -259,8 +260,8 @@ func TestRestoringDoesNotMigrateTheBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.SchemaVersion != restored.Known-1 {
-		t.Fatalf("the restored database is at schema %d, want it left at %d", restored.SchemaVersion, restored.Known-1)
+	if restored.SchemaVersion != olderVersion || olderVersion >= restored.Known {
+		t.Fatalf("the restored database is at schema %d, want it left at %d", restored.SchemaVersion, olderVersion)
 	}
 }
 
@@ -290,8 +291,9 @@ func TestRestoringABackupFromANewerVersionSaysSo(t *testing.T) {
 }
 
 // dropNewestMigration makes a copy of a database that looks one migration
-// older, and returns where.
-func dropNewestMigration(t *testing.T, path string) string {
+// older, and returns where and the version it is at now. Not the newest less
+// one: numbers are reserved for work still on its way, so there can be gaps.
+func dropNewestMigration(t *testing.T, path string) (string, int) {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "older.db")
 	data, err := os.ReadFile(path)
@@ -309,7 +311,11 @@ func dropNewestMigration(t *testing.T, path string) string {
 	if _, err := raw.Exec(`DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)`); err != nil {
 		t.Fatal(err)
 	}
-	return out
+	var version int
+	if err := raw.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	return out, version
 }
 
 // A sealed panel backup opens with the passphrase from the environment, and

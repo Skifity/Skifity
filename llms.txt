@@ -55,6 +55,7 @@ skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
 skifity apps                      List apps
 skifity servers                   List servers
+skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
 skifity api spec                  The HTTP API, described in OpenAPI 3.1
@@ -139,6 +140,8 @@ POST   /api/environments/{env}/apps           create one
 GET    /api/apps/{app}                        an app
 GET    /api/apps/{app}/status                 live state and instances
 POST   /api/teams/{team}/detect-upload        what a folder (.tar.gz) is and needs, before any app exists
+GET    /api/teams/{team}/git-sources/{source}/repositories?q=  what a Git connection can read
+GET    /api/teams/{team}/git-sources/{source}/branches?repo=owner/name  one repository's branches
 PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, for an app with no repository
 POST   /api/apps/{app}/deploy                 deploy
 GET    /api/apps/{app}/deployments            deployment history

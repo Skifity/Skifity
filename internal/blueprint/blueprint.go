@@ -31,6 +31,7 @@ import (
 	"skifity/internal/builder"
 	"skifity/internal/cron"
 	"skifity/internal/errdoc"
+	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
 )
 
@@ -84,9 +85,13 @@ type App struct {
 	// Databases links a database by name to the variable it is read from.
 	Databases map[string]string `json:"databases,omitempty"`
 
-	DeployOnPush *bool  `json:"deploy_on_push,omitempty"`
-	Previews     *bool  `json:"previews,omitempty"`
-	PreviewSeed  string `json:"preview_seed,omitempty"`
+	DeployOnPush *bool `json:"deploy_on_push,omitempty"`
+	// DeployTrigger is branch, every push to the branch, or tag, only a pushed
+	// tag whose name matches TagPattern.
+	DeployTrigger string `json:"deploy_trigger,omitempty"`
+	TagPattern    string `json:"tag_pattern,omitempty"`
+	Previews      *bool  `json:"previews,omitempty"`
+	PreviewSeed   string `json:"preview_seed,omitempty"`
 }
 
 // Autoscale is instances decided by load.
@@ -202,6 +207,13 @@ func Parse(data []byte) (File, error) {
 		if app.Port != nil && (*app.Port < 1 || *app.Port > 65535) {
 			say("%s: port %d is not a port", where, *app.Port)
 		}
+		if trigger := strings.TrimSpace(app.DeployTrigger); trigger != "" &&
+			trigger != gitsrc.DeployOnBranch && trigger != gitsrc.DeployOnTag {
+			say("%s: deploy_trigger is branch or tag, not %q", where, app.DeployTrigger)
+		}
+		if pattern := strings.TrimSpace(app.TagPattern); pattern != "" && gitsrc.ValidTagPattern(pattern) != nil {
+			say("%s: tag_pattern %q is not a pattern such as v* or release-*", where, app.TagPattern)
+		}
 		if app.Instances != nil && app.Autoscale != nil {
 			say("%s: give instances or autoscale, not both", where)
 		}
@@ -261,7 +273,8 @@ func Parse(data []byte) (File, error) {
 func normalize(file *File) {
 	for name, app := range file.Apps {
 		for _, field := range []*string{&app.Repo, &app.Branch, &app.Image, &app.Git, &app.Builder, &app.Dockerfile,
-			&app.Build, &app.Static, &app.Start, &app.Release, &app.Health, &app.PreviewSeed} {
+			&app.Build, &app.Static, &app.Start, &app.Release, &app.Health, &app.PreviewSeed,
+			&app.DeployTrigger, &app.TagPattern} {
 			*field = strings.TrimSpace(*field)
 		}
 		app.Root = strings.TrimPrefix(strings.TrimSpace(app.Root), "/")

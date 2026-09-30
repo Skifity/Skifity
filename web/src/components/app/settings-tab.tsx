@@ -18,6 +18,13 @@ import {
   FieldTitle,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
@@ -48,6 +55,8 @@ export function settingsKey(app: App): string {
     app.preview_deploys,
     app.preview_seed,
     app.watch_paths,
+    app.deploy_trigger,
+    app.tag_pattern,
     app.internal,
   ])
 }
@@ -71,6 +80,8 @@ export function SettingsTab({ app }: { app: App }) {
   const [previewDeploys, setPreviewDeploys] = useState(app.preview_deploys)
   const [previewSeed, setPreviewSeed] = useState(app.preview_seed)
   const [watchPaths, setWatchPaths] = useState(app.watch_paths)
+  const [deployTrigger, setDeployTrigger] = useState(app.deploy_trigger)
+  const [tagPattern, setTagPattern] = useState(app.tag_pattern)
   const [internal, setInternal] = useState(app.internal)
 
   const save = useMutation({
@@ -90,6 +101,8 @@ export function SettingsTab({ app }: { app: App }) {
         preview_deploys: previewDeploys,
         preview_seed: previewSeed.trim(),
         watch_paths: watchPaths,
+        deploy_trigger: deployTrigger,
+        tag_pattern: tagPattern.trim(),
         internal,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
@@ -246,14 +259,56 @@ export function SettingsTab({ app }: { app: App }) {
               <Field orientation="horizontal">
                 <FieldContent>
                   <FieldTitle>{t("apps.deployOnPush")}</FieldTitle>
+                  <FieldDescription>{t("apps.deployOnPushHelp")}</FieldDescription>
                 </FieldContent>
                 <Switch checked={autoDeploy} onCheckedChange={setAutoDeploy} />
               </Field>
               {/*
-                In a monorepo every push used to rebuild every app built from
-                it. The root directory is the usual answer, so it is offered.
+                Every push to the branch, or only the tags somebody releases
+                with. Not both: a tag is put on a commit the branch already
+                had, and deploying both is the same code twice.
               */}
               {autoDeploy && (
+                <Field>
+                  <FieldLabel htmlFor="settings-deploy-trigger">
+                    {t("apps.deployTrigger")}
+                  </FieldLabel>
+                  <Select
+                    value={deployTrigger}
+                    onValueChange={(value) => setDeployTrigger(value as App["deploy_trigger"])}
+                  >
+                    <SelectTrigger id="settings-deploy-trigger">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="branch">
+                        {t("apps.deployTriggerBranch", { branch: branch.trim() || "main" })}
+                      </SelectItem>
+                      <SelectItem value="tag">{t("apps.deployTriggerTag")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+              {autoDeploy && deployTrigger === "tag" && (
+                <Field>
+                  <FieldLabel htmlFor="settings-tag-pattern">{t("apps.tagPattern")}</FieldLabel>
+                  <Input
+                    id="settings-tag-pattern"
+                    value={tagPattern}
+                    onChange={(event) => setTagPattern(event.target.value)}
+                    placeholder="v*"
+                    className="font-mono"
+                    spellCheck={false}
+                  />
+                  <FieldDescription>{t("apps.tagPatternHelp")}</FieldDescription>
+                </Field>
+              )}
+              {/*
+                In a monorepo every push used to rebuild every app built from
+                it. The root directory is the usual answer, so it is offered.
+                A tag lists no files, so the paths are for the branch alone.
+              */}
+              {autoDeploy && deployTrigger !== "tag" && (
                 <Field>
                   <FieldLabel htmlFor="settings-watch-paths">{t("apps.watchPaths")}</FieldLabel>
                   <Textarea

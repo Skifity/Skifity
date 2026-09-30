@@ -25,6 +25,7 @@ import {
   TerminalInstructions,
 } from "@/components/folder-picker"
 import { Page, PageHeader } from "@/components/page"
+import { canListRepositories, RepositoryPicker } from "@/components/repository-picker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -49,6 +50,8 @@ import type {
   ComposeService,
   Deployment,
   Detection,
+  GitListing,
+  GitRepository,
   GitSource,
   InitialDatabaseResult,
   StackNote,
@@ -109,6 +112,36 @@ export function NewAppPage() {
     enabled: Boolean(team),
   })
   const sources = gitSources.data?.items ?? []
+  // The connection chosen, when its host can be asked what it holds.
+  const chosenSource = sources.find((source) => source.id === gitSourceID)
+  const listable = canListRepositories(chosenSource) ? chosenSource : undefined
+  // The repository picked from that list. It is the one in the form only while
+  // the address is the one picking it filled in and the connection is the one
+  // it came from: typing over either is typing the branch again too.
+  const [picked, setPicked] = useState<{ sourceId: string; repository: GitRepository }>()
+  const pickedRepository =
+    picked && listable?.id === picked.sourceId && repoURL.trim() === picked.repository.url
+      ? picked.repository
+      : undefined
+  const branches = useQuery({
+    queryKey: ["git-branches", listable?.id, pickedRepository?.full_name],
+    queryFn: () =>
+      api.get<GitListing<{ name: string }>>(
+        `/api/teams/${team!.id}/git-sources/${listable!.id}/branches?repo=` +
+          encodeURIComponent(pickedRepository!.full_name),
+      ),
+    enabled: Boolean(team && listable && pickedRepository),
+    staleTime: 60_000,
+  })
+  // A select only when the list is whole: one cut short could hide the branch
+  // somebody wants, so then it is typed. What is in the field is always among
+  // the choices, so the select never shows something other than what is sent.
+  const branchChoices = (() => {
+    if (!pickedRepository || !branches.data || branches.data.truncated) return undefined
+    const names = branches.data.items.map((item) => item.name)
+    if (branch && !names.includes(branch)) names.unshift(branch)
+    return names.length > 0 ? names : undefined
+  })()
 
   // Looking at the repository before anything is created.
   //
@@ -448,6 +481,29 @@ export function NewAppPage() {
               </>
             ) : sourceType === "git" ? (
               <>
+                {/* First, because the connection is what the repositories
+                    below are offered from. */}
+                {sources.length > 0 && (
+                  <Field>
+                    <FieldLabel htmlFor="git-source">
+                      {t("git.title")}{" "}
+                      <span className="text-muted-foreground">({t("common.optional")})</span>
+                    </FieldLabel>
+                    <Select value={gitSourceID} onValueChange={setGitSourceID}>
+                      <SelectTrigger id="git-source">
+                        <SelectValue placeholder={t("common.none")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sources.map((source) => (
+                          <SelectItem key={source.id} value={source.id}>
+                            {source.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>{t("git.help")}</FieldDescription>
+                  </Field>
+                )}
                 <Field>
                   <FieldLabel htmlFor="repo-url">{t("apps.repository")}</FieldLabel>
                   <Input
@@ -458,7 +514,7 @@ export function NewAppPage() {
                     autoFocus
                     required
                   />
-                  <FieldDescription>
+                  <FieldDescription className="flex flex-wrap items-center gap-x-4">
                     <Button
                       type="button"
                       variant="ghost"
@@ -470,6 +526,18 @@ export function NewAppPage() {
                       {detect.isPending ? <Spinner /> : <SparklesIcon className="size-3.5" />}
                       {t("apps.detect")}
                     </Button>
+                    {team && listable && (
+                      <RepositoryPicker
+                        key={listable.id}
+                        teamId={team.id}
+                        source={listable}
+                        onPick={(repository) => {
+                          setRepoURL(repository.url)
+                          setBranch(repository.default_branch)
+                          setPicked({ sourceId: listable.id, repository })
+                        }}
+                      />
+                    )}
                   </FieldDescription>
                 </Field>
 
@@ -533,38 +601,41 @@ export function NewAppPage() {
                     }}
                   />
                 )}
-                {sources.length > 0 && (
-                  <Field>
-                    <FieldLabel htmlFor="git-source">
-                      {t("git.title")}{" "}
-                      <span className="text-muted-foreground">({t("common.optional")})</span>
-                    </FieldLabel>
-                    <Select value={gitSourceID} onValueChange={setGitSourceID}>
-                      <SelectTrigger id="git-source">
-                        <SelectValue placeholder={t("common.none")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sources.map((source) => (
-                          <SelectItem key={source.id} value={source.id}>
-                            {source.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>{t("git.help")}</FieldDescription>
-                  </Field>
-                )}
                 <Field>
                   <FieldLabel htmlFor="branch">
                     {t("apps.branch")}{" "}
                     <span className="text-muted-foreground">({t("common.optional")})</span>
                   </FieldLabel>
-                  <Input
-                    id="branch"
-                    value={branch}
-                    onChange={(event) => setBranch(event.target.value)}
-                    placeholder="main"
-                  />
+                  {branchChoices ? (
+                    <Select value={branch} onValueChange={setBranch}>
+                      <SelectTrigger id="branch" className="font-mono">
+                        <SelectValue placeholder={t("git.chooseBranch")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branchChoices.map((name) => (
+                          <SelectItem key={name} value={name} className="font-mono">
+                            {name === pickedRepository?.default_branch
+                              ? t("git.defaultBranch", { branch: name })
+                              : name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="branch"
+                      value={branch}
+                      onChange={(event) => setBranch(event.target.value)}
+                      placeholder="main"
+                    />
+                  )}
+                  {branches.isFetching && (
+                    <FieldDescription className="flex items-center gap-2">
+                      <Spinner />
+                      {t("git.readingBranches")}
+                    </FieldDescription>
+                  )}
+                  {branches.error != null && <ErrorDisplay error={branches.error} compact />}
                 </Field>
               </>
             ) : (
