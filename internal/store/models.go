@@ -300,10 +300,13 @@ type App struct {
 	PreviewDeploys bool   `json:"preview_deploys"`
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
 	// per line; empty means every push does. See gitsrc.ParseWatchPaths.
-	WatchPaths string    `json:"watch_paths"`
-	Status     string    `json:"status"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	WatchPaths string `json:"watch_paths"`
+	// Internal is reachable by name from the environment's other apps and
+	// from nowhere else: no automatic address, no Ingress.
+	Internal  bool      `json:"internal"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Variable is an environment variable, secret or not. Value is only populated

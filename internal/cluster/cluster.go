@@ -476,10 +476,15 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	if err != nil {
 		return spec, err
 	}
-	for _, d := range domains {
-		spec.Domains = append(spec.Domains, kube.DomainSpec{Hostname: d.Hostname, Path: d.Path, TLS: d.TLS})
+	// An internal app has no Ingress, whatever domains it was given before
+	// it was made internal: with none here, the deployer removes the one it
+	// had.
+	if !app.Internal {
+		for _, d := range domains {
+			spec.Domains = append(spec.Domains, kube.DomainSpec{Hostname: d.Hostname, Path: d.Path, TLS: d.TLS})
+		}
+		spec.URL = primaryURL(domains)
 	}
-	spec.URL = primaryURL(domains)
 	if env.Kind == store.EnvPreview {
 		spec.Preview = true
 		if number, ok := strings.CutPrefix(env.SourceRef, "pr-"); ok {

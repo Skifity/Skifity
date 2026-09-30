@@ -235,14 +235,31 @@ func BuildService(s AppSpec) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: s.SelectorLabels(),
-			Ports: []corev1.ServicePort{{
-				Name:       "http",
-				Port:       80,
-				TargetPort: intstr.FromString("http"),
-				Protocol:   corev1.ProtocolTCP,
-			}},
+			Ports:    servicePorts(s.Port),
 		},
 	}
+}
+
+// servicePorts are 80, which the Ingress and KEDA's interceptor send to, and
+// the app's own port as well, so another app in the environment reaches it
+// the way it would in Compose: by name and port, db:5432. With 80 alone that
+// address — the one every Compose file writes — connected to nothing.
+func servicePorts(port int) []corev1.ServicePort {
+	ports := []corev1.ServicePort{{
+		Name:       "http",
+		Port:       80,
+		TargetPort: intstr.FromString("http"),
+		Protocol:   corev1.ProtocolTCP,
+	}}
+	if port != 80 {
+		ports = append(ports, corev1.ServicePort{
+			Name:       "app",
+			Port:       int32(port),
+			TargetPort: intstr.FromString("http"),
+			Protocol:   corev1.ProtocolTCP,
+		})
+	}
+	return ports
 }
 
 // BuildIngress renders the Ingress for an app's domains.

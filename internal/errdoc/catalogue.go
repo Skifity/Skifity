@@ -125,6 +125,47 @@ func MaintenanceNoDomain() *Problem {
 		WithDocs("/docs/concepts#maintenance")
 }
 
+// StackSize is a stack with no services, or more than one request takes.
+func StackSize(max int) *Problem {
+	return New("stack.size", "That is not a stack Skifity can create").
+		WithCause("A stack has between 1 and %d services.", max).
+		WithImpact("Nothing was created.").
+		WithFix("Pick the services to create. For a larger file, create it in parts in the same environment; the parts still reach each other by name.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#a-compose-file")
+}
+
+// StackNeedsRepository is a service built from source in a stack with no
+// repository to build it from.
+func StackNeedsRepository(service string) *Problem {
+	return New("stack.needs_repository", "A service is built from a repository nobody named").
+		WithCause("The service %s is built from source, and the stack has no repository to build it from.", service).
+		WithImpact("Nothing was created.").
+		WithFix("Paste the repository's address first, then create the stack.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#a-compose-file")
+}
+
+// StackNoSource is a service with neither an image nor a build.
+func StackNoSource(service string) *Problem {
+	return New("stack.no_source", "A service has nothing to run").
+		WithCause("The service %s has neither an image nor a build.", service).
+		WithImpact("Nothing was created.").
+		WithFix("Give it an image or a build in the Compose file, or leave it out of the stack.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#a-compose-file")
+}
+
+// StackDuplicate is two services that would be the same app.
+func StackDuplicate(first, second, slug string) *Problem {
+	return New("stack.duplicate", "Two services would have the same name").
+		WithCause("%s and %s both become %s, and an environment has one app by each name.", first, second, slug).
+		WithImpact("Nothing was created.").
+		WithFix("Rename one of them in the Compose file.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#a-compose-file")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

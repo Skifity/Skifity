@@ -174,6 +174,8 @@ export type App = {
   updated_at: string
   /** Present while deploys are locked: who, why and since when. */
   deploy_lock?: { reason: string; locked_by: string; locked_at: string }
+  /** Reached by name from its environment only: no public address. */
+  internal: boolean
   /** Present while visitors see the maintenance page instead of the app. */
   maintenance?: Maintenance
 }
@@ -198,6 +200,8 @@ export type AppStatus = {
   instances: Instance[]
   image?: string
   urls?: string[]
+  /** How the environment's other apps reach an internal one: name and port. */
+  internal_address?: string
 }
 
 export type DeploymentStatus =
@@ -651,7 +655,14 @@ export type ComposeService = {
   name: string
   image?: string
   build?: string
+  /** The build's own Dockerfile, relative to its context. */
+  dockerfile?: string
+  /** Replaces the image's command, as a line a shell runs. */
+  command?: string
+  /** Published to the host, which is what makes a service public. */
   ports?: number[]
+  /** Reached only by the other services. */
+  expose?: number[]
   environment?: Record<string, string>
   volumes?: string[]
   depends_on?: string[]
@@ -751,4 +762,11 @@ export type MaintenanceView = Maintenance & {
   hostnames: string[]
   /** The caller's public address, the one to let through. */
   your_address?: string
+}
+
+/** Something about a Compose service that did not carry over as written. */
+export type StackNote = {
+  service: string
+  code: "renamed" | "bind_mount" | "interpolation"
+  value?: string
 }

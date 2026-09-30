@@ -7,6 +7,7 @@ import {
   ContainerIcon,
   FolderIcon,
   GitBranchIcon,
+  LayersIcon,
   ShieldAlertIcon,
   SparklesIcon,
 } from "lucide-react"
@@ -49,6 +50,7 @@ import type {
   Detection,
   GitSource,
   InitialDatabaseResult,
+  StackNote,
   WebhookStatus,
 } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
@@ -285,6 +287,38 @@ export function NewAppPage() {
     },
   })
 
+  // Every service of a Compose file, as one stack. See handleCreateStack.
+  const stack = useMutation({
+    mutationFn: () =>
+      api.post<{ apps: App[]; notes: StackNote[]; webhook?: WebhookStatus }>(
+        `/api/environments/${envId}/stack`,
+        {
+          repo_url: repoURL.trim(),
+          git_source_id: gitSourceID,
+          branch: branch.trim(),
+          root_dir: rootDir.trim(),
+          services: found?.compose ?? [],
+          deploy: deployNow,
+        },
+      ),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["apps", envId] })
+      toast.success(t("apps.stackCreated", { count: result.apps.length }))
+      if (result.notes.length > 0) {
+        toast.warning(t("apps.stackNotesTitle"), {
+          description: result.notes
+            .map((note) =>
+              t(`apps.stackNote.${note.code}`, { service: note.service, value: note.value }),
+            )
+            .join("\n"),
+          duration: 20000,
+        })
+      }
+      const first = result.apps.find((app) => !app.internal) ?? result.apps[0]
+      if (first) navigate(`/apps/${first.id}`)
+    },
+  })
+
   const ready =
     sourceType === "git"
       ? repoURL.trim() !== ""
@@ -430,6 +464,9 @@ export function NewAppPage() {
                     services={found.compose}
                     warnings={found.compose_warnings}
                     chosen={composeService}
+                    creatingStack={stack.isPending}
+                    stackError={stack.error}
+                    onCreateStack={() => stack.mutate()}
                     onChoose={(service) => {
                       setComposeService(service.name)
                       setVariables(service.environment ?? {})
@@ -438,12 +475,16 @@ export function NewAppPage() {
                       setPort(service.ports?.[0] ? String(service.ports[0]) : "")
                       // A service with an image and nothing to build is a
                       // prebuilt image, which is a different kind of app.
+                      setStartCommand(service.command ?? "")
                       if (service.image && !service.build) {
                         setSourceType("image")
                         setImage(service.image)
                       } else {
                         setSourceType("git")
                         setImage("")
+                        // Compose always builds with a Dockerfile.
+                        setBuilder("dockerfile")
+                        setDockerfilePath(service.dockerfile ?? "Dockerfile")
                       }
                     }}
                   />
@@ -690,16 +731,33 @@ function ComposeServices({
   warnings,
   chosen,
   onChoose,
+  creatingStack,
+  stackError,
+  onCreateStack,
 }: {
   services: ComposeService[]
   warnings?: string[]
   chosen: string
   onChoose: (service: ComposeService) => void
+  creatingStack: boolean
+  stackError: unknown
+  onCreateStack: () => void
 }) {
   const { t } = useTranslation()
 
   return (
     <div className="space-y-2">
+      {/* The whole file at once: what Compose itself does with it. */}
+      {services.length > 1 && (
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-xs text-muted-foreground">{t("apps.stackHelp")}</p>
+          {stackError != null && <ErrorDisplay error={stackError} compact />}
+          <Button type="button" size="sm" disabled={creatingStack} onClick={onCreateStack}>
+            {creatingStack ? <Spinner /> : <LayersIcon />}
+            {t("apps.stackCreate", { count: services.length })}
+          </Button>
+        </div>
+      )}
       <p className="text-sm font-medium">{t("apps.composeFound", { count: services.length })}</p>
       <div className="grid gap-2">
         {services.map((service) => {

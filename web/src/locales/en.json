@@ -305,7 +305,8 @@
       "app.alerts_changed": "Usage warnings changed",
       "app.maintenance_started": "Maintenance started",
       "app.maintenance_ended": "Maintenance ended",
-      "server.alerts_changed": "Server warnings changed"
+      "server.alerts_changed": "Server warnings changed",
+      "stack.created": "Stack created"
     }
   },
   "projects": {
@@ -530,7 +531,21 @@
     "maintenanceEnd": "End maintenance",
     "maintenanceNoDomain": "This app has no domain, so there is nowhere to show the page. Add one on the Domains tab first.",
     "maintenanceActive": "In maintenance",
-    "maintenanceActiveBy": "Visitors see your message. {{who}} started it {{when}}."
+    "maintenanceActiveBy": "Visitors see your message. {{who}} started it {{when}}.",
+    "stackCreate_one": "Create it as a stack",
+    "stackCreate_other": "Create all {{count}} as a stack",
+    "stackHelp": "Every service becomes an app in this environment, and they reach each other by name and port as they do in Compose. The services Compose publishes get an address; the rest are internal. Named volumes become disks.",
+    "stackCreated_one": "Created {{count}} app",
+    "stackCreated_other": "Created {{count}} apps",
+    "stackNotesTitle": "Some of the Compose file did not carry over",
+    "stackNote": {
+      "renamed": "{{service}} is reached as {{value}}: names in a cluster have no capitals or underscores.",
+      "bind_mount": "{{service}}: {{value}} is a folder on the machine that ran Compose, and was not carried over. Put those files in the image or in a volume.",
+      "interpolation": "{{service}}: {{value}} refers to the shell Compose ran in. Set it under the app's Variables."
+    },
+    "internal": "Internal only",
+    "internalHelp": "Reached by name and port from the other apps in this environment, and from nowhere else: no public address.",
+    "internalAddress": "Internal address"
   },
   "deploy": {
     "title": "Deployments",
@@ -2259,6 +2274,30 @@
         "cause": "Maintenance is a page shown at the app's domains, and this app has none.",
         "impact": "Nothing was changed.",
         "fix": "Add a domain on the Domains tab first. An app with no address has no visitors to show a page to."
+      },
+      "stack_size": {
+        "title": "That is not a stack Skifity can create",
+        "cause": "A stack has between 1 and {{0}} services.",
+        "impact": "Nothing was created.",
+        "fix": "Pick the services to create. For a larger file, create it in parts in the same environment; the parts still reach each other by name."
+      },
+      "stack_needs_repository": {
+        "title": "A service is built from a repository nobody named",
+        "cause": "The service {{0}} is built from source, and the stack has no repository to build it from.",
+        "impact": "Nothing was created.",
+        "fix": "Paste the repository's address first, then create the stack."
+      },
+      "stack_no_source": {
+        "title": "A service has nothing to run",
+        "cause": "The service {{0}} has neither an image nor a build.",
+        "impact": "Nothing was created.",
+        "fix": "Give it an image or a build in the Compose file, or leave it out of the stack."
+      },
+      "stack_duplicate": {
+        "title": "Two services would have the same name",
+        "cause": "{{0}} and {{1}} both become {{2}}, and an environment has one app by each name.",
+        "impact": "Nothing was created.",
+        "fix": "Rename one of them in the Compose file."
       }
     }
   },

@@ -278,6 +278,7 @@ func (s *Server) routes() chi.Router {
 				env.Get("/quota", s.handleEnvironmentQuota)
 				env.Get("/apps", s.handleListApps)
 				env.Post("/apps", s.handleCreateApp)
+				env.Post("/stack", s.handleCreateStack)
 				env.Get("/databases", s.handleListDatabases)
 				env.Post("/databases", s.handleCreateDatabase)
 			})

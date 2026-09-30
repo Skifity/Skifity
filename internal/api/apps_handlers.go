@@ -58,7 +58,9 @@ type createAppRequest struct {
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
 	// per line. Empty means every push.
 	WatchPaths string `json:"watch_paths,omitempty"`
-	Deploy     bool   `json:"deploy,omitempty"`
+	// Internal apps are reached by name from their environment only.
+	Internal bool `json:"internal,omitempty"`
+	Deploy   bool `json:"deploy,omitempty"`
 	// Variables are set on the new app before its first deploy. This exists
 	// for the Compose form: a service's environment is most of what the file
 	// says, and creating the app and then losing it would make the import a
@@ -309,6 +311,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		StartCommand:   strings.TrimSpace(req.StartCommand),
 		ReleaseCommand: strings.TrimSpace(req.ReleaseCommand),
 		WatchPaths:     watch,
+		Internal:       req.Internal,
 		// Safe defaults, per the product principles: one instance, modest
 		// limits, health checks on, deploy on push.
 		Replicas:     1,
@@ -557,6 +560,7 @@ type updateAppRequest struct {
 	StartCommand   *string `json:"start_command,omitempty"`
 	ReleaseCommand *string `json:"release_command,omitempty"`
 	WatchPaths     *string `json:"watch_paths,omitempty"`
+	Internal       *bool   `json:"internal,omitempty"`
 	AutoDeploy     *bool   `json:"auto_deploy,omitempty"`
 	PreviewDeploys *bool   `json:"preview_deploys,omitempty"`
 	CPURequestM    *int    `json:"cpu_request_m,omitempty"`
@@ -607,6 +611,9 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AutoDeploy != nil {
 		app.AutoDeploy = *req.AutoDeploy
+	}
+	if req.Internal != nil {
+		app.Internal = *req.Internal
 	}
 	if req.PreviewDeploys != nil {
 		app.PreviewDeploys = *req.PreviewDeploys
@@ -724,6 +731,15 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 	if app.ScaleToZero && status.Phase == "stopped" {
 		status.Phase = "sleeping"
 		status.Detail = "This app is asleep because nobody is using it. The next request starts it again."
+	}
+	// An internal app has no public address, only the name its environment
+	// reaches it by.
+	if app.Internal {
+		if app.Port > 0 {
+			status.InternalAddress = fmt.Sprintf("%s:%d", app.Slug, app.Port)
+		}
+		writeJSON(w, http.StatusOK, status)
+		return
 	}
 	domains, err := s.db.ListDomains(r.Context(), app.ID)
 	if err == nil {

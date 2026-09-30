@@ -297,7 +297,8 @@
       "app.alerts_changed": "已更改用量警告",
       "app.maintenance_started": "开始维护",
       "app.maintenance_ended": "结束维护",
-      "server.alerts_changed": "已更改服务器警告"
+      "server.alerts_changed": "已更改服务器警告",
+      "stack.created": "已创建堆栈"
     }
   },
   "projects": {
@@ -522,7 +523,19 @@
     "maintenanceEnd": "结束维护",
     "maintenanceNoDomain": "此应用没有域名，所以无处显示页面。请先在“域名”标签页添加一个。",
     "maintenanceActive": "维护中",
-    "maintenanceActiveBy": "访客正在看到您的留言。{{who}} 于 {{when}} 开始。"
+    "maintenanceActiveBy": "访客正在看到您的留言。{{who}} 于 {{when}} 开始。",
+    "stackCreate_other": "将全部 {{count}} 个创建为一个堆栈",
+    "stackHelp": "每个服务都会成为此环境中的一个应用，它们像在 Compose 中一样通过名称和端口互相访问。Compose 发布的服务会获得地址；其余为内部服务。命名卷会成为磁盘。",
+    "stackCreated_other": "已创建 {{count}} 个应用",
+    "stackNotesTitle": "Compose 文件的部分内容未能沿用",
+    "stackNote": {
+      "renamed": "{{service}} 的访问名称是 {{value}}：集群中的名称不能包含大写字母或下划线。",
+      "bind_mount": "{{service}}：{{value}} 是运行 Compose 的机器上的文件夹，未被沿用。请把这些文件放进镜像或卷中。",
+      "interpolation": "{{service}}：{{value}} 引用了运行 Compose 的 shell。请在应用的 Variables 中设置它。"
+    },
+    "internal": "仅内部",
+    "internalHelp": "只能由此环境中的其他应用通过名称和端口访问，其他地方都无法访问：没有公共地址。",
+    "internalAddress": "内部地址"
   },
   "deploy": {
     "title": "部署记录",
@@ -2247,6 +2260,30 @@
         "cause": "维护是显示在应用域名上的页面，而此应用没有域名。",
         "impact": "没有做任何更改。",
         "fix": "请先在“域名”标签页添加域名。没有地址的应用没有可以展示页面的访客。"
+      },
+      "stack_size": {
+        "title": "Skifity 无法创建这样的堆栈",
+        "cause": "一个堆栈包含 1 到 {{0}} 个服务。",
+        "impact": "没有创建任何内容。",
+        "fix": "选择要创建的服务。更大的文件请在同一环境中分批创建；各部分仍可通过名称互相访问。"
+      },
+      "stack_needs_repository": {
+        "title": "某个服务要从未指定的仓库构建",
+        "cause": "服务 {{0}} 需要从源代码构建，而此堆栈没有可用于构建的仓库。",
+        "impact": "没有创建任何内容。",
+        "fix": "请先粘贴仓库地址，再创建堆栈。"
+      },
+      "stack_no_source": {
+        "title": "某个服务没有可运行的内容",
+        "cause": "服务 {{0}} 既没有镜像也没有构建。",
+        "impact": "没有创建任何内容。",
+        "fix": "在 Compose 文件中为它指定镜像或构建，或将它排除在堆栈之外。"
+      },
+      "stack_duplicate": {
+        "title": "两个服务会得到相同的名称",
+        "cause": "{{0}} 和 {{1}} 都会变成 {{2}}，而一个环境中每个名称只能有一个应用。",
+        "impact": "没有创建任何内容。",
+        "fix": "在 Compose 文件中重命名其中一个。"
       }
     }
   },

@@ -129,7 +129,7 @@ here, or needs `make verify` on a real server.
 | 3 | **Closed in Phases 85 and 86.** A read-only role, and members limited to projects | Coolify, Fly, Portainer, Dokploy, Easypanel, Kubero, Canine, Netlify | M | Yes |
 | 4 | **Closed in Phase 87.** A remote MCP endpoint over HTTP, and read-only/destructive annotations on the tools | Coolify, Canine, Vercel, Netlify, Dokploy, Easypanel, Portainer | M | Yes |
 | 5 | The environment described in a file in the repository (`skifity.yaml`), with plan and apply | Render, DigitalOcean, Porter, Railway, Portainer | L | Yes |
-| 6 | A Compose file deployed as one stack of apps | Coolify, CapRover, Sealos, Render | M | Yes, except running it |
+| 6 | **Closed in Phase 101.** A Compose file deployed as one stack of apps, reaching each other by name and port, with internal apps | Coolify, CapRover, Sealos, Render | M | Yes, except running it |
 | 7 | Promote the exact image from one environment to the next | Heroku, Northflank, Vercel, Render | M | Mostly |
 | 8 | **Half closed in Phase 93** (preview-only values). Still open: previews of the whole stack with a seed step | Vercel, Netlify, Railway, Render, Coolify | M | Yes |
 | 9 | **Closed in Phase 100.** A Procfile's `web` and `release` lines, its other lines named, and `app.json`'s add-ons and settings | Heroku | M | Yes |

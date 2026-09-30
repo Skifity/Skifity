@@ -42,6 +42,7 @@ export function SettingsTab({ app }: { app: App }) {
   const [autoDeploy, setAutoDeploy] = useState(app.auto_deploy)
   const [previewDeploys, setPreviewDeploys] = useState(app.preview_deploys)
   const [watchPaths, setWatchPaths] = useState(app.watch_paths)
+  const [internal, setInternal] = useState(app.internal)
 
   const save = useMutation({
     mutationFn: () =>
@@ -59,6 +60,7 @@ export function SettingsTab({ app }: { app: App }) {
         auto_deploy: autoDeploy,
         preview_deploys: previewDeploys,
         watch_paths: watchPaths,
+        internal,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
   })
@@ -197,6 +199,14 @@ export function SettingsTab({ app }: { app: App }) {
               className="font-mono"
             />
             <FieldDescription>{t("apps.releaseCommandHelp")}</FieldDescription>
+          </Field>
+
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldTitle>{t("apps.internal")}</FieldTitle>
+              <FieldDescription>{t("apps.internalHelp")}</FieldDescription>
+            </FieldContent>
+            <Switch checked={internal} onCheckedChange={setInternal} />
           </Field>
 
           {app.source_type === "git" && (

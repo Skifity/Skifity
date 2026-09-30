@@ -188,6 +188,22 @@ export function AppDetailPage() {
         </div>
       )}
 
+      {/* An internal app has no address to open, only the name its
+          environment reaches it by, which is worth being able to copy. */}
+      {status.data?.internal_address && (
+        <div className="-mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">{t("apps.internalAddress")}</span>
+          <div className="flex items-center rounded-md border">
+            <code className="px-2.5 text-xs">{status.data.internal_address}</code>
+            <CopyButton
+              value={status.data.internal_address}
+              label={t("apps.internalAddress")}
+              className="rounded-l-none"
+            />
+          </div>
+        </div>
+      )}
+
       {restart.error != null && <ErrorDisplay error={restart.error} />}
       <DeployLockNotice app={current} />
       <MaintenanceNotice app={current} />

@@ -66,6 +66,9 @@ type AppRuntimeStatus struct {
 	Instances       []InstanceInfo `json:"instances"`
 	Image           string         `json:"image,omitempty"`
 	URLs            []string       `json:"urls,omitempty"`
+	// InternalAddress is how the environment's other apps reach an internal
+	// one: its name and port, as in Compose.
+	InternalAddress string `json:"internal_address,omitempty"`
 }
 
 // LogOptions is what to read from an app's logs, and from where.

@@ -304,16 +304,21 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	if err := d.ensureRegistryAuth(ctx, env.Namespace); err != nil {
 		return err
 	}
-	if err := d.cluster.EnsureAutoDomain(ctx, app, env, teamID); err != nil {
-		// An app that cannot be given a free URL can still be deployed on a
-		// domain of its own, so this is a warning and not a failure.
-		//
-		// It goes in the deployment log as well as the panel's, because the
-		// consequence is an app with no address, and a person looking at that
-		// app has no reason to read the panel's log or any way to reach it.
-		d.log.Warn("could not give the app an automatic domain", "app", app.ID, "error", err)
-		d.appendLog(ctx, deployment.ID,
-			"This app has no automatic address: "+errdoc.From(err).Cause)
+	// An internal app is reached by name from its environment and has no
+	// address to give.
+	if !app.Internal {
+		if err := d.cluster.EnsureAutoDomain(ctx, app, env, teamID); err != nil {
+			// An app that cannot be given a free URL can still be deployed on a
+			// domain of its own, so this is a warning and not a failure.
+			//
+			// It goes in the deployment log as well as the panel's, because the
+			// consequence is an app with no address, and a person looking at
+			// that app has no reason to read the panel's log or any way to
+			// reach it.
+			d.log.Warn("could not give the app an automatic domain", "app", app.ID, "error", err)
+			d.appendLog(ctx, deployment.ID,
+				"This app has no automatic address: "+errdoc.From(err).Cause)
+		}
 	}
 
 	spec, err := d.cluster.SpecFor(ctx, app, env, deployment.Image)

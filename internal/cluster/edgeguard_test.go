@@ -249,3 +249,23 @@ func TestAnAppInMaintenanceReachesTheGuard(t *testing.T) {
 		t.Fatal("maintenance outlived its end")
 	}
 }
+
+// An internal app has no Ingress, whatever domains it had before.
+func TestAnInternalAppHasNoIngress(t *testing.T) {
+	c, db, app, env, _ := autoDomainFixture(t)
+	if err := db.CreateDomain(t.Context(), &store.Domain{AppID: app.ID, Hostname: "web.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := c.SpecFor(t.Context(), app, env, "registry.local/web:1")
+	if kube.BuildIngress(spec) == nil {
+		t.Fatal("a public app with a domain has no Ingress")
+	}
+	app.Internal = true
+	spec, _ = c.SpecFor(t.Context(), app, env, "registry.local/web:1")
+	if kube.BuildIngress(spec) != nil || len(spec.Domains) != 0 || spec.URL != "" {
+		t.Fatalf("an internal app kept its way in: %+v", spec.Domains)
+	}
+	if kube.BuildService(spec) == nil {
+		t.Fatal("an internal app lost the Service the others reach it by")
+	}
+}

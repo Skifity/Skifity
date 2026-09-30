@@ -297,7 +297,8 @@
       "app.alerts_changed": "Peringatan pemakaian diubah",
       "app.maintenance_started": "Pemeliharaan dimulai",
       "app.maintenance_ended": "Pemeliharaan diakhiri",
-      "server.alerts_changed": "Peringatan server diubah"
+      "server.alerts_changed": "Peringatan server diubah",
+      "stack.created": "Stack dibuat"
     }
   },
   "projects": {
@@ -522,7 +523,19 @@
     "maintenanceEnd": "Akhiri pemeliharaan",
     "maintenanceNoDomain": "Aplikasi ini tidak punya domain, jadi tidak ada tempat untuk menampilkan halamannya. Tambahkan dulu di tab Domain.",
     "maintenanceActive": "Sedang dalam pemeliharaan",
-    "maintenanceActiveBy": "Pengunjung melihat pesan Anda. {{who}} memulainya {{when}}."
+    "maintenanceActiveBy": "Pengunjung melihat pesan Anda. {{who}} memulainya {{when}}.",
+    "stackCreate_other": "Buat semua {{count}} sebagai satu stack",
+    "stackHelp": "Setiap service menjadi aplikasi di environment ini, dan saling menjangkau lewat nama dan port seperti di Compose. Service yang dipublikasikan Compose mendapat alamat; sisanya internal. Named volume menjadi disk.",
+    "stackCreated_other": "{{count}} aplikasi dibuat",
+    "stackNotesTitle": "Sebagian file Compose tidak terbawa",
+    "stackNote": {
+      "renamed": "{{service}} dijangkau sebagai {{value}}: nama di cluster tidak memakai huruf kapital atau garis bawah.",
+      "bind_mount": "{{service}}: {{value}} adalah folder di mesin yang menjalankan Compose, dan tidak terbawa. Taruh file itu di image atau di volume.",
+      "interpolation": "{{service}}: {{value}} merujuk ke shell tempat Compose berjalan. Atur di Variables aplikasi."
+    },
+    "internal": "Hanya internal",
+    "internalHelp": "Dijangkau lewat nama dan port dari aplikasi lain di environment ini, dan tidak dari tempat lain: tanpa alamat publik.",
+    "internalAddress": "Alamat internal"
   },
   "deploy": {
     "title": "Deployment",
@@ -2247,6 +2260,30 @@
         "cause": "Pemeliharaan adalah halaman yang ditampilkan di domain aplikasi, dan aplikasi ini tidak punya domain.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Tambahkan domain di tab Domain terlebih dahulu. Aplikasi tanpa alamat tidak punya pengunjung untuk diberi halaman."
+      },
+      "stack_size": {
+        "title": "Itu bukan stack yang bisa dibuat Skifity",
+        "cause": "Sebuah stack punya antara 1 dan {{0}} service.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Pilih service yang akan dibuat. Untuk file yang lebih besar, buat bertahap di environment yang sama; bagian-bagiannya tetap saling menjangkau lewat nama."
+      },
+      "stack_needs_repository": {
+        "title": "Sebuah service dibangun dari repositori yang tidak disebutkan",
+        "cause": "Service {{0}} dibangun dari kode sumber, dan stack ini tidak punya repositori untuk membangunnya.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Tempelkan alamat repositorinya dulu, lalu buat stack."
+      },
+      "stack_no_source": {
+        "title": "Sebuah service tidak punya apa pun untuk dijalankan",
+        "cause": "Service {{0}} tidak punya image maupun build.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Beri image atau build di file Compose, atau jangan sertakan di stack."
+      },
+      "stack_duplicate": {
+        "title": "Dua service akan punya nama yang sama",
+        "cause": "{{0}} dan {{1}} sama-sama menjadi {{2}}, dan satu environment hanya punya satu aplikasi per nama.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Ganti nama salah satunya di file Compose."
       }
     }
   },

@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"sigs.k8s.io/yaml"
+
+	"skifity/internal/shellsafe"
 )
 
 // Builder names the strategy used to produce an image.
@@ -478,10 +480,18 @@ func portFromDockerfile(content string) int {
 
 // ComposeService is one service read from a Compose file.
 type ComposeService struct {
-	Name        string            `json:"name"`
-	Image       string            `json:"image,omitempty"`
-	Build       string            `json:"build,omitempty"`
+	Name  string `json:"name"`
+	Image string `json:"image,omitempty"`
+	Build string `json:"build,omitempty"`
+	// Dockerfile is the build's own, relative to its context. Empty is
+	// Compose's default, a Dockerfile in the context.
+	Dockerfile string `json:"dockerfile,omitempty"`
+	// Command replaces the image's, as a line a shell runs.
+	Command string `json:"command,omitempty"`
+	// Ports are the ones published to the host, which in Compose is what
+	// makes a service public. Expose are the ones only other services reach.
 	Ports       []int             `json:"ports,omitempty"`
+	Expose      []int             `json:"expose,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Volumes     []string          `json:"volumes,omitempty"`
 	DependsOn   []string          `json:"depends_on,omitempty"`
@@ -541,8 +551,27 @@ func ConvertCompose(raw map[string]any) ([]ComposeService, []string) {
 		if build, ok := body["build"].(string); ok {
 			service.Build = build
 		} else if buildMap, ok := body["build"].(map[string]any); ok {
+			service.Build = "."
 			if context, ok := buildMap["context"].(string); ok {
 				service.Build = context
+			}
+			if dockerfile, ok := buildMap["dockerfile"].(string); ok {
+				service.Dockerfile = dockerfile
+			}
+		}
+		switch command := body["command"].(type) {
+		case string:
+			service.Command = strings.TrimSpace(command)
+		case []any:
+			words := make([]string, 0, len(command))
+			for _, word := range command {
+				words = append(words, toString(word))
+			}
+			service.Command = shellsafe.Join(words...)
+		}
+		for _, entry := range toSlice(body["expose"]) {
+			if port := parseComposePort(entry); port > 0 {
+				service.Expose = append(service.Expose, port)
 			}
 		}
 
@@ -589,6 +618,60 @@ func ConvertCompose(raw map[string]any) ([]ComposeService, []string) {
 		services = append(services, service)
 	}
 	return services, warnings
+}
+
+// ContainerPort is the port the service listens on: the first one it
+// publishes, else the first it exposes, else the one its image is known for.
+// Zero is a service nothing connects to, such as a worker.
+func (s ComposeService) ContainerPort() int {
+	switch {
+	case len(s.Ports) > 0:
+		return s.Ports[0]
+	case len(s.Expose) > 0:
+		return s.Expose[0]
+	}
+	return KnownImagePort(s.Image)
+}
+
+// Public reports whether Compose would publish the service to the host,
+// which is the difference between an app with an address and an internal one.
+func (s ComposeService) Public() bool { return len(s.Ports) > 0 }
+
+// knownImagePorts are the ports of images a Compose file usually runs beside
+// an app without saying which port, because in Compose the name is enough.
+var knownImagePorts = map[string]int{
+	"postgres": 5432, "postgis": 5432, "timescaledb": 5432, "timescaledb-ha": 5432, "pgvector": 5432,
+	"mysql": 3306, "mariadb": 3306, "percona": 3306,
+	"redis": 6379, "valkey": 6379, "keydb": 6379, "dragonfly": 6379,
+	"mongo": 27017, "mongodb": 27017,
+	"memcached": 11211, "rabbitmq": 5672, "nats": 4222,
+	"elasticsearch": 9200, "opensearch": 9200, "meilisearch": 7700, "typesense": 8108,
+	"minio": 9000, "clickhouse-server": 8123, "mailpit": 1025, "mailhog": 1025,
+	"nginx": 80, "httpd": 80, "caddy": 80, "adminer": 8080,
+}
+
+// KnownImagePort is the port an image is known to listen on, or zero:
+// "postgres:16", "docker.io/library/redis" and "bitnami/postgresql" all count.
+func KnownImagePort(image string) int {
+	name := strings.ToLower(strings.TrimSpace(image))
+	if at := strings.IndexByte(name, '@'); at >= 0 {
+		name = name[:at]
+	}
+	if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
+		name = name[slash+1:]
+	}
+	name, _, _ = strings.Cut(name, ":")
+	if port, ok := knownImagePorts[name]; ok {
+		return port
+	}
+	// Bitnami's names for the same things.
+	switch name {
+	case "postgresql", "postgresql-repmgr":
+		return 5432
+	case "redis-cluster":
+		return 6379
+	}
+	return 0
 }
 
 func toSlice(v any) []any {

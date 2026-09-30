@@ -11,7 +11,7 @@ import (
 const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_source_id,''), repo_url, branch,
 	root_dir, builder, dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas,
 	autoscale, min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero,
-	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths,
+	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal,
 	status, created_at, updated_at`
 
 // appDestinations is where each of appColumns is scanned to, in order. One
@@ -22,7 +22,7 @@ func appDestinations(a *App, created, updated *string) []any {
 		&a.Branch, &a.RootDir, &a.Builder, &a.DockerfilePath, &a.BuildCommand, &a.StaticDir, &a.Image, &a.Port, &a.HealthPath,
 		&a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas, &a.CPUTarget,
 		&a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM, &a.MemRequestMB, &a.MemLimitMB,
-		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.Status, created, updated}
+		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.Internal, &a.Status, created, updated}
 }
 
 func scanApp(row interface{ Scan(...any) error }) (App, error) {
@@ -50,13 +50,13 @@ func (db *DB) CreateApp(ctx context.Context, a *App) error {
 		(id, environment_id, name, slug, source_type, git_source_id, repo_url, branch, root_dir, builder,
 		 dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas, autoscale,
 		 min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero, cpu_request_m, cpu_limit_m,
-		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, status, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal, status, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.EnvironmentID, a.Name, a.Slug, defaultStr(a.SourceType, "git"), NullString(a.GitSourceID),
 		a.RepoURL, a.Branch, a.RootDir, defaultStr(a.Builder, "auto"), a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image,
 		a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale, a.MinReplicas, a.MaxReplicas,
 		a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM, a.CPULimitM, a.MemRequestMB,
-		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, defaultStr(a.Status, "created"), now, now)
+		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, defaultStr(a.Status, "created"), now, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this environment already has an app named %s", ErrConflict, a.Name)
@@ -181,12 +181,12 @@ func (db *DB) UpdateApp(ctx context.Context, a *App) error {
 		name=?, slug=?, source_type=?, git_source_id=?, repo_url=?, branch=?, root_dir=?, builder=?,
 		dockerfile_path=?, build_command=?, static_dir=?, image=?, port=?, health_path=?, start_command=?, release_command=?, replicas=?, autoscale=?,
 		min_replicas=?, max_replicas=?, cpu_target=?, memory_target=?, scale_to_zero=?, cpu_request_m=?,
-		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?, status=?, updated_at=?
+		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?, internal=?, status=?, updated_at=?
 		WHERE id=?`,
 		a.Name, a.Slug, a.SourceType, NullString(a.GitSourceID), a.RepoURL, a.Branch, a.RootDir, a.Builder,
 		a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image, a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale,
 		a.MinReplicas, a.MaxReplicas, a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM,
-		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Status, now, a.ID)
+		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.Internal, a.Status, now, a.ID)
 	if err != nil {
 		return fmt.Errorf("update app: %w", err)
 	}

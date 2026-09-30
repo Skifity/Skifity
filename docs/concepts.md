@@ -282,6 +282,47 @@ A `Procfile` and an `app.json` already say most of this, and are read:
 * **Its `postdeploy` script** is named, with the `skifity run` command that runs
   it once.
 
+### A Compose file
+
+A repository with a `compose.yaml` or `docker-compose.yml` is offered as what it
+describes: **Create all as a stack** makes every service an app in the
+environment at once, and deploys them, the ones a service `depends_on` first.
+Or pick one service and the form fills in from it, as before.
+
+Each service carries over the way Compose runs it:
+
+* **Where it comes from.** A service with an `image` runs that image; one with
+  a `build` is built from the repository, from its context and with its
+  `dockerfile` — Compose always builds with a Dockerfile, so this does too.
+* **How the others reach it.** By name and port, the way they do in Compose:
+  `postgres://app:secret@db:5432/app` from another service reaches the `db`
+  app. The port is the first one the service publishes, else the first it
+  `expose`s, else the one its image is known for — 5432 for `postgres`, 6379
+  for `redis`, and so on for the usual ones.
+* **Who else reaches it.** A service Compose publishes with `ports` gets an
+  address like any app; the rest are **internal**: reachable from their own
+  environment and nowhere else, with no public address. Any app can be made
+  internal, or public again, in its Settings.
+* **Its settings.** `environment` becomes variables, secret-looking ones as
+  secrets. `${NAME:-default}` takes the default, since the shell Compose read
+  it from is not here; a `${NAME}` with none is kept and named, to be set under
+  Variables.
+* **Its data.** A named volume becomes a disk at the same path, 5 GB for a
+  database and 1 GB otherwise. A folder from the machine that ran Compose —
+  `./init.sql:/docker-entrypoint-initdb.d/init.sql` — has no equivalent and is
+  named; put those files in the image instead.
+* **Its command.** `command` becomes the start command.
+
+Nothing is created unless everything can be: a name already taken in the
+environment, a build with no repository, or two services that would end up
+with the same name, refuses the whole stack. A service name with capitals or
+underscores is reached by its lower-case, hyphenated form, and the panel says
+so.
+
+A database in a stack is an app running the database's image with a disk, as
+it was in Compose, not a managed database with [backups](backups.md). For
+production, create a managed one and point the app's variable at it instead.
+
 ## How your code becomes an image
 
 Four ways, in the order the panel picks them:

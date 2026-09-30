@@ -5006,6 +5006,48 @@ ignored.
 Not done: running a worker line from the same build as the web one. That is
 gap 10.
 
+## Phase 101 — a Compose file as a stack, and apps that are internal
+
+Gap 6. The form read a Compose file and offered its services as a choice:
+pick one, fill the form, come back for the next. For a web app, a worker, a
+database and a cache that was four trips and a guess at which port each
+listened on — and the promise the form made, that the services "reach each
+other by name", was not true: an app's Service listened on 80 alone, so
+`db:5432`, the address every Compose file writes, connected to nothing.
+
+Three things, in order:
+
+* **The Service listens on the app's own port too** (`kube.servicePorts`),
+  beside 80 for the Ingress and KEDA. Pods in an environment may already reach
+  each other on any port; the missing piece was the name.
+* **Apps can be internal** (migration 0029, `apps.internal`): no automatic
+  address, no Ingress — the deployer skips the domain and the spec drops the
+  domains, which removes an Ingress the app had. The status answers with an
+  internal address, `name:port`, and Settings has the switch.
+* **`POST /api/environments/{env}/stack`** takes the services detection read
+  and creates each as an app. Everything is planned and checked first — names
+  against each other and the environment, a build with no repository, a service
+  with nothing to run — and a failure creating one removes the ones before it.
+  A build uses its context and Dockerfile, a `command` is the start command
+  (a list is quoted word by word), the port is the published one else the
+  exposed one else the one the image is known for, a service Compose does not
+  publish is internal, named volumes become disks, bind mounts are named, and
+  `${NAME:-default}` takes its default. The apps deploy with the ones they
+  depend on first. Notes come back as codes the interface translates.
+
+`ConvertCompose` reads `build.dockerfile`, `command` and `expose` now, and
+picking a single service fills the start command and the Dockerfile too.
+
+Tested: a five-service file — build context and Dockerfile, a list command, a
+database and a cache on their images' ports and internal, an exposed port still
+internal, a named volume as a disk and a bind mount named, a default taken and
+a bare reference named, a name that had to change, every app deployed, the
+audit; a stack refused whole for a taken name, a build without a repository,
+nothing to run, two names that collide, and none at all; the deploy order,
+cycles included.
+
+Not executed: the stack on a cluster, and the Service's second port in one.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
