@@ -59,6 +59,27 @@ func TestAnAppsUsageIsDrawnInBuckets(t *testing.T) {
 	}
 }
 
+// A minute metrics-server had nothing for is kept for its restarts but is not
+// averaged in as zero, and a bucket of only such minutes says so.
+func TestAMinuteOfUnknownUsageIsNotAveragedAsZero(t *testing.T) {
+	hour := time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC)
+	points := bucketSamples([]store.AppSample{
+		{At: hour, CPUM: 300, MemoryMB: 400, MemoryPeakPct: 80, Ready: 1, Desired: 1},
+		{At: hour.Add(time.Minute), UsageUnknown: true, Restarts: 2, Ready: 1, Desired: 1},
+		{At: hour.Add(time.Hour), UsageUnknown: true, Restarts: 3, Ready: 0, Desired: 1},
+	}, time.Hour)
+	if len(points) != 2 {
+		t.Fatalf("%d points, want two hours", len(points))
+	}
+	if first := points[0]; !first.UsageKnown || first.CPUM != 300 || first.MemoryMB != 400 ||
+		first.MemoryPeakPct != 80 || first.Restarts != 2 {
+		t.Fatalf("the first hour is %+v", first)
+	}
+	if second := points[1]; second.UsageKnown || second.Restarts != 3 || second.Ready != 0 {
+		t.Fatalf("an hour nobody measured is %+v", second)
+	}
+}
+
 func TestAnAppsThresholds(t *testing.T) {
 	h := newHarness(t)
 	acme := h.newTenant("acme")

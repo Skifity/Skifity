@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -144,13 +145,33 @@ func TestADiskWarningIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 
 // metrics-server had nothing for the node: a minute of 0% CPU and memory is a
 // false dip in the graph and ended alerts when the server was under pressure.
+// The minute is still kept for its disk, which the kubelet reports either way:
+// a full disk is what evicts metrics-server in the first place.
 func TestAServerWhoseUsageIsNotKnownIsNotRecordedAsIdle(t *testing.T) {
 	db := newFakeStore()
 	db.servers = []store.Server{{ID: "srv_1", TeamID: "team_1", Name: "web-1", NodeName: "web-1", Status: store.ServerReady}}
-	c := &fakeCluster{nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUCapacityM: 2000, MemCapacityMB: 4096}}}
+	c := &fakeCluster{
+		nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUCapacityM: 2000, MemCapacityMB: 4096, PodCount: 7}},
+		disks: map[string]api.NodeDisk{"web-1": {UsedMB: 38000, CapacityMB: 40000}},
+	}
 	w, _ := testWatcher(t, db, c)
 	w.Once(t.Context())
-	if len(db.serverSamples["srv_1"]) != 0 {
-		t.Fatalf("a minute nobody measured was recorded as %+v", db.serverSamples["srv_1"])
+	got := db.serverSamples["srv_1"]
+	if len(got) != 1 {
+		t.Fatalf("%d samples, want the minute kept for its disk", len(got))
+	}
+	if s := got[0]; s.CPUCapacityM != 0 || s.MemoryCapacityMB != 0 || s.DiskUsedMB != 38000 || s.Pods != 7 {
+		t.Fatalf("the minute is %+v", s)
+	}
+
+	// Three such minutes over the disk line warn about the disk, and say
+	// nothing either way about memory.
+	full := []store.ServerSample{got[0], got[0], got[0]}
+	crossed, clear := evaluateServer(store.ServerAlerts{DiskPct: 85, MemoryPct: 90}, full)
+	if len(crossed) != 1 || crossed[0].name != "disk" {
+		t.Fatalf("crossed %+v", crossed)
+	}
+	if slices.Contains(clear, "memory") {
+		t.Fatal("minutes nobody measured ended a memory warning")
 	}
 }

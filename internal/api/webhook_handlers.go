@@ -174,9 +174,17 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 			// A monorepo app whose paths the push did not touch has nothing
 			// new to build. The host shows this answer in its delivery log,
 			// which is where somebody looks for why a push did not deploy.
-			if patterns, _ := gitsrc.ParseWatchPaths(app.WatchPaths); !event.Touches(patterns) && s.runsFrom(r, app.ID, event.Before) {
-				result.Skipped = append(result.Skipped, app.Name+" (nothing it watches changed)")
-				continue
+			if patterns, _ := gitsrc.ParseWatchPaths(app.WatchPaths); !event.Touches(patterns) {
+				if running, ok := s.runsFrom(r, app.ID, event.Before); ok {
+					// The app is as good as on this commit now: the next push
+					// is compared from here, or it would rebuild because the
+					// app runs the commit before this one.
+					if err := s.db.SetWatchedCommit(r.Context(), app.ID, event.CommitSHA, running); err != nil {
+						s.log.Warn("could not record a skipped push", "app", app.ID, "error", err)
+					}
+					result.Skipped = append(result.Skipped, app.Name+" (nothing it watches changed)")
+					continue
+				}
 			}
 			if s.deployer == nil {
 				continue
@@ -220,12 +228,25 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 // they say nothing changed for an app only when that app runs that commit: a
 // push that was never deployed — the app was locked, or its build failed —
 // is otherwise skipped for good by the next push that touches nothing of it.
-func (s *Server) runsFrom(r *http.Request, appID, commit string) bool {
+//
+// A push skipped before counts as run: the app's code at that commit is what
+// it runs, since nothing it watches had changed. That holds only while the
+// deployment running then is still the one running — a rollback or a manual
+// deploy since, and the comparison starts again from what that ran. It
+// answers the running deployment's id.
+func (s *Server) runsFrom(r *http.Request, appID, commit string) (string, bool) {
 	if commit == "" {
-		return false
+		return "", false
 	}
 	last, err := s.db.LatestSuccessfulDeployment(r.Context(), appID)
-	return err == nil && last.CommitSHA == commit
+	if err != nil {
+		return "", false
+	}
+	if last.CommitSHA == commit {
+		return last.ID, true
+	}
+	watched, base, err := s.db.WatchedCommit(r.Context(), appID)
+	return last.ID, err == nil && watched == commit && base == last.ID
 }
 
 // previewRef identifies the preview environment for a branch or pull

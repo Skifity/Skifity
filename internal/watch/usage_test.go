@@ -140,19 +140,40 @@ func TestAnAlertIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 	}
 }
 
-// A running instance metrics-server had nothing for is not idle.
-func TestAMinuteWhoseUsageIsNotKnownIsLeftOut(t *testing.T) {
+// A running instance metrics-server had nothing for is not idle: its CPU and
+// memory are unknown, not zero. The minute is still kept, for the restarts
+// the pods report themselves — leaving it out meant a crash-looping app was
+// never warned about while metrics-server was down.
+func TestAMinuteWhoseUsageIsNotKnownKeepsItsRestarts(t *testing.T) {
 	db := newFakeStore()
 	db.apps = []store.DeployedApp{{App: store.App{ID: "app_1", Name: "web", Slug: "web", Status: "running",
 		CPULimitM: 1000, MemLimitMB: 512}, TeamID: "team_1", Namespace: "ns"}}
 	c := &fakeCluster{apps: map[string]api.AppRuntimeStatus{"web": {
 		DesiredReplicas: 1, ReadyReplicas: 1,
-		Instances: []api.InstanceInfo{{Ready: true}},
+		Instances: []api.InstanceInfo{{Ready: true, Restarts: 4, CPUM: 900, MemoryMB: 500}},
 	}}}
 	w, _ := testWatcher(t, db, c)
 	w.Once(t.Context())
-	if len(db.samples["app_1"]) != 0 {
-		t.Fatalf("a minute nobody measured was recorded as %+v", db.samples["app_1"])
+	got := db.samples["app_1"]
+	if len(got) != 1 {
+		t.Fatalf("%d samples, want the minute kept", len(got))
+	}
+	if s := got[0]; !s.UsageUnknown || s.CPUM != 0 || s.MemoryMB != 0 || s.MemoryPeakPct != 0 || s.Restarts != 4 {
+		t.Fatalf("the minute is %+v", s)
+	}
+
+	// Unknown minutes neither raise nor end a memory warning, and restarts
+	// are still counted through them.
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	unknown := samples(now.Add(-3*time.Minute),
+		store.AppSample{UsageUnknown: true}, store.AppSample{Restarts: 2, UsageUnknown: true},
+		store.AppSample{Restarts: 5, UsageUnknown: true})
+	crossed, clear := evaluate(store.AppAlerts{MemoryPct: 90, Restarts: 3}, unknown, now)
+	if len(crossed) != 1 || crossed[0].name != "restarts" {
+		t.Fatalf("crossed %+v", crossed)
+	}
+	if slices.Contains(clear, "memory") {
+		t.Fatal("minutes nobody measured ended a memory warning")
 	}
 }
 

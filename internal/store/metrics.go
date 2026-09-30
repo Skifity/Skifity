@@ -23,18 +23,22 @@ type AppSample struct {
 	// Restarts is the total across the app's instances, as Kubernetes counts
 	// them: it only goes up, until an instance is replaced.
 	Restarts int `json:"restarts"`
+	// UsageUnknown marks a minute metrics-server had nothing for: CPU and
+	// memory are not known then, and are not zero.
+	UsageUnknown bool `json:"usage_unknown,omitempty"`
 }
 
 // RecordAppSample keeps one minute of an app's usage.
 func (db *DB) RecordAppSample(ctx context.Context, appID string, s AppSample) error {
 	_, err := db.Exec(ctx, `INSERT INTO app_samples
-		(app_id, at, cpu_m, memory_mb, cpu_peak_pct, memory_peak_pct, ready, desired, restarts)
-		VALUES (?,?,?,?,?,?,?,?,?)
+		(app_id, at, cpu_m, memory_mb, cpu_peak_pct, memory_peak_pct, ready, desired, restarts, usage_unknown)
+		VALUES (?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (app_id, at) DO UPDATE SET cpu_m = excluded.cpu_m, memory_mb = excluded.memory_mb,
 			cpu_peak_pct = excluded.cpu_peak_pct, memory_peak_pct = excluded.memory_peak_pct,
-			ready = excluded.ready, desired = excluded.desired, restarts = excluded.restarts`,
+			ready = excluded.ready, desired = excluded.desired, restarts = excluded.restarts,
+			usage_unknown = excluded.usage_unknown`,
 		appID, FormatTime(s.At.UTC().Truncate(time.Minute)), s.CPUM, s.MemoryMB, s.CPUPeakPct, s.MemoryPeakPct,
-		s.Ready, s.Desired, s.Restarts)
+		s.Ready, s.Desired, s.Restarts, s.UsageUnknown)
 	if err != nil {
 		return fmt.Errorf("record an app sample: %w", err)
 	}
@@ -43,7 +47,7 @@ func (db *DB) RecordAppSample(ctx context.Context, appID string, s AppSample) er
 
 // AppSamples returns an app's samples since a time, oldest first.
 func (db *DB) AppSamples(ctx context.Context, appID string, since time.Time) ([]AppSample, error) {
-	rows, err := db.QueryContext(ctx, `SELECT at, cpu_m, memory_mb, cpu_peak_pct, memory_peak_pct, ready, desired, restarts
+	rows, err := db.QueryContext(ctx, `SELECT at, cpu_m, memory_mb, cpu_peak_pct, memory_peak_pct, ready, desired, restarts, usage_unknown
 		FROM app_samples WHERE app_id = ? AND at >= ? ORDER BY at`, appID, FormatTime(since.UTC()))
 	if err != nil {
 		return nil, fmt.Errorf("read an app's samples: %w", err)
@@ -53,7 +57,7 @@ func (db *DB) AppSamples(ctx context.Context, appID string, since time.Time) ([]
 	for rows.Next() {
 		var s AppSample
 		var at string
-		if err := rows.Scan(&at, &s.CPUM, &s.MemoryMB, &s.CPUPeakPct, &s.MemoryPeakPct, &s.Ready, &s.Desired, &s.Restarts); err != nil {
+		if err := rows.Scan(&at, &s.CPUM, &s.MemoryMB, &s.CPUPeakPct, &s.MemoryPeakPct, &s.Ready, &s.Desired, &s.Restarts, &s.UsageUnknown); err != nil {
 			return nil, fmt.Errorf("scan an app sample: %w", err)
 		}
 		s.At, _ = ParseTime(at)

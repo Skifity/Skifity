@@ -109,3 +109,36 @@ func TestWatchPathsAreCheckedWhenTheyAreSaved(t *testing.T) {
 		t.Fatalf("too many paths answered %d: %s", status, truncate(body, 200))
 	}
 }
+
+func TestAnAppIsSkippedByEveryPushThatTouchesNothingOfIt(t *testing.T) {
+	// Skipped once, the app still runs the commit before that push, so the
+	// next push — which starts from the skipped one — did not match what it
+	// ran, and every monorepo app rebuilt on every other push.
+	h := newHarness(t)
+	h.api.deployer = &fakeDeployer{log: &recorder{}}
+	acme := h.newTenant("acme")
+	const repo = "https://github.com/acme/monorepo"
+	api := store.App{EnvironmentID: acme.env.ID, Name: "api", Slug: "api", Replicas: 1,
+		RepoURL: repo, Branch: "main", AutoDeploy: true, WatchPaths: "apps/api"}
+	if err := h.db.CreateApp(t.Context(), &api); err != nil {
+		t.Fatal(err)
+	}
+	deployedAt(t, h, api.ID, "a")
+	source := store.GitSource{TeamID: acme.team.ID}
+	push := func(before, commit string) webhookResult {
+		event := gitsrc.PushEvent{Kind: "push", RepoURL: repo, Branch: "main", Before: before, CommitSHA: commit,
+			FilesKnown: true, ChangedFiles: []string{"apps/web/page.tsx"}}
+		return h.api.dispatchGitEvent(httptest.NewRequest(http.MethodPost, "/api/webhooks/git/src", nil), source, event)
+	}
+	for _, step := range [][2]string{{"a", "b"}, {"b", "c"}, {"c", "d"}} {
+		if result := push(step[0], step[1]); len(result.Deployments) != 0 {
+			t.Fatalf("a push from %s to %s that touched nothing of the api deployed it", step[0], step[1])
+		}
+	}
+	// Deployed some other way since — a rollback, a manual deploy — the
+	// comparison starts again from what that runs.
+	deployedAt(t, h, api.ID, "x")
+	if result := push("d", "e"); len(result.Deployments) != 1 {
+		t.Fatal("an app deployed since the last skipped push was skipped against a commit it does not run")
+	}
+}

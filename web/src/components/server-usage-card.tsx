@@ -17,9 +17,9 @@ import { queryClient } from "@/lib/query"
 
 type ServerPoint = {
   at: string
-  cpu_pct: number
-  memory_pct: number
-  /** Missing where the disk could not be read. */
+  /** Each share is missing where what it is a share of was not known. */
+  cpu_pct?: number
+  memory_pct?: number
   disk_pct?: number
   pods: number
 }
@@ -64,13 +64,17 @@ export function ServerUsageCard({ serverId, canEdit }: { serverId: string; canEd
     {
       key: "memory",
       label: t("apps.usageMemory"),
-      points: points.map((point) => ({ at: point.at, value: point.memory_pct })),
+      points: points.flatMap((point) =>
+        point.memory_pct == null ? [] : [{ at: point.at, value: point.memory_pct }],
+      ),
       threshold: alerts.data?.memory_pct,
     },
     {
       key: "cpu",
       label: t("apps.usageCPU"),
-      points: points.map((point) => ({ at: point.at, value: point.cpu_pct })),
+      points: points.flatMap((point) =>
+        point.cpu_pct == null ? [] : [{ at: point.at, value: point.cpu_pct }],
+      ),
       threshold: alerts.data?.cpu_pct,
     },
   ]

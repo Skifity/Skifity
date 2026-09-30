@@ -45,7 +45,7 @@ func TestAServersUsageIsBucketedWithItsDisk(t *testing.T) {
 		t.Fatalf("%d points for three minutes at one a minute", len(answer.Points))
 	}
 	first, last := answer.Points[0], answer.Points[2]
-	if first.CPUPct != 25 || first.MemoryPct != 25 || first.DiskPct == nil || *first.DiskPct != 50 || first.Pods != 10 {
+	if first.CPUPct == nil || *first.CPUPct != 25 || first.MemoryPct == nil || *first.MemoryPct != 25 || first.DiskPct == nil || *first.DiskPct != 50 || first.Pods != 10 {
 		t.Fatalf("the first point is %+v", first)
 	}
 	// A minute the disk was not read is left out of the disk line, not drawn
@@ -65,7 +65,7 @@ func TestAServersUsageIsBucketedWithItsDisk(t *testing.T) {
 		{At: hour.Add(20 * time.Minute), DiskUsedMB: 60, DiskCapacityMB: 100, MemoryMB: 10, MemoryCapacityMB: 100},
 		{At: hour.Add(21 * time.Minute), DiskUsedMB: 80, DiskCapacityMB: 100, MemoryMB: 90, MemoryCapacityMB: 100},
 	}, time.Hour)
-	if len(points) != 1 || *points[0].DiskPct != 80 || points[0].MemoryPct != 90 {
+	if len(points) != 1 || *points[0].DiskPct != 80 || *points[0].MemoryPct != 90 {
 		t.Fatalf("an hour's bucket is %+v", points)
 	}
 }

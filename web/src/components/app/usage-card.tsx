@@ -25,6 +25,8 @@ type MetricPoint = {
   ready: number
   desired: number
   restarts: number
+  /** False where no minute of the bucket had its CPU and memory measured. */
+  usage_known: boolean
 }
 
 type Metrics = { range: string; points: MetricPoint[] }
@@ -54,6 +56,8 @@ export function UsageCard({ app }: { app: App }) {
   })
 
   const points = metrics.data?.points ?? []
+  // A bucket nobody measured is a gap in the line, not a dip to zero.
+  const measured = points.filter((point) => point.usage_known)
   const percent = (value: number) => `${Math.round(value)}%`
 
   return (
@@ -89,7 +93,7 @@ export function UsageCard({ app }: { app: App }) {
               <p className="text-sm font-medium">{t("apps.usageMemory")}</p>
               <UsageChart
                 label={t("apps.usageMemory")}
-                points={points.map((point) => ({ at: point.at, value: point.memory_peak_pct }))}
+                points={measured.map((point) => ({ at: point.at, value: point.memory_peak_pct }))}
                 max={100}
                 threshold={alerts.data?.memory_pct}
                 format={percent}
@@ -99,7 +103,7 @@ export function UsageCard({ app }: { app: App }) {
               <p className="text-sm font-medium">{t("apps.usageCPU")}</p>
               <UsageChart
                 label={t("apps.usageCPU")}
-                points={points.map((point) => ({ at: point.at, value: point.cpu_peak_pct }))}
+                points={measured.map((point) => ({ at: point.at, value: point.cpu_peak_pct }))}
                 max={100}
                 threshold={alerts.data?.cpu_pct}
                 format={percent}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
 
@@ -56,6 +57,7 @@ func TestMaintenanceStartsAndEnds(t *testing.T) {
 	h.withCluster(cluster)
 	acme := h.newTenant("acme")
 	app := h.app(acme, "web")
+	deployed(t, h, app)
 	path := "/api/apps/" + app.ID + "/maintenance"
 	start := map[string]any{"message": "Back at 14:00.", "allow": []string{" 203.0.113.9/24 ", "198.51.100.7", ""}}
 
@@ -136,6 +138,7 @@ func TestMaintenanceThatCannotBeEnforcedIsNotRecorded(t *testing.T) {
 	h.withCluster(&guardCluster{installErr: errors.New("no Traefik")})
 	acme := h.newTenant("acme")
 	app := h.app(acme, "web")
+	deployed(t, h, app)
 	if err := h.db.CreateDomain(t.Context(), &store.Domain{AppID: app.ID, Hostname: "web.example.com"}); err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +168,7 @@ func TestMaintenanceWhoseIngressWasNotChangedIsNotInForce(t *testing.T) {
 	h.api.deployer = &failingSyncDeployer{fakeDeployer{log: &recorder{}}}
 	acme := h.newTenant("acme")
 	app := h.app(acme, "web")
+	deployed(t, h, app)
 	if err := h.db.CreateDomain(t.Context(), &store.Domain{AppID: app.ID, Hostname: "web.example.com"}); err != nil {
 		t.Fatal(err)
 	}
@@ -186,5 +190,52 @@ func TestMaintenanceWhoseIngressWasNotChangedIsNotInForce(t *testing.T) {
 	}
 	if _, err := h.db.GetMaintenance(t.Context(), app.ID); err != nil {
 		t.Fatal("maintenance still in force was recorded as over")
+	}
+}
+
+// deployed gives an app a version that ran, which is what maintenance is put
+// in front of.
+func deployed(t *testing.T, h *harness, app store.App) {
+	t.Helper()
+	deployment := store.Deployment{AppID: app.ID, Trigger: "manual", Image: "registry.local/acme/web:1"}
+	if err := h.db.CreateDeployment(t.Context(), &deployment); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.UpdateDeploymentStatus(t.Context(), deployment.ID, store.DeploySucceeded, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// unreadySyncDeployer applies an app and then finds it not ready: what a
+// crash-looping app, the usual reason for maintenance, gives.
+type unreadySyncDeployer struct{ fakeDeployer }
+
+func (*unreadySyncDeployer) Sync(context.Context, string) error {
+	return errdoc.RolloutTimedOut("web", 0, 1, "CrashLoopBackOff")
+}
+
+func TestMaintenanceInFrontOfACrashingAppIsInForce(t *testing.T) {
+	// The Ingress is applied before the wait for the app to be ready. The
+	// wait failing meant maintenance was recorded as off while visitors saw
+	// the notice.
+	h := newHarness(t)
+	h.withCluster(&guardCluster{})
+	h.api.deployer = &unreadySyncDeployer{fakeDeployer{log: &recorder{}}}
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	path := "/api/apps/" + app.ID + "/maintenance"
+	if err := h.db.CreateDomain(t.Context(), &store.Domain{AppID: app.ID, Hostname: "web.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	// Never deployed: nothing to put the notice in front of.
+	if status, body := h.do(acme, http.MethodPut, path, map[string]any{"message": "m"}); status != http.StatusBadRequest {
+		t.Fatalf("maintenance on an app never deployed answered %d: %s", status, truncate(body, 200))
+	}
+	deployed(t, h, app)
+	if status, body := h.do(acme, http.MethodPut, path, map[string]any{"message": "m"}); status != http.StatusOK {
+		t.Fatalf("maintenance on a crashing app answered %d: %s", status, truncate(body, 200))
+	}
+	if _, err := h.db.GetMaintenance(t.Context(), app.ID); err != nil {
+		t.Fatalf("maintenance in force was not recorded: %v", err)
 	}
 }

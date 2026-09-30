@@ -27,16 +27,20 @@ func (w *Watcher) recordServers(ctx context.Context, servers []store.Server, nod
 		if server.NodeName == "" || !present || !node.Ready {
 			continue
 		}
-		// metrics-server had nothing for the node: its usage is not zero,
-		// it is not known, and a minute recorded as 0% drew a false dip in
-		// the graph and ended an alert exactly when the server was under
-		// pressure. The minute is left out; the graph shows a gap.
-		if !node.UsageKnown {
-			continue
-		}
 		sample := store.ServerSample{
 			At: now, CPUM: node.CPUUsedM, CPUCapacityM: node.CPUCapacityM,
 			MemoryMB: node.MemUsedMB, MemoryCapacityMB: node.MemCapacityMB, Pods: node.PodCount,
+		}
+		// metrics-server had nothing for the node: its CPU and memory are not
+		// zero, they are not known, and a minute recorded as 0% drew a false
+		// dip and ended an alert when the server was under pressure. They are
+		// kept as unknown — no capacity, which every reader takes as that —
+		// and the minute is still kept, for its disk, which the kubelet
+		// reports whether metrics-server is there or not. Leaving the whole
+		// minute out meant the disk warning never fired while metrics-server
+		// was the thing the full disk had evicted.
+		if !node.UsageKnown {
+			sample.CPUM, sample.CPUCapacityM, sample.MemoryMB, sample.MemoryCapacityMB = 0, 0, 0, 0
 		}
 		if disk, ok := disks[server.NodeName]; ok {
 			sample.DiskUsedMB, sample.DiskCapacityMB = disk.UsedMB, disk.CapacityMB

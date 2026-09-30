@@ -33,6 +33,9 @@ type metricPoint struct {
 	Ready         int `json:"ready"`
 	Desired       int `json:"desired"`
 	Restarts      int `json:"restarts"`
+	// UsageKnown is false for a bucket with no minute whose CPU and memory
+	// were known; those numbers are then not zero, only absent.
+	UsageKnown bool `json:"usage_known"`
 }
 
 func (s *Server) handleAppMetrics(w http.ResponseWriter, r *http.Request) {
@@ -72,13 +75,16 @@ func (s *Server) handleAppMetrics(w http.ResponseWriter, r *http.Request) {
 func bucketSamples(samples []store.AppSample, width time.Duration) []metricPoint {
 	out := []metricPoint{}
 	var current metricPoint
-	var count int64
+	var count, known int64
 	flush := func() {
 		if count == 0 {
 			return
 		}
-		current.CPUM /= count
-		current.MemoryMB /= count
+		if known > 0 {
+			current.CPUM /= known
+			current.MemoryMB /= known
+		}
+		current.UsageKnown = known > 0
 		out = append(out, current)
 	}
 	for _, sample := range samples {
@@ -89,12 +95,16 @@ func bucketSamples(samples []store.AppSample, width time.Duration) []metricPoint
 		}
 		if count == 0 {
 			current = metricPoint{At: start, Ready: sample.Ready}
+			known = 0
 		}
 		count++
-		current.CPUM += sample.CPUM
-		current.MemoryMB += sample.MemoryMB
-		current.CPUPeakPct = max(current.CPUPeakPct, sample.CPUPeakPct)
-		current.MemoryPeakPct = max(current.MemoryPeakPct, sample.MemoryPeakPct)
+		if !sample.UsageUnknown {
+			known++
+			current.CPUM += sample.CPUM
+			current.MemoryMB += sample.MemoryMB
+			current.CPUPeakPct = max(current.CPUPeakPct, sample.CPUPeakPct)
+			current.MemoryPeakPct = max(current.MemoryPeakPct, sample.MemoryPeakPct)
+		}
 		current.Ready = min(current.Ready, sample.Ready)
 		current.Desired = max(current.Desired, sample.Desired)
 		current.Restarts = max(current.Restarts, sample.Restarts)

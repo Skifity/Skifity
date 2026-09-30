@@ -5557,6 +5557,29 @@ registry inside the cluster takes a push from any build — a Dockerfile's `RUN`
 could overwrite another team's image. The last needs the registry to have
 credentials per team, which is its own piece of work.
 
+Some of Phase 110's own fixes had made new problems:
+
+* **Maintenance in front of a crashing app.** The notice is put in front by
+  re-applying the app, which then waits for it to be ready. An app that is
+  crash-looping — the usual reason for a notice — failed that wait after the
+  Ingress had already changed, and the panel said maintenance had not started
+  while visitors saw it. A failed wait for readiness no longer undoes the
+  record; an app never deployed is refused, since there is nothing to put the
+  notice in front of.
+* **Monorepo apps rebuilt every other push.** A push that touched nothing of an
+  app was skipped only if the app ran the commit before it; the next push's
+  "before" was the skipped one, which it never ran, so it rebuilt. The skipped
+  commit now stands in for the running one until another deployment runs.
+* **Preview copies deployed production's pushes.** The copies whole-environment
+  previews made kept their source's "deploy on push"; they are switched off, and
+  the ones already made are corrected by a migration.
+* **An unmeasured minute was a missing minute.** Leaving out a minute that
+  metrics-server had nothing for also left out its restarts and its disk, so a
+  crash-looping app or a full disk — the thing that evicts metrics-server — went
+  unwarned. The minute is kept with CPU and memory marked unknown: the graphs
+  show a gap, the memory and CPU warnings neither start nor end on it, and the
+  restarts and disk warnings go on.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

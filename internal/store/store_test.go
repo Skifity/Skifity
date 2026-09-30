@@ -1278,3 +1278,35 @@ func TestANameAWakeServiceWouldTakeIsTaken(t *testing.T) {
 		t.Errorf("an unrelated name is taken by %q", owner)
 	}
 }
+
+func TestNoPreviewCopyDeploysOnPushAfterTheUpgrade(t *testing.T) {
+	// The migration itself: a copy the previous release made, still set to
+	// deploy on push, is switched off, and an ordinary app is left alone.
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, project, env := seedTeam(t, db)
+	preview := Environment{ProjectID: project.ID, Name: "pr-3", Slug: "pr-3", Kind: EnvPreview, Namespace: "acme-shop-pr-3", SourceRef: "pr-3"}
+	if err := db.CreateEnvironment(ctx, &preview); err != nil {
+		t.Fatal(err)
+	}
+	copied := App{EnvironmentID: preview.ID, Name: "web", Slug: "web", Replicas: 1, AutoDeploy: true}
+	ordinary := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1, AutoDeploy: true}
+	for _, app := range []*App{&copied, &ordinary} {
+		if err := db.CreateApp(ctx, app); err != nil {
+			t.Fatal(err)
+		}
+	}
+	migration, err := os.ReadFile("migrations/0035_preview_copies_do_not_deploy_on_push.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, string(migration)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := db.GetApp(ctx, copied.ID); got.AutoDeploy {
+		t.Fatal("a preview's copy still deploys on push")
+	}
+	if got, _ := db.GetApp(ctx, ordinary.ID); !got.AutoDeploy {
+		t.Fatal("an ordinary app stopped deploying on push")
+	}
+}

@@ -127,6 +127,13 @@ func (s *Server) handleStartMaintenance(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Maintenance is put in front of an app by re-applying the version it
+	// runs; an app that has never run one has nothing to re-apply, and
+	// starting would answer success with nothing in front of anybody.
+	if _, err := s.db.LatestSuccessfulDeployment(r.Context(), app.ID); errors.Is(err, store.ErrNotFound) {
+		writeError(w, r, errdoc.BadRequest("This app has not been deployed yet, so there is no version to put the notice in front of. Deploy it first."))
+		return
+	}
 	_, wasActive := s.db.GetMaintenance(r.Context(), app.ID)
 	maintenance := store.Maintenance{AppID: app.ID, Message: message, Allow: allow, StartedBy: user.Email}
 	if err := s.db.StartMaintenance(r.Context(), &maintenance); err != nil {
@@ -207,6 +214,16 @@ func (s *Server) applyMaintenance(r *http.Request, app store.App) error {
 	}
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
+			// A sync applies everything, the Ingress included, and then waits
+			// for the app to be ready. An app that is not — crash-looping, the
+			// usual reason to put a notice in front of it — failed that wait
+			// with the Ingress already changed, and the panel recorded the
+			// opposite of what visitors saw.
+			var problem *errdoc.Problem
+			if errors.As(err, &problem) && problem.Code == "deploy.rollout_timeout" {
+				s.log.Info("maintenance changed while the app is not ready", "app", app.ID, "detail", problem.Cause)
+				return nil
+			}
 			return err
 		}
 	}

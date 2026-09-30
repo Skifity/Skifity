@@ -29,16 +29,20 @@ func (w *Watcher) recordUsage(ctx context.Context, app store.DeployedApp, status
 	sample := store.AppSample{At: at, Ready: status.ReadyReplicas, Desired: status.DesiredReplicas}
 	for _, instance := range status.Instances {
 		// A running instance metrics-server had nothing for is not idle; its
-		// use is not known, and the minute is left out rather than drawn as
-		// a dip that ends an alert when the app is under pressure.
+		// use is not known. The minute is kept for its restarts and readiness,
+		// which the pods say themselves, with CPU and memory marked unknown
+		// rather than drawn as a dip that ends an alert under pressure.
 		if instance.Ready && !instance.UsageKnown {
-			return
+			sample.UsageUnknown = true
 		}
 	}
 	for _, instance := range status.Instances {
+		sample.Restarts += instance.Restarts
+		if sample.UsageUnknown {
+			continue
+		}
 		sample.CPUM += instance.CPUM
 		sample.MemoryMB += instance.MemoryMB
-		sample.Restarts += instance.Restarts
 		sample.CPUPeakPct = max(sample.CPUPeakPct, percentOf(instance.CPUM, int64(app.CPULimitM)))
 		sample.MemoryPeakPct = max(sample.MemoryPeakPct, percentOf(instance.MemoryMB, int64(app.MemLimitMB)))
 	}
@@ -75,6 +79,10 @@ func evaluate(thresholds store.AppAlerts, recent []store.AppSample, now time.Tim
 		}
 		lowest, highest := 100000, 0
 		for _, s := range last {
+			// A minute whose use is not known is neither over nor under.
+			if s.UsageUnknown {
+				return "", 0
+			}
 			lowest, highest = min(lowest, peak(s)), max(highest, peak(s))
 		}
 		switch {

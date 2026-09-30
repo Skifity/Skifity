@@ -20,8 +20,8 @@ import (
 // matters. Disk is missing from a bucket where it could not be read.
 type serverPoint struct {
 	At        time.Time `json:"at"`
-	CPUPct    int       `json:"cpu_pct"`
-	MemoryPct int       `json:"memory_pct"`
+	CPUPct    *int      `json:"cpu_pct,omitempty"`
+	MemoryPct *int      `json:"memory_pct,omitempty"`
 	DiskPct   *int      `json:"disk_pct,omitempty"`
 	Pods      int       `json:"pods"`
 }
@@ -77,15 +77,21 @@ func bucketServerSamples(samples []store.ServerSample, width time.Duration) []se
 			current = serverPoint{At: start}
 			started = true
 		}
-		current.CPUPct = max(current.CPUPct, store.Percent(sample.CPUM, sample.CPUCapacityM))
-		current.MemoryPct = max(current.MemoryPct, store.Percent(sample.MemoryMB, sample.MemoryCapacityMB))
-		current.Pods = max(current.Pods, sample.Pods)
-		if sample.DiskCapacityMB > 0 {
-			disk := store.Percent(sample.DiskUsedMB, sample.DiskCapacityMB)
-			if current.DiskPct == nil || disk > *current.DiskPct {
-				current.DiskPct = &disk
+		// A share is only drawn from a minute where what it is a share of was
+		// known; a bucket with none has no point, not a zero.
+		highest := func(into **int, used, capacity int64) {
+			if capacity <= 0 {
+				return
+			}
+			pct := store.Percent(used, capacity)
+			if *into == nil || pct > **into {
+				*into = &pct
 			}
 		}
+		highest(&current.CPUPct, sample.CPUM, sample.CPUCapacityM)
+		highest(&current.MemoryPct, sample.MemoryMB, sample.MemoryCapacityMB)
+		highest(&current.DiskPct, sample.DiskUsedMB, sample.DiskCapacityMB)
+		current.Pods = max(current.Pods, sample.Pods)
 	}
 	if started {
 		out = append(out, current)
