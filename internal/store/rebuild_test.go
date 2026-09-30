@@ -30,7 +30,7 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 	if err := db.migrateUpTo(ctx, 15); err != nil {
 		t.Fatalf("migrate to 15: %v", err)
 	}
-	_, _, prj, env := seedTeam(t, db)
+	prj, env := seedAtVersion15(t, db)
 	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1, RepoURL: "https://example.test/a.git"}
 	if err := db.CreateApp(ctx, &app); err != nil {
 		t.Fatalf("CreateApp: %v", err)
@@ -79,4 +79,30 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 	if _, err := db.GetDeployment(ctx, d.ID); err == nil {
 		t.Fatal("deleting the project no longer removes its deployments")
 	}
+}
+
+// seedAtVersion15 makes a team, a project and an environment in the schema as
+// it was before 0016. The environment is written by hand because the
+// repository function writes every column the table has today, and a column
+// added by a later migration does not exist yet at this point.
+func seedAtVersion15(t *testing.T, db *DB) (Project, Environment) {
+	t.Helper()
+	ctx := t.Context()
+	team := Team{Name: "Acme", Slug: "acme"}
+	if err := db.CreateTeam(ctx, &team); err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	prj := Project{TeamID: team.ID, Name: "Shop", Slug: "shop"}
+	if err := db.CreateProject(ctx, &prj); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	env := Environment{ID: NewID("env"), ProjectID: prj.ID, Name: "Production", Slug: "production",
+		Kind: EnvStandard, Namespace: "acme-shop-production", PodSecurity: "restricted"}
+	if _, err := db.Exec(ctx, `INSERT INTO environments
+		(id, project_id, name, slug, kind, namespace, source_ref, pod_security, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?)`,
+		env.ID, env.ProjectID, env.Name, env.Slug, env.Kind, env.Namespace, "", env.PodSecurity, Now()); err != nil {
+		t.Fatalf("insert the environment: %v", err)
+	}
+	return prj, env
 }

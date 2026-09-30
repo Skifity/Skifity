@@ -733,6 +733,14 @@ func (d *Deployer) runtimeVariables(ctx context.Context, app store.App, env stor
 		return nil, err
 	}
 	for _, row := range shared {
+		// A preview of a pull request from a fork runs code anybody could
+		// have written, and its first commit could print the environment. It
+		// gets the project's plain settings and none of its secrets — the same
+		// line GitHub Actions draws, and the one the preview's own copy of the
+		// app's variables already drew.
+		if env.FromFork && row.IsSecret {
+			continue
+		}
 		plaintext, err := d.keyring.Open(row.Sealed, "shared_variable:"+env.ProjectID+":"+row.Key)
 		if err != nil {
 			return nil, fmt.Errorf("read the shared variable %s: %w", row.Key, err)

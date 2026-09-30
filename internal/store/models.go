@@ -86,8 +86,12 @@ type Environment struct {
 	// PodSecurity is the Pod Security Admission level this environment's
 	// namespace enforces: "restricted", or "baseline" for an environment that
 	// has to run an image starting as root. See kube.PodSecurity.
-	PodSecurity string    `json:"pod_security"`
-	CreatedAt   time.Time `json:"created_at"`
+	PodSecurity string `json:"pod_security"`
+	// FromFork is true for a preview of a pull request from a fork. Nothing
+	// secret is given to one: anybody can open such a pull request, and its
+	// code decides what runs.
+	FromFork  bool      `json:"from_fork,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ServerStatus is the lifecycle of a machine the panel manages.

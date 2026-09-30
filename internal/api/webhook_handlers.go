@@ -236,6 +236,7 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 			Kind:      store.EnvPreview,
 			SourceRef: ref,
 			Namespace: kube.NamespaceFor(team.Slug, project.Slug, ref),
+			FromFork:  event.Fork,
 		}
 		if err := s.db.CreateEnvironment(r.Context(), &env); err != nil {
 			return "", err

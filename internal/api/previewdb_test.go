@@ -204,3 +204,14 @@ func TestAPreviewFromAForkIsGivenNoDatabase(t *testing.T) {
 		t.Fatalf("a fork's preview was given %q", url)
 	}
 }
+
+// Where a preview came from is recorded, because the deployer decides what a
+// fork's preview may read at every deploy, long after the webhook is gone.
+func TestAPreviewRemembersItCameFromAFork(t *testing.T) {
+	p := withLinkedDatabase(t)
+	forked := p.openPullRequest(t, 21, true)
+	env, err := p.db.GetEnvironment(t.Context(), forked.EnvironmentID)
+	if err != nil || !env.FromFork {
+		t.Fatalf("a fork's preview environment does not say it came from a fork: %+v, %v", env, err)
+	}
+}

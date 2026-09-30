@@ -4231,6 +4231,26 @@ No real provider has been signed in through. The claim handling, the account
 decision, the linking flow and the endpoints are tested; the round trip to Okta,
 Entra or Keycloak is not.
 
+## Phase 78 — a fork's preview was handed the project's shared secrets
+
+Found by the Northflank research pass. A preview of a pull request from a fork
+never copied the app's own secret variables — `copyPreviewVariables` has drawn
+that line since previews existed — and was then handed every one of the
+project's shared variables, secret or not, at every deploy: `runtimeVariables`
+merges them into whatever environment is being deployed, and nothing recorded
+that this environment came from a fork. A stranger's first commit could have
+printed them.
+
+The preview environment now records `from_fork` when it is made (migration
+0019), and the deployer leaves out every shared variable marked secret for such
+an environment, while still passing the plain ones. Everything that runs an
+app's code — the deploy, a scheduled command, a one-off run — reads its
+variables through the same function, so there is one place for the rule.
+
+A store test that seeded an old schema through today's repository functions
+broke on the new column, and now writes that one row by hand: the test is about
+a migration from before the column existed.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

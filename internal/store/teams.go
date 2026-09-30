@@ -262,13 +262,13 @@ func (db *DB) DeleteProject(ctx context.Context, id string) error {
 
 // --- environments ---
 
-const envColumns = `id, project_id, name, slug, kind, namespace, source_ref, pod_security, created_at`
+const envColumns = `id, project_id, name, slug, kind, namespace, source_ref, pod_security, from_fork, created_at`
 
 func scanEnvironment(row interface{ Scan(...any) error }) (Environment, error) {
 	var e Environment
 	var created string
 	err := row.Scan(&e.ID, &e.ProjectID, &e.Name, &e.Slug, &e.Kind, &e.Namespace, &e.SourceRef,
-		&e.PodSecurity, &created)
+		&e.PodSecurity, &e.FromFork, &created)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return e, ErrNotFound
@@ -292,9 +292,9 @@ func (db *DB) CreateEnvironment(ctx context.Context, e *Environment) error {
 		e.PodSecurity = string(kube.PodSecurityRestricted)
 	}
 	now := Now()
-	_, err := db.Exec(ctx, `INSERT INTO environments (id, project_id, name, slug, kind, namespace, source_ref, pod_security, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
-		e.ID, e.ProjectID, e.Name, e.Slug, e.Kind, e.Namespace, e.SourceRef, e.PodSecurity, now)
+	_, err := db.Exec(ctx, `INSERT INTO environments (id, project_id, name, slug, kind, namespace, source_ref, pod_security, from_fork, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		e.ID, e.ProjectID, e.Name, e.Slug, e.Kind, e.Namespace, e.SourceRef, e.PodSecurity, e.FromFork, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this project already has an environment named %s", ErrConflict, e.Name)
