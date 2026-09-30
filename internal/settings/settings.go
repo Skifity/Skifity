@@ -161,6 +161,7 @@ const (
 	KeySSOGroupsClaim        = "signin.oidc_groups_claim"
 	KeySSOGroupRoles         = "signin.oidc_group_roles"
 	KeyBuilderDefault        = "general.default_builder"
+	KeyBuildConcurrency      = "cluster.build_concurrency"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
 
 	// Written by the panel rather than by a person: when the registry was last
@@ -262,6 +263,14 @@ var Definitions = []Definition{
 		Kind:     KindChoice,
 		Options:  []string{FlannelWireGuard, FlannelVXLAN},
 		Validate: validateOneOf(FlannelWireGuard, FlannelVXLAN),
+	},
+	{
+		Key: KeyBuildConcurrency, Label: "Builds at once", Group: GroupCluster,
+		Help: "How many builds run at the same time. More wait their turn, in the order they came, " +
+			"and say so in their log. Each build can use up to 3 GiB of memory, taken from what the apps have.",
+		Placeholder: "2",
+		Kind:        KindNumber,
+		Validate:    validateBuildConcurrency,
 	},
 	{
 		Key: KeyDeploymentHistory, Label: "Deployment records to keep, per app", Group: GroupCluster,
@@ -720,6 +729,20 @@ func validateInt(value string) error {
 	}
 	if _, err := strconv.Atoi(value); err != nil {
 		return errors.New("enter a number")
+	}
+	return nil
+}
+
+// DefaultBuildConcurrency is how many builds run at once when nobody said.
+const DefaultBuildConcurrency = 2
+
+func validateBuildConcurrency(value string) error {
+	if value == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 1 || n > 20 {
+		return errors.New("enter a number between 1 and 20")
 	}
 	return nil
 }

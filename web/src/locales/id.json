@@ -1281,6 +1281,10 @@
       "storage_backup_passphrase": {
         "label": "Frasa sandi cadangan",
         "help": "Jika diisi, setiap cadangan dienkripsi dengannya sebelum keluar dari cluster, sehingga pemilik bucket tidak bisa membacanya. Simpan salinannya di tempat lain: cadangan tidak bisa dipulihkan tanpanya, dan panel tidak bisa memberitahukannya lagi kepada Anda."
+      },
+      "cluster_build_concurrency": {
+        "label": "Build sekaligus",
+        "help": "Berapa build yang berjalan bersamaan. Selebihnya menunggu giliran, sesuai urutan datangnya, dan menyatakannya di log. Setiap build bisa memakai hingga 3 GiB memori, diambil dari jatah aplikasi."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",

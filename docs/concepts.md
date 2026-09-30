@@ -475,6 +475,12 @@ the app's **Settings**.
 
 Nothing from the repository's own `.git` directory ever reaches a served image.
 
+**Builds take turns.** Two run at once by default — **Settings → Cluster →
+Builds at once** changes it — and the rest wait, in the order they came, with a
+line in their log saying how many are ahead. A build can use up to 3 GiB of
+memory, taken from what your apps have, so five pushes landing together no
+longer start five.
+
 ### Versions with a known critical vulnerability
 
 When a version of a framework can be taken over from the internet — the

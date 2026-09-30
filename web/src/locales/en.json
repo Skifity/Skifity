@@ -1295,6 +1295,10 @@
       "storage_backup_passphrase": {
         "label": "Backup passphrase",
         "help": "When set, every backup is encrypted with it before it leaves the cluster, so the bucket's owner cannot read it. Keep a copy somewhere else: a backup cannot be restored without it, and the panel cannot tell it to you again."
+      },
+      "cluster_build_concurrency": {
+        "label": "Builds at once",
+        "help": "How many builds run at the same time. More wait their turn, in the order they came, and say so in their log. Each build can use up to 3 GiB of memory, taken from what the apps have."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",

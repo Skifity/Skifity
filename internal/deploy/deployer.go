@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +54,9 @@ type Deployer struct {
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
+
+	// slots queues builds past the panel's limit. See buildslots.go.
+	slots *buildSlots
 }
 
 // New builds a Deployer. notifier may be nil, and then nothing is sent.
@@ -60,6 +64,7 @@ func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Clus
 	return &Deployer{
 		db: db, keyring: keyring, hub: hub, cluster: c, notifier: notifier, log: log,
 		running: map[string]context.CancelFunc{},
+		slots:   newBuildSlots(),
 	}
 }
 
@@ -209,8 +214,21 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 	d.reportToGit(ctx, deployment, gitsrc.StatePending, "")
 
 	if deployment.Image == "" {
+		// Queued until a build slot is free, and said so: a deployment that
+		// sits at "queued" with nothing in its log looks stuck.
+		release, err := d.slots.acquire(ctx, func() int { return d.buildLimit(ctx) }, func(running, ahead int) {
+			d.appendLog(ctx, deployment.ID, fmt.Sprintf(
+				"Waiting to build: %d builds are running, as many as this panel runs at once, and %d %s ahead of this one.",
+				running, ahead, pluralIs(ahead)))
+		})
+		if err != nil {
+			d.fail(ctx, deployment, errdoc.From(err))
+			return
+		}
 		d.setStatus(ctx, &deployment, store.DeployBuilding)
-		if _, err := d.build(ctx, &deployment, app, env); err != nil {
+		_, err = d.build(ctx, &deployment, app, env)
+		release()
+		if err != nil {
 			d.fail(ctx, deployment, errdoc.From(err))
 			return
 		}
@@ -1191,6 +1209,26 @@ func (d *Deployer) ensureTeamRegistries(ctx context.Context, namespace, teamID s
 		return fmt.Errorf("place the team's registry credentials in %s: %w", namespace, err)
 	}
 	return nil
+}
+
+// buildLimit is how many builds may run at once: the setting, or two.
+func (d *Deployer) buildLimit(ctx context.Context) int {
+	value, _, err := d.db.GetSetting(ctx, settings.KeyBuildConcurrency)
+	if err != nil {
+		return settings.DefaultBuildConcurrency
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n < 1 {
+		return settings.DefaultBuildConcurrency
+	}
+	return n
+}
+
+func pluralIs(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
 }
 
 // settingValue reads one setting, decrypting it when it was sealed.
