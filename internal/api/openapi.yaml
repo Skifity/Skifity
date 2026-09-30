@@ -5731,8 +5731,8 @@ components:
       properties:
         path: {type: string, description: 'Absolute, such as /etc/nginx/nginx.conf.'}
         content: {type: string}
-        is_secret: {type: boolean}
-        executable: {type: boolean}
+        is_secret: {type: boolean, description: 'Left out, a file keeps what it was; a new one is secret when its path or content looks like a credential.'}
+        executable: {type: boolean, description: 'Left out, a file keeps what it was; a new one is not executable.'}
 
     RegistryCredential:
       type: object

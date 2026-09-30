@@ -152,3 +152,32 @@ func TestAFileThatCannotWorkIsRefused(t *testing.T) {
 		t.Errorf("a fourth 250 KiB file answered %d: %.300s", status, answer)
 	}
 }
+
+// Replacing a script's content without saying whether it is executable keeps
+// it executable: `skifity files set` without --executable used to stop an
+// entrypoint script from running.
+func TestReplacingAFileKeepsItExecutable(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	app := h.app(acme, "shop")
+	path := "/api/apps/" + app.ID + "/files"
+	script := "/docker-entrypoint.d/10-init.sh"
+
+	save := func(body map[string]any) bool {
+		t.Helper()
+		if status, answer := h.do(acme, http.MethodPut, path, body); status != http.StatusOK {
+			t.Fatalf("saving answered %d: %s", status, answer)
+		}
+		rows, _ := h.db.ListFiles(t.Context(), app.ID)
+		return len(rows) == 1 && rows[0].Executable
+	}
+	if !save(map[string]any{"path": script, "content": "#!/bin/sh\n", "executable": true}) {
+		t.Fatal("the script was not saved executable")
+	}
+	if !save(map[string]any{"path": script, "content": "#!/bin/sh\necho hi\n"}) {
+		t.Error("replacing the content without saying made the script not executable")
+	}
+	if save(map[string]any{"path": script, "content": "#!/bin/sh\n", "executable": false}) {
+		t.Error("saying it is not executable was ignored")
+	}
+}

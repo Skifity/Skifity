@@ -234,7 +234,7 @@ function DNSInstructions({ domain, onRecheck, rechecking }: {
   }
 
   // A colon is IPv6, digits and dots are IPv4; anything else is a name.
-  const type = /^[\d.]+$|:/.test(target) ? "A" : "CNAME"
+  const type = target.includes(":") ? "AAAA" : /^[\d.]+$/.test(target) ? "A" : "CNAME"
 
   return (
     <Alert>

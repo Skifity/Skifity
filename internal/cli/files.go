@@ -31,7 +31,7 @@ func cmdFiles(ctx context.Context, args []string, out io.Writer) error {
 	flags.SetOutput(out)
 	appID := flags.String("app", "", "the app id")
 	secret := flags.Bool("secret", false, "never show the content again once saved")
-	executable := flags.Bool("executable", false, "mount the file executable, for a script the image runs")
+	executable := flags.Bool("executable", false, "mount the file executable, for a script the image runs; --executable=false stops that, and leaving it out keeps what the file was")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	positional, err := parseInterspersed(flags, args)
 	if err != nil {
@@ -102,11 +102,17 @@ func cmdFiles(ctx context.Context, args []string, out io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", positional[1], err)
 		}
-		body := map[string]any{"path": positional[0], "content": string(content), "executable": *executable}
-		// Said only when asked: silence keeps a secret file secret.
+		body := map[string]any{"path": positional[0], "content": string(content)}
+		// Said only when asked: silence keeps a secret file secret, and a
+		// script executable.
 		if *secret {
 			body["is_secret"] = true
 		}
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "executable" {
+				body["executable"] = *executable
+			}
+		})
 		var saved struct {
 			File store.AppFile `json:"file"`
 		}

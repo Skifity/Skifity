@@ -69,11 +69,14 @@ func TestAFileIsSavedFromDiskOrStandardInput(t *testing.T) {
 		t.Fatalf("saved %v", panel.saved)
 	}
 	first, second := panel.saved[0], panel.saved[1]
-	if first["content"] != "events {}\n" || first["executable"] != false {
+	if first["content"] != "events {}\n" {
 		t.Errorf("the file from disk was sent as %v", first)
 	}
 	if _, said := first["is_secret"]; said {
 		t.Error("a file saved without --secret said it was not secret, which would turn a secret file ordinary")
+	}
+	if _, said := first["executable"]; said {
+		t.Error("a file saved without --executable said it was not executable, which would stop a script running")
 	}
 	if second["content"] != "#!/bin/sh\n" || second["executable"] != true || second["is_secret"] != true {
 		t.Errorf("the file from standard input was sent as %v", second)

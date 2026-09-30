@@ -44,8 +44,10 @@ type setFileRequest struct {
 	Content string `json:"content"`
 	// IsSecret is nil when the caller said nothing: keep what the file was,
 	// and otherwise decide the way a variable is decided. See secretness.
-	IsSecret   *bool `json:"is_secret,omitempty"`
-	Executable bool  `json:"executable"`
+	IsSecret *bool `json:"is_secret,omitempty"`
+	// Executable is nil when the caller said nothing: keep what the file
+	// was, so replacing a script's content does not stop it running.
+	Executable *bool `json:"executable,omitempty"`
 }
 
 func (s *Server) handleSetFile(w http.ResponseWriter, r *http.Request) {
@@ -79,10 +81,10 @@ func (s *Server) handleSetFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	total, wasSecret, replacing := len(req.Content), false, false
+	total, wasSecret, wasExecutable, replacing := len(req.Content), false, false, false
 	for _, f := range existing {
 		if f.Path == req.Path {
-			wasSecret, replacing = f.IsSecret, true
+			wasSecret, wasExecutable, replacing = f.IsSecret, f.Executable, true
 			continue
 		}
 		total += f.Size
@@ -115,8 +117,11 @@ func (s *Server) handleSetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	file := store.AppFile{
-		AppID: app.ID, Path: req.Path, Size: len(req.Content), Executable: req.Executable,
+		AppID: app.ID, Path: req.Path, Size: len(req.Content), Executable: wasExecutable,
 		IsSecret: secretness(req.IsSecret, wasSecret, req.Path, req.Content),
+	}
+	if req.Executable != nil {
+		file.Executable = *req.Executable
 	}
 	if err := s.db.SetFile(r.Context(), &file, sealed); err != nil {
 		writeError(w, r, err)
