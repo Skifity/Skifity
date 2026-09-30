@@ -240,6 +240,8 @@ Then, under **Settings → Sign-in**:
 | Sign-in button text | What the button says. Empty gives a generic label. |
 | Allowed email domains | Comma-separated. Only verified addresses in these domains may sign in. |
 | Create an account on first sign-in | Off by default: somebody the provider knows and this panel does not is refused. |
+| Groups claim | The ID token claim that lists a person's groups. Empty is `groups`. |
+| Groups to teams | One per line, `group = team:role`. See below. |
 
 Leave **Allowed email domains** empty only when the provider is yours. Against a
 public provider an empty list means anybody with an account there can sign in.
@@ -247,7 +249,35 @@ public provider an empty list means anybody with an account there can sign in.
 An account created this way has **no password**. It cannot be signed into with
 one, and the refusal is indistinguishable from a wrong password — so the sign-in
 form does not become a way to find out which addresses use single sign-on. A new
-account joins no team: an administrator adds it to one, the same as any other.
+account joins no team: an administrator adds it to one, the same as any other —
+unless the provider's groups say which.
+
+### Teams that follow the provider's groups
+
+**Groups to teams** maps a group at the provider to a team and a role, one per
+line, by the team's slug:
+
+```
+platform-admins = acme:admin
+developers      = acme:member
+clients         = acme:viewer
+```
+
+A team named there follows the groups for everybody who signs in through the
+provider, at every sign-in: they get the highest role their groups give, and
+leave the team when no group gives one. So taking somebody out of a group at
+the provider takes them out of the team the next time they sign in, and nobody
+has to remember to do it twice. A team not named is left alone, and a team's
+last owner is never removed or demoted by it. A member who was limited to some
+projects keeps the limit when a group only changes their role between member
+and viewer.
+
+The groups are read from the verified ID token, so the provider has to put them
+there — most need a mapper or a scope for that. A sign-in whose teams cannot be
+brought in line is refused rather than let through on yesterday's groups, and
+every change is in the team's audit log as `team.member_synced`. A session
+already open keeps its access until it ends or is signed out; to remove
+somebody at once, remove them under Members as well.
 
 ### How a returning person is recognised
 

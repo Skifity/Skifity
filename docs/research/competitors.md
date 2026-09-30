@@ -138,7 +138,7 @@ here, or needs `make verify` on a real server.
 | 12 | Upgrade what the installer installed: components and k3s | Kubero, Epinio | L | The plan yes; the upgrade needs one |
 | 13 | Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
 | 14 | **Closed in Phase 88.** More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
-| 15 | **Half closed in Phase 91** (2FA or SSO required per team). Still open: SSO groups mapped to roles | Portainer, Epinio, Dokploy | S–M | Yes |
+| 15 | **Closed in Phases 91 and 92.** SSO groups mapped to roles, and 2FA or SSO required per team | Portainer, Epinio, Dokploy | S–M | Yes |
 | 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
 | 17 | **Closed in Phase 89.** Set several variables in one rollout, and import a `.env` | Dokku | S | Yes |
 | 18 | Skip a monorepo app whose directory did not change; warn on framework versions with critical advisories | Vercel, Netlify | S–M | Yes |

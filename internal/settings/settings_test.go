@@ -157,3 +157,16 @@ func TestCloudflareTunnelTokenIsASecret(t *testing.T) {
 		t.Errorf("group = %q, want %q", def.Group, GroupDomains)
 	}
 }
+
+func TestParseGroupRoles(t *testing.T) {
+	got, err := ParseGroupRoles("# comment\n\nplatform-admins = acme:admin\n  Clients=acme : Viewer \n")
+	if err != nil || len(got) != 2 || got[0] != (GroupRole{"platform-admins", "acme", "admin"}) ||
+		got[1] != (GroupRole{"Clients", "acme", "viewer"}) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	for _, bad := range []string{"no-equals", "g = acme", "g = acme:god", " = acme:admin", "g = :admin"} {
+		if _, err := ParseGroupRoles(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

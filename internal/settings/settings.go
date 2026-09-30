@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -156,6 +157,8 @@ const (
 	KeySSOButtonLabel        = "signin.oidc_button_label"
 	KeySSODomains            = "signin.oidc_allowed_domains"
 	KeySSOAutoCreate         = "signin.oidc_auto_create"
+	KeySSOGroupsClaim        = "signin.oidc_groups_claim"
+	KeySSOGroupRoles         = "signin.oidc_group_roles"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
 
@@ -221,6 +224,19 @@ var Definitions = []Definition{
 		Help: "With this off, somebody the provider knows and this panel does not is refused, " +
 			"so accounts are created by invitation rather than by anyone with a company address.",
 		Kind: KindBool, Validate: validateBool,
+	},
+	{
+		Key: KeySSOGroupsClaim, Label: "Groups claim", Group: GroupSignIn,
+		Help:        "The claim in the ID token that lists a person's groups. Empty is groups. The provider has to put it in the ID token.",
+		Placeholder: "groups",
+	},
+	{
+		Key: KeySSOGroupRoles, Label: "Groups to teams", Group: GroupSignIn, Multiline: true,
+		Help: "One per line: a group, then the team and the role it gives, as platform-admins = acme:admin. " +
+			"A team named here follows the groups at every single sign-on: a person gets the highest role their groups give, and leaves the team when none do. " +
+			"Teams not named here are left alone, and a team's last owner is never removed.",
+		Placeholder: "platform-admins = acme:admin",
+		Validate:    validateGroupRoles,
 	},
 	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
@@ -731,4 +747,41 @@ func validateOneOf(allowed ...string) func(string) error {
 		}
 		return fmt.Errorf("must be one of: %s", strings.Join(allowed, ", "))
 	}
+}
+
+// GroupRole is one line of the groups-to-teams setting: members of Group get
+// Role in the team whose slug is Team.
+type GroupRole struct {
+	Group, Team, Role string
+}
+
+// groupRoles are the roles a line may give, lowest first.
+var groupRoles = []string{"viewer", "member", "admin", "owner"}
+
+// ParseGroupRoles reads the groups-to-teams setting. Blank lines and lines
+// starting with # are skipped.
+func ParseGroupRoles(text string) ([]GroupRole, error) {
+	var out []GroupRole
+	for number, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		group, target, ok := strings.Cut(line, "=")
+		team, role, ok2 := strings.Cut(strings.TrimSpace(target), ":")
+		group, team, role = strings.TrimSpace(group), strings.TrimSpace(team), strings.ToLower(strings.TrimSpace(role))
+		if !ok || !ok2 || group == "" || team == "" {
+			return nil, fmt.Errorf("line %d is not in the form group = team:role", number+1)
+		}
+		if !slices.Contains(groupRoles, role) {
+			return nil, fmt.Errorf("line %d gives the role %q; a role is viewer, member, admin or owner", number+1, role)
+		}
+		out = append(out, GroupRole{Group: group, Team: team, Role: role})
+	}
+	return out, nil
+}
+
+func validateGroupRoles(value string) error {
+	_, err := ParseGroupRoles(value)
+	return err
 }

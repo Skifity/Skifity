@@ -289,7 +289,8 @@
       "variables.changed": "Variabel diubah",
       "shared_variables.changed": "Variabel bersama diubah",
       "team.strong_auth_required": "Dua faktor diwajibkan untuk tim",
-      "team.strong_auth_relaxed": "Dua faktor tidak lagi diwajibkan untuk tim"
+      "team.strong_auth_relaxed": "Dua faktor tidak lagi diwajibkan untuk tim",
+      "team.member_synced": "Keanggotaan disesuaikan dengan grup single sign-on"
     }
   },
   "projects": {
@@ -1083,6 +1084,14 @@
       "storage_panel_backup_keep": {
         "label": "Cadangan panel yang disimpan",
         "help": "Berapa salinan database panel ini yang disimpan di bucket. Salinan lama dihapus setelah salinan baru berhasil, tidak pernah sebelumnya. Kosong berarti 14."
+      },
+      "signin_oidc_groups_claim": {
+        "label": "Klaim grup",
+        "help": "Klaim di ID token yang mendaftar grup seseorang. Kosong berarti groups. Penyedia harus memasukkannya ke ID token."
+      },
+      "signin_oidc_group_roles": {
+        "label": "Grup ke tim",
+        "help": "Satu per baris: sebuah grup, lalu tim dan peran yang diberikannya, seperti platform-admins = acme:admin. Tim yang disebut di sini mengikuti grup di setiap single sign-on: seseorang mendapat peran tertinggi yang diberikan grupnya, dan keluar dari tim bila tidak ada. Tim yang tidak disebut di sini dibiarkan, dan pemilik terakhir sebuah tim tidak pernah dikeluarkan."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",

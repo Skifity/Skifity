@@ -297,7 +297,8 @@
       "variables.changed": "Variables changed",
       "shared_variables.changed": "Shared variables changed",
       "team.strong_auth_required": "Two-factor required for the team",
-      "team.strong_auth_relaxed": "Two-factor no longer required for the team"
+      "team.strong_auth_relaxed": "Two-factor no longer required for the team",
+      "team.member_synced": "Membership brought in line with single sign-on groups"
     }
   },
   "projects": {
@@ -1095,6 +1096,14 @@
       "storage_panel_backup_keep": {
         "label": "Panel backups to keep",
         "help": "How many copies of this panel's database to keep in the bucket. Older ones are deleted after a new one succeeds, never before. Empty keeps 14."
+      },
+      "signin_oidc_groups_claim": {
+        "label": "Groups claim",
+        "help": "The claim in the ID token that lists a person's groups. Empty is groups. The provider has to put it in the ID token."
+      },
+      "signin_oidc_group_roles": {
+        "label": "Groups to teams",
+        "help": "One per line: a group, then the team and the role it gives, as platform-admins = acme:admin. A team named here follows the groups at every single sign-on: a person gets the highest role their groups give, and leaves the team when none do. Teams not named here are left alone, and a team's last owner is never removed."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",

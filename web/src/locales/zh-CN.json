@@ -289,7 +289,8 @@
       "variables.changed": "已更改变量",
       "shared_variables.changed": "已更改共享变量",
       "team.strong_auth_required": "已要求团队使用双重验证",
-      "team.strong_auth_relaxed": "已取消团队的双重验证要求"
+      "team.strong_auth_relaxed": "已取消团队的双重验证要求",
+      "team.member_synced": "已按单点登录群组调整成员身份"
     }
   },
   "projects": {
@@ -1083,6 +1084,14 @@
       "storage_panel_backup_keep": {
         "label": "保留的面板备份数",
         "help": "在存储桶中保留本面板数据库的几份副本。只有新副本成功后才会删除旧的，绝不提前。留空则保留 14 份。"
+      },
+      "signin_oidc_groups_claim": {
+        "label": "群组声明",
+        "help": "ID 令牌中列出一个人所属群组的声明。留空则为 groups。身份提供方必须把它放进 ID 令牌。"
+      },
+      "signin_oidc_group_roles": {
+        "label": "群组到团队",
+        "help": "每行一条：一个群组，然后是它授予的团队和角色，例如 platform-admins = acme:admin。这里列出的团队在每次单点登录时都跟随群组：一个人获得其群组给予的最高角色，若没有任何群组给予则离开团队。未在此列出的团队保持不变，团队的最后一位所有者永远不会被移除。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",

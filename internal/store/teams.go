@@ -81,6 +81,18 @@ func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]Team, erro
 	return out, nil
 }
 
+// TeamBySlug finds a team by its slug.
+func (db *DB) TeamBySlug(ctx context.Context, slug string) (Team, error) {
+	var id string
+	if err := db.QueryRowContext(ctx, `SELECT id FROM teams WHERE slug = ?`, slug).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Team{}, ErrNotFound
+		}
+		return Team{}, fmt.Errorf("find team %s: %w", slug, err)
+	}
+	return db.GetTeam(ctx, id)
+}
+
 // UpdateTeam renames a team.
 func (db *DB) UpdateTeam(ctx context.Context, t *Team) error {
 	res, err := db.Exec(ctx, `UPDATE teams SET name = ?, slug = ?, require_strong_auth = ? WHERE id = ?`,

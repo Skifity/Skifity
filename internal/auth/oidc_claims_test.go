@@ -1,6 +1,9 @@
 package auth
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // What a provider's claims say about the person signing in. The one that
 // matters is email_verified: absent is not true. A provider that sends nothing
@@ -41,5 +44,26 @@ func TestAnAddressTheProviderDidNotVerifyIsRefused(t *testing.T) {
 	if _, err := o.identityFrom("https://idp.example.test", "sub-1",
 		idClaims{Email: "owner@example.test", EmailVerified: verified(false)}); err == nil {
 		t.Fatal("an address the provider said it had not verified was accepted")
+	}
+}
+
+// Providers list groups, and a few send a lone string when there is one.
+func TestGroupsAreReadHoweverTheyAreSent(t *testing.T) {
+	cases := []struct {
+		value any
+		want  []string
+	}{
+		{[]any{"devs", " leads ", "", 3}, []string{"devs", "leads"}},
+		{"devs", []string{"devs"}},
+		{nil, nil},
+		{map[string]any{"x": 1}, nil},
+	}
+	for _, tc := range cases {
+		if got := claimStrings(tc.value); !slices.Equal(got, tc.want) {
+			t.Errorf("claimStrings(%v) = %v, want %v", tc.value, got, tc.want)
+		}
+	}
+	if (OIDCConfig{}).groupsClaim() != "groups" || (OIDCConfig{GroupsClaim: "roles"}).groupsClaim() != "roles" {
+		t.Error("the groups claim is not groups by default and the setting otherwise")
 	}
 }

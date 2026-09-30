@@ -4681,7 +4681,35 @@ it, `/me` still answering and saying why; the same session let in once
 two-factor is on; an SSO session let in without it; a token let in once its
 owner links an identity; and turning it on refused, then accepted, and audited.
 
-Still open from gap 15: mapping the identity provider's groups to roles.
+The other half of gap 15 is Phase 92.
+
+## Phase 92 — teams that follow the provider's groups
+
+The rest of gap 15. An organisation that keeps people in groups at Okta, Entra,
+Authentik or Keycloak had to add and remove the same person in two places, and
+the one forgotten is the person who left.
+
+Two settings: **Groups claim**, the ID token claim to read (`groups` when
+empty), and **Groups to teams**, lines of `group = team:role` by team slug,
+validated when saved. The claim is read from the verified ID token, as a list
+or a lone string. At every single sign-on, before the session is issued, each
+team the mappings name is brought in line: the highest role the person's
+groups give, and out of the team when none do. A team not named is untouched.
+A team's last owner is never removed or demoted by it. A member limited to some
+projects keeps the limit when a group only moves them between member and
+viewer, since the limit was somebody's decision and a group changing the role
+does not undo it. A sign-in whose teams cannot be synced is refused rather than
+let through on the previous groups, and each change is audited as
+`team.member_synced` with the role it moved from and to.
+
+Tested: the parser with comments, spacing, case and five malformed lines; the
+claim read from a list, a string, nothing and a map; and the sync through three
+sign-ins — admin from two groups, member from one, out from none — with a team
+no mapping names and a mapped team that does not exist both left alone, three
+audited changes, the project limit kept, and the last owner kept through both
+an empty group list and a demotion.
+
+Not executed: a sign-in against a real provider sending groups.
 
 ## Idle resource usage
 

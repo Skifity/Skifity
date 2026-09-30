@@ -55,6 +55,9 @@ type OIDCConfig struct {
 	// the provider knows and this panel does not is refused, which is what an
 	// operator who invites people by hand wants.
 	AutoCreate bool
+	// GroupsClaim names the ID token claim that lists a person's groups.
+	// Empty is "groups".
+	GroupsClaim string
 }
 
 // Enabled reports whether enough is configured to offer the button at all.
@@ -104,6 +107,9 @@ type Identity struct {
 	// already exists.
 	EmailVerified bool
 	Name          string
+	// Groups are the groups the provider says the person is in, from the
+	// configured claim. Empty when it sent none.
+	Groups []string
 }
 
 // OIDC talks to one provider. It is built per request from the settings, with
@@ -216,7 +222,42 @@ func (o *OIDC) Exchange(ctx context.Context, redirectURL, code, verifier, nonce 
 	if err := idToken.Claims(&claims); err != nil {
 		return Identity{}, fmt.Errorf("read the ID token's claims: %w", err)
 	}
-	return o.identityFrom(idToken.Issuer, idToken.Subject, claims)
+	identity, err := o.identityFrom(idToken.Issuer, idToken.Subject, claims)
+	if err != nil {
+		return Identity{}, err
+	}
+	var all map[string]any
+	if err := idToken.Claims(&all); err == nil {
+		identity.Groups = claimStrings(all[o.config.groupsClaim()])
+	}
+	return identity, nil
+}
+
+// groupsClaim is the claim groups are read from.
+func (c OIDCConfig) groupsClaim() string {
+	if claim := strings.TrimSpace(c.GroupsClaim); claim != "" {
+		return claim
+	}
+	return "groups"
+}
+
+// claimStrings reads a claim that lists names: providers send a list, and a
+// few send a single string when there is only one.
+func claimStrings(value any) []string {
+	var out []string
+	switch v := value.(type) {
+	case string:
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+	}
+	return out
 }
 
 // idClaims are the parts of an ID token this panel reads.

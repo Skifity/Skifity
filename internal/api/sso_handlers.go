@@ -77,6 +77,9 @@ func (s *Server) ssoConfig(r *http.Request) (auth.OIDCConfig, error) {
 		return auth.OIDCConfig{}, err
 	}
 	config.AutoCreate = autoCreate == "true"
+	if config.GroupsClaim, err = read(settings.KeySSOGroupsClaim); err != nil {
+		return auth.OIDCConfig{}, err
+	}
 	return config, nil
 }
 
@@ -222,6 +225,15 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if user.Disabled {
 		fail("disabled")
+		return
+	}
+	// Before the session, so a person the provider has taken out of a group
+	// is out of its team from this sign-in on. A sync that cannot finish
+	// refuses the sign-in rather than letting it through on yesterday's
+	// groups.
+	if err := s.syncGroupRoles(r, user, identity.Groups); err != nil {
+		s.log.Error("could not bring a single sign-on user's teams in line with their groups", "error", err)
+		fail("server")
 		return
 	}
 
