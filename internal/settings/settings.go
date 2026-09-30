@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"net/url"
 	"regexp"
@@ -160,6 +161,7 @@ const (
 	KeySSOAutoCreate         = "signin.oidc_auto_create"
 	KeySSOGroupsClaim        = "signin.oidc_groups_claim"
 	KeySSOGroupRoles         = "signin.oidc_group_roles"
+	KeyAPIAllowedNetworks    = "signin.api_allowed_networks"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
@@ -239,6 +241,14 @@ var Definitions = []Definition{
 			"Teams not named here are left alone, and a team's last owner is never removed.",
 		Placeholder: "platform-admins = acme:admin",
 		Validate:    validateGroupRoles,
+	},
+	{
+		Key: KeyAPIAllowedNetworks, Label: "API tokens only from", Group: GroupSignIn, Multiline: true,
+		Help: "Addresses or networks, one per line, such as 203.0.113.7 or 10.0.0.0/8. When set, an API token — the CLI's, " +
+			"a CI job's, an assistant's — is refused from anywhere else, even though it is valid. " +
+			"Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere.",
+		Placeholder: "203.0.113.0/24",
+		Validate:    validateNetworks,
 	},
 	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
@@ -721,6 +731,52 @@ func validateEmail(value string) error {
 		return errors.New("that does not look like an email address")
 	}
 	return nil
+}
+
+// validateNetworks accepts addresses and CIDR networks, one per line or
+// separated by commas.
+func validateNetworks(value string) error {
+	for _, entry := range Networks(value) {
+		if _, _, err := net.ParseCIDR(entry); err == nil {
+			continue
+		}
+		if net.ParseIP(entry) == nil {
+			return fmt.Errorf("%q is not an address or a network such as 10.0.0.0/8", entry)
+		}
+	}
+	return nil
+}
+
+// Networks splits the value of a list of networks into its entries.
+func Networks(value string) []string {
+	var out []string
+	for _, field := range strings.FieldsFunc(value, func(r rune) bool { return r == '\n' || r == ',' || r == ' ' }) {
+		if field = strings.TrimSpace(field); field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
+// InNetworks reports whether an address is one of a list's addresses or in
+// one of its networks.
+func InNetworks(ip string, networks []string) bool {
+	address := net.ParseIP(ip)
+	if address == nil {
+		return false
+	}
+	for _, entry := range networks {
+		if _, network, err := net.ParseCIDR(entry); err == nil {
+			if network.Contains(address) {
+				return true
+			}
+			continue
+		}
+		if other := net.ParseIP(entry); other != nil && other.Equal(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateInt(value string) error {

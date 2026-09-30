@@ -17,6 +17,7 @@ import (
 	"skifity/internal/auth"
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 	"skifity/web"
 )
@@ -287,6 +288,9 @@ func (s *Server) identifyAs(ctx context.Context, r *http.Request,
 						WithFix("Use a token without a scope, or create one that can write, under Account.").
 						WithStatus(http.StatusForbidden)
 				}
+				if err := s.tokenNetworkAllowed(ctx, r); err != nil {
+					return ctx, err
+				}
 				ctx = context.WithValue(ctx, ctxUser, user)
 				ctx = context.WithValue(ctx, ctxAPIToken, apiToken)
 				return ctx, nil
@@ -307,6 +311,30 @@ func (s *Server) identifyAs(ctx context.Context, r *http.Request,
 		}
 	}
 	return ctx, nil
+}
+
+// tokenNetworkAllowed refuses an API token used from outside the networks an
+// administrator listed. A token is a password that does not expire when
+// somebody leaves; limiting where it works means one copied out of a CI log
+// is not a way in from anywhere else. A browser session is not limited: it is
+// signed in with a password and a second factor, from wherever its owner is.
+func (s *Server) tokenNetworkAllowed(ctx context.Context, r *http.Request) error {
+	value, _, err := s.db.GetSetting(ctx, settings.KeyAPIAllowedNetworks)
+	if err != nil {
+		return err
+	}
+	networks := settings.Networks(value)
+	if len(networks) == 0 {
+		return nil
+	}
+	ip := clientIPFrom(ctx)
+	if ip == "" {
+		ip = s.clientIP(r)
+	}
+	if settings.InNetworks(ip, networks) {
+		return nil
+	}
+	return errdoc.TokenNetworkRefused(ip)
 }
 
 // requireAuth rejects anonymous requests.

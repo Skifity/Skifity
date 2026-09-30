@@ -1453,6 +1453,10 @@
       "cluster_build_concurrency": {
         "label": "同时构建数",
         "help": "同时运行多少个构建。其余的按到达顺序排队等待，并在日志中说明。每个构建最多可使用 3 GiB 内存，占用应用的资源。"
+      },
+      "signin_api_allowed_networks": {
+        "label": "API 令牌仅限来自",
+        "help": "地址或网络，每行一个，例如 203.0.113.7 或 10.0.0.0/8。设置后，来自其他任何地方的 API 令牌（CLI、CI 任务、助手使用的）都会被拒绝，即使令牌有效。通过浏览器登录面板不受影响。留空则接受来自任何地方的令牌。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -2827,6 +2831,12 @@
         "cause": "无法在 {{server}} 上确认更改，因此已撤销。",
         "impact": "服务器上的 SSH 保持原样：没有任何更改。",
         "fix": "在服务器的 /etc/ssh/sshd_config 中手动设置 PasswordAuthentication no 和 KbdInteractiveAuthentication no，用 sshd -t 检查后重新加载 ssh。"
+      },
+      "auth_token_network": {
+        "title": "不接受来自此地址的 API 令牌",
+        "cause": "此请求来自 {{ip}}，不在允许使用 API 令牌的网络列表中。",
+        "impact": "请求已被拒绝。令牌本身仍然有效。",
+        "fix": "从列表中的地址发起请求，或请面板管理员在“设置 → 登录”中添加此地址。"
       }
     }
   },

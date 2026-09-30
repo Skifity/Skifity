@@ -652,6 +652,18 @@ func ServerNotOurs(name, action string) *Problem {
 		With("server", name)
 }
 
+// TokenNetworkRefused means an API token was used from an address outside
+// the networks tokens are limited to.
+func TokenNetworkRefused(ip string) *Problem {
+	return New("auth.token_network", "API tokens are not accepted from this address").
+		WithCause("This request came from %s, which is not on the list of networks API tokens may be used from.", ip).
+		WithImpact("The request was refused. The token itself is still valid.").
+		WithFix("Make the request from an address on the list, or ask a panel administrator to add this one under Settings, Sign-in.").
+		WithDocs("/docs/configuration#api-tokens-only-from").
+		WithStatus(http.StatusForbidden).
+		With("ip", ip)
+}
+
 // ServerSSHFailed means the panel could not sign in to a server it added,
 // for something done after it was added: a hardening check, a change to it.
 func ServerSSHFailed(name string, err error) *Problem {

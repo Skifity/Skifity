@@ -381,6 +381,20 @@ With `SKIFITY_URL` and `SKIFITY_TOKEN` set, nothing has to be signed in first,
 which is how the CLI and the MCP server are meant to be used from CI, a
 container or an assistant's sandbox. They override anything stored.
 
+### API tokens only from
+
+A token is a password that does not end when somebody leaves, and it tends to
+end up in CI logs and dotfiles. **Settings → Sign-in → API tokens only from**
+takes addresses and networks, one per line (`203.0.113.7`, `10.0.0.0/8`); once
+it is set, a token used from anywhere else is refused with
+`auth.token_network`, valid or not — the CLI, CI jobs and the MCP endpoint
+alike. Signing in to the panel in a browser is not limited, because that is a
+password and a second factor from wherever its owner happens to be.
+
+The address checked is the one the panel sees, through as many proxies as
+`SKIFITY_TRUSTED_PROXY_COUNT` says sit in front of it. Leave the list empty to take
+tokens from anywhere, which is the default.
+
 ## What to back up
 
 Two things, and they are not the same thing:

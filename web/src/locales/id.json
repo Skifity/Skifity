@@ -1453,6 +1453,10 @@
       "cluster_build_concurrency": {
         "label": "Build sekaligus",
         "help": "Berapa build yang berjalan bersamaan. Selebihnya menunggu giliran, sesuai urutan datangnya, dan menyatakannya di log. Setiap build bisa memakai hingga 3 GiB memori, diambil dari jatah aplikasi."
+      },
+      "signin_api_allowed_networks": {
+        "label": "Token API hanya dari",
+        "help": "Alamat atau jaringan, satu per baris, seperti 203.0.113.7 atau 10.0.0.0/8. Jika diisi, token API — milik CLI, pekerjaan CI, atau asisten — ditolak dari tempat lain, meskipun tokennya valid. Masuk ke panel lewat peramban tidak terpengaruh. Kosongkan untuk menerima token dari mana saja."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -2827,6 +2831,12 @@
         "cause": "Perubahan tidak bisa dipastikan di {{server}}, jadi dibatalkan.",
         "impact": "SSH di server tetap seperti semula: tidak ada yang diubah.",
         "fix": "Atur PasswordAuthentication no dan KbdInteractiveAuthentication no di /etc/ssh/sshd_config secara manual, periksa dengan sshd -t, lalu muat ulang ssh."
+      },
+      "auth_token_network": {
+        "title": "Token API tidak diterima dari alamat ini",
+        "cause": "Permintaan ini datang dari {{ip}}, yang tidak ada dalam daftar jaringan tempat token API boleh digunakan.",
+        "impact": "Permintaan ditolak. Tokennya sendiri masih berlaku.",
+        "fix": "Kirim permintaan dari alamat yang ada di daftar, atau minta administrator panel menambahkan alamat ini di Pengaturan, Masuk."
       }
     }
   },

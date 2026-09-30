@@ -1467,6 +1467,10 @@
       "cluster_build_concurrency": {
         "label": "Builds at once",
         "help": "How many builds run at the same time. More wait their turn, in the order they came, and say so in their log. Each build can use up to 3 GiB of memory, taken from what the apps have."
+      },
+      "signin_api_allowed_networks": {
+        "label": "API tokens only from",
+        "help": "Addresses or networks, one per line, such as 203.0.113.7 or 10.0.0.0/8. When set, an API token — the CLI's, a CI job's, an assistant's — is refused from anywhere else, even though it is valid. Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -2841,6 +2845,12 @@
         "cause": "The change could not be confirmed on {{server}}, so it was undone.",
         "impact": "SSH on the server is as it was: nothing was changed.",
         "fix": "Set PasswordAuthentication no and KbdInteractiveAuthentication no in /etc/ssh/sshd_config on the server by hand, check it with sshd -t, and reload ssh."
+      },
+      "auth_token_network": {
+        "title": "API tokens are not accepted from this address",
+        "cause": "This request came from {{ip}}, which is not on the list of networks API tokens may be used from.",
+        "impact": "The request was refused. The token itself is still valid.",
+        "fix": "Make the request from an address on the list, or ask a panel administrator to add this one under Settings, Sign-in."
       }
     }
   },
