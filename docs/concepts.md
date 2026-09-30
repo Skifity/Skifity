@@ -314,6 +314,11 @@ Kubernetes does the scheduling, not the panel. A panel that is restarting at
 three in the morning is not a reason for a job to be skipped. A job that is
 still running when the next one is due does not start a second copy.
 
+**Run now** runs one straight away, outside its schedule — to see that it works
+before three in the morning comes, or to make up for a run that failed. It is
+the command the schedule holds, run the way a command from the console is, and
+its output appears there.
+
 ## What the panel works out for you
 
 When you paste a repository address, **Check this repository** reads its file

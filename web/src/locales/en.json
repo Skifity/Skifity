@@ -331,7 +331,8 @@
       "registry.saved": "saved registry credentials",
       "registry.deleted": "removed registry credentials",
       "port.opened": "opened a port",
-      "port.closed": "closed a port"
+      "port.closed": "closed a port",
+      "app.job_run": "ran a scheduled command now"
     }
   },
   "projects": {
@@ -598,7 +599,9 @@
     "deployTriggerBranch": "Every push to {{branch}}",
     "deployTriggerTag": "Tags that match a pattern",
     "tagPattern": "Tag pattern",
-    "tagPatternHelp": "A pushed tag whose name matches deploys the commit it points at, and pushes to the branch deploy nothing. * matches anything but a slash, ? one character, [0-9] one of a set: v* deploys v1.4.0 and v2.0.0-rc.1."
+    "tagPatternHelp": "A pushed tag whose name matches deploys the commit it points at, and pushes to the branch deploy nothing. * matches anything but a slash, ? one character, [0-9] one of a set: v* deploys v1.4.0 and v2.0.0-rc.1.",
+    "runNow": "Run now",
+    "runNowNamed": "Run {{name}} now"
   },
   "deploy": {
     "title": "Deployments",

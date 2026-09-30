@@ -2590,6 +2590,31 @@ paths:
           description: Removed.
         default: {$ref: '#/components/responses/Error'}
 
+  /api/apps/{appID}/jobs/{jobID}/run:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+      - $ref: '#/components/parameters/jobID'
+    post:
+      operationId: runAppJobNow
+      tags: [Apps]
+      summary: Run a scheduled command now, outside its schedule
+      description: >-
+        Admin. Runs the command the schedule holds, as a one-off run; a command
+        in the request is ignored. Follow its output at
+        /api/apps/{appID}/runs/{runID}/logs.
+      responses:
+        '202':
+          description: The run has started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run, note]
+                properties:
+                  run: {type: string}
+                  note: {type: string}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/apps/{appID}/ports:
     parameters:
       - $ref: '#/components/parameters/appID'

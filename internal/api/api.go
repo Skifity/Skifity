@@ -335,6 +335,7 @@ func (s *Server) routes() chi.Router {
 				app.Post("/jobs", s.handleCreateAppJob)
 				app.Patch("/jobs/{jobID}", s.handleUpdateAppJob)
 				app.Delete("/jobs/{jobID}", s.handleDeleteAppJob)
+				app.Post("/jobs/{jobID}/run", s.handleRunAppJob)
 				app.Post("/restart", s.handleRestartApp)
 				app.Get("/variables", s.handleListVariables)
 				app.Put("/variables", s.handleSetVariable)

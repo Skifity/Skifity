@@ -323,7 +323,8 @@
       "registry.saved": "menyimpan kredensial registry",
       "registry.deleted": "menghapus kredensial registry",
       "port.opened": "membuka sebuah port",
-      "port.closed": "menutup sebuah port"
+      "port.closed": "menutup sebuah port",
+      "app.job_run": "menjalankan perintah terjadwal sekarang"
     }
   },
   "projects": {
@@ -588,7 +589,9 @@
     "deployTriggerBranch": "Setiap push ke {{branch}}",
     "deployTriggerTag": "Tag yang cocok dengan pola",
     "tagPattern": "Pola tag",
-    "tagPatternHelp": "Tag yang di-push dan namanya cocok akan men-deploy commit yang ditunjuknya, dan push ke branch tidak men-deploy apa pun. * cocok dengan apa saja kecuali garis miring, ? satu karakter, [0-9] satu dari sekumpulan: v* men-deploy v1.4.0 dan v2.0.0-rc.1."
+    "tagPatternHelp": "Tag yang di-push dan namanya cocok akan men-deploy commit yang ditunjuknya, dan push ke branch tidak men-deploy apa pun. * cocok dengan apa saja kecuali garis miring, ? satu karakter, [0-9] satu dari sekumpulan: v* men-deploy v1.4.0 dan v2.0.0-rc.1.",
+    "runNow": "Jalankan sekarang",
+    "runNowNamed": "Jalankan {{name}} sekarang"
   },
   "deploy": {
     "title": "Deployment",

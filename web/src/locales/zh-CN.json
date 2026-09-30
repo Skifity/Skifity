@@ -323,7 +323,8 @@
       "registry.saved": "保存了仓库凭据",
       "registry.deleted": "删除了仓库凭据",
       "port.opened": "打开了一个端口",
-      "port.closed": "关闭了一个端口"
+      "port.closed": "关闭了一个端口",
+      "app.job_run": "立即运行了一个计划命令"
     }
   },
   "projects": {
@@ -588,7 +589,9 @@
     "deployTriggerBranch": "每次推送到 {{branch}}",
     "deployTriggerTag": "匹配某个模式的标签",
     "tagPattern": "标签模式",
-    "tagPatternHelp": "推送的标签名称匹配时，会部署该标签指向的提交，此时推送到分支不会部署任何东西。* 匹配除斜杠以外的任意字符，? 匹配一个字符，[0-9] 匹配集合中的一个：v* 会部署 v1.4.0 和 v2.0.0-rc.1。"
+    "tagPatternHelp": "推送的标签名称匹配时，会部署该标签指向的提交，此时推送到分支不会部署任何东西。* 匹配除斜杠以外的任意字符，? 匹配一个字符，[0-9] 匹配集合中的一个：v* 会部署 v1.4.0 和 v2.0.0-rc.1。",
+    "runNow": "立即运行",
+    "runNowNamed": "立即运行 {{name}}"
   },
   "deploy": {
     "title": "部署记录",

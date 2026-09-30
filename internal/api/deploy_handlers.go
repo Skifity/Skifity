@@ -447,6 +447,49 @@ func (s *Server) handleRunCommand(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleRunAppJob runs a scheduled command now, outside its schedule: to see
+// that it works before waiting for three in the morning, or to catch up on a
+// run that failed. It is the same one-off run the console starts, with the
+// command the schedule holds, so its output is read the same way.
+func (s *Server) handleRunAppJob(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleAdmin)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	jobs, err := s.db.ListAppJobs(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	jobID := chi.URLParam(r, "jobID")
+	var job store.AppJob
+	for _, candidate := range jobs {
+		if candidate.ID == jobID {
+			job = candidate
+		}
+	}
+	if job.ID == "" {
+		writeError(w, r, errdoc.NotFound("scheduled command", jobID))
+		return
+	}
+	if s.deployer == nil {
+		writeError(w, r, errdoc.ClusterUnreachable(nil))
+		return
+	}
+	handle, err := s.deployer.RunOnce(r.Context(), app.ID, job.Command)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	s.audit(r, teamID, "app.job_run", "app", app.ID, job.Name)
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"run":  handle.Name,
+		"note": "The command is running. Read its output at /api/apps/" + app.ID + "/runs/" + handle.Name + "/logs.",
+	})
+}
+
 // handleRunLogs returns a run's output, or streams it while it is still going.
 func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
 	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)

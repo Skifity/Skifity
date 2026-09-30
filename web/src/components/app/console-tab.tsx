@@ -44,19 +44,22 @@ export function ConsoleTab({ app }: { app: App }) {
   const [result, setResult] = useState<RunOutput | null>(null)
   const [ran, setRan] = useState("")
 
+  // What to run: a command typed here, or a scheduled one run now. Both are
+  // one-off runs whose output is followed the same way.
   const run = useMutation({
-    mutationFn: async () => {
-      const started = await api.post<{ run: string }>(`/api/apps/${app.id}/run`, {
-        command: command.trim(),
-      })
+    mutationFn: async (what: { label: string; start: () => Promise<{ run: string }> }) => {
+      const started = await what.start()
       // Followed to the end. Without it the panel answered with whatever the
       // container had printed when its pod was first seen running — usually
       // nothing — and this said the command had finished while it ran on.
-      return api.get<RunOutput>(`/api/apps/${app.id}/runs/${started.run}/logs?follow=true`)
+      const output = await api.get<RunOutput>(
+        `/api/apps/${app.id}/runs/${started.run}/logs?follow=true`,
+      )
+      return { label: what.label, output }
     },
     onSuccess: (answer) => {
-      setResult(answer)
-      setRan(command.trim())
+      setResult(answer.output)
+      setRan(answer.label)
     },
   })
   const output = result?.lines ?? null
@@ -67,7 +70,11 @@ export function ConsoleTab({ app }: { app: App }) {
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
-          run.mutate()
+          run.mutate({
+            label: command.trim(),
+            start: () =>
+              api.post<{ run: string }>(`/api/apps/${app.id}/run`, { command: command.trim() }),
+          })
         }}
       >
         <Field>
@@ -134,7 +141,16 @@ export function ConsoleTab({ app }: { app: App }) {
         </div>
       )}
 
-      <ScheduledCommands app={app} />
+      <ScheduledCommands
+        app={app}
+        running={run.isPending}
+        onRunNow={(job) =>
+          run.mutate({
+            label: job.command,
+            start: () => api.post<{ run: string }>(`/api/apps/${app.id}/jobs/${job.id}/run`, {}),
+          })
+        }
+      />
     </div>
   )
 }
@@ -146,7 +162,15 @@ export function ConsoleTab({ app }: { app: App }) {
  * three in the morning should not be why a nightly job did not run. They are
  * applied with the app, so a schedule always runs the version that is deployed.
  */
-function ScheduledCommands({ app }: { app: App }) {
+function ScheduledCommands({
+  app,
+  running,
+  onRunNow,
+}: {
+  app: App
+  running: boolean
+  onRunNow: (job: AppJob) => void
+}) {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const [adding, setAdding] = useState(false)
@@ -286,6 +310,16 @@ function ScheduledCommands({ app }: { app: App }) {
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={running}
+                    onClick={() => onRunNow(job)}
+                    aria-label={t("apps.runNowNamed", { name: job.name })}
+                  >
+                    <PlayIcon className="size-4" />
+                    <span className="hidden sm:inline">{t("apps.runNow")}</span>
+                  </Button>
                   <Switch
                     checked={job.enabled}
                     disabled={toggle.isPending}
