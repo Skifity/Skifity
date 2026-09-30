@@ -556,14 +556,32 @@ func buildPlainEnv(s AppSpec) []corev1.EnvVar {
 		// without the user configuring anything.
 		env = append(env, corev1.EnvVar{Name: "PORT", Value: strconv.Itoa(s.Port)})
 	}
-	// The downward API gives an app its own identity without a service account.
+	// What an app can know about itself without asking anybody. These were
+	// Skifity_APP and Skifity_ENVIRONMENT — the product's display name glued
+	// to a suffix — which no documentation mentioned and no program expects.
+	// The prefix is reserved: these take precedence over a variable of the
+	// same name, which Kubernetes does for env over envFrom.
+	prefix := strings.ToUpper(version.Binary)
 	env = append(env,
-		corev1.EnvVar{Name: version.Name + "_APP", Value: s.Name},
-		corev1.EnvVar{Name: version.Name + "_ENVIRONMENT", Value: s.Environment},
-		corev1.EnvVar{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
-		}},
+		corev1.EnvVar{Name: prefix + "_APP", Value: s.Name},
+		corev1.EnvVar{Name: prefix + "_ENVIRONMENT", Value: s.Environment},
 	)
+	if s.CommitSHA != "" {
+		env = append(env, corev1.EnvVar{Name: prefix + "_COMMIT_SHA", Value: s.CommitSHA})
+	}
+	if s.URL != "" {
+		env = append(env, corev1.EnvVar{Name: prefix + "_URL", Value: s.URL})
+	}
+	if s.Preview {
+		env = append(env, corev1.EnvVar{Name: prefix + "_PREVIEW", Value: "true"})
+		if s.PullRequest > 0 {
+			env = append(env, corev1.EnvVar{Name: prefix + "_PULL_REQUEST", Value: strconv.Itoa(s.PullRequest)})
+		}
+	}
+	// The downward API gives an app its own identity without a service account.
+	env = append(env, corev1.EnvVar{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
+		FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
+	}})
 	for k, v := range sortedPairs(s.PlainEnv) {
 		env = append(env, corev1.EnvVar{Name: k, Value: v})
 	}

@@ -26,6 +26,19 @@ type AppSpec struct {
 	TeamID      string
 	Environment string
 	DisplayName string
+	// CommitSHA is the commit the running image was built from, when there is
+	// one. The app reads it as SKIFITY_COMMIT_SHA.
+	CommitSHA string
+	// URL is the address the app is reached at: a domain of the team's own
+	// when there is one, otherwise the one the panel gave it. A preview's
+	// address changes with every pull request, and an app that has to know it
+	// — for a sign-in callback, a link in an email — has nowhere else to read
+	// it from.
+	URL string
+	// Preview is true in a pull request's or branch's preview environment,
+	// and PullRequest is its number when there is one.
+	Preview     bool
+	PullRequest int
 
 	// Workload
 	Image        string

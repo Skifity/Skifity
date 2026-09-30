@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -461,6 +462,13 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	for _, d := range domains {
 		spec.Domains = append(spec.Domains, kube.DomainSpec{Hostname: d.Hostname, Path: d.Path, TLS: d.TLS})
 	}
+	spec.URL = primaryURL(domains)
+	if env.Kind == store.EnvPreview {
+		spec.Preview = true
+		if number, ok := strings.CutPrefix(env.SourceRef, "pr-"); ok {
+			spec.PullRequest, _ = strconv.Atoi(number)
+		}
+	}
 
 	// An app with the firewall switched on gets the guard's middleware in
 	// front of its Ingress. Read here rather than passed in, because every
@@ -647,4 +655,24 @@ func (c *Cluster) CertificateStatus(ctx context.Context, namespace, name string)
 	}
 	// A Certificate with no Ready condition has only just been created.
 	return CertificateState{Found: true, Ready: false, Reason: "The certificate has been requested."}, nil
+}
+
+// primaryURL is the address an app is reached at: the first domain of the
+// team's own, otherwise the one the panel gave it. Empty when it has neither.
+func primaryURL(domains []store.Domain) string {
+	if len(domains) == 0 {
+		return ""
+	}
+	chosen := domains[0]
+	for _, domain := range domains {
+		if !domain.Auto {
+			chosen = domain
+			break
+		}
+	}
+	scheme := "http://"
+	if chosen.TLS {
+		scheme = "https://"
+	}
+	return scheme + chosen.Hostname + strings.TrimSuffix(chosen.Path, "/")
 }

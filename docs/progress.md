@@ -4329,6 +4329,23 @@ A panel that already installed the BuildKit component keeps the daemon it
 installed: components are installed once and never revisited, which is the
 upgrade gap the Kubero research named. New installs get v0.33.0.
 
+## Phase 81 — what an app can read about itself
+
+The Dokploy research pass found that every app was given `Skifity_APP` and
+`Skifity_ENVIRONMENT` — the product's display name glued to a suffix, in mixed
+case, mentioned by no documentation — and nothing else about itself. Every
+hosted platform in the research gives an app its own address and commit:
+Vercel's `VERCEL_URL`, Render's `RENDER_EXTERNAL_URL` and `IS_PULL_REQUEST`,
+Railway's `RAILWAY_PUBLIC_DOMAIN`.
+
+Now `SKIFITY_APP`, `SKIFITY_ENVIRONMENT`, `SKIFITY_URL`, `SKIFITY_COMMIT_SHA`,
+and in a preview `SKIFITY_PREVIEW` and `SKIFITY_PULL_REQUEST`. `SKIFITY_URL`
+matters most for previews: their address changes with every pull request, and a
+sign-in callback or a link in an email has nowhere else to learn it. The commit
+is only set for an app built from a repository, since an uploaded folder's
+deployment carries the upload's hash in the same field. Documented in
+`docs/concepts.md` and `llms.txt`.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

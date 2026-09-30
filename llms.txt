@@ -18,7 +18,9 @@ than click through a panel. Everything below is true of the current version.
   **environments** (Production by default). An environment is a namespace.
 - An **app** lives in an environment. It comes from a Git repository, a
   container image, or a folder sent with `skifity up`, and has variables,
-  domains, scaling and storage.
+  domains, scaling and storage. Every app can also read `SKIFITY_URL`,
+  `SKIFITY_APP`, `SKIFITY_ENVIRONMENT`, `SKIFITY_COMMIT_SHA` and, in a pull
+  request's preview, `SKIFITY_PREVIEW` and `SKIFITY_PULL_REQUEST`.
 - An **instance** is one running copy of an app.
 - A **database** is a managed PostgreSQL, Redis or MySQL that apps connect to.
 - A **deployment** is one attempt to run a new version of an app.

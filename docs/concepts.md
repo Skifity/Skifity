@@ -107,6 +107,25 @@ every visitor, whatever it is marked. Keep secrets out of those.
 This is the thing most often complained about in other panels, where changing
 any setting triggers a ten-minute rebuild. Here it does not.
 
+### What every app is given
+
+Beside its own variables, every app can read these, and so can its scheduled
+and one-off commands:
+
+| Variable | What it holds |
+|---|---|
+| `PORT` | The port it should listen on, when it has one. |
+| `SKIFITY_APP` | The app's name as a slug, such as `web`. |
+| `SKIFITY_ENVIRONMENT` | The environment's, such as `production` or `pr-12`. |
+| `SKIFITY_URL` | The address it is reached at: a domain of your own when it has one, otherwise the one it was given. A preview's changes with every pull request, which is what an app needs for a sign-in callback or a link in an email. |
+| `SKIFITY_COMMIT_SHA` | The commit the running version was built from, for an app from a repository. |
+| `SKIFITY_PREVIEW` | `true` in a preview, and unset otherwise. |
+| `SKIFITY_PULL_REQUEST` | The pull request's number, in a preview of one. |
+
+The `SKIFITY_` prefix is the panel's: a variable of your own with one of these
+names is replaced by the panel's value. A value that is not known is left unset
+rather than empty.
+
 ## Deployments and rollback
 
 Each deployment records the image it produced *and* the settings it ran with:

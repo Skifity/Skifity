@@ -317,6 +317,12 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	if err != nil {
 		return err
 	}
+	// Only a commit: an uploaded folder's deployment carries the upload's hash
+	// in the same field, and calling that a commit would be a lie an app might
+	// act on.
+	if app.SourceType == "git" {
+		spec.CommitSHA = deployment.CommitSHA
+	}
 	spec.DeploymentID = deployment.ID
 
 	variables, err := d.runtimeVariables(ctx, app, env)
