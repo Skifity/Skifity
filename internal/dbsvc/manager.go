@@ -3,8 +3,10 @@ package dbsvc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -340,6 +342,27 @@ func (m *Manager) Credentials(ctx context.Context, databaseID string) (api.Datab
 
 // Link injects a database's connection string into an app as a variable.
 func (m *Manager) Link(ctx context.Context, databaseID, appID, varName string) error {
+	// The app's links as they are: another database already under this name
+	// would have its connection string overwritten, and unlinking either
+	// deleted the variable the other still needed. The same database under
+	// another name is being renamed, and its old variable goes.
+	links, err := m.db.ListLinksForApp(ctx, appID)
+	if err != nil {
+		return err
+	}
+	previous := ""
+	for _, link := range links {
+		switch {
+		case link.DatabaseID != databaseID && link.VarName == varName:
+			return errdoc.New("database.variable_taken", "That variable already connects another database").
+				WithCause("This app's %s is the connection string of another database linked to it.", varName).
+				WithImpact("Nothing was changed.").
+				WithFix("Link this database under another name, or unlink the other one first.").
+				WithStatus(http.StatusConflict)
+		case link.DatabaseID == databaseID && link.VarName != varName:
+			previous = link.VarName
+		}
+	}
 	credentials, err := m.Credentials(ctx, databaseID)
 	if err != nil {
 		return err
@@ -355,6 +378,11 @@ func (m *Manager) Link(ctx context.Context, databaseID, appID, varName string) e
 	}
 	if err := m.db.LinkDatabase(ctx, databaseID, appID, varName); err != nil {
 		return err
+	}
+	if previous != "" {
+		if err := m.db.DeleteVariable(ctx, appID, previous); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
 	}
 	// Roll the app so the new variable actually reaches its instances.
 	if m.deployer != nil {

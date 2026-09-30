@@ -315,7 +315,8 @@
       "app.process_removed": "Process removed",
       "environment.previews_changed": "Previews of the environment changed",
       "component.upgraded": "Component upgraded",
-      "cluster.k3s_upgrade_started": "k3s upgrade started"
+      "cluster.k3s_upgrade_started": "k3s upgrade started",
+      "git_source.webhook_viewed": "Webhook secret viewed"
     }
   },
   "projects": {
@@ -2481,6 +2482,12 @@
         "cause": "The store listed a manifest with the digest {{0}}, and the file at {{1}} now has the digest {{2}}.",
         "impact": "Nothing was installed.",
         "fix": "Tell the store's publisher; install it from the store again once the two agree."
+      },
+      "database_variable_taken": {
+        "title": "That variable already connects another database",
+        "cause": "This app's {{0}} is the connection string of another database linked to it.",
+        "impact": "Nothing was changed.",
+        "fix": "Link this database under another name, or unlink the other one first."
       }
     }
   },
@@ -2509,7 +2516,11 @@
     "pushDeploysOn": "Pushes to this repository deploy it",
     "pushDeploysOnHelp": "Skifity added the webhook to your Git host. Nothing else to set up.",
     "pushDeploysManual": "Deploy on push needs one more step",
-    "pushDeploysManualHelp": "Skifity could not add the webhook itself, so add this URL to the repository's webhook settings. Use the secret from Settings, Git."
+    "pushDeploysManualHelp": "Skifity could not add the webhook itself, so add this URL to the repository's webhook settings, with the secret shown under Settings, Git, Webhook.",
+    "webhookSecret": "Webhook secret",
+    "webhookSecretHelp": "Paste this as the webhook's secret. It belongs to this connection alone, so it can be given to a repository without giving away the token.",
+    "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token. Connect the account again to give it a secret of its own.",
+    "showWebhook": "Webhook"
   },
   "notifications": {
     "title": "Notifications",

@@ -1,7 +1,14 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { CheckIcon, ClipboardIcon, GitBranchIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import {
+  CheckIcon,
+  ClipboardIcon,
+  GitBranchIcon,
+  PlusIcon,
+  Trash2Icon,
+  WebhookIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { EmptyState } from "@/components/empty-state"
@@ -28,6 +35,13 @@ import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { GitSource } from "@/lib/types"
 
+/**
+ * Where a repository delivers pushes, and the secret it signs them with. A
+ * connection made before each had a secret of its own signs with its token,
+ * which is never shown here.
+ */
+type Webhook = { url: string; secret: string; secret_is_token?: boolean }
+
 /** What each provider calls itself, and whether it can be self-hosted. */
 const PROVIDERS = [
   { kind: "github_pat", label: "GitHub", selfHosted: false },
@@ -40,9 +54,9 @@ export function GitSources() {
   const { team } = useSession()
   const [adding, setAdding] = useState(false)
   const confirm = useConfirm()
-  // Shown once, after connecting: a self-hosted Gitea or GitLab whose token
-  // cannot register a webhook needs this pasted in by hand.
-  const [webhookURL, setWebhookURL] = useState<string | null>(null)
+  // Shown after connecting, and again on asking: a self-hosted Gitea or
+  // GitLab whose token cannot register a webhook needs these pasted in by hand.
+  const [webhook, setWebhook] = useState<Webhook | null>(null)
 
   const sources = useQuery({
     queryKey: ["git-sources", team?.id],
@@ -53,6 +67,13 @@ export function GitSources() {
   const remove = useMutation({
     mutationFn: (sourceID: string) => api.delete(`/api/teams/${team!.id}/git-sources/${sourceID}`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["git-sources", team?.id] }),
+  })
+  // Asked for on a click rather than loaded with the list: reading the secret
+  // is recorded in the activity log, and only an admin may.
+  const reveal = useMutation({
+    mutationFn: (sourceID: string) =>
+      api.get<Webhook>(`/api/teams/${team!.id}/git-sources/${sourceID}/webhook`),
+    onSuccess: setWebhook,
   })
 
   if (sources.isLoading) return <Skeleton className="h-48" />
@@ -66,7 +87,8 @@ export function GitSources() {
     <div className="space-y-4">
       <p className="max-w-2xl text-sm text-muted-foreground">{t("git.help")}</p>
 
-      {webhookURL && <WebhookNotice url={webhookURL} onDismiss={() => setWebhookURL(null)} />}
+      {webhook && <WebhookNotice webhook={webhook} onDismiss={() => setWebhook(null)} />}
+      {reveal.error != null && <ErrorDisplay error={reveal.error} compact />}
 
       {items.length === 0 && !adding ? (
         <EmptyState
@@ -101,6 +123,15 @@ export function GitSources() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  disabled={reveal.isPending}
+                  onClick={() => reveal.mutate(source.id)}
+                >
+                  <WebhookIcon className="size-4" />
+                  {t("git.showWebhook")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={remove.isPending}
                   onClick={() => {
                     void confirm({
@@ -131,9 +162,9 @@ export function GitSources() {
 
       {adding && (
         <ConnectForm
-          onDone={(url) => {
+          onDone={(made) => {
             setAdding(false)
-            setWebhookURL(url ?? null)
+            setWebhook(made ?? null)
           }}
         />
       )}
@@ -142,13 +173,38 @@ export function GitSources() {
   )
 }
 
-function WebhookNotice({ url, onDismiss }: { url: string; onDismiss: () => void }) {
+function WebhookNotice({ webhook, onDismiss }: { webhook: Webhook; onDismiss: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <Alert>
+      <AlertTitle>{t("git.webhookURL")}</AlertTitle>
+      <AlertDescription className="space-y-3">
+        <p>{t("git.webhookURLHelp")}</p>
+        <CopyLine value={webhook.url} />
+        {webhook.secret ? (
+          <>
+            <p className="font-medium text-foreground">{t("git.webhookSecret")}</p>
+            <p>{t("git.webhookSecretHelp")}</p>
+            <CopyLine value={webhook.secret} />
+          </>
+        ) : (
+          webhook.secret_is_token && <p>{t("git.webhookSecretIsToken")}</p>
+        )}
+        <Button variant="ghost" size="sm" onClick={onDismiss}>
+          {t("common.done")}
+        </Button>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
+function CopyLine({ value }: { value: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(value)
       setCopied(true)
       toast.success(t("common.copied"))
       window.setTimeout(() => setCopied(false), 2000)
@@ -158,28 +214,19 @@ function WebhookNotice({ url, onDismiss }: { url: string; onDismiss: () => void 
   }
 
   return (
-    <Alert>
-      <AlertTitle>{t("git.webhookURL")}</AlertTitle>
-      <AlertDescription className="space-y-3">
-        <p>{t("git.webhookURLHelp")}</p>
-        <code className="block w-full rounded-md border bg-muted p-2 font-mono text-xs break-all">
-          {url}
-        </code>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void copy()}>
-            {copied ? <CheckIcon className="size-3.5" /> : <ClipboardIcon className="size-3.5" />}
-            {copied ? t("common.copied") : t("common.copy")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onDismiss}>
-            {t("common.done")}
-          </Button>
-        </div>
-      </AlertDescription>
-    </Alert>
+    <div className="flex items-center gap-2">
+      <code className="block min-w-0 flex-1 rounded-md border bg-muted p-2 font-mono text-xs break-all">
+        {value}
+      </code>
+      <Button variant="outline" size="sm" onClick={() => void copy()}>
+        {copied ? <CheckIcon className="size-3.5" /> : <ClipboardIcon className="size-3.5" />}
+        {copied ? t("common.copied") : t("common.copy")}
+      </Button>
+    </div>
   )
 }
 
-function ConnectForm({ onDone }: { onDone: (webhookURL?: string) => void }) {
+function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
   const { t } = useTranslation()
   const { team } = useSession()
   const [kind, setKind] = useState<string>("github_pat")
@@ -192,18 +239,21 @@ function ConnectForm({ onDone }: { onDone: (webhookURL?: string) => void }) {
 
   const create = useMutation({
     mutationFn: () =>
-      api.post<{ webhook_url?: string }>(`/api/teams/${team!.id}/git-sources`, {
-        kind,
-        name: name.trim() || provider?.label,
-        token: token.trim(),
-        base_url: baseURL.trim(),
-        account: account.trim(),
-      }),
+      api.post<{ webhook_url: string; webhook_secret: string }>(
+        `/api/teams/${team!.id}/git-sources`,
+        {
+          kind,
+          name: name.trim() || provider?.label,
+          token: token.trim(),
+          base_url: baseURL.trim(),
+          account: account.trim(),
+        },
+      ),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["git-sources", team?.id] })
       // The token only ever existed in this form.
       setToken("")
-      onDone(result?.webhook_url)
+      onDone({ url: result.webhook_url, secret: result.webhook_secret })
     },
   })
 

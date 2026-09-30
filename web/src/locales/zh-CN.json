@@ -307,7 +307,8 @@
       "app.process_removed": "进程已删除",
       "environment.previews_changed": "环境的预览设置已修改",
       "component.upgraded": "组件已升级",
-      "cluster.k3s_upgrade_started": "k3s 升级已开始"
+      "cluster.k3s_upgrade_started": "k3s 升级已开始",
+      "git_source.webhook_viewed": "查看了 Webhook 密钥"
     }
   },
   "projects": {
@@ -2467,6 +2468,12 @@
         "cause": "商店列出的清单摘要为 {{0}}，而 {{1}} 处的文件现在的摘要为 {{2}}。",
         "impact": "未安装任何内容。",
         "fix": "请告知商店发布者；两者一致后再从商店安装。"
+      },
+      "database_variable_taken": {
+        "title": "该变量已连接另一个数据库",
+        "cause": "此应用的 {{0}} 是与其关联的另一个数据库的连接字符串。",
+        "impact": "未做任何更改。",
+        "fix": "请用其他名称关联此数据库，或先取消关联另一个数据库。"
       }
     }
   },
@@ -2495,7 +2502,11 @@
     "pushDeploysOn": "推送到这个仓库就会自动部署",
     "pushDeploysOnHelp": "Skifity 已在你的 Git 主机上添加了 webhook，无需再设置。",
     "pushDeploysManual": "推送即部署还差一步",
-    "pushDeploysManualHelp": "Skifity 无法自行添加 webhook，请把这个地址填进仓库的 webhook 设置，密钥在「设置 → Git」。"
+    "pushDeploysManualHelp": "Skifity 无法自行添加 Webhook，请将此 URL 添加到仓库的 Webhook 设置中，并使用“设置 → Git → Webhook”中显示的密钥。",
+    "webhookSecret": "Webhook 密钥",
+    "webhookSecretHelp": "将此粘贴为 Webhook 的密钥。它只属于这个连接，因此可以交给仓库而不泄露令牌。",
+    "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名。重新连接该账号即可为其生成独立密钥。",
+    "showWebhook": "Webhook"
   },
   "notifications": {
     "title": "通知",

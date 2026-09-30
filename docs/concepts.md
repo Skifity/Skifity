@@ -526,7 +526,10 @@ preview's database, the preview starts without the variable and fails where
 you can see it, rather than quietly connecting somewhere it should not.
 
 A pull request from a fork gets no database and no secret variables, since
-anybody can open one.
+anybody can open one. For the same reason a project runs at most three
+previews of pull requests from forks at once: a fourth is skipped, and the
+repository's webhook log says so, until one of them is closed. Pull requests
+from the repository itself are not counted.
 
 Two apps linked to one database — an API and its admin, a web app and a worker
 that is an app of its own — share the preview's copy of it, rather than each

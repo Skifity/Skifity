@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
 	"skifity/internal/gitsrc"
 	"skifity/internal/notify"
@@ -88,30 +89,77 @@ func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 		BaseURL: baseURL,
 		Account: strings.TrimSpace(req.Account),
 	}
-	if req.Token != "" {
-		// A webhook secret is generated per source so one leaked secret cannot
-		// be replayed against another.
-		config, err := json.Marshal(map[string]string{"token": req.Token})
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		sealed, err := s.keyring.Seal(config, "git_source:"+teamID+":"+source.Name)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		source.ConfigEnc = sealed
+	// The webhook secret is the connection's own, made here. It was the token:
+	// registered as the secret on every repository the panel hooked, and sent
+	// verbatim by GitLab on every delivery, so the account's token went with
+	// each push, and the secret could not change without the token changing.
+	secret, err := crypto.RandomToken(32)
+	if err != nil {
+		writeError(w, r, err)
+		return
 	}
+	stored := map[string]string{"webhook_secret": secret}
+	if req.Token != "" {
+		stored["token"] = req.Token
+	}
+	config, err := json.Marshal(stored)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	sealed, err := s.keyring.Seal(config, "git_source:"+teamID+":"+source.Name)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	source.ConfigEnc = sealed
 	if err := s.db.CreateGitSource(r.Context(), &source); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	s.audit(r, teamID, "git_source.created", "git_source", source.ID, source.Name)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"source":      source,
-		"webhook_url": s.webhookURL(r, source.ID),
+		"source":         source,
+		"webhook_url":    s.webhookURL(r, source.ID),
+		"webhook_secret": secret,
 	})
+}
+
+// handleGetGitSourceWebhook answers where a repository delivers pushes and the
+// secret it signs them with, for a host the panel could not hook by itself.
+//
+// A connection made before each had its own secret signs with its token; that
+// is said, and the token is not shown — it is a credential for the whole
+// account, not a webhook's.
+func (s *Server) handleGetGitSourceWebhook(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	sourceID := chi.URLParam(r, "sourceID")
+	source, err := s.db.GetGitSource(r.Context(), sourceID)
+	if err != nil || source.TeamID != teamID {
+		writeError(w, r, errdoc.NotFound("git source", sourceID))
+		return
+	}
+	answer := map[string]any{"url": s.webhookURL(r, source.ID), "secret": "", "secret_is_token": false}
+	if source.ConfigEnc != "" {
+		raw, err := s.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		var config map[string]string
+		if err := json.Unmarshal(raw, &config); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		answer["secret"] = config["webhook_secret"]
+		answer["secret_is_token"] = config["webhook_secret"] == "" && config["token"] != ""
+	}
+	s.audit(r, teamID, "git_source.webhook_viewed", "git_source", source.ID, source.Name)
+	writeJSON(w, http.StatusOK, answer)
 }
 
 func (s *Server) handleDeleteGitSource(w http.ResponseWriter, r *http.Request) {

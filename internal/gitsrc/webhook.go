@@ -55,6 +55,9 @@ type PushEvent struct {
 	// are the difference from it, so they only describe what changed since
 	// an app's running version when that version was built from it.
 	Before string
+	// Forced is a push that rewrote the branch, which only GitHub says. Going
+	// back to an older commit that way is somebody meaning to.
+	Forced bool
 }
 
 // pushCommit is one commit in a push, as GitHub, GitLab and Gitea all describe
@@ -267,6 +270,7 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 			CommitSHA: payload.After,
 			Deleted:   payload.Deleted,
 			Before:    payload.Before,
+			Forced:    payload.Forced,
 		}
 		if payload.HeadCommit != nil {
 			ev.CommitMessage = firstLine(payload.HeadCommit.Message)

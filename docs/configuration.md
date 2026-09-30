@@ -120,6 +120,15 @@ only things a viewer cannot read are the ones a member cannot either, because
 they are an administrator's: invitations, the audit log, the export, a
 database's password, and the Kubernetes objects under Advanced.
 
+What a member cannot *read*, a member can still *use*. Deploying is running
+code of your choosing with the app's variables, secrets included, so a member
+can print any of them from a deployment or `skifity run`, and a database they
+link to an app hands its connection string — password and all — to that app.
+The line between member and admin keeps a password off a member's screen and
+out of their tokens; it does not keep it from somebody who can deploy. Give
+the member role to people you would trust with the app's secrets, and viewer
+to everybody else.
+
 ### Limiting somebody to some projects
 
 A member or a viewer can be limited to some of the team's projects: tick

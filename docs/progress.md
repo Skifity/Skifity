@@ -5613,6 +5613,40 @@ Some of Phase 110's own fixes had made new problems:
   it. Two backups sharing one object before each had its own key lost it when
   the older expired; retention now leaves an object another backup uses.
 
+And the integrations — Git hosts, databases linked into apps:
+
+* **The Git token was the webhook secret.** The panel registered the account's
+  token as the secret on every repository it hooked, and GitLab sends the
+  secret verbatim with every delivery. A connection now gets a secret of its
+  own, shown when it is made and under Settings, Git, Webhook; one made before
+  keeps signing with its token until the account is connected again, and the
+  page says so without showing the token. An unknown connection id is answered
+  exactly as a bad signature is, not with a 404 that says which ids exist.
+* **Older pushes deployed over newer ones.** Hosts do not promise to deliver in
+  order, and a signed delivery is good for ever. A push is now skipped when its
+  commit is what already runs or is on its way, or one a later push moved the
+  app past; a forced push, somebody going back on purpose, still deploys.
+* **Previews from forks had no limit.** Anybody can open a pull request, and
+  each made a namespace and ran its author's code. A project runs three at
+  most; pull requests from the repository itself are not counted.
+* **Previews left behind.** Closing a pull request removed its preview only if
+  the app deployed on push, and a deleted branch looked for its preview under
+  an empty name. Both remove it now.
+* **Database links.** Linking a database again under a new name left the old
+  variable, with the full connection string, belonging to no link — kept by
+  every preview. Two databases under one name overwrote each other, and
+  unlinking either took the other's connection away. The old variable goes, and
+  a name another database holds is refused.
+* **What a member can do** is written down: deploying is running code with the
+  app's secrets, so a member can read any of them, a linked database's password
+  included. The admin line keeps a password off screens and out of tokens, not
+  from somebody who can deploy.
+
+Checked and found sound: a fork's build never sees the Git token. Only the clone
+container has it, as a header scoped to the repository's own host on the one
+command that fetches, never on disk; the build that runs the fork's code does
+not have it.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

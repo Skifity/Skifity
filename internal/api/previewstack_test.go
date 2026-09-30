@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -417,5 +418,64 @@ func TestAPreviewTheLastReleaseMadeIsTheOneUpdatedAndRemoved(t *testing.T) {
 		RepoURL: "https://github.com/acme/web"})
 	if _, err := p.db.GetEnvironment(t.Context(), stale.ID); err == nil {
 		t.Fatal("closing the pull request left the preview the last release made")
+	}
+}
+
+// A pull request from a fork can be opened by anybody, and each made an
+// environment, a namespace, a build and a running copy of the app — of the
+// whole environment, with previews of it on. A stranger opening pull requests
+// filled the cluster with their own code.
+func TestPreviewsFromForksAreCapped(t *testing.T) {
+	p, _, _ := stackHarness(t, false)
+	fork := func(number int) gitsrc.PushEvent {
+		return gitsrc.PushEvent{Kind: "pull_request_opened", PullRequest: number, SourceBranch: "main",
+			CommitSHA: "evil", RepoURL: "https://github.com/acme/web", Fork: true}
+	}
+	for number := 1; number <= maxForkPreviews; number++ {
+		if _, err := p.api.deployPreview(httptestRequest(), p.app, fork(number)); err != nil {
+			t.Fatalf("fork preview %d: %v", number, err)
+		}
+	}
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, fork(maxForkPreviews+1)); !errors.Is(err, errForkPreviewLimit) {
+		t.Fatalf("one fork preview too many: %v", err)
+	}
+	// One already open is still updated, and the project's own pull requests
+	// are not counted against strangers'.
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, fork(1)); err != nil {
+		t.Fatalf("an open fork preview was not updated: %v", err)
+	}
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(99)); err != nil {
+		t.Fatalf("a pull request from the repository itself: %v", err)
+	}
+}
+
+// Closing a pull request removes its preview whether or not the app deploys on
+// push: that switch is about pushes to its branch, and a preview left behind
+// is a namespace running for ever.
+func TestAClosedPullRequestsPreviewGoesEvenWithoutDeployOnPush(t *testing.T) {
+	p, _, _ := stackHarness(t, false)
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(12)); err != nil {
+		t.Fatal(err)
+	}
+	web := p.app
+	web.AutoDeploy = false
+	if err := p.db.UpdateApp(t.Context(), &web); err != nil {
+		t.Fatal(err)
+	}
+	p.api.dispatchGitEvent(httptestRequest(), store.GitSource{TeamID: p.acme.team.ID},
+		gitsrc.PushEvent{Kind: "pull_request_closed", PullRequest: 12, RepoURL: "https://github.com/acme/web"})
+	if _, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(pullRequest(12))); err == nil {
+		t.Fatal("the closed pull request's preview is still there")
+	}
+
+	// A deleted branch names itself in Branch, not SourceBranch.
+	branch := gitsrc.PushEvent{Kind: "pull_request_opened", SourceBranch: "feature-x", RepoURL: "https://github.com/acme/web"}
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, branch); err != nil {
+		t.Fatal(err)
+	}
+	p.api.dispatchGitEvent(httptestRequest(), store.GitSource{TeamID: p.acme.team.ID},
+		gitsrc.PushEvent{Kind: "push", Deleted: true, Branch: "feature-x", RepoURL: "https://github.com/acme/web"})
+	if _, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(branch)); err == nil {
+		t.Fatal("the deleted branch's preview is still there")
 	}
 }

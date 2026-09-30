@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -28,11 +29,16 @@ import (
 // action.
 func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 	sourceID := chi.URLParam(r, "sourceID")
+	unverified := errdoc.New("webhook.unverified", "This webhook could not be verified").
+		WithCause("The signature on the request does not match this connection's webhook secret.").
+		WithImpact("No deploy was started.").
+		WithFix("Check that the secret in your Git host's webhook settings matches the one in Skifity.").
+		WithStatus(http.StatusUnauthorized)
 	source, err := s.db.GetGitSource(r.Context(), sourceID)
 	if err != nil {
-		// Answer the same for an unknown source as for a bad signature, so the
-		// endpoint cannot be used to discover which source ids exist.
-		writeError(w, r, errdoc.NotFound("git source", sourceID))
+		// Answered exactly as a bad signature is, so the endpoint cannot be
+		// used to find out which connection ids exist.
+		writeError(w, r, unverified)
 		return
 	}
 
@@ -44,11 +50,7 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.verifyWebhook(r, source, body); err != nil {
 		s.log.Warn("rejected a webhook", "source", sourceID, "error", err)
-		writeError(w, r, errdoc.New("webhook.unverified", "This webhook could not be verified").
-			WithCause("The signature on the request does not match this connection's webhook secret.").
-			WithImpact("No deploy was started.").
-			WithFix("Check that the secret in your Git host's webhook settings matches the one in Skifity.").
-			WithStatus(http.StatusUnauthorized))
+		writeError(w, r, unverified)
 		return
 	}
 
@@ -120,8 +122,9 @@ func (s *Server) webhookSecretFor(r *http.Request, source store.GitSource) (stri
 	if secret := config["webhook_secret"]; secret != "" {
 		return secret, nil
 	}
-	// A connection created with only a token reuses it as the webhook secret,
-	// which is what the setup instructions tell the user to paste.
+	// A connection made before each had a secret of its own signs with its
+	// token, and the webhooks already on its repositories were registered with
+	// it; reconnecting the account gives it a secret of its own.
 	return config["token"], nil
 }
 
@@ -153,6 +156,13 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 		if err != nil || teamID != source.TeamID {
 			continue
 		}
+		// Removing a preview is not deploying anything: a closed pull request
+		// or a deleted branch takes its preview away whether or not the app
+		// deploys on push, or the namespace ran for ever.
+		if event.Kind == "pull_request_closed" || (event.Kind == "push" && event.Deleted) {
+			s.cleanupPreviewFor(r, app, event)
+			continue
+		}
 		if !app.AutoDeploy {
 			result.Skipped = append(result.Skipped, app.Name+" (deploy on push is off)")
 			continue
@@ -160,16 +170,16 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 
 		switch event.Kind {
 		case "push":
-			if event.Deleted {
-				s.cleanupPreviewFor(r, app, event)
-				continue
-			}
 			branch := app.Branch
 			if branch == "" {
 				branch = "main"
 			}
 			if event.Branch != branch {
 				result.Skipped = append(result.Skipped, app.Name+" (watches "+branch+")")
+				continue
+			}
+			if why := s.olderPush(r, app.ID, event); why != "" {
+				result.Skipped = append(result.Skipped, app.Name+" ("+why+")")
 				continue
 			}
 			// A monorepo app whose paths the push did not touch has nothing
@@ -183,6 +193,7 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 					if err := s.db.SetWatchedCommit(r.Context(), app.ID, event.CommitSHA, running); err != nil {
 						s.log.Warn("could not record a skipped push", "app", app.ID, "error", err)
 					}
+					s.movedPast(r, app.ID, event)
 					result.Skipped = append(result.Skipped, app.Name+" (nothing it watches changed)")
 					continue
 				}
@@ -203,6 +214,7 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 				s.log.Error("could not start a deploy from a webhook", "app", app.ID, "error", err)
 				continue
 			}
+			s.movedPast(r, app.ID, event)
 			result.Deployments = append(result.Deployments, deployment.ID)
 
 		case "pull_request_opened":
@@ -211,14 +223,16 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 				continue
 			}
 			deploymentID, err := s.deployPreview(r, app, event)
+			if errors.Is(err, errForkPreviewLimit) {
+				result.Skipped = append(result.Skipped, fmt.Sprintf("%s (%d previews of pull requests from forks are open already)",
+					app.Name, maxForkPreviews))
+				continue
+			}
 			if err != nil {
 				s.log.Error("could not deploy a preview", "app", app.ID, "error", err)
 				continue
 			}
 			result.Deployments = append(result.Deployments, deploymentID)
-
-		case "pull_request_closed":
-			s.cleanupPreviewFor(r, app, event)
 		}
 	}
 	return result
@@ -248,6 +262,50 @@ func (s *Server) runsFrom(r *http.Request, appID, commit string) (string, bool) 
 	}
 	watched, base, err := s.db.WatchedCommit(r.Context(), appID)
 	return last.ID, err == nil && watched == commit && base == last.ID
+}
+
+// olderPush says why a push must not deploy an app, when its commit is not
+// newer than what the app has: already running or on its way, or one a later
+// push has moved the app past. A Git host does not promise to deliver pushes
+// in order, and a signed delivery can be sent again at any time; either way
+// an older commit went out over a newer one. A forced push is somebody going
+// back on purpose and deploys.
+func (s *Server) olderPush(r *http.Request, appID string, event gitsrc.PushEvent) string {
+	if event.CommitSHA == "" {
+		return ""
+	}
+	short := event.CommitSHA[:min(len(event.CommitSHA), 7)]
+	if latest, err := s.db.ListDeployments(r.Context(), appID, 1); err == nil && len(latest) == 1 &&
+		latest[0].CommitSHA == event.CommitSHA {
+		switch {
+		case latest[0].Status == store.DeploySucceeded:
+			return "already runs " + short
+		case !latest[0].Status.Terminal():
+			return "already deploying " + short
+		}
+	}
+	if event.Forced {
+		return ""
+	}
+	passed, err := s.db.CommitPassed(r.Context(), appID, event.CommitSHA)
+	if err != nil {
+		s.log.Warn("could not tell whether a push is older than the app", "app", appID, "error", err)
+		return ""
+	}
+	if passed {
+		return short + " is older than a commit already deployed"
+	}
+	return ""
+}
+
+// movedPast records that a push took an app from the commit before it.
+func (s *Server) movedPast(r *http.Request, appID string, event gitsrc.PushEvent) {
+	if event.Before == "" || strings.Trim(event.Before, "0") == "" || event.CommitSHA == "" {
+		return
+	}
+	if err := s.db.MarkCommitPassed(r.Context(), appID, event.Before, event.CommitSHA); err != nil {
+		s.log.Warn("could not record the commit a push moved past", "app", appID, "error", err)
+	}
 }
 
 // previewRef identifies the preview environment for a branch or pull
@@ -310,6 +368,15 @@ func repoTag(repoURL string) string {
 	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:]))[:6]
 }
 
+// maxForkPreviews is how many previews of pull requests from forks a project
+// runs at once. Anybody can open one, and each is an environment, a build and
+// running code of the author's choosing; without a limit a stranger opening
+// pull requests fills the cluster. One already open is still updated, and a
+// pull request from the repository itself is not counted.
+const maxForkPreviews = 3
+
+var errForkPreviewLimit = errors.New("too many previews of pull requests from forks are open")
+
 // deployPreview creates or updates the preview environment for a pull request.
 func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.PushEvent) (string, error) {
 	if s.deployer == nil {
@@ -331,6 +398,11 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 	ref := previewRef(event)
 	env, err := s.findPreview(r, project.ID, event)
 	if errors.Is(err, store.ErrNotFound) {
+		if event.Fork {
+			if err := s.forkPreviewRoom(r, project.ID); err != nil {
+				return "", err
+			}
+		}
 		// First push to this pull request: make the environment.
 		env = store.Environment{
 			ProjectID: project.ID,
@@ -644,10 +716,34 @@ func (s *Server) previewDatabaseFor(r *http.Request, env store.Environment, sour
 	return store.Database{}, false
 }
 
+// forkPreviewRoom answers errForkPreviewLimit when a project already runs
+// maxForkPreviews previews of pull requests from forks.
+func (s *Server) forkPreviewRoom(r *http.Request, projectID string) error {
+	envs, err := s.db.ListEnvironments(r.Context(), projectID)
+	if err != nil {
+		return err
+	}
+	open := 0
+	for _, env := range envs {
+		if env.Kind == store.EnvPreview && env.FromFork {
+			open++
+		}
+	}
+	if open >= maxForkPreviews {
+		return errForkPreviewLimit
+	}
+	return nil
+}
+
 // cleanupPreviewFor removes the preview environment for a closed pull request or
 // a deleted branch. Previews that are never cleaned up are how a self-hosted
 // cluster quietly runs out of memory.
 func (s *Server) cleanupPreviewFor(r *http.Request, app store.App, event gitsrc.PushEvent) {
+	// A deleted branch is named in Branch; a preview's ref is made from the
+	// source branch, which a push does not have.
+	if event.PullRequest == 0 && event.SourceBranch == "" {
+		event.SourceBranch = event.Branch
+	}
 	sourceEnv, err := s.db.GetEnvironment(r.Context(), app.EnvironmentID)
 	if err != nil {
 		return

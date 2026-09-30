@@ -307,7 +307,8 @@
       "app.process_removed": "Proses dihapus",
       "environment.previews_changed": "Pratinjau environment diubah",
       "component.upgraded": "Komponen ditingkatkan",
-      "cluster.k3s_upgrade_started": "Peningkatan k3s dimulai"
+      "cluster.k3s_upgrade_started": "Peningkatan k3s dimulai",
+      "git_source.webhook_viewed": "Secret webhook dilihat"
     }
   },
   "projects": {
@@ -2467,6 +2468,12 @@
         "cause": "Toko mencantumkan manifest dengan digest {{0}}, dan file di {{1}} sekarang memiliki digest {{2}}.",
         "impact": "Tidak ada yang dipasang.",
         "fix": "Beri tahu penerbit toko; pasang lagi dari toko setelah keduanya cocok."
+      },
+      "database_variable_taken": {
+        "title": "Variabel itu sudah menghubungkan database lain",
+        "cause": "{{0}} pada aplikasi ini adalah string koneksi database lain yang terhubung dengannya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Hubungkan database ini dengan nama lain, atau putuskan database yang lain terlebih dahulu."
       }
     }
   },
@@ -2495,7 +2502,11 @@
     "pushDeploysOn": "Push ke repositori ini langsung men-deploy",
     "pushDeploysOnHelp": "Skifity sudah menambahkan webhook di host Git Anda. Tidak ada lagi yang perlu diatur.",
     "pushDeploysManual": "Deploy saat push butuh satu langkah lagi",
-    "pushDeploysManualHelp": "Skifity tidak bisa menambahkan webhook sendiri, jadi tambahkan URL ini di pengaturan webhook repositori. Gunakan secret dari Pengaturan, Git."
+    "pushDeploysManualHelp": "Skifity tidak bisa menambahkan webhook sendiri, jadi tambahkan URL ini di pengaturan webhook repositori, dengan secret yang ditampilkan di Pengaturan, Git, Webhook.",
+    "webhookSecret": "Secret webhook",
+    "webhookSecretHelp": "Tempel ini sebagai secret webhook. Secret ini hanya milik koneksi ini, jadi bisa diberikan ke repositori tanpa memberikan token.",
+    "webhookSecretIsToken": "Koneksi ini dibuat sebelum setiap koneksi punya secret sendiri, jadi webhook-nya ditandatangani dengan token. Hubungkan akun lagi agar koneksi ini punya secret sendiri.",
+    "showWebhook": "Webhook"
   },
   "notifications": {
     "title": "Notifikasi",

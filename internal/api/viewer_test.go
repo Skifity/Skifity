@@ -19,12 +19,13 @@ import (
 // route added next month is covered either way without anybody remembering to
 // add it.
 var viewerMayNotRead = map[string]string{
-	"GET /api/teams/{teamID}/invitations":         "an invitation link is a way in; administrators hand them out",
-	"GET /api/teams/{teamID}/audit":               "the audit log is for administrators, as it is for members",
-	"GET /api/teams/{teamID}/export":              "the whole team in one file is for administrators",
-	"GET /api/teams/{teamID}/notifications/kinds": "the form for adding a channel, which only administrators can do",
-	"GET /api/apps/{appID}/advanced":              "the Kubernetes objects are for administrators",
-	"GET /api/databases/{databaseID}/credentials": "a database's password is for administrators",
+	"GET /api/teams/{teamID}/invitations":                    "an invitation link is a way in; administrators hand them out",
+	"GET /api/teams/{teamID}/audit":                          "the audit log is for administrators, as it is for members",
+	"GET /api/teams/{teamID}/export":                         "the whole team in one file is for administrators",
+	"GET /api/teams/{teamID}/notifications/kinds":            "the form for adding a channel, which only administrators can do",
+	"GET /api/apps/{appID}/advanced":                         "the Kubernetes objects are for administrators",
+	"GET /api/databases/{databaseID}/credentials":            "a database's password is for administrators",
+	"GET /api/teams/{teamID}/git-sources/{sourceID}/webhook": "a webhook's secret starts deploys; administrators set webhooks up",
 }
 
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team

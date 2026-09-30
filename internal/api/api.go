@@ -238,6 +238,7 @@ func (s *Server) routes() chi.Router {
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)
+				team.Get("/git-sources/{sourceID}/webhook", s.handleGetGitSourceWebhook)
 
 				team.Get("/notifications/kinds", s.handleListNotificationKinds)
 				team.Get("/notifications", s.handleListNotificationChannels)
