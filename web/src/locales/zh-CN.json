@@ -2113,7 +2113,11 @@
       "telegram": "Telegram",
       "discord": "Discord",
       "webhook": "Webhook",
-      "email": "电子邮件"
+      "email": "电子邮件",
+      "slack": "Slack",
+      "mattermost": "Mattermost",
+      "ntfy": "ntfy",
+      "pushover": "Pushover"
     },
     "event": {
       "deploy.succeeded": "部署成功",
@@ -2124,7 +2128,44 @@
       "backup.failed": "备份失败",
       "certificate.failed": "证书签发失败"
     },
-    "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。"
+    "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
+    "field": {
+      "telegram": {
+        "bot_token": "机器人令牌",
+        "chat_id": "聊天 ID",
+        "chat_idHelp": "先给你的机器人发一条消息，然后从 getUpdates 中读取聊天 ID。"
+      },
+      "discord": {
+        "webhook_url": "Webhook 地址"
+      },
+      "slack": {
+        "webhook_url": "Webhook 地址",
+        "webhook_urlHelp": "Slack 应用的 Incoming Webhooks 页面中的传入 webhook，以 https://hooks.slack.com/ 开头。"
+      },
+      "mattermost": {
+        "webhook_url": "Webhook 地址",
+        "webhook_urlHelp": "Mattermost“集成”中的传入 webhook，以 /hooks/ 加一长串 ID 结尾。"
+      },
+      "ntfy": {
+        "topic": "主题",
+        "server": "服务器",
+        "serverHelp": "留空则使用 ntfy.sh，或填写你自己的服务器地址。",
+        "token": "访问令牌",
+        "tokenHelp": "仅用于需要令牌的主题。"
+      },
+      "pushover": {
+        "app_token": "应用令牌",
+        "app_tokenHelp": "在 pushover.net 创建一个应用即可获得。",
+        "user_key": "用户或群组密钥",
+        "user_keyHelp": "在你的 pushover.net 控制台顶部。"
+      },
+      "webhook": {
+        "url": "URL"
+      },
+      "email": {
+        "to": "收件人"
+      }
+    }
   },
   "invite": {
     "title": "加入 {{team}}",

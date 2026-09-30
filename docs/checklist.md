@@ -138,7 +138,8 @@ promise being kept rather than a gap — they are already in your own cluster as
 ordinary Kubernetes Secrets, and the export's README has the one line that reads
 them out.
 
-**17. Notification on failure.** Telegram, Discord, a webhook or email, on seven
+**17. Notification on failure.** Telegram, Discord, Slack, Mattermost, ntfy,
+Pushover, a webhook or email, on seven
 events: a deploy succeeding or failing, an app going unhealthy, a server added
 or lost, a backup failing, a certificate failing. Delivery has never been seen
 end to end, which is the only part that counts. Phase 5 stands up a listener and

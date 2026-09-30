@@ -73,8 +73,19 @@ for a GitHub App — an app id, a client id, a client secret, a private key — 
 nothing ever read one of them, so it is gone until the code behind it exists.
 
 **Notifications** is a tab rather than a group of settings: a channel is a row
-you add, and Skifity sends to Telegram, Discord, a webhook of your own, or email
-through the SMTP settings above.
+you add, and Skifity sends to Telegram, Discord, Slack, Mattermost, ntfy,
+Pushover, a webhook of your own, or email through the SMTP settings above.
+
+* **Slack** and **Mattermost** take an incoming webhook's address, and get the
+  message as a coloured attachment with a link back to the panel.
+* **ntfy** takes a topic, and optionally your own server (ntfy.sh otherwise) and
+  an access token for a protected topic. A failure is sent at high priority, so
+  it buzzes; a success is sent low, so it does not.
+* **Pushover** takes an application token and your user or group key. Nothing
+  is sent at emergency priority, which repeats until acknowledged.
+
+Every one of them is sent from the panel through the same guarded client as a
+webhook, so none can be pointed at an address inside the cluster.
 
 ## Adding somebody to the team
 

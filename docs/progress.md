@@ -4556,6 +4556,29 @@ whether repeating them changes anything more. None reach beyond the panel. The
 test checks the annotations against the names, so a tool added later is held
 to what it is called.
 
+## Phase 88 — the channels people already read
+
+Gap 14. Skifity sent to Telegram, Discord, a webhook or email; Coolify and
+Dokploy both send to Slack, Mattermost, ntfy and Pushover as well, and a webhook
+is not an answer for somebody who wants the message on their phone.
+
+The four are built in now. Slack and Mattermost share one sender, because
+Mattermost takes Slack's payload: a coloured attachment with the fields and a
+link back to the panel. ntfy is published as JSON to the server's root rather
+than as a body with headers, because a title in a header can only be ASCII and
+an app called `café-api` is not; failures go at high priority and successes low.
+Pushover is a form post with both keys, and nothing goes at its emergency
+priority, which repeats until somebody acknowledges it. All four go through the
+same netguard client as a webhook. The form validates what can be validated —
+Slack's host, a Mattermost webhook's `/hooks/` path, an ntfy topic, Pushover's
+30-character keys — and each sender has a test against a server that records
+what it was sent.
+
+The form's field labels for the built-in kinds were English written into the
+component, which the rule against hardcoded strings should have caught and
+could not, since they were data. They are translation keys now, with help text
+for the fields that need it, in all five languages.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

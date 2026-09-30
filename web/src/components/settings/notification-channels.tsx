@@ -53,20 +53,39 @@ const EVENTS = [
  * here could never offer it: the panel would accept such a channel through the
  * API and never let a person pick it.
  */
-const BUILT_IN: Record<string, NotificationField[]> = {
+const BUILT_IN: Record<string, Omit<NotificationField, "label" | "help">[]> = {
   telegram: [
-    { key: "bot_token", label: "Bot token", secret: true, required: true },
-    { key: "chat_id", label: "Chat id", required: true },
+    { key: "bot_token", secret: true, required: true },
+    { key: "chat_id", required: true },
   ],
-  discord: [{ key: "webhook_url", label: "Webhook URL", secret: true, required: true }],
-  webhook: [{ key: "url", label: "URL", required: true }],
-  email: [{ key: "to", label: "To", required: true }],
+  discord: [{ key: "webhook_url", secret: true, required: true }],
+  slack: [{ key: "webhook_url", secret: true, required: true }],
+  mattermost: [{ key: "webhook_url", secret: true, required: true }],
+  ntfy: [{ key: "topic", required: true }, { key: "server" }, { key: "token", secret: true }],
+  pushover: [
+    { key: "app_token", secret: true, required: true },
+    { key: "user_key", secret: true, required: true },
+  ],
+  webhook: [{ key: "url", required: true }],
+  email: [{ key: "to", required: true }],
 }
 
-/** The form for a kind: the panel's own for a built-in, the plugin's otherwise. */
-function fieldsFor(kind: NotificationKind | undefined): NotificationField[] {
-  if (!kind) return []
-  return BUILT_IN[kind.kind] ?? kind.fields ?? []
+/**
+ * The form for a kind: the panel's own for a built-in, translated, and the
+ * plugin's otherwise, in the plugin author's words.
+ */
+function useFieldsFor() {
+  const { t } = useTranslation()
+  return (kind: NotificationKind | undefined): NotificationField[] => {
+    if (!kind) return []
+    const builtIn = BUILT_IN[kind.kind]
+    if (!builtIn) return kind.fields ?? []
+    return builtIn.map((field) => ({
+      ...field,
+      label: t(`notifications.field.${kind.kind}.${field.key}`),
+      help: t(`notifications.field.${kind.kind}.${field.key}Help`, { defaultValue: "" }),
+    }))
+  }
 }
 
 /** What to call a kind: a translated name for a built-in, the plugin's own otherwise. */
@@ -219,6 +238,7 @@ function ChannelForm({ onDone }: { onDone: () => void }) {
   const { team } = useSession()
   const kinds = useChannelKinds()
   const label = useKindLabel()
+  const fieldsFor = useFieldsFor()
   const [kind, setKind] = useState("telegram")
   const [name, setName] = useState("")
   const [config, setConfig] = useState<Record<string, string>>({})

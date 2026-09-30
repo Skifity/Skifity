@@ -2127,7 +2127,11 @@
       "telegram": "Telegram",
       "discord": "Discord",
       "webhook": "एक webhook",
-      "email": "ईमेल"
+      "email": "ईमेल",
+      "slack": "Slack",
+      "mattermost": "Mattermost",
+      "ntfy": "ntfy",
+      "pushover": "Pushover"
     },
     "event": {
       "deploy.succeeded": "डिप्लॉयमेंट सफल रहा",
@@ -2138,7 +2142,44 @@
       "backup.failed": "एक बैकअप विफल हुआ",
       "certificate.failed": "एक प्रमाणपत्र जारी नहीं हो सका"
     },
-    "removeConfirm": "{{name}} को सूचनाएँ मिलनी बंद हो जाएँगी, और उसका पता व टोकन भुला दिए जाएँगे।"
+    "removeConfirm": "{{name}} को सूचनाएँ मिलनी बंद हो जाएँगी, और उसका पता व टोकन भुला दिए जाएँगे।",
+    "field": {
+      "telegram": {
+        "bot_token": "बॉट टोकन",
+        "chat_id": "चैट आईडी",
+        "chat_idHelp": "अपने बॉट को एक बार संदेश भेजें, फिर getUpdates से चैट आईडी पढ़ें।"
+      },
+      "discord": {
+        "webhook_url": "वेबहुक URL"
+      },
+      "slack": {
+        "webhook_url": "वेबहुक URL",
+        "webhook_urlHelp": "Slack ऐप के Incoming Webhooks पेज से एक इनकमिंग वेबहुक। यह https://hooks.slack.com/ से शुरू होता है।"
+      },
+      "mattermost": {
+        "webhook_url": "वेबहुक URL",
+        "webhook_urlHelp": "Mattermost के Integrations से एक इनकमिंग वेबहुक। यह /hooks/ और एक लंबी आईडी पर खत्म होता है।"
+      },
+      "ntfy": {
+        "topic": "टॉपिक",
+        "server": "सर्वर",
+        "serverHelp": "ntfy.sh के लिए खाली छोड़ें, या अपने सर्वर का पता दें।",
+        "token": "एक्सेस टोकन",
+        "tokenHelp": "सिर्फ़ उस टॉपिक के लिए जिसे इसकी ज़रूरत हो।"
+      },
+      "pushover": {
+        "app_token": "ऐप्लिकेशन टोकन",
+        "app_tokenHelp": "इसे पाने के लिए pushover.net पर एक ऐप्लिकेशन बनाएँ।",
+        "user_key": "यूज़र या ग्रुप की",
+        "user_keyHelp": "आपके pushover.net डैशबोर्ड में सबसे ऊपर।"
+      },
+      "webhook": {
+        "url": "URL"
+      },
+      "email": {
+        "to": "प्राप्तकर्ता"
+      }
+    }
   },
   "invite": {
     "title": "{{team}} में शामिल हों",

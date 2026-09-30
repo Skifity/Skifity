@@ -137,7 +137,7 @@ here, or needs `make verify` on a real server.
 | 11 | `skifity db connect`: reach a private database from a laptop | Coolify, Fly, Sealos, Epinio | M | Partly |
 | 12 | Upgrade what the installer installed: components and k3s | Kubero, Epinio | L | The plan yes; the upgrade needs one |
 | 13 | Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
-| 14 | More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
+| 14 | **Closed in Phase 88.** More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
 | 15 | SSO groups mapped to roles, and 2FA or SSO required per team | Portainer, Epinio, Dokploy | S–M | Yes |
 | 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
 | 17 | Set several variables in one rollout, and import a `.env` | Dokku | S | Yes |

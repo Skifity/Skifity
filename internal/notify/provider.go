@@ -83,7 +83,7 @@ type Field struct {
 // Exported because the panel lists the choices in one place now, and a second
 // copy of this list in a handler is a kind that exists in one and not the
 // other.
-var BuiltIn = []string{"telegram", "discord", "webhook", "email"}
+var BuiltIn = []string{"telegram", "discord", "slack", "mattermost", "ntfy", "pushover", "webhook", "email"}
 
 // IsBuiltIn reports whether this package can send a kind without help.
 func IsBuiltIn(kind string) bool {

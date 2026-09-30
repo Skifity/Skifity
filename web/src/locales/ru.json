@@ -2155,7 +2155,11 @@
       "telegram": "Telegram",
       "discord": "Discord",
       "webhook": "Webhook",
-      "email": "Электронная почта"
+      "email": "Электронная почта",
+      "slack": "Slack",
+      "mattermost": "Mattermost",
+      "ntfy": "ntfy",
+      "pushover": "Pushover"
     },
     "event": {
       "deploy.succeeded": "Развёртывание прошло успешно",
@@ -2166,7 +2170,44 @@
       "backup.failed": "Резервное копирование не удалось",
       "certificate.failed": "Не удалось выпустить сертификат"
     },
-    "removeConfirm": "{{name}} перестанет получать уведомления, а его адрес и токен будут забыты."
+    "removeConfirm": "{{name}} перестанет получать уведомления, а его адрес и токен будут забыты.",
+    "field": {
+      "telegram": {
+        "bot_token": "Токен бота",
+        "chat_id": "ID чата",
+        "chat_idHelp": "Напишите боту один раз, затем возьмите ID чата из getUpdates."
+      },
+      "discord": {
+        "webhook_url": "URL вебхука"
+      },
+      "slack": {
+        "webhook_url": "URL вебхука",
+        "webhook_urlHelp": "Входящий вебхук со страницы Incoming Webhooks приложения Slack. Начинается с https://hooks.slack.com/."
+      },
+      "mattermost": {
+        "webhook_url": "URL вебхука",
+        "webhook_urlHelp": "Входящий вебхук из раздела Integrations в Mattermost. Заканчивается на /hooks/ и длинный ID."
+      },
+      "ntfy": {
+        "topic": "Тема",
+        "server": "Сервер",
+        "serverHelp": "Оставьте пустым для ntfy.sh или укажите адрес своего сервера.",
+        "token": "Токен доступа",
+        "tokenHelp": "Только для темы, которой он нужен."
+      },
+      "pushover": {
+        "app_token": "Токен приложения",
+        "app_tokenHelp": "Создайте приложение на pushover.net, чтобы получить его.",
+        "user_key": "Ключ пользователя или группы",
+        "user_keyHelp": "Вверху вашей панели на pushover.net."
+      },
+      "webhook": {
+        "url": "URL"
+      },
+      "email": {
+        "to": "Кому"
+      }
+    }
   },
   "invite": {
     "title": "Присоединиться к {{team}}",

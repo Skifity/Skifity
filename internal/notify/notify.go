@@ -1,4 +1,5 @@
-// Package notify delivers events to email, Telegram, Discord and webhooks.
+// Package notify delivers events to email, Telegram, Discord, Slack,
+// Mattermost, ntfy, Pushover and webhooks.
 package notify
 
 import (
@@ -12,6 +13,8 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +88,32 @@ func ValidateConfig(ctx context.Context, kind string, config map[string]string, 
 			!strings.HasPrefix(config["webhook_url"], "https://discordapp.com/api/webhooks/") {
 			return errors.New("that does not look like a Discord webhook URL")
 		}
+	case "slack":
+		if !strings.HasPrefix(config["webhook_url"], "https://hooks.slack.com/") {
+			return errors.New("that does not look like a Slack webhook URL; it starts with https://hooks.slack.com/")
+		}
+	case "mattermost":
+		// A Mattermost server is anybody's own address, so all that can be
+		// checked is that it is one, and that it is an incoming webhook's.
+		url := config["webhook_url"]
+		if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") || !strings.Contains(url, "/hooks/") {
+			return errors.New("enter the incoming webhook's full URL, which ends in /hooks/ and a long id")
+		}
+	case "ntfy":
+		if strings.TrimSpace(config["topic"]) == "" {
+			return errors.New("enter the topic to publish to")
+		}
+		if server := strings.TrimSpace(config["server"]); server != "" &&
+			!strings.HasPrefix(server, "https://") && !strings.HasPrefix(server, "http://") {
+			return errors.New("enter the server's full address, starting with https://, or leave it empty for ntfy.sh")
+		}
+	case "pushover":
+		if len(strings.TrimSpace(config["app_token"])) != 30 {
+			return errors.New("an application token is 30 characters; create an application at pushover.net to get one")
+		}
+		if len(strings.TrimSpace(config["user_key"])) != 30 {
+			return errors.New("a user or group key is 30 characters; it is at the top of your pushover.net dashboard")
+		}
 	case "webhook":
 		url := config["url"]
 		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
@@ -115,6 +144,12 @@ func Send(ctx context.Context, kind string, config map[string]string, msg Messag
 		return sendTelegram(ctx, config, msg)
 	case "discord":
 		return sendDiscord(ctx, config, msg)
+	case "slack", "mattermost":
+		return sendSlack(ctx, config, msg)
+	case "ntfy":
+		return sendNtfy(ctx, config, msg)
+	case "pushover":
+		return sendPushover(ctx, config, msg)
 	case "webhook":
 		return sendWebhook(ctx, config, msg)
 	case "email":
@@ -163,6 +198,146 @@ func sendDiscord(ctx context.Context, config map[string]string, msg Message) err
 		return fmt.Errorf("encode discord message: %w", err)
 	}
 	return postJSON(ctx, config["webhook_url"], body, nil)
+}
+
+// sendSlack posts to a Slack incoming webhook, or a Mattermost one: Mattermost
+// takes Slack's payload, attachments and colours included.
+func sendSlack(ctx context.Context, config map[string]string, msg Message) error {
+	attachment := map[string]any{
+		"fallback": msg.Title,
+		"color":    fmt.Sprintf("#%06x", discordColour(msg.Level)),
+		"title":    msg.Title,
+		"text":     msg.Body,
+		"footer":   version.Name,
+		"ts":       time.Now().Unix(),
+	}
+	if msg.URL != "" {
+		attachment["title_link"] = msg.URL
+	}
+	if len(msg.Fields) > 0 {
+		fields := make([]map[string]any, 0, len(msg.Fields))
+		for _, k := range sortedKeys(msg.Fields) {
+			fields = append(fields, map[string]any{"title": k, "value": msg.Fields[k], "short": true})
+		}
+		attachment["fields"] = fields
+	}
+	body, err := json.Marshal(map[string]any{"text": "", "attachments": []any{attachment}})
+	if err != nil {
+		return fmt.Errorf("encode slack message: %w", err)
+	}
+	return postJSON(ctx, config["webhook_url"], body, nil)
+}
+
+// ntfyServer is where a topic is published when no server is given.
+const ntfyServer = "https://ntfy.sh"
+
+// sendNtfy publishes to an ntfy topic, as JSON: headers cannot carry a title
+// in anything but ASCII, and a deployment of "café-api" is not ASCII.
+func sendNtfy(ctx context.Context, config map[string]string, msg Message) error {
+	payload := map[string]any{
+		"topic":    strings.TrimSpace(config["topic"]),
+		"title":    msg.Title,
+		"message":  renderPlain(msg),
+		"priority": ntfyPriority(msg.Level),
+		"tags":     []string{ntfyTag(msg.Level)},
+	}
+	if msg.URL != "" {
+		payload["click"] = msg.URL
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode ntfy message: %w", err)
+	}
+	headers := map[string]string{}
+	if token := strings.TrimSpace(config["token"]); token != "" {
+		headers["Authorization"] = "Bearer " + token
+	}
+	server := strings.TrimSuffix(defaultStr(strings.TrimSpace(config["server"]), ntfyServer), "/")
+	return postJSON(ctx, server, body, headers)
+}
+
+// pushoverURL is Pushover's message endpoint. A variable so the tests can
+// answer in its place.
+var pushoverURL = "https://api.pushover.net/1/messages.json"
+
+func sendPushover(ctx context.Context, config map[string]string, msg Message) error {
+	form := url.Values{
+		"token":    {strings.TrimSpace(config["app_token"])},
+		"user":     {strings.TrimSpace(config["user_key"])},
+		"title":    {msg.Title},
+		"message":  {renderPlain(msg)},
+		"priority": {strconv.Itoa(pushoverPriority(msg.Level))},
+	}
+	if msg.URL != "" {
+		form.Set("url", msg.URL)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pushoverURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", version.UserAgent())
+	return do(req)
+}
+
+// renderPlain is a message as plain text, for the services that show it as
+// that: the body, then the fields one to a line.
+func renderPlain(msg Message) string {
+	var b strings.Builder
+	b.WriteString(msg.Body)
+	for _, k := range sortedKeys(msg.Fields) {
+		fmt.Fprintf(&b, "\n%s: %s", k, msg.Fields[k])
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// ntfyPriority maps a level onto ntfy's 1 to 5: a failure buzzes, a success
+// does not.
+func ntfyPriority(level string) int {
+	switch level {
+	case "error":
+		return 4
+	case "warning":
+		return 3
+	default:
+		return 2
+	}
+}
+
+// ntfyTag is the emoji ntfy shows in front of the title.
+func ntfyTag(level string) string {
+	switch level {
+	case "success":
+		return "white_check_mark"
+	case "warning":
+		return "warning"
+	case "error":
+		return "rotating_light"
+	default:
+		return "information_source"
+	}
+}
+
+// pushoverPriority keeps everything below Pushover's emergency level, which
+// repeats until acknowledged and is not a thing to turn on for somebody.
+func pushoverPriority(level string) int {
+	switch level {
+	case "error":
+		return 1
+	case "success", "info":
+		return -1
+	default:
+		return 0
+	}
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func sendWebhook(ctx context.Context, config map[string]string, msg Message) error {
@@ -274,6 +449,12 @@ func postJSON(ctx context.Context, url string, body []byte, headers map[string]s
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
+	return do(req)
+}
+
+// do sends a request through the guarded client and turns a refusal into an
+// error that says what the service said.
+func do(req *http.Request) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send notification: %w", err)

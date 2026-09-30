@@ -2113,7 +2113,11 @@
       "telegram": "Telegram",
       "discord": "Discord",
       "webhook": "Webhook",
-      "email": "Email"
+      "email": "Email",
+      "slack": "Slack",
+      "mattermost": "Mattermost",
+      "ntfy": "ntfy",
+      "pushover": "Pushover"
     },
     "event": {
       "deploy.succeeded": "Deployment berhasil",
@@ -2124,7 +2128,44 @@
       "backup.failed": "Pencadangan gagal",
       "certificate.failed": "Sertifikat gagal diterbitkan"
     },
-    "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan."
+    "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
+    "field": {
+      "telegram": {
+        "bot_token": "Token bot",
+        "chat_id": "ID chat",
+        "chat_idHelp": "Kirim pesan sekali ke bot Anda, lalu baca ID chat dari getUpdates."
+      },
+      "discord": {
+        "webhook_url": "URL webhook"
+      },
+      "slack": {
+        "webhook_url": "URL webhook",
+        "webhook_urlHelp": "Incoming webhook dari halaman Incoming Webhooks aplikasi Slack. Diawali https://hooks.slack.com/."
+      },
+      "mattermost": {
+        "webhook_url": "URL webhook",
+        "webhook_urlHelp": "Incoming webhook dari Integrations di Mattermost. Diakhiri /hooks/ dan ID panjang."
+      },
+      "ntfy": {
+        "topic": "Topik",
+        "server": "Server",
+        "serverHelp": "Kosongkan untuk ntfy.sh, atau isi alamat server Anda sendiri.",
+        "token": "Token akses",
+        "tokenHelp": "Hanya untuk topik yang memerlukannya."
+      },
+      "pushover": {
+        "app_token": "Token aplikasi",
+        "app_tokenHelp": "Buat aplikasi di pushover.net untuk mendapatkannya.",
+        "user_key": "Kunci pengguna atau grup",
+        "user_keyHelp": "Ada di bagian atas dasbor pushover.net Anda."
+      },
+      "webhook": {
+        "url": "URL"
+      },
+      "email": {
+        "to": "Kepada"
+      }
+    }
   },
   "invite": {
     "title": "Gabung ke {{team}}",

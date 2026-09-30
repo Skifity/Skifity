@@ -2125,7 +2125,11 @@
       "telegram": "Telegram",
       "discord": "Discord",
       "webhook": "A webhook",
-      "email": "Email"
+      "email": "Email",
+      "slack": "Slack",
+      "mattermost": "Mattermost",
+      "ntfy": "ntfy",
+      "pushover": "Pushover"
     },
     "event": {
       "deploy.succeeded": "A deployment succeeded",
@@ -2136,7 +2140,44 @@
       "backup.failed": "A backup failed",
       "certificate.failed": "A certificate could not be issued"
     },
-    "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten."
+    "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
+    "field": {
+      "telegram": {
+        "bot_token": "Bot token",
+        "chat_id": "Chat id",
+        "chat_idHelp": "Message your bot once, then read the chat id from getUpdates."
+      },
+      "discord": {
+        "webhook_url": "Webhook URL"
+      },
+      "slack": {
+        "webhook_url": "Webhook URL",
+        "webhook_urlHelp": "An incoming webhook, from the Slack app's Incoming Webhooks page. It starts with https://hooks.slack.com/."
+      },
+      "mattermost": {
+        "webhook_url": "Webhook URL",
+        "webhook_urlHelp": "An incoming webhook, from Integrations in Mattermost. It ends in /hooks/ and a long id."
+      },
+      "ntfy": {
+        "topic": "Topic",
+        "server": "Server",
+        "serverHelp": "Leave empty for ntfy.sh, or give your own server's address.",
+        "token": "Access token",
+        "tokenHelp": "Only for a topic that needs one."
+      },
+      "pushover": {
+        "app_token": "Application token",
+        "app_tokenHelp": "Create an application at pushover.net to get one.",
+        "user_key": "User or group key",
+        "user_keyHelp": "At the top of your pushover.net dashboard."
+      },
+      "webhook": {
+        "url": "URL"
+      },
+      "email": {
+        "to": "To"
+      }
+    }
   },
   "invite": {
     "title": "Join {{team}}",
