@@ -276,11 +276,13 @@ func backupScript(s JobSpec) string {
 		dump = `PGPASSWORD="$DB_PASSWORD" pg_dump --host="$DB_HOST" --port="$DB_PORT" ` +
 			`--username="$DB_USER" --dbname="$DB_NAME" --no-owner --no-privileges --clean --if-exists`
 	case dbsvc.EngineMySQL:
-		dump = `mariadb-dump --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" ` +
-			`--password="$DB_PASSWORD" --single-transaction --quick --routines --events "$DB_NAME"`
+		// The password goes in the client's own variable, not on its command
+		// line, where anything that can list the pod's processes reads it.
+		dump = `MYSQL_PWD="$DB_PASSWORD" mariadb-dump --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" ` +
+			`--single-transaction --quick --routines --events "$DB_NAME"`
 	case dbsvc.EngineRedis:
 		// --rdb writes a point-in-time snapshot without stopping the server.
-		dump = `redis-cli -h "$DB_HOST" -p "$DB_PORT" -a "$DB_PASSWORD" --no-auth-warning --rdb /dev/stdout`
+		dump = `REDISCLI_AUTH="$DB_PASSWORD" redis-cli -h "$DB_HOST" -p "$DB_PORT" --rdb /dev/stdout`
 	}
 
 	return fmt.Sprintf(`set -eu
@@ -358,13 +360,12 @@ func restoreScript(s JobSpec) string {
 		load = `PGPASSWORD="$DB_PASSWORD" psql --host="$DB_HOST" --port="$DB_PORT" ` +
 			`--username="$DB_USER" --dbname="$DB_NAME" --quiet --set ON_ERROR_STOP=on`
 	case dbsvc.EngineMySQL:
-		load = `mariadb --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" ` +
-			`--password="$DB_PASSWORD" "$DB_NAME"`
+		load = `MYSQL_PWD="$DB_PASSWORD" mariadb --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME"`
 	case dbsvc.EngineRedis:
 		// Redis cannot load an RDB over a running server, so the restore
 		// replays the keys instead. This is slower but does not need the pod
 		// to be stopped and the volume swapped.
-		load = `redis-cli -h "$DB_HOST" -p "$DB_PORT" -a "$DB_PASSWORD" --no-auth-warning --pipe`
+		load = `REDISCLI_AUTH="$DB_PASSWORD" redis-cli -h "$DB_HOST" -p "$DB_PORT" --pipe`
 	}
 
 	// No pipeline here, for the reason the backup side spells out and this side

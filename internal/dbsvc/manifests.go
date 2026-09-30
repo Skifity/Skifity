@@ -295,7 +295,7 @@ func BuildRedis(s Spec) []any {
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								Exec: &corev1.ExecAction{Command: []string{
-									"sh", "-c", `redis-cli -a "$REDIS_PASSWORD" ping`,
+									"sh", "-c", `REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping`,
 								}},
 							},
 							InitialDelaySeconds: 5,

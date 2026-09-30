@@ -192,3 +192,53 @@ func TestABackupThatUnpacksToNothingIsRefused(t *testing.T) {
 		t.Errorf("the reason was not said in words somebody can act on:\n%s", out)
 	}
 }
+
+// A password on a command line is readable by anything that can list the
+// pod's processes — `ps` in a sidecar, a debugging session, /proc — for as
+// long as the dump or restore runs. Each client has an environment variable
+// for it, which is not.
+func TestNoScriptPutsThePasswordOnACommandLine(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no POSIX shell here")
+	}
+	const password = "not-a-real-password"
+	tools := map[string]struct{ backup, restore, env string }{
+		dbsvc.EnginePostgres: {"pg_dump", "psql", "PGPASSWORD"},
+		dbsvc.EngineMySQL:    {"mariadb-dump", "mariadb", "MYSQL_PWD"},
+		dbsvc.EngineRedis:    {"redis-cli", "redis-cli", "REDISCLI_AUTH"},
+	}
+	for engine, tool := range tools {
+		for _, side := range []struct{ name, tool, script string }{
+			{"backup", tool.backup, backupScript(JobSpec{Engine: engine})},
+			{"restore", tool.restore, restoreScript(JobSpec{Engine: engine})},
+		} {
+			dir := t.TempDir()
+			seen := filepath.Join(dir, "seen")
+			// The stub writes its arguments and the environment variable it
+			// should have been given, and enough output for the script to go on.
+			stub := "#!/bin/sh\nprintf 'ARGS %s\\nENV %s\\n' \"$*\" \"$" + tool.env + "\" >> " + shellQuote(seen) +
+				"\nprintf 'header and some data'\n"
+			if err := os.WriteFile(filepath.Join(dir, side.tool), []byte(stub), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("sh", "-c", side.script)
+			cmd.Env = append(os.Environ(),
+				"PATH="+dir+":"+os.Getenv("PATH"),
+				"DB_NAME=shop", "DB_HOST=db.test", "DB_PORT=5432",
+				"DB_USER=shop", "DB_PASSWORD="+password)
+			_, _ = cmd.CombinedOutput() // the restore may fail on the stub's output; the call is what is checked
+			recorded, err := os.ReadFile(seen)
+			if err != nil {
+				t.Fatalf("%s %s never ran %s", engine, side.name, side.tool)
+			}
+			for _, line := range strings.Split(string(recorded), "\n") {
+				if strings.HasPrefix(line, "ARGS ") && strings.Contains(line, password) {
+					t.Errorf("%s %s passes the password on %s's command line: %s", engine, side.name, side.tool, line)
+				}
+			}
+			if !strings.Contains(string(recorded), "ENV "+password) {
+				t.Errorf("%s %s does not give %s the password in %s", engine, side.name, side.tool, tool.env)
+			}
+		}
+	}
+}
