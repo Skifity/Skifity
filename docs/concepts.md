@@ -789,6 +789,18 @@ rows. A failed seed does not fail the deploy, which has already happened; its
 output is in the deployment's log, with the `skifity run` command that runs it
 again. It never runs outside a preview.
 
+### Previewing a branch without a pull request
+
+**Preview a branch** on an app's page, or `skifity preview feature/checkout`,
+makes the same preview a pull request from that branch would get — a copy of
+the app built from the branch's tip, its own databases, and the whole
+environment when the environment asks for it — without the pull request or a
+webhook. It is for showing a design before opening one, and for a Git host
+whose webhooks cannot reach the panel. Asking again deploys the branch's tip
+again; a pull request opened from the branch later takes the same preview over
+rather than making a second. `skifity preview feature/checkout --close` removes
+it, as deleting the branch does.
+
 ### Previewing the whole environment
 
 By default a pull request's preview has the apps its repository builds. A front

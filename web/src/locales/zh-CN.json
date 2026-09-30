@@ -341,7 +341,9 @@
       "environment.cloned": "环境已克隆",
       "notification.updated": "已更改通知渠道",
       "server.ssh_passwords_off": "已在服务器上关闭 SSH 密码登录",
-      "domain.redirect_changed": "域名重定向已更改"
+      "domain.redirect_changed": "域名重定向已更改",
+      "preview.started": "已启动分支预览",
+      "preview.closed": "已关闭分支预览"
     }
   },
   "projects": {
@@ -3403,5 +3405,12 @@
     "anyServer": "任意服务器的地址，端口 {{port}}",
     "close": "关闭 {{port}}",
     "closeConfirm": "{{port}} 将在每台服务器上关闭，所有连接都会被拒绝。"
+  },
+  "previews": {
+    "previewBranch": "预览分支",
+    "previewBranchTitle": "预览 {{name}} 的分支",
+    "previewBranchHelp": "此应用的副本，从该分支构建，位于独立的预览环境中并拥有自己的数据库——与该分支的拉取请求获得的预览相同，因此之后打开拉取请求会更新它，而不是再创建一个。",
+    "previewBranchRemove": "它会一直保留，直到分支被删除、其拉取请求被关闭，或有人用 skifity preview --close 关闭它。",
+    "start": "开始预览"
   }
 }

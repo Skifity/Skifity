@@ -341,7 +341,9 @@
       "environment.cloned": "Lingkungan dikloning",
       "notification.updated": "Saluran notifikasi diubah",
       "server.ssh_passwords_off": "Kata sandi SSH dimatikan di server",
-      "domain.redirect_changed": "Pengalihan domain diubah"
+      "domain.redirect_changed": "Pengalihan domain diubah",
+      "preview.started": "Pratinjau sebuah branch dimulai",
+      "preview.closed": "Pratinjau sebuah branch ditutup"
     }
   },
   "projects": {
@@ -3403,5 +3405,12 @@
     "anyServer": "alamat server mana pun, port {{port}}",
     "close": "Tutup {{port}}",
     "closeConfirm": "{{port}} ditutup di setiap server, dan apa pun yang terhubung ke sana akan ditolak."
+  },
+  "previews": {
+    "previewBranch": "Pratinjau branch",
+    "previewBranchTitle": "Pratinjau branch dari {{name}}",
+    "previewBranchHelp": "Salinan aplikasi ini, dibangun dari branch tersebut, di lingkungan pratinjau sendiri dengan database sendiri — pratinjau yang sama dengan yang didapat pull request dari branch itu, jadi membuka pull request nanti akan memperbaruinya, bukan membuat yang baru.",
+    "previewBranchRemove": "Pratinjau tetap ada sampai branch dihapus, pull request-nya ditutup, atau seseorang menutupnya dengan skifity preview --close.",
+    "start": "Mulai pratinjau"
   }
 }

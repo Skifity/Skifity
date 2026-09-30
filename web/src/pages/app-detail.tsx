@@ -22,6 +22,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock"
+import { PreviewBranchButton } from "@/components/app/preview-branch"
 import { MaintenanceNotice } from "@/components/app/maintenance"
 import { UsageCard } from "@/components/app/usage-card"
 import { Page, PageHeader } from "@/components/page"
@@ -164,6 +165,9 @@ export function AppDetailPage() {
               {t("apps.restart")}
             </Button>
             {current.source_type === "upload" && <SendFolderButton app={current} />}
+            {current.source_type === "git" && environment.data?.kind === "standard" && (
+              <PreviewBranchButton app={current} />
+            )}
             <DeployLockButton app={current} />
             <DeployButton appId={appId} />
           </>

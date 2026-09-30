@@ -2682,6 +2682,55 @@ paths:
               schema: {$ref: '#/components/schemas/Domain'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/apps/{appID}/previews:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: startPreview
+      tags: [Deployments]
+      summary: Preview a branch without a pull request
+      description: >-
+        Member. The same preview a pull request from the branch would get — a
+        copy of the app in a preview environment of its own, with its own
+        databases — built from the branch's tip. Asked again, the same preview
+        is deployed again; a pull request opened from the branch later updates
+        it. Only an app built from a Git repository, and not a preview itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PreviewBranchRequest'}
+      responses:
+        '201':
+          description: The preview and the deployment building it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [environment_id, app_id, deployment_id]
+                properties:
+                  environment_id: {type: string}
+                  app_id: {type: string, description: 'The preview''s copy of the app.'}
+                  deployment_id: {type: string}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/previews/close:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: closePreview
+      tags: [Deployments]
+      summary: Remove a branch's preview
+      description: Member. As deleting the branch does, databases and all.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PreviewBranchRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/apps/{appID}/domains/{domainID}/check:
     parameters:
       - $ref: '#/components/parameters/appID'
@@ -5899,6 +5948,13 @@ components:
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/Domain'}}
         total: {type: integer}
+
+    PreviewBranchRequest:
+      type: object
+      required: [branch]
+      additionalProperties: false
+      properties:
+        branch: {type: string, description: 'The branch as Git writes it, such as feature/checkout.'}
 
     AddDomainRequest:
       type: object

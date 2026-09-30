@@ -349,7 +349,9 @@
       "environment.cloned": "Environment cloned",
       "notification.updated": "Notification channel changed",
       "server.ssh_passwords_off": "SSH passwords turned off on a server",
-      "domain.redirect_changed": "Domain redirect changed"
+      "domain.redirect_changed": "Domain redirect changed",
+      "preview.started": "Preview of a branch started",
+      "preview.closed": "Preview of a branch closed"
     }
   },
   "projects": {
@@ -3419,5 +3421,12 @@
     "anyServer": "any server's address, port {{port}}",
     "close": "Close {{port}}",
     "closeConfirm": "{{port}} closes on every server, and whatever connects to it is refused."
+  },
+  "previews": {
+    "previewBranch": "Preview a branch",
+    "previewBranchTitle": "Preview a branch of {{name}}",
+    "previewBranchHelp": "A copy of this app, built from the branch, in a preview environment of its own with its own databases — the same preview a pull request from that branch gets, so opening one later updates this instead of making another.",
+    "previewBranchRemove": "It stays until the branch is deleted, its pull request is closed, or somebody closes it with skifity preview --close.",
+    "start": "Start the preview"
   }
 }
