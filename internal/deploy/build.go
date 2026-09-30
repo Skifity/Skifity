@@ -3,7 +3,6 @@ package deploy
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -418,18 +417,10 @@ func (d *Deployer) ensureCloneSecret(ctx context.Context, gitSourceID, namespace
 	if err != nil {
 		return err
 	}
-	if source.ConfigEnc == "" {
-		return nil
-	}
-	raw, err := d.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
+	token, err := d.gitToken(source)
 	if err != nil {
-		return fmt.Errorf("read the Git credentials: %w", err)
+		return err
 	}
-	var config map[string]string
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return fmt.Errorf("read the Git credentials: %w", err)
-	}
-	token := config["token"]
 	if token == "" {
 		return nil
 	}

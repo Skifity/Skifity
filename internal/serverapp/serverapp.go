@@ -136,6 +136,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	deployer.Metrics = registry
 	deployer.Plugins = pluginEvents
 	deployer.Uploads = uploads
+	deployer.PanelURL = panelAddress(cfg, db, log)
 	provisioner := provision.New(provision.Options{
 		DB: db, Keyring: keyring, Hub: hub, Cluster: clusterAdapter,
 		Notifier: dispatcher, Plugins: pluginEvents,

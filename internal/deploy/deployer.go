@@ -16,6 +16,7 @@ import (
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
@@ -44,7 +45,11 @@ type Deployer struct {
 	// Uploads is where the code of an app with no repository is kept. Nil
 	// means this panel does not deploy uploaded folders.
 	Uploads *upload.Store
-	log     *slog.Logger
+	// PanelURL is the panel's public address, for the link a Git host shows
+	// beside a commit's status. Nil or empty means the status carries none.
+	PanelURL func(context.Context) string
+	gitHost  gitHost
+	log      *slog.Logger
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -188,6 +193,8 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 		return
 	}
 
+	d.reportToGit(ctx, deployment, gitsrc.StatePending, "")
+
 	if deployment.Image == "" {
 		d.setStatus(ctx, &deployment, store.DeployBuilding)
 		image, err := d.build(ctx, &deployment, app, env)
@@ -255,6 +262,7 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 	d.Metrics.Inc("skifity_deployments_total", "result", "succeeded")
 	_ = d.db.SetAppStatus(ctx, app.ID, "running")
 	d.publish(ctx, deployment.ID)
+	d.reportToGit(ctx, deployment, gitsrc.StateSuccess, "")
 	d.notify(ctx, app, deployment, notify.EventDeploySucceeded, notify.Message{
 		Title: app.Name + " is live",
 		Body:  "The deployment finished and the new version is serving traffic.",
@@ -614,6 +622,7 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	}
 	d.hub.Publish(events.DeploymentTopic(deployment.ID), "failed", problem)
 	d.publish(ctx, deployment.ID)
+	d.reportToGit(ctx, deployment, gitsrc.StateFailure, problem.Error())
 
 	app, err := d.db.GetApp(ctx, deployment.AppID)
 	if err != nil {

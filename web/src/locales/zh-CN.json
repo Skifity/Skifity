@@ -1998,7 +1998,7 @@
     "sourceName": "名称",
     "sourceNameHelp": "一个你能认出的名字，例如“工作用 GitHub”。",
     "token": "访问令牌",
-    "tokenHelp": "需要读取仓库和创建 webhook 的权限。加密保存，且不会再次显示。",
+    "tokenHelp": "需要读取仓库和创建 webhook 的权限；若要在提交和拉取请求上显示每次部署的结果，还需要写入提交状态和评论的权限。加密保存，且不会再次显示。",
     "baseURL": "服务器地址",
     "baseURLHelp": "用于自建的 GitLab 或 Gitea。使用官方服务时留空。",
     "account": "用户或组织",

@@ -1998,7 +1998,7 @@
     "sourceName": "Nama",
     "sourceNameHelp": "Sesuatu yang Anda kenali, misalnya \"GitHub kantor\".",
     "token": "Token akses",
-    "tokenHelp": "Perlu izin untuk membaca repositori dan membuat webhook. Disimpan terenkripsi dan tidak pernah ditampilkan lagi.",
+    "tokenHelp": "Perlu izin untuk membaca repositori dan membuat webhook, serta — agar hasil setiap deploy tampil di commit dan pull request-nya — untuk menulis status commit dan komentar. Disimpan terenkripsi dan tidak pernah ditampilkan lagi.",
     "baseURL": "Alamat server",
     "baseURLHelp": "Untuk GitLab atau Gitea yang Anda hosting sendiri. Kosongkan untuk layanan resmi.",
     "account": "Pengguna atau organisasi",

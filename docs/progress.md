@@ -4094,6 +4094,43 @@ build nobody delivers to), the pod-state logic is tested from pod statuses, and
 the smoke test drives `skifity up` against the real binary up to the build.
 The build itself from an upload is phase 1 of `make verify`, and has not run.
 
+## Phase 74 — the pull request never heard back
+
+Preview environments were built for every pull request, and the only way to
+find one was to open the panel and look for an environment named after it. The
+reviewer — the person who most needs the address and the one least likely to
+have an account — had nothing. Vercel, Netlify, Coolify and Dokploy all answer
+this the same way, and the competitor research (`docs/research/competitors/`)
+named it for every one of them.
+
+Every deploy of a commit from a connected repository now reports back:
+
+* **A commit status** on GitHub, GitLab and Gitea — pending when the deploy
+  starts, then success or failure — named `skifity/<environment>/<app>`, and
+  `skifity/preview/<app>` for every preview so branch protection can require
+  one. Its link is the live app when it worked and the deployment's log when it
+  did not.
+* **One comment per app on a preview's pull request**, with the address, the
+  commit and the log, edited in place on every push and found again by a hidden
+  marker. A comment per push is the reason people mute deployment bots.
+
+It is never allowed to change the outcome: the report is sent after the
+database already says what happened, with a fifteen-second limit, and a token
+that cannot write statuses gets one line in the deployment's log instead of a
+failure. The team's token only goes to the host its connection is for — the
+same rule as the clone, with a test that fails when the check is removed. A
+rollback is not reported, and neither is a plain Git connection with no API.
+
+`internal/gitsrc/report.go` speaks the three hosts' dialects and is tested
+against a fake host for each; `internal/deploy/gitreport.go` decides what is
+reported and is tested with a recorder in place of the host.
+
+### Not executed
+
+No real GitHub, GitLab or Gitea has been sent a status or a comment. The request
+shapes follow each host's documented API and are checked against fakes, which
+is not the same as the host accepting them.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -274,6 +274,30 @@ you the URL to add yourself. It never fails creating the app over it.
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.
 
+### What the pull request sees
+
+Every deploy of a commit from a connected repository is reported back to it.
+The commit gets a status — building, live or failed — named
+`skifity/<environment>/<app>`, whose link opens the app when it is live and the
+deployment's log when it is not. A preview's pull request also gets one comment
+with the preview's address, the commit it is running and a link to its log. The
+comment is edited on every push rather than added to, and two apps built from
+one repository get a comment each.
+
+Every preview reports under the same name, `skifity/preview/<app>`, so a branch
+protection rule can require a working preview before anything is merged.
+
+This needs a token that can write commit statuses and comments: on GitHub a
+fine-grained token with *Commit statuses* and *Pull requests* set to read and
+write, on GitLab the `api` scope, on Gitea one that can write to the
+repository. A token that cannot is not an error. The deploy goes ahead, and its
+log says once why nothing appeared on the pull request.
+
+Two things are deliberately not reported. A rollback goes back to a commit that
+was already reported when it first went out, and saying "live" on it again
+would read as a fresh test. A plain Git connection has no host API to report
+to.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

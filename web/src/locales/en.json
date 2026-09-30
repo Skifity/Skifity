@@ -2010,7 +2010,7 @@
     "sourceName": "Name",
     "sourceNameHelp": "Something you will recognise, such as \"Work GitHub\".",
     "token": "Access token",
-    "tokenHelp": "Needs permission to read the repository and to create a webhook. Stored encrypted and never shown again.",
+    "tokenHelp": "Needs permission to read the repository and create a webhook, and — to show each deploy on its commit and pull request — to write commit statuses and comments. Stored encrypted and never shown again.",
     "baseURL": "Server address",
     "baseURLHelp": "For a self-hosted GitLab or Gitea. Leave empty for the hosted service.",
     "account": "User or organisation",
