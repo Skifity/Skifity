@@ -166,6 +166,57 @@ func StackDuplicate(first, second, slug string) *Problem {
 		WithDocs("/docs/concepts#a-compose-file")
 }
 
+// TemplateGone is an app whose template, or whose service in it, this
+// version of the panel no longer has.
+func TemplateGone(app string) *Problem {
+	return New("template.gone", "There is no template version to update to").
+		WithCause("%s did not come from a template this panel still has.", app).
+		WithImpact("Nothing was changed.").
+		WithFix("Change the image under Settings yourself if a newer version exists.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#updates")
+}
+
+// TemplateUpToDate is an app already on the template's image.
+func TemplateUpToDate(app, image string) *Problem {
+	return New("template.up_to_date", "This app is already on the template's version").
+		WithCause("%s runs %s, which is what the template sets.", app, image).
+		WithImpact("Nothing was changed.").
+		WithFix("Updates arrive with new versions of the panel.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#updates")
+}
+
+// TemplateChangedByHand is an app whose image somebody set themselves.
+func TemplateChangedByHand(current, installed string) *Problem {
+	return New("template.changed_by_hand", "The image was changed by hand").
+		WithCause("The app runs %s, and the template last set %s: somebody chose that image, and an update would replace it.", current, installed).
+		WithImpact("Nothing was changed.").
+		WithFix("Update anyway to go back to the template's version, or keep the image you chose.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#updates")
+}
+
+// TemplateUpdateRunning is an update already waiting on its backups.
+func TemplateUpdateRunning(app string) *Problem {
+	return New("template.update_running", "An update is already under way").
+		WithCause("%s is being backed up before an update.", app).
+		WithImpact("Nothing else was started.").
+		WithFix("Wait for it: the app page says when it has deployed or why it stopped.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#updates")
+}
+
+// TemplateNeedsBackups is an update with data to back up and nowhere to put it.
+func TemplateNeedsBackups(app string) *Problem {
+	return New("template.needs_backups", "There is nowhere to back up to first").
+		WithCause("%s has disks or databases, and an update backs them up before it starts, but backups are not configured.", app).
+		WithImpact("Nothing was changed.").
+		WithFix("Set up backup storage under Settings, or update without a backup if you have one of your own.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#updates")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

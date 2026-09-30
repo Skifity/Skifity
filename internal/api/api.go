@@ -300,6 +300,8 @@ func (s *Server) routes() chi.Router {
 				app.Post("/deploy", s.handleDeployApp)
 				app.Put("/lock", s.handleLockDeploys)
 				app.Delete("/lock", s.handleUnlockDeploys)
+				app.Get("/template", s.handleGetAppTemplate)
+				app.Post("/template/update", s.handleUpdateAppTemplate)
 				app.Get("/maintenance", s.handleGetMaintenance)
 				app.Put("/maintenance", s.handleStartMaintenance)
 				app.Delete("/maintenance", s.handleEndMaintenance)

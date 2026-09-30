@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query"
 import { Trash2Icon } from "lucide-react"
 
 import { MaintenanceCard } from "@/components/app/maintenance"
+import { TemplateCard } from "@/components/app/template-card"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
@@ -75,6 +76,8 @@ export function SettingsTab({ app }: { app: App }) {
 
   return (
     <div className="space-y-6">
+      <TemplateCard app={app} />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("apps.settings")}</CardTitle>

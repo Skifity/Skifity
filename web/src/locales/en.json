@@ -306,7 +306,8 @@
       "app.maintenance_started": "Maintenance started",
       "app.maintenance_ended": "Maintenance ended",
       "server.alerts_changed": "Server warnings changed",
-      "stack.created": "Stack created"
+      "stack.created": "Stack created",
+      "app.template_update": "Updated through its template"
     }
   },
   "projects": {
@@ -545,7 +546,22 @@
     },
     "internal": "Internal only",
     "internalHelp": "Reached by name and port from the other apps in this environment, and from nowhere else: no public address.",
-    "internalAddress": "Internal address"
+    "internalAddress": "Internal address",
+    "template": {
+      "title": "Template",
+      "from": "Installed from {{name}} ({{service}}).",
+      "version": "Runs {{image}}.",
+      "available": "The template now sets {{image}}.",
+      "backupFirst": "Its disks and linked databases are backed up first, and the update waits for them.",
+      "changedByHand": "The image was changed by hand since the template set {{image}}; updating goes back to the template's version.",
+      "update": "Update",
+      "updateAnyway": "Update anyway",
+      "updateWithoutBackup": "Update without a backup",
+      "backingUp": "Backing up before the update to {{image}}…",
+      "failed": "The update to {{image}} stopped and nothing was changed: {{reason}}",
+      "started": "Backing up; the update deploys when the backups finish.",
+      "upToDate": "Up to date with the template."
+    }
   },
   "deploy": {
     "title": "Deployments",
@@ -2298,6 +2314,36 @@
         "cause": "{{0}} and {{1}} both become {{2}}, and an environment has one app by each name.",
         "impact": "Nothing was created.",
         "fix": "Rename one of them in the Compose file."
+      },
+      "template_gone": {
+        "title": "There is no template version to update to",
+        "cause": "{{0}} did not come from a template this panel still has.",
+        "impact": "Nothing was changed.",
+        "fix": "Change the image under Settings yourself if a newer version exists."
+      },
+      "template_up_to_date": {
+        "title": "This app is already on the template's version",
+        "cause": "{{0}} runs {{1}}, which is what the template sets.",
+        "impact": "Nothing was changed.",
+        "fix": "Updates arrive with new versions of the panel."
+      },
+      "template_changed_by_hand": {
+        "title": "The image was changed by hand",
+        "cause": "The app runs {{0}}, and the template last set {{1}}: somebody chose that image, and an update would replace it.",
+        "impact": "Nothing was changed.",
+        "fix": "Update anyway to go back to the template's version, or keep the image you chose."
+      },
+      "template_update_running": {
+        "title": "An update is already under way",
+        "cause": "{{0}} is being backed up before an update.",
+        "impact": "Nothing else was started.",
+        "fix": "Wait for it: the app page says when it has deployed or why it stopped."
+      },
+      "template_needs_backups": {
+        "title": "There is nowhere to back up to first",
+        "cause": "{{0}} has disks or databases, and an update backs them up before it starts, but backups are not configured.",
+        "impact": "Nothing was changed.",
+        "fix": "Set up backup storage under Settings, or update without a backup if you have one of your own."
       }
     }
   },

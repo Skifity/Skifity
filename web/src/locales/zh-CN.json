@@ -298,7 +298,8 @@
       "app.maintenance_started": "开始维护",
       "app.maintenance_ended": "结束维护",
       "server.alerts_changed": "已更改服务器警告",
-      "stack.created": "已创建堆栈"
+      "stack.created": "已创建堆栈",
+      "app.template_update": "已通过模板更新"
     }
   },
   "projects": {
@@ -535,7 +536,22 @@
     },
     "internal": "仅内部",
     "internalHelp": "只能由此环境中的其他应用通过名称和端口访问，其他地方都无法访问：没有公共地址。",
-    "internalAddress": "内部地址"
+    "internalAddress": "内部地址",
+    "template": {
+      "title": "模板",
+      "from": "从 {{name}}（{{service}}）安装。",
+      "version": "正在运行 {{image}}。",
+      "available": "模板现在使用 {{image}}。",
+      "backupFirst": "会先备份其磁盘和关联的数据库，更新会等待备份完成。",
+      "changedByHand": "自模板设置 {{image}} 以来镜像被手动修改过；更新会恢复为模板的版本。",
+      "update": "更新",
+      "updateAnyway": "仍然更新",
+      "updateWithoutBackup": "不备份直接更新",
+      "backingUp": "正在更新到 {{image}} 之前进行备份…",
+      "failed": "更新到 {{image}} 已停止，未做任何更改：{{reason}}",
+      "started": "正在备份；备份完成后将部署更新。",
+      "upToDate": "与模板保持一致。"
+    }
   },
   "deploy": {
     "title": "部署记录",
@@ -2284,6 +2300,36 @@
         "cause": "{{0}} 和 {{1}} 都会变成 {{2}}，而一个环境中每个名称只能有一个应用。",
         "impact": "没有创建任何内容。",
         "fix": "在 Compose 文件中重命名其中一个。"
+      },
+      "template_gone": {
+        "title": "没有可更新到的模板版本",
+        "cause": "{{0}} 不是来自本面板仍保留的模板。",
+        "impact": "没有做任何更改。",
+        "fix": "如有新版本，请自行在 Settings 中更改镜像。"
+      },
+      "template_up_to_date": {
+        "title": "此应用已是模板的版本",
+        "cause": "{{0}} 正在运行 {{1}}，这正是模板设置的版本。",
+        "impact": "没有做任何更改。",
+        "fix": "更新会随面板的新版本一起到来。"
+      },
+      "template_changed_by_hand": {
+        "title": "镜像曾被手动更改",
+        "cause": "应用正在运行 {{0}}，而模板上次设置的是 {{1}}：有人选择了该镜像，更新会将其替换。",
+        "impact": "没有做任何更改。",
+        "fix": "选择仍然更新以恢复模板的版本，或保留您选择的镜像。"
+      },
+      "template_update_running": {
+        "title": "已有更新在进行中",
+        "cause": "{{0}} 正在更新前进行备份。",
+        "impact": "没有启动其他操作。",
+        "fix": "请稍候：应用页面会显示何时已部署或为何停止。"
+      },
+      "template_needs_backups": {
+        "title": "没有地方可以先行备份",
+        "cause": "{{0}} 有磁盘或数据库，更新开始前会先备份它们，但尚未配置备份。",
+        "impact": "没有做任何更改。",
+        "fix": "请在 Settings 中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
       }
     }
   },

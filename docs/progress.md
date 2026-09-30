@@ -5048,6 +5048,45 @@ cycles included.
 
 Not executed: the stack on a cluster, and the Service's second port in one.
 
+## Phase 102 — an app remembers its template, and is offered its updates
+
+Gap 13. The catalogue ships inside the panel, pinned to versions, so an upgrade
+of the panel is what brings a template's newer version — and an installed app
+knew nothing about where it came from. The new version sat in the catalogue
+and the app ran the old one until somebody noticed and typed a tag by hand.
+Cloudron offers the update, backs up first, and applies it only then.
+
+Installing now records the template, the service and the image it set
+(migration 0030, `app_templates`). `GET /api/apps/{app}/template` compares that
+with the app's image and the catalogue's: an update is available when the
+catalogue's image differs from the app's, and "changed by hand" when the app's
+differs from what the template last set, which an update does not replace
+unless asked. `POST /api/apps/{app}/template/update` backs up every disk and
+every linked database first, marks the update `backing_up`, and waits in the
+background: all of them succeeded, and it moves the image and deploys; one
+failed, and it stops with the reason recorded and nothing changed. An app with
+nothing to back up updates at once; one with data and no backup storage is
+refused unless the update is asked for without a backup. A locked app is
+refused before anything is backed up. The Settings tab has a Template card.
+
+On the way, two bugs in what templates install:
+
+* A service a template marks `public: false` got a public address anyway: the
+  installer never read the field. 31 private services with a port — MongoDB,
+  Elasticsearch, ClickHouse, internal APIs — are now internal (Phase 101).
+* 13 templates address a sibling as `name:port` — `http://elasticsearch:9200`,
+  `mongodb://mongodb:27017`, `redis://redis:6379` — which could not connect
+  while a Service listened on 80 alone. Phase 101's second port is what makes
+  them work.
+
+Tested: the view and an update with nothing to back up; up to date refused; an
+image changed by hand kept unless forced; a disk backed up first, the image
+unchanged while it runs, the update applied after it succeeds and stopped with
+the reason after it fails; and an install recording its template and keeping
+the private service internal.
+
+Not executed: a real backup job ahead of a real deploy.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

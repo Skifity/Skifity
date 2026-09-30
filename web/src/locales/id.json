@@ -298,7 +298,8 @@
       "app.maintenance_started": "Pemeliharaan dimulai",
       "app.maintenance_ended": "Pemeliharaan diakhiri",
       "server.alerts_changed": "Peringatan server diubah",
-      "stack.created": "Stack dibuat"
+      "stack.created": "Stack dibuat",
+      "app.template_update": "Diperbarui lewat templatnya"
     }
   },
   "projects": {
@@ -535,7 +536,22 @@
     },
     "internal": "Hanya internal",
     "internalHelp": "Dijangkau lewat nama dan port dari aplikasi lain di environment ini, dan tidak dari tempat lain: tanpa alamat publik.",
-    "internalAddress": "Alamat internal"
+    "internalAddress": "Alamat internal",
+    "template": {
+      "title": "Templat",
+      "from": "Dipasang dari {{name}} ({{service}}).",
+      "version": "Menjalankan {{image}}.",
+      "available": "Templat kini memakai {{image}}.",
+      "backupFirst": "Disk dan database yang terhubung dicadangkan dulu, dan pembaruan menunggu sampai selesai.",
+      "changedByHand": "Image diubah manual sejak templat memakai {{image}}; memperbarui akan kembali ke versi templat.",
+      "update": "Perbarui",
+      "updateAnyway": "Tetap perbarui",
+      "updateWithoutBackup": "Perbarui tanpa cadangan",
+      "backingUp": "Mencadangkan sebelum pembaruan ke {{image}}…",
+      "failed": "Pembaruan ke {{image}} berhenti dan tidak ada yang diubah: {{reason}}",
+      "started": "Sedang mencadangkan; pembaruan di-deploy setelah pencadangan selesai.",
+      "upToDate": "Sudah sesuai dengan templat."
+    }
   },
   "deploy": {
     "title": "Deployment",
@@ -2284,6 +2300,36 @@
         "cause": "{{0}} dan {{1}} sama-sama menjadi {{2}}, dan satu environment hanya punya satu aplikasi per nama.",
         "impact": "Tidak ada yang dibuat.",
         "fix": "Ganti nama salah satunya di file Compose."
+      },
+      "template_gone": {
+        "title": "Tidak ada versi templat untuk diperbarui",
+        "cause": "{{0}} tidak berasal dari templat yang masih dimiliki panel ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Ubah sendiri image di Settings jika ada versi yang lebih baru."
+      },
+      "template_up_to_date": {
+        "title": "Aplikasi ini sudah memakai versi templat",
+        "cause": "{{0}} menjalankan {{1}}, yang memang dipakai templat.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Pembaruan datang bersama versi baru panel."
+      },
+      "template_changed_by_hand": {
+        "title": "Image diubah secara manual",
+        "cause": "Aplikasi menjalankan {{0}}, sedangkan templat terakhir memakai {{1}}: seseorang memilih image itu, dan pembaruan akan menggantinya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tetap perbarui untuk kembali ke versi templat, atau pertahankan image pilihan Anda."
+      },
+      "template_update_running": {
+        "title": "Pembaruan sedang berjalan",
+        "cause": "{{0}} sedang dicadangkan sebelum pembaruan.",
+        "impact": "Tidak ada hal lain yang dimulai.",
+        "fix": "Tunggu saja: halaman aplikasi akan memberi tahu kapan sudah di-deploy atau mengapa berhenti."
+      },
+      "template_needs_backups": {
+        "title": "Tidak ada tempat untuk mencadangkan lebih dulu",
+        "cause": "{{0}} punya disk atau database, dan pembaruan mencadangkannya sebelum dimulai, tetapi pencadangan belum dikonfigurasi.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Atur penyimpanan cadangan di Settings, atau perbarui tanpa cadangan jika Anda punya cadangan sendiri."
       }
     }
   },

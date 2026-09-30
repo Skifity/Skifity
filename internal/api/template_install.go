@@ -81,9 +81,19 @@ func (s *Server) installTemplate(
 			MemRequestMB:  orDefault(svc.MemRequestMB, 128),
 			MemLimitMB:    orDefault(svc.MemLimitMB, 512),
 			AutoDeploy:    false,
-			Status:        "created",
+			// A template says which of its services the public reaches.
+			// This was read and never used, so a search index or a worker
+			// with a port got a public address like the app in front of it.
+			Internal: !svc.Public,
+			Status:   "created",
 		}
 		if err := s.db.CreateApp(r.Context(), &app); err != nil {
+			return result, err
+		}
+		// Remembered, so a newer version of the template can be offered.
+		if err := s.db.RecordAppTemplate(r.Context(), store.AppTemplate{
+			AppID: app.ID, TemplateID: tpl.ID, Service: svc.Name, InstalledImage: svc.Image,
+		}); err != nil {
 			return result, err
 		}
 		created[svc.Name] = app

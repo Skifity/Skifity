@@ -84,8 +84,35 @@ publishes a series tag that takes patches without breaking changes, that is what
 a template uses; where it does not, an exact version is.
 
 So a template does not update itself. Moving one forward is a change to Skifity,
-and you move your own installation forward by changing the image on the app, the
-same way you would for anything else you run.
+and a newer version arrives when the panel is upgraded.
+
+## Updates
+
+An app installed from a template remembers which one, and which of its
+services it is. When an upgrade of the panel brings a newer version of that
+template, the app's **Settings** tab says so and offers **Update**:
+
+1. **It backs up first.** Every disk of the app and every database linked to it
+   is backed up to your backup storage, and the update waits for all of them.
+2. **Only then does it change anything.** The image moves to the template's
+   version and the app deploys, the way any deploy does, so a failed start
+   rolls back to what was running.
+3. **A backup that fails stops it.** The app keeps running what it ran, and the
+   tab says which backup failed and why.
+
+An app with nothing to back up updates straight away. With disks or databases
+and no backup storage configured, the update asks you to set storage up — or to
+update without a backup, if you have one of your own.
+
+If you changed the image yourself since the template last set it, the update
+says so rather than replacing your choice; **Update anyway** goes back to the
+template's version. Updates only ever move the image: variables, disks and
+databases are yours and are left as they are. A template's notes for a release
+with breaking changes are worth reading before pressing the button — the
+backup is what makes pressing it safe, not what makes it a good idea.
+
+Apps installed before the panel remembered where they came from do not know,
+and are updated by changing the image under Settings.
 
 ## Adding one
 

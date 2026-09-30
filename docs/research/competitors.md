@@ -136,7 +136,7 @@ here, or needs `make verify` on a real server.
 | 10 | Several processes (web, worker) from one build; service types in the new-app form | Fly, Dokku, Render | M–L | Manifests yes |
 | 11 | `skifity db connect`: reach a private database from a laptop | Coolify, Fly, Sealos, Epinio | M | Partly |
 | 12 | Upgrade what the installer installed: components and k3s | Kubero, Epinio | L | The plan yes; the upgrade needs one |
-| 13 | Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
+| 13 | **Closed in Phase 102.** Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
 | 14 | **Closed in Phase 88.** More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
 | 15 | **Closed in Phases 91 and 92.** SSO groups mapped to roles, and 2FA or SSO required per team | Portainer, Epinio, Dokploy | S–M | Yes |
 | 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
