@@ -74,6 +74,33 @@ case "$fail_text" in
 *) t_fail "a failure should say how to fix it" ;;
 esac
 
+# --- the ingress keeps the visitor's address ---------------------------------
+
+# Without it every visitor reaches Traefik from ServiceLB's own address, and the
+# firewall's address and country rules see one address for everybody.
+manifests="$WORKDIR/manifests"
+( K3S_MANIFESTS_DIR="$manifests"; LOG_FILE=/dev/null; configure_ingress >/dev/null 2>&1 )
+if grep -q 'externalTrafficPolicy: Local' "$manifests/skifity-traefik.yaml" 2>/dev/null &&
+  grep -q 'kind: DaemonSet' "$manifests/skifity-traefik.yaml"; then
+  t_pass "Traefik is told to keep the visitor's address, on every server"
+else
+  t_fail "the ingress configuration was not written"
+fi
+# An operator's own configuration of Traefik is not fought over.
+theirs="$WORKDIR/theirs"
+mkdir -p "$theirs"
+printf 'apiVersion: helm.cattle.io/v1\nkind: HelmChartConfig\nmetadata:\n  name: traefik\n  namespace: kube-system\n' >"$theirs/traefik-config.yaml"
+out=$( (K3S_MANIFESTS_DIR="$theirs"; LOG_FILE=/dev/null; configure_ingress) 2>&1 || true)
+if [ ! -f "$theirs/skifity-traefik.yaml" ]; then
+  t_pass "an operator's own Traefik configuration is left alone"
+else
+  t_fail "a second configuration of Traefik was written beside the operator's"
+fi
+case "$out" in
+*"externalTrafficPolicy: Local"*) t_pass "and they are told what to set in it" ;;
+*) t_fail "the operator should be told what to set, got: $out" ;;
+esac
+
 # --- the installer refuses to install what does not exist -------------------
 
 # Two things an install needs and this script cannot invent: an image to run,

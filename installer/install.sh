@@ -66,6 +66,8 @@ K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
 # The pod network. Decided in pick_pod_network below, unless it is set here.
 POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
+# k3s applies every file here, and applies one again when it changes.
+K3S_MANIFESTS_DIR="/var/lib/rancher/k3s/server/manifests"
 ISSUER="skifity-letsencrypt"
 # The in-cluster registry built images are pushed to and pulled from. These
 # three values must match internal/kube/naming.go; a Go test checks that they do.
@@ -299,8 +301,9 @@ install_k3s() {
 	fi
 
 	# Before the early return below: an install that is being re-run still has
-	# to end up with the mirror configured.
+	# to end up with the mirror and the ingress configured.
 	configure_registry_mirror
+	configure_ingress
 
 	if have k3s && systemctl is-active --quiet k3s 2>/dev/null; then
 		ok "k3s is already installed and running"
@@ -388,6 +391,54 @@ EOF
 		note "Restarting k3s so it picks up the registry configuration"
 		systemctl restart k3s >>"$LOG_FILE" 2>&1 || warn "k3s could not be restarted; do it by hand"
 	fi
+}
+
+# k3s's load balancer, ServiceLB, hands a visitor to Traefik from an address
+# of its own inside the pod network unless the Service's traffic policy is
+# Local. Every app then saw one address for everybody: the firewall's address
+# rules matched nobody or everybody, a country was looked up for a private
+# address, and — since the pod network is where the tunnel's connector runs —
+# a request sent straight to a server was believed when it claimed to have come
+# through Cloudflare. Local keeps the visitor's address, and running Traefik on
+# every server keeps every server answering, which Local otherwise stops on a
+# server with no Traefik of its own.
+#
+# The tunnel reaches Traefik by its cluster address, which the policy does not
+# touch. An operator's own HelmChartConfig for Traefik is left alone: two files
+# for one object would undo each other on every start.
+configure_ingress() {
+	ours="${K3S_MANIFESTS_DIR}/skifity-traefik.yaml"
+	mkdir -p "$K3S_MANIFESTS_DIR"
+	for other in "$K3S_MANIFESTS_DIR"/*.yaml "$K3S_MANIFESTS_DIR"/*.yml; do
+		[ -f "$other" ] && [ "$other" != "$ours" ] || continue
+		if grep -q 'kind: *HelmChartConfig' "$other" && grep -q 'name: *traefik *$' "$other"; then
+			note "Traefik is configured by $(basename "$other"); it is left as it is."
+			note "Set service.spec.externalTrafficPolicy: Local there, or the firewall sees one address for everybody."
+			return 0
+		fi
+	done
+	cat >"${ours}.new" <<'TRAEFIK'
+# Written by Skifity. Do not edit: the installer writes it again.
+# Why: configure_ingress in install.sh.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      kind: DaemonSet
+    service:
+      spec:
+        externalTrafficPolicy: Local
+TRAEFIK
+	if cmp -s "${ours}.new" "$ours" 2>/dev/null; then
+		rm -f "${ours}.new"
+		return 0
+	fi
+	mv "${ours}.new" "$ours"
+	ok "the ingress keeps each visitor's own address"
 }
 
 wait_for_cluster() {

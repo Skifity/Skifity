@@ -187,7 +187,7 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 				{base + "/processes", &listOf[store.AppProcess]{}},
 				{base + "/domains", &listOf[store.Domain]{}},
 				{base + "/jobs", &listOf[store.AppJob]{}},
-				{base + "/deployments?limit=1", &listOf[store.Deployment]{}},
+				{base + "/deployments?limit=20", &listOf[store.Deployment]{}},
 			} {
 				if err := client.Do(ctx, "GET", part.path, nil, part.into); err != nil {
 					return state, err
@@ -203,12 +203,28 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 					one.Jobs = list.Items
 				case *listOf[store.Deployment]:
 					one.Deployed = len(list.Items) > 0
+					one.Running, one.Pending = runningAndPending(list.Items)
 				}
 			}
 		}
 		state.Apps = append(state.Apps, one)
 	}
 	return state, nil
+}
+
+// runningAndPending picks, from deployments newest first, the one an app
+// runs and the newest one still under way.
+func runningAndPending(deployments []store.Deployment) (running, pending *store.Deployment) {
+	for i := range deployments {
+		deployment := &deployments[i]
+		switch {
+		case deployment.Status == store.DeploySucceeded:
+			return deployment, pending
+		case pending == nil && !deployment.Status.Terminal():
+			pending = deployment
+		}
+	}
+	return nil, pending
 }
 
 type listOf[T any] struct {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
@@ -361,4 +362,73 @@ func matching() State {
 				Deployed: true},
 		},
 	}
+}
+
+// The file's image was stored and its deploy refused — the app locked, the
+// cluster away. The next plan compared the file with the stored image, found
+// them equal and planned nothing, and the image never ran.
+func TestAnImageStoredButNeverRunIsDeployed(t *testing.T) {
+	state := matching()
+	cache := &state.Apps[1]
+	cache.App.Image = "valkey/valkey:9"
+	cache.Running = &store.Deployment{Image: "valkey/valkey:8", Status: store.DeploySucceeded}
+	file := strings.Replace(shop, "valkey/valkey:8", "valkey/valkey:9", 1)
+	if !strings.Contains(file, "valkey/valkey:9") {
+		t.Fatal("the fixture no longer names valkey/valkey:8")
+	}
+	if deploys := plannedDeploys(t, file, state); deploys != "cache" {
+		t.Fatalf("deploys planned for %q", deploys)
+	}
+	// Not while a deploy of it is still under way.
+	cache.Pending = &store.Deployment{Image: "valkey/valkey:9", Status: store.DeployQueued}
+	if deploys := plannedDeploys(t, file, state); deploys != "" {
+		t.Fatalf("a deploy already on its way was planned again: %q", deploys)
+	}
+}
+
+// A value the build reads is in the image, so a new one needs a build. It was
+// stored and nothing was deployed, and the next plan had nothing to do while
+// the image still had the old value baked in.
+func TestABuildVariableIsBuiltIn(t *testing.T) {
+	state := matching()
+	web := &state.Apps[0]
+	built := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	web.Running = &store.Deployment{Status: store.DeploySucceeded, CreatedAt: built}
+	web.Variables = append(web.Variables, store.Variable{Key: "API_URL", Value: "https://old.example.test", BuildTime: true, UpdatedAt: built.Add(-time.Hour)})
+
+	// Changed by this file: deployed after.
+	file := strings.Replace(shop, "LOG_LEVEL: info", "LOG_LEVEL: info\n      API_URL: https://new.example.test", 1)
+	if !strings.Contains(file, "API_URL") {
+		t.Fatal("the fixture's variables moved")
+	}
+	if deploys := plannedDeploys(t, file, state); deploys != "web" {
+		t.Fatalf("a new build value planned deploys for %q", deploys)
+	}
+
+	// Changed by an apply whose deploy did not happen: still owed.
+	web.Variables[len(web.Variables)-1].Value = "https://new.example.test"
+	web.Variables[len(web.Variables)-1].UpdatedAt = built.Add(time.Hour)
+	if deploys := plannedDeploys(t, file, state); deploys != "web" {
+		t.Fatalf("a build value changed after the running build planned deploys for %q", deploys)
+	}
+	// And not once a build that has it is under way.
+	web.Pending = &store.Deployment{Status: store.DeployBuilding, CreatedAt: built.Add(2 * time.Hour)}
+	if deploys := plannedDeploys(t, file, state); deploys != "" {
+		t.Fatalf("a build already on its way was planned again: %q", deploys)
+	}
+}
+
+func plannedDeploys(t *testing.T, file string, state State) string {
+	t.Helper()
+	steps, err := Plan(mustParse(t, file), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deployed []string
+	for _, step := range steps {
+		if step.Kind == "deploy" {
+			deployed = append(deployed, step.Name)
+		}
+	}
+	return strings.Join(deployed, " ")
 }

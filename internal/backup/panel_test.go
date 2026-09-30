@@ -264,3 +264,41 @@ func TestWhenThePanelBacksItselfUp(t *testing.T) {
 		t.Error("off does not turn it off")
 	}
 }
+
+// Before backups had a key of their own, two taken in the same second shared
+// one object. Retention deleted the older row's object from under the newer
+// row, which then pointed at nothing.
+func TestRetentionKeepsAnObjectANewerBackupStillUses(t *testing.T) {
+	m, db, s3, _, _ := panelHarness(t)
+	if err := db.SetSetting(t.Context(), settings.KeyPanelBackupKeep, "2", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	const shared = "panel/2026-03-01T10-00-00.db"
+	s3.mu.Lock()
+	s3.objects[shared] = []byte("the only copy")
+	s3.mu.Unlock()
+	for i, created := range []string{"2026-03-01T10:00:00Z", "2026-03-01T10:00:01Z"} {
+		row := store.Backup{TargetType: PanelTarget, TargetID: PanelTarget, Status: "succeeded", Location: shared}
+		if err := db.CreateBackup(t.Context(), &row); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(t.Context(), `UPDATE backups SET created_at = ? WHERE id = ?`, created, row.ID); err != nil {
+			t.Fatalf("backdate row %d: %v", i, err)
+		}
+	}
+
+	if _, err := m.BackupPanel(t.Context(), "manual"); err != nil {
+		t.Fatal(err)
+	}
+	listed, _ := db.ListBackups(t.Context(), PanelTarget, PanelTarget, 10)
+	if len(listed) != 2 {
+		t.Fatalf("%d panel backups are on record, want 2", len(listed))
+	}
+	kept := false
+	for _, key := range s3.keys() {
+		kept = kept || key == shared
+	}
+	if !kept {
+		t.Fatal("retention deleted an object a backup it kept still points at")
+	}
+}

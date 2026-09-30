@@ -105,6 +105,19 @@ If you have a load balancer of your own in front of the cluster, add its address
 range to **Settings → Domains and HTTPS → Trusted proxies**. Add only ranges you
 control: a trusted range is one whose word is taken for who a visitor is.
 
+On k3s, the load balancer on each server (ServiceLB) hands every visitor to
+Traefik from an address of its own unless Traefik's Service keeps the
+visitor's address. The installer sets that up: it writes
+`/var/lib/rancher/k3s/server/manifests/skifity-traefik.yaml`, which runs Traefik
+on every server with `externalTrafficPolicy: Local`. Without it, every visitor
+looks like one private address — address rules match everybody or nobody, and a
+request sent straight to a server could claim to have come through the
+Cloudflare tunnel. A panel installed before this was added gets it by running
+the installer again. If you configure Traefik yourself with a HelmChartConfig,
+the installer leaves yours alone and says so; set
+`service.spec.externalTrafficPolicy: Local` in it, and run Traefik on every
+server that answers on ports 80 and 443.
+
 ## A password instead
 
 Sometimes the right answer is not a rule about addresses at all. A client

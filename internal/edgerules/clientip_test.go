@@ -154,7 +154,8 @@ func TestClientCountry(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ClientCountry(netip.MustParseAddr(tc.peer), hdr("CF-IPCountry", tc.value), tc.trust)
+			// Our proxy always records who connected to it; here, the connector.
+			got := ClientCountry(netip.MustParseAddr(tc.peer), hdr("CF-IPCountry", tc.value, "X-Forwarded-For", "10.42.0.7"), tc.trust)
 			if got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
@@ -165,6 +166,11 @@ func TestClientCountry(t *testing.T) {
 	direct := hdr("CF-IPCountry", "ID", "X-Forwarded-For", "198.51.100.9")
 	if got := ClientCountry(netip.MustParseAddr("10.42.1.5"), direct, tunnel); got != "" {
 		t.Errorf("a country sent straight to a node was believed: %q", got)
+	}
+	// Our proxy always says who connected to it. A request that does not say
+	// did not come through it the way the tunnel's do, and is not believed.
+	if got := ClientCountry(netip.MustParseAddr("10.42.1.5"), hdr("CF-IPCountry", "ID"), tunnel); got != "" {
+		t.Errorf("a country with no hop recorded was believed: %q", got)
 	}
 	through := hdr("CF-IPCountry", "ID", "X-Forwarded-For", "10.42.0.7")
 	if got := ClientCountry(netip.MustParseAddr("10.42.1.5"), through, tunnel); got != "ID" {

@@ -376,6 +376,17 @@ func (db *DB) ExpiredBackups(ctx context.Context, targetType, targetID string, k
 	return scanBackups(rows)
 }
 
+// BackupObjectShared reports whether a backup other than id points at the
+// same object. Backups taken before each had a key of its own could share one,
+// and deleting it for one of them deleted it for both.
+func (db *DB) BackupObjectShared(ctx context.Context, id, location string) (bool, error) {
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM backups WHERE location = ? AND id != ?`, location, id).Scan(&n); err != nil {
+		return false, fmt.Errorf("check whether a backup's object is shared: %w", err)
+	}
+	return n > 0, nil
+}
+
 // DeleteBackup removes a backup record once its object is gone.
 func (db *DB) DeleteBackup(ctx context.Context, id string) error {
 	_, err := db.Exec(ctx, `DELETE FROM backups WHERE id = ?`, id)

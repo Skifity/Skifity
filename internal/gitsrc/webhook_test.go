@@ -151,3 +151,26 @@ func TestAGiteaSignatureIsADigestAndNotTheSecret(t *testing.T) {
 		t.Error("a connection with no secret verified a push")
 	}
 }
+
+// Gitea says a pull request was pushed to as "synchronized", not GitHub's
+// "synchronize". Dropped as unsupported, a Gitea preview stayed at the commit
+// its pull request was opened with.
+func TestAGiteaPullRequestPushUpdatesItsPreview(t *testing.T) {
+	header := http.Header{}
+	header.Set("X-Gitea-Event", "pull_request")
+	event, err := ParseWebhook(header, []byte(`{
+		"action": "synchronized", "number": 4,
+		"pull_request": {
+			"head": {"ref": "feature", "sha": "def456", "repo": {"full_name": "acme/shop"}},
+			"base": {"repo": {"full_name": "acme/shop"}},
+			"title": "t", "user": {"login": "x"}
+		},
+		"repository": {"clone_url": "https://gitea.example.test/acme/shop.git", "full_name": "acme/shop"}
+	}`))
+	if err != nil {
+		t.Fatalf("a Gitea pull request push was refused: %v", err)
+	}
+	if event.Kind != "pull_request_opened" || event.PullRequest != 4 || event.CommitSHA != "def456" {
+		t.Fatalf("parsed as %+v", event)
+	}
+}

@@ -363,3 +363,59 @@ func TestAWholeEnvironmentPreviewFillsInWhatFailedBefore(t *testing.T) {
 		t.Fatalf("the second push deployed %d apps: web and the new API copy only", len(deployer.requests))
 	}
 }
+
+func TestAPreviewTheLastReleaseMadeIsTheOneUpdatedAndRemoved(t *testing.T) {
+	// A preview made before previews were named by repository has the ref
+	// pr-7. The next event for pull request 7 made a second preview beside
+	// it, and closing the pull request removed only the new one.
+	p, _, _ := stackHarness(t, false)
+	old := store.Environment{ProjectID: p.acme.project.ID, Name: "Pull request #7", Slug: "pr-7", Kind: store.EnvPreview,
+		SourceRef: "pr-7", Namespace: "acme-shop-pr-7"}
+	if err := p.db.CreateEnvironment(t.Context(), &old); err != nil {
+		t.Fatal(err)
+	}
+	copied := p.app
+	copied.ID, copied.EnvironmentID, copied.AutoDeploy, copied.PreviewDeploys = "", old.ID, false, false
+	if err := p.db.CreateApp(t.Context(), &copied); err != nil {
+		t.Fatal(err)
+	}
+	// Another repository's pull request 7 is not this one.
+	other := gitsrc.PushEvent{Kind: "pull_request_opened", PullRequest: 7, SourceBranch: "x", RepoURL: "https://github.com/acme/api"}
+	if env, err := p.api.findPreview(httptestRequest(), p.acme.project.ID, other); err == nil {
+		t.Fatalf("the API's pull request 7 took the front end's old preview %s", env.SourceRef)
+	}
+
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(7)); err != nil {
+		t.Fatal(err)
+	}
+	envs, _ := p.db.ListEnvironments(t.Context(), p.acme.project.ID)
+	previews := 0
+	for _, env := range envs {
+		if env.Kind == store.EnvPreview {
+			previews++
+		}
+	}
+	if previews != 1 {
+		t.Fatalf("%d previews of one pull request", previews)
+	}
+	if env, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(pullRequest(7))); err != nil || env.ID != old.ID {
+		t.Fatalf("the old preview was not taken over: %+v (%v)", env, err)
+	}
+
+	// And one never touched again since the upgrade is removed on close.
+	stale := store.Environment{ProjectID: p.acme.project.ID, Name: "Pull request #8", Slug: "pr-8", Kind: store.EnvPreview,
+		SourceRef: "pr-8", Namespace: "acme-shop-pr-8"}
+	if err := p.db.CreateEnvironment(t.Context(), &stale); err != nil {
+		t.Fatal(err)
+	}
+	staleCopy := copied
+	staleCopy.ID, staleCopy.EnvironmentID = "", stale.ID
+	if err := p.db.CreateApp(t.Context(), &staleCopy); err != nil {
+		t.Fatal(err)
+	}
+	p.api.cleanupPreviewFor(httptestRequest(), p.app, gitsrc.PushEvent{Kind: "pull_request_closed", PullRequest: 8,
+		RepoURL: "https://github.com/acme/web"})
+	if _, err := p.db.GetEnvironment(t.Context(), stale.ID); err == nil {
+		t.Fatal("closing the pull request left the preview the last release made")
+	}
+}

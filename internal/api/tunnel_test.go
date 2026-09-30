@@ -156,6 +156,55 @@ func TestATunnelEndsWhenItsOpenerMayNoLonger(t *testing.T) {
 	}
 }
 
+// tunnelWithABrokenCheck opens a tunnel whose recheck cannot reach an answer:
+// the table it asks has gone.
+func tunnelWithABrokenCheck(t *testing.T, patience int) io.ReadWriteCloser {
+	t.Helper()
+	was, before := tunnelRecheck, tunnelPatience
+	tunnelRecheck, tunnelPatience = 10*time.Millisecond, patience
+	t.Cleanup(func() { tunnelRecheck, tunnelPatience = was, before })
+
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	database := h.database(acme, "orders")
+	h.withDatabases(&tunnelDatabases{address: echoServer(t).Addr().String()})
+	conn, err := cli.NewClient(cli.Config{PanelURL: h.server.URL, Token: acme.token}).OpenTunnel(t.Context(), database.ID)
+	if err != nil {
+		t.Fatalf("the tunnel was not opened: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	h.breakTable("memberships")
+	return conn
+}
+
+func TestATunnelOutlastsACheckThatCouldNotBeAsked(t *testing.T) {
+	// The recheck asks the panel's database whether the opener may still use
+	// the tunnel. A moment when that cannot be asked is not an answer of no:
+	// it closed a working tunnel, in the middle of whatever it was carrying.
+	conn := tunnelWithABrokenCheck(t, 1000)
+	time.Sleep(200 * time.Millisecond)
+	if _, err := io.WriteString(conn, "SELECT 1;\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(conn, make([]byte, len("SELECT 1;\n"))); err != nil {
+		t.Fatalf("a check that could not be asked closed the tunnel: %v", err)
+	}
+}
+
+func TestATunnelNobodyCanCheckForLongIsClosed(t *testing.T) {
+	conn := tunnelWithABrokenCheck(t, 2)
+	ended := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(io.Discard, conn)
+		ended <- err
+	}()
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a tunnel nobody could check for minutes stayed open")
+	}
+}
+
 func TestATunnelPassesOnTheEndOfOneDirectionAlone(t *testing.T) {
 	// A database that answers once its client has said everything: the way
 	// `nc -N` or a file piped in ends. Closing both ways at the first end of

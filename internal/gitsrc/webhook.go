@@ -287,7 +287,8 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 		}
 		kind := ""
 		switch payload.Action {
-		case "opened", "reopened", "synchronize":
+		// Gitea and Forgejo spell a push to the pull request "synchronized".
+		case "opened", "reopened", "synchronize", "synchronized":
 			kind = "pull_request_opened"
 		case "closed":
 			kind = "pull_request_closed"

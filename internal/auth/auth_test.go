@@ -772,3 +772,52 @@ func TestTurningOnTwoFactorSignsOutEveryOtherSession(t *testing.T) {
 		t.Fatal("two-factor was switched off by starting to set it up again")
 	}
 }
+
+// Asking on somebody's behalf is not somebody doing something. The database
+// tunnel checks its session every minute; with Authenticate that kept an idle
+// session alive for as long as a tunnel stayed open.
+func TestCheckingASessionDoesNotExtendIt(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.OpenMemory(ctx)
+	if err != nil {
+		t.Fatalf("open the database: %v", err)
+	}
+	defer db.Close()
+	keyring, err := crypto.InitKeyring(filepath.Join(t.TempDir(), "master.key"))
+	if err != nil {
+		t.Fatalf("create a keyring: %v", err)
+	}
+	service := NewService(db, keyring, time.Hour, false)
+	hash, err := HashPassword("a reasonable passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := store.User{Email: "person@example.test", Name: "Person", PasswordHash: hash, Locale: "en"}
+	if err := db.CreateUser(ctx, &user); err != nil {
+		t.Fatalf("create the user: %v", err)
+	}
+	login, err := service.Login(ctx, user.Email, "a reasonable passphrase", "", "203.0.113.1", "test")
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+	// Last seen long enough ago that Authenticate would extend it.
+	session, _ := db.GetSessionByHash(ctx, HashToken(login.Token))
+	if _, err := db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`,
+		store.FormatTime(time.Now().Add(-10*time.Minute)), session.ID); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := db.GetSessionByHash(ctx, HashToken(login.Token))
+
+	if _, _, err := service.CheckSession(ctx, login.Token); err != nil {
+		t.Fatalf("a good session was refused: %v", err)
+	}
+	if after, _ := db.GetSessionByHash(ctx, HashToken(login.Token)); !after.ExpiresAt.Equal(before.ExpiresAt) || !after.LastSeenAt.Equal(before.LastSeenAt) {
+		t.Fatalf("checking moved the session from %v to %v", before.ExpiresAt, after.ExpiresAt)
+	}
+	if _, _, err := service.Authenticate(ctx, login.Token); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := db.GetSessionByHash(ctx, HashToken(login.Token)); after.LastSeenAt.Equal(before.LastSeenAt) {
+		t.Fatal("using the session did not extend it; the test above proves nothing")
+	}
+}

@@ -418,9 +418,14 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	}
 
 	// Scheduled commands run the version that is deployed, so they are applied
-	// with it rather than when somebody writes the schedule.
-	if err := d.applyScheduledJobs(ctx, deployment.ID, spec, app); err != nil {
-		return nil, err
+	// with it rather than when somebody writes the schedule — and a new
+	// version's only once the app serves it, below, like its processes: a
+	// nightly job on this week's code while the web stays on last week's is
+	// the same skew.
+	if !newVersion {
+		if err := d.applyScheduledJobs(ctx, deployment.ID, spec, app); err != nil {
+			return nil, err
+		}
 	}
 
 	// Objects that are no longer wanted have to be removed explicitly: server-
@@ -453,10 +458,23 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		}
 		return nil, errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
 	}
-	if newVersion && len(processObjects) > 0 {
+	if !newVersion {
+		return processes, nil
+	}
+	// From here the app is serving this version, so nothing below fails the
+	// deployment: one marked failed with the new version live is one the next
+	// variable change would sync the app back from. What did not happen is
+	// said in the log, and the next deploy or sync applies it again.
+	if err := d.applyScheduledJobs(ctx, deployment.ID, spec, app); err != nil {
+		d.appendLog(ctx, deployment.ID, "The scheduled commands could not be moved to this version, and still run the previous one: "+
+			errdoc.From(err).Cause)
+	}
+	if len(processObjects) > 0 {
 		d.appendLog(ctx, deployment.ID, "Starting the new version of the app's other processes.")
 		if err := d.cluster.Client().Applier().ApplyAll(ctx, processObjects...); err != nil {
-			return nil, err
+			d.appendLog(ctx, deployment.ID, "The app's other processes could not be moved to this version, and still run the previous one: "+
+				errdoc.From(err).Cause)
+			return nil, nil
 		}
 	}
 	return processes, nil

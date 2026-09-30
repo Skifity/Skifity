@@ -481,6 +481,19 @@ func (db *DB) SetEnvironmentPodSecurity(ctx context.Context, id, level string) e
 	return nil
 }
 
+// SetEnvironmentSourceRef renames what a preview environment was made for; see
+// findPreview in internal/api.
+func (db *DB) SetEnvironmentSourceRef(ctx context.Context, id, ref string) error {
+	res, err := db.Exec(ctx, `UPDATE environments SET source_ref = ? WHERE id = ? AND kind = 'preview'`, ref, id)
+	if err != nil {
+		return fmt.Errorf("rename a preview's ref: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SetEnvironmentPreviewStack sets whether a pull request's preview of an app
 // in this environment copies every app in it.
 func (db *DB) SetEnvironmentPreviewStack(ctx context.Context, id string, on bool) error {

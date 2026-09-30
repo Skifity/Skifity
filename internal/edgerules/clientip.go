@@ -223,10 +223,12 @@ func throughTunnel(peer netip.Addr, headers Headers, trust Trust) bool {
 		return false
 	}
 	chain := strings.Split(strings.Join(headerValues(headers, "X-Forwarded-For"), ","), ",")
-	last := strings.TrimSpace(chain[len(chain)-1])
-	if last == "" {
-		return true
-	}
-	hop, err := netip.ParseAddr(last)
+	// Our proxy always appends who connected to it, so a request without that
+	// did not come through the connector; it is not believed. And on k3s the
+	// ingress has to be told to keep a visitor's address (configure_ingress in
+	// install.sh): without that, a request sent straight to a node reaches it
+	// from ServiceLB's address in the pod network, which this cannot tell from
+	// the connector's.
+	hop, err := netip.ParseAddr(strings.TrimSpace(chain[len(chain)-1]))
 	return err == nil && trust.Contains(hop.Unmap())
 }

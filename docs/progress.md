@@ -5579,6 +5579,39 @@ Some of Phase 110's own fixes had made new problems:
   unwarned. The minute is kept with CPU and memory marked unknown: the graphs
   show a gap, the memory and CPU warnings neither start nor end on it, and the
   restarts and disk warnings go on.
+* **Previews the previous release made.** Their ref did not name the
+  repository, so the next event for the same pull request made a second preview
+  beside the first, and closing it removed only the new one. An old preview
+  that copies an app of the event's repository is now taken over and renamed.
+* **Gitea previews froze.** Gitea says a pull request was pushed to as
+  `synchronized`, not GitHub's `synchronize`; it is read as the same thing.
+* **A direct request posing as the tunnel.** Cloudflare's headers are believed
+  only from the connector, which was told apart by the last hop being inside
+  the pod network — but on k3s every visitor arrives from inside it, handed on
+  by ServiceLB, so the firewall's address rules saw one address for everybody
+  as well. The installer now runs Traefik on every server with
+  `externalTrafficPolicy: Local`, which keeps each visitor's address, and
+  leaves an operator's own Traefik configuration alone with a note of what to
+  set. A request with no hop recorded at all is no longer taken as the tunnel.
+  **Not run on a cluster**: the file is written and checked by the installer's
+  smoke test, and nothing here has seen ServiceLB honour it.
+* **`skifity.yaml` lost a change whose deploy was refused.** The apply stored
+  the new image, the deploy was refused, and the next plan compared the file
+  with what was stored, found them equal and planned nothing. A new value for a
+  variable the build reads planned no build at all. The plan now compares with
+  what runs — the last deployment that succeeded, or one under way — so a
+  stored image that is not running, or a build value changed since the running
+  build, is still owed a deploy.
+* **Deploy order.** Scheduled commands moved to a new image before the app was
+  serving it; they move with the processes, after. Once the app serves a
+  version, a process or schedule that cannot be moved is said in the log
+  instead of failing a deployment that is live.
+* **Smaller ones.** The MCP tool that changes a process sent an instance count
+  whether asked or not, so a new command stopped the process. The tunnel's
+  minute-by-minute check closed a working tunnel on one database hiccup — three
+  in a row now — and kept an idle browser session alive; it no longer extends
+  it. Two backups sharing one object before each had its own key lost it when
+  the older expired; retention now leaves an object another backup uses.
 
 ## Idle resource usage
 

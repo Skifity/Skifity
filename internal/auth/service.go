@@ -305,6 +305,18 @@ func (s *Service) issueSession(ctx context.Context, user store.User, ip, userAge
 
 // Authenticate resolves a session token to its user and extends the session.
 func (s *Service) Authenticate(ctx context.Context, token string) (store.User, store.Session, error) {
+	return s.authenticate(ctx, token, true)
+}
+
+// CheckSession resolves a session token like Authenticate, without extending
+// it. It is for something that asks on the person's behalf rather than because
+// they did anything — the database tunnel's recheck every minute — which would
+// otherwise keep an idle session alive for as long as the tunnel stayed open.
+func (s *Service) CheckSession(ctx context.Context, token string) (store.User, store.Session, error) {
+	return s.authenticate(ctx, token, false)
+}
+
+func (s *Service) authenticate(ctx context.Context, token string, extend bool) (store.User, store.Session, error) {
 	session, err := s.db.GetSessionByHash(ctx, HashToken(token))
 	if err != nil {
 		return store.User{}, store.Session{}, err
@@ -327,7 +339,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (store.User, s
 		return store.User{}, store.Session{}, store.ErrNotFound
 	}
 	// Sliding expiry, refreshed at most once a minute to avoid a write per request.
-	if time.Since(session.LastSeenAt) > time.Minute {
+	if extend && time.Since(session.LastSeenAt) > time.Minute {
 		next := time.Now().Add(s.sessionTTL)
 		if !session.CreatedAt.IsZero() && next.After(deadline) {
 			next = deadline

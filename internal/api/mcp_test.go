@@ -185,3 +185,24 @@ func TestAReadOnlyTokensAssistantReads(t *testing.T) {
 		t.Fatalf("a read-only token wrote: %s", text)
 	}
 }
+
+// Changing a process's command through an assistant keeps how many run. The
+// tool required instances and always sent it, so changing only the command
+// either failed or set a count nobody asked for — 0 stops the process.
+func TestAnAssistantChangesAProcessCommandAndKeepsItsCount(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	if err := h.db.SetProcess(t.Context(), &store.AppProcess{AppID: app.ID, Name: "worker", Command: "bin/work", Instances: 3}); err != nil {
+		t.Fatal(err)
+	}
+	session := h.connectMCP(t, acme)
+	text, failed := callText(t, session, "set_process", map[string]any{"app_id": app.ID, "name": "worker", "command": "bin/work --fast"})
+	if failed {
+		t.Fatalf("changing only the command failed: %s", text)
+	}
+	processes, _ := h.db.ListProcesses(t.Context(), app.ID)
+	if len(processes) != 1 || processes[0].Command != "bin/work --fast" || processes[0].Instances != 3 {
+		t.Fatalf("the process is now %+v", processes)
+	}
+}

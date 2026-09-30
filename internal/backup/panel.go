@@ -176,17 +176,7 @@ func (m *Manager) retainPanel(ctx context.Context, storage *Storage) {
 		m.log.Warn("could not list old panel backups", "error", err)
 		return
 	}
-	for _, old := range expired {
-		if old.Location != "" {
-			if err := storage.Remove(ctx, old.Location); err != nil {
-				m.log.Warn("could not delete an old panel backup", "backup", old.ID, "error", err)
-				continue
-			}
-		}
-		if err := m.db.DeleteBackup(ctx, old.ID); err != nil {
-			m.log.Warn("could not delete an old panel backup's record", "backup", old.ID, "error", err)
-		}
-	}
+	m.forget(ctx, storage, expired)
 }
 
 // panelDue reports whether the panel's own backup is due in any of the minutes.

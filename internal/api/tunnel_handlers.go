@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -43,9 +44,14 @@ const tunnelDialTimeout = 10 * time.Second
 // ends their tunnels within that, rather than whenever they next hang up.
 // None lasts beyond tunnelMaxLife; `db connect` opens a new one for the next
 // connection a client makes. Variables, so a test need not wait a minute.
+//
+// A recheck that cannot be answered — the panel's database busy or briefly
+// unreadable — is not a no, and closing on it cut a working tunnel in the
+// middle of a migration or a dump. tunnelPatience of them in a row is.
 var (
-	tunnelRecheck = time.Minute
-	tunnelMaxLife = 12 * time.Hour
+	tunnelRecheck  = time.Minute
+	tunnelMaxLife  = 12 * time.Hour
+	tunnelPatience = 3
 )
 
 func (s *Server) handleDatabaseTunnel(w http.ResponseWriter, r *http.Request) {
@@ -99,20 +105,34 @@ func (s *Server) handleDatabaseTunnel(w http.ResponseWriter, r *http.Request) {
 	// client's end of stream, and a client that half-closes has not left.
 	open, end := context.WithTimeout(context.WithoutCancel(r.Context()), tunnelMaxLife)
 	defer end()
+	every, patience := tunnelRecheck, tunnelPatience
 	go func() {
 		defer runsafe.Recover(s.log, "rechecking a database tunnel", nil)
-		ticker := time.NewTicker(tunnelRecheck)
+		ticker := time.NewTicker(every)
 		defer ticker.Stop()
+		unanswered := 0
 		for {
 			select {
 			case <-open.Done():
 				return
 			case <-ticker.C:
-				if !s.stillAllowed(r, record.ID) {
+				allowed, err := s.stillAllowed(r, record.ID)
+				switch {
+				case err != nil:
+					unanswered++
+					if unanswered < patience {
+						s.log.Warn("could not recheck a database tunnel; it stays open for now", "database", record.ID, "error", err)
+						continue
+					}
+					s.log.Warn("closed a database tunnel that could not be rechecked", "database", record.ID, "error", err)
+				case allowed:
+					unanswered = 0
+					continue
+				default:
 					s.log.Info("closed a database tunnel whose access was withdrawn", "database", record.ID)
-					end()
-					return
 				}
+				end()
+				return
 			}
 		}
 	}()
@@ -128,20 +148,45 @@ func (s *Server) handleDatabaseTunnel(w http.ResponseWriter, r *http.Request) {
 }
 
 // stillAllowed signs the tunnel's request in again, with the credential it
-// was opened with and nothing remembered from then, and asks what opening it
-// asked.
-func (s *Server) stillAllowed(r *http.Request, databaseID string) bool {
+// was opened with, and asks whether that may still open this database's
+// tunnel. An error means it could not be asked; false means no.
+//
+// A cookie session is looked at without being extended: the tunnel asking
+// every minute is not the person doing anything.
+func (s *Server) stillAllowed(r *http.Request, databaseID string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	ctx, err := s.identify(ctx, r)
+	ctx, err := s.identifyAs(ctx, r, s.auth.CheckSession)
 	if err != nil {
-		return false
+		if refused(err) {
+			return false, nil
+		}
+		return false, err
 	}
 	if _, ok := UserFrom(ctx); !ok {
+		return false, nil
+	}
+	if _, _, err := s.authorizeDatabase(r.WithContext(ctx), databaseID, store.RoleAdmin); err != nil {
+		if refused(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// refused reports whether an error is an answer — not signed in, not
+// allowed, not there — rather than a failure to find one out.
+func refused(err error) bool {
+	var problem *errdoc.Problem
+	if !errors.As(err, &problem) {
 		return false
 	}
-	_, _, err = s.authorizeDatabase(r.WithContext(ctx), databaseID, store.RoleAdmin)
-	return err == nil
+	switch problem.Status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		return true
+	}
+	return false
 }
 
 // pipe copies both ways until both are done, or ctx ends. The end of one

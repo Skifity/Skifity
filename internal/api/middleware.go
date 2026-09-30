@@ -264,6 +264,13 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 // nobody did. An open database tunnel calls it again, long after the request
 // that opened it, to find out whether that credential still signs anybody in.
 func (s *Server) identify(ctx context.Context, r *http.Request) (context.Context, error) {
+	return s.identifyAs(ctx, r, s.auth.Authenticate)
+}
+
+// identifyAs is identify with the way a session cookie is read chosen by the
+// caller: Authenticate extends the session, CheckSession does not.
+func (s *Server) identifyAs(ctx context.Context, r *http.Request,
+	session func(context.Context, string) (store.User, store.Session, error)) (context.Context, error) {
 	if header := r.Header.Get("Authorization"); header != "" {
 		token, ok := strings.CutPrefix(header, "Bearer ")
 		if ok {
@@ -291,10 +298,10 @@ func (s *Server) identify(ctx context.Context, r *http.Request) (context.Context
 	}
 
 	if value := s.auth.ReadCookie(r, auth.SessionCookieName); value != "" {
-		user, session, err := s.auth.Authenticate(ctx, value)
+		user, found, err := session(ctx, value)
 		if err == nil {
 			ctx = context.WithValue(ctx, ctxUser, user)
-			ctx = context.WithValue(ctx, ctxSession, session)
+			ctx = context.WithValue(ctx, ctxSession, found)
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return ctx, err
 		}

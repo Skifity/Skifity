@@ -33,6 +33,42 @@ type AppState struct {
 	// Deployed is whether it has ever been deployed. An app made by an apply
 	// that stopped before its first deploy is still owed one.
 	Deployed bool
+	// Running is the version it runs — its newest deployment that succeeded —
+	// and Pending its newest one still under way; nil when there is none.
+	// Together they say what the stored settings have that nothing running
+	// has yet: an apply whose deploy was refused stored them and stopped.
+	Running, Pending *store.Deployment
+}
+
+// owed says why an app has to be deployed for what is already stored to run,
+// or "" when nothing is owed or it cannot be told.
+//
+// It is read from the state rather than from the plan's own changes, because
+// those are gone after the apply that made them: the next plan compared the
+// file with what the apply had stored, found them equal, and never deployed.
+func owed(have AppState) string {
+	if have.Running == nil {
+		return ""
+	}
+	app := have.App
+	if app.SourceType == "image" {
+		if app.Image == "" || have.Running.Image == app.Image || (have.Pending != nil && have.Pending.Image == app.Image) {
+			return ""
+		}
+		return "to run " + app.Image + ", which is stored and not running yet"
+	}
+	// A value the build reads is in the image: one changed after the running
+	// version was started, and after any deploy now under way, is not in it.
+	since := have.Running.CreatedAt
+	if have.Pending != nil && have.Pending.CreatedAt.After(since) {
+		since = have.Pending.CreatedAt
+	}
+	for _, variable := range have.Variables {
+		if variable.BuildTime && variable.UpdatedAt.After(since) {
+			return "to build with the value of " + variable.Key + " it has now"
+		}
+	}
+	return ""
 }
 
 // Step is one line of a plan, and what applying it sends.
@@ -141,6 +177,9 @@ func Plan(file File, state State) ([]Step, error) {
 			steps = append(steps, create)
 		}
 		changes, redeploy := appSteps(name, ref, want, have, exists)
+		if redeploy == "" && exists {
+			redeploy = owed(have)
+		}
 		steps = append(steps, changes...)
 		switch {
 		case !exists || (!have.Deployed && have.App.SourceType != "upload"):
@@ -345,6 +384,10 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 		case variable.Value != value:
 			steps = append(steps, Step{Op: "change", Kind: "variable", App: name, Name: key,
 				Detail: fmt.Sprintf("%q → %q", variable.Value, value)})
+			// The build reads it, so the running image has the old value in it.
+			if variable.BuildTime && current.SourceType != "image" && redeploy == "" {
+				redeploy = "to build with the new value of " + key
+			}
 		default:
 			continue
 		}

@@ -211,14 +211,29 @@ func (m *Manager) applyRetention(ctx context.Context, storage *Storage, targetTy
 		m.log.Warn("could not list expired backups", targetType, targetID, "error", err)
 		return
 	}
+	m.forget(ctx, storage, expired)
+}
+
+// forget deletes expired backups, their objects first.
+//
+// A backup that cannot be deleted from storage stays in the list, so it is not
+// silently forgotten while still costing money. An object another backup
+// still points at — two taken in one second before each had a key of its own
+// — is left for that one, and only the record goes.
+func (m *Manager) forget(ctx context.Context, storage *Storage, expired []store.Backup) {
 	for _, old := range expired {
 		if old.Location != "" {
-			if err := storage.Remove(ctx, old.Location); err != nil {
-				// A backup that cannot be deleted from storage stays in the
-				// list, so it is not silently forgotten while still costing money.
-				m.log.Warn("could not delete an expired backup from storage",
-					"backup", old.ID, "error", err)
+			shared, err := m.db.BackupObjectShared(ctx, old.ID, old.Location)
+			if err != nil {
+				m.log.Warn("could not delete an expired backup", "backup", old.ID, "error", err)
 				continue
+			}
+			if !shared {
+				if err := storage.Remove(ctx, old.Location); err != nil {
+					m.log.Warn("could not delete an expired backup from storage",
+						"backup", old.ID, "error", err)
+					continue
+				}
 			}
 		}
 		if err := m.db.DeleteBackup(ctx, old.ID); err != nil {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -265,6 +266,43 @@ func previewRef(event gitsrc.PushEvent) string {
 	return ref + "-" + repoTag(event.RepoURL)
 }
 
+// findPreview finds the preview environment for an event, and takes over one
+// the previous release made for it.
+//
+// Before previews were named by repository their ref was pr-<number> or
+// branch-<name> alone. Looked up only by the new ref, such a preview was
+// never found again: the next event for its pull request made a second one
+// beside it, and the close removed only that. An old preview is this event's
+// when it holds a copy of an app of the event's repository — pull request 7 of
+// the API is not the front end's — and it is renamed to the new ref, so it is
+// found directly from then on.
+func (s *Server) findPreview(r *http.Request, projectID string, event gitsrc.PushEvent) (store.Environment, error) {
+	ref := previewRef(event)
+	env, err := s.db.FindEnvironmentBySourceRef(r.Context(), projectID, ref)
+	if !errors.Is(err, store.ErrNotFound) {
+		return env, err
+	}
+	legacy := strings.TrimSuffix(ref, "-"+repoTag(event.RepoURL))
+	old, err := s.db.FindEnvironmentBySourceRef(r.Context(), projectID, legacy)
+	if err != nil {
+		return store.Environment{}, err
+	}
+	apps, err := s.db.ListApps(r.Context(), old.ID)
+	if err != nil {
+		return store.Environment{}, err
+	}
+	if !slices.ContainsFunc(apps, func(app store.App) bool {
+		return app.RepoURL != "" && repoTag(app.RepoURL) == repoTag(event.RepoURL)
+	}) {
+		return store.Environment{}, store.ErrNotFound
+	}
+	if err := s.db.SetEnvironmentSourceRef(r.Context(), old.ID, ref); err != nil {
+		return store.Environment{}, err
+	}
+	old.SourceRef = ref
+	return old, nil
+}
+
 // repoTag is a short, stable name for a repository, for a preview's ref.
 func repoTag(repoURL string) string {
 	normal := strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(repoURL), "/"), ".git"))
@@ -291,8 +329,8 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 	}
 
 	ref := previewRef(event)
-	env, err := s.db.FindEnvironmentBySourceRef(r.Context(), project.ID, ref)
-	if err != nil {
+	env, err := s.findPreview(r, project.ID, event)
+	if errors.Is(err, store.ErrNotFound) {
 		// First push to this pull request: make the environment.
 		env = store.Environment{
 			ProjectID: project.ID,
@@ -306,6 +344,8 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 		if err := s.db.CreateEnvironment(r.Context(), &env); err != nil {
 			return "", err
 		}
+	} else if err != nil {
+		return "", err
 	}
 	// Every time, not only when the environment is made: a namespace that
 	// could not be made on the first push is made on the next one, rather
@@ -612,7 +652,7 @@ func (s *Server) cleanupPreviewFor(r *http.Request, app store.App, event gitsrc.
 	if err != nil {
 		return
 	}
-	env, err := s.db.FindEnvironmentBySourceRef(r.Context(), sourceEnv.ProjectID, previewRef(event))
+	env, err := s.findPreview(r, sourceEnv.ProjectID, event)
 	if err != nil {
 		return
 	}

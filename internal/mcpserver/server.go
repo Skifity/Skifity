@@ -239,7 +239,7 @@ type setProcessInput struct {
 	AppID     string `json:"app_id" jsonschema:"the app's id"`
 	Name      string `json:"name" jsonschema:"the process's name, lowercase, as in a Procfile: worker, clock"`
 	Command   string `json:"command" jsonschema:"the command it runs, one shell line"`
-	Instances int    `json:"instances" jsonschema:"how many to run; 0 stops it and keeps the command"`
+	Instances *int   `json:"instances,omitempty" jsonschema:"how many to run; 0 stops it and keeps the command. Leave it out to keep the current count, or run one of a new process"`
 }
 
 type logsOutput struct {
@@ -763,7 +763,10 @@ func (s *Server) getAppLogs(ctx context.Context, _ *mcp.CallToolRequest, in logs
 
 func (s *Server) setProcess(ctx context.Context, _ *mcp.CallToolRequest, in setProcessInput) (*mcp.CallToolResult, store.AppProcess, error) {
 	var saved store.AppProcess
-	body := map[string]any{"command": in.Command, "instances": in.Instances}
+	body := map[string]any{"command": in.Command}
+	if in.Instances != nil {
+		body["instances"] = *in.Instances
+	}
 	if err := s.client.Do(ctx, "PUT", "/api/apps/"+in.AppID+"/processes/"+url.PathEscape(in.Name), body, &saved); err != nil {
 		return errorResult(err), store.AppProcess{}, nil
 	}
