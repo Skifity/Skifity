@@ -293,7 +293,8 @@
       "team.member_synced": "Keanggotaan disesuaikan dengan grup single sign-on",
       "variable.preview_set": "Isi variabel untuk preview diubah",
       "app.deploys_locked": "Deploy dikunci",
-      "app.deploys_unlocked": "Kunci deploy dibuka"
+      "app.deploys_unlocked": "Kunci deploy dibuka",
+      "app.alerts_changed": "Peringatan pemakaian diubah"
     }
   },
   "projects": {
@@ -475,7 +476,31 @@
     "lockReason": "Alasan",
     "lockReasonPlaceholder": "Insiden 42: failover database sedang berjalan",
     "deploysLocked": "Deploy dikunci",
-    "deploysLockedBy": "{{who}} menguncinya {{when}}: {{reason}}"
+    "deploysLockedBy": "{{who}} menguncinya {{when}}: {{reason}}",
+    "usage": "Pemakaian",
+    "usageHelp": "Instance tersibuk sebagai bagian dari batasnya sendiri, dibaca setiap menit dan disimpan tiga hari. Garis putus-putus adalah titik peringatan dikirim.",
+    "usageNone": "Belum ada yang tercatat. Panel membaca setiap app yang berjalan sekali per menit.",
+    "usageMemory": "Memori",
+    "usageCPU": "CPU",
+    "range": {
+      "1h": "1 jam",
+      "6h": "6 jam",
+      "24h": "1 hari",
+      "72h": "3 hari"
+    },
+    "alertsTitle": "Peringatan",
+    "alertsHelp": "Dikirim ke kanal notifikasi tim sekali saat ambang terlewati selama tiga menit, dan sekali saat sudah selesai. 0 mematikannya.",
+    "alertsFiring": "Aktif sekarang: {{list}}",
+    "alertName": {
+      "memory": "memori",
+      "cpu": "CPU",
+      "restarts": "restart"
+    },
+    "alertField": {
+      "memory_pct": "Memori, % dari batas",
+      "cpu_pct": "CPU, % dari batas",
+      "restarts": "Restart dalam 10 menit"
+    }
   },
   "deploy": {
     "title": "Deployment",
@@ -2216,7 +2241,8 @@
       "server.added": "Server bergabung",
       "server.lost": "Server berhenti merespons",
       "backup.failed": "Pencadangan gagal",
-      "certificate.failed": "Sertifikat gagal diterbitkan"
+      "certificate.failed": "Sertifikat gagal diterbitkan",
+      "app.alert": "Sebuah app melewati ambang pemakaian"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {

@@ -386,6 +386,31 @@ hidden as the secret. It is read when a preview is made, so previews already
 running keep what they were given and the next one made gets the new setting.
 The app itself never changes when you set these.
 
+## Usage and warnings
+
+The panel reads every running app once a minute and keeps what it read for
+three days: CPU and memory, instances ready, restarts. The **Usage** card on
+the app's Overview draws the last hour, six hours, day or three days, as the
+busiest instance's share of its own limit — the number that gets an instance
+throttled at the CPU limit or killed at the memory limit, which a total across
+instances hides.
+
+Three thresholds are watched, and each is sent to the team's notification
+channels (as **An app crossed a usage threshold**) once when it is crossed and
+once when it is over:
+
+* **memory** — the busiest instance at 90% of its memory limit or more for three
+  minutes running, by default;
+* **CPU** — the same for the CPU limit, off by default, since a busy app is using
+  what it was given;
+* **restarts** — three restarts in ten minutes, by default, counted across
+  instances that are replaced.
+
+Each is set on the same card; 0 turns one off. They are not checked while a
+deploy is in progress, when new instances starting and old ones stopping are
+expected. `GET /api/apps/{app}/metrics?range=6h` and `/api/apps/{app}/alerts`
+are the same for a script.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

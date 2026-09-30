@@ -293,7 +293,8 @@
       "team.member_synced": "已按单点登录群组调整成员身份",
       "variable.preview_set": "已更改变量在预览中的取值",
       "app.deploys_locked": "已锁定部署",
-      "app.deploys_unlocked": "已解锁部署"
+      "app.deploys_unlocked": "已解锁部署",
+      "app.alerts_changed": "已更改用量警告"
     }
   },
   "projects": {
@@ -475,7 +476,31 @@
     "lockReason": "原因",
     "lockReasonPlaceholder": "事故 42：数据库正在故障转移",
     "deploysLocked": "部署已锁定",
-    "deploysLockedBy": "{{who}} 于 {{when}} 锁定：{{reason}}"
+    "deploysLockedBy": "{{who}} 于 {{when}} 锁定：{{reason}}",
+    "usage": "用量",
+    "usageHelp": "最繁忙的实例占其自身上限的比例，每分钟读取一次，保留三天。虚线是发送警告的位置。",
+    "usageNone": "还没有记录。面板每分钟读取一次每个运行中的应用。",
+    "usageMemory": "内存",
+    "usageCPU": "CPU",
+    "range": {
+      "1h": "1 小时",
+      "6h": "6 小时",
+      "24h": "1 天",
+      "72h": "3 天"
+    },
+    "alertsTitle": "警告",
+    "alertsHelp": "阈值连续三分钟被超过时，向团队的通知渠道发送一次；结束时再发送一次。填 0 表示关闭。",
+    "alertsFiring": "正在触发：{{list}}",
+    "alertName": {
+      "memory": "内存",
+      "cpu": "CPU",
+      "restarts": "重启"
+    },
+    "alertField": {
+      "memory_pct": "内存，占上限的 %",
+      "cpu_pct": "CPU，占上限的 %",
+      "restarts": "10 分钟内的重启次数"
+    }
   },
   "deploy": {
     "title": "部署记录",
@@ -2216,7 +2241,8 @@
       "server.added": "有服务器加入",
       "server.lost": "服务器停止响应",
       "backup.failed": "备份失败",
-      "certificate.failed": "证书签发失败"
+      "certificate.failed": "证书签发失败",
+      "app.alert": "应用超过了用量阈值"
     },
     "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
     "field": {

@@ -4776,6 +4776,45 @@ endpoint naming the commit and what it leaves.
 
 Still open from gap 19: a maintenance page served in front of an app.
 
+## Phase 95 — what an app used, and saying when it is too much
+
+Gap 1, the one twelve of the twenty-two products have: a history of what an app
+used, and a warning before it falls over. The panel showed usage now and
+nothing about an hour ago, and the first sign of an app running out of memory
+was the notification that it had stopped answering.
+
+The watcher already read every app's status once a minute — and since Phase 89
+actually does. It now keeps what it read (migration 0025, `app_samples`, three
+days): total CPU and memory, instances ready and wanted, restarts, and the
+busiest instance's share of its own CPU and memory limits, which is what gets
+an instance throttled or killed and what a total hides. Each app's status is
+read once per pass now, where it was read only for running apps before.
+
+Three thresholds per app (`app_alerts`; no row is the defaults): memory at 90%
+of the limit for three minutes, restarts three times in ten minutes, and CPU,
+off by default. `evaluate` is a pure function of the thresholds and the recent
+samples, so the rules are tested without a cluster or a clock: a spike is not
+news, three minutes are; two minutes of data are not three; zero is off; and
+restarts are the sum of the increases, so a replaced instance counting from
+zero again neither hides restarts nor makes negative ones. Crossing a threshold
+is sent once, as the new `app.alert` event, and so is its end; which are firing
+is stored, so a pass that finds the same thing says nothing. Thresholds are not
+checked during a deploy.
+
+`GET /api/apps/{app}/metrics?range=` returns up to 120 points for an hour, six,
+a day or three, averaging usage in each bucket and keeping the peak — a minute
+at the limit is the minute that matters. The Overview tab draws memory and CPU
+with the threshold as a dashed line, in an SVG component of its own rather
+than a charting library, and sets the thresholds.
+
+Tested: the sample recorded from two instances, with the busiest one's shares;
+a crossed threshold said once over two passes and its end said once after; the
+rules above; the buckets for an hour and six hours with the peak kept; and the
+thresholds' defaults, validation and audit.
+
+Not executed: numbers from a real metrics-server. Still open from gap 1: the
+same history for servers, and disk.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

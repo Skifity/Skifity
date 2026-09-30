@@ -284,6 +284,10 @@ func (s *Server) routes() chi.Router {
 				app.Patch("/", s.handleUpdateApp)
 				app.Delete("/", s.handleDeleteApp)
 				app.Get("/status", s.handleAppStatus)
+				// What it used over time, and when to say so.
+				app.Get("/metrics", s.handleAppMetrics)
+				app.Get("/alerts", s.handleGetAppAlerts)
+				app.Put("/alerts", s.handleSetAppAlerts)
 				app.Get("/firewall", s.handleGetFirewall)
 				app.Put("/firewall", s.handleSetFirewall)
 				app.Get("/password", s.handleGetPassword)

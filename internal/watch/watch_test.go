@@ -29,6 +29,9 @@ type fakeStore struct {
 	deletedEnvs    []string
 	settingValues  map[string]string
 	previewsBefore time.Time
+
+	samples map[string][]store.AppSample
+	alerts  map[string]store.AppAlerts
 }
 
 func newFakeStore() *fakeStore {
@@ -38,7 +41,41 @@ func newFakeStore() *fakeStore {
 		appStatuses:   map[string]string{},
 		domainSet:     map[string]string{},
 		settingValues: map[string]string{},
+		samples:       map[string][]store.AppSample{},
+		alerts:        map[string]store.AppAlerts{},
 	}
+}
+
+func (f *fakeStore) RecordAppSample(_ context.Context, appID string, s store.AppSample) error {
+	s.At = s.At.UTC().Truncate(time.Minute)
+	f.samples[appID] = append(f.samples[appID], s)
+	return nil
+}
+
+func (f *fakeStore) AppSamples(_ context.Context, appID string, since time.Time) ([]store.AppSample, error) {
+	out := []store.AppSample{}
+	for _, s := range f.samples[appID] {
+		if !s.At.Before(since) {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) PruneAppSamples(context.Context, time.Time) error { return nil }
+
+func (f *fakeStore) GetAppAlerts(_ context.Context, appID string) (store.AppAlerts, error) {
+	if a, ok := f.alerts[appID]; ok {
+		return a, nil
+	}
+	return store.DefaultAppAlerts(), nil
+}
+
+func (f *fakeStore) SetAlertsFiring(_ context.Context, appID string, firing []string) error {
+	a, _ := f.GetAppAlerts(context.Background(), appID)
+	a.Firing = firing
+	f.alerts[appID] = a
+	return nil
 }
 
 func (f *fakeStore) ListAllServers(context.Context) ([]store.Server, error) { return f.servers, nil }

@@ -42,6 +42,12 @@ type Store interface {
 	SetAppStatus(ctx context.Context, id, status string) error
 	ListUnfinishedDeployments(ctx context.Context) ([]store.Deployment, error)
 
+	RecordAppSample(ctx context.Context, appID string, s store.AppSample) error
+	AppSamples(ctx context.Context, appID string, since time.Time) ([]store.AppSample, error)
+	PruneAppSamples(ctx context.Context, before time.Time) error
+	GetAppAlerts(ctx context.Context, appID string) (store.AppAlerts, error)
+	SetAlertsFiring(ctx context.Context, appID string, firing []string) error
+
 	ListDomains(ctx context.Context, appID string) ([]store.Domain, error)
 	SetDomainStatus(ctx context.Context, id, status, detail string) error
 
@@ -282,25 +288,34 @@ func (w *Watcher) checkApps(ctx context.Context) {
 		}
 	}
 
+	now := time.Now().UTC()
 	for _, app := range apps {
+		status, err := w.cluster.AppStatus(ctx, app.Namespace, app.Slug)
+		if err != nil {
+			w.log.Debug("could not read an app's status while watching", "app", app.ID, "error", err)
+			continue
+		}
+		w.recordUsage(ctx, app, status, now)
 		if deploying[app.ID] {
 			continue
 		}
-		w.checkApp(ctx, app)
+		w.checkAlerts(ctx, app, now)
+		w.checkApp(ctx, app, status)
 		w.checkCertificate(ctx, app)
+	}
+	// Once an hour is plenty for forgetting: a sample an hour past its time
+	// costs nothing, and a scan every minute would.
+	if now.Minute() == 0 {
+		if err := w.db.PruneAppSamples(ctx, now.Add(-SampleRetention)); err != nil {
+			w.log.Warn("could not forget old app samples", "error", err)
+		}
 	}
 }
 
-func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp) {
+func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp, status api.AppRuntimeStatus) {
 	// Only an app the panel believes is up can fall down. One left failed by a
 	// deployment, or never started, is already showing the right thing.
 	if app.Status != "running" && app.Status != "unhealthy" {
-		return
-	}
-
-	status, err := w.cluster.AppStatus(ctx, app.Namespace, app.Slug)
-	if err != nil {
-		w.log.Debug("could not read an app's status while watching", "app", app.ID, "error", err)
 		return
 	}
 

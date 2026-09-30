@@ -48,12 +48,15 @@ const (
 	EventServerLost      = "server.lost"
 	EventBackupFailed    = "backup.failed"
 	EventCertificate     = "certificate.failed"
+	// EventAppAlert is an app crossing one of its thresholds — memory, CPU,
+	// restarts — and coming back under it.
+	EventAppAlert = "app.alert"
 )
 
 // AllEvents is what the UI offers when configuring a channel.
 var AllEvents = []string{
 	EventDeploySucceeded, EventDeployFailed, EventAppUnhealthy,
-	EventServerAdded, EventServerLost, EventBackupFailed, EventCertificate,
+	EventServerAdded, EventServerLost, EventBackupFailed, EventCertificate, EventAppAlert,
 }
 
 // client is shared so notifications reuse connections and always time out.

@@ -141,6 +141,8 @@ POST   /api/apps/{app}/run                    run a command once in the app's im
 GET    /api/apps/{app}/runs/{run}/logs        that command's output
 GET    /api/apps/{app}/jobs                   scheduled commands
 POST   /api/apps/{app}/jobs                   add one (name, schedule, command)
+GET    /api/apps/{app}/metrics?range=6h       usage over 1h, 6h, 24h or 72h
+GET    /api/apps/{app}/alerts                 usage warning thresholds (PUT to change)
 GET    /api/apps/{app}/variables              variables
 PUT    /api/apps/{app}/variables              set one
 POST   /api/apps/{app}/variables/batch        set and remove several, all or none, one rollout

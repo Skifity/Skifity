@@ -301,7 +301,8 @@
       "team.member_synced": "Membership brought in line with single sign-on groups",
       "variable.preview_set": "What previews get for a variable changed",
       "app.deploys_locked": "Deploys locked",
-      "app.deploys_unlocked": "Deploys unlocked"
+      "app.deploys_unlocked": "Deploys unlocked",
+      "app.alerts_changed": "Usage warnings changed"
     }
   },
   "projects": {
@@ -483,7 +484,31 @@
     "lockReason": "Why",
     "lockReasonPlaceholder": "Incident 42: database failover in progress",
     "deploysLocked": "Deploys are locked",
-    "deploysLockedBy": "{{who}} locked them {{when}}: {{reason}}"
+    "deploysLockedBy": "{{who}} locked them {{when}}: {{reason}}",
+    "usage": "Usage",
+    "usageHelp": "The busiest instance as a share of its own limit, read every minute and kept for three days. The dashed line is where a warning is sent.",
+    "usageNone": "Nothing recorded yet. The panel reads every running app once a minute.",
+    "usageMemory": "Memory",
+    "usageCPU": "CPU",
+    "range": {
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "24h": "1 day",
+      "72h": "3 days"
+    },
+    "alertsTitle": "Warnings",
+    "alertsHelp": "Sent to the team's notification channels once when a threshold is crossed for three minutes, and once when it is over. 0 turns one off.",
+    "alertsFiring": "Going off now: {{list}}",
+    "alertName": {
+      "memory": "memory",
+      "cpu": "CPU",
+      "restarts": "restarts"
+    },
+    "alertField": {
+      "memory_pct": "Memory, % of the limit",
+      "cpu_pct": "CPU, % of the limit",
+      "restarts": "Restarts in 10 minutes"
+    }
   },
   "deploy": {
     "title": "Deployments",
@@ -2228,7 +2253,8 @@
       "server.added": "A server joined",
       "server.lost": "A server stopped responding",
       "backup.failed": "A backup failed",
-      "certificate.failed": "A certificate could not be issued"
+      "certificate.failed": "A certificate could not be issued",
+      "app.alert": "An app crossed a usage threshold"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {

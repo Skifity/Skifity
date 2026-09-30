@@ -43,6 +43,7 @@ const EVENTS = [
   "server.lost",
   "backup.failed",
   "certificate.failed",
+  "app.alert",
 ] as const
 
 /**
