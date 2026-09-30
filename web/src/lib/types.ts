@@ -819,6 +819,20 @@ export type StackNote = {
 }
 
 /** One of an app's other processes: its image, its own command, no port. */
+/** A file an app's containers read, mounted read-only at its path. */
+export type AppFile = {
+  id: string
+  app_id: string
+  path: string
+  /** Absent for a secret file, whose content is never sent back. */
+  content?: string
+  size: number
+  is_secret: boolean
+  executable: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type AppProcess = {
   app_id: string
   name: string

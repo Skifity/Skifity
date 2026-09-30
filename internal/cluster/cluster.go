@@ -471,6 +471,18 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		spec.Args = []string{app.StartCommand}
 	}
 
+	// Where each file goes, not what is in it: the Deployment only names the
+	// Secret, and the deployer, which opens the contents, writes that.
+	files, err := c.db.ListFiles(ctx, app.ID)
+	if err != nil {
+		return spec, err
+	}
+	for _, f := range files {
+		spec.Files = append(spec.Files, kube.FileMount{
+			Key: kube.FileKey(f.Path), Path: f.Path, Executable: f.Executable,
+		})
+	}
+
 	volumes, err := c.db.ListVolumes(ctx, app.ID)
 	if err != nil {
 		return spec, err

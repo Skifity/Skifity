@@ -133,6 +133,41 @@ The `SKIFITY_` prefix is the panel's: a variable of your own with one of these
 names is replaced by the panel's value. A value that is not known is left unset
 rather than empty.
 
+## Files
+
+Some software is configured by a file rather than by variables: nginx reads
+`nginx.conf`, Caddy a `Caddyfile`, Prometheus `prometheus.yml`, and many images
+run whatever scripts are in `/docker-entrypoint.d` when they start. An app's
+**Files**, on its Variables tab, are those: each has a path and its content,
+and is mounted read-only at that path in every container the app runs — its
+instances, its [processes](#processes), its release command and its scheduled
+and one-off commands.
+
+```
+skifity files set /etc/nginx/conf.d/default.conf ./default.conf
+skifity files set /docker-entrypoint.d/10-init.sh ./init.sh --executable
+skifity files set /app/credentials.json ./credentials.json --secret
+skifity files cat /etc/nginx/conf.d/default.conf
+skifity files rm /etc/nginx/conf.d/default.conf
+```
+
+* **Only that file is replaced.** The rest of its directory is still the
+  image's: a `default.conf` does not hide `/etc/nginx/mime.types`.
+* **Saving one restarts the app, and never rebuilds it.** A file is read when a
+  process starts, so a changed one is rolled out like a changed variable.
+* **A secret file** is like a secret variable: its content is never shown
+  again once saved, and a preview of a pull request from a fork does not get
+  it. Every file is stored encrypted, secret or not; secret only decides
+  whether it is shown.
+* **Text, and configuration-sized.** A file is at most 256 KiB and an app's
+  files together at most 900 KiB, because they travel with every container
+  that starts. Data belongs in a volume, on the Storage tab, and a binary in the
+  image.
+* **Not everywhere.** A file cannot go where Kubernetes writes its own
+  (`/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`), under `/proc`, `/sys` or
+  `/dev`, or exactly where a volume is mounted. Inside a volume is fine, which
+  is how a settings file sits beside the data it configures.
+
 ## Deployments and rollback
 
 Each deployment records the image it produced *and* the settings it ran with:

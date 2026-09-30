@@ -360,11 +360,19 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	if err != nil {
 		return nil, err
 	}
+	files, err := d.fileContents(ctx, app)
+	if err != nil {
+		return nil, err
+	}
 	// The pod template carries a hash of the configuration, so a variable
 	// change actually restarts the pods. Kubernetes does not watch a Secret's
 	// contents, so without this the new value would only appear at the next
-	// unrelated restart.
+	// unrelated restart. The files' hash only when there are files, so an
+	// app without any is not restarted by the upgrade that added them.
 	spec.Revision = kube.EnvHash(variables) + ":" + deployment.ID
+	if len(spec.Files) > 0 {
+		spec.Revision += ":" + kube.FilesHash(spec.Files, files)
+	}
 
 	if err := spec.Validate(); err != nil {
 		return nil, errdoc.BadRequest(err.Error())
@@ -382,6 +390,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 
 	objects := []any{
 		kube.BuildEnvSecret(spec, variables),
+		// Before the Deployment that mounts it, for the same reason as the
+		// variables: a pod naming a Secret that is not there does not start.
+		kube.BuildFilesSecret(spec, files),
 		// Before the Ingress that names them: a middleware that is missing
 		// when Traefik reads the Ingress is a route Traefik refuses to serve.
 		kube.BuildPasswordSecret(spec),
@@ -549,6 +560,13 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 		if err := applier.Delete(ctx, "policy/v1", "PodDisruptionBudget",
 			spec.Namespace, kube.ResourceName(spec.Name, "pdb")); err != nil {
 			d.log.Warn("could not remove the disruption budget", "app", app.ID, "error", err)
+		}
+	}
+	if len(spec.Files) == 0 {
+		// Configuration somebody removed is not left in the cluster, where
+		// anybody who can read the namespace's Secrets still reads it.
+		if err := applier.Delete(ctx, "v1", "Secret", spec.Namespace, kube.FilesSecretName(spec.Name)); err != nil {
+			d.log.Warn("could not remove the files secret", "app", app.ID, "error", err)
 		}
 	}
 	if spec.PasswordUsers == "" {
@@ -921,6 +939,23 @@ func (d *Deployer) runtimeVariables(ctx context.Context, app store.App, env stor
 			return nil, fmt.Errorf("read the variable %s: %w", row.Key, err)
 		}
 		out[row.Key] = string(plaintext)
+	}
+	return out, nil
+}
+
+// fileContents opens an app's files, keyed as their Secret holds them.
+func (d *Deployer) fileContents(ctx context.Context, app store.App) (map[string][]byte, error) {
+	rows, err := d.db.ListFiles(ctx, app.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]byte, len(rows))
+	for _, row := range rows {
+		content, err := d.keyring.Open(row.Sealed, store.FileContext(app.ID, row.Path))
+		if err != nil {
+			return nil, fmt.Errorf("read the file %s: %w", row.Path, err)
+		}
+		out[kube.FileKey(row.Path)] = content
 	}
 	return out, nil
 }

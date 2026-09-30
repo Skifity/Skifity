@@ -325,7 +325,9 @@
       "environment.previews_changed": "Previews of the environment changed",
       "component.upgraded": "Component upgraded",
       "cluster.k3s_upgrade_started": "k3s upgrade started",
-      "git_source.webhook_viewed": "Webhook secret viewed"
+      "git_source.webhook_viewed": "Webhook secret viewed",
+      "file.saved": "saved a file",
+      "file.deleted": "removed a file"
     }
   },
   "projects": {
@@ -2545,6 +2547,18 @@
         "cause": "{{0}}",
         "impact": "The action may not have completed.",
         "fix": "Try again. If it keeps happening, copy this and open an issue."
+      },
+      "file_too_large": {
+        "title": "That is more than an app's files can hold",
+        "cause": "An app's files are configuration, kept together in one place that holds at most {{0}} KiB.",
+        "impact": "The file was not saved.",
+        "fix": "Put data in a volume, or build it into the image, and keep files for configuration."
+      },
+      "file_too_many": {
+        "title": "This app has as many files as it can",
+        "cause": "An app has at most {{0}} files.",
+        "impact": "The file was not added.",
+        "fix": "Remove one it no longer needs, or put several settings in one file."
       }
     }
   },
@@ -3016,5 +3030,23 @@
       "title": "Full monitoring",
       "description": "Prometheus and Grafana, installed with Helm rather than by the panel. Skifity shows CPU and memory for every server and every instance without it."
     }
+  },
+  "files": {
+    "title": "Files",
+    "help": "Configuration the app reads from a file — an nginx.conf, a Caddyfile, a script run at start. Each is mounted read-only at its path in every container the app runs.",
+    "empty": "No files. The app runs with what its image holds.",
+    "add": "Add a file",
+    "edit": "Edit {{path}}",
+    "remove": "Remove {{path}}",
+    "removeConfirm": "{{path}} is removed from the app's containers, and the app restarts without it.",
+    "path": "Path",
+    "pathHelp": "Where the file appears in the container, from /. The rest of that directory is still the image's.",
+    "content": "Content",
+    "secret": "Secret",
+    "secretHelp": "Never shown again once saved, and not given to a preview of a pull request from a fork.",
+    "secretStored": "Saved and hidden. Type new content to replace it.",
+    "executable": "Executable",
+    "executableHelp": "For a script the image runs, such as one in /docker-entrypoint.d.",
+    "restartNote": "Saving restarts the app so it reads the file. It does not rebuild it."
   }
 }

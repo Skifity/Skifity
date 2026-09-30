@@ -56,6 +56,8 @@ type exportApp struct {
 	Volumes   []store.Volume     `json:"volumes"`
 	Schedules []store.AppJob     `json:"schedules"`
 	Processes []store.AppProcess `json:"processes"`
+	// Files carry their content unless secret, like variables.
+	Files []store.AppFile `json:"files"`
 	// Manifests is the app as Kubernetes YAML: apply it anywhere.
 	Manifests string `json:"manifests,omitempty"`
 	// ManifestError says why the objects could not be rendered, rather than
@@ -201,6 +203,21 @@ func (s *Server) exportApp(r *http.Request, app store.App, env store.Environment
 		return exportApp{}, err
 	}
 	out.Processes = processes
+
+	files, err := s.db.ListFiles(ctx, app.ID)
+	if err != nil {
+		return exportApp{}, err
+	}
+	out.Files = make([]store.AppFile, 0, len(files))
+	for _, row := range files {
+		f := row.AppFile
+		if !f.IsSecret {
+			if content, err := s.keyring.Open(row.Sealed, store.FileContext(app.ID, f.Path)); err == nil {
+				f.Content = string(content)
+			}
+		}
+		out.Files = append(out.Files, f)
+	}
 
 	out.Manifests, out.ManifestError = s.renderManifests(ctx, app, env)
 	return out, nil

@@ -451,6 +451,7 @@ var sealedSources = []sealedSource{
 	{table: "app_variables", valueCol: "value_enc", ctxPrefix: "variable"},
 	{table: "app_variables", valueCol: "preview_value_enc", ctxPrefix: "variable_preview"},
 	{table: "shared_variables", valueCol: "value_enc", ctxPrefix: "shared_variable"},
+	{table: "app_files", valueCol: "content_enc", ctxPrefix: "file"},
 	{table: "servers", valueCol: "ssh_key_enc", ctxPrefix: "server_key"},
 	{table: "databases", valueCol: "credentials_enc", ctxPrefix: "database_credentials"},
 	{table: "git_sources", valueCol: "config_enc", ctxPrefix: "git_source"},

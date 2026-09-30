@@ -144,6 +144,8 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 			Name: v.Name, MountPath: v.MountPath,
 		})
 	}
+	// And its files: a migration reads the same settings.yml the app does.
+	container.VolumeMounts = append(container.VolumeMounts, fileMounts(s.App)...)
 
 	podSpec := corev1.PodSpec{
 		RestartPolicy: corev1.RestartPolicyNever,
@@ -171,6 +173,9 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 				},
 			},
 		})
+	}
+	if files := filesPodVolume(s.App); files != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *files)
 	}
 
 	// No retries. A migration that half-ran and then ran again is worse than

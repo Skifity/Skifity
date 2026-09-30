@@ -12,6 +12,7 @@ import { AppPasswordProtection } from "@/components/app/password-protection"
 import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
+import { FilesCard } from "@/components/app/files"
 import { ProcessesCard } from "@/components/app/processes"
 import { SettingsTab, settingsKey } from "@/components/app/settings-tab"
 import { StorageTab } from "@/components/app/storage-tab"
@@ -239,13 +240,14 @@ export function AppDetailPage() {
         <TabsContent value="console" className="pt-4">
           <ConsoleTab app={current} />
         </TabsContent>
-        <TabsContent value="variables" className="pt-4">
+        <TabsContent value="variables" className="space-y-6 pt-4">
           <VariablesEditor
             base={`/api/apps/${appId}`}
             queryKey={["variables", appId]}
             showBuildTime
             showPreviews
           />
+          <FilesCard app={current} />
         </TabsContent>
         <TabsContent value="domains" className="pt-4">
           <DomainsTab app={current} />

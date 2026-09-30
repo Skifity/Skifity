@@ -71,6 +71,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdDB(ctx, rest, stdout)
 	case "processes", "ps":
 		err = cmdProcesses(ctx, rest, stdout)
+	case "files":
+		err = cmdFiles(ctx, rest, stdout)
 	case "plan", "apply":
 		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
@@ -221,6 +223,7 @@ Working with apps:
   env                   List, set, import or remove environment variables
   scale                 Change the number of instances or turn on autoscaling
   processes             List, add or stop the app's workers and other processes
+  files                 List, save or remove files the app reads, such as an nginx.conf
   rollback              Go back to a previous deployment
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop

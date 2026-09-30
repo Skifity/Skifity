@@ -317,7 +317,9 @@
       "environment.previews_changed": "Pratinjau environment diubah",
       "component.upgraded": "Komponen ditingkatkan",
       "cluster.k3s_upgrade_started": "Peningkatan k3s dimulai",
-      "git_source.webhook_viewed": "Secret webhook dilihat"
+      "git_source.webhook_viewed": "Secret webhook dilihat",
+      "file.saved": "menyimpan sebuah berkas",
+      "file.deleted": "menghapus sebuah berkas"
     }
   },
   "projects": {
@@ -2531,6 +2533,18 @@
         "cause": "{{0}}",
         "impact": "Tindakan itu mungkin tidak selesai.",
         "fix": "Coba lagi. Jika terus terjadi, salin ini dan buka issue."
+      },
+      "file_too_large": {
+        "title": "Itu melebihi kapasitas berkas sebuah aplikasi",
+        "cause": "Berkas sebuah aplikasi adalah konfigurasi, disimpan bersama di satu tempat yang menampung paling banyak {{0}} KiB.",
+        "impact": "Berkas tidak disimpan.",
+        "fix": "Simpan data di volume, atau masukkan ke dalam image, dan gunakan berkas untuk konfigurasi."
+      },
+      "file_too_many": {
+        "title": "Aplikasi ini sudah memiliki berkas sebanyak yang bisa ditampung",
+        "cause": "Sebuah aplikasi memiliki paling banyak {{0}} berkas.",
+        "impact": "Berkas tidak ditambahkan.",
+        "fix": "Hapus yang tidak lagi diperlukan, atau gabungkan beberapa pengaturan dalam satu berkas."
       }
     }
   },
@@ -3000,5 +3014,23 @@
       "title": "Pemantauan lengkap",
       "description": "Prometheus dan Grafana, dipasang dengan Helm, bukan oleh panel. Skifity menampilkan CPU dan memori setiap server dan setiap instans tanpa itu."
     }
+  },
+  "files": {
+    "title": "Berkas",
+    "help": "Konfigurasi yang dibaca aplikasi dari berkas — nginx.conf, Caddyfile, skrip yang dijalankan saat mulai. Setiap berkas dipasang hanya-baca di jalurnya pada setiap kontainer aplikasi.",
+    "empty": "Tidak ada berkas. Aplikasi berjalan dengan isi image-nya.",
+    "add": "Tambah berkas",
+    "edit": "Sunting {{path}}",
+    "remove": "Hapus {{path}}",
+    "removeConfirm": "{{path}} dihapus dari kontainer aplikasi, dan aplikasi dimulai ulang tanpanya.",
+    "path": "Jalur",
+    "pathHelp": "Tempat berkas muncul di kontainer, dari /. Sisa direktori itu tetap milik image.",
+    "content": "Isi",
+    "secret": "Rahasia",
+    "secretHelp": "Tidak pernah ditampilkan lagi setelah disimpan, dan tidak diberikan ke pratinjau pull request dari fork.",
+    "secretStored": "Tersimpan dan tersembunyi. Ketik isi baru untuk menggantinya.",
+    "executable": "Dapat dieksekusi",
+    "executableHelp": "Untuk skrip yang dijalankan image, misalnya di /docker-entrypoint.d.",
+    "restartNote": "Menyimpan akan memulai ulang aplikasi agar membaca berkas. Tidak membangun ulang."
   }
 }

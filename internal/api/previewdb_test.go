@@ -216,3 +216,51 @@ func TestAPreviewRemembersItCameFromAFork(t *testing.T) {
 		t.Fatalf("a fork's preview environment does not say it came from a fork: %+v, %v", env, err)
 	}
 }
+
+// A preview is the app with the pull request's code, so it reads the app's
+// files — an nginx.conf, a settings.yml — but a fork's gets no secret one,
+// for the reason it gets no secret variable.
+func TestAPreviewGetsTheAppsFilesAndAForksNoSecretOnes(t *testing.T) {
+	withFiles := func() previewDBHarness {
+		p := withLinkedDatabase(t)
+		for path, secret := range map[string]bool{"/etc/nginx/nginx.conf": false, "/app/credentials.json": true} {
+			sealed, err := p.keyring.Seal([]byte("content of "+path), store.FileContext(p.app.ID, path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := p.db.SetFile(t.Context(), &store.AppFile{AppID: p.app.ID, Path: path, Size: 1, IsSecret: secret}, sealed); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return p
+	}
+
+	paths := func(p previewDBHarness, appID string) map[string]string {
+		rows, err := p.db.ListFiles(t.Context(), appID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, row := range rows {
+			// Resealed under the copy: opening it under the copy's own
+			// context is what proves that.
+			content, err := p.keyring.Open(row.Sealed, store.FileContext(appID, row.Path))
+			if err != nil {
+				t.Fatalf("%s was not resealed for the preview: %v", row.Path, err)
+			}
+			out[row.Path] = string(content)
+		}
+		return out
+	}
+
+	p := withFiles()
+	same := paths(p, p.openPullRequest(t, 31, false).ID)
+	if same["/etc/nginx/nginx.conf"] != "content of /etc/nginx/nginx.conf" || same["/app/credentials.json"] == "" {
+		t.Errorf("a same-repository preview has %v", same)
+	}
+	p = withFiles()
+	forked := paths(p, p.openPullRequest(t, 32, true).ID)
+	if _, ok := forked["/app/credentials.json"]; ok || forked["/etc/nginx/nginx.conf"] == "" {
+		t.Errorf("a fork's preview has %v, want only the ordinary file", forked)
+	}
+}

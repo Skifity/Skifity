@@ -317,7 +317,9 @@
       "environment.previews_changed": "环境的预览设置已修改",
       "component.upgraded": "组件已升级",
       "cluster.k3s_upgrade_started": "k3s 升级已开始",
-      "git_source.webhook_viewed": "查看了 Webhook 密钥"
+      "git_source.webhook_viewed": "查看了 Webhook 密钥",
+      "file.saved": "保存了一个文件",
+      "file.deleted": "删除了一个文件"
     }
   },
   "projects": {
@@ -2531,6 +2533,18 @@
         "cause": "{{0}}",
         "impact": "操作可能未完成。",
         "fix": "请重试。如果问题持续出现，请复制此信息并提交 issue。"
+      },
+      "file_too_large": {
+        "title": "超出了应用文件的容量",
+        "cause": "应用的文件是配置，集中保存在一个最多容纳 {{0}} KiB 的地方。",
+        "impact": "文件未保存。",
+        "fix": "将数据放在卷中或构建进镜像，文件只用于配置。"
+      },
+      "file_too_many": {
+        "title": "此应用的文件数量已达上限",
+        "cause": "一个应用最多有 {{0}} 个文件。",
+        "impact": "文件未添加。",
+        "fix": "删除不再需要的文件，或将多个设置放在一个文件中。"
       }
     }
   },
@@ -3000,5 +3014,23 @@
       "title": "完整监控",
       "description": "Prometheus 和 Grafana，用 Helm 安装而不是由面板安装。即使没有它们，Skifity 也会显示每台服务器和每个实例的 CPU 与内存。"
     }
+  },
+  "files": {
+    "title": "文件",
+    "help": "应用从文件读取的配置——nginx.conf、Caddyfile、启动时运行的脚本。每个文件以只读方式挂载到应用每个容器中的对应路径。",
+    "empty": "没有文件。应用使用镜像中的内容运行。",
+    "add": "添加文件",
+    "edit": "编辑 {{path}}",
+    "remove": "删除 {{path}}",
+    "removeConfirm": "{{path}} 将从应用的容器中删除，应用会在没有它的情况下重启。",
+    "path": "路径",
+    "pathHelp": "文件在容器中的位置，从 / 开始。该目录的其余内容仍来自镜像。",
+    "content": "内容",
+    "secret": "机密",
+    "secretHelp": "保存后不再显示，也不会提供给来自复刻仓库的拉取请求预览。",
+    "secretStored": "已保存并隐藏。输入新内容以替换。",
+    "executable": "可执行",
+    "executableHelp": "用于镜像运行的脚本，例如 /docker-entrypoint.d 中的脚本。",
+    "restartNote": "保存会重启应用以读取该文件，不会重新构建。"
   }
 }

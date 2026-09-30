@@ -269,3 +269,22 @@ func TestAnInternalAppHasNoIngress(t *testing.T) {
 		t.Fatal("an internal app lost the Service the others reach it by")
 	}
 }
+
+// Every object built from an app's spec mounts its files — the Advanced view,
+// a sleeping app woken, a scheduled command — not only the deploy that wrote
+// the Secret. A spec that left them out re-applied the app without them.
+func TestAnAppsSpecCarriesWhereItsFilesGo(t *testing.T) {
+	c, db, app, env, _ := autoDomainFixture(t)
+	file := store.AppFile{AppID: app.ID, Path: "/etc/nginx/nginx.conf", Size: 10, Executable: true}
+	if err := db.SetFile(t.Context(), &file, "sealed-not-read-here"); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := c.SpecFor(t.Context(), app, env, "registry.local/web:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spec.Files) != 1 || spec.Files[0].Path != "/etc/nginx/nginx.conf" || !spec.Files[0].Executable ||
+		spec.Files[0].Key != kube.FileKey("/etc/nginx/nginx.conf") {
+		t.Fatalf("the spec's files are %+v", spec.Files)
+	}
+}

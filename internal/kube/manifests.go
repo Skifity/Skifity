@@ -102,6 +102,7 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 			MountPath: v.MountPath,
 		})
 	}
+	container.VolumeMounts = append(container.VolumeMounts, fileMounts(s)...)
 
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{container},
@@ -147,6 +148,9 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 				},
 			},
 		})
+	}
+	if files := filesPodVolume(s); files != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *files)
 	}
 
 	if s.SpreadAcrossServers {

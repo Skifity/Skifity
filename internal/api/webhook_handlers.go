@@ -499,6 +499,9 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, fork, linked); err != nil {
 		return undo(err)
 	}
+	if err := s.copyPreviewFiles(r, app.ID, previewApp.ID, fork); err != nil {
+		return undo(err)
+	}
 	if fork {
 		s.log.Info("a preview from a fork was given no secrets", "app", previewApp.ID)
 	}
@@ -634,6 +637,36 @@ func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string
 		}
 		variable := store.Variable{AppID: toAppID, Key: row.Key, IsSecret: row.IsSecret, BuildTime: row.BuildTime}
 		if err := s.db.SetVariable(r.Context(), &variable, sealed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copyPreviewFiles gives a preview copy the app's files, resealed under the
+// copy, and — for a fork, for the reason copyPreviewVariables gives — none of
+// the secret ones. A preview without its nginx.conf is a preview of a
+// different app.
+func (s *Server) copyPreviewFiles(r *http.Request, fromAppID, toAppID string, fork bool) error {
+	rows, err := s.db.ListFiles(r.Context(), fromAppID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if fork && row.IsSecret {
+			continue
+		}
+		content, err := s.keyring.Open(row.Sealed, store.FileContext(fromAppID, row.Path))
+		if err != nil {
+			return err
+		}
+		sealed, err := s.keyring.Seal(content, store.FileContext(toAppID, row.Path))
+		if err != nil {
+			return err
+		}
+		file := store.AppFile{AppID: toAppID, Path: row.Path, Size: row.Size,
+			IsSecret: row.IsSecret, Executable: row.Executable}
+		if err := s.db.SetFile(r.Context(), &file, sealed); err != nil {
 			return err
 		}
 	}

@@ -322,6 +322,27 @@ func TooManyProcesses(limit int) *Problem {
 		WithDocs("/docs/concepts#processes")
 }
 
+// FilesTooLarge is a file, or an app's files together, over what one Secret
+// holds.
+func FilesTooLarge(limitKiB int) *Problem {
+	return New("file.too_large", "That is more than an app's files can hold").
+		WithCause("An app's files are configuration, kept together in one place that holds at most %d KiB.", limitKiB).
+		WithImpact("The file was not saved.").
+		WithFix("Put data in a volume, or build it into the image, and keep files for configuration.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#files")
+}
+
+// TooManyFiles is an app that already has as many files as it can.
+func TooManyFiles(limit int) *Problem {
+	return New("file.too_many", "This app has as many files as it can").
+		WithCause("An app has at most %d files.", limit).
+		WithImpact("The file was not added.").
+		WithFix("Remove one it no longer needs, or put several settings in one file.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#files")
+}
+
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.
 func TunnelUnreachable(database string) *Problem {
 	return New("database.tunnel_unreachable", "The panel could not reach this database").

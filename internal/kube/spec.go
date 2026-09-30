@@ -113,6 +113,10 @@ type AppSpec struct {
 	// an app whose image lives in a registry that is not the one in the
 	// cluster. Empty for everything else, which is the common case.
 	ImagePullSecret string
+
+	// Files are mounted read-only into every container the app runs, from
+	// the Secret FilesSecretName names. See files.go.
+	Files []FileMount
 }
 
 // Confinement is how a pod's security context is written for this app.
@@ -183,6 +187,9 @@ func (s AppSpec) Validate() error {
 			return fmt.Errorf("two volumes are both mounted at %s", v.MountPath)
 		}
 		seenMounts[v.MountPath] = true
+	}
+	if err := validateFiles(s); err != nil {
+		return err
 	}
 	seenHosts := map[string]bool{}
 	for _, d := range s.Domains {
