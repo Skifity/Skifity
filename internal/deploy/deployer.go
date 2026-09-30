@@ -69,7 +69,22 @@ func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Clus
 }
 
 // maxDeployDuration bounds a whole deploy, build included.
-const maxDeployDuration = 45 * time.Minute
+//
+// Forty-five minutes, plus however much longer than the default an app may
+// be allowed to take to start: a slow build followed by an app with half an
+// hour to warm up is slow, not stuck, and a bound that cut it off would fail a
+// deployment that was doing what it had been told it could.
+const maxDeployDuration = 45*time.Minute +
+	(kube.MaxHealthStartSeconds-kube.DefaultHealthStartSeconds)*time.Second
+
+// rolloutWait is how long a deployment waits for an app's new instances to
+// be ready: ten minutes, or the app's start budget with room for pulling and
+// scheduling on top, whichever is longer. It has to be at least the budget,
+// or a deployment gives up on an instance that is still within the time the
+// app's settings allow it.
+func rolloutWait(spec kube.AppSpec) time.Duration {
+	return max(10*time.Minute, time.Duration(spec.HealthStart()+kube.RolloutMargin)*time.Second)
+}
 
 // Deploy queues a deployment and starts it.
 //
@@ -476,7 +491,7 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	}
 
 	d.appendLog(ctx, deployment.ID, "Waiting for the new instances to become ready.")
-	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, 10*time.Minute); err != nil {
+	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, rolloutWait(spec)); err != nil {
 		status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, app.Slug)
 		ready, wanted := 0, int(spec.DesiredReplicas())
 		reason := err.Error()
@@ -1062,6 +1077,12 @@ func (d *Deployer) runtimeSpec(ctx context.Context, app store.App, env store.Env
 		"health_path":    app.HealthPath,
 		"start_command":  app.StartCommand,
 		"domains":        hostnames,
+		// How the version's instances were checked. A health check changed
+		// to one the app cannot pass is a bad configuration change like any
+		// other, and a rollback is how it is undone.
+		"health_check":           app.HealthCheck,
+		"health_start_seconds":   app.HealthStartSeconds,
+		"health_timeout_seconds": app.HealthTimeoutSeconds,
 	}
 	encoded, err := json.Marshal(spec)
 	if err != nil {
@@ -1094,6 +1115,7 @@ func (d *Deployer) restoreRuntimeSpec(ctx context.Context, appID, encoded string
 	if err := json.Unmarshal([]byte(encoded), &spec); err != nil {
 		return fmt.Errorf("read the recorded settings: %w", err)
 	}
+	spec = spec.WithHealthDefaults()
 
 	app, err := d.db.GetApp(ctx, appID)
 	if err != nil {
@@ -1110,6 +1132,9 @@ func (d *Deployer) restoreRuntimeSpec(ctx context.Context, appID, encoded string
 	app.MemLimitMB = spec.MemLimitMB
 	app.Port = spec.Port
 	app.HealthPath = spec.HealthPath
+	app.HealthCheck = spec.HealthCheck
+	app.HealthStartSeconds = spec.HealthStartSeconds
+	app.HealthTimeoutSeconds = spec.HealthTimeoutSeconds
 	app.StartCommand = spec.StartCommand
 	return d.db.UpdateApp(ctx, &app)
 }

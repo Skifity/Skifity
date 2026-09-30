@@ -616,7 +616,18 @@
     "tagPattern": "Tag pattern",
     "tagPatternHelp": "A pushed tag whose name matches deploys the commit it points at, and pushes to the branch deploy nothing. * matches anything but a slash, ? one character, [0-9] one of a set: v* deploys v1.4.0 and v2.0.0-rc.1.",
     "runNow": "Run now",
-    "runNowNamed": "Run {{name}} now"
+    "runNowNamed": "Run {{name}} now",
+    "healthCheck": "Health check",
+    "healthCheckHelp": "How a new instance shows it is ready before it gets traffic, and how one that has stopped answering is noticed.",
+    "healthCheckHttp": "HTTP: ask the health path",
+    "healthCheckTcp": "TCP: check the port is open",
+    "healthCheckNone": "None: do not check",
+    "healthCheckNoneWarning": "Nothing checks this app's instances",
+    "healthCheckNoneWarningHelp": "Each new instance gets traffic as soon as its process starts, whether it is ready or not, and one that stops answering keeps getting it. A deploy is then zero-downtime only if the app is ready the moment it starts. Use this only for software that cannot answer a check.",
+    "healthStart": "Time to start (seconds)",
+    "healthStartHelp": "How long a new instance may take before it has to answer, from {{min}} to {{max}}. Two minutes suits most apps; a JVM, or an image that migrates its database before it listens, may need five to ten.",
+    "healthTimeout": "Check timeout (seconds)",
+    "healthTimeoutHelp": "How long one check waits for an answer, from {{min}} to {{max}}."
   },
   "deploy": {
     "title": "Deployments",
@@ -675,7 +686,10 @@
       "mem_limit_mb": "Memory limit (MB)",
       "port": "Port",
       "health_path": "Health check path",
-      "start_command": "Start command"
+      "start_command": "Start command",
+      "health_check": "Health check",
+      "health_start_seconds": "Time to start (s)",
+      "health_timeout_seconds": "Check timeout (s)"
     },
     "promote": "Promote",
     "promoteTitle": "Promote #{{number}}",
@@ -745,7 +759,21 @@
     "recordValue": "Value",
     "dnsPropagation": "A new record usually works within a few minutes, and can take a few hours.",
     "checkAgain": "Check again",
-    "dnsNameVaries": "Some registrars want the whole name here; others want only the part in front of your domain."
+    "dnsNameVaries": "Some registrars want the whole name here; others want only the part in front of your domain.",
+    "checkDns": "Check DNS",
+    "dnsStatusHere": "DNS points here",
+    "dnsStatusPartly": "DNS points here only in part",
+    "dnsStatusElsewhere": "DNS points elsewhere: {{addresses}}",
+    "dnsStatusMissing": "No DNS record yet",
+    "dnsStatusUnknown": "DNS points at {{addresses}}",
+    "dnsHereHelp": "Visitors who use this address reach this app.",
+    "dnsPartlyHelp": "{{addresses}} is not this cluster, so some visitors reach this app and some do not. Remove that record, or change it to {{expected}}.",
+    "dnsElsewhereHelp": "Change the record to {{expected}}. The old address keeps getting visitors until you do.",
+    "dnsMissingHelp": "Nothing answers for this name yet. Create the record, and check again in a few minutes.",
+    "dnsUnknownHelp": "This panel does not know its own public address, so it cannot tell whether that is here. An administrator can set it under Settings, Domains.",
+    "dnsCertificateSoon": "The certificate is issued once DNS points here, so it should follow within a few minutes.",
+    "dnsCertificateAfter": "The certificate is issued once DNS points here.",
+    "dnsRecordsFound": "Records found:"
   },
   "scaling": {
     "title": "Scaling",
@@ -831,6 +859,11 @@
         "title": "More than one instance is configured, and this app has a volume",
         "detail": "The extra instances will stay pending, or will be scheduled onto the same server and write to the same files at once.",
         "fix": "Set the instance count back to one, or enable cross-node storage, or move the data out of the volume."
+      },
+      "health_check_off": {
+        "title": "The health check is off",
+        "detail": "Each instance is sent traffic as soon as its process starts, whether it is ready or not, and one that stops answering keeps receiving requests. With several instances, some visitors get errors and others do not.",
+        "fix": "Turn the health check on under the app's settings: HTTP with a path that returns 200 once the app is ready, or TCP if it has no such path."
       }
     }
   },
@@ -1697,7 +1730,7 @@
         "title": "The new version did not start",
         "cause": "{{0}} of {{1}} instances of {{2}} became ready before the timeout. {{3}}",
         "impact": "Kubernetes kept the previous version running, so your app is still up. The new version was not rolled out.",
-        "fix": "Check the app logs for a crash on startup. The usual causes are a missing environment variable, a health check path that does not exist yet, and a port mismatch between the app and the configured port."
+        "fix": "Check the app logs for a crash on startup. The usual causes are a missing environment variable, a health check path that does not exist yet, a port mismatch between the app and the configured port, and an app that needs longer to start than its time to start under Settings allows."
       },
       "detect_unreadable": {
         "title": "That repository could not be read",
@@ -2646,6 +2679,36 @@
         "cause": "It has been used already, it is more than 30 minutes old, or it was never a link this panel sent.",
         "impact": "Your password has not changed.",
         "fix": "Ask for a new link from the sign-in page. Only the newest one works."
+      },
+      "app_health_check_unknown": {
+        "title": "That is not a health check",
+        "cause": "{{0}} is not a way to check an app. It is http, tcp or none.",
+        "impact": "Nothing was changed.",
+        "fix": "Choose http to ask the app's health path, tcp to check that its port is open, or none for software that answers neither."
+      },
+      "app_health_path_required": {
+        "title": "An HTTP health check needs a path",
+        "cause": "The health check is set to HTTP, which asks the app a path, and there is no path to ask.",
+        "impact": "Nothing was changed.",
+        "fix": "Enter a path that returns 200 once the app is ready, such as /healthz, or choose TCP to check only that the port is open."
+      },
+      "app_health_start_out_of_range": {
+        "title": "That is not a time an app can be given to start",
+        "cause": "The time to start has to be from {{0}} to {{1}} seconds, and it is {{2}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Give the app as long as its slowest start takes, with some room: two minutes suits most apps, and five to ten a JVM or an image that migrates its database before it listens."
+      },
+      "app_health_timeout_out_of_range": {
+        "title": "That is not a time a health check can wait",
+        "cause": "A health check can wait from {{0}} to {{1}} seconds for an answer, and this one is set to {{2}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Three seconds suits most apps. Raise it only for a health path that does real work, such as checking the database, and keep that work quick."
+      },
+      "domain_dns_lookup_failed": {
+        "title": "The DNS check did not get an answer",
+        "cause": "Looking up {{0}} did not finish: the DNS server the panel asks timed out or refused.",
+        "impact": "Nothing was changed. The domain is still attached, and whether it points here is not known yet.",
+        "fix": "Try again in a minute. If it keeps failing, check {{0}} from your own computer with `dig +short {{1}}`; a panel whose server cannot resolve names at all has a DNS problem of its own."
       }
     }
   },

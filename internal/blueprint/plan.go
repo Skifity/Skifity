@@ -268,11 +268,12 @@ func createApp(name string, want App, envID, gitSource string) (Step, error) {
 		return Step{}, errdoc.BlueprintInvalid(fmt.Sprintf("app %s is not in the environment, and without a repo or an image "+
 			"it cannot be made from the file: send its folder once with `skifity up`, then the file describes it", name))
 	}
+	health := want.health()
 	for key, value := range map[string]string{
 		"branch": want.Branch, "root_dir": want.Root, "builder": want.Builder, "dockerfile_path": want.Dockerfile,
 		"build_command": want.Build, "static_dir": want.Static, "start_command": want.Start,
-		"release_command": want.Release, "health_path": want.Health, "watch_paths": strings.Join(want.Watch, "\n"),
-		"deploy_trigger": want.DeployTrigger, "tag_pattern": want.TagPattern,
+		"release_command": want.Release, "health_path": health.Path, "watch_paths": strings.Join(want.Watch, "\n"),
+		"health_check": health.Check, "deploy_trigger": want.DeployTrigger, "tag_pattern": want.TagPattern,
 	} {
 		if value != "" {
 			body[key] = value
@@ -280,6 +281,12 @@ func createApp(name string, want App, envID, gitSource string) (Step, error) {
 	}
 	if want.Port != nil {
 		body["port"] = *want.Port
+	}
+	if health.Start != 0 {
+		body["health_start_seconds"] = health.Start
+	}
+	if health.Timeout != 0 {
+		body["health_timeout_seconds"] = health.Timeout
 	}
 	if want.Internal != nil {
 		body["internal"] = *want.Internal
@@ -320,13 +327,23 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 		field("static", "static_dir", want.Static, current.StaticDir)
 		field("start", "start_command", want.Start, current.StartCommand)
 		field("release", "release_command", want.Release, current.ReleaseCommand)
-		field("health", "health_path", want.Health, current.HealthPath)
+		health := want.health()
+		field("health", "health_path", health.Path, current.HealthPath)
+		field("health check", "health_check", health.Check, current.HealthCheck)
 		field("watch", "watch_paths", strings.Join(want.Watch, "\n"), current.WatchPaths)
 		field("deploy trigger", "deploy_trigger", want.DeployTrigger, current.DeployTrigger)
 		field("tag pattern", "tag_pattern", want.TagPattern, current.TagPattern)
 		if want.Port != nil && *want.Port != current.Port {
 			patch["port"] = *want.Port
 			changed = append(changed, fmt.Sprintf("port %d → %d", current.Port, *want.Port))
+		}
+		if health.Start != 0 && health.Start != current.HealthStartSeconds {
+			patch["health_start_seconds"] = health.Start
+			changed = append(changed, fmt.Sprintf("health start %ds → %ds", current.HealthStartSeconds, health.Start))
+		}
+		if health.Timeout != 0 && health.Timeout != current.HealthTimeoutSeconds {
+			patch["health_timeout_seconds"] = health.Timeout
+			changed = append(changed, fmt.Sprintf("health timeout %ds → %ds", current.HealthTimeoutSeconds, health.Timeout))
 		}
 		if want.Internal != nil && *want.Internal != current.Internal {
 			patch["internal"] = *want.Internal

@@ -57,16 +57,10 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 			ContainerPort: int32(s.Port),
 			Protocol:      corev1.ProtocolTCP,
 		}}
-		container.ReadinessProbe = buildProbe(s, 3, 2)
-		container.LivenessProbe = buildProbe(s, 10, 6)
-		// A startup probe gives a slow framework time to boot without making
-		// the liveness probe lenient forever afterwards.
-		container.StartupProbe = &corev1.Probe{
-			ProbeHandler:     probeHandler(s),
-			PeriodSeconds:    3,
-			FailureThreshold: 40, // up to two minutes to start
-			TimeoutSeconds:   3,
-		}
+		// Readiness, liveness, and a startup probe that gives a slow framework
+		// the time the app's settings allow it — or none, when the app asked
+		// for none. See health.go.
+		setProbes(&container, s)
 		// The other half of a zero-downtime deploy.
 		//
 		// maxUnavailable: 0 keeps the capacity, and on its own it still drops
@@ -215,6 +209,9 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 			// Ten revisions is enough history for rollback without filling
 			// etcd with ReplicaSets nobody will ever use.
 			RevisionHistoryLimit: ptr(int32(10)),
+			// Longer than Kubernetes' ten minutes only for an app allowed
+			// nearly that long to start; see progressDeadline.
+			ProgressDeadlineSeconds: progressDeadline(s),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -552,31 +549,6 @@ func pullSecrets(s AppSpec) []corev1.LocalObjectReference {
 		}
 	}
 	return out
-}
-
-func probeHandler(s AppSpec) corev1.ProbeHandler {
-	if s.HealthPath != "" {
-		return corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: s.HealthPath,
-				Port: intstr.FromString("http"),
-			},
-		}
-	}
-	// Without a health path, a TCP connect is the only check that does not risk
-	// calling an endpoint with side effects.
-	return corev1.ProbeHandler{
-		TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromString("http")},
-	}
-}
-
-func buildProbe(s AppSpec, period, failureThreshold int32) *corev1.Probe {
-	return &corev1.Probe{
-		ProbeHandler:     probeHandler(s),
-		PeriodSeconds:    period,
-		TimeoutSeconds:   3,
-		FailureThreshold: failureThreshold,
-	}
 }
 
 func buildPlainEnv(s AppSpec) []corev1.EnvVar {

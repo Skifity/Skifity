@@ -1,14 +1,18 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   BookOpenIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
   ExternalLinkIcon,
   GlobeIcon,
+  InfoIcon,
   LockIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
+  TriangleAlertIcon,
 } from "lucide-react"
 
 import { useConfirm } from "@/components/confirm-dialog"
@@ -33,12 +37,16 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { App, Domain } from "@/lib/types"
+import type { AddedDomain, App, DNSCheck, Domain } from "@/lib/types"
 
 export function DomainsTab({ app }: { app: App }) {
   const { t } = useTranslation()
   const [hostname, setHostname] = useState("")
   const [adding, setAdding] = useState(false)
+  // What each domain's DNS said when it was added. Adding one answers with
+  // its DNS, so the first thing somebody sees after adding a domain is
+  // whether it already points here, without pressing anything.
+  const [dnsWhenAdded, setDNSWhenAdded] = useState<Record<string, DNSCheck>>({})
 
   const domains = useQuery({
     queryKey: ["domains", app.id],
@@ -46,9 +54,12 @@ export function DomainsTab({ app }: { app: App }) {
   })
 
   const add = useMutation({
-    mutationFn: () => api.post(`/api/apps/${app.id}/domains`, { hostname: hostname.trim() }),
-    onSuccess: () => {
+    mutationFn: () =>
+      api.post<AddedDomain>(`/api/apps/${app.id}/domains`, { hostname: hostname.trim() }),
+    onSuccess: (added) => {
       void queryClient.invalidateQueries({ queryKey: ["domains", app.id] })
+      const dns = added.dns
+      if (dns) setDNSWhenAdded((current) => ({ ...current, [added.id]: dns }))
       setHostname("")
       setAdding(false)
     },
@@ -175,12 +186,8 @@ export function DomainsTab({ app }: { app: App }) {
                 )}
               </div>
 
-              {domain.status === "pending" && !domain.auto && (
-                <DNSInstructions
-                  domain={domain}
-                  rechecking={domains.isFetching}
-                  onRecheck={() => void domains.refetch()}
-                />
+              {!domain.auto && (
+                <DomainDNS app={app} domain={domain} whenAdded={dnsWhenAdded[domain.id]} />
               )}
 
               {/* A certificate that stopped trying says why, and cert-manager's
@@ -204,6 +211,121 @@ export function DomainsTab({ app }: { app: App }) {
 }
 
 /**
+ * Whether a domain's DNS points here, on demand.
+ *
+ * A certificate that stays "waiting" looked the same whether the record was
+ * right and a minute old or pointed at the old host, and only one of those
+ * fixes itself. The panel asks DNS and says which, with the address it found.
+ * The answer shown is the latest one: this button's, or the one that came
+ * back with adding the domain.
+ */
+function DomainDNS({ app, domain, whenAdded }: { app: App; domain: Domain; whenAdded?: DNSCheck }) {
+  const { t } = useTranslation()
+  const check = useMutation({
+    mutationFn: () => api.post<DNSCheck>(`/api/apps/${app.id}/domains/${domain.id}/check`),
+    // The certificate's state may have moved on as well, and it is on the
+    // same card.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["domains", app.id] }),
+  })
+  const result = check.data ?? whenAdded
+
+  const button = (
+    <Button variant="outline" size="sm" disabled={check.isPending} onClick={() => check.mutate()}>
+      {check.isPending ? <Spinner /> : <RefreshCwIcon className="size-3.5" />}
+      {result ? t("domains.checkAgain") : t("domains.checkDns")}
+    </Button>
+  )
+
+  return (
+    <>
+      {domain.status === "pending" ? (
+        <DNSInstructions domain={domain} action={button} />
+      ) : (
+        <div>{button}</div>
+      )}
+      {check.error != null && <ErrorDisplay error={check.error} compact />}
+      {result && !check.isPending && <DNSResult check={result} domain={domain} />}
+    </>
+  )
+}
+
+/**
+ * What DNS said, in one sentence and the records behind it.
+ *
+ * The certificate is mentioned where it is still to come, because the two are
+ * one wait to the person watching: cert-manager cannot prove a domain it is
+ * not reached at, so the certificate follows the record, and saying so turns
+ * "waiting" into something with a cause.
+ */
+function DNSResult({ check, domain }: { check: DNSCheck; domain: Domain }) {
+  const { t } = useTranslation()
+  const addresses = check.found
+    .filter((record) => record.type !== "CNAME" && !record.here)
+    .map((record) => record.value)
+    .join(", ")
+  const found = check.found.map((record) => record.value).join(", ")
+  const expected = check.expected[0] ?? ""
+  // Still waiting for its certificate: soon once DNS is right. One that has
+  // stopped trying says so above this, with what to do about it.
+  const certificateToCome = domain.tls && domain.status !== "active"
+  const certificateSoon = domain.tls && domain.status === "pending"
+
+  const shown = {
+    here: {
+      variant: "success" as const,
+      icon: <CircleCheckIcon />,
+      title: t("domains.dnsStatusHere"),
+      help: certificateSoon ? t("domains.dnsCertificateSoon") : t("domains.dnsHereHelp"),
+    },
+    partly: {
+      variant: "warning" as const,
+      icon: <TriangleAlertIcon />,
+      title: t("domains.dnsStatusPartly"),
+      help: t("domains.dnsPartlyHelp", { addresses, expected }),
+    },
+    elsewhere: {
+      variant: "warning" as const,
+      icon: <TriangleAlertIcon />,
+      title: t("domains.dnsStatusElsewhere", { addresses }),
+      help: t("domains.dnsElsewhereHelp", { expected }),
+    },
+    missing: {
+      variant: "info" as const,
+      icon: <CircleDashedIcon />,
+      title: t("domains.dnsStatusMissing"),
+      help: t("domains.dnsMissingHelp"),
+    },
+    unknown: {
+      variant: "default" as const,
+      icon: <InfoIcon />,
+      title: t("domains.dnsStatusUnknown", { addresses: found }),
+      help: t("domains.dnsUnknownHelp"),
+    },
+  }[check.status]
+
+  return (
+    <Alert variant={shown.variant}>
+      {shown.icon}
+      <AlertTitle>{shown.title}</AlertTitle>
+      <AlertDescription className="space-y-1">
+        <p>{shown.help}</p>
+        {certificateToCome && check.status !== "here" && check.status !== "unknown" && (
+          <p>{t("domains.dnsCertificateAfter")}</p>
+        )}
+        {check.found.length > 0 && (
+          <p className="text-xs">
+            {t("domains.dnsRecordsFound")}{" "}
+            <span className="font-mono">
+              {check.found.map((record) => `${record.type} ${record.value}`).join(" · ")}
+            </span>
+          </p>
+        )}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
+/**
  * The record to create, as a record.
  *
  * Written as a sentence first — "Create an A record for blog.example.com
@@ -216,11 +338,7 @@ export function DomainsTab({ app }: { app: App }) {
  * An address that is a name rather than a number is a CNAME, which is what an
  * install behind a load balancer has, so the type follows the value.
  */
-function DNSInstructions({ domain, onRecheck, rechecking }: {
-  domain: Domain
-  onRecheck: () => void
-  rechecking: boolean
-}) {
+function DNSInstructions({ domain, action }: { domain: Domain; action: ReactNode }) {
   const { t } = useTranslation()
   const target = domain.dns_target ?? ""
 
@@ -228,7 +346,10 @@ function DNSInstructions({ domain, onRecheck, rechecking }: {
     return (
       <Alert>
         <AlertTitle>{t("domains.dnsInstructions")}</AlertTitle>
-        <AlertDescription>{t("domains.dnsUnknown")}</AlertDescription>
+        <AlertDescription className="space-y-3">
+          <p>{t("domains.dnsUnknown")}</p>
+          <div>{action}</div>
+        </AlertDescription>
       </Alert>
     )
   }
@@ -275,10 +396,7 @@ function DNSInstructions({ domain, onRecheck, rechecking }: {
               screen, because the alternative is somebody deciding after two
               minutes that the panel is broken. */}
           <p className="text-xs text-muted-foreground">{t("domains.dnsPropagation")}</p>
-          <Button variant="outline" size="sm" disabled={rechecking} onClick={onRecheck}>
-            {rechecking ? <Spinner /> : <RefreshCwIcon className="size-3.5" />}
-            {t("domains.checkAgain")}
-          </Button>
+          {action}
           <Button variant="ghost" size="sm" asChild>
             <a href="/docs/quick-start#4-add-your-own-domain" target="_blank" rel="noreferrer">
               <BookOpenIcon className="size-3.5" />

@@ -55,6 +55,12 @@ type createAppRequest struct {
 	HealthPath     string `json:"health_path,omitempty"`
 	StartCommand   string `json:"start_command,omitempty"`
 	ReleaseCommand string `json:"release_command,omitempty"`
+	// The health check: http, tcp or none, how long an instance may take to
+	// start, and how long one check waits. Each left out is what every app
+	// had before they could be chosen.
+	HealthCheck          string `json:"health_check,omitempty"`
+	HealthStartSeconds   *int   `json:"health_start_seconds,omitempty"`
+	HealthTimeoutSeconds *int   `json:"health_timeout_seconds,omitempty"`
 	// PreviewSeed runs once in each new preview of the app.
 	PreviewSeed string `json:"preview_seed,omitempty"`
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
@@ -363,6 +369,14 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		AutoDeploy:   true,
 		Status:       "created",
 	}
+	var check *string
+	if req.HealthCheck != "" {
+		check = &req.HealthCheck
+	}
+	if err := applyHealthSettings(&app, check, req.HealthStartSeconds, req.HealthTimeoutSeconds, false); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if err := s.db.CreateApp(r.Context(), &app); err != nil {
 		writeError(w, r, err)
 		return
@@ -624,6 +638,10 @@ type updateAppRequest struct {
 	StaticDir      *string `json:"static_dir,omitempty"`
 	StartCommand   *string `json:"start_command,omitempty"`
 	ReleaseCommand *string `json:"release_command,omitempty"`
+	// See createAppRequest. Runtime settings: changing one is a rollout.
+	HealthCheck          *string `json:"health_check,omitempty"`
+	HealthStartSeconds   *int    `json:"health_start_seconds,omitempty"`
+	HealthTimeoutSeconds *int    `json:"health_timeout_seconds,omitempty"`
 	// PreviewSeed runs once in each new preview of the app.
 	PreviewSeed    *string `json:"preview_seed,omitempty"`
 	WatchPaths     *string `json:"watch_paths,omitempty"`
@@ -673,7 +691,13 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	assignString(&app.Image, req.Image)
+	pathWas := app.HealthPath
 	assignString(&app.HealthPath, req.HealthPath)
+	if err := applyHealthSettings(&app, req.HealthCheck, req.HealthStartSeconds, req.HealthTimeoutSeconds,
+		app.HealthPath != pathWas); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	assignString(&app.BuildCommand, req.BuildCommand)
 	assignString(&app.StaticDir, req.StaticDir)
 	assignString(&app.StartCommand, req.StartCommand)
@@ -1502,7 +1526,18 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "domain.added", "app", app.ID, hostname)
-	writeJSON(w, http.StatusCreated, domain)
+
+	// What its DNS says now, so the answer to adding a domain is also the
+	// answer to "is it pointing here yet". A lookup that fails says nothing
+	// rather than failing what already succeeded: the domain is added, and
+	// the check can be asked for again.
+	answer := addedDomain{Domain: domain}
+	if check, err := s.checkDomainDNS(r.Context(), app, hostname, dnsCheckOnAddTimeout); err == nil {
+		answer.DNS = &check
+	} else {
+		s.log.Debug("could not check a new domain's DNS", "app", app.ID, "error", err)
+	}
+	writeJSON(w, http.StatusCreated, answer)
 }
 
 // isPanelHostname reports whether a hostname is the one the panel answers on.

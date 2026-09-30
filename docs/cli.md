@@ -310,6 +310,14 @@ apps:
     image: valkey/valkey:8
     port: 6379
     internal: true
+
+  auth:
+    image: quay.io/keycloak/keycloak:26.0
+    port: 8080
+    # The long form of health: the check (http, tcp or none), the path, and
+    # seconds to start and to answer one check. `health: /path` is the same
+    # as {path: /path}.
+    health: {check: http, path: /health/ready, start: 600, timeout: 5}
 ```
 
 ```sh

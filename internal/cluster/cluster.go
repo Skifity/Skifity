@@ -460,6 +460,12 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		// honest thing to say about its user is what the image itself says.
 		ImageBuiltHere: app.SourceType == "git" || app.SourceType == "upload",
 	}
+	// How the app's instances are checked. Runtime settings: they reach the
+	// probes and never the build fingerprint, so changing one is a rollout
+	// (ADR-0007).
+	spec.HealthCheck = app.HealthCheck
+	spec.HealthStartSeconds = app.HealthStartSeconds
+	spec.HealthTimeoutSeconds = app.HealthTimeoutSeconds
 
 	// An image in somebody's own registry needs a credential to pull, and the
 	// same Secret the build pushed with is the one to read. Named only when an

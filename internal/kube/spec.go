@@ -54,6 +54,13 @@ type AppSpec struct {
 	Revision     string // set on the pod template to force a rollout
 	DeploymentID string
 
+	// Health checks; see health.go. Zero values are what every app had
+	// before these could be chosen: the check follows HealthPath, two
+	// minutes to start, three seconds to answer.
+	HealthCheck          string
+	HealthStartSeconds   int
+	HealthTimeoutSeconds int
+
 	// Resources, in Kubernetes units
 	CPURequestM  int
 	CPULimitM    int
@@ -166,6 +173,9 @@ func (s AppSpec) Validate() error {
 	}
 	if s.Replicas < 0 {
 		return fmt.Errorf("replica count %d is negative", s.Replicas)
+	}
+	if err := validateHealth(s); err != nil {
+		return err
 	}
 	if s.Autoscale {
 		if s.MinReplicas < 1 {

@@ -53,8 +53,12 @@ func TestARollbackPlanNamesEachSettingItPutsBack(t *testing.T) {
 	for _, change := range changes {
 		got[change.Field] = change
 	}
-	if len(changes) != 4 || got["replicas"].To != "3" || got["mem_limit_mb"].From != "512" ||
-		got["port"].To != "8080" || got["health_path"].To != "/healthz" {
+	// A record from before the health check could be chosen still says what
+	// the check was: a path meant an HTTP check, so going back to it turns the
+	// connect this app has now back into one.
+	if len(changes) != 5 || got["replicas"].To != "3" || got["mem_limit_mb"].From != "512" ||
+		got["port"].To != "8080" || got["health_path"].To != "/healthz" ||
+		got["health_check"].From != "tcp" || got["health_check"].To != "http" {
 		t.Fatalf("the plan is %+v", changes)
 	}
 	if none, _ := store.RollbackChanges(app, ""); len(none) != 0 {

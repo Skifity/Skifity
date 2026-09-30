@@ -167,6 +167,48 @@ func MaintenanceNoDomain() *Problem {
 		WithDocs("/docs/concepts#maintenance")
 }
 
+// HealthCheckUnknown is a health check that is none of the three there are.
+func HealthCheckUnknown(check string) *Problem {
+	return New("app.health_check_unknown", "That is not a health check").
+		WithCause("%q is not a way to check an app. It is http, tcp or none.", check).
+		WithImpact("Nothing was changed.").
+		WithFix("Choose http to ask the app's health path, tcp to check that its port is open, or none for software that answers neither.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#health-checks").
+		With("health_check", check)
+}
+
+// HealthPathRequired is an HTTP health check with no path to ask.
+func HealthPathRequired() *Problem {
+	return New("app.health_path_required", "An HTTP health check needs a path").
+		WithCause("The health check is set to HTTP, which asks the app a path, and there is no path to ask.").
+		WithImpact("Nothing was changed.").
+		WithFix("Enter a path that returns 200 once the app is ready, such as /healthz, or choose TCP to check only that the port is open.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#health-checks")
+}
+
+// HealthStartOutOfRange is a start budget too short to mean anything or too
+// long to be anything but stuck.
+func HealthStartOutOfRange(seconds, low, high int) *Problem {
+	return New("app.health_start_out_of_range", "That is not a time an app can be given to start").
+		WithCause("The time to start has to be from %d to %d seconds, and it is %d.", low, high, seconds).
+		WithImpact("Nothing was changed.").
+		WithFix("Give the app as long as its slowest start takes, with some room: two minutes suits most apps, and five to ten a JVM or an image that migrates its database before it listens.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#health-checks")
+}
+
+// HealthTimeoutOutOfRange is a probe timeout outside what is allowed.
+func HealthTimeoutOutOfRange(seconds, low, high int) *Problem {
+	return New("app.health_timeout_out_of_range", "That is not a time a health check can wait").
+		WithCause("A health check can wait from %d to %d seconds for an answer, and this one is set to %d.", low, high, seconds).
+		WithImpact("Nothing was changed.").
+		WithFix("Three seconds suits most apps. Raise it only for a health path that does real work, such as checking the database, and keep that work quick.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#health-checks")
+}
+
 // StackSize is a stack with no services, or more than one request takes.
 func StackSize(max int) *Problem {
 	return New("stack.size", "That is not a stack Skifity can create").
@@ -671,7 +713,7 @@ func RolloutTimedOut(app string, ready, want int, reason string) *Problem {
 	return New("deploy.rollout_timeout", "The new version did not start").
 		WithCause("%d of %d instances of %s became ready before the timeout. %s", ready, want, app, reason).
 		WithImpact("Kubernetes kept the previous version running, so your app is still up. The new version was not rolled out.").
-		WithFix("Check the app logs for a crash on startup. The usual causes are a missing environment variable, a health check path that does not exist yet, and a port mismatch between the app and the configured port.").
+		WithFix("Check the app logs for a crash on startup. The usual causes are a missing environment variable, a health check path that does not exist yet, a port mismatch between the app and the configured port, and an app that needs longer to start than its time to start under Settings allows.").
 		WithDocs("/docs/troubleshooting#a-deployment-failed").
 		WithStatus(http.StatusGatewayTimeout).
 		Retry().
@@ -883,6 +925,20 @@ func DNSNotPointing(hostname, want, got string) *Problem {
 		WithSeverity(SeverityWarning).
 		Retry().
 		With("hostname", hostname).With("expected", want).With("actual", orNone(got))
+}
+
+// DNSLookupFailed is a DNS check that got no answer at all: not "there is no
+// record", which is an answer, but a resolver that timed out or failed.
+func DNSLookupFailed(hostname string, err error) *Problem {
+	return New("domain.dns_lookup_failed", "The DNS check did not get an answer").
+		WithCause("Looking up %s did not finish: the DNS server the panel asks timed out or refused.", hostname).
+		WithImpact("Nothing was changed. The domain is still attached, and whether it points here is not known yet.").
+		WithFix("Try again in a minute. If it keeps failing, check %s from your own computer with `dig +short %s`; a panel whose server cannot resolve names at all has a DNS problem of its own.", hostname, hostname).
+		WithDocs("/docs/troubleshooting#a-domain-does-not-work").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("hostname", hostname).
+		Wrap(err)
 }
 
 // CertificateFailed reports a failed Let's Encrypt issuance.

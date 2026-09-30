@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"skifity/internal/kube"
 )
 
 const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_source_id,''), repo_url, branch,
-	root_dir, builder, dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas,
+	root_dir, builder, dockerfile_path, build_command, static_dir, image, port, health_path,
+	health_check, health_start_seconds, health_timeout_seconds, start_command, release_command, replicas,
 	autoscale, min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero,
 	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths,
 	deploy_trigger, tag_pattern, internal, preview_seed, seeded_at, status, created_at, updated_at`
@@ -20,6 +23,7 @@ const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_so
 func appDestinations(a *App, created, updated *string) []any {
 	return []any{&a.ID, &a.EnvironmentID, &a.Name, &a.Slug, &a.SourceType, &a.GitSourceID, &a.RepoURL,
 		&a.Branch, &a.RootDir, &a.Builder, &a.DockerfilePath, &a.BuildCommand, &a.StaticDir, &a.Image, &a.Port, &a.HealthPath,
+		&a.HealthCheck, &a.HealthStartSeconds, &a.HealthTimeoutSeconds,
 		&a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas, &a.CPUTarget,
 		&a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM, &a.MemRequestMB, &a.MemLimitMB,
 		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.DeployTrigger, &a.TagPattern, &a.Internal, &a.PreviewSeed,
@@ -41,6 +45,22 @@ func scanApp(row interface{ Scan(...any) error }) (App, error) {
 	return a, nil
 }
 
+// healthDefaults fills in the health check an app would have had before it
+// could be chosen, for whatever the caller left out. Everything that makes an
+// app — the form, a template, a blueprint, `skifity up` — goes through here,
+// so none of them has to know the settings exist to get them right.
+func (a *App) healthDefaults() {
+	if a.HealthCheck == "" {
+		a.HealthCheck = kube.HealthCheckFor(a.HealthPath)
+	}
+	if a.HealthStartSeconds == 0 {
+		a.HealthStartSeconds = kube.DefaultHealthStartSeconds
+	}
+	if a.HealthTimeoutSeconds == 0 {
+		a.HealthTimeoutSeconds = kube.DefaultHealthTimeoutSeconds
+	}
+}
+
 // CreateApp inserts an app.
 func (db *DB) CreateApp(ctx context.Context, a *App) error {
 	if a.ID == "" {
@@ -51,16 +71,18 @@ func (db *DB) CreateApp(ctx context.Context, a *App) error {
 	// caller answers with says what it will do on a push.
 	a.DeployTrigger = defaultStr(a.DeployTrigger, "branch")
 	a.TagPattern = defaultStr(a.TagPattern, "v*")
+	a.healthDefaults()
 	_, err := db.Exec(ctx, `INSERT INTO apps
 		(id, environment_id, name, slug, source_type, git_source_id, repo_url, branch, root_dir, builder,
-		 dockerfile_path, build_command, static_dir, image, port, health_path, start_command, release_command, replicas, autoscale,
+		 dockerfile_path, build_command, static_dir, image, port, health_path,
+		 health_check, health_start_seconds, health_timeout_seconds, start_command, release_command, replicas, autoscale,
 		 min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero, cpu_request_m, cpu_limit_m,
 		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, deploy_trigger, tag_pattern,
 		 internal, preview_seed, status, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.EnvironmentID, a.Name, a.Slug, defaultStr(a.SourceType, "git"), NullString(a.GitSourceID),
 		a.RepoURL, a.Branch, a.RootDir, defaultStr(a.Builder, "auto"), a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image,
-		a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale, a.MinReplicas, a.MaxReplicas,
+		a.Port, a.HealthPath, a.HealthCheck, a.HealthStartSeconds, a.HealthTimeoutSeconds, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale, a.MinReplicas, a.MaxReplicas,
 		a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM, a.CPULimitM, a.MemRequestMB,
 		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.DeployTrigger, a.TagPattern,
 		a.Internal, a.PreviewSeed, defaultStr(a.Status, "created"), now, now)
@@ -196,15 +218,18 @@ func (db *DB) queryApps(ctx context.Context, query string, args ...any) ([]App, 
 // UpdateApp writes an app's mutable fields.
 func (db *DB) UpdateApp(ctx context.Context, a *App) error {
 	now := Now()
+	a.healthDefaults()
 	res, err := db.Exec(ctx, `UPDATE apps SET
 		name=?, slug=?, source_type=?, git_source_id=?, repo_url=?, branch=?, root_dir=?, builder=?,
-		dockerfile_path=?, build_command=?, static_dir=?, image=?, port=?, health_path=?, start_command=?, release_command=?, replicas=?, autoscale=?,
+		dockerfile_path=?, build_command=?, static_dir=?, image=?, port=?, health_path=?,
+		health_check=?, health_start_seconds=?, health_timeout_seconds=?, start_command=?, release_command=?, replicas=?, autoscale=?,
 		min_replicas=?, max_replicas=?, cpu_target=?, memory_target=?, scale_to_zero=?, cpu_request_m=?,
 		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?,
 		deploy_trigger=?, tag_pattern=?, internal=?, preview_seed=?, status=?, updated_at=?
 		WHERE id=?`,
 		a.Name, a.Slug, a.SourceType, NullString(a.GitSourceID), a.RepoURL, a.Branch, a.RootDir, a.Builder,
-		a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image, a.Port, a.HealthPath, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale,
+		a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image, a.Port, a.HealthPath,
+		a.HealthCheck, a.HealthStartSeconds, a.HealthTimeoutSeconds, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale,
 		a.MinReplicas, a.MaxReplicas, a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM,
 		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths,
 		defaultStr(a.DeployTrigger, "branch"), defaultStr(a.TagPattern, "v*"), a.Internal, a.PreviewSeed, a.Status, now, a.ID)

@@ -285,6 +285,14 @@ type App struct {
 	Port         int    `json:"port"`
 	HealthPath   string `json:"health_path"`
 	StartCommand string `json:"start_command"`
+	// HealthCheck is how an instance is checked: "http" asks HealthPath,
+	// "tcp" connects to the port, "none" checks nothing. HealthStartSeconds
+	// is how long a new instance may take to answer, HealthTimeoutSeconds how
+	// long one check waits. Runtime settings, all three: changing one is a
+	// rollout, never a build.
+	HealthCheck          string `json:"health_check"`
+	HealthStartSeconds   int    `json:"health_start_seconds"`
+	HealthTimeoutSeconds int    `json:"health_timeout_seconds"`
 	// ReleaseCommand runs after the build and before any traffic reaches the
 	// new version, which is where a migration belongs.
 	ReleaseCommand string `json:"release_command"`

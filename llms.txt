@@ -194,6 +194,7 @@ POST   /api/apps/{app}/ports                  open one on every server (port, pr
 PUT    /api/apps/{app}/files                  save one (path, content, is_secret, executable)
 GET    /api/apps/{app}/domains                domains
 POST   /api/apps/{app}/domains                add one
+POST   /api/apps/{app}/domains/{domain}/check whether its DNS points here yet
 GET    /api/apps/{app}/scaling                scaling
 PUT    /api/apps/{app}/scaling                change it
 GET    /api/apps/{app}/scaling/readiness      what would break with more instances

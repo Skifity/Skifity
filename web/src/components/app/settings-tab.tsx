@@ -2,12 +2,13 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation } from "@tanstack/react-query"
-import { Trash2Icon } from "lucide-react"
+import { BookOpenIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 
 import { MaintenanceCard } from "@/components/app/maintenance"
 import { TemplateCard } from "@/components/app/template-card"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -29,14 +30,18 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { App } from "@/lib/types"
+import type { App, HealthCheck } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
+
+/** The bounds the server holds the health check to, in seconds; see internal/kube/health.go. */
+const HEALTH_START = { min: 10, max: 1800 }
+const HEALTH_TIMEOUT = { min: 1, max: 60 }
 
 /**
  * What the settings form edits, as one string. The form keeps its own copy of
  * each field while somebody types, so it is keyed on this where it is shown:
  * when any of them changes underneath it — a rollback puts the port, health
- * path and commands back — the form starts again from the app, instead of the
+ * check and commands back — the form starts again from the app, instead of the
  * next Save writing the values from before the rollback over them.
  */
 export function settingsKey(app: App): string {
@@ -47,6 +52,9 @@ export function settingsKey(app: App): string {
     app.image,
     app.port,
     app.health_path,
+    app.health_check,
+    app.health_start_seconds,
+    app.health_timeout_seconds,
     app.build_command,
     app.static_dir,
     app.start_command,
@@ -72,6 +80,9 @@ export function SettingsTab({ app }: { app: App }) {
   const [image, setImage] = useState(app.image)
   const [port, setPort] = useState(String(app.port || ""))
   const [healthPath, setHealthPath] = useState(app.health_path)
+  const [healthCheck, setHealthCheck] = useState<HealthCheck>(app.health_check)
+  const [healthStart, setHealthStart] = useState(String(app.health_start_seconds))
+  const [healthTimeout, setHealthTimeout] = useState(String(app.health_timeout_seconds))
   const [buildCommand, setBuildCommand] = useState(app.build_command)
   const [staticDir, setStaticDir] = useState(app.static_dir)
   const [startCommand, setStartCommand] = useState(app.start_command)
@@ -93,6 +104,11 @@ export function SettingsTab({ app }: { app: App }) {
         image: image.trim(),
         port: Number(port) || 0,
         health_path: healthPath.trim(),
+        health_check: healthCheck,
+        // Sent as typed: a value out of range is refused with the range,
+        // which says more than a field that quietly reverts.
+        health_start_seconds: Number(healthStart),
+        health_timeout_seconds: Number(healthTimeout),
         build_command: buildCommand.trim(),
         static_dir: staticDir.trim(),
         start_command: startCommand.trim(),
@@ -213,16 +229,99 @@ export function SettingsTab({ app }: { app: App }) {
               />
               <FieldDescription>{t("apps.portHelp", { product: "Skifity" })}</FieldDescription>
             </Field>
+            {/* An app with no port is a worker: nothing sends it traffic,
+                so there is nothing to check before it gets any. */}
+            {Number(port) > 0 && (
+              <Field>
+                <FieldLabel htmlFor="settings-health-check">{t("apps.healthCheck")}</FieldLabel>
+                <Select
+                  value={healthCheck}
+                  onValueChange={(value) => setHealthCheck(value as HealthCheck)}
+                >
+                  <SelectTrigger id="settings-health-check" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">{t("apps.healthCheckHttp")}</SelectItem>
+                    <SelectItem value="tcp">{t("apps.healthCheckTcp")}</SelectItem>
+                    <SelectItem value="none">{t("apps.healthCheckNone")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>{t("apps.healthCheckHelp")}</FieldDescription>
+              </Field>
+            )}
+          </div>
+
+          {Number(port) > 0 && healthCheck === "http" && (
             <Field>
               <FieldLabel htmlFor="settings-health">{t("apps.healthPath")}</FieldLabel>
               <Input
                 id="settings-health"
                 value={healthPath}
                 onChange={(event) => setHealthPath(event.target.value)}
+                placeholder="/healthz"
                 className="font-mono"
               />
+              <FieldDescription>{t("apps.healthPathHelp")}</FieldDescription>
             </Field>
-          </div>
+          )}
+
+          {/*
+            Switching the check off is allowed, because some software answers
+            nothing a probe can ask, and it is said plainly what it costs: a
+            deploy can then only wait for the process to start.
+          */}
+          {Number(port) > 0 && healthCheck === "none" && (
+            <Alert variant="warning">
+              <TriangleAlertIcon />
+              <AlertTitle>{t("apps.healthCheckNoneWarning")}</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{t("apps.healthCheckNoneWarningHelp")}</p>
+                <Button variant="ghost" size="sm" className="-ml-2" asChild>
+                  <a href="/docs/concepts#health-checks" target="_blank" rel="noreferrer">
+                    <BookOpenIcon className="size-3.5" />
+                    {t("nav.documentation")}
+                  </a>
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {Number(port) > 0 && healthCheck !== "none" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="settings-health-start">{t("apps.healthStart")}</FieldLabel>
+                <Input
+                  id="settings-health-start"
+                  type="number"
+                  min={HEALTH_START.min}
+                  max={HEALTH_START.max}
+                  value={healthStart}
+                  onChange={(event) => setHealthStart(event.target.value)}
+                />
+                <FieldDescription>
+                  {t("apps.healthStartHelp", { min: HEALTH_START.min, max: HEALTH_START.max })}
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="settings-health-timeout">{t("apps.healthTimeout")}</FieldLabel>
+                <Input
+                  id="settings-health-timeout"
+                  type="number"
+                  min={HEALTH_TIMEOUT.min}
+                  max={HEALTH_TIMEOUT.max}
+                  value={healthTimeout}
+                  onChange={(event) => setHealthTimeout(event.target.value)}
+                />
+                <FieldDescription>
+                  {t("apps.healthTimeoutHelp", {
+                    min: HEALTH_TIMEOUT.min,
+                    max: HEALTH_TIMEOUT.max,
+                  })}
+                </FieldDescription>
+              </Field>
+            </div>
+          )}
 
           <Field>
             <FieldLabel htmlFor="settings-command">{t("apps.startCommand")}</FieldLabel>

@@ -62,6 +62,9 @@ type Server struct {
 	// panel does not accept uploaded folders.
 	uploads *upload.Store
 
+	// resolver is what a domain's DNS is checked through; see domain_dns.go.
+	resolver Resolver
+
 	// frontend serves the embedded UI.
 	frontend http.Handler
 
@@ -91,6 +94,9 @@ type Options struct {
 	Uploads    *upload.Store
 	Frontend   http.Handler
 	SetupToken string
+	// Resolver is what a domain's DNS is checked through. Nil is the
+	// system's own resolver, which is what a panel wants.
+	Resolver Resolver
 	// Metrics is shared with the orchestrators, so a deployment counted there
 	// appears on the same page as a request counted here. Nil is fine and
 	// means the panel keeps its own.
@@ -114,12 +120,16 @@ func New(opts Options) *Server {
 		plugins:     opts.Plugins,
 		channels:    opts.Channels,
 		uploads:     opts.Uploads,
+		resolver:    opts.Resolver,
 		frontend:    opts.Frontend,
 		setup:       newSetupState(opts.SetupToken),
 		metrics:     opts.Metrics,
 	}
 	if s.metrics == nil {
 		s.metrics = metrics.New()
+	}
+	if s.resolver == nil {
+		s.resolver = systemResolver
 	}
 	s.describeMetrics()
 	if s.log == nil {
@@ -359,6 +369,8 @@ func (s *Server) routes() chi.Router {
 				app.Get("/domains", s.handleListDomains)
 				app.Post("/domains", s.handleAddDomain)
 				app.Delete("/domains/{domainID}", s.handleDeleteDomain)
+				// Whether its DNS points here yet; see domain_dns.go.
+				app.Post("/domains/{domainID}/check", s.handleCheckDomainDNS)
 				app.Get("/scaling", s.handleGetScaling)
 				app.Put("/scaling", s.handleSetScaling)
 				app.Get("/processes", s.handleListProcesses)

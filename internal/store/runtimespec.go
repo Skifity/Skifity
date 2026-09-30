@@ -19,6 +19,25 @@ type RecordedSpec struct {
 	Port         int    `json:"port"`
 	HealthPath   string `json:"health_path"`
 	StartCommand string `json:"start_command"`
+
+	HealthCheck          string `json:"health_check"`
+	HealthStartSeconds   int    `json:"health_start_seconds"`
+	HealthTimeoutSeconds int    `json:"health_timeout_seconds"`
+}
+
+// WithHealthDefaults fills in the health settings a deployment recorded
+// before they could be chosen. Such a version ran with the probes every app
+// had then — its path or a connect, two minutes, three seconds — and a
+// rollback to it puts those back rather than zeroes.
+func (s RecordedSpec) WithHealthDefaults() RecordedSpec {
+	app := App{
+		HealthPath: s.HealthPath, HealthCheck: s.HealthCheck,
+		HealthStartSeconds: s.HealthStartSeconds, HealthTimeoutSeconds: s.HealthTimeoutSeconds,
+	}
+	app.healthDefaults()
+	s.HealthCheck, s.HealthStartSeconds, s.HealthTimeoutSeconds =
+		app.HealthCheck, app.HealthStartSeconds, app.HealthTimeoutSeconds
+	return s
 }
 
 // SpecChange is one setting a rollback would change.
@@ -41,6 +60,7 @@ func RollbackChanges(app App, encoded string) ([]SpecChange, error) {
 	if err := json.Unmarshal([]byte(encoded), &spec); err != nil {
 		return nil, fmt.Errorf("read the recorded settings: %w", err)
 	}
+	spec = spec.WithHealthDefaults()
 	add := func(field string, from, to any) {
 		f, t := fmt.Sprint(from), fmt.Sprint(to)
 		if f != t {
@@ -58,6 +78,9 @@ func RollbackChanges(app App, encoded string) ([]SpecChange, error) {
 	add("mem_limit_mb", app.MemLimitMB, spec.MemLimitMB)
 	add("port", app.Port, spec.Port)
 	add("health_path", app.HealthPath, spec.HealthPath)
+	add("health_check", app.HealthCheck, spec.HealthCheck)
+	add("health_start_seconds", app.HealthStartSeconds, spec.HealthStartSeconds)
+	add("health_timeout_seconds", app.HealthTimeoutSeconds, spec.HealthTimeoutSeconds)
 	add("start_command", app.StartCommand, spec.StartCommand)
 	return changes, nil
 }

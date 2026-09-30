@@ -606,7 +606,18 @@
     "tagPattern": "标签模式",
     "tagPatternHelp": "推送的标签名称匹配时，会部署该标签指向的提交，此时推送到分支不会部署任何东西。* 匹配除斜杠以外的任意字符，? 匹配一个字符，[0-9] 匹配集合中的一个：v* 会部署 v1.4.0 和 v2.0.0-rc.1。",
     "runNow": "立即运行",
-    "runNowNamed": "立即运行 {{name}}"
+    "runNowNamed": "立即运行 {{name}}",
+    "healthCheck": "健康检查",
+    "healthCheckHelp": "新实例在接收流量前如何表明自己已就绪，以及如何发现已停止响应的实例。",
+    "healthCheckHttp": "HTTP：请求健康检查路径",
+    "healthCheckTcp": "TCP：检查端口是否打开",
+    "healthCheckNone": "无：不检查",
+    "healthCheckNoneWarning": "没有任何东西在检查这个应用的实例",
+    "healthCheckNoneWarningHelp": "每个新实例的进程一启动就会收到流量，不管它是否就绪；停止响应的实例也会继续收到流量。这样一来，只有应用在启动那一刻就已就绪，部署才能做到零停机。只有对无法响应检查的软件才使用这个选项。",
+    "healthStart": "启动时间（秒）",
+    "healthStartHelp": "新实例在必须响应之前最多可以用多长时间启动，范围 {{min}} 到 {{max}}。大多数应用两分钟就够；JVM，或在开始监听前先迁移数据库的镜像，可能需要五到十分钟。",
+    "healthTimeout": "检查超时（秒）",
+    "healthTimeoutHelp": "一次检查等待响应的时长，范围 {{min}} 到 {{max}}。"
   },
   "deploy": {
     "title": "部署记录",
@@ -665,7 +676,10 @@
       "mem_limit_mb": "内存上限 (MB)",
       "port": "端口",
       "health_path": "健康检查路径",
-      "start_command": "启动命令"
+      "start_command": "启动命令",
+      "health_check": "健康检查",
+      "health_start_seconds": "启动时间（秒）",
+      "health_timeout_seconds": "检查超时（秒）"
     },
     "promote": "提升",
     "promoteTitle": "提升 #{{number}}",
@@ -735,7 +749,21 @@
     "recordValue": "值",
     "dnsPropagation": "新记录通常几分钟内生效，也可能要等上几个小时。",
     "checkAgain": "重新检查",
-    "dnsNameVaries": "有些注册商要在这里填完整名称，有些只要域名前面的那一段。"
+    "dnsNameVaries": "有些注册商要在这里填完整名称，有些只要域名前面的那一段。",
+    "checkDns": "检查 DNS",
+    "dnsStatusHere": "DNS 已指向这里",
+    "dnsStatusPartly": "DNS 只有一部分指向这里",
+    "dnsStatusElsewhere": "DNS 指向了别处：{{addresses}}",
+    "dnsStatusMissing": "还没有 DNS 记录",
+    "dnsStatusUnknown": "DNS 指向 {{addresses}}",
+    "dnsHereHelp": "使用这个地址的访客会访问到这个应用。",
+    "dnsPartlyHelp": "{{addresses}} 不是这个集群，所以有的访客能访问到这个应用，有的不能。删除那条记录，或者把它改成 {{expected}}。",
+    "dnsElsewhereHelp": "把记录改成 {{expected}}。在你修改之前，访客仍会去往旧地址。",
+    "dnsMissingHelp": "这个名称目前还没有任何响应。创建记录，几分钟后再检查一次。",
+    "dnsUnknownHelp": "这个面板不知道自己的公网地址，所以无法判断那是不是这里。管理员可以在设置、域名中填写。",
+    "dnsCertificateSoon": "DNS 指向这里后才会签发证书，所以证书应该会在几分钟内跟上。",
+    "dnsCertificateAfter": "DNS 指向这里后才会签发证书。",
+    "dnsRecordsFound": "找到的记录："
   },
   "scaling": {
     "title": "伸缩",
@@ -821,6 +849,11 @@
         "title": "配置了多个实例，而这个应用有卷",
         "detail": "多出来的实例要么一直挂起，要么被排到同一台服务器上，同时往同一批文件里写。",
         "fix": "把实例数改回一个，或者启用跨节点存储，或者把数据挪出卷。"
+      },
+      "health_check_off": {
+        "title": "健康检查已关闭",
+        "detail": "每个实例的进程一启动就会收到流量，不管它是否就绪；停止响应的实例也会继续收到请求。有多个实例时，一部分访客会遇到错误，另一部分不会。",
+        "fix": "在应用设置中打开健康检查：选择 HTTP 并填写一个应用就绪后返回 200 的路径；如果没有这样的路径，就选择 TCP。"
       }
     }
   },
@@ -1683,7 +1716,7 @@
         "title": "新版本没能起来",
         "cause": "超时前 {{2}} 的 {{1}} 个实例中只有 {{0}} 个就绪。{{3}}",
         "impact": "Kubernetes 保留了旧版本，所以你的应用还在线。新版本没有发布出去。",
-        "fix": "看看应用日志里有没有启动时崩溃。常见原因：缺少环境变量、健康检查路径还不存在、应用监听的端口和配置的端口对不上。"
+        "fix": "看看应用日志里有没有启动时崩溃。常见原因：缺少环境变量、健康检查路径还不存在、应用监听的端口和配置的端口对不上，以及应用需要的启动时间超过了设置中允许的启动时间。"
       },
       "detect_unreadable": {
         "title": "读不了那个仓库",
@@ -2632,6 +2665,36 @@
         "cause": "它已被使用、超过 30 分钟，或不是此面板发送的链接。",
         "impact": "你的密码未更改。",
         "fix": "从登录页面申请新的链接。只有最新的链接有效。"
+      },
+      "app_health_check_unknown": {
+        "title": "这不是一种健康检查",
+        "cause": "{{0}} 不是检查应用的方式。可选 http、tcp 或 none。",
+        "impact": "没有做任何更改。",
+        "fix": "选择 http 请求应用的健康检查路径，选择 tcp 检查端口是否打开，或者对两者都无法响应的软件选择 none。"
+      },
+      "app_health_path_required": {
+        "title": "HTTP 健康检查需要路径",
+        "cause": "健康检查设为 HTTP，它会向应用请求一个路径，但没有可请求的路径。",
+        "impact": "没有做任何更改。",
+        "fix": "填写一个应用就绪后返回 200 的路径，例如 /healthz，或者选择 TCP，只检查端口是否打开。"
+      },
+      "app_health_start_out_of_range": {
+        "title": "不能给应用这样的启动时间",
+        "cause": "启动时间必须在 {{0}} 到 {{1}} 秒之间，而现在是 {{2}}。",
+        "impact": "没有做任何更改。",
+        "fix": "给应用它最慢一次启动所需的时间，再留些余量：大多数应用两分钟就够，JVM 或在开始监听前先迁移数据库的镜像需要五到十分钟。"
+      },
+      "app_health_timeout_out_of_range": {
+        "title": "健康检查不能等待这么长时间",
+        "cause": "健康检查等待响应的时间可以是 {{0}} 到 {{1}} 秒，而这里设成了 {{2}}。",
+        "impact": "没有做任何更改。",
+        "fix": "大多数应用三秒就够。只有当健康检查路径要做实际工作（例如检查数据库）时才调高它，并让这些工作保持快速。"
+      },
+      "domain_dns_lookup_failed": {
+        "title": "DNS 检查没有得到响应",
+        "cause": "查询 {{0}} 没有完成：面板所用的 DNS 服务器超时或拒绝了请求。",
+        "impact": "没有做任何更改。域名仍然绑定着，但它是否指向这里还不知道。",
+        "fix": "一分钟后再试。如果一直失败，就在你自己的电脑上用 `dig +short {{1}}` 检查 {{0}}；如果面板所在的服务器根本无法解析域名，那是它自己的 DNS 问题。"
       }
     }
   },

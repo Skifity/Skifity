@@ -2578,7 +2578,9 @@ paths:
       operationId: addDomain
       tags: [Domains]
       summary: Add a domain
-      description: Member. A certificate is requested once its DNS points here. The panel's own hostname is refused.
+      description: >-
+        Member. A certificate is requested once its DNS points here. The panel's own hostname is refused.
+        A domain whose DNS does not point here yet is still added: the answer says what its DNS said.
       requestBody:
         required: true
         content:
@@ -2586,10 +2588,10 @@ paths:
             schema: {$ref: '#/components/schemas/AddDomainRequest'}
       responses:
         '201':
-          description: The domain, pending until it is served.
+          description: The domain, pending until it is served, and what its DNS said when it was added.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/Domain'}
+              schema: {$ref: '#/components/schemas/AddedDomain'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/domains/{domainID}:
@@ -2603,6 +2605,26 @@ paths:
       description: Member. The automatic domain cannot be removed.
       responses:
         '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/domains/{domainID}/check:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+      - $ref: '#/components/parameters/domainID'
+    post:
+      operationId: checkDomainDNS
+      tags: [Domains]
+      summary: Check whether a domain's DNS points here
+      description: >-
+        Member. Looks the hostname's A, AAAA and CNAME records up now and compares them with the cluster's
+        addresses. No record is an answer (missing); a resolver that does not answer is
+        domain.dns_lookup_failed. Nothing is changed either way.
+      responses:
+        '200':
+          description: What the hostname's DNS says, against where it has to point.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSCheck'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/scaling:
@@ -4959,7 +4981,8 @@ components:
     App:
       type: object
       required: [id, environment_id, name, slug, source_type, repo_url, branch, root_dir, builder, dockerfile_path,
-                 build_command, static_dir, image, port, health_path, start_command, release_command, replicas,
+                 build_command, static_dir, image, port, health_path, health_check, health_start_seconds,
+                 health_timeout_seconds, start_command, release_command, replicas,
                  autoscale, min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero, cpu_request_m,
                  cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, internal,
                  preview_seed, status, created_at, updated_at]
@@ -4980,6 +5003,14 @@ components:
         image: {type: string}
         port: {type: integer}
         health_path: {type: string}
+        health_check:
+          type: string
+          enum: [http, tcp, none]
+          description: >-
+            http asks health_path, tcp checks the port is open, none checks nothing: an instance gets traffic as
+            soon as its process starts, and one that stops answering keeps it.
+        health_start_seconds: {type: integer, description: 'How long a new instance may take to answer before it is restarted.'}
+        health_timeout_seconds: {type: integer, description: 'How long one health check waits for an answer.'}
         start_command: {type: string}
         release_command: {type: string, description: 'Runs after the build and before traffic reaches the new version.'}
         replicas: {type: integer}
@@ -5041,6 +5072,12 @@ components:
         image: {type: string, description: 'Needed for image, such as nginx:1.27.'}
         port: {type: integer}
         health_path: {type: string}
+        health_check:
+          type: string
+          enum: [http, tcp, none]
+          description: http when a health_path is given, tcp otherwise. http needs a health_path.
+        health_start_seconds: {type: integer, minimum: 10, maximum: 1800, default: 120}
+        health_timeout_seconds: {type: integer, minimum: 1, maximum: 60, default: 3}
         start_command: {type: string}
         release_command: {type: string}
         preview_seed: {type: string}
@@ -5154,7 +5191,10 @@ components:
         dockerfile_path: {type: string}
         image: {type: string}
         port: {type: integer, minimum: 0, maximum: 65535}
-        health_path: {type: string}
+        health_path: {type: string, description: 'Changing it without health_check makes the check follow it: http with a path, tcp without, unless the check is none.'}
+        health_check: {type: string, enum: [http, tcp, none], description: 'http needs a health_path.'}
+        health_start_seconds: {type: integer, minimum: 10, maximum: 1800}
+        health_timeout_seconds: {type: integer, minimum: 1, maximum: 60}
         build_command: {type: string}
         static_dir: {type: string}
         start_command: {type: string}
@@ -5670,6 +5710,45 @@ components:
         status_detail: {type: string}
         created_at: {type: string, format: date-time}
         dns_target: {type: string, description: 'Where a domain of your own has to point.'}
+
+    AddedDomain:
+      allOf:
+        - $ref: '#/components/schemas/Domain'
+        - type: object
+          properties:
+            dns:
+              $ref: '#/components/schemas/DNSCheck'
+              description: What the domain's DNS said when it was added. Absent when the lookup did not finish.
+
+    DNSCheck:
+      type: object
+      required: [hostname, status, points_here, found, expected, checked_at]
+      properties:
+        hostname: {type: string}
+        status:
+          type: string
+          enum: [here, partly, elsewhere, missing, unknown]
+          description: >-
+            here is every address being the cluster's; partly is some of them; elsewhere is none; missing is no
+            address at all yet; unknown is addresses found while the panel does not know its own.
+        points_here: {type: boolean, description: 'status is here.'}
+        found:
+          type: array
+          description: The records found, a CNAME first when there is one.
+          items: {$ref: '#/components/schemas/DNSRecord'}
+        expected:
+          type: array
+          description: Every address that counts as here, the one to use first.
+          items: {type: string}
+        checked_at: {type: string, format: date-time}
+
+    DNSRecord:
+      type: object
+      required: [type, value, here]
+      properties:
+        type: {type: string, enum: [A, AAAA, CNAME]}
+        value: {type: string}
+        here: {type: boolean, description: 'The address is one of the cluster''s. Always false for a CNAME.'}
 
     DomainList:
       type: object

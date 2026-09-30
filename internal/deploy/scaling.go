@@ -6,6 +6,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/errdoc"
+	"skifity/internal/kube"
 	"skifity/internal/store"
 )
 
@@ -74,7 +75,21 @@ func (d *Deployer) ScalingReadiness(ctx context.Context, appID string) ([]api.Sc
 
 	// No health path means Kubernetes cannot tell a starting instance from a
 	// ready one, so a rollout sends traffic to an instance that is not up yet.
-	if app.HealthPath == "" && app.Port > 0 {
+	// No health check at all is the same, and worse: an instance that has
+	// stopped answering is not taken out of rotation either.
+	check := kube.EffectiveHealthCheck(app.HealthCheck, app.HealthPath)
+	switch {
+	case app.Port <= 0:
+	case check == kube.HealthNone:
+		findings = append(findings, api.ScalingFinding{
+			Code:     "health_check_off",
+			Severity: "warning",
+			Title:    "The health check is off",
+			Detail: "Each instance is sent traffic as soon as its process starts, whether it is ready or not, " +
+				"and one that stops answering keeps receiving requests. With several instances, some visitors get errors and others do not.",
+			Fix: "Turn the health check on under the app's settings: HTTP with a path that returns 200 once the app is ready, or TCP if it has no such path.",
+		})
+	case check == kube.HealthTCP:
 		findings = append(findings, api.ScalingFinding{
 			Code:     "no_health_check",
 			Severity: "warning",

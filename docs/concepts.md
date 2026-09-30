@@ -871,6 +871,44 @@ Two other things stop an app on purpose, and both say so first: restoring a
 volume backup, and scale to zero, where the first request after an idle period
 waits for an instance to start.
 
+### Health checks
+
+The readiness check is how a deploy knows a new instance is ready, and the same
+check is how an instance that has stopped answering is noticed and restarted.
+Under the app's **Settings**, **Health check** is one of three:
+
+| Check | What it asks | When to choose it |
+| --- | --- | --- |
+| **HTTP** | The health path, such as `/healthz`. A 2xx or 3xx answer is ready. | Whenever the app has such a path. It is the only check that knows the app is ready rather than only listening. |
+| **TCP** | Whether the port accepts a connection. | An app with no health path. Most frameworks open the port before they can serve, so traffic may arrive a little early. |
+| **None** | Nothing. | Software that cannot answer a check at all. Read the warning below first. |
+
+Two numbers go with an HTTP or TCP check:
+
+* **Time to start** — how long a new instance may take before it has to
+  answer, from 10 seconds to 30 minutes. Two minutes is the default and suits
+  most apps. A JVM warming up, or an image that migrates its database before it
+  opens its port, may need five or ten; give it as long as its slowest start
+  takes, with some room. Until then the instance is left alone to start, and
+  after it the check is as strict as ever, so a long start costs nothing once
+  the app is up. A deploy waits at least this long for the new version.
+* **Check timeout** — how long one check waits for an answer, from 1 to 60
+  seconds; three by default. Raise it only for a health path that does real
+  work, such as asking the database, and keep that work quick.
+
+**With the check set to none, nothing checks the app.** Each new instance gets
+traffic as soon as its process starts, whether it is ready or not, and an
+instance that stops answering keeps getting it until it exits on its own. A
+deploy is then zero-downtime only if the app is ready the moment its process
+starts — for most web apps it is not, and visitors see errors during every
+deploy. The settings page and the scaling tab both say so while it is off.
+
+These are runtime settings, like the instance count: changing one rolls the
+app out again and never rebuilds it. A deployment records the check it ran
+with, and a rollback puts it back. In `skifity.yaml`, `health: /healthz` is
+the path, and the long form chooses the rest:
+`health: {check: http, path: /healthz, start: 600, timeout: 5}`.
+
 ## Maintenance
 
 When the work needs the app to be left alone — a migration run by hand, a data

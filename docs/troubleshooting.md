@@ -79,7 +79,9 @@ hardcoded 3000 when Skifity asked for 8080 produces exactly this.
 
 **Health checks never pass.** The health check path returns something other
 than 200, or the app takes longer to start than the check allows. Both are in
-the app's settings.
+the app's settings: the path, and **Time to start**, which is two minutes unless
+you raise it. A JVM or an image that migrates its database before it listens
+often needs five to ten. See [Health checks](concepts.md#health-checks).
 
 ## An app says it is waiting for a server
 
@@ -108,14 +110,19 @@ the settings it ran with, so a bad variable is undone too.
 
 ## A domain does not work
 
-The panel shows the DNS record to create. Check it has actually taken effect:
+The panel shows the DNS record to create, and **Check DNS** on the domain asks
+DNS whether it has taken effect: it says whether the name points here, points
+somewhere else (and at what), points here only in part — often an old AAAA
+record left beside a new A record — or has no record yet. Adding a domain does
+the same check once. You can ask from your own computer too:
 
 ```sh
 dig +short app.example.com
 ```
 
 That has to return your server's IP address. If it returns nothing, DNS has not
-propagated yet, which can take up to an hour.
+propagated yet, which can take up to an hour. The certificate is only issued
+once the name points here, so a domain whose DNS is wrong stays waiting.
 
 If DNS is right but the certificate is not issued, cert-manager is still
 working. Watch it:

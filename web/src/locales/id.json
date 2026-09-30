@@ -606,7 +606,18 @@
     "tagPattern": "Pola tag",
     "tagPatternHelp": "Tag yang di-push dan namanya cocok akan men-deploy commit yang ditunjuknya, dan push ke branch tidak men-deploy apa pun. * cocok dengan apa saja kecuali garis miring, ? satu karakter, [0-9] satu dari sekumpulan: v* men-deploy v1.4.0 dan v2.0.0-rc.1.",
     "runNow": "Jalankan sekarang",
-    "runNowNamed": "Jalankan {{name}} sekarang"
+    "runNowNamed": "Jalankan {{name}} sekarang",
+    "healthCheck": "Health check",
+    "healthCheckHelp": "Cara instance baru menunjukkan bahwa ia siap sebelum menerima trafik, dan cara instance yang berhenti menjawab ketahuan.",
+    "healthCheckHttp": "HTTP: tanyakan path health check",
+    "healthCheckTcp": "TCP: periksa bahwa port terbuka",
+    "healthCheckNone": "Tidak ada: jangan periksa",
+    "healthCheckNoneWarning": "Tidak ada yang memeriksa instance aplikasi ini",
+    "healthCheckNoneWarningHelp": "Setiap instance baru menerima trafik begitu prosesnya mulai, siap atau belum, dan instance yang berhenti menjawab tetap menerimanya. Deploy tanpa downtime jadi hanya terjadi kalau aplikasinya langsung siap saat mulai. Pakai ini hanya untuk software yang tidak bisa menjawab pemeriksaan.",
+    "healthStart": "Waktu untuk mulai (detik)",
+    "healthStartHelp": "Berapa lama instance baru boleh mulai sebelum harus menjawab, dari {{min}} sampai {{max}}. Dua menit cukup untuk kebanyakan aplikasi; JVM, atau image yang memigrasi database sebelum mendengarkan, mungkin butuh lima sampai sepuluh menit.",
+    "healthTimeout": "Batas waktu pemeriksaan (detik)",
+    "healthTimeoutHelp": "Berapa lama satu pemeriksaan menunggu jawaban, dari {{min}} sampai {{max}}."
   },
   "deploy": {
     "title": "Deployment",
@@ -665,7 +676,10 @@
       "mem_limit_mb": "Batas memori (MB)",
       "port": "Port",
       "health_path": "Path cek kesehatan",
-      "start_command": "Perintah mulai"
+      "start_command": "Perintah mulai",
+      "health_check": "Health check",
+      "health_start_seconds": "Waktu untuk mulai (d)",
+      "health_timeout_seconds": "Batas waktu pemeriksaan (d)"
     },
     "promote": "Promosikan",
     "promoteTitle": "Promosikan #{{number}}",
@@ -735,7 +749,21 @@
     "recordValue": "Nilai",
     "dnsPropagation": "Record baru biasanya berfungsi dalam beberapa menit, dan bisa memakan waktu beberapa jam.",
     "checkAgain": "Periksa lagi",
-    "dnsNameVaries": "Sebagian registrar meminta nama lengkapnya di sini; sebagian lagi hanya bagian di depan domainmu."
+    "dnsNameVaries": "Sebagian registrar meminta nama lengkapnya di sini; sebagian lagi hanya bagian di depan domainmu.",
+    "checkDns": "Periksa DNS",
+    "dnsStatusHere": "DNS mengarah ke sini",
+    "dnsStatusPartly": "DNS hanya sebagian mengarah ke sini",
+    "dnsStatusElsewhere": "DNS mengarah ke tempat lain: {{addresses}}",
+    "dnsStatusMissing": "Belum ada record DNS",
+    "dnsStatusUnknown": "DNS mengarah ke {{addresses}}",
+    "dnsHereHelp": "Pengunjung yang memakai alamat ini sampai ke aplikasi ini.",
+    "dnsPartlyHelp": "{{addresses}} bukan klaster ini, jadi sebagian pengunjung sampai ke aplikasi ini dan sebagian tidak. Hapus record itu, atau ubah ke {{expected}}.",
+    "dnsElsewhereHelp": "Ubah record-nya ke {{expected}}. Alamat lama tetap menerima pengunjung sampai kamu mengubahnya.",
+    "dnsMissingHelp": "Belum ada yang menjawab untuk nama ini. Buat record-nya, lalu periksa lagi dalam beberapa menit.",
+    "dnsUnknownHelp": "Panel ini tidak tahu alamat publiknya sendiri, jadi tidak bisa memastikan apakah itu di sini. Administrator bisa mengaturnya di Pengaturan, Domain.",
+    "dnsCertificateSoon": "Sertifikat diterbitkan begitu DNS mengarah ke sini, jadi seharusnya menyusul dalam beberapa menit.",
+    "dnsCertificateAfter": "Sertifikat diterbitkan begitu DNS mengarah ke sini.",
+    "dnsRecordsFound": "Record yang ditemukan:"
   },
   "scaling": {
     "title": "Penskalaan",
@@ -821,6 +849,11 @@
         "title": "Instance-nya disetel lebih dari satu, dan aplikasi ini punya volume",
         "detail": "Instance tambahannya akan menggantung, atau dijadwalkan ke server yang sama dan menulis ke file yang sama bersamaan.",
         "fix": "Kembalikan jumlah instance ke satu, atau nyalakan penyimpanan lintas-node, atau pindahkan datanya keluar dari volume."
+      },
+      "health_check_off": {
+        "title": "Health check dimatikan",
+        "detail": "Setiap instance dikirimi trafik begitu prosesnya mulai, siap atau belum, dan instance yang berhenti menjawab tetap menerima request. Dengan beberapa instance, sebagian pengunjung mendapat error dan sebagian tidak.",
+        "fix": "Nyalakan health check di pengaturan aplikasi: HTTP dengan path yang mengembalikan 200 begitu aplikasinya siap, atau TCP kalau tidak ada path seperti itu."
       }
     }
   },
@@ -1683,7 +1716,7 @@
         "title": "Versi baru tidak berhasil menyala",
         "cause": "{{0}} dari {{1}} instance {{2}} siap sebelum batas waktu. {{3}}",
         "impact": "Kubernetes mempertahankan versi sebelumnya, jadi aplikasimu tetap hidup. Versi barunya tidak jadi dirilis.",
-        "fix": "Periksa log aplikasi untuk crash saat mulai. Yang biasa: variabel lingkungan yang kurang, jalur health check yang belum ada, dan port aplikasi yang beda dengan port yang diatur."
+        "fix": "Periksa log aplikasi untuk crash saat mulai. Yang biasa: variabel lingkungan yang kurang, jalur health check yang belum ada, port aplikasi yang beda dengan port yang diatur, dan aplikasi yang butuh waktu mulai lebih lama daripada waktu untuk mulai yang diizinkan di Pengaturan."
       },
       "detect_unreadable": {
         "title": "Repositori itu tidak bisa dibaca",
@@ -2632,6 +2665,36 @@
         "cause": "Tautan sudah dipakai, berumur lebih dari 30 menit, atau bukan tautan yang dikirim panel ini.",
         "impact": "Kata sandi Anda tidak berubah.",
         "fix": "Minta tautan baru dari halaman masuk. Hanya tautan terbaru yang berlaku."
+      },
+      "app_health_check_unknown": {
+        "title": "Itu bukan health check",
+        "cause": "{{0}} bukan cara memeriksa aplikasi. Pilihannya http, tcp, atau none.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Pilih http untuk menanyakan path health check aplikasi, tcp untuk memeriksa bahwa port-nya terbuka, atau none untuk software yang tidak bisa menjawab keduanya."
+      },
+      "app_health_path_required": {
+        "title": "Health check HTTP butuh path",
+        "cause": "Health check diatur ke HTTP, yang menanyakan sebuah path ke aplikasi, dan tidak ada path untuk ditanyakan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Isi path yang mengembalikan 200 begitu aplikasinya siap, misalnya /healthz, atau pilih TCP untuk hanya memeriksa bahwa port-nya terbuka."
+      },
+      "app_health_start_out_of_range": {
+        "title": "Itu bukan waktu yang bisa diberikan untuk mulai",
+        "cause": "Waktu untuk mulai harus dari {{0}} sampai {{1}} detik, dan nilainya {{2}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Beri aplikasi waktu selama start terlamanya, ditambah sedikit ruang: dua menit cukup untuk kebanyakan aplikasi, dan lima sampai sepuluh menit untuk JVM atau image yang memigrasi database sebelum mendengarkan."
+      },
+      "app_health_timeout_out_of_range": {
+        "title": "Itu bukan waktu tunggu yang bisa dipakai health check",
+        "cause": "Health check bisa menunggu jawaban dari {{0}} sampai {{1}} detik, dan yang ini diatur ke {{2}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tiga detik cukup untuk kebanyakan aplikasi. Naikkan hanya untuk path health check yang benar-benar bekerja, seperti memeriksa database, dan jaga agar kerjanya cepat."
+      },
+      "domain_dns_lookup_failed": {
+        "title": "Pemeriksaan DNS tidak mendapat jawaban",
+        "cause": "Pencarian {{0}} tidak selesai: server DNS yang ditanya panel kehabisan waktu atau menolak.",
+        "impact": "Tidak ada yang diubah. Domainnya tetap terpasang, dan apakah ia mengarah ke sini belum diketahui.",
+        "fix": "Coba lagi dalam semenit. Kalau terus gagal, periksa {{0}} dari komputermu sendiri dengan `dig +short {{1}}`; panel yang server-nya tidak bisa me-resolve nama sama sekali punya masalah DNS sendiri."
       }
     }
   },

@@ -171,6 +171,12 @@ export type App = {
   image: string
   port: number
   health_path: string
+  /** How an instance is checked: ask health_path, connect to the port, or nothing. */
+  health_check: HealthCheck
+  /** How long a new instance may take to answer, in seconds. */
+  health_start_seconds: number
+  /** How long one check waits for an answer, in seconds. */
+  health_timeout_seconds: number
   build_command: string
   static_dir: string
   start_command: string
@@ -288,6 +294,22 @@ export type Domain = {
   dns_target?: string
   created_at: string
 }
+
+export type HealthCheck = "http" | "tcp" | "none"
+
+/** What a domain's DNS said when it was last asked, against where it has to point. */
+export type DNSCheck = {
+  hostname: string
+  status: "here" | "partly" | "elsewhere" | "missing" | "unknown"
+  points_here: boolean
+  found: { type: "A" | "AAAA" | "CNAME"; value: string; here: boolean }[]
+  /** Every address that counts as here, the one to use first. */
+  expected: string[]
+  checked_at: string
+}
+
+/** Adding a domain answers with the domain and, when it could be looked up, its DNS. */
+export type AddedDomain = Domain & { dns?: DNSCheck }
 
 export type Volume = {
   id: string

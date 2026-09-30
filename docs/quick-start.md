@@ -164,8 +164,9 @@ domain is yours.
 ## 4. Add your own domain
 
 Open the app, go to **Domains**, and add yours. The panel shows the DNS record
-to create. Once it resolves, the certificate is issued automatically and the
-domain goes green. This is where HTTPS comes from: a domain you control has its
+to create, and says whether the name already points here; **Check DNS** asks
+again once you have created the record. Once it resolves, the certificate is
+issued automatically and the domain goes green. This is where HTTPS comes from: a domain you control has its
 own rate limit, so cert-manager can ask for a certificate and keep renewing it.
 
 Your app keeps its original address too, so nothing breaks while DNS

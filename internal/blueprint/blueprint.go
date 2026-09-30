@@ -64,8 +64,9 @@ type App struct {
 	Start      string `json:"start,omitempty"`
 	Release    string `json:"release,omitempty"`
 	Port       *int   `json:"port,omitempty"`
-	Health     string `json:"health,omitempty"`
 	Internal   *bool  `json:"internal,omitempty"`
+	// Health is how its instances are checked; see Health.
+	Health *Health `json:"health,omitempty"`
 	// Watch is the paths a push has to touch to deploy the app.
 	Watch []string `json:"watch,omitempty"`
 
@@ -92,6 +93,51 @@ type App struct {
 	TagPattern    string `json:"tag_pattern,omitempty"`
 	Previews      *bool  `json:"previews,omitempty"`
 	PreviewSeed   string `json:"preview_seed,omitempty"`
+}
+
+// Health is how an app's instances are checked.
+//
+// `health: /healthz` is the path, which is all the file took before the rest
+// could be chosen, and still means what it meant: an HTTP check of that path.
+// The long form chooses the rest, each left out as it is:
+//
+//	health: {check: http, path: /healthz, start: 600, timeout: 5}
+//	health: {check: none}
+//
+// start and timeout are seconds: how long a new instance may take to answer,
+// and how long one check waits for it.
+type Health struct {
+	Check   string `json:"check,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Start   int    `json:"start,omitempty"`
+	Timeout int    `json:"timeout,omitempty"`
+}
+
+// health is what the file says about the app's health check, with nothing
+// where it says nothing.
+func (a App) health() Health {
+	if a.Health == nil {
+		return Health{}
+	}
+	return *a.Health
+}
+
+// UnmarshalJSON takes the path on its own as well as the long form.
+func (h *Health) UnmarshalJSON(data []byte) error {
+	var path string
+	if err := json.Unmarshal(data, &path); err == nil {
+		*h = Health{Path: path}
+		return nil
+	}
+	type plain Health
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var long plain
+	if err := decoder.Decode(&long); err != nil {
+		return err
+	}
+	*h = Health(long)
+	return nil
 }
 
 // Autoscale is instances decided by load.
@@ -214,6 +260,19 @@ func Parse(data []byte) (File, error) {
 		if pattern := strings.TrimSpace(app.TagPattern); pattern != "" && gitsrc.ValidTagPattern(pattern) != nil {
 			say("%s: tag_pattern %q is not a pattern such as v* or release-*", where, app.TagPattern)
 		}
+		if h := app.Health; h != nil {
+			if check := strings.ToLower(strings.TrimSpace(h.Check)); check != "" && !kube.ValidHealthCheck(check) {
+				say("%s: health check is http, tcp or none, not %q", where, h.Check)
+			}
+			if h.Start != 0 && (h.Start < kube.MinHealthStartSeconds || h.Start > kube.MaxHealthStartSeconds) {
+				say("%s: health start is from %d to %d seconds, not %d", where,
+					kube.MinHealthStartSeconds, kube.MaxHealthStartSeconds, h.Start)
+			}
+			if h.Timeout != 0 && (h.Timeout < kube.MinHealthTimeoutSeconds || h.Timeout > kube.MaxHealthTimeoutSeconds) {
+				say("%s: health timeout is from %d to %d seconds, not %d", where,
+					kube.MinHealthTimeoutSeconds, kube.MaxHealthTimeoutSeconds, h.Timeout)
+			}
+		}
 		if app.Instances != nil && app.Autoscale != nil {
 			say("%s: give instances or autoscale, not both", where)
 		}
@@ -273,9 +332,13 @@ func Parse(data []byte) (File, error) {
 func normalize(file *File) {
 	for name, app := range file.Apps {
 		for _, field := range []*string{&app.Repo, &app.Branch, &app.Image, &app.Git, &app.Builder, &app.Dockerfile,
-			&app.Build, &app.Static, &app.Start, &app.Release, &app.Health, &app.PreviewSeed,
+			&app.Build, &app.Static, &app.Start, &app.Release, &app.PreviewSeed,
 			&app.DeployTrigger, &app.TagPattern} {
 			*field = strings.TrimSpace(*field)
+		}
+		if app.Health != nil {
+			app.Health.Path = strings.TrimSpace(app.Health.Path)
+			app.Health.Check = strings.ToLower(strings.TrimSpace(app.Health.Check))
 		}
 		app.Root = strings.TrimPrefix(strings.TrimSpace(app.Root), "/")
 		watch := app.Watch[:0:0]
