@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -41,11 +42,36 @@ type Server struct {
 
 	// tools is every tool name registered, for the check against llms.txt.
 	tools []string
+
+	// remote is the server the panel serves itself, at /api/mcp. It runs on
+	// the panel's server rather than the person's computer, so a tool that
+	// reads local files would read the panel's — its database, its master key
+	// — and is not offered.
+	remote bool
 }
 
-// New builds an MCP server for a panel.
+// New builds an MCP server for a panel, run on the person's computer by
+// `skifity mcp`.
 func New(cfg cli.Config) *Server {
-	s := &Server{client: cli.NewClient(cfg), config: cfg}
+	return build(cfg, cli.NewClient(cfg), false)
+}
+
+// NewRemote builds the MCP server the panel itself serves over HTTP. Its
+// requests go through transport — the panel's own router — with the caller's
+// token, so every tool is exactly as allowed as the same request from the CLI.
+func NewRemote(cfg cli.Config, transport http.RoundTripper) *Server {
+	return build(cfg, cli.NewClientWith(cfg, transport), true)
+}
+
+func build(cfg cli.Config, client *cli.Client, remote bool) *Server {
+	s := &Server{client: client, config: cfg, remote: remote}
+	folders := `To put a folder on this computer online, with no repository, use
+deploy_folder: it creates the app the first time and updates it after.`
+	if remote {
+		folders = `This server runs on the panel, not on the user's computer, so it cannot
+read local files. To deploy a folder with no repository, the user runs
+` + "`" + version.Binary + ` up` + "`" + ` in it, or connects the local server with ` + "`" + version.Binary + ` mcp` + "`" + `.`
+	}
 	s.mcp = mcp.NewServer(&mcp.Implementation{
 		Name:    version.Binary,
 		Version: version.Version,
@@ -54,8 +80,7 @@ func New(cfg cli.Config) *Server {
 		Instructions: strings.TrimSpace(`
 ` + version.Name + ` runs applications on a Kubernetes cluster the user owns.
 
-To put a folder on this computer online, with no repository, use
-deploy_folder: it creates the app the first time and updates it after.
+` + folders + `
 Use list_apps to find an app's id before calling anything that takes one.
 Deploys are asynchronous: deploy_app returns immediately, and get_app_status
 tells you what happened. When something fails, the error carries a cause, an
@@ -67,6 +92,22 @@ app, so those are cheap. Deploying a new commit does rebuild and takes minutes.
 	})
 	s.register()
 	return s
+}
+
+// HTTPHandler serves MCP over streamable HTTP, with a server built for each
+// request by serverFor — nil answers 400.
+//
+// Stateless: a session would be a second credential, bound to whoever
+// started it and checked by nobody after that. Every request here carries its
+// own token and is authorized on its own, the same as any other API request.
+func HTTPHandler(serverFor func(*http.Request) *Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		s := serverFor(r)
+		if s == nil {
+			return nil
+		}
+		return s.mcp
+	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 }
 
 // Run serves the protocol over stdin and stdout.
@@ -294,12 +335,33 @@ type readinessOutput struct {
 // says so.
 const maxRunWait = 10 * time.Minute
 
+// reads describes a tool that looks and changes nothing.
+func reads(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, OpenWorldHint: new(false)}
+}
+
+// changes describes a tool that changes something. Destructive is whether
+// what it changes can be lost — a running version replaced, a value
+// overwritten, a command run — as opposed to only adding; an assistant's
+// client uses it to decide what to ask the person about first.
+func changes(title string, destructive, idempotent bool) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{
+		Title: title, DestructiveHint: new(destructive), IdempotentHint: idempotent,
+		OpenWorldHint: new(false),
+	}
+}
+
 // addTool registers a tool and remembers its name.
 //
 // The name matters beyond the protocol: llms.txt prints a table of these, that
 // page is what an assistant is pointed at, and a tool in the table that does
 // not exist reads as the product being broken rather than as a stale document.
 // TestEveryToolLlmsTxtPromisesExists compares the two, in both directions.
+//
+// Every tool says whether it only reads, and if not, whether it can destroy
+// something. The protocol's defaults are the worst case — not read-only, and
+// destructive — so a tool that says nothing is one every careful client asks
+// about, including list_apps. TestEveryToolSaysWhatItDoes holds that.
 func addTool[In, Out any](s *Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	s.tools = append(s.tools, t.Name)
 	mcp.AddTool(s.mcp, t, h)
@@ -312,40 +374,51 @@ func (s *Server) ToolNames() []string { return append([]string(nil), s.tools...)
 func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "list_projects",
+		Annotations: reads("List projects"),
 		Description: "List the projects in this team and the environments inside them. Use this to find an environment id before creating an app.",
 	}, s.listProjects)
 
 	addTool(s, &mcp.Tool{
 		Name:        "create_app",
+		Annotations: changes("Create an app", false, false),
 		Description: "Create an application from a git repository or a prebuilt image, and optionally deploy it. This is how a new app gets onto the cluster.",
 	}, s.createApp)
 
 	addTool(s, &mcp.Tool{
 		Name:        "list_apps",
+		Annotations: reads("List apps"),
 		Description: "List the applications in an environment, with their ids and current state. Call this first: every other tool takes an app id.",
 	}, s.listApps)
 
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_status",
+		Annotations: reads("Get an app's status"),
 		Description: "Describe an app's live state: whether it is running, how many instances are ready, and its URLs. Use this after a deploy to find out what happened.",
 	}, s.getAppStatus)
 
 	addTool(s, &mcp.Tool{
 		Name:        "deploy_app",
+		Annotations: changes("Deploy an app", true, false),
 		Description: "Start a deployment. This returns immediately; the build takes minutes. Poll get_app_status or call get_deployment_history to see the outcome.",
 	}, s.deployApp)
 
-	addTool(s, &mcp.Tool{
-		Name: "deploy_folder",
-		Description: "Deploy a folder on this computer, with no Git repository needed: the way to put an app you have just written online. " +
-			"The first time, it creates the app, and the databases the code uses, and links the folder so later calls update the same app. " +
-			"It leaves out .env files, node_modules and whatever .gitignore lists. " +
-			"It returns when the deploy has started; call get_app_status for the outcome and the URL. " +
-			"If the answer names a dotenv_file that was not sent, ask the person whether to send its values, then call again with dotenv=true.",
-	}, s.deployFolder)
+	// Reads files on the computer it runs on: the person's, from `skifity
+	// mcp`, and the panel's own from /api/mcp, which is why it is not there.
+	if !s.remote {
+		addTool(s, &mcp.Tool{
+			Name:        "deploy_folder",
+			Annotations: changes("Deploy a folder", true, false),
+			Description: "Deploy a folder on this computer, with no Git repository needed: the way to put an app you have just written online. " +
+				"The first time, it creates the app, and the databases the code uses, and links the folder so later calls update the same app. " +
+				"It leaves out .env files, node_modules and whatever .gitignore lists. " +
+				"It returns when the deploy has started; call get_app_status for the outcome and the URL. " +
+				"If the answer names a dotenv_file that was not sent, ask the person whether to send its values, then call again with dotenv=true.",
+		}, s.deployFolder)
+	}
 
 	addTool(s, &mcp.Tool{
-		Name: "run_command",
+		Name:        "run_command",
+		Annotations: changes("Run a command", true, false),
 		Description: "Run a one-off command in the app's own image, with the app's own environment variables. " +
 			"This is where a database migration runs, and where to look at data or run a management command. " +
 			"It waits for the command to finish — up to ten minutes — and returns its output. " +
@@ -354,41 +427,49 @@ func (s *Server) register() {
 
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_logs",
+		Annotations: reads("Read an app's logs"),
 		Description: "Read an app's recent log lines. This is where the cause of a crash or a failed start is. For an app that keeps restarting, pass previous=true: the container that printed the reason has already been replaced and the live log no longer has it.",
 	}, s.getAppLogs)
 
 	addTool(s, &mcp.Tool{
 		Name:        "list_variables",
+		Annotations: reads("List variables"),
 		Description: "List an app's environment variables. Values marked as secrets are not returned: they are write-only once set.",
 	}, s.listVariables)
 
 	addTool(s, &mcp.Tool{
 		Name:        "set_variable",
+		Annotations: changes("Set a variable", true, true),
 		Description: "Set an environment variable. A runtime variable is rolled out without rebuilding; a build-time variable causes a rebuild on the next deploy.",
 	}, s.setVariable)
 
 	addTool(s, &mcp.Tool{
 		Name:        "scale_app",
+		Annotations: changes("Scale an app", true, true),
 		Description: "Change how many instances an app runs, or turn on autoscaling. Returns any reason the app may not behave correctly with several instances.",
 	}, s.scaleApp)
 
 	addTool(s, &mcp.Tool{
 		Name:        "rollback_app",
+		Annotations: changes("Roll an app back", true, false),
 		Description: "Go back to a previous deployment. This restores the image and the settings that version ran with.",
 	}, s.rollbackApp)
 
 	addTool(s, &mcp.Tool{
 		Name:        "get_deployment_history",
+		Annotations: reads("Get deployment history"),
 		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed.",
 	}, s.getHistory)
 
 	addTool(s, &mcp.Tool{
 		Name:        "get_cluster_status",
+		Annotations: reads("Get the cluster's status"),
 		Description: "Describe the servers in the cluster: how many are ready, whether it survives losing one, and how much capacity is left.",
 	}, s.getCluster)
 
 	addTool(s, &mcp.Tool{
 		Name:        "check_scaling_readiness",
+		Annotations: reads("Check scaling readiness"),
 		Description: "Report what would break if this app ran more than one instance, such as local file storage or in-memory sessions, with a suggested fix for each.",
 	}, s.checkReadiness)
 }

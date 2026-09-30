@@ -2072,6 +2072,12 @@
         "cause": "You are in this team for some of its projects only, and this belongs to the whole team.",
         "impact": "The action was not performed.",
         "fix": "Ask an admin of the team for access to the whole team, if you need this."
+      },
+      "mcp_token_required": {
+        "title": "The MCP endpoint takes an API token",
+        "cause": "This request was signed in with a browser session rather than an API token.",
+        "impact": "Nothing was done.",
+        "fix": "Create a token under Account, then give it to the assistant as an Authorization: Bearer header."
       }
     }
   },

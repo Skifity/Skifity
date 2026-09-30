@@ -4514,6 +4514,48 @@ keeps up by polling. The invitation form also now does what its help text said:
 somebody who already has an account is added directly instead of being refused
 a link.
 
+## Phase 87 — the MCP server, served by the panel
+
+Gap 4, named by seven products. `skifity mcp` runs on the person's computer
+and talks stdio, which needs the binary wherever the assistant runs; a hosted
+assistant, a phone or a teammate's editor does not have it. And the fifteen
+tools said nothing about what they do, so a careful client — where the
+protocol's defaults are "not read-only" and "destructive" — asked before
+`list_apps` exactly as before `rollback_app`.
+
+The panel now serves the same server at `/api/mcp`, over streamable HTTP. It is
+stateless: a session would be a second credential, bound to whoever opened it
+and checked by nobody after that, so every request carries its token and is
+authorized on its own. The tools are not reimplemented. The MCP server is still
+a client of the API; for the endpoint, its client's transport is the panel's
+own router, in process, so each tool call is the same API requests the CLI
+would make, with the caller's token, through the same authentication and
+authorization. A viewer's assistant reads and cannot change, a token limited to
+one project reaches that project, and a token scoped to `read` reads — each
+with a test that drives the endpoint with the SDK's own client. Token scopes
+let `POST /api/mcp` through for that reason: it does nothing itself, and every
+request behind it is checked against the scope.
+
+The in-process requests get a fresh context that carries only the caller's
+cancellation. The first version cloned the MCP request's context, and every
+tool call came back 404: it carried chi's route for `/api/mcp`. It also carried
+that request's signed-in user, which would have outlived a token that failed
+on the inner request — a context is not a thing to hand from one request to
+another.
+
+`deploy_folder` is not offered over HTTP. It reads files on the computer the
+server runs on, which for the endpoint is the panel's — its database, its
+master key. A test holds that. A browser session is refused with
+`mcp.token_required`: the endpoint wants a token, and a cookie is what another
+site can make a browser send.
+
+Every tool now carries annotations: a title, read-only for the `list_`, `get_`
+and `check_` tools, and for the rest whether they can destroy something (a
+deploy, a rollback, a command, an overwritten variable or instance count) and
+whether repeating them changes anything more. None reach beyond the panel. The
+test checks the annotations against the names, so a tool added later is held
+to what it is called.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

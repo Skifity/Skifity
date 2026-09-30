@@ -25,6 +25,11 @@ type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
+	// transport is how requests reach the panel: nil is the network. The
+	// panel's own MCP endpoint sets it to the panel's router, so the tools it
+	// serves go through the same API, authentication and all, without a
+	// round trip out of the process and back.
+	transport http.RoundTripper
 }
 
 // Config is the CLI's stored configuration.
@@ -113,13 +118,26 @@ func SaveConfig(cfg Config) error {
 
 // NewClient builds a client from a configuration.
 func NewClient(cfg Config) *Client {
+	return NewClientWith(cfg, nil)
+}
+
+// NewClientWith is NewClient with the requests sent through transport rather
+// than the network.
+func NewClientWith(cfg Config, transport http.RoundTripper) *Client {
 	return &Client{
 		baseURL: strings.TrimSuffix(cfg.PanelURL, "/"),
 		token:   cfg.Token,
 		http: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout:   60 * time.Second,
+			Transport: transport,
 		},
+		transport: transport,
 	}
+}
+
+// unbounded is a client with no deadline but the context's.
+func (c *Client) unbounded() *http.Client {
+	return &http.Client{Timeout: 0, Transport: c.transport}
 }
 
 // Do sends a request and decodes the response into out.
@@ -175,7 +193,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 // to finish. The context is still the deadline — Ctrl-C ends it, and a caller
 // that wants a cap sets one.
 func (c *Client) DoLong(ctx context.Context, method, path string, body, out any) error {
-	long := &Client{baseURL: c.baseURL, token: c.token, http: &http.Client{Timeout: 0}}
+	long := &Client{baseURL: c.baseURL, token: c.token, http: c.unbounded(), transport: c.transport}
 	return long.Do(ctx, method, path, body, out)
 }
 
@@ -192,8 +210,7 @@ func (c *Client) Stream(ctx context.Context, path string, onEvent func(event, da
 	}
 
 	// A stream has no overall deadline: following logs is meant to stay open.
-	client := &http.Client{Timeout: 0}
-	resp, err := client.Do(req)
+	resp, err := c.unbounded().Do(req)
 	if err != nil {
 		return fmt.Errorf("could not reach the panel at %s: %w", c.baseURL, err)
 	}

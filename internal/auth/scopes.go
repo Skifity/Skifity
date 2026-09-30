@@ -139,6 +139,9 @@ func isBoundary(path, prefix string) bool {
 	return path[len(prefix)] == '/'
 }
 
+// MCPPath is where the panel serves its MCP endpoint.
+const MCPPath = "/api/mcp"
+
 // TokenAllows reports whether a token's scopes permit a request.
 //
 // An empty scope list is full access, which is what every token issued before
@@ -147,6 +150,13 @@ func isBoundary(path, prefix string) bool {
 func TokenAllows(scopes, method, path string) bool {
 	scopes = strings.TrimSpace(scopes)
 	if scopes == "" {
+		return true
+	}
+	// The MCP endpoint is a POST whatever the tool does, and does nothing
+	// itself: every tool call is a set of ordinary API requests made with the
+	// same token, and each of those comes back through here. Refusing the POST
+	// would only stop a read-only token from reading.
+	if path == MCPPath {
 		return true
 	}
 	readOnly := method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions

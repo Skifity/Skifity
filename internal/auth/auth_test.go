@@ -455,6 +455,13 @@ func TestAResourceScopeReachesOnlyItsOwnResource(t *testing.T) {
 		// rather than falling into whichever scope happened to be nearest.
 		{"a route no scope names", "apps:write", http.MethodPost, "/api/something-new", false},
 
+		// The MCP endpoint is a POST whatever the tool does, and each request
+		// a tool makes comes back through here on its own, so a scoped token
+		// reaches it and is held to its scope one request further in.
+		{"the MCP endpoint, with a read-only token", "read", http.MethodPost, MCPPath, true},
+		{"the MCP endpoint, with apps:read", "apps:read", http.MethodPost, MCPPath, true},
+		{"a path merely starting like it", "read", http.MethodPost, MCPPath + "/x", false},
+
 		// The older, unscoped form still means what it always did.
 		{"plain write, anywhere", "write", http.MethodDelete, "/api/servers/srv_1", true},
 		{"no scopes at all", "", http.MethodDelete, "/api/servers/srv_1", true},

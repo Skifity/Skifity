@@ -233,6 +233,33 @@ claude mcp add skifity -- skifity mcp
 It needs credentials the same way the CLI does: either `skifity login` first, or
 `SKIFITY_URL` and `SKIFITY_TOKEN` in its environment.
 
+### Without installing anything
+
+The panel serves the same MCP server itself, at `/api/mcp`, for an assistant
+that cannot run the binary — a hosted one, or a teammate's editor. Create an API
+token under Account and give it as a header:
+
+```sh
+claude mcp add --transport http skifity https://panel.example.com/api/mcp \
+  --header "Authorization: Bearer skf_..."
+```
+
+It is streamable HTTP and stateless: every request carries the token and is
+checked on its own, like any other API request, and each tool call is the same
+API requests the CLI would make with that token. So a viewer's token reads and
+changes nothing, a token limited to one project reaches that project, and a
+token scoped to `read` reads. A browser session is refused: the endpoint wants a
+token.
+
+One tool is missing there: `deploy_folder` reads files on the computer the
+server runs on, and over HTTP that is the panel's server. Deploy a folder with
+`skifity up`, or with the local MCP server.
+
+Every tool says whether it only reads and, if not, whether it can destroy
+something — a deploy replaces what is running, a variable is overwritten, a
+command does whatever it does — so an assistant's client can ask before those
+and not before `list_apps`.
+
 The tools are listed in [llms.txt](../llms.txt). They are named for what someone
 would ask for — `get_app_logs`, `check_scaling_readiness`, `rollback_app` — and
 every error comes back as a cause, an impact and a suggested fix rather than a

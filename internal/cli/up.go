@@ -713,7 +713,7 @@ func (c *Client) Upload(ctx context.Context, path string, body io.Reader, size i
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	resp, err := (&http.Client{Timeout: 0}).Do(req)
+	resp, err := c.unbounded().Do(req)
 	if err != nil {
 		return fmt.Errorf("could not reach the panel at %s: %w", c.baseURL, err)
 	}

@@ -66,6 +66,8 @@ type Server struct {
 	frontend http.Handler
 
 	router chi.Router
+	// mcp is the panel's own MCP endpoint; see mcp_handlers.go.
+	mcp http.Handler
 }
 
 // Options carries the Server's dependencies.
@@ -124,6 +126,7 @@ func New(opts Options) *Server {
 		s.log = slog.Default()
 	}
 	s.router = s.routes()
+	s.mcp = s.mcpHandler()
 	return s
 }
 
@@ -353,6 +356,13 @@ func (s *Server) routes() chi.Router {
 			authed.Post("/templates/{templateID}/install", s.handleInstallTemplate)
 
 			authed.Get("/events", s.handleEventStream)
+
+			// The MCP server, for an assistant that cannot run the binary.
+			// Each tool call is its own set of API requests with the same
+			// token, checked the same way. See mcp_handlers.go.
+			authed.Post("/mcp", s.handleMCP)
+			authed.Get("/mcp", s.handleMCP)
+			authed.Delete("/mcp", s.handleMCP)
 
 			authed.Group(func(admin chi.Router) {
 				admin.Use(s.requireAdmin)

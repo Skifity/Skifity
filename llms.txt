@@ -74,6 +74,15 @@ The binary is an MCP server over stdio:
 skifity mcp
 ```
 
+The panel serves the same tools over HTTP, for an assistant that cannot run the
+binary: `https://<panel>/api/mcp`, streamable HTTP, with
+`Authorization: Bearer <token>`. Each tool call is ordinary API requests made
+with that token, so it can do exactly what the token can. `deploy_folder` is not
+offered there: it would read the panel's disk, not yours.
+
+Every tool is annotated: read-only or not, and if not, whether it can destroy
+something (a deploy, a rollback, a command, an overwritten variable).
+
 Tools, in the order they are usually needed:
 
 | Tool | What it does |

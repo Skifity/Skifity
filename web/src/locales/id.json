@@ -2060,6 +2060,12 @@
         "cause": "Anda berada di tim ini hanya untuk sebagian proyeknya, dan ini milik seluruh tim.",
         "impact": "Tindakan tidak dijalankan.",
         "fix": "Minta admin tim untuk memberi akses ke seluruh tim, jika Anda membutuhkannya."
+      },
+      "mcp_token_required": {
+        "title": "Endpoint MCP memerlukan token API",
+        "cause": "Permintaan ini masuk dengan sesi browser, bukan token API.",
+        "impact": "Tidak ada yang dilakukan.",
+        "fix": "Buat token di Akun, lalu berikan ke asisten sebagai header Authorization: Bearer."
       }
     }
   },
