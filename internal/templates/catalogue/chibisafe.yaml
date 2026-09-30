@@ -30,7 +30,7 @@ services:
     mount_path: /app/uploads
     size_gb: 5
 - name: caddy
-  image: caddy:2-alpine
+  image: caddy:2.11.4-alpine
   port: 80
   public: true
   mem_request_mb: 128

@@ -12,12 +12,16 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
-  variables:
-    REDIS_CONN_STRING: redis://redis:6379
 databases:
 - name: newapi-db
   engine: postgres
   storage_gb: 5
   link_to:
   - new-api
-  var_name: DATABASE_URL
+  var_name: SQL_DSN
+- name: newapi-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - new-api
+  var_name: REDIS_CONN_STRING

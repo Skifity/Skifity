@@ -183,6 +183,20 @@ func TestEveryDatabaseReachesTheServiceItIsFor(t *testing.T) {
 // `main-stable`, which is a branch with a nicer name.
 var floatingTag = regexp.MustCompile(`(^|[-_.])(latest|main|master|stable|edge|nightly|release|dev)$`)
 
+// majorOnlyTag matches a tag that names a major version and nothing else: `1`,
+// `v2`, `15`, `5-alpine`, `3-management`.
+//
+// That is whatever is newest with a fence around it. Upstream moves it on every
+// minor and patch release, so two installs a week apart run different software
+// and a rollback restores the tag rather than the image that worked, exactly as
+// with `latest`; all the fence promises is that the next image is not a new
+// major. This directory's README once recommended these, and thirty-seven
+// services ran on one.
+//
+// Four digits or more is not a major version. `260919` is a date, and a
+// project that numbers its builds that way means each number to name one image.
+var majorOnlyTag = regexp.MustCompile(`^v?[0-9]{1,3}(-[a-z][a-z0-9]*)*$`)
+
 // TestNoTemplateRunsWhateverIsNewest: an image on a floating tag is not a
 // version. Two deploys of the same app run different software, a rollback
 // restores a tag rather than the thing that worked, and an upstream release
@@ -198,9 +212,14 @@ func TestNoTemplateRunsWhateverIsNewest(t *testing.T) {
 				t.Errorf("%s/%s runs %q with no tag, which means latest", tpl.ID, svc.Name, svc.Image)
 				continue
 			}
-			if tag := svc.Image[colon+1:]; floatingTag.MatchString(tag) {
+			tag := svc.Image[colon+1:]
+			if floatingTag.MatchString(tag) {
 				t.Errorf("%s/%s runs %q: %q is whatever is newest, so this app cannot be rolled back",
 					tpl.ID, svc.Name, svc.Image, tag)
+			}
+			if majorOnlyTag.MatchString(tag) {
+				t.Errorf("%s/%s runs %q: %q is whatever is newest in that major version; "+
+					"name the release inside it that it runs", tpl.ID, svc.Name, svc.Image, tag)
 			}
 		}
 	}
@@ -264,9 +283,35 @@ func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 			`CACHE|QUEUE|BROKER|AMQP|RABBITMQ|ELASTIC|ELASTICSEARCH|MEILI|CLICKHOUSE)($|_)`)
 	address := regexp.MustCompile(`(^|_)(HOST|HOSTNAME|PORT|SERVER|ADDR|ADDRESS|URL|URI|DSN|CONNECTION|CONNECTIONSTRING)$`)
 
+	// A URL names a host whatever the variable that holds it is called.
+	// PAPERLESS_REDIS=redis://redis:6379 went past the check on names, because
+	// PAPERLESS_REDIS ends in neither HOST nor URL, and gave Paperless a Redis
+	// the template never installed. A host with no dot in it is either the
+	// container itself (localhost) or something in the same environment,
+	// reached by name: a service of this template, or one of its managed
+	// databases. Anything else — including grampsweb_redis, which no resolver
+	// would even look up — is a container that is not there.
+	urlHost := regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://(?:[^@/?#\s]*@)?([^:/?#\s\[\]]*)`)
+
 	for _, tpl := range All() {
+		reachable := map[string]bool{"localhost": true}
+		for _, svc := range tpl.Services {
+			reachable[svc.Name] = true
+		}
+		for _, db := range tpl.Databases {
+			reachable[db.Name] = true
+		}
 		for _, svc := range tpl.Services {
 			for key, value := range svc.Variables {
+				for _, match := range urlHost.FindAllStringSubmatch(value, -1) {
+					host := strings.ToLower(match[1])
+					if host == "" || strings.Contains(host, ".") || reachable[host] {
+						continue
+					}
+					t.Errorf("%s/%s sets %s=%q; %q is neither a service in this template nor one of its "+
+						"databases, so this points at a container that does not exist",
+						tpl.ID, svc.Name, key, value, host)
+				}
 				upper := strings.ToUpper(key)
 				if datastore.MatchString(upper) && address.MatchString(upper) {
 					t.Errorf("%s/%s sets %s=%q; Skifity injects a connection string instead, "+

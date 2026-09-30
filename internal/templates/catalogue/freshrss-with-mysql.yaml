@@ -5,7 +5,7 @@ category: media
 website: https://freshrss.org/index.html
 services:
 - name: freshrss
-  image: freshrss/freshrss:1
+  image: freshrss/freshrss:1.30.0
   port: 80
   public: true
   mem_request_mb: 128

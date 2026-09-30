@@ -5,7 +5,7 @@ category: finance
 website: https://invoiceninja.github.io/selfhost.html
 services:
 - name: invoice-ninja
-  image: invoiceninja/invoiceninja:5
+  image: invoiceninja/invoiceninja:5.13.43
   port: 9000
   public: true
   mem_request_mb: 128

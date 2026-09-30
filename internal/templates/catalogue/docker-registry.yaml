@@ -5,7 +5,7 @@ category: developer
 website: https://distribution.github.io/distribution/
 services:
 - name: registry
-  image: registry:3
+  image: registry:3.1.2
   port: 5000
   public: true
   mem_request_mb: 128

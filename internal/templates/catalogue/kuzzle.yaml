@@ -5,7 +5,7 @@ category: developer
 website: https://kuzzle.io
 services:
 - name: elasticsearch
-  image: kuzzleio/elasticsearch:7
+  image: kuzzleio/elasticsearch:7.17.26
   port: 9200
   public: false
   mem_request_mb: 128
@@ -13,7 +13,7 @@ services:
   cpu_request_m: 50
   cpu_limit_m: 1000
 - name: kuzzle
-  image: kuzzleio/kuzzle:2
+  image: kuzzleio/kuzzle:2.58.0
   port: 7512
   public: true
   mem_request_mb: 128

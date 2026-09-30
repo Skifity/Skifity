@@ -28,7 +28,7 @@ services:
     mount_path: /app/api/logs
     size_gb: 5
 - name: mongodb
-  image: mongo:8
+  image: mongo:8.3.11
   port: 27017
   public: false
   mem_request_mb: 128

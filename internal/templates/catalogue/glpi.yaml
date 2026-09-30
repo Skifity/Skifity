@@ -6,7 +6,7 @@ category: productivity
 website: https://help.glpi-project.org/documentation
 services:
 - name: glpi
-  image: glpi/glpi:11
+  image: glpi/glpi:11.0.10
   port: 80
   public: true
   mem_request_mb: 128

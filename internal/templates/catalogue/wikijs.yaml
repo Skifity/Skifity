@@ -5,7 +5,7 @@ category: cms
 website: https://docs.requarks.io
 services:
 - name: wikijs
-  image: ghcr.io/requarks/wiki:2
+  image: ghcr.io/requarks/wiki:2.5.315
   port: 80
   public: true
   mem_request_mb: 128

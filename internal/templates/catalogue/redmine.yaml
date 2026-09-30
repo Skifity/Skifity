@@ -5,7 +5,7 @@ category: productivity
 website: https://www.redmine.org/
 services:
 - name: redmine
-  image: redmine:6-alpine
+  image: redmine:6.1.4-alpine
   port: 3000
   public: true
   mem_request_mb: 128

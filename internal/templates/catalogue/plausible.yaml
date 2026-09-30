@@ -6,7 +6,7 @@ website: https://plausible.io
 beta: true
 services:
 - name: plausible
-  image: ghcr.io/plausible/community-edition:v2
+  image: ghcr.io/plausible/community-edition:v2.1.5
   port: 8000
   variables:
     DISABLE_REGISTRATION: invite_only

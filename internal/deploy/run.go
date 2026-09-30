@@ -213,8 +213,10 @@ func (d *Deployer) runRelease(ctx context.Context, deployment store.Deployment, 
 }
 
 // prepareRuntime makes what a pod of the app reads before it can start: the
-// namespace and its guards, the registry's pull secret, and the Secret with
-// the app's variables as they are now.
+// namespace and its guards, the registry's pull secret, and the Secrets with
+// the app's variables and files as they are now. A release command runs
+// before the app's first rollout has written either, and a pod that mounts a
+// Secret which is not there never starts.
 func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.Environment, spec kube.AppSpec) error {
 	project, err := d.db.GetProject(ctx, env.ProjectID)
 	if err != nil {
@@ -230,7 +232,11 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 	if err != nil {
 		return err
 	}
-	return d.cluster.Client().Applier().Apply(ctx, kube.BuildEnvSecret(spec, variables))
+	files, err := d.fileContents(ctx, app)
+	if err != nil {
+		return err
+	}
+	return d.cluster.Client().Applier().ApplyAll(ctx, kube.BuildEnvSecret(spec, variables), kube.BuildFilesSecret(spec, files))
 }
 
 // runSeed runs a preview's seed command, once, after its first deploy that

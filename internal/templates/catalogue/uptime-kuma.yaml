@@ -5,7 +5,7 @@ category: monitoring
 website: https://uptime.kuma.pet
 services:
 - name: uptime-kuma
-  image: louislam/uptime-kuma:1
+  image: louislam/uptime-kuma:1.23.17
   port: 3001
   volumes:
   - name: data

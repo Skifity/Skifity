@@ -5,7 +5,7 @@ category: cms
 website: https://wordpress.org
 services:
 - name: wordpress
-  image: wordpress:6-apache
+  image: wordpress:6.9.4-apache
   port: 80
   health_path: /wp-admin/install.php
   volumes:

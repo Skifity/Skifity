@@ -6,7 +6,7 @@ category: monitoring
 website: https://github.com/louislam/uptime-kuma
 services:
 - name: uptime-kuma
-  image: louislam/uptime-kuma:2
+  image: louislam/uptime-kuma:2.5.5
   port: 3001
   public: true
   mem_request_mb: 128

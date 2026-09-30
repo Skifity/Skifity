@@ -6,7 +6,7 @@ category: developer
 website: https://forgejo.org/docs
 services:
 - name: forgejo
-  image: codeberg.org/forgejo/forgejo:15
+  image: codeberg.org/forgejo/forgejo:15.0.9
   port: 3000
   public: true
   mem_request_mb: 128

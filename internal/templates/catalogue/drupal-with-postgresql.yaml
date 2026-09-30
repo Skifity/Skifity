@@ -6,7 +6,7 @@ category: cms
 website: https://www.drupal.org/about
 services:
 - name: drupal
-  image: drupal:10-apache
+  image: drupal:10.6.18-apache
   port: 80
   public: true
   mem_request_mb: 128

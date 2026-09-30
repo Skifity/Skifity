@@ -6,7 +6,7 @@ category: cms
 website: https://directus.io
 services:
 - name: directus
-  image: directus/directus:11
+  image: directus/directus:11.17.4
   port: 8055
   public: true
   mem_request_mb: 128

@@ -5,7 +5,7 @@ category: productivity
 website: https://www.odoo.com/
 services:
 - name: odoo
-  image: odoo:18
+  image: odoo:18.0-20260926
   port: 8069
   public: true
   mem_request_mb: 128

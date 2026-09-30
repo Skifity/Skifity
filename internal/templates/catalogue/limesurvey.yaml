@@ -12,8 +12,6 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
-  variables:
-    LIMESURVEY_PHP_SESSION_SAVE_PATH: tcp://redis:6379
   volumes:
   - name: limesurvey-plugins-data
     mount_path: /var/www/html/plugins

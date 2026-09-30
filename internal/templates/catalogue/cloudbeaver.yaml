@@ -5,7 +5,7 @@ category: developer
 website: https://dbeaver.com/docs/cloudbeaver/
 services:
 - name: cloudbeaver
-  image: dbeaver/cloudbeaver:24
+  image: dbeaver/cloudbeaver:24.3.5
   port: 8978
   public: true
   mem_request_mb: 128

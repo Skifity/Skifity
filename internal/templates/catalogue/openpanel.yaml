@@ -5,7 +5,7 @@ category: analytics
 website: https://openpanel.dev/docs
 services:
 - name: openpanel-dashboard
-  image: lindesvard/openpanel-dashboard:2
+  image: lindesvard/openpanel-dashboard:2.3.0
   port: 3000
   public: true
   mem_request_mb: 128
@@ -16,7 +16,7 @@ services:
     NODE_ENV: production
     SELF_HOSTED: 'true'
 - name: openpanel-api
-  image: lindesvard/openpanel-api:2
+  image: lindesvard/openpanel-api:2.3.0
   port: 3000
   public: false
   mem_request_mb: 128
@@ -27,7 +27,7 @@ services:
     NODE_ENV: production
     SELF_HOSTED: 'true'
 - name: openpanel-worker
-  image: lindesvard/openpanel-worker:2
+  image: lindesvard/openpanel-worker:2.3.0
   port: 0
   public: false
   mem_request_mb: 128

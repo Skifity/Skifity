@@ -5,7 +5,7 @@ category: automation
 website: https://n8n.io
 services:
 - name: n8n
-  image: n8nio/n8n:1
+  image: n8nio/n8n:1.123.83
   port: 5678
   health_path: /healthz
   variables:

@@ -6,7 +6,7 @@ category: communication
 website: https://www.rabbitmq.com/documentation.html
 services:
 - name: rabbitmq
-  image: rabbitmq:3-management
+  image: rabbitmq:3.13.7-management
   port: 15672
   public: true
   mem_request_mb: 128

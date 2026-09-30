@@ -13,8 +13,6 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
-  variables:
-    PAPERLESS_REDIS: redis://redis:6379
   volumes:
   - name: paperless-data
     mount_path: /usr/src/paperless/data
@@ -23,9 +21,9 @@ services:
     mount_path: /usr/src/paperless/media
     size_gb: 5
 databases:
-- name: paperless-db
+- name: paperless-redis
   engine: redis
   storage_gb: 5
   link_to:
   - paperless
-  var_name: DATABASE_URL
+  var_name: PAPERLESS_REDIS
