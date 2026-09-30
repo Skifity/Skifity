@@ -36,8 +36,9 @@ func BuildPasswordSecret(s AppSpec) *corev1.Secret {
 			Namespace: s.Namespace,
 			Labels:    s.Labels(),
 		},
-		Type:       corev1.SecretTypeOpaque,
-		StringData: map[string]string{"users": s.PasswordUsers},
+		Type: corev1.SecretTypeOpaque,
+		// data, as the app's variables are: stringData cannot be taken away.
+		Data: map[string][]byte{"users": []byte(s.PasswordUsers)},
 	}
 }
 

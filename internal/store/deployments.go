@@ -111,13 +111,26 @@ func (db *DB) LatestDeployment(ctx context.Context, appID string) (Deployment, e
 
 // FindDeploymentByFingerprint finds a successful build with the same inputs, so a
 // redeploy can reuse its image instead of building again (ADR-0007).
-func (db *DB) FindDeploymentByFingerprint(ctx context.Context, appID, fingerprint string) (Deployment, error) {
+//
+// Only one whose image the registry still keeps (see ImagesWorthKeeping): an
+// image reused after the sweep took it is a rollout that ends pulling nothing.
+func (db *DB) FindDeploymentByFingerprint(ctx context.Context, appID, fingerprint string, keep int) (Deployment, error) {
 	if fingerprint == "" {
 		return Deployment{}, ErrNotFound
 	}
+	return scanDeployment(db.QueryRowContext(ctx, `SELECT `+deploymentColumns+` FROM (
+			SELECT *, ROW_NUMBER() OVER (ORDER BY number DESC) AS rn FROM deployments
+			WHERE app_id = ? AND image != ''
+		) WHERE build_fingerprint = ? AND status = 'succeeded' AND rn <= ?
+		ORDER BY number DESC LIMIT 1`, appID, fingerprint, max(keep, 1)))
+}
+
+// DeploymentRollingOut is an app's deployment whose image is being rolled out
+// right now, when there is one.
+func (db *DB) DeploymentRollingOut(ctx context.Context, appID string) (Deployment, error) {
 	return scanDeployment(db.QueryRowContext(ctx, `SELECT `+deploymentColumns+` FROM deployments
-		WHERE app_id = ? AND build_fingerprint = ? AND status = 'succeeded' AND image != ''
-		ORDER BY number DESC LIMIT 1`, appID, fingerprint))
+		WHERE app_id = ? AND status = 'deploying' AND image != ''
+		ORDER BY number DESC LIMIT 1`, appID))
 }
 
 // UpdateDeploymentStatus moves a deployment forward and records failure details.
@@ -163,9 +176,13 @@ func (db *DB) SetDeploymentImage(ctx context.Context, id, image string) error {
 // it, and two builds finishing in an unpredictable order is the thing this is
 // supposed to prevent. The caller cancels them.
 func (db *DB) SupersedeRunningDeployments(ctx context.Context, appID, exceptID string) ([]string, error) {
+	// Only the ones before it. Two deploys asked for at once each supersede
+	// the other otherwise, and the one that ran on was whichever finished
+	// last rather than the newer.
 	rows, err := db.QueryContext(ctx,
-		`SELECT id FROM deployments WHERE app_id = ? AND id != ? AND status IN ('queued','building','deploying')`,
-		appID, exceptID)
+		`SELECT id FROM deployments WHERE app_id = ? AND id != ? AND status IN ('queued','building','deploying')
+			AND number < (SELECT number FROM deployments WHERE id = ?)`,
+		appID, exceptID, exceptID)
 	if err != nil {
 		return nil, fmt.Errorf("find deployments to supersede: %w", err)
 	}
@@ -187,8 +204,9 @@ func (db *DB) SupersedeRunningDeployments(ctx context.Context, appID, exceptID s
 	}
 
 	if _, err := db.Exec(ctx, `UPDATE deployments SET status = 'superseded', finished_at = ?
-		WHERE app_id = ? AND id != ? AND status IN ('queued','building','deploying')`,
-		Now(), appID, exceptID); err != nil {
+		WHERE app_id = ? AND id != ? AND status IN ('queued','building','deploying')
+			AND number < (SELECT number FROM deployments WHERE id = ?)`,
+		Now(), appID, exceptID, exceptID); err != nil {
 		return nil, fmt.Errorf("supersede deployments: %w", err)
 	}
 	return ids, nil

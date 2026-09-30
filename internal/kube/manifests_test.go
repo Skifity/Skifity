@@ -514,7 +514,7 @@ func TestEnvSecretCarriesValues(t *testing.T) {
 	if secret.Name != "web-env" {
 		t.Fatalf("secret name %q, want web-env", secret.Name)
 	}
-	if secret.StringData["DATABASE_URL"] != "postgres://x" {
+	if string(secret.Data["DATABASE_URL"]) != "postgres://x" || len(secret.StringData) != 0 {
 		t.Fatal("the secret lost a value")
 	}
 
@@ -543,27 +543,27 @@ func TestEnvHashChangesWithValues(t *testing.T) {
 func TestBuildFingerprintSeparatesBuildFromRuntime(t *testing.T) {
 	// This is the mechanism behind ADR-0007 and the fix for the most common
 	// complaint about comparable products.
-	base := BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", nil)
+	base := BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", "", "", nil)
 
-	if base != BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", nil) {
+	if base != BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", "", "", nil) {
 		t.Fatal("the fingerprint is not stable for identical inputs")
 	}
-	if base == BuildFingerprint("https://github.com/a/b", "sha2", "railpack", "", "", nil) {
+	if base == BuildFingerprint("https://github.com/a/b", "sha2", "railpack", "", "", "", "", nil) {
 		t.Fatal("a new commit did not change the fingerprint, so it would never rebuild")
 	}
-	if base == BuildFingerprint("https://github.com/a/b", "sha1", "nixpacks", "", "", nil) {
+	if base == BuildFingerprint("https://github.com/a/b", "sha1", "nixpacks", "", "", "", "", nil) {
 		t.Fatal("changing the builder did not change the fingerprint")
 	}
-	if base == BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "apps/web", nil) {
+	if base == BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "apps/web", "", "", nil) {
 		t.Fatal("changing the root directory did not change the fingerprint")
 	}
-	if base == BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", map[string]string{"NODE_ENV": "production"}) {
+	if base == BuildFingerprint("https://github.com/a/b", "sha1", "railpack", "", "", "", "", map[string]string{"NODE_ENV": "production"}) {
 		t.Fatal("a build argument did not change the fingerprint")
 	}
 	// Build arguments must hash in a stable order.
 	args := map[string]string{"A": "1", "B": "2"}
-	if BuildFingerprint("r", "c", "b", "", "", args) !=
-		BuildFingerprint("r", "c", "b", "", "", map[string]string{"B": "2", "A": "1"}) {
+	if BuildFingerprint("r", "c", "b", "", "", "", "", args) !=
+		BuildFingerprint("r", "c", "b", "", "", "", "", map[string]string{"B": "2", "A": "1"}) {
 		t.Fatal("build argument order changes the fingerprint")
 	}
 }
@@ -998,5 +998,21 @@ func TestARunsPodIsNotOneOfTheAppsInstances(t *testing.T) {
 	}
 	if job.Labels["app.kubernetes.io/component"] != "run" {
 		t.Error("the Job is no longer marked as a run")
+	}
+}
+
+func TestARunPullsTheAppsImageAsTheAppDoes(t *testing.T) {
+	// A release, a one-off command and a scheduled one run the app's image;
+	// from an external registry they could not pull it without the app's
+	// pull secret.
+	app := baseSpec()
+	app.ImagePullSecret = "skifity-registry-auth"
+	job, err := BuildRunJob(RunSpec{App: app, Name: "web-run-abc", Command: "npm run migrate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets := job.Spec.Template.Spec.ImagePullSecrets
+	if len(secrets) != 1 || secrets[0].Name != "skifity-registry-auth" {
+		t.Fatalf("the run pulls with %v", secrets)
 	}
 }

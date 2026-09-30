@@ -148,6 +148,10 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 	podSpec := corev1.PodSpec{
 		RestartPolicy: corev1.RestartPolicyNever,
 		Containers:    []corev1.Container{container},
+		// The app's own pull secret: a release, a one-off command or a
+		// scheduled one runs the app's image, and from an external registry
+		// the pod could not pull it without.
+		ImagePullSecrets: pullSecrets(s.App),
 		SecurityContext: &corev1.PodSecurityContext{
 			RunAsNonRoot: confinement.RunAsNonRoot(),
 			RunAsUser:    confinement.RunAsUser(),

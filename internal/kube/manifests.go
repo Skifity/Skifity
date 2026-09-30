@@ -486,9 +486,13 @@ func BuildPVCs(s AppSpec) []*corev1.PersistentVolumeClaim {
 
 // BuildEnvSecret renders the Secret holding an app's environment variables.
 func BuildEnvSecret(s AppSpec, values map[string]string) *corev1.Secret {
-	data := make(map[string]string, len(values))
+	// data, never stringData. stringData is write-only: the API server folds
+	// it into data and forgets it, so server-side apply owns nothing it can
+	// take away, and a variable deleted in the panel stayed in data — and in
+	// every pod started after — for good.
+	data := make(map[string][]byte, len(values))
 	for k, v := range values {
-		data[k] = v
+		data[k] = []byte(v)
 	}
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
@@ -497,8 +501,8 @@ func BuildEnvSecret(s AppSpec, values map[string]string) *corev1.Secret {
 			Namespace: s.Namespace,
 			Labels:    s.Labels(),
 		},
-		Type:       corev1.SecretTypeOpaque,
-		StringData: data,
+		Type: corev1.SecretTypeOpaque,
+		Data: data,
 	}
 }
 

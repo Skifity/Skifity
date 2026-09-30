@@ -5516,6 +5516,47 @@ team role, when any signed-in user can create a team and be its owner.
   addresses, webhook paths and signed query strings. A release command's output
   is scrubbed like a build's.
 
+The deploy pipeline had the worst of the correctness bugs:
+
+* **Deploy now deployed old code.** The button sends no commit, so the build's
+  fingerprint said "no commit" every time, and the second press reused the first
+  press's image — whatever had been deployed in between. A Git deploy with no
+  commit now always builds.
+* **A tag named one image, until it named another.** Images were tagged by commit
+  alone, so the same commit built with another build variable was pushed over the
+  first, and a server that had the tag never pulled again. Tags now carry a piece
+  of the fingerprint. A static site's build command and output folder are part of
+  the fingerprint, which they were not; a cancelled or replaced build's Job is
+  stopped rather than left to push later.
+* **Stuck and rolled-back deploys.** A deploy that ran into its 45-minute limit
+  wrote its failure on the context that had just run out, so it stayed
+  "building" for good. A deploy is recorded as succeeded the moment the web is
+  serving it, before the processes and the seed, so a cancel in between no longer
+  leaves the new version live under a row that says otherwise. A settings change
+  during a rollout re-applied the previous version's image; it applies the one
+  rolling out. An older request could supersede a newer one, and a rollback
+  superseded nothing; both are ordered now.
+* **The registry.** The sweep keeps each app's running image however many failed
+  rollouts follow it, an image is reused only while the registry still keeps it,
+  and a build records its image before it lets the sweep in.
+* **Variables.** The app's variables were a Secret written with `stringData`,
+  which server-side apply cannot take a key away from, so a deleted variable stayed
+  in every pod started afterwards. It is written as `data`.
+* **Release commands** ran before the namespace, the variables Secret and the
+  registry's pull secret existed, so a first deploy's release waited for nothing
+  and later ones migrated with the previous variables; those are put in place
+  first, and every run pod carries the pull secret. A slow clone no longer counts
+  as a build that never started.
+* **Names.** An app's wake Service is `<app>-wake`, which is also the Service of
+  an app called that; such a name is refused beside the other.
+
+Not fixed, and said here: Kubernetes resets a Deployment to one instance for a
+moment when autoscaling is switched on, an app asleep at zero passes the
+rollout check without starting, the build workspace has no size limit, and the
+registry inside the cluster takes a push from any build — a Dockerfile's `RUN`
+could overwrite another team's image. The last needs the registry to have
+credentials per team, which is its own piece of work.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

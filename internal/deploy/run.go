@@ -137,6 +137,15 @@ func (d *Deployer) runRelease(ctx context.Context, deployment store.Deployment, 
 	if err != nil {
 		return err
 	}
+	// What the release reads, in place before it runs: it runs before the
+	// rollout that would otherwise make them. On a first deploy the pod sat
+	// waiting for a variables Secret that did not exist yet, and was reported
+	// as a build that never started; on later ones a migration ran with the
+	// variables of the version before, and one from an external registry
+	// could not be pulled at all.
+	if err := d.prepareRuntime(ctx, app, env, spec); err != nil {
+		return err
+	}
 	name := kube.RunJobName(app.Slug, kube.RunKindRelease, shortID(deployment.ID))
 	job, err := kube.BuildRunJob(kube.RunSpec{
 		App: spec, Name: name, Command: command, Kind: kube.RunKindRelease,
@@ -161,6 +170,27 @@ func (d *Deployer) runRelease(ctx context.Context, deployment store.Deployment, 
 	}
 	d.appendLog(ctx, deployment.ID, "The release command finished.")
 	return nil
+}
+
+// prepareRuntime makes what a pod of the app reads before it can start: the
+// namespace and its guards, the registry's pull secret, and the Secret with
+// the app's variables as they are now.
+func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.Environment, spec kube.AppSpec) error {
+	project, err := d.db.GetProject(ctx, env.ProjectID)
+	if err != nil {
+		return err
+	}
+	if err := d.cluster.EnsureNamespace(ctx, env, project.TeamID, project.ID); err != nil {
+		return err
+	}
+	if err := d.ensureRegistryAuth(ctx, env.Namespace); err != nil {
+		return err
+	}
+	variables, err := d.runtimeVariables(ctx, app, env)
+	if err != nil {
+		return err
+	}
+	return d.cluster.Client().Applier().Apply(ctx, kube.BuildEnvSecret(spec, variables))
 }
 
 // runSeed runs a preview's seed command, once, after its first deploy that

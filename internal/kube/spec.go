@@ -295,10 +295,21 @@ func EnvHash(values map[string]string) string {
 // This is the mechanism behind ADR-0007: two deploys with the same fingerprint
 // can share an image, so changing an environment variable or a replica count
 // never triggers a rebuild.
-func BuildFingerprint(repoURL, commitSHA, builder, dockerfilePath, rootDir string, buildArgs map[string]string) string {
+func BuildFingerprint(repoURL, commitSHA, builder, dockerfilePath, rootDir, buildCommand, staticDir string, buildArgs map[string]string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "repo=%s\ncommit=%s\nbuilder=%s\ndockerfile=%s\nroot=%s\n",
 		repoURL, commitSHA, builder, dockerfilePath, rootDir)
+	// A static site's build command and the folder it serves go into the
+	// image as surely as the commit does: changing either and deploying used
+	// to find the old image by its fingerprint and run it. Written only when
+	// set, so every fingerprint made before stays what it was and nothing is
+	// rebuilt for having been upgraded.
+	if buildCommand != "" {
+		fmt.Fprintf(h, "build=%s\n", buildCommand)
+	}
+	if staticDir != "" {
+		fmt.Fprintf(h, "static=%s\n", staticDir)
+	}
 	keys := make([]string, 0, len(buildArgs))
 	for k := range buildArgs {
 		keys = append(keys, k)

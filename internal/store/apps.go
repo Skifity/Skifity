@@ -97,11 +97,15 @@ func (db *DB) ListAppsForProject(ctx context.Context, projectID string) ([]App, 
 // Redis. Deleting either one then deleted the other's Service as well.
 func (db *DB) SlugOwnerInEnvironment(ctx context.Context, envID, slug string) (string, error) {
 	var kind string
+	// Also a name one more "-wake" away, either way: an app's wake Service —
+	// the path to it while it sleeps — is <slug>-wake, which is exactly the
+	// Service of an app or database called that, and whichever was applied
+	// last took the other's over.
 	err := db.QueryRowContext(ctx, `
-		SELECT 'app'      FROM apps      WHERE environment_id = ? AND slug = ?
+		SELECT 'app'      FROM apps      WHERE environment_id = ? AND (slug = ? OR slug || '-wake' = ? OR slug = ? || '-wake')
 		UNION ALL
-		SELECT 'database' FROM databases WHERE environment_id = ? AND slug = ?
-		LIMIT 1`, envID, slug, envID, slug).Scan(&kind)
+		SELECT 'database' FROM databases WHERE environment_id = ? AND (slug = ? OR slug || '-wake' = ? OR slug = ? || '-wake')
+		LIMIT 1`, envID, slug, slug, slug, envID, slug, slug, slug).Scan(&kind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -134,7 +138,15 @@ func (db *DB) ImagesWorthKeeping(ctx context.Context, perApp int) ([]string, err
 			WHERE d.image <> ''
 		) WHERE rn <= ?
 		UNION
-		SELECT image FROM apps WHERE image <> ''`, perApp)
+		SELECT image FROM apps WHERE image <> ''
+		UNION
+		-- The version each app is running, however many deployments with an
+		-- image have failed since: ten failed rollouts in a row used to push
+		-- it out of the window above, and its image went with the next sweep.
+		SELECT d.image FROM deployments d
+		WHERE d.image <> '' AND d.status = 'succeeded' AND d.number = (
+			SELECT MAX(number) FROM deployments
+			WHERE app_id = d.app_id AND status = 'succeeded' AND image <> '')`, perApp)
 	if err != nil {
 		return nil, fmt.Errorf("list the images worth keeping: %w", err)
 	}

@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"skifity/internal/api"
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/kube"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 )
@@ -693,5 +696,68 @@ func TestTwoDeploymentsAtOnceHaveTwoBuildNames(t *testing.T) {
 			t.Fatalf("two deployments made together share the build name %q", name)
 		}
 		seen[name] = true
+	}
+}
+
+func TestTheSameCommitBuiltTwoWaysIsTwoImages(t *testing.T) {
+	// Pods pull only an image they do not already have, so a tag has to name
+	// one image for good: the same commit with another build variable was
+	// pushed over the first build's tag and never pulled.
+	a := store.Deployment{CommitSHA: "0123456789abcdef", BuildFingerprint: "aaaaaaaa11112222"}
+	b := store.Deployment{CommitSHA: "0123456789abcdef", BuildFingerprint: "bbbbbbbb11112222"}
+	if imageTag(a) == imageTag(b) {
+		t.Fatalf("two builds of one commit share the tag %q", imageTag(a))
+	}
+	again := a
+	if imageTag(again) != imageTag(a) {
+		t.Fatal("one build does not always have one tag")
+	}
+	if got := imageTag(store.Deployment{Number: 7}); got != "d7" {
+		t.Fatalf("a build with no commit is tagged %q", got)
+	}
+}
+
+func TestAStaticSitesBuildSettingsAreBuildInputs(t *testing.T) {
+	base := kube.BuildFingerprint("https://github.com/a/b", "sha1", "static", "", "", "", "", nil)
+	for _, changed := range []string{
+		kube.BuildFingerprint("https://github.com/a/b", "sha1", "static", "", "", "npm run build", "", nil),
+		kube.BuildFingerprint("https://github.com/a/b", "sha1", "static", "", "", "", "dist", nil),
+	} {
+		if changed == base {
+			t.Fatal("changing what a static site builds or serves kept its fingerprint, so the old image was reused")
+		}
+	}
+}
+
+func TestADeployWithNoCommitBuildsWhatTheBranchHoldsNow(t *testing.T) {
+	// The Deploy button sends no commit. Its fingerprint said "no commit"
+	// every time, so the second press reused the first press's image — and
+	// put the app back on that code, whatever had been deployed in between.
+	d, db, app, _ := testDeployer(t)
+	first, err := d.Deploy(t.Context(), api.DeployRequest{AppID: app.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	markBuilt(t, db, first.ID, "registry/acme/web:d1")
+
+	second, err := d.Deploy(t.Context(), api.DeployRequest{AppID: app.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Image != "" {
+		t.Fatalf("a deploy of the branch as it is now reused %q", second.Image)
+	}
+}
+
+func TestACloneUnderWayIsABuildThatStarted(t *testing.T) {
+	cloning := corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending,
+		InitContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}}}}
+	if !initContainersWorking(cloning) {
+		t.Fatal("a pod cloning its repository counts as one that never started")
+	}
+	waiting := corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending,
+		InitContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}
+	if initContainersWorking(waiting) {
+		t.Fatal("a pod that cannot pull its first image counts as working")
 	}
 }

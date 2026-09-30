@@ -218,7 +218,7 @@ func TestFindDeploymentByFingerprintOnlyMatchesSuccess(t *testing.T) {
 		t.Fatalf("UpdateDeploymentStatus: %v", err)
 	}
 	// A failed build must never let a later deploy skip building.
-	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-1"); !errors.Is(err, ErrNotFound) {
+	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-1", 10); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("a failed build was reused: %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestFindDeploymentByFingerprintOnlyMatchesSuccess(t *testing.T) {
 	if err := db.UpdateDeploymentStatus(ctx, ok.ID, DeploySucceeded, "", "", ""); err != nil {
 		t.Fatalf("UpdateDeploymentStatus: %v", err)
 	}
-	found, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-1")
+	found, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-1", 10)
 	if err != nil {
 		t.Fatalf("FindDeploymentByFingerprint: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestFindDeploymentByFingerprintOnlyMatchesSuccess(t *testing.T) {
 		t.Fatalf("reused image %q, want reg/img:2", found.Image)
 	}
 	// An unknown fingerprint must force a build rather than reuse anything.
-	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-other"); !errors.Is(err, ErrNotFound) {
+	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-other", 10); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("an unrelated fingerprint matched: %v", err)
 	}
 }
@@ -975,7 +975,7 @@ func TestFailedRolloutsTakeTheirPlaceInTheRollbackWindow(t *testing.T) {
 	if err := db.CreateApp(ctx, &app); err != nil {
 		t.Fatal(err)
 	}
-	var good string
+	var ids []string
 	for i, status := range []string{"succeeded", "succeeded", "succeeded", "failed", "failed", "failed"} {
 		d := Deployment{AppID: app.ID, Image: fmt.Sprintf("registry:5000/acme-prod/web:v%d", i)}
 		if err := db.CreateDeployment(ctx, &d); err != nil {
@@ -984,16 +984,24 @@ func TestFailedRolloutsTakeTheirPlaceInTheRollbackWindow(t *testing.T) {
 		if _, err := db.Exec(ctx, `UPDATE deployments SET status = ? WHERE id = ?`, status, d.ID); err != nil {
 			t.Fatal(err)
 		}
-		if status == "succeeded" {
-			good = d.ID
-		}
+		ids = append(ids, d.ID)
 	}
+	// v1: a good version before the one running, behind three failures.
+	good := ids[1]
 	kept, err := db.ImagesWorthKeeping(ctx, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(kept, "registry:5000/acme-prod/web:v2") {
+	if slices.Contains(kept, "registry:5000/acme-prod/web:v1") {
 		t.Fatalf("the sweep keeps %v; this test's premise is wrong", kept)
+	}
+	// The version running now is kept however many failures followed it:
+	// ten in a row used to take its image with the next sweep.
+	if !slices.Contains(kept, "registry:5000/acme-prod/web:v2") {
+		t.Fatalf("the image the app is running is not kept: %v", kept)
+	}
+	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "", 3); !errors.Is(err, ErrNotFound) {
+		t.Fatal("an empty fingerprint found a deployment")
 	}
 	if ok, err := db.WithinRollbackWindow(ctx, app.ID, good, 3); err != nil || ok {
 		t.Fatalf("a version whose image the sweep takes is offered (%v, %v)", ok, err)
@@ -1166,5 +1174,107 @@ func TestAStepRemembersHowToSayItselfAgain(t *testing.T) {
 		if step.Key == "preflight" && (step.MessageKey != "" || len(step.MessageArgs) != 0 || len(step.Notes) != 0) {
 			t.Errorf("a reset step still says %q %q %+v", step.MessageKey, step.MessageArgs, step.Notes)
 		}
+	}
+}
+
+func TestAnOlderDeployNeverSupersedesANewerOne(t *testing.T) {
+	// Two deploys asked for at once each looked for "the others" to
+	// supersede; the older could supersede the newer, and whichever
+	// finished last was what ran.
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	older := Deployment{AppID: app.ID, Status: DeployBuilding}
+	newer := Deployment{AppID: app.ID, Status: DeployBuilding}
+	for _, d := range []*Deployment{&older, &newer} {
+		if err := db.CreateDeployment(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := db.SupersedeRunningDeployments(ctx, app.ID, older.ID)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("the older deploy superseded %v (%v)", ids, err)
+	}
+	if got, _ := db.GetDeployment(ctx, newer.ID); got.Status != DeployBuilding {
+		t.Fatalf("the newer deploy is %s", got.Status)
+	}
+	if ids, _ := db.SupersedeRunningDeployments(ctx, app.ID, newer.ID); len(ids) != 1 || ids[0] != older.ID {
+		t.Fatalf("the newer deploy superseded %v", ids)
+	}
+}
+
+func TestAnImageIsReusedOnlyWhileTheRegistryKeepsIt(t *testing.T) {
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	for i, fingerprint := range []string{"fp-old", "fp-a", "fp-b", "fp-c"} {
+		d := Deployment{AppID: app.ID, Image: fmt.Sprintf("registry:5000/acme-prod/web:v%d", i), BuildFingerprint: fingerprint}
+		if err := db.CreateDeployment(ctx, &d); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, `UPDATE deployments SET status = 'succeeded' WHERE id = ?`, d.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Three are kept, so the oldest image is gone: finding it by its
+	// fingerprint would roll out an image nobody can pull.
+	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-old", 3); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an image the sweep has taken was found to reuse: %v", err)
+	}
+	if _, err := db.FindDeploymentByFingerprint(ctx, app.ID, "fp-a", 3); err != nil {
+		t.Fatalf("a kept image was not found: %v", err)
+	}
+}
+
+func TestTheVersionBeingRolledOutIsTheOneASyncApplies(t *testing.T) {
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DeploymentRollingOut(ctx, app.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an app with nothing rolling out: %v", err)
+	}
+	live := Deployment{AppID: app.ID, Image: "registry:5000/acme-prod/web:v1"}
+	rolling := Deployment{AppID: app.ID, Image: "registry:5000/acme-prod/web:v2"}
+	for d, status := range map[*Deployment]string{&live: "succeeded", &rolling: "deploying"} {
+		if err := db.CreateDeployment(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, `UPDATE deployments SET status = ? WHERE id = ?`, status, d.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.DeploymentRollingOut(ctx, app.ID)
+	if err != nil || got.ID != rolling.ID {
+		t.Fatalf("the deployment rolling out is %+v (%v)", got, err)
+	}
+}
+
+func TestANameAWakeServiceWouldTakeIsTaken(t *testing.T) {
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"web", "web-wake"} {
+		if owner, err := db.SlugOwnerInEnvironment(ctx, env.ID, slug); err != nil || owner != "app" {
+			t.Errorf("%q is free beside an app called web (%q, %v)", slug, owner, err)
+		}
+	}
+	if owner, _ := db.SlugOwnerInEnvironment(ctx, env.ID, "api"); owner != "" {
+		t.Errorf("an unrelated name is taken by %q", owner)
 	}
 }

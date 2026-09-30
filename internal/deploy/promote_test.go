@@ -14,7 +14,7 @@ import (
 func TestAPromotionRunsTheImageOnlyWhenItWouldHaveBeenBuiltTheSame(t *testing.T) {
 	d, db, app, _ := testDeployer(t)
 	const commit = "0123456789abcdef0123456789abcdef01234567"
-	same := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir, map[string]string{})
+	same := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir, "", "", map[string]string{})
 	promote := func(fingerprint string, force bool) (store.Deployment, error) {
 		return d.Deploy(t.Context(), api.DeployRequest{
 			AppID: app.ID, Trigger: "promote", CommitSHA: commit, CommitMessage: "Fix the basket",
@@ -34,7 +34,7 @@ func TestAPromotionRunsTheImageOnlyWhenItWouldHaveBeenBuiltTheSame(t *testing.T)
 	markBuilt(t, db, deployment.ID, deployment.Image)
 
 	// Staging's build-time variables, which this app does not have.
-	built := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir,
+	built := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir, "", "",
 		map[string]string{"NEXT_PUBLIC_API_URL": "https://api.staging.example"})
 	if _, err := promote(built, false); problemCode(err) != "promote.built_differently" {
 		t.Fatalf("an image built differently answered %v", err)

@@ -46,16 +46,7 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", err
 	}
 
-	tag := deployment.CommitSHA
-	if len(tag) > 12 {
-		tag = tag[:12]
-	}
-	if tag == "" {
-		// Without a commit the deployment number keeps tags unique and
-		// meaningful in the registry.
-		tag = fmt.Sprintf("d%d", deployment.Number)
-	}
-	image := builder.ImageName(registry, env.Namespace, app.Slug, tag)
+	image := builder.ImageName(registry, env.Namespace, app.Slug, imageTag(*deployment))
 
 	chosen, err := d.chooseBuilder(ctx, app)
 	if err != nil {
@@ -140,6 +131,19 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", fmt.Errorf("start the build: %w", err)
 	}
 	d.ownBuildVars(ctx, spec)
+	// A build cancelled or replaced stops here, and its Job has to stop with
+	// it: left running, it finished later and pushed an image nobody asked
+	// for, over a tag the build that replaced it may be using.
+	defer func() {
+		if ctx.Err() == nil {
+			return
+		}
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err := d.cluster.Client().Applier().Delete(cleanup, "batch/v1", "Job", spec.Namespace, spec.Name); err != nil {
+			d.log.Warn("could not stop a build that was cancelled", "job", spec.Name, "error", err)
+		}
+	}()
 
 	if spec.SourceUpload {
 		if err := d.deliverUpload(ctx, deployment, app, spec.Namespace, spec.Name); err != nil {
@@ -154,6 +158,13 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 
 	if err := d.streamBuild(ctx, deployment, spec.Namespace, spec.Name, chosen); err != nil {
 		return "", err
+	}
+	// Recorded while the build still holds the registry lock. Recorded after
+	// it, a sweep waiting for the lock found an image no deployment named yet
+	// and took it, a moment before the rollout pulled it.
+	deployment.Image = image
+	if err := d.db.SetDeploymentImage(context.WithoutCancel(ctx), deployment.ID, image); err != nil {
+		d.log.Warn("could not record the built image", "deployment", deployment.ID, "error", err)
 	}
 	return image, nil
 }
@@ -271,6 +282,13 @@ func (d *Deployer) waitForBuildPod(ctx context.Context, namespace, jobName strin
 						return "", errdoc.InsufficientCapacity("The build", cond.Message)
 					}
 				}
+				// Cloning a large repository and preparing the build happen
+				// in init containers, while the pod is still Pending. That
+				// is a build under way, not one that never started, and it
+				// was failed at five minutes while its Job carried on.
+				if initContainersWorking(pod) {
+					deadline = time.Now().Add(5 * time.Minute)
+				}
 			}
 		}
 		if time.Now().After(deadline) {
@@ -282,6 +300,18 @@ func (d *Deployer) waitForBuildPod(ctx context.Context, namespace, jobName strin
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+// initContainersWorking reports whether a pending pod's init containers are
+// running, or have finished without failing: work is being done.
+func initContainersWorking(pod corev1.Pod) bool {
+	for _, status := range pod.Status.InitContainerStatuses {
+		if status.State.Running != nil ||
+			(status.State.Terminated != nil && status.State.Terminated.ExitCode == 0) {
+			return true
+		}
+	}
+	return false
 }
 
 // buildNotStarted is a build pod that never got going.
@@ -466,6 +496,33 @@ func cloneSecretName(gitSourceID string) string {
 // the build Job, and the Secret with its variables, live in one namespace for
 // every team, so two apps called "web" deploying together shared a Job name,
 // deleted each other's builds and could read each other's build values.
+// imageTag is what a deployment's image is tagged with: its commit and a
+// piece of its fingerprint, or its number when there is no commit.
+//
+// The commit alone was not enough. The same commit built twice — a build
+// variable changed, another root or Dockerfile — pushed different images to
+// one tag, and a server that already had the tag kept running the old one:
+// pods pull only an image they do not have.
+func imageTag(deployment store.Deployment) string {
+	commit := deployment.CommitSHA
+	if len(commit) > 12 {
+		commit = commit[:12]
+	}
+	if commit == "" {
+		// Without a commit the deployment number keeps tags unique and
+		// meaningful in the registry.
+		return fmt.Sprintf("d%d", deployment.Number)
+	}
+	fingerprint := deployment.BuildFingerprint
+	if len(fingerprint) > 8 {
+		fingerprint = fingerprint[:8]
+	}
+	if fingerprint == "" {
+		return commit
+	}
+	return commit + "-" + fingerprint
+}
+
 func shortID(id string) string {
 	if idx := strings.IndexByte(id, '_'); idx >= 0 {
 		id = id[idx+1:]

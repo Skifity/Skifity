@@ -99,7 +99,8 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	if err != nil {
 		return store.Deployment{}, err
 	}
-	fingerprint := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir, buildArgs)
+	fingerprint := kube.BuildFingerprint(app.RepoURL, commit, app.Builder, app.DockerfilePath, app.RootDir,
+		app.BuildCommand, app.StaticDir, buildArgs)
 	if app.SourceType == "image" {
 		// A prebuilt image is its own fingerprint: nothing is built.
 		fingerprint = "image:" + app.Image
@@ -135,8 +136,14 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 		deployment.CommitMessage = req.CommitMessage
 		deployment.CommitAuthor = req.CommitAuthor
 		deployment.BuildFingerprint = req.Fingerprint
-	} else if !req.Force && app.SourceType != "image" {
-		if previous, err := d.db.FindDeploymentByFingerprint(ctx, app.ID, fingerprint); err == nil {
+	} else if !req.Force && app.SourceType != "image" && (commit != "" || app.SourceType != "git") {
+		// Not for a Git deploy that names no commit — the Deploy button, a
+		// CLI deploy with no --commit: it builds whatever the branch holds
+		// now, which nobody knows until it is cloned. Its fingerprint said
+		// "no commit" every time, so the second one reused the first one's
+		// image and put the app back on that code, whatever had been pushed
+		// and deployed in between.
+		if previous, err := d.db.FindDeploymentByFingerprint(ctx, app.ID, fingerprint, registry.KeptPerApp); err == nil {
 			deployment.Image = previous.Image
 			deployment.CommitSHA = previous.CommitSHA
 			deployment.CommitMessage = previous.CommitMessage
@@ -150,17 +157,7 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	if err := d.db.CreateDeployment(ctx, &deployment); err != nil {
 		return store.Deployment{}, err
 	}
-	superseded, err := d.db.SupersedeRunningDeployments(ctx, app.ID, deployment.ID)
-	if err != nil {
-		d.log.Warn("could not supersede earlier deployments", "app", app.ID, "error", err)
-	}
-	// Marking the row is not enough: the build it belongs to is still running,
-	// and would go on to roll out an older version after this one.
-	for _, id := range superseded {
-		d.log.Info("stopping a deployment that a newer one replaced",
-			"app", app.ID, "deployment", id, "replaced_by", deployment.ID)
-		d.stop(id)
-	}
+	d.supersede(ctx, app.ID, deployment.ID)
 
 	d.start(deployment.ID, func(runCtx context.Context) {
 		d.run(runCtx, deployment.ID)
@@ -213,14 +210,9 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 
 	if deployment.Image == "" {
 		d.setStatus(ctx, &deployment, store.DeployBuilding)
-		image, err := d.build(ctx, &deployment, app, env)
-		if err != nil {
+		if _, err := d.build(ctx, &deployment, app, env); err != nil {
 			d.fail(ctx, deployment, errdoc.From(err))
 			return
-		}
-		deployment.Image = image
-		if err := d.db.SetDeploymentImage(ctx, deployment.ID, image); err != nil {
-			d.log.Warn("could not record the built image", "deployment", deployment.ID, "error", err)
 		}
 	} else {
 		d.appendLog(ctx, deployment.ID,
@@ -273,11 +265,19 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 		d.fail(ctx, deployment, errdoc.From(err))
 		return
 	}
+	// The app is serving this version from here on, so it is recorded as the
+	// one that succeeded now — on a context of its own. Written after the
+	// processes and the seed, a cancel or the deploy's deadline landing in
+	// between left the row cancelled or "deploying" with the new version
+	// live, and the next variable change synced the app back to the version
+	// before it.
+	finished := context.WithoutCancel(ctx)
+	_ = d.db.UpdateDeploymentStatus(finished, deployment.ID, store.DeploySucceeded, "", "", "")
 	d.watchProcesses(ctx, deployment, app, env, processes)
 	d.runSeed(ctx, deployment, app, env)
+	ctx = finished
 
 	d.appendLog(ctx, deployment.ID, "Deployed.")
-	_ = d.db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeploySucceeded, "", "", "")
 	d.Metrics.Inc("skifity_deployments_total", "result", "succeeded")
 	_ = d.db.SetAppStatus(ctx, app.ID, "running")
 	d.publish(ctx, deployment.ID)
@@ -570,12 +570,21 @@ func (d *Deployer) Sync(ctx context.Context, appID string) error {
 		return err
 	}
 	last, err := d.db.LatestSuccessfulDeployment(ctx, appID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			// Nothing has been deployed yet, so there is nothing to update.
-			return nil
-		}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
+	}
+	// A version being rolled out is the one to apply the change to. The last
+	// that succeeded is the one before it, and re-applying that in the middle
+	// of a rollout — somebody adding the variable the new version crashes
+	// without, which is when it happens — put the app back on the old image,
+	// and the rollout then reported success for pods running it.
+	if rolling, rollingErr := d.db.DeploymentRollingOut(ctx, appID); rollingErr == nil &&
+		(errors.Is(err, store.ErrNotFound) || rolling.Number > last.Number) {
+		last, err = rolling, nil
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		// Nothing has been deployed yet, so there is nothing to update.
+		return nil
 	}
 	env, err := d.db.GetEnvironment(ctx, app.EnvironmentID)
 	if err != nil {
@@ -633,6 +642,10 @@ func (d *Deployer) Rollback(ctx context.Context, appID, deploymentID, actorID st
 	if err := d.db.CreateDeployment(ctx, &deployment); err != nil {
 		return store.Deployment{}, err
 	}
+	// A rollback is the version that should be running from now on, as much
+	// as a deploy is: a build still in flight rolled out over it, and a stuck
+	// rollout being rolled back saw the rollback finish and took the credit.
+	d.supersede(ctx, appID, deployment.ID)
 
 	// Restore the runtime settings the old version ran with, so a rollback
 	// undoes a bad configuration change and not only a bad build.
@@ -644,6 +657,21 @@ func (d *Deployer) Rollback(ctx context.Context, appID, deploymentID, actorID st
 		d.run(runCtx, deployment.ID)
 	})
 	return deployment, nil
+}
+
+// supersede marks the deployments before this one that are still running as
+// superseded, and stops them: marking the row is not enough, since the build
+// it belongs to would go on to roll out an older version after this one.
+func (d *Deployer) supersede(ctx context.Context, appID, deploymentID string) {
+	superseded, err := d.db.SupersedeRunningDeployments(ctx, appID, deploymentID)
+	if err != nil {
+		d.log.Warn("could not supersede earlier deployments", "app", appID, "error", err)
+	}
+	for _, id := range superseded {
+		d.log.Info("stopping a deployment that a newer one replaced",
+			"app", appID, "deployment", id, "replaced_by", deploymentID)
+		d.stop(id)
+	}
 }
 
 // Cancel stops an in-flight build or rollout.
@@ -731,6 +759,11 @@ func (d *Deployer) setStatus(ctx context.Context, deployment *store.Deployment, 
 }
 
 func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, problem *errdoc.Problem) {
+	// Written on a context of its own: a deploy that ran into its deadline
+	// failed because the context ran out, and every write on that context
+	// failed with it — the row stayed "building" for good.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
 	// A cancelled deploy is not a failure to shout about.
 	if errors.Is(problem, context.Canceled) {
 		_ = d.db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeployCancelled, "cancelled", "Cancelled.", "")

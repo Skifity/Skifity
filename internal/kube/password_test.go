@@ -75,8 +75,8 @@ func TestThePasswordMiddlewareReadsItsSecretAndHidesTheHeader(t *testing.T) {
 	if basicAuth["removeHeader"] != true {
 		t.Error("the Authorization header is passed on to the app")
 	}
-	if secret.StringData["users"] != spec.PasswordUsers {
-		t.Errorf("the secret holds %q", secret.StringData["users"])
+	if string(secret.Data["users"]) != spec.PasswordUsers {
+		t.Errorf("the secret holds %q", secret.Data["users"])
 	}
 }
 
