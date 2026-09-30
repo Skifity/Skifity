@@ -3,6 +3,8 @@ package kube
 import (
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestAK3sVersionIsReadAsNodesReportIt(t *testing.T) {
@@ -24,6 +26,14 @@ func TestAK3sVersionIsReadAsNodesReportIt(t *testing.T) {
 	c, _ := ParseK3sVersion("v1.31.10+k3s1")
 	if a.Compare(b) != -1 || c.Compare(b) != 1 || a.Compare(a) != 0 {
 		t.Fatal("versions are not ordered numerically")
+	}
+
+	// Typed without its +k3s part, as the form takes when the releases cannot
+	// be listed, a version is the release a node at +k3s1 already runs, and
+	// not one older than it.
+	plan := PlanK3sUpgrade([]UpgradeNode{{Name: "one", ControlPlane: true, Ready: true, Version: "v1.31.4+k3s1"}}, "v1.31.4")
+	if !plan.Nothing || len(plan.Blockers) != 0 {
+		t.Fatalf("v1.31.4 against a node at v1.31.4+k3s1: %+v", plan)
 	}
 }
 
@@ -104,5 +114,21 @@ func TestTheUpgradePlansAreTheOnesK3sDocuments(t *testing.T) {
 	}
 	if _, err := ToUnstructured(server); err != nil {
 		t.Fatalf("a plan cannot be applied: %v", err)
+	}
+}
+
+func TestPlansThePanelDidNotWriteAreFound(t *testing.T) {
+	target, _ := ParseK3sVersion("v1.31.4+k3s1")
+	var plans []unstructured.Unstructured
+	for _, plan := range BuildK3sUpgradePlans(target) {
+		plans = append(plans, *plan)
+	}
+	byHand := unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "upgrade.cattle.io/v1", "kind": "Plan",
+		"metadata": map[string]any{"name": "server-plan", "namespace": UpgradeNamespace},
+	}}
+	plans = append(plans, byHand)
+	if got := ForeignPlans(plans); len(got) != 1 || got[0] != "server-plan" {
+		t.Fatalf("the plans not the panel's are %v", got)
 	}
 }

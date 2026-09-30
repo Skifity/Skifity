@@ -623,15 +623,18 @@ func (c *Cluster) InstallComponent(ctx context.Context, name string) error {
 	defer cancel()
 
 	if err := c.installComponent(installCtx, name); err != nil {
-		_ = c.db.SetComponent(ctx, store.ClusterComponent{
+		_ = c.db.SetComponent(context.WithoutCancel(ctx), store.ClusterComponent{
 			Name: name, Status: "failed", Detail: err.Error(),
 		})
 		return fmt.Errorf("install %s: %w", def.Title, err)
 	}
 
-	return c.db.SetComponent(ctx, store.ClusterComponent{
+	// On a context of its own, as the work was: an abandoned request must not
+	// leave a component installed and recorded as still installing.
+	done := context.WithoutCancel(ctx)
+	return c.db.SetComponent(done, store.ClusterComponent{
 		Name: name, Status: "installed", InstalledAt: time.Now(), Detail: "",
-		Version: c.ComponentVersion(ctx, name),
+		Version: c.ComponentVersion(done, name),
 	})
 }
 

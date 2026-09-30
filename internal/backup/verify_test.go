@@ -74,3 +74,22 @@ func flipped(data []byte, at int) []byte {
 	out[at] ^= 0xff
 	return out
 }
+
+func TestABackupIsVerifiedOnceAtATime(t *testing.T) {
+	// Each verification of a sealed backup is 64 MiB of Argon2id. Asked for
+	// again while it runs, it is the same verification, not a second one.
+	m := &Manager{}
+	if !m.claimVerification("bak_1") {
+		t.Fatal("the first verification was refused")
+	}
+	if m.claimVerification("bak_1") {
+		t.Fatal("a backup being verified was verified again alongside")
+	}
+	if !m.claimVerification("bak_2") {
+		t.Fatal("another backup's verification was refused; it waits its turn instead")
+	}
+	m.releaseVerification("bak_1")
+	if !m.claimVerification("bak_1") {
+		t.Fatal("a backup verified before cannot be verified again")
+	}
+}

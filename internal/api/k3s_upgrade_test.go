@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"skifity/internal/kube"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -18,6 +19,7 @@ type upgradeCluster struct {
 	started    []string
 	upgraded   []string
 	components map[string]store.ClusterComponent
+	foreign    []string
 }
 
 func (c *upgradeCluster) K3sUpgradeNodes(context.Context) ([]kube.UpgradeNode, error) {
@@ -29,6 +31,10 @@ func (c *upgradeCluster) K3sUpgradeNodes(context.Context) ([]kube.UpgradeNode, e
 
 func (c *upgradeCluster) K3sReleases(context.Context) ([]K3sRelease, error) {
 	return []K3sRelease{{Channel: "v1.36", Version: "v1.36.4+k3s1", Stable: true}, {Channel: "v1.35", Version: "v1.35.9+k3s1"}}, nil
+}
+
+func (c *upgradeCluster) ForeignUpgradePlans(context.Context) ([]string, error) {
+	return c.foreign, nil
 }
 
 func (c *upgradeCluster) StartK3sUpgrade(_ context.Context, target kube.K3sVersion) error {
@@ -103,6 +109,17 @@ func TestK3sIsUpgradedOnlyWithAPlanThatHoldsAndABackup(t *testing.T) {
 		t.Fatal("a refused upgrade was started")
 	}
 
+	// Plans somebody applied by hand would upgrade the same servers beside
+	// the panel's.
+	cluster.foreign = []string{"agent-plan", "server-plan"}
+	if _, body := h.do(admin, http.MethodPost, "/api/k3s/upgrade", map[string]string{"version": "v1.36.4+k3s1"}); !strings.Contains(body, "agent-plan server-plan") {
+		t.Fatalf("beside plans the panel did not write: %s", body)
+	}
+	if len(cluster.started) != 0 {
+		t.Fatal("an upgrade was started beside another set of plans")
+	}
+	cluster.foreign = nil
+
 	status, body = h.do(admin, http.MethodPost, "/api/k3s/upgrade", map[string]string{"version": "v1.36.4+k3s1"})
 	if status != http.StatusAccepted || len(cluster.started) != 1 || cluster.started[0] != "v1.36.4+k3s1" {
 		t.Fatalf("starting answered %d (%v): %s", status, cluster.started, body)
@@ -163,5 +180,25 @@ func TestAnInstalledComponentOffersItsNewerVersion(t *testing.T) {
 	}
 	if status, _ := h.do(admin, http.MethodPost, "/api/components/monitoring/upgrade", nil); status != http.StatusNotFound {
 		t.Fatalf("upgrading a component the panel does not install answered %d", status)
+	}
+}
+
+func TestAComponentIsOfferedOnlyANewerVersion(t *testing.T) {
+	for _, c := range []struct {
+		installed, wanted string
+		offered           bool
+	}{
+		{"1.20.0", "1.21.2", true},
+		{"1.21.2", "1.21.2", false},
+		// A setting cleared after a newer manifest was put in: not an upgrade.
+		{"1.22.0", "1.21.2", false},
+		{"1.9.0", "1.10.0", true},
+		// Installed before versions were recorded: offered, and said so.
+		{"", "1.21.2", true},
+		{"1.21.2", "", false},
+	} {
+		if got := settings.UpgradeOffered(c.installed, c.wanted); got != c.offered {
+			t.Errorf("%q → %q offered %v, want %v", c.installed, c.wanted, got, c.offered)
+		}
 	}
 }

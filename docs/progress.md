@@ -5430,6 +5430,27 @@ it. What they found, and what changed:
   rollback window counted only successful deployments while the registry keeps
   the images of the last ten of any outcome, so behind a run of failed rollouts
   it offered versions whose images were already gone; the two now count alike.
+* **Backups.** Any member could verify sealed backups in parallel, each one 64
+  MiB of Argon2id, until the panel ran out of memory; verifications now run one
+  at a time and a repeat joins the one already asked for. A backup's Job Secret,
+  holding the passphrase that seals every team's backups, was left in the
+  team's namespace by a restart mid-backup; it now belongs to its Job and goes
+  with it. Two backups started in one second were one object, which retention
+  then deleted from under the newer; the key carries the backup's id. Clearing a
+  setting — the backup passphrase, say — was not audited; it is. A sealed backup
+  on a panel outside its cluster failed with the firewall's error; it has its
+  own. That a sealed file is not bound to its place in the bucket is said in the
+  documentation rather than changed, since binding it would change the format.
+* **Upgrades.** A component's final state was written on the request's context,
+  so upgrading the Cloudflare tunnel — which drops that request — left it
+  "upgrading" for good, and nothing reset that or "installing" after a restart.
+  Both are written on a context of their own and settled at startup. Versions
+  were compared as text, so a cleared setting offered a downgrade; they are
+  compared as numbers, a downgrade is refused, and a manifest component moves one
+  minor version at a time. A k3s version typed without `+k3s1` was read as older
+  than itself and blocked as a downgrade, and upgrade plans somebody applied by
+  hand went unnoticed beside the panel's; the first is read as `+k3s1`, the
+  second is a reason not to start.
 * **Words in the interface.** Detection's notes and the components' names were
   English in every language; they are now codes the interface translates.
 

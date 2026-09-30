@@ -45,7 +45,7 @@ func (m *Manager) sealing(ctx context.Context) (sealPlan, error) {
 	if err != nil || passphrase == "" {
 		return sealPlan{}, err
 	}
-	image, err := m.cluster.PanelImage(ctx)
+	image, err := m.panelImage(ctx)
 	if err != nil {
 		return sealPlan{}, err
 	}
@@ -75,9 +75,26 @@ func (m *Manager) opening(ctx context.Context, storage *Storage, backup store.Ba
 	case err != nil:
 		return sealPlan{}, errdoc.BackupDamaged(err.Error())
 	}
-	image, err := m.cluster.PanelImage(ctx)
+	image, err := m.panelImage(ctx)
 	if err != nil {
 		return sealPlan{}, err
 	}
 	return sealPlan{passphrase: passphrase, image: image}, nil
+}
+
+// panelImage is the image sealing runs, with a failure to find it said as a
+// backup's problem: it was the firewall's, whose words are about installing a
+// firewall, and every sealed backup of a panel outside its cluster failed
+// saying so.
+func (m *Manager) panelImage(ctx context.Context) (string, error) {
+	image, err := m.cluster.PanelImage(ctx)
+	if err != nil {
+		detail := err.Error()
+		var problem *errdoc.Problem
+		if errors.As(err, &problem) && problem.Cause != "" {
+			detail = problem.Cause
+		}
+		return "", errdoc.BackupNoPanelImage(detail)
+	}
+	return image, nil
 }

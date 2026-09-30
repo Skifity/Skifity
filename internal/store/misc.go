@@ -368,6 +368,29 @@ func (db *DB) SetComponent(ctx context.Context, c ClusterComponent) error {
 	return nil
 }
 
+// ResetInterruptedComponents settles the components a restart caught being
+// installed or upgraded. One installing is failed, to be installed again; one
+// upgrading is installed at the version it had, which is the last one known
+// to have been running. Left as they were, the first can never be installed
+// and the second is taken for not installed by everything that checks.
+func (db *DB) ResetInterruptedComponents(ctx context.Context) (int64, error) {
+	var total int64
+	for _, change := range []struct{ from, to, detail string }{
+		{"installing", "failed", "The panel restarted while this was being installed. Install it again."},
+		{"upgrading", "installed", "The panel restarted during an upgrade, so whether it finished is not known. " +
+			"Upgrade it again; applying the same version twice changes nothing."},
+	} {
+		result, err := db.Exec(ctx, `UPDATE cluster_components SET status = ?, detail = ? WHERE status = ?`,
+			change.to, change.detail, change.from)
+		if err != nil {
+			return total, fmt.Errorf("reset interrupted components: %w", err)
+		}
+		n, _ := result.RowsAffected()
+		total += n
+	}
+	return total, nil
+}
+
 // ListComponents returns every add-on the panel knows about.
 func (db *DB) ListComponents(ctx context.Context) ([]ClusterComponent, error) {
 	rows, err := db.QueryContext(ctx, `SELECT name, status, version, installed_at, detail FROM cluster_components ORDER BY name`)

@@ -260,6 +260,7 @@
       "server.retry": "已重试服务器",
       "server.updated": "已更新服务器",
       "settings.updated": "已更改设置",
+      "settings.cleared": "设置已清除",
       "setup.completed": "面板完成设置",
       "shared_variable.deleted": "已删除共享变量",
       "shared_variable.set": "已设置共享变量",
@@ -2454,6 +2455,12 @@
         "cause": "{{0}}。",
         "impact": "没有做任何修改；每台服务器仍运行原来的版本。",
         "fix": "逐一处理每个原因，然后再次检查计划。"
+      },
+      "backup_no_panel_image": {
+        "title": "无法在此创建或打开加密备份",
+        "cause": "加密会在备份任务中运行面板自身的镜像，但无法读取面板的 Deployment 来找到它：{{0}}",
+        "impact": "没有备份、恢复或更改任何内容，也没有任何内容以未加密形式上传到存储桶。",
+        "fix": "当面板运行在它所管理的集群内时（安装程序即如此设置），此功能可用。集群外的面板只能在不设置密码短语的情况下备份，备份将以未加密形式上传。"
       }
     }
   },
@@ -2833,7 +2840,9 @@
       "skips_minor": "{{target}} 跳过了 {{next}}。Kubernetes 每次只升级一个次版本，所以请先升级到最新的 {{next}}。",
       "no_backup": "最近一天内没有面板自身数据库的备份。请先在“本面板的备份”里做一个：如果升级连同服务器一起出了问题，面板就是从它恢复的。",
       "one_control_plane": "只有一个控制平面，所以它重启时 Kubernetes API 大约有一分钟无法访问。应用照常服务，面板会自己重新连接。",
-      "only_server": "这是唯一的服务器。它被标记为不可调度期间不会调度新的东西，所以升级期间的部署会等待。"
+      "only_server": "这是唯一的服务器。它被标记为不可调度期间不会调度新的东西，所以升级期间的部署会等待。",
+      "other_plans": "集群中已有并非面板创建的升级计划（{{plans}}）；两套计划会同时升级服务器。请先删除它们：kubectl -n system-upgrade delete plans.upgrade.cattle.io {{plans}}",
+      "plans_unreadable": "无法读取集群中已有的升级计划：{{error}}"
     }
   },
   "detect": {

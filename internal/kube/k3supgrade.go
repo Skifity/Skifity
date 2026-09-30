@@ -42,14 +42,17 @@ var k3sVersion = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:\+k3s(\d+))?$`)
 
 // ParseK3sVersion reads a k3s version as a node reports it and as releases are
 // named. A release candidate is not something to upgrade a panel's cluster to,
-// so one does not parse.
+// so one does not parse. One written without its +k3s part is the first k3s
+// release of that Kubernetes version, which is what String names it: read as
+// revision 0, v1.31.4 was older than the v1.31.4+k3s1 it upgrades to, and a
+// node already there was taken for one to be downgraded.
 func ParseK3sVersion(text string) (K3sVersion, bool) {
 	match := k3sVersion.FindStringSubmatch(strings.TrimSpace(text))
 	if match == nil {
 		return K3sVersion{}, false
 	}
 	number := func(s string) int { n, _ := strconv.Atoi(s); return n }
-	v := K3sVersion{Major: number(match[1]), Minor: number(match[2]), Patch: number(match[3]), Revision: number(match[4])}
+	v := K3sVersion{Major: number(match[1]), Minor: number(match[2]), Patch: number(match[3]), Revision: max(number(match[4]), 1)}
 	return v, true
 }
 
@@ -242,6 +245,21 @@ func BuildK3sUpgradePlans(target K3sVersion) []*unstructured.Unstructured {
 			"prepare": map[string]any{"image": K3sUpgradeImage, "args": []any{"prepare", "k3s-server"}},
 		}),
 	}
+}
+
+// ForeignPlans names the upgrade Plans this panel did not write, such as the
+// server-plan and agent-plan the k3s documentation has an operator apply by
+// hand. Beside the panel's own, each set upgrades one node at a time — so two
+// control-plane servers can be down at once, or pulled to two versions.
+func ForeignPlans(plans []unstructured.Unstructured) []string {
+	var names []string
+	for _, plan := range plans {
+		if plan.GetLabels()["app.kubernetes.io/managed-by"] != "skifity" {
+			names = append(names, plan.GetName())
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Texts is the English of a list of reasons, for a message.

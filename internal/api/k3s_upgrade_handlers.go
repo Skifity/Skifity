@@ -140,5 +140,21 @@ func (s *Server) k3sPlan(r *http.Request, nodes []kube.UpgradeNode, target strin
 			Text: "there is no backup of the panel's own database from the last day; take one under Backups of this panel in Settings, " +
 				"since it is what the panel is restored from if an upgrade takes its server with it"})
 	}
+	// Plans somebody applied by hand, as the k3s documentation shows, would
+	// upgrade the same servers beside the panel's: two at once, or to two
+	// versions. Not being able to tell is a reason not to start, too.
+	foreign, err := s.cluster.ForeignUpgradePlans(r.Context())
+	switch {
+	case err != nil:
+		plan.Blockers = append(plan.Blockers, kube.UpgradeReason{Code: "plans_unreadable",
+			Params: map[string]string{"error": err.Error()},
+			Text:   "the upgrade plans already in the cluster could not be read: " + err.Error()})
+	case len(foreign) > 0:
+		names := strings.Join(foreign, " ")
+		plan.Blockers = append(plan.Blockers, kube.UpgradeReason{Code: "other_plans",
+			Params: map[string]string{"plans": names},
+			Text: "upgrade plans the panel did not write are already in the cluster (" + names + "); two sets would upgrade " +
+				"servers side by side. Remove them first: kubectl -n system-upgrade delete plans.upgrade.cattle.io " + names})
+	}
 	return plan
 }

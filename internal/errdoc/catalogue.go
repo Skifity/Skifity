@@ -249,6 +249,19 @@ func BackupPassphraseMissing() *Problem {
 		WithDocs("/docs/backups#encryption")
 }
 
+// BackupNoPanelImage is a sealed backup or restore with no image to seal or
+// open it with: the step that does runs the panel's own image, found from the
+// panel's Deployment.
+func BackupNoPanelImage(detail string) *Problem {
+	return New("backup.no_panel_image", "A sealed backup cannot be made or opened here").
+		WithCause("Sealing runs the panel's own image in the backup job, and the panel's Deployment could not be read to find it: %s", detail).
+		WithImpact("Nothing was backed up, restored or changed, and nothing went to the bucket unencrypted.").
+		WithFix("This works when the panel runs inside the cluster it manages, as the installer sets it up. " +
+			"A panel outside it can back up only without a passphrase, which sends backups unencrypted.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/backups#encryption")
+}
+
 // BackupWrongPassphrase is a sealed backup the current passphrase does not open.
 func BackupWrongPassphrase() *Problem {
 	return New("backup.wrong_passphrase", "The backup passphrase does not open this backup").

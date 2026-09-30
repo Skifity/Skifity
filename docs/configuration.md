@@ -400,8 +400,14 @@ by pointing a component's manifest setting at another address, is the version
 it is compared with.
 
 A component installed before versions were recorded shows no version and is
-offered the current one. An upgrade that fails leaves the component as it was,
-marked installed, with the reason beside it.
+offered the current one. Only a newer version is offered — clearing a manifest
+setting that pointed at a newer release does not turn into a downgrade — and a
+component upgraded from a manifest goes one minor version at a time: Longhorn
+refuses more, and cert-manager advises against it. When the panel's version is
+further ahead, the refusal names the manifest setting to point at the release in
+between first. An upgrade that fails leaves the component as it was, marked
+installed, with the reason beside it; one the panel restarted in the middle of
+is marked installed at its old version, to be upgraded again.
 
 ### Upgrading k3s
 
@@ -417,7 +423,12 @@ anything happens:
   not allow.
 * Every reason not to start: a version that skips a minor version (1.35 to 1.37
   has to go through 1.36), a server that already runs something newer, one that
-  is not ready, and **no backup of the panel's own database from the last day**.
+  is not ready, upgrade plans already in the cluster that the panel did not
+  write — the `server-plan` and `agent-plan` of the k3s documentation, applied by
+  hand, would upgrade the same servers beside the panel's — and **no backup of
+  the panel's own database from the last day**. A version typed without its
+  `+k3s` part is read as the first k3s release of it: `v1.31.4` is
+  `v1.31.4+k3s1`.
   The upgrade does not start until the list is empty; starting checks it again
   rather than trusting the one on screen.
 * What is worth knowing: with one control plane, the Kubernetes API is away for

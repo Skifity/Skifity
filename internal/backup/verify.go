@@ -46,11 +46,19 @@ func (m *Manager) VerifyBackup(ctx context.Context, backupID string) error {
 			return errdoc.BackupPassphraseMissing()
 		}
 	}
+	// A backup already waiting or being read is not read twice: the second
+	// request is the first one's answer.
+	if !m.claimVerification(backup.ID) {
+		return nil
+	}
 	go func() {
 		ctx := context.WithoutCancel(ctx)
+		defer m.releaseVerification(backup.ID)
 		defer runsafe.Recover(m.log, "verifying backup "+backup.ID, func(err error) {
 			_ = m.db.RecordVerification(ctx, backup.ID, err.Error())
 		})
+		m.verifyTurn.Lock()
+		defer m.verifyTurn.Unlock()
 		outcome := ""
 		if _, err := m.readThrough(ctx, storage, backup, passphrase); err != nil {
 			outcome = err.Error()
@@ -64,6 +72,27 @@ func (m *Manager) VerifyBackup(ctx context.Context, backupID string) error {
 		m.log.Info("backup verified", "backup", backup.ID, "ok", outcome == "", "detail", outcome)
 	}()
 	return nil
+}
+
+// claimVerification reports whether a backup's verification may start, and
+// false while one of it is already waiting or running.
+func (m *Manager) claimVerification(backupID string) bool {
+	m.verifyMu.Lock()
+	defer m.verifyMu.Unlock()
+	if m.verifying[backupID] {
+		return false
+	}
+	if m.verifying == nil {
+		m.verifying = map[string]bool{}
+	}
+	m.verifying[backupID] = true
+	return true
+}
+
+func (m *Manager) releaseVerification(backupID string) {
+	m.verifyMu.Lock()
+	defer m.verifyMu.Unlock()
+	delete(m.verifying, backupID)
 }
 
 func (m *Manager) readThrough(ctx context.Context, storage *Storage, backup store.Backup, passphrase string) (int64, error) {

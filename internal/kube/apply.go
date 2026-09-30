@@ -228,6 +228,24 @@ func (a *Applier) Get(ctx context.Context, apiVersion, kind, namespace, name str
 	return a.dynamic.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
 }
 
+// List fetches every object of a kind in a namespace, in its generic form. A
+// kind whose definition is not installed has none.
+func (a *Applier) List(ctx context.Context, apiVersion, kind, namespace string) ([]unstructured.Unstructured, error) {
+	probe := &unstructured.Unstructured{Object: map[string]any{"apiVersion": apiVersion, "kind": kind}}
+	gvr, err := a.resourceFor(probe)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.dynamic.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list %s in %s: %w", kind, namespace, err)
+	}
+	return list.Items, nil
+}
+
 // isNil reports whether an interface holds a nil pointer, which a plain
 // `obj == nil` misses.
 func isNil(obj any) bool {

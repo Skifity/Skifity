@@ -260,6 +260,7 @@
       "server.retry": "Server dicoba lagi",
       "server.updated": "Server diubah",
       "settings.updated": "Pengaturan diubah",
+      "settings.cleared": "Pengaturan dikosongkan",
       "setup.completed": "Panel disiapkan",
       "shared_variable.deleted": "Variabel bersama dihapus",
       "shared_variable.set": "Variabel bersama diatur",
@@ -2454,6 +2455,12 @@
         "cause": "{{0}}.",
         "impact": "Tidak ada yang diubah; setiap server menjalankan versi yang sama seperti sebelumnya.",
         "fix": "Selesaikan setiap alasannya lalu periksa rencananya lagi."
+      },
+      "backup_no_panel_image": {
+        "title": "Backup tersegel tidak dapat dibuat atau dibuka di sini",
+        "cause": "Penyegelan menjalankan image panel sendiri di job backup, dan Deployment panel tidak dapat dibaca untuk menemukannya: {{0}}",
+        "impact": "Tidak ada yang di-backup, dipulihkan, atau diubah, dan tidak ada yang dikirim ke bucket tanpa enkripsi.",
+        "fix": "Ini berfungsi bila panel berjalan di dalam klaster yang dikelolanya, seperti yang disiapkan installer. Panel di luarnya hanya dapat mem-backup tanpa passphrase, sehingga backup dikirim tanpa enkripsi."
       }
     }
   },
@@ -2833,7 +2840,9 @@
       "skips_minor": "{{target}} melompati {{next}}. Kubernetes ditingkatkan satu versi minor setiap kali, jadi tingkatkan ke {{next}} terbaru lebih dulu.",
       "no_backup": "Belum ada cadangan database panel dari sehari terakhir. Buat satu lebih dulu di Cadangan panel ini: dari situlah panel dipulihkan jika peningkatan ikut merusak servernya.",
       "one_control_plane": "Hanya ada satu control plane, jadi API Kubernetes tidak bisa dijangkau sekitar satu menit saat dimulai ulang. Aplikasi tetap melayani, dan panel tersambung kembali dengan sendirinya.",
-      "only_server": "Ini satu-satunya server. Tidak ada yang baru dijadwalkan selama di-cordon, jadi deploy selama peningkatan akan menunggu."
+      "only_server": "Ini satu-satunya server. Tidak ada yang baru dijadwalkan selama di-cordon, jadi deploy selama peningkatan akan menunggu.",
+      "other_plans": "Rencana upgrade yang tidak ditulis panel sudah ada di klaster ({{plans}}); dua set rencana akan meng-upgrade server bersamaan. Hapus dulu: kubectl -n system-upgrade delete plans.upgrade.cattle.io {{plans}}",
+      "plans_unreadable": "Rencana upgrade yang sudah ada di klaster tidak dapat dibaca: {{error}}"
     }
   },
   "detect": {

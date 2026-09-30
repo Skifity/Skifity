@@ -33,7 +33,8 @@ bucket's owner never sees.
 In a backup job, a step running the panel's own image seals the dump between
 making it and uploading it; a restore opens it between downloading and
 loading. The passphrase reaches the job the way the upload URL does, in a
-Secret that exists for as long as the job. If the panel's image cannot be
+Secret that exists for as long as the job — it belongs to the job, so it goes
+with it even if the panel restarts in the middle. If the panel's image cannot be
 found, the backup fails rather than going up unencrypted.
 
 The format is AES-256-GCM in 64 KiB chunks, with a key derived from the
@@ -51,6 +52,12 @@ with, and the panel checks that against the backup before stopping or
 overwriting anything. Backups taken before a passphrase was set stay as they
 were, and are restored as they were.
 
+What sealing does not do is tie a file to its place. Every chunk is checked, but
+a whole backup put where another one was — an older backup of the same database,
+or one of another team's, sealed with the same passphrase — opens and restores.
+Whoever can write to the bucket can do that, so give write access to it as
+narrowly as read access.
+
 ## Verifying
 
 A backup nobody has tried to restore is a hope. **Verify** beside a backup
@@ -59,6 +66,8 @@ end in the background; the list then says when it was last read through, or why
 it could not be — a wrong passphrase, a chunk missing or changed, an archive cut
 short or not an archive at all. It proves everything a restore depends on
 except whether the database accepts the dump, which only a restore does.
+Verifications run one at a time — opening a sealed backup takes 64 MiB to derive
+its key — and asking again while one is waiting or running is the same one.
 
 ## Schedules
 

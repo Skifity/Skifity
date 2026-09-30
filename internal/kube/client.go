@@ -670,6 +670,25 @@ func (c *Client) RestartApp(ctx context.Context, namespace, appSlug string) erro
 	return nil
 }
 
+// GiveSecretToJob makes a Job the owner of a Secret, so the Secret goes with
+// the Job — which its TTL removes — even when nothing is left to remove it: a
+// backup's Secret holds a signed upload address and the passphrase that seals
+// every team's backups, and a panel restarted mid-backup used to leave it in
+// the team's namespace for good.
+func (c *Client) GiveSecretToJob(ctx context.Context, namespace, secretName, jobName string) error {
+	job, err := c.clientset.BatchV1().Jobs(namespace).Get(ctx, jobName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("read the job %s: %w", jobName, err)
+	}
+	patch := fmt.Sprintf(`{"metadata":{"ownerReferences":[{"apiVersion":"batch/v1","kind":"Job","name":%q,"uid":%q}]}}`,
+		job.Name, job.UID)
+	if _, err := c.clientset.CoreV1().Secrets(namespace).Patch(ctx, secretName,
+		"application/merge-patch+json", []byte(patch), metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("give %s to the job %s: %w", secretName, jobName, err)
+	}
+	return nil
+}
+
 // ScaleDeployment sets a Deployment's replica count and reports what it was.
 //
 // Used by a volume restore, which has to stop the app first: a ReadWriteOnce

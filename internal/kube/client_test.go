@@ -684,3 +684,19 @@ func TestMetricsAvailableSaysNoWhenNothingIsServingThem(t *testing.T) {
 		t.Error("a metrics API that answered with an error was read as available")
 	}
 }
+
+func TestABackupsSecretGoesWithItsJob(t *testing.T) {
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "backup-orders-1", Namespace: "acme", UID: "uid-1"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "backup-orders-1-url", Namespace: "acme"}}
+	c := &Client{clientset: fake.NewSimpleClientset(job, secret), systemNamespace: "skifity-system"}
+	if err := c.GiveSecretToJob(t.Context(), "acme", secret.Name, job.Name); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.clientset.CoreV1().Secrets("acme").Get(t.Context(), secret.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.OwnerReferences) != 1 || got.OwnerReferences[0].UID != "uid-1" || got.OwnerReferences[0].Kind != "Job" {
+		t.Fatalf("the Secret's owners are %+v", got.OwnerReferences)
+	}
+}

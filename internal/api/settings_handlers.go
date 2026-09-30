@@ -86,11 +86,14 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 		// An empty value clears a setting; for a secret that means the operator
 		// is disconnecting the integration, not blanking the password by accident.
+		// It is audited as a change is: clearing the backup passphrase is what
+		// makes every later backup go to the bucket unsealed.
 		if strings.TrimSpace(value) == "" {
 			if err := s.db.DeleteSetting(r.Context(), key); err != nil {
 				writeError(w, r, err)
 				return
 			}
+			s.audit(r, "", "settings.cleared", "setting", key, key)
 			continue
 		}
 
@@ -166,7 +169,7 @@ func (s *Server) handleListComponents(w http.ResponseWriter, r *http.Request) {
 		}
 		views = append(views, componentView{
 			WantedVersion:    wanted,
-			UpgradeAvailable: component.Status == "installed" && wanted != "" && component.Version != wanted,
+			UpgradeAvailable: component.Status == "installed" && settings.UpgradeOffered(component.Version, wanted),
 			ClusterComponent: component,
 			Title:            def.Title,
 			Description:      def.Description,

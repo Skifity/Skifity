@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,11 +35,28 @@ type Manager struct {
 	// Plugins hear when a backup finishes, either way. A zero value sends
 	// nothing, so leaving it unset is a working configuration.
 	Plugins plugins.Dispatcher
+
+	// verifyTurn lets one verification run at a time, and verifying is the
+	// backups asked to be verified and not finished. Opening a sealed backup
+	// derives its key with 64 MiB of Argon2id, so ten at once from one member
+	// clicking is the panel's whole memory limit.
+	verifyTurn sync.Mutex
+	verifyMu   sync.Mutex
+	verifying  map[string]bool
 }
 
 // New builds a Manager. notifier may be nil, and then nothing is sent.
 func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Cluster, notifier notify.Notifier, log *slog.Logger) *Manager {
 	return &Manager{db: db, keyring: keyring, hub: hub, cluster: c, notifier: notifier, log: log}
+}
+
+// giveSecretToJob hands a job's Secret to the job, so it is removed with it if
+// the panel is not there to remove it. The deferred delete still does it
+// sooner on the ordinary path, so a failure here is worth a line and no more.
+func (m *Manager) giveSecretToJob(ctx context.Context, namespace, secretName, jobName string) {
+	if err := m.cluster.Client().GiveSecretToJob(ctx, namespace, secretName, jobName); err != nil {
+		m.log.Warn("could not tie a backup's Secret to its job", "job", jobName, "error", err)
+	}
 }
 
 // Verify checks that the configured storage is usable.
@@ -84,10 +102,10 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	}
 
 	backup := store.Backup{
-		TargetType: targetType, TargetID: targetID,
+		ID: store.NewID("bak"), TargetType: targetType, TargetID: targetID,
 		Status: "running", Kind: kind, Encrypted: plan.passphrase != "",
 	}
-	backup.Location = ObjectKey(targetType, targetID, record.Name, time.Now())
+	backup.Location = ObjectKey(targetType, targetID, record.Name, time.Now(), backup.ID)
 	if err := m.db.CreateBackup(ctx, &backup); err != nil {
 		return store.Backup{}, err
 	}
@@ -159,6 +177,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		fail(err)
 		return
 	}
+	m.giveSecretToJob(ctx, env.Namespace, secretName, jobName)
 
 	if err := m.waitForJob(ctx, env.Namespace, jobName); err != nil {
 		fail(err)
@@ -335,6 +354,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 		fail("restore", err)
 		return
 	}
+	m.giveSecretToJob(ctx, env.Namespace, secretName, jobName)
 	if err := m.waitForJob(ctx, env.Namespace, jobName); err != nil {
 		fail("restore", err)
 		return
@@ -602,10 +622,10 @@ func (m *Manager) runVolumeBackup(ctx context.Context, volumeID, kind string) (s
 	}
 
 	backup := store.Backup{
-		TargetType: "volume", TargetID: volumeID,
+		ID: store.NewID("bak"), TargetType: "volume", TargetID: volumeID,
 		Status: "running", Kind: kind, Encrypted: plan.passphrase != "",
 	}
-	backup.Location = ObjectKey("volume", volumeID, app.Slug+"-"+volume.Name, time.Now())
+	backup.Location = ObjectKey("volume", volumeID, app.Slug+"-"+volume.Name, time.Now(), backup.ID)
 	if err := m.db.CreateBackup(ctx, &backup); err != nil {
 		return store.Backup{}, err
 	}
@@ -668,6 +688,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 		fail(err)
 		return
 	}
+	m.giveSecretToJob(ctx, env.Namespace, secretName, jobName)
 
 	if err := m.waitForJob(ctx, env.Namespace, jobName); err != nil {
 		fail(err)

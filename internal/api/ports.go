@@ -167,6 +167,8 @@ type Cluster interface {
 	K3sUpgradeNodes(ctx context.Context) ([]kube.UpgradeNode, error)
 	// StartK3sUpgrade hands an upgrade to the system-upgrade-controller.
 	StartK3sUpgrade(ctx context.Context, target kube.K3sVersion) error
+	// ForeignUpgradePlans names upgrade Plans the panel did not write.
+	ForeignUpgradePlans(ctx context.Context) ([]string, error)
 	// K3sReleases is the latest k3s release of each minor version.
 	K3sReleases(ctx context.Context) ([]K3sRelease, error)
 	// QuotaUsage reports how much of an environment's limits are in use.

@@ -226,8 +226,22 @@ func TestARestartDoesNotLeaveABackupOrADatabaseInProgressForever(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Components a restart caught mid-way: one installing, one upgrading.
+	for name, status := range map[string]string{"keda": "installing", "longhorn": "upgrading"} {
+		if err := db.SetComponent(ctx, store.ClusterComponent{Name: name, Status: status, Version: "1.7.0"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	if err := markInterruptedWork(ctx, db, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatalf("markInterruptedWork: %v", err)
+	}
+
+	if keda, _ := db.GetComponent(ctx, "keda"); keda.Status != "failed" || keda.Detail == "" {
+		t.Errorf("a component being installed at the restart is %+v", keda)
+	}
+	if longhorn, _ := db.GetComponent(ctx, "longhorn"); longhorn.Status != "installed" || longhorn.Version != "1.7.0" {
+		t.Errorf("a component being upgraded at the restart is %+v", longhorn)
 	}
 
 	if record, err := db.GetAppTemplate(ctx, app.ID); err != nil || record.UpdateStatus != store.TemplateUpdateFailed ||

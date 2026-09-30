@@ -802,3 +802,57 @@ func validateBackupPassphrase(value string) error {
 	}
 	return nil
 }
+
+// CompareVersions orders two component versions part by part, as numbers, so
+// 1.10 comes after 1.9: -1, 0 or 1. ok is false when either is not a version
+// of dotted numbers, with or without a leading v.
+func CompareVersions(a, b string) (order int, ok bool) {
+	parse := func(text string) ([]int, bool) {
+		parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(text), "v"), ".")
+		out := make([]int, 0, len(parts))
+		for _, part := range parts {
+			n, err := strconv.Atoi(part)
+			if err != nil || n < 0 {
+				return nil, false
+			}
+			out = append(out, n)
+		}
+		return out, len(out) > 0
+	}
+	x, okA := parse(a)
+	y, okB := parse(b)
+	if !okA || !okB {
+		return 0, false
+	}
+	for i := range max(len(x), len(y)) {
+		var p, q int
+		if i < len(x) {
+			p = x[i]
+		}
+		if i < len(y) {
+			q = y[i]
+		}
+		if p != q {
+			if p < q {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
+}
+
+// UpgradeOffered reports whether a component installed at one version is
+// offered the version this panel would install now: when that is newer, or
+// when the installed one was never recorded. An older one is not an upgrade,
+// whatever a setting cleared since says.
+func UpgradeOffered(installed, wanted string) bool {
+	if wanted == "" || installed == wanted {
+		return false
+	}
+	if installed == "" {
+		return true
+	}
+	order, ok := CompareVersions(wanted, installed)
+	return !ok || order > 0
+}

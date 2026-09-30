@@ -251,10 +251,13 @@ func (s *Storage) Bucket() string { return s.bucket }
 // ObjectKey builds the path a backup is stored at.
 //
 // The shape is deliberately readable in a bucket listing: an operator should be
-// able to find a backup without the panel.
-func ObjectKey(targetType, targetID, name string, at time.Time) string {
-	return fmt.Sprintf("skifity/%s/%s/%s-%s.gz",
-		targetType, targetID, at.UTC().Format("20060102-150405"), sanitise(name))
+// able to find a backup without the panel. The backup's id keeps two taken in
+// the same second — a double click on "Back up now" — from being one object,
+// which retention would then delete from under the newer row, as
+// PanelObjectKey already does for the panel's own.
+func ObjectKey(targetType, targetID, name string, at time.Time, id string) string {
+	return fmt.Sprintf("skifity/%s/%s/%s-%s-%s.gz",
+		targetType, targetID, at.UTC().Format("20060102-150405"), sanitise(id), sanitise(name))
 }
 
 func sanitise(name string) string {

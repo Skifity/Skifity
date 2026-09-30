@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"skifity/internal/builder"
+	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
 
@@ -72,5 +73,27 @@ func TestK3sReleasesAreReadFromItsChannels(t *testing.T) {
 	}
 	if _, err := parseK3sChannels(strings.NewReader(`{"data":[]}`)); err == nil {
 		t.Fatal("an empty channel list was taken as no releases")
+	}
+}
+
+func TestAComponentIsNotDowngradedOrMovedSeveralMinorsAtOnce(t *testing.T) {
+	for _, c := range []struct {
+		name, installed, wanted, refused string
+	}{
+		{"longhorn", "1.7.2", "1.8.1", ""},
+		{"longhorn", "1.7.2", "1.9.0", "latest 1.8 release in the components.longhorn_url setting"},
+		{"cert-manager", "1.22.0", "1.21.2", "which is older"},
+		// A component whose version is an image tag is not upgraded from a
+		// manifest, and has no minor rule to keep.
+		{"registry", "2.8.3", "3.0.0", ""},
+		{"longhorn", "", "1.9.0", ""},
+	} {
+		err := checkComponentUpgrade(c.name, c.name, c.installed, c.wanted)
+		switch {
+		case c.refused == "" && err != nil:
+			t.Errorf("%s %s → %s was refused: %v", c.name, c.installed, c.wanted, err)
+		case c.refused != "" && (err == nil || !strings.Contains(errdoc.From(err).Cause+err.Error(), c.refused)):
+			t.Errorf("%s %s → %s: %v, want it refused saying %q", c.name, c.installed, c.wanted, err, c.refused)
+		}
 	}
 }

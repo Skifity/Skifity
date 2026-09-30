@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,24 +102,63 @@ func (c *Cluster) UpgradeInstalledComponent(ctx context.Context, name string) er
 	if wanted != "" && current.Version == wanted {
 		return nil
 	}
+	if err := checkComponentUpgrade(def.Title, name, current.Version, wanted); err != nil {
+		return err
+	}
 	if err := c.db.SetComponent(ctx, store.ClusterComponent{
 		Name: name, Status: "upgrading", Version: current.Version, InstalledAt: current.InstalledAt,
 	}); err != nil {
 		return err
 	}
 	c.log.Info("upgrading cluster component", "component", name, "from", current.Version, "to", wanted)
+	// The work and what is written after it outlive the request: upgrading
+	// the Cloudflare tunnel drops the very connection the request came in
+	// on, and a final write on that request's context left it "upgrading"
+	// for good.
 	upgradeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
 	defer cancel()
 	if err := c.installComponent(upgradeCtx, name); err != nil {
-		_ = c.db.SetComponent(ctx, store.ClusterComponent{
+		_ = c.db.SetComponent(context.WithoutCancel(ctx), store.ClusterComponent{
 			Name: name, Status: "installed", Version: current.Version, InstalledAt: current.InstalledAt,
 			Detail: fmt.Sprintf("The upgrade to %s did not finish: %s", wanted, err),
 		})
 		return fmt.Errorf("upgrade %s: %w", def.Title, err)
 	}
-	return c.db.SetComponent(ctx, store.ClusterComponent{
+	return c.db.SetComponent(context.WithoutCancel(ctx), store.ClusterComponent{
 		Name: name, Status: "installed", Version: wanted, InstalledAt: time.Now(),
 	})
+}
+
+// checkComponentUpgrade refuses what is not an upgrade: a version older than
+// the one installed — a manifest setting cleared after a newer one was put
+// in — and a jump of more than one minor version for a component upgraded
+// from a manifest, which Longhorn forbids and cert-manager advises against.
+func checkComponentUpgrade(title, name, installed, wanted string) error {
+	if installed == "" || wanted == "" {
+		return nil
+	}
+	order, ok := settings.CompareVersions(wanted, installed)
+	if !ok {
+		return nil
+	}
+	if order < 0 {
+		return errdoc.BadRequest(fmt.Sprintf("%s is at %s, and this panel would install %s, which is older. "+
+			"Nothing was changed; a component is not downgraded from here.", title, installed, wanted))
+	}
+	key, _ := manifestSettingFor(name)
+	have := strings.Split(strings.TrimPrefix(installed, "v"), ".")
+	want := strings.Split(strings.TrimPrefix(wanted, "v"), ".")
+	if key == "" || len(have) < 2 || len(want) < 2 || have[0] != want[0] {
+		return nil
+	}
+	haveMinor, errHave := strconv.Atoi(have[1])
+	wantMinor, errWant := strconv.Atoi(want[1])
+	if errHave == nil && errWant == nil && wantMinor > haveMinor+1 {
+		return errdoc.BadRequest(fmt.Sprintf("%s is at %s and would go to %s, more than one minor version at once. "+
+			"Upgrade one minor version at a time: put the manifest of the latest %s.%d release in the %s setting, "+
+			"upgrade, then clear the setting and upgrade again.", title, installed, wanted, have[0], haveMinor+1, key))
+	}
+	return nil
 }
 
 // installUpgradeController installs the system-upgrade-controller: its
@@ -168,6 +208,16 @@ func (c *Cluster) StartK3sUpgrade(ctx context.Context, target kube.K3sVersion) e
 		}
 	}
 	return nil
+}
+
+// ForeignUpgradePlans names the upgrade Plans in the cluster that this panel
+// did not write. None when the controller has never been installed.
+func (c *Cluster) ForeignUpgradePlans(ctx context.Context) ([]string, error) {
+	plans, err := c.client.Applier().List(ctx, "upgrade.cattle.io/v1", "Plan", kube.UpgradeNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return kube.ForeignPlans(plans), nil
 }
 
 // K3sReleases is the latest k3s release of each minor version, newest first,

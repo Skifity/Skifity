@@ -14,7 +14,13 @@ import (
 
 func TestObjectKeyIsSortableAndSafe(t *testing.T) {
 	at, _ := time.Parse(time.RFC3339, "2026-09-16T03:00:00Z")
-	key := ObjectKey("database", "db_abc", "My Shop DB!", at)
+	key := ObjectKey("database", "db_abc", "My Shop DB!", at, "bak_1")
+
+	// Two in the same second are two objects: retention deleting the older
+	// row's object must not delete the newer's.
+	if key == ObjectKey("database", "db_abc", "My Shop DB!", at, "bak_2") {
+		t.Fatalf("two backups taken in one second share %q", key)
+	}
 
 	if !strings.HasPrefix(key, "skifity/database/db_abc/") {
 		t.Fatalf("key is %q", key)

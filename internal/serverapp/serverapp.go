@@ -385,6 +385,14 @@ func markInterruptedWork(ctx context.Context, db *store.DB, log *slog.Logger) er
 	if updates > 0 {
 		log.Info("marked interrupted template updates as failed", "count", updates)
 	}
+
+	components, err := db.ResetInterruptedComponents(ctx)
+	if err != nil {
+		return err
+	}
+	if components > 0 {
+		log.Info("settled components a restart caught being installed or upgraded", "count", components)
+	}
 	return nil
 }
 
