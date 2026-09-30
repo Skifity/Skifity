@@ -42,6 +42,16 @@ func Forbidden(action string) *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// ScopedToProjects is a member limited to some of a team's projects asking
+// for something that belongs to the whole team.
+func ScopedToProjects() *Problem {
+	return New("auth.scoped_to_projects", "Your access is limited to some projects").
+		WithCause("You are in this team for some of its projects only, and this belongs to the whole team.").
+		WithImpact("The action was not performed.").
+		WithFix("Ask an admin of the team for access to the whole team, if you need this.").
+		WithStatus(http.StatusForbidden)
+}
+
 // NotFound means the resource does not exist, or the caller may not see it.
 func NotFound(kind, id string) *Problem {
 	return Newf("resource.not_found", "That %s does not exist", kind).

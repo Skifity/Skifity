@@ -1091,7 +1091,15 @@
     "panelBackupsRestore": "要恢复某个副本，请把它从存储桶下载到服务器，停止面板，然后运行：",
     "roleViewer": "查看者",
     "readOnlyTitle": "只能查看，不能更改",
-    "readOnly": "你是 {{team}} 的查看者：你可以查看它的应用、部署和日志，任何更改都会被拒绝。团队管理员可以给你更多权限。"
+    "readOnly": "你是 {{team}} 的查看者：你可以查看它的应用、部署和日志，任何更改都会被拒绝。团队管理员可以给你更多权限。",
+    "access": "访问范围",
+    "allProjects": "所有项目",
+    "noProjectsLeft": "没有项目：原有的项目已被删除",
+    "limitToProjects": "仅限部分项目",
+    "limitToProjectsHelp": "他们只能看到下面勾选的项目——看不到其他项目、服务器或团队设置。",
+    "limitChooseOne": "请至少选择一个项目。",
+    "changeAccess": "更改访问权限",
+    "memberAdded": "对方已有账号，因此已直接加入团队。"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2046,6 +2054,12 @@
         "cause": "{{0}}",
         "impact": "没有改动任何东西。",
         "fix": "换一个备份。存储桶 skifity/panel/ 文件夹中最新的那个通常就是要用的。"
+      },
+      "auth_scoped_to_projects": {
+        "title": "你的访问仅限于部分项目",
+        "cause": "你在这个团队中只负责部分项目，而这属于整个团队。",
+        "impact": "操作没有执行。",
+        "fix": "如果需要，请团队管理员给你整个团队的访问权限。"
       }
     }
   },

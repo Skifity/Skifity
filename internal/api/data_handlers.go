@@ -411,19 +411,8 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorizeAppID is authorizeApp for an id that comes from a request body
-// rather than the URL.
+// rather than the URL. It is authorizeApp: two copies of one check are two
+// places for a project limit to be forgotten in, and one of them was.
 func (s *Server) authorizeAppID(r *http.Request, appID string, required store.Role) (store.App, store.User, error) {
-	teamID, err := s.db.TeamIDForApp(r.Context(), appID)
-	if err != nil {
-		return store.App{}, store.User{}, errdoc.NotFound("app", appID)
-	}
-	user, err := s.authorizeTeam(r, teamID, required)
-	if err != nil {
-		return store.App{}, store.User{}, err
-	}
-	app, err := s.db.GetApp(r.Context(), appID)
-	if err != nil {
-		return store.App{}, store.User{}, errdoc.NotFound("app", appID)
-	}
-	return app, user, nil
+	return s.authorizeApp(r, appID, required)
 }

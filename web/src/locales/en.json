@@ -1103,7 +1103,15 @@
     "panelBackupsRestore": "To put one back, download it from the bucket to the server, stop the panel, and run:",
     "roleViewer": "Viewer",
     "readOnlyTitle": "You can look, not change",
-    "readOnly": "You are a viewer in {{team}}: you can see its apps, deployments and logs, and anything you try to change will be refused. An admin of the team can give you more."
+    "readOnly": "You are a viewer in {{team}}: you can see its apps, deployments and logs, and anything you try to change will be refused. An admin of the team can give you more.",
+    "access": "Access",
+    "allProjects": "All projects",
+    "noProjectsLeft": "No projects: the ones they had were deleted",
+    "limitToProjects": "Limit to some projects",
+    "limitToProjectsHelp": "They see only the projects ticked below — not the others, the servers or the team's settings.",
+    "limitChooseOne": "Choose at least one project.",
+    "changeAccess": "Change access",
+    "memberAdded": "They already had an account, so they were added to the team directly."
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2058,6 +2066,12 @@
         "cause": "{{0}}",
         "impact": "Nothing was changed.",
         "fix": "Take a different backup. The newest one in the bucket's skifity/panel/ folder is usually the one to use."
+      },
+      "auth_scoped_to_projects": {
+        "title": "Your access is limited to some projects",
+        "cause": "You are in this team for some of its projects only, and this belongs to the whole team.",
+        "impact": "The action was not performed.",
+        "fix": "Ask an admin of the team for access to the whole team, if you need this."
       }
     }
   },

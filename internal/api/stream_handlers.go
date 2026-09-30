@@ -131,7 +131,7 @@ func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
 			if err != nil {
 				return nil, errdoc.NotFound("operation", id)
 			}
-			if _, err := s.authorizeTeam(r, op.TeamID, store.RoleViewer); err != nil {
+			if err := s.authorizeOperation(r, op, store.RoleViewer); err != nil {
 				return nil, err
 			}
 		case "deployment":

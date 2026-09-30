@@ -52,6 +52,10 @@ type Team struct {
 	CreatedAt time.Time `json:"created_at"`
 	// Role is filled in when a team is listed for a particular user.
 	Role Role `json:"role,omitempty"`
+	// Scoped and Projects are filled in with it: a member limited to some of
+	// the team's projects, and which.
+	Scoped   bool     `json:"scoped,omitempty"`
+	Projects []string `json:"projects,omitempty"`
 }
 
 // Membership joins a user to a team with a role.
@@ -60,6 +64,23 @@ type Membership struct {
 	UserID    string    `json:"user_id"`
 	Role      Role      `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
+	// Scoped limits the membership to Projects. A scoped membership with no
+	// projects left sees none of the team's: see 0021_project_members.sql.
+	Scoped   bool     `json:"scoped"`
+	Projects []string `json:"projects,omitempty"`
+}
+
+// Reaches reports whether the membership covers a project.
+func (m Membership) Reaches(projectID string) bool {
+	if !m.Scoped {
+		return true
+	}
+	for _, id := range m.Projects {
+		if id == projectID {
+			return true
+		}
+	}
+	return false
 }
 
 // Project groups environments, which group apps and databases.

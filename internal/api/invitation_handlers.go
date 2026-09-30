@@ -37,6 +37,9 @@ const invitationTTL = 7 * 24 * time.Hour
 type inviteRequest struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
+	// Projects limits the membership to some of the team's projects. Absent
+	// is the whole team; see memberLimits.
+	Projects []string `json:"projects,omitempty"`
 }
 
 type inviteResponse struct {
@@ -83,6 +86,11 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.Forbidden("inviting somebody to a role higher than your own"))
 		return
 	}
+	projects, err := s.memberLimits(r, teamID, role, req.Projects)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	// Somebody who already has an account does not need a link: they need a
 	// membership, which is what the members endpoint does. Saying so is more
@@ -110,7 +118,7 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invitation := store.Invitation{
-		TeamID: teamID, Email: email, Role: role,
+		TeamID: teamID, Email: email, Role: role, Projects: projects,
 		InvitedBy: actor.ID, ExpiresAt: time.Now().Add(invitationTTL),
 	}
 	if err := s.db.CreateInvitation(r.Context(), &invitation, auth.HashToken(token)); err != nil {
@@ -263,7 +271,8 @@ func (s *Server) handleAcceptInvitation(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	if err := s.db.AcceptInvitation(r.Context(), invitation.ID, invitation.TeamID, user.ID, invitation.Role); err != nil {
+	if err := s.db.AcceptInvitation(r.Context(), invitation.ID, invitation.TeamID, user.ID,
+		invitation.Role, invitation.Projects); err != nil {
 		writeError(w, r, err)
 		return
 	}

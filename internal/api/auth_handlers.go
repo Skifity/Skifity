@@ -415,7 +415,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	// in the team at that moment. So a viewer can have one too — for a
 	// dashboard, or an assistant that should read and never change — and it
 	// reads.
-	user, err := s.authorizeTeam(r, req.TeamID, store.RoleViewer)
+	user, _, err := s.authorizeTeamMember(r, req.TeamID, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

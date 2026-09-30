@@ -14,6 +14,7 @@ import {
   PlusIcon,
   ShieldAlertIcon,
   Trash2Icon,
+  UserCogIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,6 +22,14 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
+import {
+  AccessSummary,
+  ChangeAccessDialog,
+  ProjectLimitField,
+  RoleSelect,
+  canLimit,
+  limitFor,
+} from "@/components/settings/member-access"
 import { NotificationChannels } from "@/components/settings/notification-channels"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -57,7 +66,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSession } from "@/hooks/use-session"
-import { api, type List } from "@/lib/api"
+import { ApiError, api, type List } from "@/lib/api"
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type {
@@ -65,10 +74,10 @@ import type {
   Backup,
   Component,
   Invitation,
+  Member,
   Role,
   Setting,
   StoreCatalogue,
-  User,
 } from "@/lib/types"
 
 /**
@@ -693,10 +702,13 @@ function MembersPanel() {
   const { team } = useSession()
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<Role>("member")
+  const [limited, setLimited] = useState(false)
+  const [chosen, setChosen] = useState<string[]>([])
+  const [changing, setChanging] = useState<Member | null>(null)
 
   const members = useQuery({
     queryKey: ["members", team?.id],
-    queryFn: () => api.get<List<{ user: User; role: Role }>>(`/api/teams/${team!.id}/members`),
+    queryFn: () => api.get<List<Member>>(`/api/teams/${team!.id}/members`),
     enabled: Boolean(team),
   })
 
@@ -712,15 +724,30 @@ function MembersPanel() {
   const [link, setLink] = useState<string | null>(null)
 
   const invite = useMutation({
-    mutationFn: () =>
-      api.post<{ url: string }>(`/api/teams/${team!.id}/invitations`, {
-        email: email.trim(),
-        role,
-      }),
+    // Somebody who already has an account here needs a membership, not a
+    // link. The server says so rather than guessing, and the form then does
+    // what its help text promises: adds them directly.
+    mutationFn: async (): Promise<{ url?: string }> => {
+      const body = { email: email.trim(), role, projects: limitFor(role, limited, chosen) }
+      try {
+        return await api.post<{ url: string }>(`/api/teams/${team!.id}/invitations`, body)
+      } catch (error) {
+        if (error instanceof ApiError && error.problem.code === "team.account_exists") {
+          await api.post(`/api/teams/${team!.id}/members`, body)
+          return {}
+        }
+        throw error
+      }
+    },
     onSuccess: (result) => {
-      setLink(result.url)
+      if (result.url) {
+        setLink(result.url)
+      } else {
+        toast.success(t("settings.memberAdded"))
+      }
       setEmail("")
       void queryClient.invalidateQueries({ queryKey: ["invitations", team?.id] })
+      void queryClient.invalidateQueries({ queryKey: ["members", team?.id] })
     },
   })
 
@@ -749,7 +776,8 @@ function MembersPanel() {
               <TableRow>
                 <TableHead>{t("common.name")}</TableHead>
                 <TableHead>{t("settings.memberRole")}</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="hidden sm:table-cell">{t("settings.access")}</TableHead>
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -769,7 +797,18 @@ function MembersPanel() {
                       )}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
+                    <AccessSummary scoped={member.scoped} projects={member.projects} />
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("settings.changeAccess")}
+                      onClick={() => setChanging(member)}
+                    >
+                      <UserCogIcon className="size-4 text-muted-foreground" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -800,6 +839,17 @@ function MembersPanel() {
         </CardContent>
       </Card>
 
+      {changing != null && (
+        <ChangeAccessDialog
+          // Keyed by the person, so opening it for somebody else starts from
+          // their access rather than the last one's.
+          key={changing.user.id}
+          member={changing}
+          open
+          onOpenChange={(open) => !open && setChanging(null)}
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("settings.inviteMember")}</CardTitle>
@@ -826,22 +876,27 @@ function MembersPanel() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="member-role">{t("settings.memberRole")}</Label>
-                <Select value={role} onValueChange={(value) => setRole(value as Role)}>
-                  <SelectTrigger id="member-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">{t("settings.roleViewer")}</SelectItem>
-                    <SelectItem value="member">{t("settings.roleMember")}</SelectItem>
-                    <SelectItem value="admin">{t("settings.roleAdmin")}</SelectItem>
-                    <SelectItem value="owner">{t("settings.roleOwner")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <RoleSelect id="member-role" value={role} onChange={setRole} />
               </div>
             </div>
+            <ProjectLimitField
+              id="invite"
+              role={role}
+              limited={limited}
+              onLimitedChange={setLimited}
+              chosen={chosen}
+              onChosenChange={setChosen}
+            />
             {invite.error != null && <ErrorDisplay error={invite.error} compact />}
             <div className="flex justify-end">
-              <Button type="submit" disabled={!email.trim() || invite.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  !email.trim() ||
+                  invite.isPending ||
+                  (canLimit(role) && limited && chosen.length === 0)
+                }
+              >
                 <PlusIcon className="size-4" />
                 {invite.isPending && <Spinner />}
                 {invite.isPending ? t("common.saving") : t("settings.inviteMember")}
@@ -902,6 +957,12 @@ function MembersPanel() {
                           { defaultValue: invitation.role },
                         )}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
+                      <AccessSummary
+                        scoped={invitation.projects != null}
+                        projects={invitation.projects}
+                      />
                     </TableCell>
                     <TableCell className="w-10">
                       <Button

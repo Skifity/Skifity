@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -17,10 +18,13 @@ import (
 
 // Invitation is a pending offer to join a team.
 type Invitation struct {
-	ID         string    `json:"id"`
-	TeamID     string    `json:"team_id"`
-	Email      string    `json:"email"`
-	Role       Role      `json:"role"`
+	ID     string `json:"id"`
+	TeamID string `json:"team_id"`
+	Email  string `json:"email"`
+	Role   Role   `json:"role"`
+	// Projects is what the membership will be limited to, or nil for the
+	// whole team.
+	Projects   []string  `json:"projects,omitempty"`
 	InvitedBy  string    `json:"invited_by,omitempty"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	AcceptedAt time.Time `json:"accepted_at,omitzero"`
@@ -30,18 +34,24 @@ type Invitation struct {
 // Expired reports whether an invitation can still be used.
 func (i Invitation) Expired() bool { return time.Now().After(i.ExpiresAt) }
 
-const invitationColumns = `id, team_id, email, role, invited_by, expires_at, accepted_at, created_at`
+const invitationColumns = `id, team_id, email, role, projects, invited_by, expires_at, accepted_at, created_at`
 
 func scanInvitation(row interface{ Scan(...any) error }) (Invitation, error) {
 	var i Invitation
 	var invitedBy sql.NullString
 	var expires, created string
 	var accepted sql.NullString
-	if err := row.Scan(&i.ID, &i.TeamID, &i.Email, &i.Role, &invitedBy, &expires, &accepted, &created); err != nil {
+	var projects string
+	if err := row.Scan(&i.ID, &i.TeamID, &i.Email, &i.Role, &projects, &invitedBy, &expires, &accepted, &created); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return i, ErrNotFound
 		}
 		return i, fmt.Errorf("scan invitation: %w", err)
+	}
+	if projects != "" {
+		// Unreadable is scoped to nothing rather than the whole team.
+		i.Projects = []string{}
+		_ = json.Unmarshal([]byte(projects), &i.Projects)
 	}
 	i.InvitedBy = invitedBy.String
 	i.ExpiresAt, _ = ParseTime(expires)
@@ -64,10 +74,18 @@ func (db *DB) CreateInvitation(ctx context.Context, i *Invitation, tokenHash str
 			i.TeamID, i.Email); err != nil {
 			return fmt.Errorf("replace a pending invitation: %w", err)
 		}
+		projects := ""
+		if i.Projects != nil {
+			encoded, err := json.Marshal(i.Projects)
+			if err != nil {
+				return fmt.Errorf("encode projects: %w", err)
+			}
+			projects = string(encoded)
+		}
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO team_invitations (id, team_id, email, role, token_hash, invited_by, expires_at, created_at)
-			 VALUES (?,?,?,?,?,?,?,?)`,
-			i.ID, i.TeamID, i.Email, string(i.Role), tokenHash,
+			`INSERT INTO team_invitations (id, team_id, email, role, projects, token_hash, invited_by, expires_at, created_at)
+			 VALUES (?,?,?,?,?,?,?,?,?)`,
+			i.ID, i.TeamID, i.Email, string(i.Role), projects, tokenHash,
 			nullIfEmpty(i.InvitedBy), FormatTime(i.ExpiresAt), FormatTime(i.CreatedAt))
 		if err != nil {
 			return fmt.Errorf("create invitation: %w", err)
@@ -106,7 +124,7 @@ func (db *DB) ListInvitations(ctx context.Context, teamID string) ([]Invitation,
 //
 // Both or neither: an invitation marked accepted with no membership behind it
 // is a person who cannot get in and cannot be invited again.
-func (db *DB) AcceptInvitation(ctx context.Context, invitationID, teamID, userID string, role Role) error {
+func (db *DB) AcceptInvitation(ctx context.Context, invitationID, teamID, userID string, role Role, projects []string) error {
 	return db.Tx(ctx, func(tx *sql.Tx) error {
 		// The WHERE clause is the guard: an invitation that another request
 		// accepted a moment ago updates no rows, and this refuses rather than
@@ -121,12 +139,12 @@ func (db *DB) AcceptInvitation(ctx context.Context, invitationID, teamID, userID
 			return ErrConflict
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO memberships (team_id, user_id, role, created_at) VALUES (?,?,?,?)
-			 ON CONFLICT (team_id, user_id) DO UPDATE SET role = excluded.role`,
-			teamID, userID, string(role), Now()); err != nil {
+			`INSERT INTO memberships (team_id, user_id, role, scoped, created_at) VALUES (?,?,?,?,?)
+			 ON CONFLICT (team_id, user_id) DO UPDATE SET role = excluded.role, scoped = excluded.scoped`,
+			teamID, userID, string(role), projects != nil, Now()); err != nil {
 			return fmt.Errorf("add the member an invitation was for: %w", err)
 		}
-		return nil
+		return setMemberProjects(ctx, tx, teamID, userID, projects)
 	})
 }
 

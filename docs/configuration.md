@@ -109,6 +109,26 @@ only things a viewer cannot read are the ones a member cannot either, because
 they are an administrator's: invitations, the audit log, the export, a
 database's password, and the Kubernetes objects under Advanced.
 
+### Limiting somebody to some projects
+
+A member or a viewer can be limited to some of the team's projects: tick
+**Limit to some projects** when inviting them, or later under **Change access**
+beside their name. It is how one team holds an agency and its clients, or a
+company and a contractor who works on one product.
+
+A limited member sees their projects and nothing else. Another project's apps,
+databases and environments answer exactly as if they did not exist — the same
+answer another team's get — so the limit does not tell them what else there is.
+What belongs to the whole team is refused outright: servers, the cluster,
+notification channels, creating a project. They can still see the team's name
+and who is in it, pick a repository to create an app from, and make an API
+token, which is limited exactly as they are.
+
+Admins and owners cannot be limited: they look after the whole team by
+definition. Deleting the last project somebody was limited to leaves them with
+no projects, not with all of them. Changing someone's role without ticking the
+box lifts the limit — the form always says the whole of what they can reach.
+
 ## Signing in
 
 **Passwords** are hashed with Argon2id, twelve characters minimum, and checked

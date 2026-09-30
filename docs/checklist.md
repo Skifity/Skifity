@@ -104,8 +104,10 @@ recovery keys, and OpenID Connect with PKCE, a verified ID token, a per-sign-in
 nonce and a single-use state. Four roles, ordered. Authorization lives in one
 place and a test walks every route in the router: 126 of them must refuse an
 anonymous request (13 are open on purpose), 91 team-scoped ones must answer
-404 for another team's id, and a viewer must be refused every one of the 57 that
-change something and answered by every read but six named ones. An API token is bound to one team and its scopes are enforced.
+404 for another team's id, a viewer must be refused every one of the 57 that
+change something and answered by every read but six named ones, and a member
+limited to one project must get 404 on all 69 routes for another project in the
+same team and 403 on the 25 team-wide ones not named as open to them. An API token is bound to one team and its scopes are enforced.
 
 **12. Isolation between projects.** An environment is a namespace with a
 default-deny NetworkPolicy, a ResourceQuota, a LimitRange and the `restricted`

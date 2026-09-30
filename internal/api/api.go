@@ -407,11 +407,45 @@ func (s *Server) routes() chi.Router {
 // single place on purpose: a missing check in a handler is the most common way
 // this class of product leaks data between tenants.
 
-// authorizeTeam checks that the caller has at least the given role in a team.
+// authorizeTeam checks that the caller has at least the given role in a team,
+// for something that belongs to the whole team.
+//
+// A member limited to some projects is refused here by default: servers, the
+// cluster, notification channels, creating a project — none of it is inside a
+// project. A handler that a limited member may use says so by calling
+// authorizeTeamMember instead, which is a decision somebody made and not one a
+// new route inherits.
 func (s *Server) authorizeTeam(r *http.Request, teamID string, required store.Role) (store.User, error) {
+	user, membership, err := s.authorizeTeamMember(r, teamID, required)
+	if err != nil {
+		return store.User{}, err
+	}
+	if membership.Scoped {
+		return store.User{}, errdoc.ScopedToProjects()
+	}
+	return user, nil
+}
+
+// authorizeTeamMember checks the caller's role in a team and returns the
+// membership, limits included, for a handler that serves a member limited to
+// some projects and narrows what it answers with Membership.Reaches.
+func (s *Server) authorizeTeamMember(r *http.Request, teamID string, required store.Role) (store.User, store.Membership, error) {
+	user, membership, err := s.membershipIn(r, teamID)
+	if err != nil {
+		return store.User{}, store.Membership{}, err
+	}
+	if !membership.Role.AtLeast(required) {
+		return store.User{}, store.Membership{}, errdoc.Forbidden("this action")
+	}
+	return user, membership, nil
+}
+
+// membershipIn finds the caller's membership of a team, with no role asked
+// for yet.
+func (s *Server) membershipIn(r *http.Request, teamID string) (store.User, store.Membership, error) {
 	user, ok := UserFrom(r.Context())
 	if !ok {
-		return store.User{}, errdoc.Unauthorized()
+		return store.User{}, store.Membership{}, errdoc.Unauthorized()
 	}
 	// A token is issued for one team — the panel's form has no other option —
 	// and until now that binding was stored and never read, so a token made
@@ -419,16 +453,33 @@ func (s *Server) authorizeTeam(r *http.Request, teamID string, required store.Ro
 	// the same as for a team that does not exist, so a token cannot be used to
 	// find out which other teams there are.
 	if token, ok := apiTokenFrom(r.Context()); ok && token.TeamID != "" && token.TeamID != teamID {
-		return store.User{}, errdoc.NotFound("team", teamID)
+		return store.User{}, store.Membership{}, errdoc.NotFound("team", teamID)
 	}
 	membership, err := s.db.GetMembership(r.Context(), teamID, user.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Not a member: answer exactly as for a team that does not exist,
 			// so membership cannot be probed.
-			return store.User{}, errdoc.NotFound("team", teamID)
+			return store.User{}, store.Membership{}, errdoc.NotFound("team", teamID)
 		}
+		return store.User{}, store.Membership{}, err
+	}
+	return user, membership, nil
+}
+
+// authorizeInProject checks that the caller's membership reaches a project and
+// then their role. A project outside a member's limits answers exactly as one
+// that does not exist, for the same reason another team's does: a limited
+// member should not be able to find out what else the team has. That is also
+// why the limit is checked first — a role refusal would be a 403, and a 403
+// says the thing is there.
+func (s *Server) authorizeInProject(r *http.Request, teamID, projectID string, required store.Role, kind, id string) (store.User, error) {
+	user, membership, err := s.membershipIn(r, teamID)
+	if err != nil {
 		return store.User{}, err
+	}
+	if !membership.Reaches(projectID) {
+		return store.User{}, errdoc.NotFound(kind, id)
 	}
 	if !membership.Role.AtLeast(required) {
 		return store.User{}, errdoc.Forbidden("this action")
@@ -438,14 +489,14 @@ func (s *Server) authorizeTeam(r *http.Request, teamID string, required store.Ro
 
 // authorizeApp resolves an app's team and checks the caller's role in it.
 func (s *Server) authorizeApp(r *http.Request, appID string, required store.Role) (store.App, store.User, error) {
-	teamID, err := s.db.TeamIDForApp(r.Context(), appID)
+	teamID, projectID, err := s.db.ProjectOfApp(r.Context(), appID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.App{}, store.User{}, errdoc.NotFound("app", appID)
 		}
 		return store.App{}, store.User{}, err
 	}
-	user, err := s.authorizeTeam(r, teamID, required)
+	user, err := s.authorizeInProject(r, teamID, projectID, required, "app", appID)
 	if err != nil {
 		return store.App{}, store.User{}, err
 	}
@@ -458,14 +509,14 @@ func (s *Server) authorizeApp(r *http.Request, appID string, required store.Role
 
 // authorizeEnvironment resolves an environment's team and checks the role.
 func (s *Server) authorizeEnvironment(r *http.Request, envID string, required store.Role) (store.Environment, store.User, error) {
-	teamID, err := s.db.TeamIDForEnvironment(r.Context(), envID)
+	teamID, projectID, err := s.db.ProjectOfEnvironment(r.Context(), envID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Environment{}, store.User{}, errdoc.NotFound("environment", envID)
 		}
 		return store.Environment{}, store.User{}, err
 	}
-	user, err := s.authorizeTeam(r, teamID, required)
+	user, err := s.authorizeInProject(r, teamID, projectID, required, "environment", envID)
 	if err != nil {
 		return store.Environment{}, store.User{}, err
 	}
@@ -482,14 +533,15 @@ func (s *Server) authorizeProject(r *http.Request, projectID string, required st
 	if err != nil {
 		return store.Project{}, store.User{}, errdoc.NotFound("project", projectID)
 	}
-	user, err := s.authorizeTeam(r, project.TeamID, required)
+	user, err := s.authorizeInProject(r, project.TeamID, project.ID, required, "project", projectID)
 	if err != nil {
 		return store.Project{}, store.User{}, err
 	}
 	return project, user, nil
 }
 
-// authorizeServer resolves a server's team and checks the role.
+// authorizeServer resolves a server's team and checks the role. Servers belong
+// to the whole team, so a member limited to projects is refused.
 func (s *Server) authorizeServer(r *http.Request, serverID string, required store.Role) (store.Server, store.User, error) {
 	server, err := s.db.GetServer(r.Context(), serverID)
 	if err != nil {
@@ -504,14 +556,14 @@ func (s *Server) authorizeServer(r *http.Request, serverID string, required stor
 
 // authorizeDatabase resolves a database's team and checks the role.
 func (s *Server) authorizeDatabase(r *http.Request, databaseID string, required store.Role) (store.Database, store.User, error) {
-	teamID, err := s.db.TeamIDForDatabase(r.Context(), databaseID)
+	teamID, projectID, err := s.db.ProjectOfDatabase(r.Context(), databaseID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Database{}, store.User{}, errdoc.NotFound("database", databaseID)
 		}
 		return store.Database{}, store.User{}, err
 	}
-	user, err := s.authorizeTeam(r, teamID, required)
+	user, err := s.authorizeInProject(r, teamID, projectID, required, "database", databaseID)
 	if err != nil {
 		return store.Database{}, store.User{}, err
 	}
@@ -520,6 +572,35 @@ func (s *Server) authorizeDatabase(r *http.Request, databaseID string, required 
 		return store.Database{}, store.User{}, errdoc.NotFound("database", databaseID)
 	}
 	return record, user, nil
+}
+
+// authorizeOperation checks the caller may see an operation. Most belong to
+// the team — a server being added, a component installed — and a member
+// limited to projects sees those as not there. One about an app, a database,
+// an environment or a project is theirs if that project is.
+func (s *Server) authorizeOperation(r *http.Request, op store.Operation, required store.Role) error {
+	_, membership, err := s.authorizeTeamMember(r, op.TeamID, required)
+	if err != nil {
+		return err
+	}
+	if !membership.Scoped {
+		return nil
+	}
+	var projectID string
+	switch op.TargetType {
+	case "app":
+		_, projectID, err = s.db.ProjectOfApp(r.Context(), op.TargetID)
+	case "database":
+		_, projectID, err = s.db.ProjectOfDatabase(r.Context(), op.TargetID)
+	case "environment":
+		_, projectID, err = s.db.ProjectOfEnvironment(r.Context(), op.TargetID)
+	case "project":
+		projectID = op.TargetID
+	}
+	if err != nil || projectID == "" || !membership.Reaches(projectID) {
+		return errdoc.NotFound("operation", op.ID)
+	}
+	return nil
 }
 
 // audit records an action. Audit failures never fail the request they describe,

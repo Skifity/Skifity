@@ -48,24 +48,36 @@ func (db *DB) GetTeam(ctx context.Context, id string) (Team, error) {
 
 // ListTeamsForUser returns the teams a user belongs to, with their role in each.
 func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]Team, error) {
-	rows, err := db.QueryContext(ctx, `SELECT t.id, t.name, t.slug, t.created_at, m.role
+	rows, err := db.QueryContext(ctx, `SELECT t.id, t.name, t.slug, t.created_at, m.role, m.scoped
 		FROM teams t JOIN memberships m ON m.team_id = t.id
 		WHERE m.user_id = ? ORDER BY t.created_at`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list teams: %w", err)
 	}
-	defer rows.Close()
 	out := []Team{}
 	for rows.Next() {
 		var t Team
 		var created string
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &created, &t.Role); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &created, &t.Role, &t.Scoped); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan team: %w", err)
 		}
 		t.CreatedAt, _ = ParseTime(created)
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	for i := range out {
+		if out[i].Scoped {
+			if out[i].Projects, err = db.memberProjects(ctx, out[i].ID, userID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 // UpdateTeam renames a team.
@@ -84,25 +96,72 @@ func (db *DB) UpdateTeam(ctx context.Context, t *Team) error {
 
 // AddMember grants a user a role in a team, or changes the role they already have.
 func (db *DB) AddMember(ctx context.Context, teamID, userID string, role Role) error {
+	return db.SetMembership(ctx, teamID, userID, role, nil)
+}
+
+// SetMembership adds a member or changes one: the role, and the projects they
+// are limited to, or nil for the whole team. One transaction, so there is no
+// moment in which somebody being added with a limit has the whole team.
+func (db *DB) SetMembership(ctx context.Context, teamID, userID string, role Role, projects []string) error {
 	if !role.Valid() {
 		return fmt.Errorf("%q is not a valid role", role)
 	}
-	_, err := db.Exec(ctx, `INSERT INTO memberships (team_id, user_id, role, created_at) VALUES (?,?,?,?)
-		ON CONFLICT (team_id, user_id) DO UPDATE SET role = excluded.role`,
-		teamID, userID, role, Now())
-	if err != nil {
-		return fmt.Errorf("add member: %w", err)
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO memberships (team_id, user_id, role, scoped, created_at)
+			VALUES (?,?,?,?,?)
+			ON CONFLICT (team_id, user_id) DO UPDATE SET role = excluded.role, scoped = excluded.scoped`,
+			teamID, userID, role, projects != nil, Now()); err != nil {
+			return fmt.Errorf("add member: %w", err)
+		}
+		return setMemberProjects(ctx, tx, teamID, userID, projects)
+	})
+}
+
+// setMemberProjects replaces the projects a membership is limited to. A
+// project of another team is skipped rather than stored: the list can only
+// ever narrow what the team gives.
+func setMemberProjects(ctx context.Context, tx *sql.Tx, teamID, userID string, projects []string) error {
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM membership_projects WHERE team_id = ? AND user_id = ?`, teamID, userID); err != nil {
+		return fmt.Errorf("clear member projects: %w", err)
+	}
+	for _, projectID := range projects {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO membership_projects (team_id, user_id, project_id)
+			SELECT ?, ?, id FROM projects WHERE id = ? AND team_id = ?`,
+			teamID, userID, projectID, teamID); err != nil {
+			return fmt.Errorf("limit member to a project: %w", err)
+		}
 	}
 	return nil
+}
+
+// memberProjects lists the projects a membership is limited to.
+func (db *DB) memberProjects(ctx context.Context, teamID, userID string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT mp.project_id FROM membership_projects mp
+		JOIN projects p ON p.id = mp.project_id
+		WHERE mp.team_id = ? AND mp.user_id = ? ORDER BY p.name`, teamID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list member projects: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan member project: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
 }
 
 // GetMembership returns a user's role in a team.
 func (db *DB) GetMembership(ctx context.Context, teamID, userID string) (Membership, error) {
 	var m Membership
 	var created string
-	err := db.QueryRowContext(ctx, `SELECT team_id, user_id, role, created_at FROM memberships
+	err := db.QueryRowContext(ctx, `SELECT team_id, user_id, role, scoped, created_at FROM memberships
 		WHERE team_id = ? AND user_id = ?`, teamID, userID).
-		Scan(&m.TeamID, &m.UserID, &m.Role, &created)
+		Scan(&m.TeamID, &m.UserID, &m.Role, &m.Scoped, &created)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return m, ErrNotFound
@@ -110,43 +169,64 @@ func (db *DB) GetMembership(ctx context.Context, teamID, userID string) (Members
 		return m, fmt.Errorf("get membership: %w", err)
 	}
 	m.CreatedAt, _ = ParseTime(created)
+	if m.Scoped {
+		// A failure here is a failure: a scoped membership whose projects
+		// could not be read must not be handed back looking like one that
+		// reaches nothing, or worse, everything.
+		if m.Projects, err = db.memberProjects(ctx, teamID, userID); err != nil {
+			return Membership{}, err
+		}
+	}
 	return m, nil
 }
 
 // ListMembers returns a team's members with their user records.
-func (db *DB) ListMembers(ctx context.Context, teamID string) ([]struct {
-	User User `json:"user"`
-	Role Role `json:"role"`
-}, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+prefixColumns("u", userColumns)+`, m.role
+func (db *DB) ListMembers(ctx context.Context, teamID string) ([]Member, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+prefixColumns("u", userColumns)+`, m.role, m.scoped
 		FROM users u JOIN memberships m ON m.user_id = u.id
 		WHERE m.team_id = ? ORDER BY u.created_at`, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
 	}
-	defer rows.Close()
-	out := []struct {
-		User User `json:"user"`
-		Role Role `json:"role"`
-	}{}
+	out := []Member{}
 	for rows.Next() {
 		var u User
 		var role Role
+		var scoped bool
 		var created, updated string
 		var lastLogin sql.NullString
 		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecretEnc, &u.TOTPEnabled,
-			&u.IsAdmin, &u.Disabled, &u.Locale, &u.Theme, &u.RecoverySaved, &created, &updated, &lastLogin, &role); err != nil {
+			&u.IsAdmin, &u.Disabled, &u.Locale, &u.Theme, &u.RecoverySaved, &created, &updated, &lastLogin,
+			&role, &scoped); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan member: %w", err)
 		}
 		u.CreatedAt, _ = ParseTime(created)
 		u.UpdatedAt, _ = ParseTime(updated)
 		u.LastLoginAt = scanTime(lastLogin)
-		out = append(out, struct {
-			User User `json:"user"`
-			Role Role `json:"role"`
-		}{User: u, Role: role})
+		out = append(out, Member{User: u, Role: role, Scoped: scoped})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	for i := range out {
+		if out[i].Scoped {
+			if out[i].Projects, err = db.memberProjects(ctx, teamID, out[i].User.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
+}
+
+// Member is one person in a team, as the members list shows them.
+type Member struct {
+	User     User     `json:"user"`
+	Role     Role     `json:"role"`
+	Scoped   bool     `json:"scoped"`
+	Projects []string `json:"projects,omitempty"`
 }
 
 // CountOwners reports how many owners a team has, so the last one cannot be
@@ -425,6 +505,41 @@ func (db *DB) TeamIDForDatabase(ctx context.Context, dbID string) (string, error
 		return "", fmt.Errorf("resolve team for database: %w", err)
 	}
 	return teamID, nil
+}
+
+// ProjectOfEnvironment walks environment -> project -> team.
+//
+// It and ProjectOfApp and ProjectOfDatabase return the team and the project,
+// which is what deciding who may see something needs: the team for the
+// membership, the project for its limits.
+func (db *DB) ProjectOfEnvironment(ctx context.Context, envID string) (teamID, projectID string, err error) {
+	return db.projectOf(ctx, "environment", `SELECT p.team_id, p.id FROM environments e
+		JOIN projects p ON p.id = e.project_id WHERE e.id = ?`, envID)
+}
+
+// ProjectOfApp walks app -> environment -> project -> team.
+func (db *DB) ProjectOfApp(ctx context.Context, appID string) (teamID, projectID string, err error) {
+	return db.projectOf(ctx, "app", `SELECT p.team_id, p.id FROM apps a
+		JOIN environments e ON e.id = a.environment_id
+		JOIN projects p ON p.id = e.project_id WHERE a.id = ?`, appID)
+}
+
+// ProjectOfDatabase walks database -> environment -> project -> team.
+func (db *DB) ProjectOfDatabase(ctx context.Context, databaseID string) (teamID, projectID string, err error) {
+	return db.projectOf(ctx, "database", `SELECT p.team_id, p.id FROM databases d
+		JOIN environments e ON e.id = d.environment_id
+		JOIN projects p ON p.id = e.project_id WHERE d.id = ?`, databaseID)
+}
+
+func (db *DB) projectOf(ctx context.Context, kind, query, id string) (string, string, error) {
+	var teamID, projectID string
+	if err := db.QueryRowContext(ctx, query, id).Scan(&teamID, &projectID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", ErrNotFound
+		}
+		return "", "", fmt.Errorf("resolve project for %s: %w", kind, err)
+	}
+	return teamID, projectID, nil
 }
 
 // prefixColumns qualifies a column list with a table alias, so a join can reuse

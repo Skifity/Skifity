@@ -58,17 +58,20 @@ import type { AuditEvent, ClusterSummary, Project, Server } from "@/lib/types"
 export function DashboardPage() {
   const { t } = useTranslation()
   const { team, user, meta } = useSession()
+  // Servers and the cluster belong to the whole team. A member limited to some
+  // projects is refused them, so their overview is their projects.
+  const teamWide = !team?.scoped
 
   const cluster = useQuery({
     queryKey: ["cluster", team?.id],
     queryFn: () => api.get<ClusterSummary>(`/api/teams/${team!.id}/cluster`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && teamWide,
     refetchInterval: 15_000,
   })
   const servers = useQuery({
     queryKey: ["servers", team?.id],
     queryFn: () => api.get<List<Server>>(`/api/teams/${team!.id}/servers`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && teamWide,
   })
   const projects = useQuery({
     queryKey: ["projects", team?.id],
@@ -92,7 +95,7 @@ export function DashboardPage() {
       deployment: () =>
         void queryClient.invalidateQueries({ queryKey: ["audit", team?.id, "recent"] }),
     },
-    Boolean(team),
+    Boolean(team) && teamWide,
   )
 
   const serverItems = servers.data?.items ?? []
@@ -100,7 +103,7 @@ export function DashboardPage() {
   const summary = cluster.data
   const loading = servers.isLoading || cluster.isLoading
 
-  const firstRun = !loading && serverItems.length === 0
+  const firstRun = teamWide && !loading && serverItems.length === 0
   const firstEnvironment = useFirstEnvironment(!firstRun)
 
   return (
@@ -112,12 +115,14 @@ export function DashboardPage() {
         }
         actions={
           <>
-            <Button variant="outline" asChild>
-              <Link to="/servers/new">
-                <ServerIcon />
-                {t("servers.addServer")}
-              </Link>
-            </Button>
+            {teamWide && (
+              <Button variant="outline" asChild>
+                <Link to="/servers/new">
+                  <ServerIcon />
+                  {t("servers.addServer")}
+                </Link>
+              </Button>
+            )}
             {/*
               Deploying is the thing people came here to do, and until now the
               only way in was two lists deep: Projects, then the project, then
@@ -178,41 +183,43 @@ export function DashboardPage() {
         <FirstRun />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
-              icon={ServerIcon}
-              label={t("nav.servers")}
-              value={loading ? null : String(summary?.ready_nodes ?? serverItems.length)}
-              detail={
-                summary
-                  ? t("common.of") + " " + (summary.nodes?.length ?? serverItems.length)
-                  : undefined
-              }
-              to="/servers"
-            />
-            <Stat
-              icon={FolderIcon}
-              label={t("nav.projects")}
-              value={projects.isLoading ? null : String(projectItems.length)}
-              to="/projects"
-            />
-            <UsageStat
-              icon={CpuIcon}
-              label={t("dashboard.cpuUsed")}
-              used={summary?.used_cpu_m ?? 0}
-              total={summary?.total_cpu_m ?? 0}
-              render={formatCPU}
-              loading={loading}
-            />
-            <UsageStat
-              icon={MemoryStickIcon}
-              label={t("dashboard.memoryUsed")}
-              used={summary?.used_memory_mb ?? 0}
-              total={summary?.total_memory_mb ?? 0}
-              render={formatMemory}
-              loading={loading}
-            />
-          </div>
+          {teamWide && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                icon={ServerIcon}
+                label={t("nav.servers")}
+                value={loading ? null : String(summary?.ready_nodes ?? serverItems.length)}
+                detail={
+                  summary
+                    ? t("common.of") + " " + (summary.nodes?.length ?? serverItems.length)
+                    : undefined
+                }
+                to="/servers"
+              />
+              <Stat
+                icon={FolderIcon}
+                label={t("nav.projects")}
+                value={projects.isLoading ? null : String(projectItems.length)}
+                to="/projects"
+              />
+              <UsageStat
+                icon={CpuIcon}
+                label={t("dashboard.cpuUsed")}
+                used={summary?.used_cpu_m ?? 0}
+                total={summary?.total_cpu_m ?? 0}
+                render={formatCPU}
+                loading={loading}
+              />
+              <UsageStat
+                icon={MemoryStickIcon}
+                label={t("dashboard.memoryUsed")}
+                used={summary?.used_memory_mb ?? 0}
+                total={summary?.total_memory_mb ?? 0}
+                render={formatMemory}
+                loading={loading}
+              />
+            </div>
+          )}
 
           {summary?.reachable && (
             <Alert variant={summary.high_availability ? "default" : "warning"}>
@@ -287,46 +294,48 @@ export function DashboardPage() {
               )}
             </Section>
 
-            <Section
-              title={t("nav.servers")}
-              description={t("servers.requirementsList")}
-              actions={
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/servers">
-                    {t("common.viewAll")}
-                    <ArrowRightIcon />
-                  </Link>
-                </Button>
-              }
-            >
-              {servers.isLoading ? (
-                <Skeleton className="h-32" />
-              ) : (
-                <ItemGroup className="rounded-lg border">
-                  {serverItems.slice(0, 5).map((server) => (
-                    <Item key={server.id} asChild>
-                      <Link to={`/servers/${server.id}`}>
-                        <ItemMedia variant="icon">
-                          <ServerIcon />
-                        </ItemMedia>
-                        <ItemContent>
-                          <ItemTitle>{server.name}</ItemTitle>
-                          <ItemDescription className="font-mono">{server.host}</ItemDescription>
-                        </ItemContent>
-                        <ItemActions>
-                          <StatusBadge
-                            status={server.status}
-                            label={t(`servers.status.${server.status}`, {
-                              defaultValue: server.status,
-                            })}
-                          />
-                        </ItemActions>
-                      </Link>
-                    </Item>
-                  ))}
-                </ItemGroup>
-              )}
-            </Section>
+            {teamWide && (
+              <Section
+                title={t("nav.servers")}
+                description={t("servers.requirementsList")}
+                actions={
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/servers">
+                      {t("common.viewAll")}
+                      <ArrowRightIcon />
+                    </Link>
+                  </Button>
+                }
+              >
+                {servers.isLoading ? (
+                  <Skeleton className="h-32" />
+                ) : (
+                  <ItemGroup className="rounded-lg border">
+                    {serverItems.slice(0, 5).map((server) => (
+                      <Item key={server.id} asChild>
+                        <Link to={`/servers/${server.id}`}>
+                          <ItemMedia variant="icon">
+                            <ServerIcon />
+                          </ItemMedia>
+                          <ItemContent>
+                            <ItemTitle>{server.name}</ItemTitle>
+                            <ItemDescription className="font-mono">{server.host}</ItemDescription>
+                          </ItemContent>
+                          <ItemActions>
+                            <StatusBadge
+                              status={server.status}
+                              label={t(`servers.status.${server.status}`, {
+                                defaultValue: server.status,
+                              })}
+                            />
+                          </ItemActions>
+                        </Link>
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                )}
+              </Section>
+            )}
           </div>
 
           {user?.is_admin && (audit.data?.items.length ?? 0) > 0 && (

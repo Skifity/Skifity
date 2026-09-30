@@ -8,6 +8,8 @@ export type Invitation = {
   team_id: string
   email: string
   role: Role
+  /** What the membership will be limited to; absent for the whole team. */
+  projects?: string[]
   expires_at: string
   created_at: string
 }
@@ -26,7 +28,19 @@ export type User = {
   last_login_at?: string
 }
 
-export type Team = { id: string; name: string; slug: string; created_at: string; role?: Role }
+export type Team = {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+  role?: Role
+  /** Limited to some of the team's projects, and which. */
+  scoped?: boolean
+  projects?: string[]
+}
+
+/** One person in a team, as the members list shows them. */
+export type Member = { user: User; role: Role; scoped: boolean; projects?: string[] }
 
 export type Project = {
   id: string

@@ -77,8 +77,10 @@ export function AppDetailPage() {
     enabled: Boolean(environment.data?.project_id),
   })
 
+  // The team's stream carries every project's events, so a member limited to
+  // some projects is refused it; their page keeps up by polling instead.
   useEvents(
-    team ? [`team:${team.id}`] : [],
+    team && !team.scoped ? [`team:${team.id}`] : [],
     {
       deployment: () => {
         void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })

@@ -36,7 +36,9 @@ type detectRequest struct {
 // than filling the field in.
 func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	// Open to a member limited to projects: it creates nothing, and it is the
+	// first step of creating an app in one of theirs.
+	if _, _, err := s.authorizeTeamMember(r, teamID, store.RoleMember); err != nil {
 		writeError(w, r, err)
 		return
 	}

@@ -77,7 +77,9 @@ func (s *Server) handleUploadSource(w http.ResponseWriter, r *http.Request) {
 // been created — a second trip, and in exchange nothing is kept for a form
 // that is abandoned halfway.
 func (s *Server) handleDetectUpload(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.authorizeTeam(r, chi.URLParam(r, "teamID"), store.RoleMember); err != nil {
+	// As for handleDetect: nothing is created, and a member limited to
+	// projects needs it to create an app in one of them.
+	if _, _, err := s.authorizeTeamMember(r, chi.URLParam(r, "teamID"), store.RoleMember); err != nil {
 		writeError(w, r, err)
 		return
 	}

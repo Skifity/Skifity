@@ -326,7 +326,7 @@ func (s *Server) handleGetOperation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if _, err := s.authorizeTeam(r, op.TeamID, store.RoleViewer); err != nil {
+	if err := s.authorizeOperation(r, op, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}

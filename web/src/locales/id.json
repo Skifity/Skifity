@@ -1091,7 +1091,15 @@
     "panelBackupsRestore": "Untuk memulihkannya, unduh salinan dari bucket ke server, hentikan panel, lalu jalankan:",
     "roleViewer": "Pengamat",
     "readOnlyTitle": "Anda bisa melihat, bukan mengubah",
-    "readOnly": "Anda adalah pengamat di {{team}}: Anda bisa melihat aplikasi, deployment, dan log-nya, dan apa pun yang Anda coba ubah akan ditolak. Admin tim bisa memberi Anda akses lebih."
+    "readOnly": "Anda adalah pengamat di {{team}}: Anda bisa melihat aplikasi, deployment, dan log-nya, dan apa pun yang Anda coba ubah akan ditolak. Admin tim bisa memberi Anda akses lebih.",
+    "access": "Akses",
+    "allProjects": "Semua proyek",
+    "noProjectsLeft": "Tidak ada proyek: proyek yang dimilikinya sudah dihapus",
+    "limitToProjects": "Batasi ke beberapa proyek",
+    "limitToProjectsHelp": "Mereka hanya melihat proyek yang dicentang di bawah — bukan proyek lain, server, atau pengaturan tim.",
+    "limitChooseOne": "Pilih setidaknya satu proyek.",
+    "changeAccess": "Ubah akses",
+    "memberAdded": "Mereka sudah punya akun, jadi langsung ditambahkan ke tim."
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2046,6 +2054,12 @@
         "cause": "{{0}}",
         "impact": "Tidak ada yang diubah.",
         "fix": "Gunakan cadangan lain. Yang terbaru di folder skifity/panel/ pada bucket biasanya yang tepat."
+      },
+      "auth_scoped_to_projects": {
+        "title": "Akses Anda terbatas pada beberapa proyek",
+        "cause": "Anda berada di tim ini hanya untuk sebagian proyeknya, dan ini milik seluruh tim.",
+        "impact": "Tindakan tidak dijalankan.",
+        "fix": "Minta admin tim untuk memberi akses ke seluruh tim, jika Anda membutuhkannya."
       }
     }
   },

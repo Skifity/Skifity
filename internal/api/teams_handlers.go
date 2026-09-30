@@ -55,7 +55,9 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	user, err := s.authorizeTeam(r, teamID, store.RoleViewer)
+	// A member limited to some projects is still in the team, and the
+	// team's name and their own place in it are theirs to see.
+	_, membership, err := s.authorizeTeamMember(r, teamID, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -65,10 +67,7 @@ func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	membership, err := s.db.GetMembership(r.Context(), teamID, user.ID)
-	if err == nil {
-		team.Role = membership.Role
-	}
+	team.Role, team.Scoped, team.Projects = membership.Role, membership.Scoped, membership.Projects
 	writeJSON(w, http.StatusOK, team)
 }
 
@@ -107,7 +106,10 @@ func (s *Server) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
+	// Who else is in the team, for a member limited to some projects too —
+	// but only the projects they can see are named in anybody's limits.
+	_, caller, err := s.authorizeTeamMember(r, teamID, store.RoleViewer)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -116,12 +118,58 @@ func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if caller.Scoped {
+		for i := range members {
+			visible := []string{}
+			for _, id := range members[i].Projects {
+				if caller.Reaches(id) {
+					visible = append(visible, id)
+				}
+			}
+			members[i].Projects = visible
+		}
+	}
 	writeList(w, members)
 }
 
 type addMemberRequest struct {
 	Email string     `json:"email"`
 	Role  store.Role `json:"role"`
+	// Projects limits the membership to some of the team's projects. Absent
+	// is the whole team, and since this form also changes a role, leaving it
+	// out of a change lifts a limit that was there.
+	Projects []string `json:"projects,omitempty"`
+}
+
+// memberLimits checks the projects a membership is to be limited to: nil for
+// the whole team, otherwise at least one, every one a project of this team,
+// and only for a member or a viewer — admins and owners look after the whole
+// team by definition, and one limited to a project would be an admin who can
+// change settings that reach every other project.
+func (s *Server) memberLimits(r *http.Request, teamID string, role store.Role, projects []string) ([]string, error) {
+	if projects == nil {
+		return nil, nil
+	}
+	if role != store.RoleMember && role != store.RoleViewer {
+		return nil, errdoc.BadRequest("Only members and viewers can be limited to projects. Admins and owners look after the whole team.")
+	}
+	if len(projects) == 0 {
+		return nil, errdoc.BadRequest("Choose at least one project, or leave the limit off for the whole team.")
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(projects))
+	for _, id := range projects {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		project, err := s.db.GetProject(r.Context(), id)
+		if err != nil || project.TeamID != teamID {
+			return nil, errdoc.NotFound("project", id)
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +197,11 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if !actorMembership.Role.AtLeast(req.Role) {
 		writeError(w, r, errdoc.Forbidden("granting a role higher than your own"))
+		return
+	}
+	projects, err := s.memberLimits(r, teamID, req.Role, req.Projects)
+	if err != nil {
+		writeError(w, r, err)
 		return
 	}
 
@@ -190,7 +243,7 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.AddMember(r.Context(), teamID, target.ID, req.Role); err != nil {
+	if err := s.db.SetMembership(r.Context(), teamID, target.ID, req.Role, projects); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -264,7 +317,8 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
+	_, membership, err := s.authorizeTeamMember(r, teamID, store.RoleViewer)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -273,7 +327,15 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeList(w, projects)
+	// A member limited to some projects is shown those, and the list is how
+	// every page finds its way in, so nothing else has to filter.
+	visible := projects[:0]
+	for _, project := range projects {
+		if membership.Reaches(project.ID) {
+			visible = append(visible, project)
+		}
+	}
+	writeList(w, visible)
 }
 
 type createProjectRequest struct {

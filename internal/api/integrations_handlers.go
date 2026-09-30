@@ -21,7 +21,10 @@ import (
 
 func (s *Server) handleListGitSources(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
+	// A member limited to projects creates apps in them, and picking the
+	// repository to create one from is where that starts. The list carries
+	// names, never tokens.
+	if _, _, err := s.authorizeTeamMember(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}

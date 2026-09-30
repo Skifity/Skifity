@@ -53,7 +53,9 @@ export function CommandPalette({
   const { data: servers } = useQuery({
     queryKey: ["palette", "servers", team?.id],
     queryFn: () => api.get<List<Server>>(`/api/teams/${team!.id}/servers`),
-    enabled: open && Boolean(team),
+    // Servers belong to the whole team; a member limited to projects is
+    // refused them.
+    enabled: open && Boolean(team) && !team?.scoped,
   })
 
   const { data: apps } = useQuery({

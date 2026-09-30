@@ -184,12 +184,16 @@ function AppSidebar() {
   const { t } = useTranslation()
   const { team, teams, setTeam, user } = useSession()
 
+  // A member limited to some projects is not shown what belongs to the
+  // whole team: the server refuses it, and a link to a refusal is a trap.
+  const teamWide = !team?.scoped
+
   // Counts next to the navigation, so the sidebar says something about the
   // state of the system rather than being a list of nouns.
   const servers = useQuery({
     queryKey: ["servers", team?.id],
     queryFn: () => api.get<List<Server>>(`/api/teams/${team!.id}/servers`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && teamWide,
   })
   const projects = useQuery({
     queryKey: ["projects", team?.id],
@@ -205,13 +209,17 @@ function AppSidebar() {
     { to: "/", label: t("nav.overview"), icon: LayoutGridIcon, end: true },
     { to: "/projects", label: t("nav.projects"), icon: FolderIcon, count: projects.data?.total },
     { to: "/databases", label: t("nav.databases"), icon: DatabaseIcon },
-    {
-      to: "/servers",
-      label: t("nav.servers"),
-      icon: ServerIcon,
-      count: servers.data?.total,
-      alert: unhealthy > 0,
-    },
+    ...(teamWide
+      ? [
+          {
+            to: "/servers",
+            label: t("nav.servers"),
+            icon: ServerIcon,
+            count: servers.data?.total,
+            alert: unhealthy > 0,
+          },
+        ]
+      : []),
     { to: "/templates", label: t("nav.templates"), icon: BoxesIcon },
     { to: "/plugins", label: t("nav.plugins"), icon: PuzzleIcon },
     { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },

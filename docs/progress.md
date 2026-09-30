@@ -4468,6 +4468,52 @@ In the panel, the role is offered in the members form and on invitations, and
 a viewer sees one notice at the top of every page saying so, rather than
 finding out from the first refusal.
 
+## Phase 86 — members limited to some projects
+
+The second half of gap 3. A team is often one agency and several clients, or
+one company and a contractor on one product, and a membership was the whole
+team or nothing.
+
+A membership now has a `scoped` flag and a list of projects in
+`membership_projects` (migration 0021). The two are separate on purpose: with
+only the list, no rows would have to mean the whole team, and deleting the last
+project somebody was limited to would quietly give them every other one. With
+the flag, they are left with none, and a test deletes the project to prove it.
+Rows cascade away with the project and with the membership. Only members and
+viewers can be limited; the API refuses it for admins and owners, and refuses
+an empty list, and a project of another team. Invitations carry the limit to the
+membership they become, and one transaction sets role and limit together, so
+nobody being added with a limit has the whole team for a moment.
+
+Enforcement is where every other check is. `authorizeApp`, `authorizeEnvironment`,
+`authorizeDatabase` and `authorizeProject` now resolve the project as well as
+the team and answer 404 for a project outside the limit — checked before the
+role, because a role refusal is a 403 and a 403 says the thing is there, which
+the first run of the new test caught on every admin-only route.
+`authorizeTeam` refuses a limited member outright, so a team-wide route added
+later refuses them too; the six that serve them call `authorizeTeamMember`
+instead, and `limitedMemberMayUse` in the test names each with its reason. The
+project list is filtered, the members list names only the projects the caller
+can see in anybody's limits, and operations are visible when their target is in
+reach. `authorizeAppID`, a second copy of `authorizeApp` for ids from a body,
+still called `authorizeTeam` and would have refused a limited member their own
+app; it is now `authorizeApp`.
+
+The test walks the router as a member limited to one project, three ways: with
+another project's ids (69 routes, all 404), with the team's own ids (25 refused,
+six allowed and named), and with their own project's ids, where nothing may be
+refused for being outside the limit — each route with a freshly made app and
+database, because a member may delete an app and the walk does.
+
+In the panel, the invitation form and a new **Change access** dialog offer the
+limit for members and viewers, the members list says what each person can
+reach, and a limited member's sidebar, dashboard and command palette leave out
+servers and the cluster rather than showing refusals. Their app page does not
+subscribe to the team's event stream, which carries every project's events, and
+keeps up by polling. The invitation form also now does what its help text said:
+somebody who already has an account is added directly instead of being refused
+a link.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
