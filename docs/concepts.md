@@ -236,8 +236,9 @@ Four ways, in the order the panel picks them:
 
 The zero-config builder is the answer to "does it support my stack": it is not a
 list Skifity maintains, it is Railpack's, and it covers Node, Python, Go, PHP,
-Ruby, Rust, Java, Deno, Elixir and more. Nixpacks is selectable as a fallback
-because Railpack is young. And anything at all builds with a Dockerfile, which
+Ruby, Rust, Java, Deno, Elixir and more. Nixpacks is not offered: its makers
+replaced it with Railpack, and its command line is not published as an image a
+build can run. And anything at all builds with a Dockerfile, which
 is the escape hatch that never runs out — if a stack is not supported, that
 sentence means "you write four lines of Dockerfile", not "you cannot deploy it".
 

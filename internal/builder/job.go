@@ -108,19 +108,16 @@ type JobSpec struct {
 // Defaults fills in the images and limits a caller did not set.
 func (s *JobSpec) Defaults() {
 	if s.GitImage == "" {
-		s.GitImage = "alpine/git:latest"
+		s.GitImage = GitImage
 	}
 	if s.BuildKitImage == "" {
-		s.BuildKitImage = "moby/buildkit:master"
+		s.BuildKitImage = BuildKitClientImage
 	}
 	if s.RailpackImage == "" {
-		s.RailpackImage = "ghcr.io/railwayapp/railpack:latest"
+		s.RailpackImage = RailpackImage
 	}
 	if s.RailpackFrontend == "" {
-		s.RailpackFrontend = "ghcr.io/railwayapp/railpack-frontend:latest"
-	}
-	if s.NixpacksImage == "" {
-		s.NixpacksImage = "ghcr.io/railwayapp/nixpacks:latest"
+		s.RailpackFrontend = RailpackImage
 	}
 	if s.NodeImage == "" {
 		s.NodeImage = "node:22-alpine"
@@ -190,6 +187,11 @@ func (s JobSpec) Validate() error {
 		if !buildVarName.MatchString(key) {
 			return fmt.Errorf("%q is not a name a build variable can have", key)
 		}
+	}
+	// Nobody publishes an image with the nixpacks command in it, so there is
+	// no default to fall back on; see images.go.
+	if s.Builder == BuilderNixpacks && s.NixpacksImage == "" {
+		return fmt.Errorf("the Nixpacks builder needs an image with the nixpacks command in it")
 	}
 	if len(s.BuildArgs) > 0 && s.BuildVarsSecret == "" {
 		return fmt.Errorf("a build with variables needs the Secret that holds their values")
@@ -514,7 +516,9 @@ func prepareContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	b.WriteString("echo '==> Working out how to build this repository'\n")
-	fmt.Fprintf(&b, "railpack prepare %s --plan-out %s/railpack-plan.json --info-out %s/railpack-info.json",
+	// /railpack, not railpack: the frontend image puts the binary at the root
+	// and not on the PATH.
+	fmt.Fprintf(&b, "/railpack prepare %s --plan-out %s/railpack-plan.json --info-out %s/railpack-info.json",
 		shellsafe.Quote(context), workspace, workspace)
 	for _, pair := range sortedPairs(s.BuildArgs) {
 		// --env is how build-time configuration reaches the detection, which

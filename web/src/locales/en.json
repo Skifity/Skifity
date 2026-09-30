@@ -997,7 +997,7 @@
       },
       "general_default_builder": {
         "label": "Default builder",
-        "help": "Which builder to use when a repository has no Dockerfile. Railpack produces smaller images; Nixpacks is older and more widely tested."
+        "help": "Which builder to use when a repository has no Dockerfile. Railpack is the one available: Nixpacks was replaced by Railpack, and its command line is not published as an image a build can run."
       },
       "general_panel_url": {
         "label": "Panel URL",
@@ -2016,6 +2016,12 @@
         "cause": "This account has no password, so unlinking the provider would leave it with no way to sign in.",
         "impact": "Nothing was changed.",
         "fix": "Set a password on this page first, then unlink."
+      },
+      "build_nixpacks_unavailable": {
+        "title": "Nixpacks is not available",
+        "cause": "{{0}} is set to build with Nixpacks. Its makers replaced it with Railpack, and its command line is not published as an image a build can run.",
+        "impact": "Nothing was built or deployed.",
+        "fix": "Set the app's builder to Automatic, which uses Railpack, or to Dockerfile, under the app's Settings."
       }
     }
   },

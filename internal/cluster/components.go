@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"skifity/internal/builder"
 	"skifity/internal/kube"
 	"skifity/internal/settings"
 	"skifity/internal/version"
@@ -395,8 +396,9 @@ func buildKitObjects(namespace string) []any {
 	return []any{deployment, service}
 }
 
-// buildKitImage is the rootless builder, pinned.
-const buildKitImage = "moby/buildkit:v0.18.2-rootless"
+// buildKitImage is the rootless builder, pinned by version and digest in one
+// place with the buildctl that talks to it. See builder/images.go.
+const buildKitImage = builder.BuildKitDaemonImage
 
 // buildKitLocalAddress is how the readiness probe reaches buildkitd from
 // inside its own container.

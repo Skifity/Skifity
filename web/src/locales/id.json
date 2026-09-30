@@ -985,7 +985,7 @@
       },
       "general_default_builder": {
         "label": "Builder bawaan",
-        "help": "Builder yang dipakai ketika repositori tidak punya Dockerfile. Railpack menghasilkan image lebih kecil; Nixpacks lebih lama ada dan lebih banyak diuji."
+        "help": "Builder yang dipakai saat repositori tidak punya Dockerfile. Railpack adalah yang tersedia: Nixpacks sudah digantikan oleh Railpack, dan command line-nya tidak diterbitkan sebagai image yang bisa dijalankan build."
       },
       "general_panel_url": {
         "label": "URL panel",
@@ -2004,6 +2004,12 @@
         "cause": "Akun ini tidak punya kata sandi, jadi melepas tautan penyedia akan membuatnya tidak bisa dimasuki sama sekali.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Buat kata sandi di halaman ini dulu, lalu lepas tautannya."
+      },
+      "build_nixpacks_unavailable": {
+        "title": "Nixpacks tidak tersedia",
+        "cause": "{{0}} diatur untuk di-build dengan Nixpacks. Pembuatnya sudah menggantinya dengan Railpack, dan command line-nya tidak diterbitkan sebagai image yang bisa dijalankan build.",
+        "impact": "Tidak ada yang di-build atau di-deploy.",
+        "fix": "Ubah builder app ke Otomatis, yang memakai Railpack, atau ke Dockerfile, di Pengaturan app."
       }
     }
   },

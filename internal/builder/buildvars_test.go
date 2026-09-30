@@ -27,6 +27,7 @@ func withVariables(builder Builder) JobSpec {
 		"NEXT_PUBLIC_API_URL": "https://api.example.test",
 	}
 	spec.BuildVarsSecret = "build-dep-1-vars"
+	spec.NixpacksImage = "registry.example.test/nixpacks:1"
 	return spec
 }
 

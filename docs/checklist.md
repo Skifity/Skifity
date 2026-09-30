@@ -44,7 +44,7 @@ this product, and it does not change until `test/cluster/verify.sh` has run.
 ## Where each one is
 
 **1. Git → build → deploy.** `internal/builder` detects the language and builds
-with Railpack, Nixpacks or a Dockerfile, in a Job in the cluster, pushing to an
+with Railpack or a Dockerfile, in a Job in the cluster, pushing to an
 in-cluster registry. `internal/gitsrc` connects GitHub, GitLab and Gitea, and a
 webhook deploys on push. The build fingerprint (ADR-0007) means a variable
 change never rebuilds.

@@ -4292,6 +4292,43 @@ No build has run with this. The rendered Job, the scripts (checked with `sh
 -n`) and the flags are tested; whether the Railpack frontend mounts every
 secret the way its documentation says needs a cluster.
 
+## Phase 80 — the build images, pinned, and two that did not exist
+
+The Dokploy research pass noted that every image a build runs defaulted to a
+floating tag — `alpine/git:latest`, `moby/buildkit:master`,
+`ghcr.io/railwayapp/railpack:latest`, `…/railpack-frontend:latest`,
+`ghcr.io/railwayapp/nixpacks:latest`. Pinning them meant reading each one from
+its registry, and two of them were not what the code assumed:
+
+* **`ghcr.io/railwayapp/railpack` is not a public image.** The registry refuses
+  an anonymous pull token for it, as it does for a package that does not exist.
+  Every Railpack build — the default builder — would have stopped at pulling
+  its first step. What Railway publishes is `railpack-frontend`, which is
+  Alpine with the complete `railpack` binary at `/railpack`, `prepare`
+  included. The plan step now runs there, as `/railpack prepare`, which also
+  means the program that writes the plan and the frontend that reads it are
+  the same version, as they have to be.
+* **`ghcr.io/railwayapp/nixpacks` is Nixpacks' base image** — Ubuntu and Nix —
+  with no `nixpacks` command in it, so the Nixpacks builder could never have
+  run. Nobody publishes the command as an image, its makers put it in
+  maintenance mode in 2025 and replaced it with Railpack, and the panel could not
+  verify a release to download from here. It is no longer offered: an app set to
+  it is refused with `build.nixpacks_unavailable`, saying what to pick instead,
+  and a panel whose default was Nixpacks builds with Railpack.
+
+Every build image is now pinned by version and by digest, in one file
+(`internal/builder/images.go`), with the digests read from the registries on
+2026-09-30: Railpack v0.40.1, BuildKit v0.33.0 for both buildctl and the shared
+daemon — which had been v0.18.2 while buildctl followed `master` — and
+`alpine/git` v2.54.0. A test fails on any build image without a digest or on a
+floating tag.
+
+### Still true
+
+A panel that already installed the BuildKit component keeps the daemon it
+installed: components are installed once and never revisited, which is the
+upgrade gap the Kubero research named. New installs get v0.33.0.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

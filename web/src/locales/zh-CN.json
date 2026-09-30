@@ -985,7 +985,7 @@
       },
       "general_default_builder": {
         "label": "默认构建器",
-        "help": "仓库里没有 Dockerfile 时使用哪个构建器。Railpack 生成的镜像更小；Nixpacks 更老，经受过更广泛的验证。"
+        "help": "仓库没有 Dockerfile 时使用的构建器。可用的是 Railpack：Nixpacks 已被 Railpack 取代，且其命令行未以构建可运行的镜像形式发布。"
       },
       "general_panel_url": {
         "label": "面板地址",
@@ -2004,6 +2004,12 @@
         "cause": "此账号没有密码，取消关联提供商后将无法登录。",
         "impact": "未做任何更改。",
         "fix": "请先在此页面设置密码，然后再取消关联。"
+      },
+      "build_nixpacks_unavailable": {
+        "title": "Nixpacks 不可用",
+        "cause": "{{0}} 设置为使用 Nixpacks 构建。其作者已用 Railpack 取代它，且其命令行未以构建可运行的镜像形式发布。",
+        "impact": "未构建或部署任何内容。",
+        "fix": "在应用的设置中将构建器改为“自动”（使用 Railpack）或 Dockerfile。"
       }
     }
   },

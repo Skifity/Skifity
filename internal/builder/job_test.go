@@ -241,7 +241,7 @@ func TestRailpackBuildCommand(t *testing.T) {
 	}
 
 	prepare := job.Spec.Template.Spec.InitContainers[1].Args[0]
-	if !strings.Contains(prepare, "railpack prepare") {
+	if !strings.Contains(prepare, "/railpack prepare") {
 		t.Fatalf("the prepare step does not run railpack:\n%s", prepare)
 	}
 	if !strings.Contains(prepare, "--plan-out /workspace/railpack-plan.json") {
@@ -251,7 +251,7 @@ func TestRailpackBuildCommand(t *testing.T) {
 	script := job.Spec.Template.Spec.Containers[0].Args[0]
 	for _, want := range []string{
 		"--frontend gateway.v0",
-		`--opt 'source=ghcr.io/railwayapp/railpack-frontend:latest'`,
+		`--opt 'source=` + RailpackImage + `'`,
 		`--local 'dockerfile=/workspace'`,
 	} {
 		if !strings.Contains(script, want) {
@@ -358,6 +358,7 @@ func TestGeneratedBuildScriptsAreValidShell(t *testing.T) {
 		spec.BuildArgs = map[string]string{"A": "1"}
 		spec.BuildVarsSecret = "build-dep-1-vars"
 		spec.BuildCommand = "npm run build"
+		spec.NixpacksImage = "registry.example.test/nixpacks:1"
 		job, err := BuildJob(spec)
 		if err != nil {
 			t.Fatalf("%s: BuildJob: %v", builder, err)
@@ -452,6 +453,7 @@ func TestNixpacksWritesTheDockerfileItThenBuilds(t *testing.T) {
 	spec.Builder = BuilderNixpacks
 	spec.BuildArgs = map[string]string{"NODE_ENV": "production"}
 	spec.BuildVarsSecret = "build-dep-1-vars"
+	spec.NixpacksImage = "registry.example.test/nixpacks:1"
 	job, err := BuildJob(spec)
 	if err != nil {
 		t.Fatalf("BuildJob: %v", err)

@@ -308,6 +308,20 @@ func NoUpload(app string) *Problem {
 		With("app", app)
 }
 
+// NixpacksUnavailable reports an app set to build with Nixpacks.
+//
+// The builder was offered and could never have run: the only image its makers
+// publish is the base image their builds start from, which has no nixpacks
+// command in it, and they have since replaced Nixpacks with Railpack.
+func NixpacksUnavailable(app string) *Problem {
+	return New("build.nixpacks_unavailable", "Nixpacks is not available").
+		WithCause("%s is set to build with Nixpacks. Its makers replaced it with Railpack, and its command line is not published as an image a build can run.", app).
+		WithImpact("Nothing was built or deployed.").
+		WithFix("Set the app's builder to Automatic, which uses Railpack, or to Dockerfile, under the app's Settings.").
+		WithStatus(http.StatusBadRequest).
+		With("app", app)
+}
+
 // UploadNotFound reports a deploy that names an upload the panel does not have.
 func UploadNotFound(sha string) *Problem {
 	return New("upload.not_found", "That upload is not on the panel").

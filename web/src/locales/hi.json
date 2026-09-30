@@ -999,7 +999,7 @@
       },
       "general_default_builder": {
         "label": "डिफ़ॉल्ट बिल्डर",
-        "help": "जब रिपॉज़िटरी में Dockerfile न हो तो कौन-सा बिल्डर इस्तेमाल हो। Railpack छोटी इमेज बनाता है; Nixpacks पुराना है और ज़्यादा व्यापक रूप से परखा गया है।"
+        "help": "जब रिपॉजिटरी में Dockerfile न हो तो कौन-सा builder इस्तेमाल हो। Railpack ही उपलब्ध है: Nixpacks की जगह Railpack ने ले ली है, और उसकी command line ऐसी image के रूप में प्रकाशित नहीं होती जिसे build चला सके।"
       },
       "general_panel_url": {
         "label": "पैनल का पता",
@@ -2018,6 +2018,12 @@
         "cause": "इस खाते का कोई पासवर्ड नहीं है, इसलिए प्रदाता को अनलिंक करने से इसमें साइन इन करने का कोई रास्ता नहीं बचेगा।",
         "impact": "कुछ भी नहीं बदला गया।",
         "fix": "पहले इसी पेज पर पासवर्ड सेट करें, फिर अनलिंक करें।"
+      },
+      "build_nixpacks_unavailable": {
+        "title": "Nixpacks उपलब्ध नहीं है",
+        "cause": "{{0}} को Nixpacks से build करने के लिए सेट किया गया है। इसके निर्माताओं ने इसे Railpack से बदल दिया है, और इसकी command line ऐसी image के रूप में प्रकाशित नहीं होती जिसे build चला सके।",
+        "impact": "कुछ भी build या deploy नहीं हुआ।",
+        "fix": "ऐप की Settings में उसका builder Automatic पर करें, जो Railpack इस्तेमाल करता है, या Dockerfile पर।"
       }
     }
   },

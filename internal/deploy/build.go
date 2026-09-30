@@ -163,7 +163,7 @@ func (d *Deployer) chooseBuilder(ctx context.Context, app store.App) (builder.Bu
 	case "dockerfile":
 		return builder.BuilderDockerfile, nil
 	case "nixpacks":
-		return builder.BuilderNixpacks, nil
+		return "", errdoc.NixpacksUnavailable(app.Name)
 	case "static":
 		return builder.BuilderStatic, nil
 	case "railpack":
@@ -194,8 +194,10 @@ func (d *Deployer) defaultBuilder(ctx context.Context) builder.Builder {
 		d.log.Warn("could not read the default builder setting", "error", err)
 		return builder.BuilderRailpack
 	}
+	// Nixpacks was once a choice here and could never have run; a panel that
+	// saved it gets Railpack, which is what its makers replaced it with.
 	if strings.TrimSpace(choice) == "nixpacks" {
-		return builder.BuilderNixpacks
+		d.log.Info("the default builder is set to Nixpacks, which is not available; using Railpack")
 	}
 	return builder.BuilderRailpack
 }

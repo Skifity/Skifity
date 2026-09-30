@@ -325,7 +325,6 @@ func TestChooseBuilder(t *testing.T) {
 		{"auto", "Dockerfile", "dockerfile"},
 		{"", "", "railpack"},
 		{"dockerfile", "", "dockerfile"},
-		{"nixpacks", "", "nixpacks"},
 		{"static", "", "static"},
 		{"railpack", "", "railpack"},
 	}
@@ -341,6 +340,13 @@ func TestChooseBuilder(t *testing.T) {
 	}
 	if _, err := d.chooseBuilder(t.Context(), store.App{Builder: "magic"}); err == nil {
 		t.Fatal("an unknown builder was accepted")
+	}
+	// Nixpacks was offered and could never have run: nobody publishes an
+	// image with its command in it. Saying so beats a build stuck on
+	// "nixpacks: not found".
+	_, err := d.chooseBuilder(t.Context(), store.App{Name: "Web", Builder: "nixpacks"})
+	if err == nil || !strings.Contains(err.Error(), "Nixpacks is not available") {
+		t.Fatalf("an app set to Nixpacks was not told it is unavailable: %v", err)
 	}
 }
 
@@ -652,6 +658,8 @@ func TestTheDefaultBuilderSettingIsActuallyRead(t *testing.T) {
 		t.Fatalf("with no setting the builder is %q, want railpack", got)
 	}
 
+	// A panel that saved Nixpacks back when it was offered gets Railpack,
+	// which replaced it, rather than every build failing.
 	if err := db.SetSetting(t.Context(), settings.KeyBuilderDefault, "nixpacks", false, "test"); err != nil {
 		t.Fatalf("set the default builder: %v", err)
 	}
@@ -659,8 +667,8 @@ func TestTheDefaultBuilderSettingIsActuallyRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("chooseBuilder: %v", err)
 	}
-	if string(got) != "nixpacks" {
-		t.Fatalf("the default builder setting was ignored: got %q, want nixpacks", got)
+	if string(got) != "railpack" {
+		t.Fatalf("a saved Nixpacks default gave %q, want railpack", got)
 	}
 
 	// A Dockerfile in the repository still wins: that is the author's decision

@@ -177,9 +177,9 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyBuilderDefault, Label: "Default builder", Group: GroupGeneral,
-		Help:     "Which builder to use when a repository has no Dockerfile. Railpack produces smaller images; Nixpacks is older and more widely tested.",
-		Options:  []string{"railpack", "nixpacks"},
-		Validate: validateOneOf("railpack", "nixpacks"),
+		Help:     "Which builder to use when a repository has no Dockerfile. Railpack is the one available: Nixpacks was replaced by Railpack, and its command line is not published as an image a build can run.",
+		Options:  []string{"railpack"},
+		Validate: validateOneOf("railpack"),
 	},
 	{
 		Key: KeyTelemetryDisabled, Label: "Disable usage reporting", Group: GroupGeneral,
