@@ -168,6 +168,32 @@ skifity files rm /etc/nginx/conf.d/default.conf
   `/dev`, or exactly where a volume is mounted. Inside a volume is fine, which
   is how a settings file sits beside the data it configures.
 
+## Ports that are not HTTP
+
+A game server, an MQTT broker, a DNS server or a mail server takes connections
+that are not HTTP, and a domain cannot carry them. An app's **Ports**, on its
+Domains tab, open one on every server:
+
+```
+skifity ports open 25565                 # players join at any server, port 25565
+skifity ports open 19132/udp             # UDP as well
+skifity ports open 5432 --public 15432   # a different number outside
+skifity ports close 25565/tcp
+```
+
+* **One app per port, on the whole panel.** A public port is opened on every
+  server, so two apps cannot both have 25565/tcp; the second is told it is
+  taken. The same number over UDP is a different port.
+* **The firewall does not apply to these.** It reads HTTP requests, and these
+  are not HTTP. Anything that can reach your servers can connect, so the
+  software behind a port has to ask for its own password.
+* **Not everywhere.** Ports the servers already use — SSH, 80 and 443, the
+  Kubernetes API, the kubelet, the cluster network — are refused, as is the
+  30000–32767 range Kubernetes keeps for itself.
+* Each one is a load balancer that k3s opens on every server, and a network
+  rule that lets connections through to that port and no other. An environment
+  is allowed exactly as many as its apps have asked for.
+
 ## Private registries
 
 An app can run an image from a private repository — a ghcr.io package, a

@@ -354,6 +354,16 @@ func RegistryLoginRefused(host string) *Problem {
 		WithDocs("/docs/concepts#private-registries")
 }
 
+// PortTaken is a public port another app already has open.
+func PortTaken(port int, protocol string) *Problem {
+	return New("port.taken", "That port is already open for another app").
+		WithCause("%d/%s is open on every server already, for another app on this panel.", port, protocol).
+		WithImpact("The port was not opened.").
+		WithFix("Choose another public port: the app can still listen on its own, and only the public side changes.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#ports-that-are-not-http")
+}
+
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.
 func TunnelUnreachable(database string) *Problem {
 	return New("database.tunnel_unreachable", "The panel could not reach this database").

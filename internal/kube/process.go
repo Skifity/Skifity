@@ -63,6 +63,8 @@ func ProcessSpec(app AppSpec, process, command string, instances int) AppSpec {
 	// corruption Recreate exists to prevent.
 	s.Volumes = nil
 	s.Domains = nil
+	// Connections from outside go to the app, as its domains' do.
+	s.PublicPorts = nil
 	s.PasswordUsers = ""
 	s.Protected = false
 	s.PlainEnv = maps.Clone(app.PlainEnv)

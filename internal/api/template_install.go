@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -117,6 +118,22 @@ func (s *Server) installTemplate(
 		}
 		for _, file := range svc.Files {
 			if err := s.setTemplateFile(r, app.ID, file); err != nil {
+				return result, err
+			}
+		}
+		for _, p := range svc.Ports {
+			protocol := p.Protocol
+			if protocol == "" {
+				protocol = "tcp"
+			}
+			// The same number outside as inside: a Minecraft client dials
+			// 25565 unless told otherwise. A second install finds it taken
+			// and says so, rather than opening something else quietly.
+			port := store.AppPort{AppID: app.ID, Port: p.Port, Protocol: protocol, PublicPort: p.Port}
+			if err := s.db.AddPort(r.Context(), &port); err != nil {
+				if errors.Is(err, store.ErrPortTaken) {
+					return result, errdoc.PortTaken(p.Port, protocol)
+				}
 				return result, err
 			}
 		}

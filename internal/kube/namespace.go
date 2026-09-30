@@ -33,6 +33,10 @@ type NamespaceQuota struct {
 	StorageGB   int
 	MaxPods     int
 	MaxServices int
+	// LoadBalancers is how many apps in the environment have public ports,
+	// each of which is one LoadBalancer Service. Zero for every other
+	// environment, which keeps the guard below.
+	LoadBalancers int
 }
 
 // DefaultQuota is what a new environment gets.
@@ -111,8 +115,9 @@ func BuildResourceQuota(namespace string, q NamespaceQuota) *corev1.ResourceQuot
 				"pods":             resource.MustParse(itoaResource(q.MaxPods)),
 				"services":         resource.MustParse(itoaResource(q.MaxServices)),
 				// A LoadBalancer or NodePort service would open a port on every
-				// node, bypassing the ingress and its TLS.
-				"services.loadbalancers": resource.MustParse("0"),
+				// node, bypassing the ingress and its TLS. The only ones allowed
+				// are the panel's own, one per app with public ports.
+				"services.loadbalancers": resource.MustParse(itoaResource(q.LoadBalancers)),
 				"services.nodeports":     resource.MustParse("0"),
 			},
 		},

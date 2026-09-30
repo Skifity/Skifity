@@ -321,7 +321,9 @@
       "file.saved": "保存了一个文件",
       "file.deleted": "删除了一个文件",
       "registry.saved": "保存了仓库凭据",
-      "registry.deleted": "删除了仓库凭据"
+      "registry.deleted": "删除了仓库凭据",
+      "port.opened": "打开了一个端口",
+      "port.closed": "关闭了一个端口"
     }
   },
   "projects": {
@@ -2559,6 +2561,12 @@
         "cause": "{{0}} 回复该用户名和密码无法登录。",
         "impact": "凭据未保存，因此不会用它们拉取任何内容。",
         "fix": "检查用户名，并使用有读取包权限的令牌——ghcr.io 和 Docker Hub 要求使用令牌代替账户密码。"
+      },
+      "port_taken": {
+        "title": "该端口已为另一个应用打开",
+        "cause": "{{0}}/{{1}} 已在每台服务器上为此面板的另一个应用打开。",
+        "impact": "端口未打开。",
+        "fix": "选择另一个公共端口：应用仍可监听自己的端口，只有公共端改变。"
       }
     }
   },
@@ -3061,5 +3069,19 @@
     "unchecked": "已保存，但无法从面板向 {{host}} 验证。",
     "remove": "删除 {{host}}",
     "removeConfirm": "从下一次部署开始，应用将不再使用这些凭据从 {{host}} 拉取。"
+  },
+  "ports": {
+    "title": "非 HTTP 端口",
+    "help": "用于游戏服务器、MQTT 代理或任何非网站的服务：端口会在每台服务器上打开。防火墙不适用于这些端口。",
+    "empty": "无。应用通过其域名访问。",
+    "add": "打开端口",
+    "port": "应用端口",
+    "protocol": "协议",
+    "publicPort": "公共端口",
+    "publicPortHelp": "留空时与应用端口相同。每个公共端口在整个面板上只为一个应用打开。",
+    "reachedAt": "访问地址",
+    "anyServer": "任意服务器的地址，端口 {{port}}",
+    "close": "关闭 {{port}}",
+    "closeConfirm": "{{port}} 将在每台服务器上关闭，所有连接都会被拒绝。"
   }
 }

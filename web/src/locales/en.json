@@ -329,7 +329,9 @@
       "file.saved": "saved a file",
       "file.deleted": "removed a file",
       "registry.saved": "saved registry credentials",
-      "registry.deleted": "removed registry credentials"
+      "registry.deleted": "removed registry credentials",
+      "port.opened": "opened a port",
+      "port.closed": "closed a port"
     }
   },
   "projects": {
@@ -2573,6 +2575,12 @@
         "cause": "{{0}} answered that this username and password cannot sign in.",
         "impact": "The credentials were not saved, so nothing will pull with them.",
         "fix": "Check the username, and use a token with permission to read packages — ghcr.io and Docker Hub want a token in place of the account's password."
+      },
+      "port_taken": {
+        "title": "That port is already open for another app",
+        "cause": "{{0}}/{{1}} is open on every server already, for another app on this panel.",
+        "impact": "The port was not opened.",
+        "fix": "Choose another public port: the app can still listen on its own, and only the public side changes."
       }
     }
   },
@@ -3077,5 +3085,19 @@
     "unchecked": "Saved, but {{host}} could not be asked from the panel.",
     "remove": "Remove {{host}}",
     "removeConfirm": "Apps stop pulling from {{host}} with these credentials from their next deploy."
+  },
+  "ports": {
+    "title": "Ports that are not HTTP",
+    "help": "For a game server, an MQTT broker or anything else that is not a website: the port is opened on every server. The firewall does not apply to these.",
+    "empty": "None. The app is reached through its domains.",
+    "add": "Open a port",
+    "port": "App's port",
+    "protocol": "Protocol",
+    "publicPort": "Public port",
+    "publicPortHelp": "The same as the app's port when left empty. Each public port is open for one app on the whole panel.",
+    "reachedAt": "Reached at",
+    "anyServer": "any server's address, port {{port}}",
+    "close": "Close {{port}}",
+    "closeConfirm": "{{port}} closes on every server, and whatever connects to it is refused."
   }
 }

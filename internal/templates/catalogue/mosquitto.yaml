@@ -6,10 +6,47 @@ category: communication
 website: https://mosquitto.org/documentation/
 services:
 - name: mosquitto
-  image: eclipse-mosquitto:2.0
-  port: 1883
-  public: true
-  mem_request_mb: 128
-  mem_limit_mb: 1024
+  image: eclipse-mosquitto:2.0.22
+  # MQTT is not HTTP, so there is no domain: the broker is reached on port
+  # 1883 of any server.
+  port: 0
+  public: false
+  ports:
+  - port: 1883
+    protocol: tcp
+  # The password file is made from the inputs at every start, and handed to
+  # the mosquitto user the broker drops to, with its data.
+  command: mosquitto_passwd -c -b /mosquitto/data/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD" && chown -R
+    mosquitto:mosquitto /mosquitto/data && exec mosquitto -c /mosquitto/config/mosquitto.conf
+  files:
+  - path: /mosquitto/config/mosquitto.conf
+    content: |
+      # Every connection signs in: a broker open to the internet without a
+      # password is a relay for anybody.
+      listener 1883
+      allow_anonymous false
+      password_file /mosquitto/data/passwd
+      persistence true
+      persistence_location /mosquitto/data/
+      log_dest stdout
+  volumes:
+  - name: mosquitto-data
+    mount_path: /mosquitto/data
+    size_gb: 1
+  mem_request_mb: 32
+  mem_limit_mb: 256
   cpu_request_m: 50
-  cpu_limit_m: 1000
+  cpu_limit_m: 500
+inputs:
+- key: MQTT_USERNAME
+  label: Username
+  help: What clients sign in to the broker as.
+  default: mqtt
+- key: MQTT_PASSWORD
+  label: Password
+  secret: true
+  generate: true
+notes: Clients connect to port 1883 of any of your servers and sign in with the username and password
+  above. The connection is not encrypted; put TLS in front of it before sending anything private over
+  the internet. The image starts as root to hand its data to the mosquitto user, so the environment
+  needs the baseline pod security level.

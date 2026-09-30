@@ -13,6 +13,7 @@ import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
 import { FilesCard } from "@/components/app/files"
+import { PortsCard } from "@/components/app/ports"
 import { ProcessesCard } from "@/components/app/processes"
 import { SettingsTab, settingsKey } from "@/components/app/settings-tab"
 import { StorageTab } from "@/components/app/storage-tab"
@@ -251,6 +252,9 @@ export function AppDetailPage() {
         </TabsContent>
         <TabsContent value="domains" className="pt-4">
           <DomainsTab app={current} />
+          <div className="pt-6">
+            <PortsCard app={current} />
+          </div>
         </TabsContent>
         <TabsContent value="firewall" className="space-y-4 pt-4">
           <AppPasswordProtection appId={appId} />

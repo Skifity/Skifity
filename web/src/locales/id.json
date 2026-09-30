@@ -321,7 +321,9 @@
       "file.saved": "menyimpan sebuah berkas",
       "file.deleted": "menghapus sebuah berkas",
       "registry.saved": "menyimpan kredensial registry",
-      "registry.deleted": "menghapus kredensial registry"
+      "registry.deleted": "menghapus kredensial registry",
+      "port.opened": "membuka sebuah port",
+      "port.closed": "menutup sebuah port"
     }
   },
   "projects": {
@@ -2559,6 +2561,12 @@
         "cause": "{{0}} menjawab bahwa nama pengguna dan kata sandi ini tidak dapat masuk.",
         "impact": "Kredensial tidak disimpan, jadi tidak ada yang akan menarik dengannya.",
         "fix": "Periksa nama pengguna, dan gunakan token dengan izin membaca paket — ghcr.io dan Docker Hub meminta token sebagai ganti kata sandi akun."
+      },
+      "port_taken": {
+        "title": "Port itu sudah terbuka untuk aplikasi lain",
+        "cause": "{{0}}/{{1}} sudah terbuka di setiap server, untuk aplikasi lain di panel ini.",
+        "impact": "Port tidak dibuka.",
+        "fix": "Pilih port publik lain: aplikasi tetap bisa mendengarkan di port miliknya, hanya sisi publiknya yang berubah."
       }
     }
   },
@@ -3061,5 +3069,19 @@
     "unchecked": "Tersimpan, tetapi {{host}} tidak dapat ditanya dari panel.",
     "remove": "Hapus {{host}}",
     "removeConfirm": "Aplikasi berhenti menarik dari {{host}} dengan kredensial ini sejak deploy berikutnya."
+  },
+  "ports": {
+    "title": "Port selain HTTP",
+    "help": "Untuk server game, broker MQTT, atau apa pun yang bukan situs web: port dibuka di setiap server. Firewall tidak berlaku untuk port ini.",
+    "empty": "Tidak ada. Aplikasi dijangkau melalui domainnya.",
+    "add": "Buka port",
+    "port": "Port aplikasi",
+    "protocol": "Protokol",
+    "publicPort": "Port publik",
+    "publicPortHelp": "Sama dengan port aplikasi jika dikosongkan. Setiap port publik hanya terbuka untuk satu aplikasi di seluruh panel.",
+    "reachedAt": "Dijangkau di",
+    "anyServer": "alamat server mana pun, port {{port}}",
+    "close": "Tutup {{port}}",
+    "closeConfirm": "{{port}} ditutup di setiap server, dan apa pun yang terhubung ke sana akan ditolak."
   }
 }

@@ -87,6 +87,8 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 		}
 	}
 
+	container.Ports = append(container.Ports, publicContainerPorts(s)...)
+
 	if s.EnvFromSecret != "" {
 		container.EnvFrom = []corev1.EnvFromSource{{
 			SecretRef: &corev1.SecretEnvSource{

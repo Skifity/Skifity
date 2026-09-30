@@ -819,6 +819,18 @@ export type StackNote = {
 }
 
 /** One of an app's other processes: its image, its own command, no port. */
+/** A port an app takes connections on that is not HTTP, open on every server. */
+export type AppPort = {
+  id: string
+  app_id: string
+  port: number
+  protocol: "tcp" | "udp"
+  public_port: number
+  created_at: string
+  /** The team's servers' addresses at this port; empty when none are known. */
+  addresses: string[]
+}
+
 /** Credentials a team pulls private images with. The password never comes back. */
 export type RegistryCredential = {
   id: string

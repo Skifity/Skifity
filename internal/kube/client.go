@@ -886,11 +886,14 @@ func (c *Client) deleteRuns(ctx context.Context, namespace, appSlug string) erro
 }
 
 // EnsureNamespace creates an environment's namespace with its guards.
-func (c *Client) EnsureNamespace(ctx context.Context, namespace, teamID, projectID string, level PodSecurity) error {
+// loadBalancers is how many of its apps have public ports.
+func (c *Client) EnsureNamespace(ctx context.Context, namespace, teamID, projectID string, level PodSecurity, loadBalancers int) error {
+	quota := DefaultQuota()
+	quota.LoadBalancers = loadBalancers
 	objects := []any{
 		BuildNamespace(namespace, teamID, projectID, level),
 		BuildLimitRange(namespace),
-		BuildResourceQuota(namespace, DefaultQuota()),
+		BuildResourceQuota(namespace, quota),
 	}
 	for _, policy := range BuildNetworkPolicies(namespace, c.systemNamespace) {
 		objects = append(objects, policy)

@@ -26,6 +26,9 @@ services:
     cpu_request_m: 50
     cpu_limit_m: 1000
     command: example serve --port 8080   # optional; replaces how the image starts
+    ports:                       # optional; connections that are not HTTP
+      - port: 25565              # opened on every server at the same number
+        protocol: tcp            # tcp, the default, or udp
     files:                       # optional; mounted read-only at each path
       - path: /etc/example/config.yml
         content: |

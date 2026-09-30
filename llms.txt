@@ -49,6 +49,7 @@ skifity unlock                    Allow them again
 skifity run -- npm run migrate    Run a command once, in the app's image
 skifity processes set worker -- <command>  A worker beside the app, same build
 skifity files set /etc/app.conf ./app.conf  A file the app reads, mounted at that path
+skifity ports open 25565          Open a port that is not HTTP on every server
 skifity plan                      What skifity.yaml would change in the environment
 skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
@@ -158,6 +159,8 @@ PUT    /api/apps/{app}/variables              set one
 POST   /api/apps/{app}/variables/batch        set and remove several, all or none, one rollout
 PUT    /api/apps/{app}/variables/{key}/preview what previews get: same, value, or none
 GET    /api/apps/{app}/files                  files it reads, mounted at their paths
+GET    /api/apps/{app}/ports                  ports that are not HTTP, and where they are reached
+POST   /api/apps/{app}/ports                  open one on every server (port, protocol, public_port)
 PUT    /api/apps/{app}/files                  save one (path, content, is_secret, executable)
 GET    /api/apps/{app}/domains                domains
 POST   /api/apps/{app}/domains                add one

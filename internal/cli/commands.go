@@ -73,6 +73,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdProcesses(ctx, rest, stdout)
 	case "files":
 		err = cmdFiles(ctx, rest, stdout)
+	case "ports":
+		err = cmdPorts(ctx, rest, stdout)
 	case "plan", "apply":
 		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
@@ -226,6 +228,7 @@ Working with apps:
   scale                 Change the number of instances or turn on autoscaling
   processes             List, add or stop the app's workers and other processes
   files                 List, save or remove files the app reads, such as an nginx.conf
+  ports                 Open or close a port that is not HTTP, such as a game server's
   rollback              Go back to a previous deployment
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop

@@ -2528,6 +2528,55 @@ paths:
           description: Removed.
         default: {$ref: '#/components/responses/Error'}
 
+  /api/apps/{appID}/ports:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    get:
+      operationId: listPorts
+      tags: [Domains]
+      summary: The ports an app takes connections on that are not HTTP
+      description: Viewer. Each is open on every server, at its public port.
+      responses:
+        '200':
+          description: The ports, with the team's servers' addresses at each.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AppPortList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: addPort
+      tags: [Domains]
+      summary: Open a TCP or UDP port on every server
+      description: >-
+        Member. A public port and protocol are open for one app on the whole
+        panel; one that is taken is refused. The firewall does not apply to
+        these, because it reads HTTP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddPortRequest'}
+      responses:
+        '201':
+          description: The port, and where it is reached.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AppPortWithAddresses'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/ports/{portID}:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+      - $ref: '#/components/parameters/portID'
+    delete:
+      operationId: deletePort
+      tags: [Domains]
+      summary: Close a public port
+      description: Member.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/apps/{appID}/files:
     parameters:
       - $ref: '#/components/parameters/appID'
@@ -3523,6 +3572,7 @@ components:
     envID: {name: envID, in: path, required: true, description: 'An environment''s id.', schema: {type: string}}
     fileID: {name: fileID, in: path, required: true, description: 'A file''s id.', schema: {type: string}}
     registryID: {name: registryID, in: path, required: true, description: 'A registry credential''s id.', schema: {type: string}}
+    portID: {name: portID, in: path, required: true, description: 'A public port''s id.', schema: {type: string}}
     appID: {name: appID, in: path, required: true, description: 'An app''s id.', schema: {type: string}}
     deploymentID: {name: deploymentID, in: path, required: true, description: 'A deployment''s id.', schema: {type: string}}
     domainID: {name: domainID, in: path, required: true, description: 'A domain''s id.', schema: {type: string}}
@@ -5411,6 +5461,39 @@ components:
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/ScalingFinding'}}
         total: {type: integer}
+
+    AppPortWithAddresses:
+      type: object
+      required: [id, app_id, port, protocol, public_port, created_at, addresses]
+      properties:
+        id: {type: string}
+        app_id: {type: string}
+        port: {type: integer, description: The port the container listens on.}
+        protocol: {type: string, enum: [tcp, udp]}
+        public_port: {type: integer, description: The port opened on every server.}
+        created_at: {type: string}
+        addresses:
+          type: array
+          items: {type: string}
+          description: The team's servers' public addresses at this port. Empty when none are known.
+
+    AppPortList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AppPortWithAddresses'}
+        total: {type: integer}
+
+    AddPortRequest:
+      type: object
+      required: [port]
+      additionalProperties: false
+      properties:
+        port: {type: integer, minimum: 1, maximum: 65535}
+        protocol: {type: string, enum: [tcp, udp], default: tcp}
+        public_port: {type: integer, description: The port itself when left out.}
 
     AppFile:
       type: object

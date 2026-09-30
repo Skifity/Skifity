@@ -412,6 +412,10 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		kube.BuildPDB(spec),
 		kube.BuildInterceptorService(spec),
 		kube.BuildHTTPScaledObject(spec),
+		// The policy first: a port opened before connections may reach it
+		// is one that refuses everybody for a moment.
+		kube.BuildPortsPolicy(spec),
+		kube.BuildPortsService(spec),
 	)
 	// The app's other processes go out with it, on the same image.
 	processes, err := d.db.ListProcesses(ctx, app.ID)
@@ -563,6 +567,17 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 		if err := applier.Delete(ctx, "policy/v1", "PodDisruptionBudget",
 			spec.Namespace, kube.ResourceName(spec.Name, "pdb")); err != nil {
 			d.log.Warn("could not remove the disruption budget", "app", app.ID, "error", err)
+		}
+	}
+	if len(spec.PublicPorts) == 0 {
+		// A port somebody closed is closed on every server, not left open
+		// until the next thing that happens to tidy up.
+		if err := applier.Delete(ctx, "v1", "Service", spec.Namespace, kube.PortsServiceName(spec.Name)); err != nil {
+			d.log.Warn("could not close the app's public ports", "app", app.ID, "error", err)
+		}
+		if err := applier.Delete(ctx, "networking.k8s.io/v1", "NetworkPolicy",
+			spec.Namespace, kube.PortsPolicyName(spec.Name)); err != nil {
+			d.log.Warn("could not remove the app's public ports policy", "app", app.ID, "error", err)
 		}
 	}
 	if len(spec.Files) == 0 {

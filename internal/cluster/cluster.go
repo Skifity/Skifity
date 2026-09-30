@@ -157,8 +157,14 @@ func (c *Cluster) DeleteApp(ctx context.Context, namespace, appSlug string) erro
 // signature where a caller can forget it. Forgetting it here would silently put
 // a lowered environment back to the strict level on the next deploy.
 func (c *Cluster) EnsureNamespace(ctx context.Context, env store.Environment, teamID, projectID string) error {
+	// The quota allows exactly as many load balancers as the environment's
+	// apps with public ports need, and none anywhere else.
+	withPorts, err := c.db.CountPortsInEnvironment(ctx, env.ID)
+	if err != nil {
+		return err
+	}
 	if err := c.client.EnsureNamespace(ctx, env.Namespace, teamID, projectID,
-		kube.NormalizePodSecurity(env.PodSecurity)); err != nil {
+		kube.NormalizePodSecurity(env.PodSecurity), withPorts); err != nil {
 		return err
 	}
 	// Best effort, and separate from the namespace's own guards: this is a
@@ -195,6 +201,8 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 		kube.BuildPDB(spec),
 		kube.BuildInterceptorService(spec),
 		kube.BuildHTTPScaledObject(spec),
+		kube.BuildPortsService(spec),
+		kube.BuildPortsPolicy(spec),
 	}
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
@@ -489,6 +497,16 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	for _, f := range files {
 		spec.Files = append(spec.Files, kube.FileMount{
 			Key: kube.FileKey(f.Path), Path: f.Path, Executable: f.Executable,
+		})
+	}
+
+	ports, err := c.db.ListPorts(ctx, app.ID)
+	if err != nil {
+		return spec, err
+	}
+	for _, p := range ports {
+		spec.PublicPorts = append(spec.PublicPorts, kube.PublicPort{
+			Port: p.Port, PublicPort: p.PublicPort, Protocol: p.Protocol,
 		})
 	}
 

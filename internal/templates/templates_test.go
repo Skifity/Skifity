@@ -84,8 +84,15 @@ func TestEveryServiceCouldRun(t *testing.T) {
 			} else if svc.Port < 1 || svc.Port > 65535 {
 				t.Errorf("%s/%s listens on %d", tpl.ID, svc.Name, svc.Port)
 			}
-			if svc.Public {
+			// A port that is not HTTP is as much a way in: a game server
+			// has nothing else.
+			if svc.Public || len(svc.Ports) > 0 {
 				public++
+			}
+			for _, p := range svc.Ports {
+				if err := kube.ValidatePublicPort(p.Port, protocolOr(p.Protocol)); err != nil {
+					t.Errorf("%s/%s: %v", tpl.ID, svc.Name, err)
+				}
 			}
 			if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
 				t.Errorf("%s/%s has the health path %q, which is not a path", tpl.ID, svc.Name, svc.HealthPath)
@@ -526,4 +533,11 @@ func TestATemplateWithNoIconSaysSoRatherThanBreaking(t *testing.T) {
 	if _, _, ok := ReadIcon("a-template-that-does-not-exist"); ok {
 		t.Error("an icon was served for a template that does not exist")
 	}
+}
+
+func protocolOr(protocol string) string {
+	if protocol == "" {
+		return "tcp"
+	}
+	return protocol
 }

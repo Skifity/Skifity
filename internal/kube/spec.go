@@ -120,6 +120,9 @@ type AppSpec struct {
 	// Files are mounted read-only into every container the app runs, from
 	// the Secret FilesSecretName names. See files.go.
 	Files []FileMount
+
+	// PublicPorts take connections that are not HTTP. See ports.go.
+	PublicPorts []PublicPort
 }
 
 // Confinement is how a pod's security context is written for this app.
@@ -193,6 +196,20 @@ func (s AppSpec) Validate() error {
 	}
 	if err := validateFiles(s); err != nil {
 		return err
+	}
+	seenPorts := map[string]bool{}
+	for _, p := range s.PublicPorts {
+		if err := ValidatePublicPort(p.PublicPort, p.Protocol); err != nil {
+			return err
+		}
+		if p.Port < 1 || p.Port > 65535 {
+			return fmt.Errorf("%d is not a port a container listens on", p.Port)
+		}
+		key := fmt.Sprintf("%d/%s", p.PublicPort, p.Protocol)
+		if seenPorts[key] {
+			return fmt.Errorf("the public port %s is opened twice", key)
+		}
+		seenPorts[key] = true
 	}
 	seenHosts := map[string]bool{}
 	for _, d := range s.Domains {

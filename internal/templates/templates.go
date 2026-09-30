@@ -210,6 +210,17 @@ type Service struct {
 	// the Caddyfile, the settings file an image reads and has no variable
 	// for. Plenty of software is configured no other way.
 	Files []FileSpec `json:"files,omitempty"`
+	// Ports are connections that are not HTTP — a game server's, an MQTT
+	// broker's — opened on every server at the same number.
+	Ports []PortSpec `json:"ports,omitempty"`
+}
+
+// PortSpec is a port a template's service takes connections on that is not
+// HTTP.
+type PortSpec struct {
+	Port int `json:"port"`
+	// Protocol is tcp, the default, or udp.
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // FileSpec is a file a template's service reads.
