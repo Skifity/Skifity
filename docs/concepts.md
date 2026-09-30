@@ -91,11 +91,17 @@ could read:
 
 * **Detected builds (Railpack)** receive each one as a BuildKit secret, which is
   what Railpack reads. The name goes into the build plan; the value does not.
-* **A Dockerfile** receives each one as a build argument, for its `ARG` lines,
-  and as a secret it can mount with `RUN --mount=type=secret,id=NAME`. Prefer
-  the second for anything secret: a value an `ARG` uses in a `RUN` step is
-  recorded in the image's history, which is how Docker works rather than
-  something Skifity can change.
+* **A Dockerfile** receives each one as a secret it can mount with
+  `RUN --mount=type=secret,id=NAME,env=NAME`, and each one that is **not
+  marked secret** also as a build argument, for its `ARG` lines. A variable
+  marked secret is never a build argument: a value an `ARG` uses in a `RUN`
+  step is recorded in the image's history, where anybody who can pull the
+  image reads it. When the Dockerfile still declares an `ARG` for one, the
+  build log says so at the start, because that `ARG` is now empty.
+* **Nixpacks** writes every build variable into the finished image's
+  environment, so it is given only the ones not marked secret, and the build
+  log names any it left out. Build with Railpack or a Dockerfile to use a
+  secret one.
 * **A front end served as a static site** (Vite, Astro and the like) sees them
   while it builds, which is when `VITE_API_URL` and friends are read. They are
   declared in the build stage only, and the image that is served does not keep

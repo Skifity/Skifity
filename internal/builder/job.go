@@ -78,6 +78,12 @@ type JobSpec struct {
 	// Jobs in the namespace, and a value passed as a plain build argument is
 	// written into the image's history.
 	BuildArgs map[string]string
+	// SecretBuildArgs names the build variables marked secret. They reach a
+	// build only as BuildKit secrets, never as build arguments: a Dockerfile
+	// build writes a build argument into the image's history, where anybody
+	// who can pull the image reads it, and a Nixpacks build copies every
+	// build argument into the image's environment.
+	SecretBuildArgs map[string]bool
 	// BuildVarsSecret is the Secret holding BuildArgs' values, one key per
 	// variable. Required when there are any.
 	BuildVarsSecret string
@@ -568,12 +574,24 @@ func nixpacksContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container 
 	b.WriteString("echo '==> Working out how to build this repository'\n")
 	fmt.Fprintf(&b, "nixpacks build %s --out %s", shellsafe.Quote(context), workspace)
 	for _, pair := range sortedPairs(s.BuildArgs) {
+		// Nixpacks writes each one as ARG and ENV into the Dockerfile it
+		// generates, so the value would be in the finished image's
+		// environment. A secret one is left out, and the log says so below.
+		if s.SecretBuildArgs[pair[0]] {
+			continue
+		}
 		// The same reason as railpack prepare: a framework that builds
 		// differently per environment needs these during detection, not only
 		// during the build.
 		fmt.Fprintf(&b, ` --env "%s"`, fromEnv(pair[0]))
 	}
 	b.WriteString("\n")
+	for _, pair := range sortedPairs(s.BuildArgs) {
+		if s.SecretBuildArgs[pair[0]] {
+			fmt.Fprintf(&b, "echo %s\n", shellsafe.Quote("==> "+pair[0]+" is secret and is not given to a Nixpacks build, "+
+				"which would write it into the image's environment. Build with Railpack or a Dockerfile to use it."))
+		}
+	}
 	b.WriteString("echo '==> Build plan ready'\n")
 
 	return corev1.Container{
@@ -627,6 +645,7 @@ func buildScript(s JobSpec) string {
 		// As build arguments, because that is how a Dockerfile's ARG lines
 		// read them, and as secrets, for a Dockerfile that mounts one with
 		// RUN --mount=type=secret and keeps it out of the image's history.
+		// A secret variable is only the second: see SecretBuildArgs.
 		args = append(args, buildArgFlags(s)...)
 		args = append(args, secretFlags(s)...)
 
@@ -705,6 +724,9 @@ func buildScript(s JobSpec) string {
 	b.WriteString("set -e\n")
 	if s.Builder == BuilderStatic {
 		b.WriteString(staticDockerfileScript(s))
+	}
+	if s.Builder == BuilderDockerfile {
+		b.WriteString(secretArgWarnings(s, dockerfileFile(s)))
 	}
 	b.WriteString("echo '==> Building the image'\n")
 	b.WriteString("buildctl build \\\n  " + strings.Join(args, " \\\n  ") + "\n")
@@ -813,14 +835,53 @@ func ImageName(registry, namespace, appSlug, tag string) string {
 	return fmt.Sprintf("%s/%s/%s:%s", registry, namespace, appSlug, tag)
 }
 
-// buildArgFlags passes every build variable as a build argument, its value read
-// from the pod's environment rather than written into the Job.
+// buildArgFlags passes every build variable that is not secret as a build
+// argument, its value read from the pod's environment rather than written into
+// the Job.
 func buildArgFlags(s JobSpec) []string {
 	out := make([]string, 0, len(s.BuildArgs))
 	for _, pair := range sortedPairs(s.BuildArgs) {
+		if s.SecretBuildArgs[pair[0]] {
+			continue
+		}
 		out = append(out, `--opt "build-arg:`+fromEnv(pair[0])+`"`)
 	}
 	return out
+}
+
+// dockerfileFile is where the Dockerfile is in the build pod: a path with a
+// directory in it is from the repository's root, a bare name is in the root
+// directory the app builds from — the same rule the build itself follows.
+func dockerfileFile(s JobSpec) string {
+	if strings.LastIndex(s.DockerfilePath, "/") > 0 {
+		return workspace + "/" + s.DockerfilePath
+	}
+	if s.RootDir != "" {
+		return workspace + "/" + strings.Trim(s.RootDir, "/") + "/" + s.DockerfilePath
+	}
+	return workspace + "/" + s.DockerfilePath
+}
+
+// secretArgWarnings says, in the build log, when a Dockerfile declares an ARG
+// for a variable that is secret. That ARG is empty now, and without the line
+// the build fails somewhere far from the reason, or quietly builds without the
+// value.
+func secretArgWarnings(s JobSpec, dockerfile string) string {
+	var b strings.Builder
+	for _, pair := range sortedPairs(s.BuildArgs) {
+		name := pair[0]
+		if !s.SecretBuildArgs[name] {
+			continue
+		}
+		// The name matched buildVarName, so it is safe inside the pattern.
+		fmt.Fprintf(&b, "if grep -Eiq '^[[:space:]]*ARG[[:space:]]+%s([=[:space:]]|$)' %s 2>/dev/null; then\n",
+			name, shellsafe.Quote(dockerfile))
+		fmt.Fprintf(&b, "  echo %s\n", shellsafe.Quote("==> The Dockerfile declares ARG "+name+", but "+name+
+			" is secret, so it is not passed as a build argument: one is written into the image's history. "+
+			"Read it with RUN --mount=type=secret,id="+name+",env="+name+" instead."))
+		b.WriteString("fi\n")
+	}
+	return b.String()
 }
 
 // secretFlags hands every build variable to BuildKit as a secret, which a

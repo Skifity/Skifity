@@ -198,3 +198,52 @@ func TestABuildCommandCannotRunInTheBuildContainer(t *testing.T) {
 		t.Fatal("the build command is not in the Dockerfile, where it runs inside the build")
 	}
 }
+
+// A secret build variable is never a build argument. A Dockerfile build writes
+// a build argument into the image's history — `docker history` shows it to
+// anybody who can pull the image — and Nixpacks copies every one into the
+// image's environment. It reaches the build as a BuildKit secret only.
+func TestASecretBuildVariableIsNeverABuildArgument(t *testing.T) {
+	for _, b := range []Builder{BuilderDockerfile, BuilderNixpacks, BuilderRailpack} {
+		spec := withVariables(b)
+		spec.SecretBuildArgs = map[string]bool{"STRIPE_SECRET_KEY": true}
+		job := mustBuild(t, spec)
+		var scripts strings.Builder
+		for _, c := range append(job.Spec.Template.Spec.InitContainers, job.Spec.Template.Spec.Containers...) {
+			scripts.WriteString(strings.Join(c.Args, "\n"))
+		}
+		all := scripts.String()
+		if strings.Contains(all, `build-arg:STRIPE_SECRET_KEY`) {
+			t.Errorf("%s: the secret variable is a build argument:\n%s", b, all)
+		}
+		if b == BuilderNixpacks && strings.Contains(all, `--env "STRIPE_SECRET_KEY=`) {
+			t.Errorf("nixpacks is given the secret variable, which it writes into the image:\n%s", all)
+		}
+		// The one that is not secret still is, because that is how a
+		// Dockerfile's ARG reads it.
+		if b != BuilderRailpack && !strings.Contains(all, `build-arg:NEXT_PUBLIC_API_URL=`) {
+			t.Errorf("%s: the ordinary variable is no longer a build argument:\n%s", b, all)
+		}
+		if b != BuilderNixpacks && !strings.Contains(all, `--secret 'id=STRIPE_SECRET_KEY,env=SKIFITY_BUILD_VAR_STRIPE_SECRET_KEY'`) {
+			t.Errorf("%s: the secret variable does not reach the build as a secret:\n%s", b, all)
+		}
+	}
+}
+
+// A Dockerfile that still reads the secret one with ARG gets an empty value, so
+// the build log says why, at the start, rather than failing far from it.
+func TestADockerfileThatReadsASecretWithARGIsTold(t *testing.T) {
+	spec := withVariables(BuilderDockerfile)
+	spec.SecretBuildArgs = map[string]bool{"STRIPE_SECRET_KEY": true}
+	spec.RootDir = "api"
+	script := mustBuild(t, spec).Spec.Template.Spec.Containers[0].Args[0]
+	if !strings.Contains(script, `'/workspace/api/Dockerfile'`) {
+		t.Errorf("the check reads the wrong Dockerfile:\n%s", script)
+	}
+	if !strings.Contains(script, "RUN --mount=type=secret,id=STRIPE_SECRET_KEY,env=STRIPE_SECRET_KEY") {
+		t.Errorf("the log does not say how to read it instead:\n%s", script)
+	}
+	if strings.Contains(script, "ARG[[:space:]]+NEXT_PUBLIC_API_URL") {
+		t.Errorf("an ordinary variable is warned about:\n%s", script)
+	}
+}

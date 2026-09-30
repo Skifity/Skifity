@@ -946,6 +946,22 @@ func (d *Deployer) buildTimeVariables(ctx context.Context, app store.App) (map[s
 	return out, nil
 }
 
+// secretBuildTimeVariables names the build-time variables marked secret, which
+// reach the build as BuildKit secrets and never as build arguments.
+func (d *Deployer) secretBuildTimeVariables(ctx context.Context, app store.App) (map[string]bool, error) {
+	rows, err := d.db.ListVariables(ctx, app.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, row := range rows {
+		if row.BuildTime && row.IsSecret {
+			out[row.Key] = true
+		}
+	}
+	return out, nil
+}
+
 // runtimeSpec captures the settings a deployment ran with, so a rollback can
 // restore them rather than only the image.
 func (d *Deployer) runtimeSpec(ctx context.Context, app store.App, env store.Environment) (string, error) {

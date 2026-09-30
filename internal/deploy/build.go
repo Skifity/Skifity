@@ -56,6 +56,10 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	if err != nil {
 		return "", err
 	}
+	secretArgs, err := d.secretBuildTimeVariables(ctx, app)
+	if err != nil {
+		return "", err
+	}
 
 	spec := builder.JobSpec{
 		Name: kube.ResourceName("build-"+app.Slug, shortID(deployment.ID)),
@@ -79,6 +83,7 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		RegistryInsecure: insecure,
 		RegistrySecret:   registrySecret,
 		BuildArgs:        buildArgs,
+		SecretBuildArgs:  secretArgs,
 		BuildKitAddress:  d.buildKitAddress(),
 	}
 	if app.SourceType == "upload" {
