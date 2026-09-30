@@ -825,13 +825,14 @@ The app itself never changes when you set these.
 ## Usage and warnings
 
 The panel reads every running app once a minute and keeps what it read for
-three days: CPU and memory, instances ready, restarts. The **Usage** card on
-the app's Overview draws the last hour, six hours, day or three days, as the
-busiest instance's share of its own limit — the number that gets an instance
-throttled at the CPU limit or killed at the memory limit, which a total across
-instances hides.
+three days: CPU and memory, instances ready, restarts, and the requests that
+reached it. The **Usage** card on the app's Overview draws the last hour, six
+hours, day or three days, as the busiest instance's share of its own limit —
+the number that gets an instance throttled at the CPU limit or killed at the
+memory limit, which a total across instances hides — and, under it, the app's
+requests (see [Requests](#requests)).
 
-Three thresholds are watched, and each is sent to the team's notification
+Four thresholds are watched, and each is sent to the team's notification
 channels (as **An app crossed a usage threshold**) once when it is crossed and
 once when it is over:
 
@@ -840,12 +841,56 @@ once when it is over:
 * **CPU** — the same for the CPU limit, off by default, since a busy app is using
   what it was given;
 * **restarts** — three restarts in ten minutes, by default, counted across
-  instances that are replaced.
+  instances that are replaced;
+* **server errors** — 10% or more of the requests that reached the app answered
+  with a 5xx, every minute for three minutes running, by default. It is only
+  judged when those three minutes hold at least 20 requests between them, so
+  one failed request on a quiet app is not an alarm, and a minute with no
+  requests at all neither raises nor ends it: an app everybody has given up on
+  has not recovered. It ends when three busy minutes are each well under the
+  line.
 
 Each is set on the same card; 0 turns one off. They are not checked while a
 deploy is in progress, when new instances starting and old ones stopping are
 expected. `GET /api/apps/{app}/metrics?range=6h` and `/api/apps/{app}/alerts`
 are the same for a script.
+
+### Requests
+
+k3s's ingress, Traefik, counts every request it hands to an app, and how long
+the app took to answer. The panel reads those counters once a minute on the
+same tick as usage — from every Traefik in the cluster, one per server, added
+together — and keeps the difference between two reads: how many requests, how
+many were answered with a 2xx, 3xx, 4xx and 5xx, and the median and 95th
+percentile of how long they took. The card draws requests per minute, the share
+of client errors (4xx) and server errors (5xx), and the 95th percentile; over
+the longer ranges each point is several minutes, and its 95th percentile is the
+slowest of them rather than an average that would hide it.
+
+What is counted is what reached the app. A request the firewall refused, the
+maintenance page, a password prompt or the redirect to HTTPS was answered
+before it got there and is not in these numbers. A request to an app that can
+scale to zero is counted as it went through KEDA's interceptor, so the time it
+took to wake the app is in its response time. A WebSocket or an event stream is
+a request, and how long it stayed open is left out of the response times.
+Requests from the environment's other apps, which do not go through the
+ingress, are not counted at all.
+
+The response times are estimated from Traefik's latency histogram, the way
+Prometheus's `histogram_quantile` does it, and are only as fine as its buckets.
+Traefik's own are 0.1, 0.3, 1.2 and 5 seconds, which would put almost every app
+at "about 50 ms"; the installer asks for finer ones in the Traefik
+configuration it writes (see [Knowing who the visitor is](firewall.md#knowing-who-the-visitor-is)), and a panel
+installed before that gets them by running the installer again. If you
+configure Traefik yourself, keep its Prometheus metrics on the entry point
+`metrics`, port 9100, which is k3s's default.
+
+When nothing is drawn, the card says why: the app has no domain, so nothing
+reaches it through the ingress; the panel has only just started, and the first
+minute is the difference between two reads; there is no Traefik in
+`kube-system`; or Traefik did not answer on its metrics port. A minute some of
+whose traffic could not be counted — one server's Traefik did not answer —
+is kept and marked, since what was counted is right but not all of it.
 
 ### A server's usage, and its disk
 

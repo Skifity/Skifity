@@ -86,6 +86,12 @@ if grep -q 'externalTrafficPolicy: Local' "$manifests/skifity-traefik.yaml" 2>/d
 else
   t_fail "the ingress configuration was not written"
 fi
+# Without finer buckets every app's response time reads as about 50 ms.
+if grep -q 'buckets: "0.005,' "$manifests/skifity-traefik.yaml" 2>/dev/null; then
+  t_pass "Traefik is asked for latency buckets fine enough to draw"
+else
+  t_fail "Traefik was left with latency buckets too coarse to draw"
+fi
 # An operator's own configuration of Traefik is not fought over.
 theirs="$WORKDIR/theirs"
 mkdir -p "$theirs"

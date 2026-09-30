@@ -10,6 +10,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/cluster"
+	"skifity/internal/kube"
 	"skifity/internal/notify"
 	"skifity/internal/settings"
 	"skifity/internal/store"
@@ -32,6 +33,7 @@ type fakeStore struct {
 
 	samples map[string][]store.AppSample
 	alerts  map[string]store.AppAlerts
+	traffic map[string][]store.AppTraffic
 
 	serverSamples map[string][]store.ServerSample
 	serverAlerts  map[string]store.ServerAlerts
@@ -46,6 +48,7 @@ func newFakeStore() *fakeStore {
 		settingValues: map[string]string{},
 		samples:       map[string][]store.AppSample{},
 		alerts:        map[string]store.AppAlerts{},
+		traffic:       map[string][]store.AppTraffic{},
 		serverSamples: map[string][]store.ServerSample{},
 		serverAlerts:  map[string]store.ServerAlerts{},
 	}
@@ -100,6 +103,22 @@ func (f *fakeStore) AppSamples(_ context.Context, appID string, since time.Time)
 }
 
 func (f *fakeStore) PruneAppSamples(context.Context, time.Time) error { return nil }
+
+func (f *fakeStore) RecordAppTraffic(_ context.Context, appID string, t store.AppTraffic) error {
+	t.At = t.At.UTC().Truncate(time.Minute)
+	f.traffic[appID] = append(f.traffic[appID], t)
+	return nil
+}
+
+func (f *fakeStore) AppTrafficSince(_ context.Context, appID string, since time.Time) ([]store.AppTraffic, error) {
+	out := []store.AppTraffic{}
+	for _, t := range f.traffic[appID] {
+		if !t.At.Before(since) {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
 
 func (f *fakeStore) GetAppAlerts(_ context.Context, appID string) (store.AppAlerts, error) {
 	if a, ok := f.alerts[appID]; ok {
@@ -188,6 +207,11 @@ type fakeCluster struct {
 	certs           map[string]cluster.CertificateState
 	deletedSpaces   []string
 	deleteNamespace error
+	traefik         []kube.TraefikPod
+}
+
+func (f *fakeCluster) ScrapeTraefik(context.Context) ([]kube.TraefikPod, error) {
+	return f.traefik, nil
 }
 
 func (f *fakeCluster) DeleteNamespace(_ context.Context, namespace string) error {

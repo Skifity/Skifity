@@ -106,6 +106,20 @@ func (c *Cluster) NodeDisks(ctx context.Context) (map[string]api.NodeDisk, error
 	return out, nil
 }
 
+// ScrapeTraefik reads every Traefik pod's metrics, for the requests each app
+// answered. A pod that did not answer is in the result with its error; only
+// the listing failing fails the call. Cluster-only: see kube.ScrapeTraefik.
+func (c *Cluster) ScrapeTraefik(ctx context.Context) ([]kube.TraefikPod, error) {
+	pods, err := c.client.ScrapeTraefik(ctx)
+	if err != nil {
+		if kube.IsUnreachable(err) {
+			return nil, errdoc.ClusterUnreachable(err)
+		}
+		return nil, err
+	}
+	return pods, nil
+}
+
 // AppStatus describes one app's live state.
 func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api.AppRuntimeStatus, error) {
 	raw, err := c.client.AppStatus(ctx, namespace, appSlug)

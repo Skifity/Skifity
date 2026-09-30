@@ -1,0 +1,63 @@
+# Where this came from. It is assembled from traefik/traefik at v3.6 (MIT
+# licence), not captured from a running Traefik:
+#
+#   * the entrypoint, router and *_total lines for whoami1@docker,
+#     service-without@file and service-resp@file are copied verbatim from the
+#     assertions in integration/simple_test.go, which are substrings of the
+#     /metrics answer of the real Traefik that test starts;
+#   * the HELP and TYPE lines are the help strings and metric types declared in
+#     pkg/observability/metrics/prometheus.go;
+#   * the histogram lines (buckets, _sum, _count) are laid out the way
+#     client_golang writes one, with Traefik's default buckets from that same
+#     file (0.1, 0.3, 1.2, 5) and the two requests the service answered;
+#   * the go_ and process_ lines are client_golang's standard collectors, which
+#     Traefik registers too, and are here so the parser meets metrics it has
+#     to skip, a negative value and exponent notation among them.
+#
+# The three kubernetes lines at the end are written for this test, in the
+# shape Traefik's Kubernetes Ingress provider names a service
+# (pkg/provider/kubernetes/ingress/kubernetes.go), for an app "web" in the
+# namespace "acme-shop-production" and the same app behind KEDA's interceptor.
+# HELP go_gc_duration_seconds A summary of the pause duration of garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 2.1e-05
+go_gc_duration_seconds{quantile="1"} 0.000403
+go_gc_duration_seconds_sum 0.001622
+go_gc_duration_seconds_count 12
+# HELP process_virtual_memory_max_bytes Maximum amount of virtual memory available in bytes.
+# TYPE process_virtual_memory_max_bytes gauge
+process_virtual_memory_max_bytes -1
+# HELP traefik_entrypoint_requests_total How many HTTP requests processed on an entrypoint, partitioned by status code, protocol, and method.
+# TYPE traefik_entrypoint_requests_total counter
+traefik_entrypoint_requests_total{code="200",entrypoint="webA",method="GET",protocol="http"} 1
+traefik_entrypoint_requests_total{code="413",entrypoint="webB",method="GET",protocol="http"} 1
+traefik_entrypoint_requests_total{code="500",entrypoint="webC",method="GET",protocol="http"} 1
+# HELP traefik_router_requests_total How many HTTP requests are processed on a router, partitioned by service, status code, protocol, and method.
+# TYPE traefik_router_requests_total counter
+traefik_router_requests_total{code="200",method="GET",protocol="http",router="router1@docker",service="whoami1@docker"} 1
+traefik_router_requests_total{code="200",method="GET",protocol="http",router="router2@docker",service="whoami1@docker"} 1
+# HELP traefik_service_request_duration_seconds How long it took to process the request on a service, partitioned by status code, protocol, and method.
+# TYPE traefik_service_request_duration_seconds histogram
+traefik_service_request_duration_seconds_bucket{code="200",method="GET",protocol="http",service="whoami1@docker",le="0.1"} 2
+traefik_service_request_duration_seconds_bucket{code="200",method="GET",protocol="http",service="whoami1@docker",le="0.3"} 2
+traefik_service_request_duration_seconds_bucket{code="200",method="GET",protocol="http",service="whoami1@docker",le="1.2"} 2
+traefik_service_request_duration_seconds_bucket{code="200",method="GET",protocol="http",service="whoami1@docker",le="5"} 2
+traefik_service_request_duration_seconds_bucket{code="200",method="GET",protocol="http",service="whoami1@docker",le="+Inf"} 2
+traefik_service_request_duration_seconds_sum{code="200",method="GET",protocol="http",service="whoami1@docker"} 0.0027
+traefik_service_request_duration_seconds_count{code="200",method="GET",protocol="http",service="whoami1@docker"} 2
+# HELP traefik_service_requests_bytes_total The total size of requests in bytes received by a service, partitioned by status code, protocol, and method.
+# TYPE traefik_service_requests_bytes_total counter
+traefik_service_requests_bytes_total{code="200",method="GET",protocol="http",service="service-without@file"} 0
+traefik_service_requests_bytes_total{code="200",method="GET",protocol="http",service="service-resp@file"} 0
+# HELP traefik_service_requests_total How many HTTP requests processed on a service, partitioned by status code, protocol, and method.
+# TYPE traefik_service_requests_total counter
+traefik_service_requests_total{code="200",method="GET",protocol="http",service="whoami1@docker"} 2
+traefik_service_requests_total{code="200",method="GET",protocol="http",service="service-without@file"} 1
+traefik_service_requests_total{code="200",method="GET",protocol="http",service="service-resp@file"} 1
+traefik_service_requests_total{code="200",method="GET",protocol="http",service="acme-shop-production-web-80@kubernetes"} 40
+traefik_service_requests_total{code="502",method="POST",protocol="http",service="acme-shop-production-web-80@kubernetes"} 3
+traefik_service_requests_total{code="200",method="GET",protocol="http",service="acme-shop-production-web-wake-8080@kubernetes"} 7
+# HELP traefik_service_responses_bytes_total The total size of responses in bytes returned by a service, partitioned by status code, protocol, and method.
+# TYPE traefik_service_responses_bytes_total counter
+traefik_service_responses_bytes_total{code="200",method="GET",protocol="http",service="service-without@file"} 31
+traefik_service_responses_bytes_total{code="200",method="GET",protocol="http",service="service-resp@file"} 31

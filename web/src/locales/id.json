@@ -540,12 +540,14 @@
     "alertName": {
       "memory": "memori",
       "cpu": "CPU",
-      "restarts": "restart"
+      "restarts": "restart",
+      "errors": "error server"
     },
     "alertField": {
       "memory_pct": "Memori, % dari batas",
       "cpu_pct": "CPU, % dari batas",
-      "restarts": "Restart dalam 10 menit"
+      "restarts": "Restart dalam 10 menit",
+      "server_errors_pct": "Error server, % dari permintaan"
     },
     "watchPaths": "Path yang dipantau",
     "watchPathsHelp": "Deploy saat push hanya jika push itu mengubah salah satunya. Satu path atau pola per baris, dari root repositori; baris yang diawali ! mengecualikan sesuatu. Kosong berarti deploy pada setiap push.",
@@ -621,7 +623,23 @@
     "healthTimeoutHelp": "Berapa lama satu pemeriksaan menunggu jawaban, dari {{min}} sampai {{max}}.",
     "runAsUser": "Jalankan sebagai pengguna",
     "runAsUserPlaceholder": "Ditentukan oleh image",
-    "runAsUserHelp": "ID pengguna untuk menjalankan image ini. Hanya diperlukan untuk image yang menamai penggunanya, seperti nobody, yang ditolak oleh pembatasan paling ketat karena tidak bisa memastikan sebuah nama bukan root: isikan nomornya (65534 untuk nobody). Kosongkan untuk menyerahkannya pada image; root tidak dapat dipilih."
+    "runAsUserHelp": "ID pengguna untuk menjalankan image ini. Hanya diperlukan untuk image yang menamai penggunanya, seperti nobody, yang ditolak oleh pembatasan paling ketat karena tidak bisa memastikan sebuah nama bukan root: isikan nomornya (65534 untuk nobody). Kosongkan untuk menyerahkannya pada image; root tidak dapat dipilih.",
+    "traffic": "Permintaan",
+    "trafficHelp": "Yang sampai ke app lewat domainnya, dihitung oleh ingress setiap menit dan disimpan tiga hari. Permintaan yang sudah dijawab oleh firewall, mode pemeliharaan, atau kata sandi tidak pernah sampai ke app dan tidak dihitung.",
+    "trafficRequests": "Permintaan per menit",
+    "trafficServerErrors": "Error server (5xx)",
+    "trafficClientErrors": "Error klien (4xx)",
+    "trafficLatency": "Waktu respons, persentil ke-95",
+    "trafficPartial": "Di beberapa menit, sebagian permintaan tidak terhitung: ingress di salah satu server tidak menjawab.",
+    "trafficWhy": {
+      "notRouted": "App ini tidak punya domain, jadi tidak ada yang sampai ke sana lewat ingress. Permintaan dari app lain di lingkungan yang sama tidak dihitung.",
+      "starting": "Panel baru saja mulai menghitung permintaan. Menit pertama muncul setelah pembacaan kedua, sekitar dua menit lagi.",
+      "reading": "Belum ada permintaan yang terhitung untuk app ini dalam periode ini.",
+      "no_traefik": "Tidak ada Traefik di namespace kube-system milik cluster, jadi permintaan tidak bisa dihitung. Skifity menghitungnya dari Traefik yang dipasang oleh k3s.",
+      "unreachable": "Traefik tidak menjawab di port metriknya, 9100, jadi permintaan sedang tidak dihitung. Jika Anda mengatur Traefik sendiri, biarkan metrik Prometheus-nya menyala.",
+      "no_cluster": "Panel tidak terhubung ke cluster, jadi tidak ada sumber untuk menghitung permintaan."
+    },
+    "alertsErrorsHelp": "Error server hanya dinilai selama tiga menit yang berisi setidaknya 20 permintaan, jadi satu permintaan gagal di app yang sepi tidak menjadi peringatan."
   },
   "deploy": {
     "title": "Deployment",

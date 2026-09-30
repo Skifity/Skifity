@@ -1914,12 +1914,14 @@ paths:
     get:
       operationId: appMetrics
       tags: [Apps]
-      summary: An app's usage over time
+      summary: An app's usage and requests over time
       parameters:
         - $ref: '#/components/parameters/metricsRange'
       responses:
         '200':
-          description: CPU, memory, readiness and restarts, in at most 120 buckets.
+          description: >-
+            CPU, memory, readiness and restarts, and the requests that reached the app through the
+            ingress, in at most 120 buckets.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AppMetrics'}
@@ -1943,7 +1945,10 @@ paths:
       operationId: setAppAlerts
       tags: [Apps]
       summary: Change an app's thresholds
-      description: Member. A percentage from 50 to 100, restarts from 1 to 100, or 0 for off.
+      description: >-
+        Member. Memory and CPU are a percentage from 50 to 100, restarts from 1 to 100, server errors a
+        percentage from 1 to 100; 0 turns any of them off. server_errors_pct may be left out, and then
+        keeps the value it had.
       requestBody:
         required: true
         content:
@@ -5342,6 +5347,45 @@ components:
               desired: {type: integer}
               restarts: {type: integer}
               usage_known: {type: boolean}
+        traffic:
+          type: object
+          description: >-
+            The requests that reached the app through the ingress, counted from Traefik's metrics once a
+            minute and kept for three days. Requests the firewall, maintenance or a password answered
+            never reached the app and are not counted.
+          required: [source, routed, points]
+          properties:
+            source:
+              type: string
+              enum: [no_cluster, starting, reading, no_traefik, unreachable]
+              description: >-
+                Whether the ingress could be read on the watcher's last pass: reading when it could;
+                starting before the second read, the first being only something to compare with;
+                no_traefik when no Traefik runs in kube-system; unreachable when Traefik did not
+                answer on its metrics port; no_cluster when the panel has no cluster.
+            routed:
+              type: boolean
+              description: Whether the app has a port and a domain, so that anything reaches it through the ingress.
+            points:
+              type: array
+              items:
+                type: object
+                required: [at, minutes, requests, status_2xx, status_3xx, status_4xx, status_5xx, p50_ms, p95_ms, partial]
+                properties:
+                  at: {type: string, format: date-time}
+                  minutes: {type: integer, description: 'Minutes counted in the bucket; a rate is requests / minutes.'}
+                  requests: {type: integer}
+                  status_2xx: {type: integer}
+                  status_3xx: {type: integer}
+                  status_4xx: {type: integer}
+                  status_5xx: {type: integer}
+                  p50_ms:
+                    type: [number, 'null']
+                    description: The minutes' medians averaged by their requests, in milliseconds.
+                  p95_ms:
+                    type: [number, 'null']
+                    description: The slowest minute's 95th percentile, in milliseconds.
+                  partial: {type: boolean, description: 'Some minute could not count all of its traffic, so the numbers are a floor.'}
 
     AppAlerts:
       type: object
@@ -5351,6 +5395,12 @@ components:
         memory_pct: {type: integer, description: '50 to 100, or 0 for off.'}
         cpu_pct: {type: integer, description: '50 to 100, or 0 for off.'}
         restarts: {type: integer, description: 'Restarts in ten minutes, 1 to 100, or 0 for off.'}
+        server_errors_pct:
+          type: integer
+          description: >-
+            The share of requests answered with a server error (5xx) every minute for three minutes, with
+            at least 20 requests between them; 1 to 100, or 0 for off. 10 by default. Left out of a
+            change, it keeps the value it had.
         firing:
           type: [array, 'null']
           readOnly: true

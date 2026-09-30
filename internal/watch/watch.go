@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"skifity/internal/api"
@@ -23,6 +24,7 @@ import (
 	"skifity/internal/runsafe"
 	"skifity/internal/settings"
 	"skifity/internal/store"
+	"skifity/internal/traffic"
 )
 
 // Interval is how often the cluster is compared with the database.
@@ -48,6 +50,9 @@ type Store interface {
 	GetAppAlerts(ctx context.Context, appID string) (store.AppAlerts, error)
 	SetAlertsFiring(ctx context.Context, appID string, firing []string) error
 
+	RecordAppTraffic(ctx context.Context, appID string, t store.AppTraffic) error
+	AppTrafficSince(ctx context.Context, appID string, since time.Time) ([]store.AppTraffic, error)
+
 	RecordServerSample(ctx context.Context, serverID string, s store.ServerSample) error
 	ServerSamples(ctx context.Context, serverID string, since time.Time) ([]store.ServerSample, error)
 	PruneServerSamples(ctx context.Context, before time.Time) error
@@ -70,6 +75,9 @@ type Cluster interface {
 	AppStatus(ctx context.Context, namespace, appSlug string) (api.AppRuntimeStatus, error)
 	CertificateStatus(ctx context.Context, namespace, name string) (cluster.CertificateState, error)
 	DeleteNamespace(ctx context.Context, namespace string) error
+	// ScrapeTraefik reads the ingress's counters, for the requests apps
+	// answered.
+	ScrapeTraefik(ctx context.Context) ([]kube.TraefikPod, error)
 }
 
 // Publisher is the part of the event hub a watcher uses to refresh open pages.
@@ -86,13 +94,26 @@ type Watcher struct {
 	log      *slog.Logger
 	// Interval is how often Run compares the two. Zero means Interval.
 	interval time.Duration
+
+	// traffic remembers the ingress's counters from the last pass, which the
+	// next one is compared with. Only the pass touches it.
+	traffic traffic.Collector
+	// trafficState is whether the ingress could be read, for the API; it is
+	// read while a pass writes it.
+	trafficMu    sync.Mutex
+	trafficState string
 }
 
 // New builds a Watcher. cluster, hub and notifier may all be nil, and the
 // watcher then does correspondingly less rather than crashing: a panel with no
 // cluster still has to start.
 func New(db Store, c Cluster, hub Publisher, notifier notify.Notifier, log *slog.Logger) *Watcher {
-	return &Watcher{db: db, cluster: c, hub: hub, notifier: notifier, log: log, interval: Interval}
+	state := traffic.StateStarting
+	if c == nil {
+		state = traffic.StateNoCluster
+	}
+	return &Watcher{db: db, cluster: c, hub: hub, notifier: notifier, log: log, interval: Interval,
+		trafficState: state}
 }
 
 // Run compares the cluster with the database until the context is cancelled.
@@ -297,6 +318,11 @@ func (w *Watcher) checkApps(ctx context.Context) {
 	}
 
 	now := time.Now().UTC()
+	// Before the apps one by one, so this minute's requests are recorded by
+	// the time each app's thresholds are checked against them.
+	if len(apps) > 0 {
+		w.recordTraffic(ctx, apps, now)
+	}
 	for _, app := range apps {
 		status, err := w.cluster.AppStatus(ctx, app.Namespace, app.Slug)
 		if err != nil {

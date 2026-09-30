@@ -548,12 +548,14 @@
     "alertName": {
       "memory": "memory",
       "cpu": "CPU",
-      "restarts": "restarts"
+      "restarts": "restarts",
+      "errors": "server errors"
     },
     "alertField": {
       "memory_pct": "Memory, % of the limit",
       "cpu_pct": "CPU, % of the limit",
-      "restarts": "Restarts in 10 minutes"
+      "restarts": "Restarts in 10 minutes",
+      "server_errors_pct": "Server errors, % of requests"
     },
     "watchPaths": "Watch paths",
     "watchPathsHelp": "Deploy on a push only when it changes one of these. One path or pattern per line, from the repository's root; a line starting with ! leaves something out. Empty deploys on every push.",
@@ -631,7 +633,23 @@
     "healthTimeoutHelp": "How long one check waits for an answer, from {{min}} to {{max}}.",
     "runAsUser": "Run as user",
     "runAsUserPlaceholder": "The image decides",
-    "runAsUserHelp": "The user id to run this image as. Only needed for an image that names its user, such as nobody, which the strictest confinement refuses because it cannot see a name is not root: give its number (65534 for nobody). Empty leaves it to the image; root cannot be chosen."
+    "runAsUserHelp": "The user id to run this image as. Only needed for an image that names its user, such as nobody, which the strictest confinement refuses because it cannot see a name is not root: give its number (65534 for nobody). Empty leaves it to the image; root cannot be chosen.",
+    "traffic": "Requests",
+    "trafficHelp": "What reached the app through its domains, counted by the ingress every minute and kept for three days. A request the firewall, maintenance or a password answered never reached the app and is not counted.",
+    "trafficRequests": "Requests per minute",
+    "trafficServerErrors": "Server errors (5xx)",
+    "trafficClientErrors": "Client errors (4xx)",
+    "trafficLatency": "Response time, 95th percentile",
+    "trafficPartial": "Some minutes are missing part of their requests: the ingress on one of the servers did not answer.",
+    "trafficWhy": {
+      "notRouted": "This app has no domain, so nothing reaches it through the ingress. Requests from the environment's other apps are not counted.",
+      "starting": "The panel started counting requests a moment ago. The first minute appears after the second reading, about two minutes from now.",
+      "reading": "No requests have been counted for this app in this period yet.",
+      "no_traefik": "There is no Traefik in the cluster's kube-system namespace, so requests cannot be counted. Skifity counts them from the Traefik that k3s installs.",
+      "unreachable": "Traefik did not answer on its metrics port, 9100, so requests are not being counted. If you configure Traefik yourself, keep its Prometheus metrics on.",
+      "no_cluster": "The panel is not connected to a cluster, so there is nothing to count requests from."
+    },
+    "alertsErrorsHelp": "Server errors are only judged over three minutes with at least 20 requests between them, so one failed request on a quiet app is not a warning."
   },
   "deploy": {
     "title": "Deployments",

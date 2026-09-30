@@ -406,6 +406,14 @@ EOF
 # The tunnel reaches Traefik by its cluster address, which the policy does not
 # touch. An operator's own HelmChartConfig for Traefik is left alone: two files
 # for one object would undo each other on every start.
+#
+# The panel draws each app's response times from Traefik's latency histogram
+# (internal/traffic). Traefik's own buckets are 0.1, 0.3, 1.2 and 5 seconds,
+# which puts nearly every web app in the first one and makes its median "about
+# 50 ms" whatever it really is; these are Prometheus's defaults, fine enough to
+# tell 20 ms from 80. Prometheus metrics themselves, and their per-service
+# labels, are on in k3s's Traefik already and are not touched. Changing this
+# file makes k3s upgrade Traefik, which restarts it one server at a time.
 configure_ingress() {
 	ours="${K3S_MANIFESTS_DIR}/skifity-traefik.yaml"
 	mkdir -p "$K3S_MANIFESTS_DIR"
@@ -414,6 +422,7 @@ configure_ingress() {
 		if grep -q 'kind: *HelmChartConfig' "$other" && grep -q 'name: *traefik *$' "$other"; then
 			note "Traefik is configured by $(basename "$other"); it is left as it is."
 			note "Set service.spec.externalTrafficPolicy: Local there, or the firewall sees one address for everybody."
+			note "Keep Traefik's Prometheus metrics on port 9100 there, or apps' requests are not counted."
 			return 0
 		fi
 	done
@@ -432,6 +441,9 @@ spec:
     service:
       spec:
         externalTrafficPolicy: Local
+    metrics:
+      prometheus:
+        buckets: "0.005,0.01,0.025,0.05,0.1,0.25,0.5,1,2.5,5,10"
 TRAEFIK
 	if cmp -s "${ours}.new" "$ours" 2>/dev/null; then
 		rm -f "${ours}.new"

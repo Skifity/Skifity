@@ -158,7 +158,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		Cluster: nilIfNil(clusterAdapter), Provisioner: provisioner, Deployer: deployer,
 		Databases: databases, Backups: backups, Plugins: pluginEvents,
 		Frontend: frontend, SetupToken: setupToken, Metrics: registry,
-		Uploads: uploads,
+		Uploads: uploads, Traffic: watcher,
 	})
 
 	// Anything left running when the panel stopped is marked failed with an

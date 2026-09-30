@@ -33,6 +33,9 @@ type Client struct {
 	// systemNamespace is where the panel and the components it installs live.
 	systemNamespace string
 	config          *rest.Config
+	// fetchTraefik reads one Traefik pod's metrics; nil is through the API
+	// server. See traefik.go.
+	fetchTraefik traefikFetch
 }
 
 // Options configure a Client.

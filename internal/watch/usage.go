@@ -151,6 +151,17 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 		return
 	}
 	crossed, clear := evaluate(thresholds, recent, now)
+	requests, err := w.db.AppTrafficSince(ctx, app.ID, now.Add(-restartWindow-time.Minute))
+	if err != nil {
+		w.log.Warn("could not read an app's recent requests", "app", app.ID, "error", err)
+	}
+	// Without its minutes the threshold is left as it was, like any other
+	// whose readings are missing.
+	if failing, over := evaluateServerErrors(thresholds.ServerErrorsPct, requests, now); failing != nil {
+		crossed = append(crossed, *failing)
+	} else if over {
+		clear = append(clear, "errors")
+	}
 
 	// What fires now: what was firing and has not clearly ended, and what
 	// has just crossed.
@@ -202,6 +213,8 @@ func alertTitle(app, name string) string {
 		return app + " is close to its memory limit"
 	case "cpu":
 		return app + " is close to its CPU limit"
+	case "errors":
+		return app + " is failing requests"
 	default:
 		return app + " keeps restarting"
 	}
@@ -213,6 +226,9 @@ func alertNoun(name string) string {
 	}
 	if name == "cpu" {
 		return "CPU"
+	}
+	if name == "errors" {
+		return "server error"
 	}
 	return name
 }

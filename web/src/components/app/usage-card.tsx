@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { ActivityIcon, BellIcon } from "lucide-react"
 
 import { ErrorDisplay } from "@/components/error-display"
+import { TrafficCharts, type Traffic } from "@/components/app/traffic-charts"
 import { UsageChart } from "@/components/usage-chart"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,17 +30,25 @@ type MetricPoint = {
   usage_known: boolean
 }
 
-type Metrics = { range: string; points: MetricPoint[] }
+type Metrics = { range: string; points: MetricPoint[]; traffic: Traffic }
 
-type Alerts = { memory_pct: number; cpu_pct: number; restarts: number; firing: string[] }
+type Alerts = {
+  memory_pct: number
+  cpu_pct: number
+  restarts: number
+  server_errors_pct: number
+  firing: string[]
+}
+
+const ALERT_FIELDS = ["memory_pct", "cpu_pct", "restarts", "server_errors_pct"] as const
 
 const RANGES = ["1h", "6h", "24h", "72h"] as const
 
 /**
- * What the app used over the last hours, against the thresholds it is watched
- * against. The watcher reads every app once a minute and keeps three days; the
- * lines are the busiest instance as a share of its limit, which is what gets
- * an instance throttled or killed.
+ * What the app used over the last hours, and the requests it answered, against
+ * the thresholds it is watched against. The watcher reads every app once a
+ * minute and keeps three days; the usage lines are the busiest instance as a
+ * share of its limit, which is what gets an instance throttled or killed.
  */
 export function UsageCard({ app }: { app: App }) {
   const { t } = useTranslation()
@@ -111,6 +120,12 @@ export function UsageCard({ app }: { app: App }) {
             </div>
           </div>
         )}
+        {metrics.data?.traffic && (
+          <TrafficCharts
+            traffic={metrics.data.traffic}
+            serverErrorsThreshold={alerts.data?.server_errors_pct}
+          />
+        )}
         {alerts.data && <AlertSettings app={app} alerts={alerts.data} />}
       </CardContent>
     </Card>
@@ -118,15 +133,16 @@ export function UsageCard({ app }: { app: App }) {
 }
 
 /**
- * The thresholds, as three numbers. Zero is off. Crossing one is said once to
+ * The thresholds, as four numbers. Zero is off. Crossing one is said once to
  * the team's notification channels, and so is coming back under it.
  */
 function AlertSettings({ app, alerts }: { app: App; alerts: Alerts }) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<Record<"memory_pct" | "cpu_pct" | "restarts", string>>({
+  const [draft, setDraft] = useState<Record<(typeof ALERT_FIELDS)[number], string>>({
     memory_pct: String(alerts.memory_pct),
     cpu_pct: String(alerts.cpu_pct),
     restarts: String(alerts.restarts),
+    server_errors_pct: String(alerts.server_errors_pct),
   })
   const save = useMutation({
     mutationFn: () =>
@@ -134,6 +150,7 @@ function AlertSettings({ app, alerts }: { app: App; alerts: Alerts }) {
         memory_pct: Number(draft.memory_pct) || 0,
         cpu_pct: Number(draft.cpu_pct) || 0,
         restarts: Number(draft.restarts) || 0,
+        server_errors_pct: Number(draft.server_errors_pct) || 0,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["alerts", app.id] }),
   })
@@ -151,6 +168,7 @@ function AlertSettings({ app, alerts }: { app: App; alerts: Alerts }) {
         {t("apps.alertsTitle")}
       </div>
       <p className="text-xs text-muted-foreground">{t("apps.alertsHelp")}</p>
+      <p className="text-xs text-muted-foreground">{t("apps.alertsErrorsHelp")}</p>
       {alerts.firing.length > 0 && (
         <p className="text-xs font-medium text-destructive">
           {t("apps.alertsFiring", {
@@ -158,8 +176,8 @@ function AlertSettings({ app, alerts }: { app: App; alerts: Alerts }) {
           })}
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {(["memory_pct", "cpu_pct", "restarts"] as const).map((field) => (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {ALERT_FIELDS.map((field) => (
           <div key={field} className="space-y-1">
             <Label htmlFor={`alert-${field}`} className="text-xs">
               {t(`apps.alertField.${field}`)}

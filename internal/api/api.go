@@ -65,6 +65,10 @@ type Server struct {
 	// resolver is what a domain's DNS is checked through; see domain_dns.go.
 	resolver Resolver
 
+	// traffic says whether the ingress's request counters could be read. Nil
+	// is a panel with no watcher, which reads nothing.
+	traffic TrafficSource
+
 	// frontend serves the embedded UI.
 	frontend http.Handler
 
@@ -91,7 +95,10 @@ type Options struct {
 	// Nil is a panel with no plugins, and every built-in channel still works.
 	Channels notify.Provider
 	// Uploads is where the code of apps with no repository is kept.
-	Uploads    *upload.Store
+	Uploads *upload.Store
+	// Traffic is the watcher, which reads the ingress's request counters and
+	// knows whether it could.
+	Traffic    TrafficSource
 	Frontend   http.Handler
 	SetupToken string
 	// Resolver is what a domain's DNS is checked through. Nil is the
@@ -121,6 +128,7 @@ func New(opts Options) *Server {
 		channels:    opts.Channels,
 		uploads:     opts.Uploads,
 		resolver:    opts.Resolver,
+		traffic:     opts.Traffic,
 		frontend:    opts.Frontend,
 		setup:       newSetupState(opts.SetupToken),
 		metrics:     opts.Metrics,

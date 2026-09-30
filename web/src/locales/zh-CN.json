@@ -540,12 +540,14 @@
     "alertName": {
       "memory": "内存",
       "cpu": "CPU",
-      "restarts": "重启"
+      "restarts": "重启",
+      "errors": "服务器错误"
     },
     "alertField": {
       "memory_pct": "内存，占上限的 %",
       "cpu_pct": "CPU，占上限的 %",
-      "restarts": "10 分钟内的重启次数"
+      "restarts": "10 分钟内的重启次数",
+      "server_errors_pct": "服务器错误，占请求的 %"
     },
     "watchPaths": "监视路径",
     "watchPathsHelp": "仅当推送更改了其中之一时才部署。每行一个路径或模式，从仓库根目录开始；以 ! 开头的行用于排除内容。留空则每次推送都部署。",
@@ -621,7 +623,23 @@
     "healthTimeoutHelp": "一次检查等待响应的时长，范围 {{min}} 到 {{max}}。",
     "runAsUser": "运行用户",
     "runAsUserPlaceholder": "由镜像决定",
-    "runAsUserHelp": "运行此镜像所用的用户 ID。仅当镜像以名称指定用户（例如 nobody）时才需要：最严格的限制级别会拒绝这类镜像，因为无法从名称判断它不是 root。请填写其编号（nobody 为 65534）。留空则由镜像决定；不能选择 root。"
+    "runAsUserHelp": "运行此镜像所用的用户 ID。仅当镜像以名称指定用户（例如 nobody）时才需要：最严格的限制级别会拒绝这类镜像，因为无法从名称判断它不是 root。请填写其编号（nobody 为 65534）。留空则由镜像决定；不能选择 root。",
+    "traffic": "请求",
+    "trafficHelp": "通过域名到达应用的请求，由 ingress 每分钟统计一次，保留三天。被防火墙、维护模式或密码直接应答的请求从未到达应用，不计入。",
+    "trafficRequests": "每分钟请求数",
+    "trafficServerErrors": "服务器错误（5xx）",
+    "trafficClientErrors": "客户端错误（4xx）",
+    "trafficLatency": "响应时间，第 95 百分位",
+    "trafficPartial": "部分分钟的请求没有统计全：其中一台服务器上的 ingress 没有应答。",
+    "trafficWhy": {
+      "notRouted": "这个应用没有域名，所以没有任何请求能通过 ingress 到达它。来自同一环境中其他应用的请求不计入。",
+      "starting": "面板刚开始统计请求。第一分钟的数据会在第二次读取后出现，大约两分钟后。",
+      "reading": "这个时段内还没有统计到这个应用的任何请求。",
+      "no_traefik": "集群的 kube-system 命名空间中没有 Traefik，所以无法统计请求。Skifity 从 k3s 安装的 Traefik 统计请求。",
+      "unreachable": "Traefik 没有在其指标端口 9100 上应答，所以目前没有在统计请求。如果你自己配置 Traefik，请保持它的 Prometheus 指标开启。",
+      "no_cluster": "面板没有连接到集群，所以没有可以统计请求的来源。"
+    },
+    "alertsErrorsHelp": "只有在三分钟内总共至少有 20 个请求时才会判断服务器错误，所以访问量很小的应用偶尔失败一次不会触发警告。"
   },
   "deploy": {
     "title": "部署记录",

@@ -66,10 +66,15 @@ func (db *DB) AppSamples(ctx context.Context, appID string, since time.Time) ([]
 	return out, rows.Err()
 }
 
-// PruneAppSamples forgets samples older than a time.
+// PruneAppSamples forgets samples older than a time: what apps used and the
+// requests they answered alike, which are drawn side by side and kept for as
+// long as each other.
 func (db *DB) PruneAppSamples(ctx context.Context, before time.Time) error {
 	if _, err := db.Exec(ctx, `DELETE FROM app_samples WHERE at < ?`, FormatTime(before.UTC())); err != nil {
 		return fmt.Errorf("prune app samples: %w", err)
+	}
+	if _, err := db.Exec(ctx, `DELETE FROM app_traffic WHERE at < ?`, FormatTime(before.UTC())); err != nil {
+		return fmt.Errorf("prune app traffic: %w", err)
 	}
 	return nil
 }
@@ -84,23 +89,33 @@ type AppAlerts struct {
 	// Restarts fires when the app's instances restart this many times in ten
 	// minutes.
 	Restarts int `json:"restarts"`
+	// ServerErrorsPct fires when at least this share of the requests that
+	// reached the app were answered with a server error (5xx), every minute
+	// for three minutes running.
+	ServerErrorsPct int `json:"server_errors_pct"`
 	// Firing is which of them are going off now.
 	Firing []string `json:"firing"`
 }
 
 // DefaultAppAlerts is what an app is watched against until somebody says.
 // CPU is off: a busy app is using what it was given, and throttling is not
-// an outage the way running out of memory is.
+// an outage the way running out of memory is. Server errors are on, at one
+// request in ten: that is not an app under pressure but one failing the
+// people using it, which is what a warning is for. It is judged over three
+// minutes and only with enough requests to mean something — see
+// internal/watch — so a quiet app's one bad request is not an alarm. The
+// column's default in 0045_app_traffic.sql is the same number.
 func DefaultAppAlerts() AppAlerts {
-	return AppAlerts{MemoryPct: 90, Restarts: 3, Firing: []string{}}
+	return AppAlerts{MemoryPct: 90, Restarts: 3, ServerErrorsPct: 10, Firing: []string{}}
 }
 
 // GetAppAlerts returns an app's thresholds, or the defaults.
 func (db *DB) GetAppAlerts(ctx context.Context, appID string) (AppAlerts, error) {
 	a := DefaultAppAlerts()
 	var firing string
-	err := db.QueryRowContext(ctx, `SELECT memory_pct, cpu_pct, restarts, firing FROM app_alerts WHERE app_id = ?`,
-		appID).Scan(&a.MemoryPct, &a.CPUPct, &a.Restarts, &firing)
+	err := db.QueryRowContext(ctx, `SELECT memory_pct, cpu_pct, restarts, server_errors_pct, firing
+		FROM app_alerts WHERE app_id = ?`,
+		appID).Scan(&a.MemoryPct, &a.CPUPct, &a.Restarts, &a.ServerErrorsPct, &firing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, nil
 	}
@@ -115,9 +130,11 @@ func (db *DB) GetAppAlerts(ctx context.Context, appID string) (AppAlerts, error)
 
 // SetAppAlerts stores an app's thresholds, keeping what is firing.
 func (db *DB) SetAppAlerts(ctx context.Context, appID string, a AppAlerts) error {
-	_, err := db.Exec(ctx, `INSERT INTO app_alerts (app_id, memory_pct, cpu_pct, restarts) VALUES (?,?,?,?)
+	_, err := db.Exec(ctx, `INSERT INTO app_alerts (app_id, memory_pct, cpu_pct, restarts, server_errors_pct)
+		VALUES (?,?,?,?,?)
 		ON CONFLICT (app_id) DO UPDATE SET memory_pct = excluded.memory_pct, cpu_pct = excluded.cpu_pct,
-			restarts = excluded.restarts`, appID, a.MemoryPct, a.CPUPct, a.Restarts)
+			restarts = excluded.restarts, server_errors_pct = excluded.server_errors_pct`,
+		appID, a.MemoryPct, a.CPUPct, a.Restarts, a.ServerErrorsPct)
 	if err != nil {
 		return fmt.Errorf("store an app's alerts: %w", err)
 	}
@@ -127,9 +144,10 @@ func (db *DB) SetAppAlerts(ctx context.Context, appID string, a AppAlerts) error
 // SetAlertsFiring records which of an app's alerts are going off.
 func (db *DB) SetAlertsFiring(ctx context.Context, appID string, firing []string) error {
 	defaults := DefaultAppAlerts()
-	_, err := db.Exec(ctx, `INSERT INTO app_alerts (app_id, memory_pct, cpu_pct, restarts, firing) VALUES (?,?,?,?,?)
+	_, err := db.Exec(ctx, `INSERT INTO app_alerts (app_id, memory_pct, cpu_pct, restarts, server_errors_pct, firing)
+		VALUES (?,?,?,?,?,?)
 		ON CONFLICT (app_id) DO UPDATE SET firing = excluded.firing`,
-		appID, defaults.MemoryPct, defaults.CPUPct, defaults.Restarts, strings.Join(firing, ","))
+		appID, defaults.MemoryPct, defaults.CPUPct, defaults.Restarts, defaults.ServerErrorsPct, strings.Join(firing, ","))
 	if err != nil {
 		return fmt.Errorf("record firing alerts: %w", err)
 	}
