@@ -5733,7 +5733,60 @@ And the interface:
   kind; a switch, a list and a number are offered now, and a value that does not
   fit is refused. Turning a plugin on or off no longer discards unsaved edits.
 
-## Nine database engines
+## Phase 112 — Coolify, Dokploy and Kubero, read from their source
+
+The earlier research read documentation, changelogs and issue trackers. This
+phase cloned the three products Skifity is most often compared with — Coolify
+(Laravel on Docker), Dokploy (Next.js on Swarm) and Kubero (a Kubernetes
+operator) — read their code, then read Skifity's against it.
+`docs/research/source-audit.md` is the page about what was found; this section
+is what was done about it, in commit order.
+
+**Defects the comparison found in Skifity, fixed first.** Database passwords on
+the backup pod's command line (`0d1e5da`); a secret build variable passed as a
+build argument, which Docker writes into the image's history (`7123905`); a
+backup due while the panel was down skipped without a word (`e61837d`); ten
+templates keeping their data where a restart loses it (`4f0e5b3`); 32 images
+named by a major line rather than a release (`c9bc382`); two templates public
+behind an HTTP ingress that could never reach them (`62d2adb`); four channel
+kinds the database refused to store (`faeecc1`); a backup taken by hand pushing
+the scheduled one out of retention (`e215a65`); k3s's Traefik refusing the
+ExternalName backend every scale-to-zero app is reached through, so each would
+have answered 404 (`784fa9f`); two templates pointing at images nobody can pull
+(`66f305f`); and one-off commands pinning the group where the app leaves it to
+the image (`1c2310f`).
+
+**What they had and Skifity did not.** Files mounted at their paths (`374b40c`,
+`514aa3b`); templates with a command, files and a database handed over in
+pieces, and 92 more of them (`88a310d`, `f9b4bb2`, `b555b38`); a team's own
+registry credentials (`eb520c3`); an OpenAPI description with a test that no
+route is left out (`a0f45bd`); public TCP and UDP ports (`62d2adb`); deploy on
+a tag, `[skip ci]`, repository and branch pickers (`3c39d94`); run a scheduled
+command now (`138d296`); a build queue (`94e6e9b`); a password reset by email
+(`adddd03`); cloning an environment (`c09ffc9`); an MCP server that does more
+than deploy (`e07ac76`); editing and routing notification channels, Teams and
+Gotify (`faeecc1`); configurable health checks and a DNS check before a
+certificate (`8ed96a2`); a server hardening report (`d2480c7`); requests, errors
+and response times per app (`6fa2876`); hostname redirects (`6308052`); API
+tokens limited to networks (`977b982`); a preview started by hand (`a114e05`);
+nine database engines (`f4f9d09`); image vulnerability scanning (`ca539aa`);
+drift detection and the events feed (`080fa91`); a team's own certificates
+(`b16f93f`); Bitbucket (`505b79d`); a team's own template catalogues
+(`75ff954`); variables read from secret managers (`25e2a18`); passkeys
+(`6c3eee5`).
+
+**Built because the audit showed the need, though none of the three has it.**
+Run as user (`6f50d5d`, `1c2310f`): Skifity is the only one of the four that
+enforces a non-root user, and 109 catalogue services name theirs rather than
+numbering it. Scheduled backups counted apart from those taken by hand
+(`e215a65`). `check:destructive` in CI (`bed041f`): the check existed, failed,
+and nothing ran it — the gap `make check` warns about, again.
+
+Not executed, as everywhere in this file: nothing here has run against a
+cluster, a real Bitbucket, a real secret manager, or a browser with a real
+authenticator. Each part below says what its tests stand in for.
+
+### Nine database engines
 
 Three engines became nine: MySQL (now Oracle's own image; see ADR-0023),
 MariaDB, MongoDB, Valkey, Dragonfly, ClickHouse and Memcached beside
@@ -5777,7 +5830,7 @@ command, arguments, probes or literal values; the Redis and Valkey server
 commands, and every backup and restore script, are run against stub clients
 that record their arguments. None of it has run against a cluster.
 
-## Phase 112 — what was changed outside the panel, and what Kubernetes said
+### What was changed outside the panel, and what Kubernetes said
 
 The README invites people to use kubectl, and nothing noticed when they did:
 an edited Deployment ran as edited until the next deploy put it back, and the
@@ -5853,7 +5906,7 @@ real controllers (KEDA, cert-manager, Traefik) show up as on the fields the
 panel sets, and the event reasons a real kubelet writes. Scheduled commands and
 databases are not compared for drift.
 
-## Bitbucket Cloud as a Git source
+### Bitbucket Cloud as a Git source
 
 A connection can be to Bitbucket Cloud, with everything the other kinds do:
 cloning a private repository, the repository and branch pickers, the webhook
@@ -5894,6 +5947,58 @@ not the token check, the lists, a clone, a webhook delivery, a status or a
 comment. The BBQL search (`name ~ "…"`), a branch name with a slash in a
 directory listing, and whether a status's `url` may be left out are read from
 the documentation and not seen working.
+
+### A team's own certificates
+
+A team admin uploads a chain and its key; every HTTPS domain of the team whose
+hostname it covers is served with it instead of Let's Encrypt. The upload is
+checked in `internal/tlscert` (the key matches the leaf, the chain is put
+leaf-first, expired, nameless, weak and encrypted keys are refused with why),
+the key is sealed to the team and certificate, and no answer contains it.
+Matching is by the certificate's names — a wildcard covers one label, and of
+several the one expiring last wins. Those hostnames go in a second Ingress,
+`<app>-own-tls`, with no cert-manager annotation and the same middlewares, and a
+`kubernetes.io/tls` Secret per certificate that each sync prunes. Because
+Traefik picks certificates by name for the whole cluster, a certificate naming
+another team's hostname is refused. `certificate.expiring` is sent once at 21,
+7 and 1 days. Not executed: two Ingresses for one app in a real Traefik beside a
+real cert-manager.
+
+### A team's own template catalogues
+
+The checks the built-in catalogue's tests ran became functions in
+`internal/templates/validate.go`, and a team's catalogue — an index, or a
+`.tar.gz` or `.zip` of templates — is held to the same ones; a template that
+fails is listed with its reasons and cannot be installed. Downloads go through
+netguard, stay on https, drop the team's header when a redirect changes host,
+and are capped in size, entries and templates. Each catalogue refreshes once a
+day and keeps its last good copy. Not executed: a real catalogue downloaded from
+a real host.
+
+### Variables read from secret managers
+
+A variable can point at a secret in Vault or OpenBao, Infisical, Doppler or AWS
+Secrets Manager instead of holding a value. Connections sign in before they are
+saved and their credentials are sealed; a reference is read once when it is
+set. Values are read where the app's Secret is written, a build-time one is
+part of the build fingerprint, and one that cannot be read stops the deploy or
+sync before the cluster is touched. Refresh compares sealed digests and rolls
+out or rebuilds only what changed. The drift check reads referenced values from
+the app's Secret rather than asking the managers every five minutes. AWS SigV4
+is written with the standard library and checked against AWS's published
+vector. Not executed: any real manager.
+
+### Passkeys
+
+WebAuthn through go-webauthn: discoverable credentials, user verification
+required, the relying party taken from the panel's configured address and never
+the request's Host, so passkeys are offered only on https or localhost.
+Challenges are single-use rows, a sign-in challenge is bound to the browser by
+an HttpOnly cookie, a counter that does not go up is refused and audited, and
+failures share the password lockout. The tests use a software authenticator
+written from the specification rather than the library. Not executed: a real
+browser and a real authenticator; conditional UI and Safari's user-gesture rule
+in particular.
 
 ## Idle resource usage
 

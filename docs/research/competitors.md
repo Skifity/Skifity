@@ -12,6 +12,11 @@ sources.
 This page is the summary. The numbers below come from those files, which carry
 the sources and the dates they were read.
 
+The three products Skifity is most often compared with — Coolify, Dokploy and
+Kubero — were then cloned and read line by line against Skifity's own code.
+That pass, what it found in Skifity, and a scorecard of all four are in
+[source-audit.md](source-audit.md).
+
 ## The products
 
 | Group | Product | What it is, in one line | File |
