@@ -105,6 +105,10 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		}
 	}
 
+	if len(buildArgs) > 0 {
+		spec.BuildVarsSecret = kube.ResourceName(spec.Name, "vars")
+	}
+
 	job, err := builder.BuildJob(spec)
 	if err != nil {
 		return "", errdoc.BadRequest(err.Error())
@@ -120,10 +124,21 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", fmt.Errorf("clear the previous build: %w", err)
 	}
 
+	// The variables' values go in a Secret of their own for as long as the
+	// build runs, never into the Job: anybody who can list Jobs in the build
+	// namespace can read a Job's spec.
+	if vars := builder.BuildVarsSecretObject(spec); vars != nil {
+		if err := d.cluster.Client().Applier().Apply(ctx, vars); err != nil {
+			return "", fmt.Errorf("hand the build its variables: %w", err)
+		}
+		defer d.removeBuildVars(ctx, spec)
+	}
+
 	d.appendLog(ctx, deployment.ID, fmt.Sprintf("Building %s with the %s builder.", app.Name, chosen))
 	if err := d.cluster.Client().Applier().Apply(ctx, job); err != nil {
 		return "", fmt.Errorf("start the build: %w", err)
 	}
+	d.ownBuildVars(ctx, spec)
 
 	if spec.SourceUpload {
 		if err := d.deliverUpload(ctx, deployment, app, spec.Namespace, spec.Name); err != nil {
@@ -453,3 +468,37 @@ func shortID(id string) string {
 }
 
 func buildTopic(deploymentID string) string { return "deployment:" + deploymentID }
+
+// ownBuildVars makes the build's Job the owner of its variables' Secret, so
+// the cluster collects the Secret with the Job even if the panel stops before
+// removeBuildVars runs. A failure is only logged: the deferred delete is still
+// there, and ownership is the second line, not the first.
+func (d *Deployer) ownBuildVars(ctx context.Context, spec builder.JobSpec) {
+	vars := builder.BuildVarsSecretObject(spec)
+	if vars == nil {
+		return
+	}
+	applier := d.cluster.Client().Applier()
+	job, err := applier.Get(ctx, "batch/v1", "Job", spec.Namespace, spec.Name)
+	if err != nil {
+		d.log.Warn("could not read the build to give it its variables", "job", spec.Name, "error", err)
+		return
+	}
+	vars.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "batch/v1", Kind: "Job", Name: job.GetName(), UID: job.GetUID(),
+	}}
+	if err := applier.Apply(ctx, vars); err != nil {
+		d.log.Warn("could not make the build own its variables", "job", spec.Name, "error", err)
+	}
+}
+
+// removeBuildVars deletes the build's variables once it has finished, whether
+// it worked or not. On a context of its own, because the build's may be the
+// thing that was cancelled.
+func (d *Deployer) removeBuildVars(ctx context.Context, spec builder.JobSpec) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	if err := d.cluster.Client().Applier().Delete(ctx, "v1", "Secret", spec.Namespace, spec.BuildVarsSecret); err != nil {
+		d.log.Warn("could not remove a finished build's variables", "secret", spec.BuildVarsSecret, "error", err)
+	}
+}

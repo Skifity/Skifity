@@ -84,6 +84,26 @@ Skifity works this out from a fingerprint of everything that actually affects
 the image. The panel tells you which kind you are setting before you save it,
 and says afterwards whether it rebuilt.
 
+How a build-time variable reaches the build depends on how the app is built,
+and none of them writes its value anywhere a person can read it afterwards —
+not into the build's own Kubernetes objects, which anybody allowed to list them
+could read:
+
+* **Detected builds (Railpack)** receive each one as a BuildKit secret, which is
+  what Railpack reads. The name goes into the build plan; the value does not.
+* **A Dockerfile** receives each one as a build argument, for its `ARG` lines,
+  and as a secret it can mount with `RUN --mount=type=secret,id=NAME`. Prefer
+  the second for anything secret: a value an `ARG` uses in a `RUN` step is
+  recorded in the image's history, which is how Docker works rather than
+  something Skifity can change.
+* **A front end served as a static site** (Vite, Astro and the like) sees them
+  while it builds, which is when `VITE_API_URL` and friends are read. They are
+  declared in the build stage only, and the image that is served does not keep
+  them.
+
+A variable a front end reads at build time ends up in the JavaScript sent to
+every visitor, whatever it is marked. Keep secrets out of those.
+
 This is the thing most often complained about in other panels, where changing
 any setting triggers a ten-minute rebuild. Here it does not.
 

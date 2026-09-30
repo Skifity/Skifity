@@ -200,6 +200,7 @@ func TestDockerfileBuildCommand(t *testing.T) {
 	spec.Builder = BuilderDockerfile
 	spec.DockerfilePath = "docker/Dockerfile"
 	spec.BuildArgs = map[string]string{"NODE_ENV": "production", "API_URL": "https://api.example.com"}
+	spec.BuildVarsSecret = "build-dep-1-vars"
 
 	job, err := BuildJob(spec)
 	if err != nil {
@@ -216,8 +217,11 @@ func TestDockerfileBuildCommand(t *testing.T) {
 		`--local 'context=/workspace'`,
 		`--local 'dockerfile=/workspace/docker'`,
 		`--opt 'filename=Dockerfile'`,
-		`--opt 'build-arg:API_URL=https://api.example.com'`,
-		`--opt 'build-arg:NODE_ENV=production'`,
+		// The value is read from the pod's environment when the build runs,
+		// never written into the Job.
+		`--opt "build-arg:API_URL=${SKIFITY_BUILD_VAR_API_URL}"`,
+		`--opt "build-arg:NODE_ENV=${SKIFITY_BUILD_VAR_NODE_ENV}"`,
+		`--secret 'id=API_URL,env=SKIFITY_BUILD_VAR_API_URL'`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("the build command is missing %s:\n%s", want, script)
@@ -352,6 +356,8 @@ func TestGeneratedBuildScriptsAreValidShell(t *testing.T) {
 		spec.Builder = builder
 		spec.StaticDir = "dist"
 		spec.BuildArgs = map[string]string{"A": "1"}
+		spec.BuildVarsSecret = "build-dep-1-vars"
+		spec.BuildCommand = "npm run build"
 		job, err := BuildJob(spec)
 		if err != nil {
 			t.Fatalf("%s: BuildJob: %v", builder, err)
@@ -445,6 +451,7 @@ func TestNixpacksWritesTheDockerfileItThenBuilds(t *testing.T) {
 	spec := baseJob()
 	spec.Builder = BuilderNixpacks
 	spec.BuildArgs = map[string]string{"NODE_ENV": "production"}
+	spec.BuildVarsSecret = "build-dep-1-vars"
 	job, err := BuildJob(spec)
 	if err != nil {
 		t.Fatalf("BuildJob: %v", err)
@@ -462,7 +469,7 @@ func TestNixpacksWritesTheDockerfileItThenBuilds(t *testing.T) {
 	if !strings.Contains(prepare.Args[0], "--out /workspace") {
 		t.Fatalf("nixpacks is not told to write to the workspace:\n%s", prepare.Args[0])
 	}
-	if !strings.Contains(prepare.Args[0], `--env 'NODE_ENV=production'`) {
+	if !strings.Contains(prepare.Args[0], `--env "NODE_ENV=${SKIFITY_BUILD_VAR_NODE_ENV}"`) {
 		t.Errorf("build variables do not reach the detection:\n%s", prepare.Args[0])
 	}
 	if prepare.Image == "" {

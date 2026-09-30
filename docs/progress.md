@@ -4251,6 +4251,47 @@ A store test that seeded an old schema through today's repository functions
 broke on the new column, and now writes that one row by hand: the test is about
 a migration from before the column existed.
 
+## Phase 79 — build variables were in the Job, and never reached Railpack
+
+Found by the Netlify and Qovery research passes, each checking how Skifity hands
+a build its secrets. Two defects in the same place:
+
+* **Every build variable's value was written into the build's Job** — on the
+  `railpack prepare` and `nixpacks build` command lines and as plain
+  `build-arg:` options to buildctl. Anybody who can list Jobs in the build
+  namespace read them, and a Dockerfile build wrote them into the image's
+  history.
+* **Railpack, the default builder, was never given them.** Its documentation
+  (railpack.com, "Running Railpack in production", read 2026-09-30) says
+  `prepare --env` puts the names into the plan and not the values, and the
+  values reach the build as `--secret id=NAME,env=NAME`. buildctl was called
+  with no `--secret` at all, so a Next.js app's build-time address never
+  reached `npm run build`.
+
+The values now go into a Secret of their own for as long as the build runs,
+owned by its Job so the cluster collects it if the panel stops, and deleted when
+the build ends. Every build step reads them from it under a
+`SKIFITY_BUILD_VAR_` prefix, so a variable named `PATH` or `BUILDKIT_HOST` cannot
+change how the tools run, and the scripts refer to `${…}` rather than to the
+value. Railpack gets a `--secret` per variable and a `secrets-hash` so a changed
+value invalidates the cached steps that used it. A Dockerfile gets both a build
+argument and a secret. A front end built by the static builder — which never saw
+its variables either — now declares each in its build stage.
+
+Found on the way: one BuildKit serves every team, and Railpack's mount caches
+are shared across builds unless given a prefix. Each app's build now passes
+`cache-key=<app id>`, so one team's build cannot write a package cache another
+team's reads.
+
+A test renders a build for every builder and fails if any value appears
+anywhere in the Job.
+
+### Not executed
+
+No build has run with this. The rendered Job, the scripts (checked with `sh
+-n`) and the flags are tested; whether the Railpack frontend mounts every
+secret the way its documentation says needs a cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

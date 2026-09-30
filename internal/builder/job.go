@@ -1,7 +1,10 @@
 package builder
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -67,7 +70,16 @@ type JobSpec struct {
 	RegistrySecret string
 
 	// BuildArgs are build-time variables, which are part of the fingerprint.
+	//
+	// Their names go into the Job; their values never do. They reach the
+	// build pod from BuildVarsSecret, and the build from there as BuildKit
+	// secrets — a value in a Job's spec is readable by anybody who can list
+	// Jobs in the namespace, and a value passed as a plain build argument is
+	// written into the image's history.
 	BuildArgs map[string]string
+	// BuildVarsSecret is the Secret holding BuildArgs' values, one key per
+	// variable. Required when there are any.
+	BuildVarsSecret string
 
 	// BuildKitAddress is the shared builder, for example
 	// tcp://skifity-buildkit.skifity-system.svc.cluster.local:1234.
@@ -172,7 +184,62 @@ func (s JobSpec) Validate() error {
 	if s.CommitSHA != "" && !isHex(s.CommitSHA) {
 		return fmt.Errorf("the commit %q is not a valid hash", s.CommitSHA)
 	}
+	// A variable's name is written into the build script, so it has to be a
+	// name a shell reads as a name and nothing else.
+	for key := range s.BuildArgs {
+		if !buildVarName.MatchString(key) {
+			return fmt.Errorf("%q is not a name a build variable can have", key)
+		}
+	}
+	if len(s.BuildArgs) > 0 && s.BuildVarsSecret == "" {
+		return fmt.Errorf("a build with variables needs the Secret that holds their values")
+	}
 	return nil
+}
+
+// buildVarName is what a build variable's name may be.
+var buildVarName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// buildVarEnv is the name a build variable has in the build pod's own
+// environment. Prefixed, so a variable called PATH or BUILDKIT_HOST cannot
+// change how the build tools themselves run.
+func buildVarEnv(key string) string { return "SKIFITY_BUILD_VAR_" + key }
+
+// buildVarEnvs brings the build variables into a container from their Secret.
+func buildVarEnvs(s JobSpec) []corev1.EnvVar {
+	out := make([]corev1.EnvVar, 0, len(s.BuildArgs))
+	for _, pair := range sortedPairs(s.BuildArgs) {
+		out = append(out, corev1.EnvVar{
+			Name: buildVarEnv(pair[0]),
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: s.BuildVarsSecret},
+					Key:                  pair[0],
+				},
+			},
+		})
+	}
+	return out
+}
+
+// fromEnv is a build variable written into a script: its name as given, and
+// its value read from the pod's environment when the script runs. Double
+// quotes, so the value is one word and nothing in it is read as a command.
+func fromEnv(key string) string { return key + "=${" + buildVarEnv(key) + "}" }
+
+// secretsHash changes whenever a build variable's value does, which is what
+// Railpack reads to know a cached step that used one is out of date. It is a
+// hash of every name and value together, so it says nothing about any one of
+// them.
+func secretsHash(vars map[string]string) string {
+	h := sha256.New()
+	for _, pair := range sortedPairs(vars) {
+		h.Write([]byte(pair[0]))
+		h.Write([]byte{0})
+		h.Write([]byte(pair[1]))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // workspace is where the repository is cloned inside the build pod.
@@ -216,9 +283,9 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 		Command:      []string{"/bin/sh", "-c"},
 		Args:         []string{buildScript(s)},
 		VolumeMounts: mounts,
-		Env: []corev1.EnvVar{
+		Env: append([]corev1.EnvVar{
 			{Name: "BUILDKIT_HOST", Value: s.BuildKitAddress},
-		},
+		}, buildVarEnvs(s)...),
 		Resources: buildResources(s),
 	}
 	if s.RegistrySecret != "" {
@@ -452,7 +519,9 @@ func prepareContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container {
 	for _, pair := range sortedPairs(s.BuildArgs) {
 		// --env is how build-time configuration reaches the detection, which
 		// matters for frameworks that build differently per environment.
-		fmt.Fprintf(&b, " --env %s", shellsafe.Quote(pair[0]+"="+pair[1]))
+		// Railpack writes the names into the plan and never the values; the
+		// values reach the build as BuildKit secrets.
+		fmt.Fprintf(&b, ` --env "%s"`, fromEnv(pair[0]))
 	}
 	b.WriteString("\n")
 	b.WriteString("echo '==> Build plan ready'\n")
@@ -462,6 +531,7 @@ func prepareContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container {
 		Image:        s.RailpackImage,
 		Command:      []string{"/bin/sh", "-c"},
 		Args:         []string{b.String()},
+		Env:          buildVarEnvs(s),
 		VolumeMounts: mounts,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -496,7 +566,7 @@ func nixpacksContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container 
 		// The same reason as railpack prepare: a framework that builds
 		// differently per environment needs these during detection, not only
 		// during the build.
-		fmt.Fprintf(&b, " --env %s", shellsafe.Quote(pair[0]+"="+pair[1]))
+		fmt.Fprintf(&b, ` --env "%s"`, fromEnv(pair[0]))
 	}
 	b.WriteString("\n")
 	b.WriteString("echo '==> Build plan ready'\n")
@@ -506,6 +576,7 @@ func nixpacksContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container 
 		Image:        s.NixpacksImage,
 		Command:      []string{"/bin/sh", "-c"},
 		Args:         []string{b.String()},
+		Env:          buildVarEnvs(s),
 		VolumeMounts: mounts,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -548,9 +619,11 @@ func buildScript(s JobSpec) string {
 			flag("--local", "dockerfile="+dockerfileDir),
 			flag("--opt", "filename="+filename),
 		}
-		for _, pair := range sortedPairs(s.BuildArgs) {
-			args = append(args, flag("--opt", fmt.Sprintf("build-arg:%s=%s", pair[0], pair[1])))
-		}
+		// As build arguments, because that is how a Dockerfile's ARG lines
+		// read them, and as secrets, for a Dockerfile that mounts one with
+		// RUN --mount=type=secret and keeps it out of the image's history.
+		args = append(args, buildArgFlags(s)...)
+		args = append(args, secretFlags(s)...)
 
 	case BuilderRailpack:
 		// The frontend reads railpack-plan.json from the dockerfile context,
@@ -560,6 +633,17 @@ func buildScript(s JobSpec) string {
 			flag("--opt", "source="+s.RailpackFrontend),
 			flag("--local", "context="+context),
 			flag("--local", "dockerfile="+workspace),
+			// Every app's mount caches under its own prefix. One BuildKit
+			// serves every team, and without this a package cache written by
+			// one team's build is read by the next team's.
+			flag("--opt", "build-arg:cache-key="+s.AppID),
+		}
+		// The plan names the variables and the frontend mounts each one as a
+		// secret; without these it has nothing to mount, and a step that
+		// needs one either fails or runs without it.
+		args = append(args, secretFlags(s)...)
+		if len(s.BuildArgs) > 0 {
+			args = append(args, flag("--opt", "build-arg:secrets-hash="+secretsHash(s.BuildArgs)))
 		}
 
 	case BuilderNixpacks:
@@ -570,6 +654,8 @@ func buildScript(s JobSpec) string {
 			flag("--local", "dockerfile="+workspace+"/.nixpacks"),
 			flag("--opt", "filename=Dockerfile"),
 		}
+		args = append(args, buildArgFlags(s)...)
+		args = append(args, secretFlags(s)...)
 
 	case BuilderStatic:
 		// A static site needs no build inputs beyond the files themselves, so
@@ -579,6 +665,12 @@ func buildScript(s JobSpec) string {
 			flag("--local", "context="+context),
 			flag("--local", "dockerfile="+workspace+"/.skifity"),
 			flag("--opt", "filename=Dockerfile"),
+		}
+		// A front end reads its build-time settings — VITE_API_URL and the
+		// like — while it builds, and the generated Dockerfile declares each
+		// one in the build stage only, which the served image does not keep.
+		if s.BuildCommand != "" {
+			args = append(args, buildArgFlags(s)...)
 		}
 	}
 
@@ -641,7 +733,11 @@ func staticDockerfileScript(s JobSpec) string {
 		// is broken.
 		fmt.Fprintf(&b, `FROM %s AS build
 WORKDIR /build
-COPY . .
+`, s.NodeImage)
+		for _, pair := range sortedPairs(s.BuildArgs) {
+			fmt.Fprintf(&b, "ARG %s\n", pair[0])
+		}
+		fmt.Fprintf(&b, `COPY . .
 RUN if [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lockfile; \
     elif [ -f yarn.lock ]; then corepack enable && yarn install --immutable || yarn install --frozen-lockfile; \
     elif [ -f package-lock.json ]; then npm ci; \
@@ -649,7 +745,7 @@ RUN if [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lock
     else echo 'nothing to install'; fi
 RUN %s
 
-`, s.NodeImage, s.BuildCommand)
+`, s.BuildCommand)
 		source = "--from=build /build/" + strings.TrimPrefix(strings.Trim(dir, "/"), "./")
 		if strings.HasSuffix(source, "/") || strings.HasSuffix(source, "/.") {
 			source = strings.TrimSuffix(strings.TrimSuffix(source, "."), "/")
@@ -707,6 +803,26 @@ func ImageName(registry, namespace, appSlug, tag string) string {
 	return fmt.Sprintf("%s/%s/%s:%s", registry, namespace, appSlug, tag)
 }
 
+// buildArgFlags passes every build variable as a build argument, its value read
+// from the pod's environment rather than written into the Job.
+func buildArgFlags(s JobSpec) []string {
+	out := make([]string, 0, len(s.BuildArgs))
+	for _, pair := range sortedPairs(s.BuildArgs) {
+		out = append(out, `--opt "build-arg:`+fromEnv(pair[0])+`"`)
+	}
+	return out
+}
+
+// secretFlags hands every build variable to BuildKit as a secret, which a
+// build step mounts rather than bakes in.
+func secretFlags(s JobSpec) []string {
+	out := make([]string, 0, len(s.BuildArgs))
+	for _, pair := range sortedPairs(s.BuildArgs) {
+		out = append(out, flag("--secret", "id="+pair[0]+",env="+buildVarEnv(pair[0])))
+	}
+	return out
+}
+
 // flag renders one buildctl option with its value quoted, so a value
 // containing a space or a shell metacharacter cannot change the command.
 //
@@ -745,3 +861,34 @@ func isHex(s string) bool {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// BuildVarsSecretObject is the Secret a build reads its variables from, named
+// by BuildVarsSecret. Nil when the build has none.
+//
+// It lives only as long as the build: the deployer deletes it when the build
+// ends, and makes the Job its owner, so a panel that stops halfway still has
+// it collected with the Job.
+func BuildVarsSecretObject(s JobSpec) *corev1.Secret {
+	if len(s.BuildArgs) == 0 || s.BuildVarsSecret == "" {
+		return nil
+	}
+	values := make(map[string]string, len(s.BuildArgs))
+	for key, value := range s.BuildArgs {
+		values[key] = value
+	}
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      s.BuildVarsSecret,
+			Namespace: s.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by":    version.Binary,
+				"app.kubernetes.io/component":     "build",
+				version.LabelKey("app-id"):        s.AppID,
+				version.LabelKey("deployment-id"): s.DeploymentID,
+			},
+		},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: values,
+	}
+}
