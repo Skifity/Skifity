@@ -14,7 +14,7 @@ import (
 func TestAProcessIsTheAppsImageUnderAnotherCommand(t *testing.T) {
 	web := baseSpec()
 	web.EnvFromSecret = ResourceName(web.Name, "env")
-	web.PlainEnv = map[string]string{"SKIFITY_APP": "web"}
+	web.PlainEnv = map[string]string{"LOG_LEVEL": "info"}
 	web.Volumes = []VolumeSpec{{Name: "data", MountPath: "/data", SizeGB: 1}}
 	web.Domains = []DomainSpec{{Hostname: "shop.example.com"}}
 	web.Autoscale, web.MinReplicas, web.MaxReplicas = true, 2, 5
@@ -38,7 +38,9 @@ func TestAProcessIsTheAppsImageUnderAnotherCommand(t *testing.T) {
 	for _, variable := range container.Env {
 		env[variable.Name] = variable.Value
 	}
-	if env["SKIFITY_PROCESS"] != "worker" || env["SKIFITY_APP"] != "web" {
+	// SKIFITY_APP is the app's name in every one of its processes, not the
+	// worker's Deployment's.
+	if env["SKIFITY_PROCESS"] != "worker" || env["SKIFITY_APP"] != "web" || env["LOG_LEVEL"] != "info" {
 		t.Fatalf("the worker's own variables are %v", env)
 	}
 	if _, leaked := web.PlainEnv["SKIFITY_PROCESS"]; leaked {
@@ -126,6 +128,33 @@ func TestProcessesNoLongerWantedAreRemoved(t *testing.T) {
 	}
 	if left := remaining(t, c, web.Namespace); strings.Join(left, " ") != "api--worker web" {
 		t.Fatalf("left %v after removing web's processes", left)
+	}
+}
+
+func TestARestartReachesTheAppsProcessesAndNoOneElses(t *testing.T) {
+	web := baseSpec()
+	other := baseSpec()
+	other.Name, other.AppID = "api", "app_456"
+	c := &Client{clientset: fake.NewSimpleClientset(
+		BuildDeployment(web),
+		BuildProcessDeployment(web, "worker", "run worker", 1),
+		BuildProcessDeployment(other, "worker", "run worker", 1),
+	)}
+	if err := c.RestartProcesses(t.Context(), web.Namespace, "web"); err != nil {
+		t.Fatal(err)
+	}
+	restarted := func(name string) bool {
+		deployment, err := c.clientset.AppsV1().Deployments(web.Namespace).Get(t.Context(), name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return deployment.Spec.Template.Annotations[version.LabelKey("restarted-at")] != ""
+	}
+	if !restarted("web--worker") {
+		t.Fatal("web's worker was not restarted")
+	}
+	if restarted("api--worker") || restarted("web") {
+		t.Fatal("something other than web's processes was restarted")
 	}
 }
 

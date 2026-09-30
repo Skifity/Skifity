@@ -230,9 +230,19 @@ command the port is gone.
   connection with that password can read and change everything in the database.
   A read-only token cannot open one. Each connection is recorded in the activity
   log as *Database tunnel opened*.
+* An open tunnel is asked again every minute whether it still may be: revoke the
+  token, remove its owner from the team or make them a member, and their open
+  connections close within the minute. None lasts more than 12 hours; the
+  client's next connection opens a new one, as after a dropped connection.
+* A client that finishes sending — `nc -N`, or a file piped into `psql` — still
+  reads the database's answer: the end of one direction is passed on alone.
 * A tunnel is an upgraded HTTP/1.1 connection. A panel reached directly, or
   through the ingress it installs, carries it; a proxy in between that does not
   pass upgrades through is the one thing that stops it, and the command says so.
+  Cloudflare documents passing on WebSocket upgrades and no others, so a panel
+  reached only through a Cloudflare Tunnel should be expected to refuse one;
+  that has not been tried. Run the command from somewhere that reaches the
+  panel's own address instead.
 
 ## Describing an environment in a file
 

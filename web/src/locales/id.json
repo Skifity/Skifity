@@ -2798,9 +2798,10 @@
     "add": "Tambah",
     "remove": "Hapus {{name}}",
     "removeConfirm": "{{name}} berhenti, dan perintahnya dilupakan. Setel instansnya ke 0 untuk menghentikannya sambil menyimpan perintahnya.",
-    "formHelp": "Namanya huruf kecil, seperti di Procfile: worker, clock. Nama yang sama lagi mengubah perintahnya. 0 instans menghentikan proses dan menyimpannya.",
+    "formHelp": "Namanya huruf kecil, seperti di Procfile: worker, clock. Nama yang sama lagi mengubah perintahnya dan mempertahankan jumlah instansnya. 0 instans menghentikan proses dan menyimpannya.",
     "detected": "Proses dari Procfile",
-    "detectedHelp": "Yang dicentang berjalan di samping aplikasi sejak deploy pertama, dengan build yang sama. Hilangkan centang untuk melewatinya; proses bisa ditambahkan nanti di Penskalaan."
+    "detectedHelp": "Yang dicentang berjalan di samping aplikasi sejak deploy pertama, dengan build yang sama. Hilangkan centang untuk melewatinya; proses bisa ditambahkan nanti di Penskalaan.",
+    "change": "Ubah"
   },
   "k3s": {
     "title": "Kubernetes (k3s)",
@@ -2867,7 +2868,9 @@
       "procfile_bad_name": "Baris {{name}} di Procfile tidak bisa menjadi proses dengan nama itu: tambahkan di halaman aplikasi dengan nama huruf kecil hingga 20 huruf, angka, dan tanda hubung.",
       "procfile_processes": "Procfile juga menyebut {{names}}, yang berjalan di samping aplikasi sebagai prosesnya: build dan variabel yang sama, perintah sendiri, tanpa port.",
       "app_json_unreadable": "app.json tidak bisa dibaca: {{error}}.",
-      "app_json_postdeploy": "Skrip postdeploy app.json, `{{command}}`, menjadi seed untuk pratinjau: dijalankan sekali di setiap pratinjau baru. Jalankan sekali di sini dengan `skifity run -- {{command}}`."
+      "app_json_postdeploy": "Skrip postdeploy app.json, `{{command}}`, menjadi seed untuk pratinjau: dijalankan sekali di setiap pratinjau baru. Jalankan sekali di sini dengan `skifity run -- {{command}}`.",
+      "procfile_same_name": "Baris {{name}} di Procfile dilewati: di sini ia menjadi {{as}}, yang sudah dipakai baris sebelumnya.",
+      "procfile_over_limit": "Sebuah aplikasi menjalankan paling banyak {{max}} proses selain web, jadi baris {{names}} di Procfile dilewati. Procfile dengan sebanyak itu biasanya beberapa aplikasi dalam satu repositori."
     }
   },
   "components": {

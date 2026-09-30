@@ -713,7 +713,9 @@ clock enqueueing them, a consumer reading a stream. Each of those is a
 
 * It runs the app's own image — the same build — with the app's variables, under
   a command of its own. A worker cannot run last week's code against this week's
-  schema, because it is deployed with the app, and rolled back with it.
+  schema, because it is deployed with the app, and rolled back with it. A new
+  version reaches the processes once the app itself is serving it; a deploy whose
+  web part fails leaves them on the version the web stays on.
 * It has no port, no address and no health check. Nothing sends it traffic; it
   is running when its container is.
 * It has its own number of instances. `0` stops it and keeps its command, for a
@@ -723,12 +725,21 @@ clock enqueueing them, a consumer reading a stream. Each of those is a
   a time, and two writers on one file are how data is corrupted; keep what a
   worker shares with the web in the database, or in object storage.
 * It reads `SKIFITY_PROCESS`, its own name, beside everything else the app is
-  given.
+  given. `SKIFITY_APP` is the app's name in every one of its processes.
+* A restart, and a database restore that restarts the apps linked to it,
+  restarts the processes too: a worker's connections go stale as the web's do.
 
 Its logs are the app's logs tab with the process picked, or
-`skifity logs --process worker`. A deploy waits for every process as it waits
-for the app, so a worker that cannot start fails the deploy with the reason
-rather than crash-looping unnoticed.
+`skifity logs --process worker`. A deploy waits up to five minutes for its
+processes, all at once, and says in the deployment's log which are not ready and
+why. It does not fail over one: by then the app is serving the new version, and a
+deployment marked failed is one the next variable change would quietly roll the
+app back from. A worker that cannot start shows as such under Processes, and
+keeps trying. A change to the app's variables, or to a process's command or
+instances, reaches the processes straight away and does not wait for them.
+
+A new command for a process keeps its number of instances: five workers stay
+five, and a stopped one stays stopped.
 
 ```sh
 skifity processes                                # what runs beside the app
@@ -741,7 +752,10 @@ skifity processes rm worker
 A name is lowercase letters, digits and hyphens, up to 20, starting with a
 letter: `worker`, `clock`, `celery-beat`. `web` and `release` are taken — they
 are the app itself and its [release command](#release-command). An app can have
-ten; more than that is usually several apps sharing a repository.
+ten; more than that is usually several apps sharing a repository. A Procfile's
+names are made to fit — `Celery_Beat` becomes `celery-beat` — and a line that
+becomes a name an earlier line already has, or an eleventh, is left out and said,
+rather than stopping the app from being created.
 
 ## Servers
 

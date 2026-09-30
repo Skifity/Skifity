@@ -227,15 +227,20 @@ func localURL(connection, address string) string {
 // serveTunnel accepts local connections until ctx ends, each one relayed
 // through a tunnel of its own.
 func serveTunnel(ctx context.Context, client *Client, databaseID string, listener net.Listener, out io.Writer) error {
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
-	defer stop()
-	defer func() { _ = listener.Close() }()
-
 	var (
 		wg      sync.WaitGroup
 		printMu sync.Mutex
 	)
+	// In this order on the way out: the listener closed and every open
+	// connection ended, then their relays waited for. Waiting first would hold
+	// a failed accept open until each client hung up by itself.
 	defer wg.Wait()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
+	defer stop()
+	defer func() { _ = listener.Close() }()
+
 	for {
 		local, err := listener.Accept()
 		if err != nil {
@@ -276,7 +281,10 @@ func tunnelFailure(err error) string {
 	return err.Error()
 }
 
-// relay copies both ways until either side is done, then closes both.
+// relay copies both ways until both are done. The end of one direction is
+// passed on as the end of that direction alone — `nc -N` and a client piping
+// a file in still read the database's answer — and an error either way
+// closes both.
 func relay(local net.Conn, remote io.ReadWriteCloser) {
 	var once sync.Once
 	closeBoth := func() {
@@ -285,21 +293,31 @@ func relay(local net.Conn, remote io.ReadWriteCloser) {
 			_ = remote.Close()
 		})
 	}
+	defer closeBoth()
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		defer closeBoth()
-		defer runsafe.Recover(nil, "a database tunnel, towards the panel", nil)
-		_, _ = io.Copy(remote, local)
+		defer runsafe.Recover(nil, "a database tunnel, towards the panel", func(error) { closeBoth() })
+		copyHalf(remote, local, closeBoth)
 	}()
 	go func() {
 		defer wg.Done()
-		defer closeBoth()
-		defer runsafe.Recover(nil, "a database tunnel, towards the client", nil)
-		_, _ = io.Copy(local, remote)
+		defer runsafe.Recover(nil, "a database tunnel, towards the client", func(error) { closeBoth() })
+		copyHalf(local, remote, closeBoth)
 	}()
 	wg.Wait()
+}
+
+// copyHalf copies until from ends and then closes only the writing half of
+// to. When to has no half to close, or the copy failed, it closes both.
+func copyHalf(to io.Writer, from io.Reader, closeBoth func()) {
+	if _, err := io.Copy(to, from); err == nil {
+		if half, ok := to.(interface{ CloseWrite() error }); ok && half.CloseWrite() == nil {
+			return
+		}
+	}
+	closeBoth()
 }
 
 // OpenTunnel asks the panel for a tunnel to a database and returns the

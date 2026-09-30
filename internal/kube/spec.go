@@ -26,6 +26,10 @@ type AppSpec struct {
 	TeamID      string
 	Environment string
 	DisplayName string
+	// ProcessOf is the app's slug when this is one of its processes, whose
+	// Name is its own Deployment's. The app reads it as SKIFITY_APP either
+	// way: a worker keying a queue on its app's name must see the web's.
+	ProcessOf string
 	// CommitSHA is the commit the running image was built from, when there is
 	// one. The app reads it as SKIFITY_COMMIT_SHA.
 	CommitSHA string

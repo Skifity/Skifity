@@ -5368,6 +5368,55 @@ component offering its newer version, upgrading, and an external one refused.
 Not executed: an upgrade of a real cluster, which is the one thing here that
 cannot be tried without one.
 
+## Phase 110 — an independent review of phases 96 to 109
+
+Fourteen phases in a row is a lot of new code nobody else had read. Five
+reviewers each took a group of them, read the code against what its
+documentation claims, and ranked what they found; every finding was checked
+before anything was changed, and each fix came with a test that fails without
+it. What they found, and what changed:
+
+* **Previews.** Two repositories' pull requests with the same number were one
+  preview, so a fork of one repository could be handed the other's secrets. A
+  preview is now keyed by the pull request and a tag of its repository; a copy is
+  made whole or not at all, never deploys on a push of its own, and an
+  environment preview that failed part-way fills in what is missing next time.
+* **Git connections.** An app could be created from another team's connection by
+  its id. The connection must now belong to the app's team.
+* **Compose.** A port published on `127.0.0.1` was exposed to the internet; it is
+  now reachable inside the environment only.
+* **Watch paths.** GitLab and Gitea do not list a force-push's files, and a push
+  after a missed one lists only its own; both deploy instead of being skipped.
+* **Alerts.** A server or an app whose usage could not be read counted as idle
+  and cleared its alert, and one hovering at the threshold alerted every minute.
+  Unknown usage is now skipped, and an alert clears five points below where it
+  fired.
+* **The firewall.** `CF-Connecting-IP` was believed from anybody who sent it. It
+  is now believed only from a trusted proxy on a Cloudflare Tunnel path.
+* **Maintenance.** Starting it answered success when the app's Ingress had not
+  changed, so visitors saw the app while the team was told they saw the notice.
+* **Processes.** A worker that did not come up failed a deploy whose web part was
+  already live, and the next variable change then rolled the web back without
+  saying so. A new version now reaches the processes once the web serves it; a
+  process that is not ready is said in the deployment's log and does not fail it;
+  a settings change no longer waits for every process in turn. A new command
+  kept nothing of the old instance count, `SKIFITY_APP` was the worker's
+  Deployment's name, a restart and a database restore left the workers on their
+  old connections, and a Procfile with `worker_a` and `worker-a` made an app that
+  could not be created. Each is fixed.
+* **The database tunnel.** An open tunnel was never checked again: revoking the
+  token or removing its owner left it open. It is now checked every minute and
+  lasts at most twelve hours. A client that half-closed lost the database's
+  answer, because the first end of stream closed both ways, and a failed accept
+  in the CLI waited for every open connection before it returned.
+* **Words in the interface.** Detection's notes and the components' names were
+  English in every language; they are now codes the interface translates.
+
+Not executed: the process and tunnel changes on a real cluster. The tunnel's
+half-close and re-check are tested end to end through the real handler and the
+real CLI; the deploy ordering is not, since the deployer only runs against a
+cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

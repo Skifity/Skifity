@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -51,6 +53,7 @@ type Process struct {
 // applyProcfile takes the web and release lines, and names the rest.
 func applyProcfile(d *Detection, tree Tree) {
 	processes := ParseProcfile(tree.Read("Procfile"))
+	var skipped []string
 	for _, process := range processes {
 		switch process.Name {
 		case "web":
@@ -71,9 +74,27 @@ func applyProcfile(d *Detection, tree Tree) {
 						"under a lowercase name of up to 20 letters, digits and hyphens.", process.Name), "name", process.Name)
 				continue
 			}
+			if taken := slices.ContainsFunc(d.Processes, func(p Process) bool { return p.Name == name }); taken {
+				// worker_a and worker-a are one name here, and an app cannot
+				// have two processes of it: the first line keeps it.
+				d.note("procfile_same_name", fmt.Sprintf(
+					"The Procfile's %s line is left out: it becomes %s here, which an earlier line already is.",
+					process.Name, name), "name", process.Name, "as", name)
+				continue
+			}
+			if len(d.Processes) >= MaxProcesses {
+				skipped = append(skipped, process.Name)
+				continue
+			}
 			process.Name = name
 			d.Processes = append(d.Processes, process)
 		}
+	}
+	if len(skipped) > 0 {
+		d.note("procfile_over_limit", fmt.Sprintf(
+			"An app runs at most %d processes beside web, so the Procfile's %s lines are left out. "+
+				"A Procfile with that many is usually several apps sharing a repository.",
+			MaxProcesses, strings.Join(skipped, ", ")), "max", strconv.Itoa(MaxProcesses), "names", strings.Join(skipped, ", "))
 	}
 	if len(d.Processes) > 0 {
 		names := make([]string, 0, len(d.Processes))
@@ -85,6 +106,11 @@ func applyProcfile(d *Detection, tree Tree) {
 				"variables, a command of their own, no port.", strings.Join(names, ", ")), "names", strings.Join(names, ", "))
 	}
 }
+
+// MaxProcesses is how many processes an app may have beside web, the limit
+// the API holds a new app's processes to; a test in internal/api checks the
+// two agree.
+const MaxProcesses = 10
 
 // processName is the rule kube.ValidProcessName enforces, which this package
 // cannot import; a test in internal/api checks the two agree.

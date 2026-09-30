@@ -579,8 +579,12 @@ func buildPlainEnv(s AppSpec) []corev1.EnvVar {
 	// The prefix is reserved: these take precedence over a variable of the
 	// same name, which Kubernetes does for env over envFrom.
 	prefix := strings.ToUpper(version.Binary)
+	appName := s.Name
+	if s.ProcessOf != "" {
+		appName = s.ProcessOf
+	}
 	env = append(env,
-		corev1.EnvVar{Name: prefix + "_APP", Value: s.Name},
+		corev1.EnvVar{Name: prefix + "_APP", Value: appName},
 		corev1.EnvVar{Name: prefix + "_ENVIRONMENT", Value: s.Environment},
 	)
 	if s.CommitSHA != "" {

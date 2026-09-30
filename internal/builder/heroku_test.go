@@ -1,7 +1,9 @@
 package builder
 
 import (
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -57,6 +59,38 @@ func TestAProcfileSaysHowTheAppStartsAndWhatRunsBeforeIt(t *testing.T) {
 	d = Detect(tree)
 	if d.StartCommand != "" || d.ReleaseCommand != "bin/rails db:migrate" {
 		t.Fatalf("with a Dockerfile: start %q, release %q", d.StartCommand, d.ReleaseCommand)
+	}
+}
+
+func TestAProcfileAlwaysMakesAnAppThatCanBeCreated(t *testing.T) {
+	// Two lines that become one name, and more lines than an app may have:
+	// the API refuses the whole app for either, so neither reaches it.
+	procfile := "web: run web\nworker_a: run a\nworker-a: run a again\nWorker: run w\nworker: run w again\n"
+	for i := range MaxProcesses + 2 {
+		procfile += fmt.Sprintf("extra%d: run %d\n", i, i)
+	}
+	d := Detect(Tree{Files: []string{"Procfile"}, Contents: map[string]string{"Procfile": procfile}})
+	if len(d.Processes) != MaxProcesses {
+		t.Fatalf("%d processes, want %d", len(d.Processes), MaxProcesses)
+	}
+	names := map[string]string{}
+	for _, process := range d.Processes {
+		if earlier, twice := names[process.Name]; twice {
+			t.Fatalf("%s is two processes: %q and %q", process.Name, earlier, process.Command)
+		}
+		names[process.Name] = process.Command
+	}
+	if names["worker-a"] != "run a" || names["worker"] != "run w" {
+		t.Fatalf("the first line of a name did not keep it: %v", names)
+	}
+	var codes []string
+	for _, note := range d.NoteCodes {
+		codes = append(codes, note.Code)
+	}
+	for _, want := range []string{"procfile_same_name", "procfile_over_limit"} {
+		if !slices.Contains(codes, want) {
+			t.Errorf("nothing says %s: %v", want, d.Notes)
+		}
 	}
 }
 

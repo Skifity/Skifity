@@ -137,9 +137,12 @@ func (c *Cluster) AppLogs(ctx context.Context, namespace, appSlug string, opts a
 	})
 }
 
-// RestartApp triggers a rolling restart.
+// RestartApp triggers a rolling restart of an app and its processes.
 func (c *Cluster) RestartApp(ctx context.Context, namespace, appSlug string) error {
-	return c.client.RestartApp(ctx, namespace, appSlug)
+	if err := c.client.RestartApp(ctx, namespace, appSlug); err != nil {
+		return err
+	}
+	return c.client.RestartProcesses(ctx, namespace, appSlug)
 }
 
 // DeleteApp removes an app's Kubernetes objects.

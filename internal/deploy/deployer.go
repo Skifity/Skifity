@@ -268,10 +268,12 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 		return
 	}
 
-	if err := d.apply(ctx, deployment, app, env); err != nil {
+	processes, err := d.apply(ctx, deployment, app, env, true)
+	if err != nil {
 		d.fail(ctx, deployment, errdoc.From(err))
 		return
 	}
+	d.watchProcesses(ctx, deployment, app, env, processes)
 	d.runSeed(ctx, deployment, app, env)
 
 	d.appendLog(ctx, deployment.ID, "Deployed.")
@@ -300,10 +302,17 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 }
 
 // apply renders and applies the app's Kubernetes objects and waits for the
-// rollout.
-func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment) error {
+// app's own rollout, and answers with the processes it applied.
+//
+// A new version reaches the processes only once the app itself is serving it:
+// a worker running this week's code while the web rollout fails and the web
+// stays on last week's is the skew that one build for both is meant to rule
+// out. A sync changes no image, so it applies everything at once — waiting
+// for the web first would mean a process edit never lands while the web is
+// unwell, which is when somebody is most likely to be making one.
+func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment, newVersion bool) ([]store.AppProcess, error) {
 	if d.cluster == nil {
-		return errdoc.ClusterUnreachable(nil)
+		return nil, errdoc.ClusterUnreachable(nil)
 	}
 
 	// Every app gets a working address, and it is worked out here rather than
@@ -311,12 +320,12 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	// cluster's public IP — are often filled in after the app already exists.
 	teamID, err := d.db.TeamIDForApp(ctx, app.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Before the objects that reference it: a Deployment naming a pull secret
 	// that is not there yet is an ImagePullBackOff nobody can explain.
 	if err := d.ensureRegistryAuth(ctx, env.Namespace); err != nil {
-		return err
+		return nil, err
 	}
 	// An internal app is reached by name from its environment and has no
 	// address to give.
@@ -337,7 +346,7 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 
 	spec, err := d.cluster.SpecFor(ctx, app, env, deployment.Image)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Only a commit: an uploaded folder's deployment carries the upload's hash
 	// in the same field, and calling that a commit would be a lie an app might
@@ -349,7 +358,7 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 
 	variables, err := d.runtimeVariables(ctx, app, env)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// The pod template carries a hash of the configuration, so a variable
 	// change actually restarts the pods. Kubernetes does not watch a Secret's
@@ -358,17 +367,17 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	spec.Revision = kube.EnvHash(variables) + ":" + deployment.ID
 
 	if err := spec.Validate(); err != nil {
-		return errdoc.BadRequest(err.Error())
+		return nil, errdoc.BadRequest(err.Error())
 	}
 
 	// Make sure the namespace and its guards exist: an app can be created
 	// before the cluster was reachable.
 	project, err := d.db.GetProject(ctx, env.ProjectID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := d.cluster.EnsureNamespace(ctx, env, project.TeamID, project.ID); err != nil {
-		return err
+		return nil, err
 	}
 
 	objects := []any{
@@ -390,26 +399,28 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		kube.BuildInterceptorService(spec),
 		kube.BuildHTTPScaledObject(spec),
 	)
-	// The app's other processes go out with it, on the same image: a worker
-	// running last week's code against this week's schema is the bug that
-	// having them in one build is meant to rule out.
+	// The app's other processes go out with it, on the same image.
 	processes, err := d.db.ListProcesses(ctx, app.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	processObjects := make([]any, 0, len(processes))
 	for _, process := range processes {
-		objects = append(objects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
+		processObjects = append(processObjects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
+	}
+	if !newVersion {
+		objects = append(objects, processObjects...)
 	}
 
 	d.appendLog(ctx, deployment.ID, "Applying the configuration to the cluster.")
 	if err := d.cluster.Client().Applier().ApplyAll(ctx, objects...); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Scheduled commands run the version that is deployed, so they are applied
 	// with it rather than when somebody writes the schedule.
 	if err := d.applyScheduledJobs(ctx, deployment.ID, spec, app); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Objects that are no longer wanted have to be removed explicitly: server-
@@ -440,22 +451,61 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 				reason = status.Detail
 			}
 		}
-		return errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
+		return nil, errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
 	}
-	for _, process := range processes {
-		name := kube.ProcessDeploymentName(app.Slug, process.Name)
-		if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, name, 10*time.Minute); err != nil {
-			ready, reason := 0, err.Error()
-			if status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, name); statusErr == nil {
-				ready = status.ReadyReplicas
-				if status.Detail != "" {
-					reason = status.Detail
-				}
-			}
-			return errdoc.RolloutTimedOut(app.Name+" ("+process.Name+")", ready, process.Instances, reason)
+	if newVersion && len(processObjects) > 0 {
+		d.appendLog(ctx, deployment.ID, "Starting the new version of the app's other processes.")
+		if err := d.cluster.Client().Applier().ApplyAll(ctx, processObjects...); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return processes, nil
+}
+
+// processWait is how long a deployment waits for the app's other processes,
+// all of them at once, before saying which are not ready and finishing.
+const processWait = 5 * time.Minute
+
+// watchProcesses waits for a new version's processes and says in the
+// deployment's log which did not come up. It does not fail the deployment:
+// the app is already serving the new version by then, and a deployment
+// marked failed is one the next variable change would quietly roll the app
+// back from. A worker that crashes is the worker's state, shown beside it
+// under Processes, the way Heroku shows a crashed dyno after a release.
+func (d *Deployer) watchProcesses(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment, processes []store.AppProcess) {
+	if len(processes) == 0 {
+		return
+	}
+	d.appendLog(ctx, deployment.ID, "Waiting for the app's other processes.")
+	var wg sync.WaitGroup
+	notReady := make([]string, len(processes))
+	for i, process := range processes {
+		if process.Instances == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer runsafe.Recover(d.log, "wait for a process", nil)
+			defer wg.Done()
+			name := kube.ProcessDeploymentName(app.Slug, process.Name)
+			err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, name, processWait)
+			if err == nil {
+				return
+			}
+			reason := err.Error()
+			if status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, name); statusErr == nil && status.Detail != "" {
+				reason = status.Detail
+			}
+			notReady[i] = process.Name + ": " + reason
+		}()
+	}
+	wg.Wait()
+	for _, line := range notReady {
+		if line != "" {
+			d.appendLog(ctx, deployment.ID, "Not ready yet, and still trying — "+line+
+				". The app itself is serving this version; the process's state is under Processes.")
+		}
+	}
 }
 
 // removeUnwanted deletes objects the app no longer needs.
@@ -534,7 +584,8 @@ func (d *Deployer) Sync(ctx context.Context, appID string) error {
 	if d.cluster == nil {
 		return nil
 	}
-	return d.apply(ctx, last, app, env)
+	_, err = d.apply(ctx, last, app, env, false)
+	return err
 }
 
 // Rollback re-applies a previous deployment's image and runtime configuration.

@@ -2814,9 +2814,10 @@
     "add": "Add",
     "remove": "Remove {{name}}",
     "removeConfirm": "{{name}} stops, and its command is forgotten. Set its instances to 0 instead to stop it and keep the command.",
-    "formHelp": "The name is lowercase, as in a Procfile: worker, clock. The same name again changes its command. 0 instances stops a process and keeps it.",
+    "formHelp": "The name is lowercase, as in a Procfile: worker, clock. The same name again changes its command and keeps its instances. 0 instances stops a process and keeps it.",
     "detected": "Processes from the Procfile",
-    "detectedHelp": "Ticked ones run beside the app from its first deploy, on the same build. Untick one to leave it out; it can be added later under Scaling."
+    "detectedHelp": "Ticked ones run beside the app from its first deploy, on the same build. Untick one to leave it out; it can be added later under Scaling.",
+    "change": "Change"
   },
   "k3s": {
     "title": "Kubernetes (k3s)",
@@ -2883,7 +2884,9 @@
       "procfile_bad_name": "The Procfile's {{name}} line cannot be a process under that name: add it on the app's page under a lowercase name of up to 20 letters, digits and hyphens.",
       "procfile_processes": "The Procfile also names {{names}}, which run beside the app as its processes: the same build and variables, a command of their own, no port.",
       "app_json_unreadable": "app.json could not be read: {{error}}.",
-      "app_json_postdeploy": "app.json's postdeploy script, `{{command}}`, becomes the seed for previews: it runs once in each new one. Run it here once with `skifity run -- {{command}}`."
+      "app_json_postdeploy": "app.json's postdeploy script, `{{command}}`, becomes the seed for previews: it runs once in each new one. Run it here once with `skifity run -- {{command}}`.",
+      "procfile_same_name": "The Procfile's {{name}} line is left out: it becomes {{as}} here, which an earlier line already is.",
+      "procfile_over_limit": "An app runs at most {{max}} processes beside web, so the Procfile's {{names}} lines are left out. A Procfile with that many is usually several apps sharing a repository."
     }
   },
   "components": {

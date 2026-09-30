@@ -49,6 +49,14 @@ func TestAnAppsProcessesAreItsOwnToChange(t *testing.T) {
 	if err != nil || len(stored) != 1 || stored[0].Command != "bundle exec sidekiq -c 5" || stored[0].Instances != 0 {
 		t.Fatalf("stored %+v (%v)", stored, err)
 	}
+	// A new command alone, as `processes set worker -- cmd` sends it, leaves
+	// how many run alone: the stopped worker is not started by it.
+	if status, body := h.do(acme, http.MethodPut, path+"/worker", map[string]any{"command": "bundle exec sidekiq -c 10"}); status != http.StatusOK {
+		t.Fatalf("changing the command answered %d: %s", status, body)
+	}
+	if stored, _ := h.db.ListProcesses(t.Context(), app.ID); stored[0].Instances != 0 || stored[0].Command != "bundle exec sidekiq -c 10" {
+		t.Fatalf("a command change made the worker %+v", stored[0])
+	}
 
 	for name, body := range map[string]map[string]any{
 		"web":     {"command": "x"},
@@ -98,6 +106,27 @@ func TestAnAppsProcessesAreItsOwnToChange(t *testing.T) {
 	for _, action := range []string{"app.process_set", "app.process_removed"} {
 		if entries, _ := h.db.ListAudit(t.Context(), acme.team.ID, action, app.ID, 50); len(entries) == 0 {
 			t.Errorf("%s was not recorded", action)
+		}
+	}
+}
+
+func TestAProcessChangeIsRecordedWhenTheClusterDoesNotAnswer(t *testing.T) {
+	// The row is changed before the cluster is told, so the audit log has to
+	// say so even when telling the cluster fails.
+	h := newHarness(t)
+	h.api.deployer = &failingSyncDeployer{fakeDeployer{log: &recorder{}}}
+	acme := h.newTenant("acme")
+	app := h.app(acme, "shop")
+	path := "/api/apps/" + app.ID + "/processes/worker"
+	if status, _ := h.do(acme, http.MethodPut, path, map[string]any{"command": "run worker"}); status < 400 {
+		t.Fatalf("adding answered %d with the cluster refusing", status)
+	}
+	if status, _ := h.do(acme, http.MethodDelete, path, nil); status < 400 {
+		t.Fatalf("removing answered %d with the cluster refusing", status)
+	}
+	for _, action := range []string{"app.process_set", "app.process_removed"} {
+		if entries, _ := h.db.ListAudit(t.Context(), acme.team.ID, action, app.ID, 50); len(entries) != 1 {
+			t.Errorf("%s was recorded %d times", action, len(entries))
 		}
 	}
 }
@@ -191,6 +220,10 @@ func TestTheBuilderAndTheClusterAgreeOnAProcessName(t *testing.T) {
 		if !ok && kube.ValidProcessName(name) {
 			t.Errorf("detection drops %q, which the panel would take", name)
 		}
+	}
+	// And on how many: detection offering an eleventh is the same failure.
+	if builder.MaxProcesses != maxProcesses {
+		t.Errorf("detection offers up to %d processes and the panel takes %d", builder.MaxProcesses, maxProcesses)
 	}
 }
 

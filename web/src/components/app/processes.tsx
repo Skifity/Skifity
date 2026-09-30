@@ -45,7 +45,8 @@ export function ProcessesCard({ app }: { app: App }) {
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["processes", app.id] })
   const save = useMutation({
-    mutationFn: (process: { name: string; command: string; instances: number }) =>
+    // Instances left out keeps however many of that process already run.
+    mutationFn: (process: { name: string; command: string; instances?: number }) =>
       api.put<AppProcess>(`/api/apps/${app.id}/processes/${process.name}`, {
         command: process.command,
         instances: process.instances,
@@ -74,6 +75,9 @@ export function ProcessesCard({ app }: { app: App }) {
     return <ErrorDisplay error={processes.error} onRetry={() => void processes.refetch()} />
   }
   const items = processes.data?.items ?? []
+  // A name already listed is that process's command changing, not a new one:
+  // its instance count stays what it is.
+  const existing = items.find((process) => process.name === name.trim())
 
   return (
     <Card>
@@ -182,7 +186,7 @@ export function ProcessesCard({ app }: { app: App }) {
             save.mutate({
               name: name.trim(),
               command: command.trim(),
-              instances: Number(instances) || 0,
+              instances: existing ? undefined : Number(instances) || 0,
             })
           }}
         >
@@ -214,13 +218,14 @@ export function ProcessesCard({ app }: { app: App }) {
               type="number"
               min={0}
               max={100}
-              value={instances}
+              value={existing ? String(existing.instances) : instances}
+              disabled={existing !== undefined}
               onChange={(event) => setInstances(event.target.value)}
             />
           </Field>
           <Button type="submit" disabled={!name.trim() || !command.trim() || save.isPending}>
             {save.isPending ? <Spinner /> : <PlusIcon className="size-4" />}
-            {t("processes.add")}
+            {existing ? t("processes.change") : t("processes.add")}
           </Button>
         </form>
         <FieldDescription>{t("processes.formHelp")}</FieldDescription>

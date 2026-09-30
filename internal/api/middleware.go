@@ -251,50 +251,55 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 // who the caller is.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		if header := r.Header.Get("Authorization"); header != "" {
-			token, ok := strings.CutPrefix(header, "Bearer ")
-			if ok {
-				user, apiToken, err := s.auth.AuthenticateToken(ctx, strings.TrimSpace(token))
-				if err == nil {
-					// A scope narrower than the owner's access is checked here
-					// rather than per handler, so a read-only token cannot
-					// reach a route that nobody thought to guard — starting
-					// with the one that issues a token with no scopes at all.
-					if !auth.TokenAllows(apiToken.Scopes, r.Method, r.URL.Path) {
-						writeError(w, r, errdoc.New("auth.token_scope", "This token cannot make that request").
-							WithCause("The token %s is limited to %s.", apiToken.Name, apiToken.Scopes).
-							WithImpact("The request was refused. Nothing was changed.").
-							WithFix("Use a token without a scope, or create one that can write, under Account.").
-							WithStatus(http.StatusForbidden))
-						return
-					}
-					ctx = context.WithValue(ctx, ctxUser, user)
-					ctx = context.WithValue(ctx, ctxAPIToken, apiToken)
-					next.ServeHTTP(w, r.WithContext(ctx))
-					return
-				}
-				if !errors.Is(err, store.ErrNotFound) {
-					writeError(w, r, err)
-					return
-				}
-			}
+		ctx, err := s.identify(r.Context(), r)
+		if err != nil {
+			writeError(w, r, err)
+			return
 		}
-
-		if value := s.auth.ReadCookie(r, auth.SessionCookieName); value != "" {
-			user, session, err := s.auth.Authenticate(ctx, value)
-			if err == nil {
-				ctx = context.WithValue(ctx, ctxUser, user)
-				ctx = context.WithValue(ctx, ctxSession, session)
-			} else if !errors.Is(err, store.ErrNotFound) {
-				writeError(w, r, err)
-				return
-			}
-		}
-
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// identify signs a request in: ctx with who made it, or ctx as it was when
+// nobody did. An open database tunnel calls it again, long after the request
+// that opened it, to find out whether that credential still signs anybody in.
+func (s *Server) identify(ctx context.Context, r *http.Request) (context.Context, error) {
+	if header := r.Header.Get("Authorization"); header != "" {
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if ok {
+			user, apiToken, err := s.auth.AuthenticateToken(ctx, strings.TrimSpace(token))
+			if err == nil {
+				// A scope narrower than the owner's access is checked here
+				// rather than per handler, so a read-only token cannot
+				// reach a route that nobody thought to guard — starting
+				// with the one that issues a token with no scopes at all.
+				if !auth.TokenAllows(apiToken.Scopes, r.Method, r.URL.Path) {
+					return ctx, errdoc.New("auth.token_scope", "This token cannot make that request").
+						WithCause("The token %s is limited to %s.", apiToken.Name, apiToken.Scopes).
+						WithImpact("The request was refused. Nothing was changed.").
+						WithFix("Use a token without a scope, or create one that can write, under Account.").
+						WithStatus(http.StatusForbidden)
+				}
+				ctx = context.WithValue(ctx, ctxUser, user)
+				ctx = context.WithValue(ctx, ctxAPIToken, apiToken)
+				return ctx, nil
+			}
+			if !errors.Is(err, store.ErrNotFound) {
+				return ctx, err
+			}
+		}
+	}
+
+	if value := s.auth.ReadCookie(r, auth.SessionCookieName); value != "" {
+		user, session, err := s.auth.Authenticate(ctx, value)
+		if err == nil {
+			ctx = context.WithValue(ctx, ctxUser, user)
+			ctx = context.WithValue(ctx, ctxSession, session)
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return ctx, err
+		}
+	}
+	return ctx, nil
 }
 
 // requireAuth rejects anonymous requests.

@@ -85,13 +85,20 @@ func (s *Server) handleSetProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	process := store.AppProcess{AppID: app.ID, Name: chi.URLParam(r, "process"), Command: strings.TrimSpace(req.Command), Instances: 1}
-	if req.Instances != nil {
-		process.Instances = *req.Instances
-	}
 	existing, err := s.db.ListProcesses(r.Context(), app.ID)
 	if err != nil {
 		writeError(w, r, err)
 		return
+	}
+	// A new command for a process that is there keeps however many of it are
+	// running: five workers stay five, and one stopped at zero stays stopped.
+	for _, other := range existing {
+		if other.Name == process.Name {
+			process.Instances = other.Instances
+		}
+	}
+	if req.Instances != nil {
+		process.Instances = *req.Instances
 	}
 	if err := validateProcess(process, existing); err != nil {
 		writeError(w, r, err)
@@ -101,14 +108,16 @@ func (s *Server) handleSetProcess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// Written down before the cluster is told: the change is made from here
+	// on, whether or not the cluster answers.
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	s.audit(r, teamID, "app.process_set", "app", app.ID, app.Name+" ("+process.Name+")")
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
 			writeError(w, r, err)
 			return
 		}
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	s.audit(r, teamID, "app.process_set", "app", app.ID, app.Name+" ("+process.Name+")")
 	writeJSON(w, http.StatusOK, process)
 }
 
@@ -126,6 +135,8 @@ func (s *Server) handleDeleteProcess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	s.audit(r, teamID, "app.process_removed", "app", app.ID, app.Name+" ("+name+")")
 	// The next apply removes its Deployment; this is that apply.
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
@@ -133,8 +144,6 @@ func (s *Server) handleDeleteProcess(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	s.audit(r, teamID, "app.process_removed", "app", app.ID, app.Name+" ("+name+")")
 	w.WriteHeader(http.StatusNoContent)
 }
 

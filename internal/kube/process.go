@@ -51,6 +51,7 @@ func ProcessDeploymentName(appSlug, process string) string {
 func ProcessSpec(app AppSpec, process, command string, instances int) AppSpec {
 	s := app
 	s.Name = ProcessDeploymentName(app.Name, process)
+	s.ProcessOf = app.Name
 	s.Command = []string{"/bin/sh", "-c"}
 	s.Args = []string{command}
 	s.Port, s.HealthPath = 0, ""
@@ -116,6 +117,29 @@ func (c *Client) PruneProcesses(ctx context.Context, namespace, appSlug string, 
 		if err := c.clientset.AppsV1().Deployments(namespace).
 			Delete(ctx, deployment.Name, metav1.DeleteOptions{}); err != nil && !IsNotFound(err) {
 			return fmt.Errorf("remove the process %s: %w", deployment.Name, err)
+		}
+	}
+	return nil
+}
+
+// RestartProcesses restarts every one of an app's processes, the way
+// RestartApp restarts the app: a worker holding a connection pool to a
+// database that was just restored needs a restart as much as the web does.
+func (c *Client) RestartProcesses(ctx context.Context, namespace, appSlug string) error {
+	selector := labels.SelectorFromSet(map[string]string{
+		"app.kubernetes.io/component":  ProcessComponent,
+		version.LabelKey("process-of"): appSlug,
+	}).String()
+	deployments, err := c.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		if IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("list the processes of %s: %w", appSlug, err)
+	}
+	for _, deployment := range deployments.Items {
+		if err := c.RestartApp(ctx, namespace, deployment.Name); err != nil {
+			return err
 		}
 	}
 	return nil
