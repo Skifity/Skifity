@@ -171,12 +171,17 @@ func (m *Manager) retainPanel(ctx context.Context, storage *Storage) {
 			keep = n
 		}
 	}
-	expired, err := m.db.ExpiredBackups(ctx, PanelTarget, PanelTarget, keep)
+	expired, err := m.db.ExpiredBackups(ctx, PanelTarget, PanelTarget, keep, true)
 	if err != nil {
 		m.log.Warn("could not list old panel backups", "error", err)
 		return
 	}
-	m.forget(ctx, storage, expired)
+	byHand, err := m.db.ExpiredBackups(ctx, PanelTarget, PanelTarget, KeepByHand, false)
+	if err != nil {
+		m.log.Warn("could not list old panel backups", "error", err)
+		return
+	}
+	m.forget(ctx, storage, append(expired, byHand...))
 }
 
 // panelDue reports whether the panel's own backup is due in any of the minutes.

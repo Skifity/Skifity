@@ -196,7 +196,7 @@ func TestOldPanelBackupsAreRemovedAfterANewOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		if _, err := m.BackupPanel(t.Context(), "manual"); err != nil {
+		if _, err := m.BackupPanel(t.Context(), "scheduled"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -287,7 +287,7 @@ func TestRetentionKeepsAnObjectANewerBackupStillUses(t *testing.T) {
 		}
 	}
 
-	if _, err := m.BackupPanel(t.Context(), "manual"); err != nil {
+	if _, err := m.BackupPanel(t.Context(), "scheduled"); err != nil {
 		t.Fatal(err)
 	}
 	listed, _ := db.ListBackups(t.Context(), PanelTarget, PanelTarget, 10)
@@ -300,5 +300,37 @@ func TestRetentionKeepsAnObjectANewerBackupStillUses(t *testing.T) {
 	}
 	if !kept {
 		t.Fatal("retention deleted an object a backup it kept still points at")
+	}
+}
+
+// Taking backups by hand never deletes a scheduled one: counted together, a
+// few in a row pushed out the copy from before whatever went wrong.
+func TestBackupsTakenByHandDoNotPushOutScheduledOnes(t *testing.T) {
+	m, db, _, _, _ := panelHarness(t)
+	if err := db.SetSetting(t.Context(), settings.KeyPanelBackupKeep, "1", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.BackupPanel(t.Context(), "scheduled"); err != nil {
+		t.Fatal(err)
+	}
+	for range KeepByHand + 2 {
+		if _, err := m.BackupPanel(t.Context(), "manual"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	listed, _ := db.ListBackups(t.Context(), PanelTarget, PanelTarget, 100)
+	scheduled, byHand := 0, 0
+	for _, b := range listed {
+		if b.Kind == "scheduled" {
+			scheduled++
+		} else {
+			byHand++
+		}
+	}
+	if scheduled != 1 {
+		t.Errorf("backups taken by hand pushed out the scheduled one: %d left", scheduled)
+	}
+	if byHand != KeepByHand {
+		t.Errorf("%d backups taken by hand are kept, want %d", byHand, KeepByHand)
 	}
 }

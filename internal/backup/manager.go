@@ -199,18 +199,28 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 	m.applyRetention(ctx, storage, "database", record.ID)
 }
 
-// applyRetention deletes backups beyond the configured count.
+// KeepByHand is how many backups taken by hand, or before an update, are
+// kept for one database or volume, apart from the scheduled ones.
+const KeepByHand = 10
+
+// applyRetention deletes backups beyond the configured count: scheduled ones
+// beyond the schedule's, and the others beyond KeepByHand.
 func (m *Manager) applyRetention(ctx context.Context, storage *Storage, targetType, targetID string) {
-	policy, err := m.db.GetBackupPolicy(ctx, targetType, targetID)
-	if err != nil {
-		return
+	var expired []store.Backup
+	if policy, err := m.db.GetBackupPolicy(ctx, targetType, targetID); err == nil {
+		scheduled, err := m.db.ExpiredBackups(ctx, targetType, targetID, policy.Retention, true)
+		if err != nil {
+			m.log.Warn("could not list expired backups", targetType, targetID, "error", err)
+			return
+		}
+		expired = scheduled
 	}
-	expired, err := m.db.ExpiredBackups(ctx, targetType, targetID, policy.Retention)
+	byHand, err := m.db.ExpiredBackups(ctx, targetType, targetID, KeepByHand, false)
 	if err != nil {
 		m.log.Warn("could not list expired backups", targetType, targetID, "error", err)
 		return
 	}
-	m.forget(ctx, storage, expired)
+	m.forget(ctx, storage, append(expired, byHand...))
 }
 
 // forget deletes expired backups, their objects first.

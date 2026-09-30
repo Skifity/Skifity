@@ -83,6 +83,11 @@ Each database has its own schedule, set on its Backups tab, written as cron:
 successful new one, never before: a retention rule must not be able to leave you
 with nothing.
 
+It counts scheduled backups only. The ones you take yourself, and the ones
+taken before a template update or an upgrade, are counted apart, and the last
+ten of those are kept whatever the schedule keeps. Taking a few by hand in a
+row therefore never deletes the scheduled copy from before whatever went wrong.
+
 Times are UTC, not your local time.
 
 A backup due while the panel was not running — an upgrade, a node rebooting

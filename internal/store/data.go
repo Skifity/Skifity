@@ -365,9 +365,18 @@ func (db *DB) ListBackups(ctx context.Context, targetType, targetID string, limi
 
 // ExpiredBackups lists successful backups beyond the retention count, which the
 // retention job then deletes from object storage.
-func (db *DB) ExpiredBackups(ctx context.Context, targetType, targetID string, keep int) ([]Backup, error) {
+//
+// Scheduled backups and the rest — taken by hand, or before an update or an
+// upgrade — are counted apart. Counted together, taking a few by hand in a
+// row deleted the scheduled copy from before whatever went wrong, which is
+// the one somebody was about to need.
+func (db *DB) ExpiredBackups(ctx context.Context, targetType, targetID string, keep int, scheduled bool) ([]Backup, error) {
+	kind := `kind = 'scheduled'`
+	if !scheduled {
+		kind = `kind != 'scheduled'`
+	}
 	rows, err := db.QueryContext(ctx, `SELECT `+backupColumns+` FROM backups
-		WHERE target_type = ? AND target_id = ? AND status = 'succeeded'
+		WHERE target_type = ? AND target_id = ? AND status = 'succeeded' AND `+kind+`
 		ORDER BY created_at DESC LIMIT -1 OFFSET ?`, targetType, targetID, keep)
 	if err != nil {
 		return nil, fmt.Errorf("list expired backups: %w", err)
