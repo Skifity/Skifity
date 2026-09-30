@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"skifity/internal/blueprint"
 	"skifity/internal/builder"
 	"skifity/internal/kube"
 	"skifity/internal/store"
@@ -213,5 +214,14 @@ func TestAPreviewRunsTheAppsProcessesCheaply(t *testing.T) {
 	// worker runs once, whatever production asks for.
 	if processes[0].Instances != 0 || processes[1].Instances != 1 || processes[1].Command != "work" {
 		t.Fatalf("the preview runs %+v", processes)
+	}
+}
+
+func TestABlueprintLinksADatabaseAsThePanelWould(t *testing.T) {
+	for _, engine := range blueprint.Engines {
+		if blueprint.DefaultVariable(engine) != defaultVarNameFor(engine) {
+			t.Errorf("%s: skifity.yaml links it as %s and the panel as %s",
+				engine, blueprint.DefaultVariable(engine), defaultVarNameFor(engine))
+		}
 	}
 }

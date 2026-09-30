@@ -269,6 +269,16 @@ func BackupDamaged(detail string) *Problem {
 		WithDocs("/docs/backups#verifying")
 }
 
+// BlueprintInvalid is a skifity.yaml that cannot be applied as it is.
+func BlueprintInvalid(detail string) *Problem {
+	return New("blueprint.invalid", "skifity.yaml cannot be applied").
+		WithCause("%s.", detail).
+		WithImpact("Nothing was changed.").
+		WithFix("Correct the file and run `skifity plan` again.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/cli#describing-an-environment-in-a-file")
+}
+
 // ProcessNameInvalid is a process name that cannot be one.
 func ProcessNameInvalid(name string) *Problem {
 	return New("process.name_invalid", "That cannot be a process's name").

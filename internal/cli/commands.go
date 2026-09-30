@@ -69,6 +69,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdDB(ctx, rest, stdout)
 	case "processes", "ps":
 		err = cmdProcesses(ctx, rest, stdout)
+	case "plan", "apply":
+		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
 		err = cmdExport(ctx, rest, stdout)
 	case "open":
@@ -131,6 +133,10 @@ Working with apps:
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
   open                  Print an app's URLs
+
+Described in a file:
+  plan                  Say what skifity.yaml would change in the environment
+  apply                 Make the environment what skifity.yaml says
 
 Databases:
   db                    List the managed databases in an environment

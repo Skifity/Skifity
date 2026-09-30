@@ -2430,6 +2430,18 @@
         "cause": "Sebuah aplikasi menjalankan paling banyak {{0}} proses di samping web.",
         "impact": "Proses tidak ditambahkan.",
         "fix": "Hapus proses yang tidak lagi diperlukan, atau jadikan sisanya aplikasi terpisah dari repositori yang sama."
+      },
+      "blueprint_invalid": {
+        "title": "skifity.yaml tidak bisa diterapkan",
+        "cause": "{{0}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Perbaiki berkasnya lalu jalankan `skifity plan` lagi."
+      },
+      "cli_no_blueprint": {
+        "title": "Tidak ada skifity.yaml di sini",
+        "cause": "Direktori ini maupun direktori di atasnya tidak memilikinya.",
+        "impact": "Tidak ada yang dibaca atau diubah.",
+        "fix": "Tulis satu — contoh di dokumentasi bisa menjadi awal — atau gunakan --file."
       }
     }
   },

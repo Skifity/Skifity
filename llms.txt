@@ -47,6 +47,10 @@ skifity rollback                  Go back to the previous version
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
 skifity run -- npm run migrate    Run a command once, in the app's image
+skifity processes set worker -- <command>  A worker beside the app, same build
+skifity plan                      What skifity.yaml would change in the environment
+skifity apply                     Make the environment what skifity.yaml says
+skifity db connect <name>         A local port that reaches a managed database
 skifity apps                      List apps
 skifity servers                   List servers
 skifity open                      Print the app's URLs
@@ -205,6 +209,11 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
 - **Scaling is checked first.** `check_scaling_readiness` looks for SQLite on a
   local disk, in-memory sessions and similar, and says what would break before
   you run a second instance.
+- **An environment can be a file.** `skifity.yaml` in the repository lists apps,
+  databases, variables, processes, domains and schedules; `skifity plan` says
+  what would change and `skifity apply` does it through this same API. Nothing
+  is ever deleted by it: what the environment has and the file does not is
+  reported and left alone. Secrets are named in it, never written in it.
 - **Kubernetes is available when you need it.** `GET /api/apps/{id}/advanced`
   returns the exact objects the panel applies.
 - **An app can have a firewall.** Rules over IP address, country and AS number,

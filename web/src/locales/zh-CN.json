@@ -2430,6 +2430,18 @@
         "cause": "一个应用除了 web 之外最多运行 {{0}} 个进程。",
         "impact": "进程没有添加。",
         "fix": "删除不再需要的进程，或者把其余的做成同一仓库的另一个应用。"
+      },
+      "blueprint_invalid": {
+        "title": "无法应用 skifity.yaml",
+        "cause": "{{0}}。",
+        "impact": "没有做任何修改。",
+        "fix": "修正文件后再次运行 `skifity plan`。"
+      },
+      "cli_no_blueprint": {
+        "title": "这里没有 skifity.yaml",
+        "cause": "这个目录和它上面的目录里都没有。",
+        "impact": "没有读取或修改任何东西。",
+        "fix": "写一个——文档里的示例可以作为起点——或者用 --file 指定。"
       }
     }
   },

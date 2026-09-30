@@ -2444,6 +2444,18 @@
         "cause": "An app runs at most {{0}} processes beside web.",
         "impact": "The process was not added.",
         "fix": "Remove one it no longer needs, or make the rest a separate app from the same repository."
+      },
+      "blueprint_invalid": {
+        "title": "skifity.yaml cannot be applied",
+        "cause": "{{0}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Correct the file and run `skifity plan` again."
+      },
+      "cli_no_blueprint": {
+        "title": "There is no skifity.yaml here",
+        "cause": "Neither this directory nor any above it has one.",
+        "impact": "Nothing was read or changed.",
+        "fix": "Write one — the documentation's example is a start — or pass --file."
       }
     }
   },

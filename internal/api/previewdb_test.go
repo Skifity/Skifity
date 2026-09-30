@@ -36,7 +36,8 @@ func (m *previewDatabaseManager) Create(_ context.Context, env store.Environment
 		envID string
 		req   CreateDatabaseRequest
 	}{env.ID, req})
-	record := store.Database{Name: req.Name, Slug: "preview-db", Engine: req.Engine, EnvironmentID: env.ID, Status: "creating"}
+	record := store.Database{Name: req.Name, Slug: "preview-db", Engine: req.Engine, EngineVersion: req.Version,
+		EnvironmentID: env.ID, Status: "creating"}
 	if err := m.db.CreateDatabase(context.Background(), &record); err != nil {
 		return store.Database{}, err
 	}

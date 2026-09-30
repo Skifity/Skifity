@@ -5286,6 +5286,47 @@ its own; the seed kept, and claimed once.
 
 Not executed: a seed Job in a real cluster.
 
+## Phase 108 — `skifity.yaml`, with plan and apply
+
+Gap 5. An environment's settings lived in the panel and in the memory of
+whoever set them: nothing in a repository said that the web app needs a worker,
+a database linked as `DATABASE_URL` and a nightly job, so a new environment was
+rebuilt by clicking, and a change to one was never reviewed. Render has
+render.yaml, DigitalOcean an app spec, Porter porter.yaml, Railway
+railway.json, Portainer stacks.
+
+`internal/blueprint` reads `skifity.yaml` — apps (source, build and start
+settings, port, health, watch paths, internal, instances or autoscaling,
+resources, plain variables and the names of secrets, processes, domains,
+schedules, database links, deploy on push, previews, a preview seed) and
+databases (engine, version, storage, instances) — strictly, so a misspelt field
+is an error, and reports every problem at once. `Plan` compares it with what the
+environment has and returns ordered steps, each with the API call that makes
+it: databases before the apps linked to them, an app before what hangs off it,
+new apps' first deploys last so none starts without its database. It has no
+network and no store; `skifity plan` and `skifity apply` fetch the state through
+the API and send the calls through the API, so every change is authorized,
+validated and audited as the same click would be — a viewer can plan and not
+apply — and apply stops at the first refusal, leaving the next plan to say
+what is left.
+
+It never deletes: what the environment has and the file does not is reported
+and left alone, and so is a database whose engine or version differs.
+Variables in the file are stored as plain values, since the file is in a
+repository; `secrets:` only names the ones that must be set, and the plan says
+which are not. A field left out is left as it is. An app with neither a
+repository nor an image can only describe one that exists, a folder sent with
+`skifity up`. A link with no variable uses the panel's default for the engine,
+and a test holds the two defaults together.
+
+Tested: the file read strictly, in both forms of a process, and a wrong one
+reported whole; an empty environment built in order with references between
+new things; a matching one with nothing to do and an extra app noted; only the
+differing fields changed; what a plan refuses; references filled from what was
+made; and `skifity plan` and `apply` run by the CLI against the real API —
+everything made, applied twice being applied once, a changed file changing only
+that, and a viewer's apply refused with nothing made.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
