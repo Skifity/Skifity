@@ -116,11 +116,13 @@ here has run on a cluster. Three of them — the Railpack image, the build
 variables and the preview database — would have been the first thing a real run
 hit.
 
-## Gaps still open, ranked
+## The gaps, ranked, and the phase that closed each
 
 Ranked by how many of the twenty-two products win on it and how much a person
 loses without it. "Without a cluster" says whether it can be built and proven
-here, or needs `make verify` on a real server.
+here, or needs `make verify` on a real server. All twenty are closed; each
+phase in `docs/progress.md` says what was tested and, plainly, what could not
+be run without a cluster.
 
 | # | Gap | Cited by | Size | Without a cluster |
 |---|---|---|---|---|
