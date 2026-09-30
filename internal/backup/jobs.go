@@ -42,6 +42,10 @@ type JobSpec struct {
 	TimeoutSeconds int
 	// WorkspaceGB is how much room the staged dump may take.
 	WorkspaceGB int
+	// SealImage, when set, is the panel's own image, which seals the dump
+	// before it is uploaded and opens it after it is downloaded. The
+	// passphrase is in URLSecret, under "passphrase". See seal.go.
+	SealImage string
 }
 
 // Defaults fills in the images and the timeout.
@@ -152,12 +156,19 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 	// A backup dumps then uploads; a restore downloads then loads. Either way
 	// the first step is an init container, so the second never starts on a
 	// half-finished file.
-	var first, second corev1.Container
+	var first []corev1.Container
+	var second corev1.Container
 	if s.Restore {
-		first = s.transferContainer("download", downloadScript())
+		first = []corev1.Container{s.transferContainer("download", downloadScript())}
+		if s.SealImage != "" {
+			first = append(first, sealContainer("open", s.SealImage, s.URLSecret, "backup-open", dumpFile))
+		}
 		second = s.databaseContainer("load", restoreScript(s))
 	} else {
-		first = s.databaseContainer("dump", backupScript(s))
+		first = []corev1.Container{s.databaseContainer("dump", backupScript(s))}
+		if s.SealImage != "" {
+			first = append(first, sealContainer("seal", s.SealImage, s.URLSecret, "backup-seal", dumpFile))
+		}
 		second = s.transferContainer("upload", uploadScript())
 	}
 
@@ -188,7 +199,7 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 						FSGroup:        ptr(int64(65532)),
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 					},
-					InitContainers: []corev1.Container{first},
+					InitContainers: first,
 					Containers:     []corev1.Container{second},
 					Volumes: []corev1.Volume{{
 						Name: "workspace",
@@ -388,6 +399,16 @@ echo "==> Restore finished"
 
 // URLSecret renders the Secret carrying a presigned URL.
 func URLSecret(name, namespace, presigned string) *corev1.Secret {
+	return JobSecret(name, namespace, presigned, "")
+}
+
+// JobSecret is URLSecret with the backup passphrase beside the URL, for a job
+// that seals or opens what it moves. It lives exactly as long as the job.
+func JobSecret(name, namespace, presigned, passphrase string) *corev1.Secret {
+	data := map[string]string{"url": presigned}
+	if passphrase != "" {
+		data["passphrase"] = passphrase
+	}
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -395,7 +416,37 @@ func URLSecret(name, namespace, presigned string) *corev1.Secret {
 			Labels: map[string]string{"app.kubernetes.io/managed-by": version.Binary},
 		},
 		Type:       corev1.SecretTypeOpaque,
-		StringData: map[string]string{"url": presigned},
+		StringData: data,
+	}
+}
+
+// sealContainer seals a staged file before it is uploaded, or opens one after
+// it is downloaded, with the panel's own binary: no database or tar image has
+// anything that does this, and the panel's image already has it.
+func sealContainer(name, image, secret, command, file string) corev1.Container {
+	return corev1.Container{
+		Name:  name,
+		Image: image,
+		// The image's entrypoint is the binary; distroless has no shell.
+		Args:         []string{command, file},
+		Env:          []corev1.EnvVar{secretEnv("SKIFITY_BACKUP_PASSPHRASE", secret, "passphrase")},
+		VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: workspace}},
+		Resources: corev1.ResourceRequirements{
+			// Argon2id takes 64 MiB, once, to derive the key.
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+			Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("512Mi")},
+		},
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: ptr(false),
+			RunAsNonRoot:             ptr(true),
+			RunAsUser:                ptr(int64(65532)),
+			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+			SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+			ReadOnlyRootFilesystem:   ptr(true),
+		},
 	}
 }
 

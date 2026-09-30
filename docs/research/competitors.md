@@ -139,7 +139,7 @@ here, or needs `make verify` on a real server.
 | 13 | **Closed in Phase 102.** Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
 | 14 | **Closed in Phase 88.** More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
 | 15 | **Closed in Phases 91 and 92.** SSO groups mapped to roles, and 2FA or SSO required per team | Portainer, Epinio, Dokploy | S–M | Yes |
-| 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
+| 16 | **Closed in Phase 104.** Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
 | 17 | **Closed in Phase 89.** Set several variables in one rollout, and import a `.env` | Dokku | S | Yes |
 | 18 | **Closed in Phases 96 and 97.** Watch paths, so a push deploys only the apps it touched; a warning for framework versions with critical advisories | Vercel, Netlify, Railway, Render, Coolify | S–M | Yes |
 | 19 | **Closed in Phases 94 and 98.** Locked deploys; a rollback that shows what it will change; maintenance mode with a page and an allow list | DigitalOcean, Kamal, Easypanel, Netlify | S–M | Yes |

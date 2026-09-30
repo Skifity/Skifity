@@ -13,6 +13,7 @@ import (
 
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
+	"skifity/internal/sealed"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 	"skifity/internal/version"
@@ -309,4 +310,43 @@ func dropNewestMigration(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// A sealed panel backup opens with the passphrase from the environment, and
+// is refused without it or with another, leaving nothing behind either way.
+func TestRestoringASealedBackupNeedsItsPassphrase(t *testing.T) {
+	dir, target, keyPath, keyring := restoreHarness(t)
+	source := filepath.Join(t.TempDir(), "backup.db")
+	panelDatabase(t, source, "from-backup@example.test", keyring)
+	backup := gzipped(t, source)
+	if err := sealed.SealFile(backup, "correct horse battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() error {
+		return adminRestoreDatabase(context.Background(),
+			[]string{backup, "--database", target, "--master-key", keyPath, "--yes"}, &bytes.Buffer{})
+	}
+
+	t.Setenv("SKIFITY_BACKUP_PASSPHRASE", "")
+	if err := restore(); err == nil || !strings.Contains(errdoc.From(err).Cause, "SKIFITY_BACKUP_PASSPHRASE") {
+		t.Fatalf("with no passphrase: %v", err)
+	}
+	t.Setenv("SKIFITY_BACKUP_PASSPHRASE", "the wrong one entirely")
+	if err := restore(); err == nil || !strings.Contains(errdoc.From(err).Cause, "different passphrase") {
+		t.Fatalf("with the wrong passphrase: %v", err)
+	}
+	if got := emailsIn(t, target); len(got) != 1 || got[0] != "current@example.test" {
+		t.Fatalf("a refused restore changed the database: %v", got)
+	}
+
+	t.Setenv("SKIFITY_BACKUP_PASSPHRASE", "correct horse battery staple")
+	if err := restore(); err != nil {
+		t.Fatalf("with the passphrase: %v", err)
+	}
+	if got := emailsIn(t, target); len(got) != 1 || got[0] != "from-backup@example.test" {
+		t.Fatalf("after the restore the database holds %v", got)
+	}
+	if leftovers, _ := filepath.Glob(filepath.Join(dir, ".restore-*")); len(leftovers) != 0 {
+		t.Fatalf("files were left behind: %v", leftovers)
+	}
 }

@@ -139,6 +139,7 @@ const (
 	KeyS3Bucket              = "storage.s3_bucket"
 	KeyPanelBackupSchedule   = "storage.panel_backup_schedule"
 	KeyPanelBackupKeep       = "storage.panel_backup_keep"
+	KeyBackupPassphrase      = "storage.backup_passphrase"
 	KeyS3AccessKey           = "storage.s3_access_key"
 	KeyS3SecretKey           = "storage.s3_secret_key"
 	KeyS3PathStyle           = "storage.s3_path_style"
@@ -396,6 +397,11 @@ var Definitions = []Definition{
 		Help:        "When to copy this panel's own database to the bucket above, as a cron schedule in UTC. Empty copies it every day at 03:17; off turns it off. The master key is never uploaded: keep it somewhere else, because a restore needs both.",
 		Placeholder: "17 3 * * *",
 		Validate:    validatePanelBackupSchedule,
+	},
+	{
+		Key: KeyBackupPassphrase, Label: "Backup passphrase", Group: GroupStorage, Secret: true,
+		Help:     "When set, every backup is encrypted with it before it leaves the cluster, so the bucket's owner cannot read it. Keep a copy somewhere else: a backup cannot be restored without it, and the panel cannot tell it to you again.",
+		Validate: validateBackupPassphrase,
 	},
 	{
 		Key: KeyPanelBackupKeep, Label: "Panel backups to keep", Group: GroupStorage,
@@ -784,4 +790,13 @@ func ParseGroupRoles(text string) ([]GroupRole, error) {
 func validateGroupRoles(value string) error {
 	_, err := ParseGroupRoles(value)
 	return err
+}
+
+// validateBackupPassphrase refuses a passphrase too short to be one. It is the
+// only thing between the bucket's owner and every row of every database.
+func validateBackupPassphrase(value string) error {
+	if value != "" && len([]rune(value)) < 12 {
+		return errors.New("a backup passphrase is at least 12 characters")
+	}
+	return nil
 }

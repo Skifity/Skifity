@@ -250,10 +250,10 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 	}
 	now := Now()
 	_, err := db.Exec(ctx, `INSERT INTO backups
-		(id, target_type, target_id, status, kind, location, size_bytes, error_message, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+		(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		b.ID, b.TargetType, b.TargetID, defaultStr(b.Status, "running"), defaultStr(b.Kind, "scheduled"),
-		b.Location, b.SizeBytes, b.ErrorMessage, now)
+		b.Location, b.SizeBytes, b.ErrorMessage, b.Encrypted, now)
 	if err != nil {
 		return fmt.Errorf("create backup: %w", err)
 	}
@@ -271,21 +271,45 @@ func (db *DB) FinishBackup(ctx context.Context, id, status, location string, siz
 	return nil
 }
 
+// backupColumns is what every query reading backups selects, in the order
+// scanBackup reads it.
+const backupColumns = `id, target_type, target_id, status, kind, location, size_bytes,
+		error_message, created_at, finished_at, encrypted, verified_at, verify_error`
+
+func scanBackup(row interface{ Scan(...any) error }) (Backup, error) {
+	var b Backup
+	var created string
+	var finished, verified sql.NullString
+	if err := row.Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location,
+		&b.SizeBytes, &b.ErrorMessage, &created, &finished, &b.Encrypted, &verified, &b.VerifyError); err != nil {
+		return b, err
+	}
+	b.CreatedAt, _ = ParseTime(created)
+	b.FinishedAt = scanTime(finished)
+	b.VerifiedAt = scanTime(verified)
+	return b, nil
+}
+
 func scanBackups(rows *sql.Rows) ([]Backup, error) {
 	out := []Backup{}
 	for rows.Next() {
-		var b Backup
-		var created string
-		var finished sql.NullString
-		if err := rows.Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location,
-			&b.SizeBytes, &b.ErrorMessage, &created, &finished); err != nil {
+		b, err := scanBackup(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan backup: %w", err)
 		}
-		b.CreatedAt, _ = ParseTime(created)
-		b.FinishedAt = scanTime(finished)
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+// RecordVerification stores the outcome of opening a backup and reading it
+// through: when it worked, or why it did not.
+func (db *DB) RecordVerification(ctx context.Context, id, verifyError string) error {
+	if _, err := db.Exec(ctx, `UPDATE backups SET verified_at = ?, verify_error = ? WHERE id = ?`,
+		Now(), verifyError, id); err != nil {
+		return fmt.Errorf("record the verification of %s: %w", id, err)
+	}
+	return nil
 }
 
 // ListUnfinishedBackups finds backups interrupted by a panel restart.
@@ -295,8 +319,7 @@ func scanBackups(rows *sql.Rows) ([]Backup, error) {
 // in progress forever, and the panel is a Deployment that restarts for an
 // upgrade or a drained node like anything else.
 func (db *DB) ListUnfinishedBackups(ctx context.Context) ([]Backup, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at FROM backups WHERE status = 'running' ORDER BY created_at`)
+	rows, err := db.QueryContext(ctx, `SELECT `+backupColumns+` FROM backups WHERE status = 'running' ORDER BY created_at`)
 	if err != nil {
 		return nil, fmt.Errorf("list unfinished backups: %w", err)
 	}
@@ -316,21 +339,13 @@ func (db *DB) ListDatabasesBeingCreated(ctx context.Context) ([]Database, error)
 
 // GetBackup looks a backup up by id.
 func (db *DB) GetBackup(ctx context.Context, id string) (Backup, error) {
-	var b Backup
-	var created string
-	var finished sql.NullString
-	err := db.QueryRowContext(ctx, `SELECT id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at FROM backups WHERE id = ?`, id).
-		Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location, &b.SizeBytes,
-			&b.ErrorMessage, &created, &finished)
+	b, err := scanBackup(db.QueryRowContext(ctx, `SELECT `+backupColumns+` FROM backups WHERE id = ?`, id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return b, ErrNotFound
 		}
 		return b, fmt.Errorf("get backup: %w", err)
 	}
-	b.CreatedAt, _ = ParseTime(created)
-	b.FinishedAt = scanTime(finished)
 	return b, nil
 }
 
@@ -339,8 +354,7 @@ func (db *DB) ListBackups(ctx context.Context, targetType, targetID string, limi
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at FROM backups
+	rows, err := db.QueryContext(ctx, `SELECT `+backupColumns+` FROM backups
 		WHERE target_type = ? AND target_id = ? ORDER BY created_at DESC LIMIT ?`, targetType, targetID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list backups: %w", err)
@@ -352,28 +366,14 @@ func (db *DB) ListBackups(ctx context.Context, targetType, targetID string, limi
 // ExpiredBackups lists successful backups beyond the retention count, which the
 // retention job then deletes from object storage.
 func (db *DB) ExpiredBackups(ctx context.Context, targetType, targetID string, keep int) ([]Backup, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at FROM backups
+	rows, err := db.QueryContext(ctx, `SELECT `+backupColumns+` FROM backups
 		WHERE target_type = ? AND target_id = ? AND status = 'succeeded'
 		ORDER BY created_at DESC LIMIT -1 OFFSET ?`, targetType, targetID, keep)
 	if err != nil {
 		return nil, fmt.Errorf("list expired backups: %w", err)
 	}
 	defer rows.Close()
-	out := []Backup{}
-	for rows.Next() {
-		var b Backup
-		var created string
-		var finished sql.NullString
-		if err := rows.Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location,
-			&b.SizeBytes, &b.ErrorMessage, &created, &finished); err != nil {
-			return nil, fmt.Errorf("scan expired backup: %w", err)
-		}
-		b.CreatedAt, _ = ParseTime(created)
-		b.FinishedAt = scanTime(finished)
-		out = append(out, b)
-	}
-	return out, rows.Err()
+	return scanBackups(rows)
 }
 
 // DeleteBackup removes a backup record once its object is gone.

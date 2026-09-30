@@ -3,7 +3,9 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -212,6 +214,35 @@ func (s *Storage) Remove(ctx context.Context, key string) error {
 		return fmt.Errorf("delete the backup %s: %w", key, err)
 	}
 	return nil
+}
+
+// ReadHeader reads the first n bytes of an object, which is all a sealed
+// backup needs to say whether a passphrase opens it.
+func (s *Storage) ReadHeader(ctx context.Context, key string, n int) ([]byte, error) {
+	options := minio.GetObjectOptions{}
+	if err := options.SetRange(0, int64(n)-1); err != nil {
+		return nil, err
+	}
+	object, err := s.client.GetObject(ctx, s.bucket, key, options)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", key, err)
+	}
+	defer func() { _ = object.Close() }()
+	header := make([]byte, n)
+	read, err := io.ReadFull(object, header)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, fmt.Errorf("read %s: %w", key, err)
+	}
+	return header[:read], nil
+}
+
+// Get streams a whole object.
+func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", key, err)
+	}
+	return object, nil
 }
 
 // Bucket is the configured bucket name, for display.

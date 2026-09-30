@@ -343,6 +343,7 @@ func (s *Server) routes() chi.Router {
 				app.Delete("/volumes/{volumeID}", s.handleDeleteVolume)
 				app.Get("/volumes/{volumeID}/backups", s.handleListVolumeBackups)
 				app.Post("/volumes/{volumeID}/backups", s.handleCreateVolumeBackup)
+				app.Post("/volumes/{volumeID}/backups/{backupID}/verify", s.handleVerifyVolumeBackup)
 				app.Post("/volumes/{volumeID}/restore/{backupID}", s.handleRestoreVolumeBackup)
 				app.Get("/volumes/{volumeID}/backup-policy", s.handleGetVolumeBackupPolicy)
 				app.Put("/volumes/{volumeID}/backup-policy", s.handleSetVolumeBackupPolicy)
@@ -357,6 +358,7 @@ func (s *Server) routes() chi.Router {
 				dbr.Delete("/link/{appID}", s.handleUnlinkDatabase)
 				dbr.Get("/backups", s.handleListBackups)
 				dbr.Post("/backups", s.handleCreateBackup)
+				dbr.Post("/backups/{backupID}/verify", s.handleVerifyDatabaseBackup)
 				dbr.Get("/backup-policy", s.handleGetBackupPolicy)
 				dbr.Put("/backup-policy", s.handleSetBackupPolicy)
 				dbr.Post("/restore/{backupID}", s.handleRestoreBackup)
@@ -400,6 +402,7 @@ func (s *Server) routes() chi.Router {
 				admin.Post("/upgrade", s.handleUpgrade)
 				admin.Get("/panel/backups", s.handleListPanelBackups)
 				admin.Post("/panel/backups", s.handleBackUpPanel)
+				admin.Post("/panel/backups/{backupID}/verify", s.handleVerifyPanelBackup)
 				// Behind the same authentication as everything else. A
 				// metrics page says how many apps and servers exist and how
 				// the panel is doing, which is not a thing to hand to

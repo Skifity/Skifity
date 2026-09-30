@@ -319,4 +319,7 @@ type BackupManager interface {
 	Verify(ctx context.Context) error
 	// BackupPanel copies the panel's own database to backup storage.
 	BackupPanel(ctx context.Context, kind string) (store.Backup, error)
+	// VerifyBackup downloads a backup, opens it and reads it through, in the
+	// background, and records the outcome on it.
+	VerifyBackup(ctx context.Context, backupID string) error
 }

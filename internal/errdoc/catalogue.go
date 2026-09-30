@@ -239,6 +239,36 @@ func PromotionNotPossible(reason string) *Problem {
 		WithDocs("/docs/concepts#promoting-a-version")
 }
 
+// BackupPassphraseMissing is a sealed backup and no passphrase to open it.
+func BackupPassphraseMissing() *Problem {
+	return New("backup.passphrase_missing", "This backup is sealed, and there is no passphrase to open it").
+		WithCause("The backup was encrypted with the backup passphrase, and none is set now.").
+		WithImpact("Nothing was restored or changed.").
+		WithFix("Enter the passphrase it was sealed with under Settings, then Storage, and restore again.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/backups#encryption")
+}
+
+// BackupWrongPassphrase is a sealed backup the current passphrase does not open.
+func BackupWrongPassphrase() *Problem {
+	return New("backup.wrong_passphrase", "The backup passphrase does not open this backup").
+		WithCause("This backup was sealed with a different passphrase than the one set now.").
+		WithImpact("Nothing was restored or changed.").
+		WithFix("Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/backups#encryption")
+}
+
+// BackupDamaged is a sealed backup that is not whole.
+func BackupDamaged(detail string) *Problem {
+	return New("backup.damaged", "This backup is damaged").
+		WithCause("%s", detail).
+		WithImpact("Nothing was restored or changed.").
+		WithFix("Restore an earlier backup, and check the storage the damaged one is in.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/backups#verifying")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

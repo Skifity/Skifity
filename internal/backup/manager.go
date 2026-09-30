@@ -78,21 +78,25 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	if err != nil {
 		return store.Backup{}, err
 	}
+	plan, err := m.sealing(ctx)
+	if err != nil {
+		return store.Backup{}, err
+	}
 
 	backup := store.Backup{
 		TargetType: targetType, TargetID: targetID,
-		Status: "running", Kind: kind,
+		Status: "running", Kind: kind, Encrypted: plan.passphrase != "",
 	}
 	backup.Location = ObjectKey(targetType, targetID, record.Name, time.Now())
 	if err := m.db.CreateBackup(ctx, &backup); err != nil {
 		return store.Backup{}, err
 	}
 
-	go m.run(context.WithoutCancel(ctx), storage, backup, record)
+	go m.run(context.WithoutCancel(ctx), storage, backup, record, plan)
 	return backup, nil
 }
 
-func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup, record store.Database) {
+func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup, record store.Database, plan sealPlan) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
 
@@ -132,7 +136,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 	}()
 
 	if err := m.cluster.Client().Applier().Apply(ctx,
-		URLSecret(secretName, env.Namespace, presigned)); err != nil {
+		JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
 		fail(err)
 		return
 	}
@@ -144,6 +148,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		CredentialsSecret: kube.ResourceName(record.Slug, "credentials"),
 		URLSecret:         secretName,
 		BackupID:          backup.ID,
+		SealImage:         plan.image,
 	})
 	if err != nil {
 		fail(err)
@@ -244,6 +249,17 @@ func (m *Manager) Restore(ctx context.Context, backupID string, overwrite bool) 
 		return store.Operation{}, err
 	}
 
+	// A sealed backup the passphrase does not open is refused here, before
+	// anything is written over.
+	storage, err := LoadStorage(ctx, m.db, m.keyring)
+	if err != nil {
+		return store.Operation{}, err
+	}
+	plan, err := m.opening(ctx, storage, backup)
+	if err != nil {
+		return store.Operation{}, err
+	}
+
 	op := store.Operation{
 		TeamID: teamID, Kind: "database.restore",
 		TargetType: "database", TargetID: record.ID,
@@ -252,11 +268,11 @@ func (m *Manager) Restore(ctx context.Context, backupID string, overwrite bool) 
 		return store.Operation{}, err
 	}
 
-	go m.runRestore(context.WithoutCancel(ctx), op, backup, record, env)
+	go m.runRestore(context.WithoutCancel(ctx), op, backup, record, env, plan)
 	return op, nil
 }
 
-func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup store.Backup, record store.Database, env store.Environment) {
+func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup store.Backup, record store.Database, env store.Environment, plan sealPlan) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
 
@@ -293,7 +309,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 		_ = m.cluster.Client().Applier().Delete(ctx, "v1", "Secret", env.Namespace, secretName)
 	}()
 	if err := m.cluster.Client().Applier().Apply(ctx,
-		URLSecret(secretName, env.Namespace, presigned)); err != nil {
+		JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
 		fail("prepare", err)
 		return
 	}
@@ -308,6 +324,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 		URLSecret:         secretName,
 		BackupID:          backup.ID,
 		Restore:           true,
+		SealImage:         plan.image,
 	})
 	if err != nil {
 		fail("restore", err)
@@ -579,21 +596,26 @@ func (m *Manager) runVolumeBackup(ctx context.Context, volumeID, kind string) (s
 		return store.Backup{}, err
 	}
 
+	plan, err := m.sealing(ctx)
+	if err != nil {
+		return store.Backup{}, err
+	}
+
 	backup := store.Backup{
 		TargetType: "volume", TargetID: volumeID,
-		Status: "running", Kind: kind,
+		Status: "running", Kind: kind, Encrypted: plan.passphrase != "",
 	}
 	backup.Location = ObjectKey("volume", volumeID, app.Slug+"-"+volume.Name, time.Now())
 	if err := m.db.CreateBackup(ctx, &backup); err != nil {
 		return store.Backup{}, err
 	}
 
-	go m.runVolume(context.WithoutCancel(ctx), storage, backup, app, env, volume)
+	go m.runVolume(context.WithoutCancel(ctx), storage, backup, app, env, volume, plan)
 	return backup, nil
 }
 
 func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.Backup,
-	app store.App, env store.Environment, volume store.Volume,
+	app store.App, env store.Environment, volume store.Volume, plan sealPlan,
 ) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
@@ -623,7 +645,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 	}()
 
 	if err := m.cluster.Client().Applier().Apply(ctx,
-		URLSecret(secretName, env.Namespace, presigned)); err != nil {
+		JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
 		fail(err)
 		return
 	}
@@ -635,6 +657,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 		URLSecret:    secretName,
 		BackupID:     backup.ID,
 		CoLocateWith: m.coLocateWith(ctx, env.Namespace, app),
+		SealImage:    plan.image,
 	})
 	if err != nil {
 		fail(err)

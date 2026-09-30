@@ -78,6 +78,10 @@ func (c *Cluster) installEdgeGuard(ctx context.Context) error {
 	return c.ensureGuardMiddlewares(ctx)
 }
 
+// PanelImage is the image the panel itself is running, for a job that needs
+// the panel's own binary — a backup's seal step. See panelImage.
+func (c *Cluster) PanelImage(ctx context.Context) (string, error) { return c.panelImage(ctx) }
+
 // panelImage is the image the panel itself is running, which is the image the
 // guard runs too: it is the same binary in another mode.
 //

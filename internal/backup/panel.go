@@ -18,6 +18,7 @@ import (
 	"skifity/internal/cron"
 	"skifity/internal/errdoc"
 	"skifity/internal/notify"
+	"skifity/internal/sealed"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 )
@@ -63,13 +64,18 @@ func (m *Manager) BackupPanel(ctx context.Context, kind string) (store.Backup, e
 	}
 	defer panelMu.Unlock()
 
-	record := store.Backup{TargetType: PanelTarget, TargetID: PanelTarget, Status: "running", Kind: kind}
+	passphrase, err := Passphrase(ctx, m.db, m.keyring)
+	if err != nil {
+		return store.Backup{}, err
+	}
+	record := store.Backup{TargetType: PanelTarget, TargetID: PanelTarget, Status: "running", Kind: kind,
+		Encrypted: passphrase != ""}
 	if err := m.db.CreateBackup(ctx, &record); err != nil {
 		return store.Backup{}, err
 	}
 
 	key := PanelObjectKey(time.Now(), record.ID)
-	size, err := m.uploadPanel(ctx, storage, key)
+	size, err := m.uploadPanel(ctx, storage, key, passphrase)
 	if err != nil {
 		m.log.Error("the panel could not back itself up", "error", err)
 		_ = m.db.FinishBackup(ctx, record.ID, "failed", "", 0, err.Error())
@@ -98,7 +104,7 @@ func (m *Manager) BackupPanel(ctx context.Context, kind string) (store.Backup, e
 // The files go beside the database rather than in /tmp, because the panel's
 // root filesystem is read-only and the data directory is the one place it can
 // write — and the one with room for a copy of the database.
-func (m *Manager) uploadPanel(ctx context.Context, storage *Storage, key string) (int64, error) {
+func (m *Manager) uploadPanel(ctx context.Context, storage *Storage, key, passphrase string) (int64, error) {
 	dir := filepath.Dir(m.db.Path())
 	snapshot := filepath.Join(dir, fmt.Sprintf(".panel-backup-%d.db", time.Now().UnixNano()))
 	defer os.Remove(snapshot)
@@ -124,6 +130,25 @@ func (m *Manager) uploadPanel(ctx context.Context, storage *Storage, key string)
 	}
 	if err := zw.Close(); err != nil {
 		return 0, fmt.Errorf("compress the copy: %w", err)
+	}
+	// Sealed in place, here rather than in a job: this is the panel's own
+	// process, and the file never leaves it in the clear.
+	if passphrase != "" {
+		if err := compressed.Sync(); err != nil {
+			return 0, err
+		}
+		if err := sealed.SealFile(compressed.Name(), passphrase); err != nil {
+			return 0, fmt.Errorf("seal the copy: %w", err)
+		}
+		// The file under that name is the sealed one now.
+		compressed.Close()
+		if compressed, err = os.Open(compressed.Name()); err != nil {
+			return 0, err
+		}
+		defer compressed.Close()
+		if _, err := compressed.Seek(0, io.SeekEnd); err != nil {
+			return 0, err
+		}
 	}
 	size, err := compressed.Seek(0, io.SeekCurrent)
 	if err != nil {

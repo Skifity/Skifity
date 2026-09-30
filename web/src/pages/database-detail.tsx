@@ -19,6 +19,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
+import { BackupVerification } from "@/components/backup-verification"
 import { ErrorDisplay } from "@/components/error-display"
 import { ScheduleField } from "@/components/schedule-field"
 import { Page, PageHeader } from "@/components/page"
@@ -237,7 +238,15 @@ function ConnectionPanel({ databaseId }: { databaseId: string }) {
   )
 }
 
-function CredentialRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
+function CredentialRow({
+  label,
+  value,
+  secret,
+}: {
+  label: string
+  value: string
+  secret?: boolean
+}) {
   const { t } = useTranslation()
   const [shown, setShown] = useState(false)
 
@@ -574,6 +583,11 @@ function BackupsPanel({ databaseId }: { databaseId: string }) {
                       {backup.error_message && (
                         <p className="mt-1 text-xs text-destructive">{backup.error_message}</p>
                       )}
+                      <BackupVerification
+                        backup={backup}
+                        verifyPath={`/api/databases/${databaseId}/backups/${backup.id}/verify`}
+                        listKey={["backups", databaseId]}
+                      />
                     </TableCell>
                     <TableCell className="hidden tabular-nums sm:table-cell">
                       {backup.size_bytes ? formatBytes(backup.size_bytes) : "—"}

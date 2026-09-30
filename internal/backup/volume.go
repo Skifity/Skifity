@@ -56,6 +56,9 @@ type VolumeJobSpec struct {
 	TimeoutSeconds int
 	// WorkspaceGB is how much room the staged archive may take.
 	WorkspaceGB int
+	// SealImage, when set, seals the archive before it is uploaded and opens
+	// it after it is downloaded, as for a database. See JobSpec.
+	SealImage string
 }
 
 // Defaults fills in the images and the bounds.
@@ -111,12 +114,19 @@ func BuildVolumeJob(s VolumeJobSpec) (*batchv1.Job, error) {
 	// A backup archives then uploads; a restore downloads then unpacks. The
 	// first step is an init container either way, so the second never starts on
 	// a half-finished file.
-	var first, second corev1.Container
+	var first []corev1.Container
+	var second corev1.Container
 	if s.Restore {
-		first = s.transfer("download", downloadVolumeScript())
+		first = []corev1.Container{s.transfer("download", downloadVolumeScript())}
+		if s.SealImage != "" {
+			first = append(first, sealContainer("open", s.SealImage, s.URLSecret, "backup-open", archiveFile))
+		}
 		second = s.files("unpack", unpackScript())
 	} else {
-		first = s.files("archive", archiveScript())
+		first = []corev1.Container{s.files("archive", archiveScript())}
+		if s.SealImage != "" {
+			first = append(first, sealContainer("seal", s.SealImage, s.URLSecret, "backup-seal", archiveFile))
+		}
 		second = s.transfer("upload", uploadVolumeScript())
 	}
 
@@ -139,7 +149,7 @@ func BuildVolumeJob(s VolumeJobSpec) (*batchv1.Job, error) {
 			FSGroup:        ptr(int64(65532)),
 			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 		},
-		InitContainers: []corev1.Container{first},
+		InitContainers: first,
 		Containers:     []corev1.Container{second},
 		Volumes: []corev1.Volume{
 			{

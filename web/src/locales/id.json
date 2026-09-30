@@ -1234,6 +1234,10 @@
       "signin_oidc_group_roles": {
         "label": "Grup ke tim",
         "help": "Satu per baris: sebuah grup, lalu tim dan peran yang diberikannya, seperti platform-admins = acme:admin. Tim yang disebut di sini mengikuti grup di setiap single sign-on: seseorang mendapat peran tertinggi yang diberikan grupnya, dan keluar dari tim bila tidak ada. Tim yang tidak disebut di sini dibiarkan, dan pemilik terakhir sebuah tim tidak pernah dikeluarkan."
+      },
+      "storage_backup_passphrase": {
+        "label": "Frasa sandi cadangan",
+        "help": "Jika diisi, setiap cadangan dienkripsi dengannya sebelum keluar dari cluster, sehingga pemilik bucket tidak bisa membacanya. Simpan salinannya di tempat lain: cadangan tidak bisa dipulihkan tanpanya, dan panel tidak bisa memberitahukannya lagi kepada Anda."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -2352,6 +2356,24 @@
         "cause": "{{0}}",
         "impact": "Tidak ada yang di-deploy.",
         "fix": "Promosikan antara aplikasi yang sama di dua environment dalam satu proyek, dari versi yang berhasil di-deploy."
+      },
+      "backup_passphrase_missing": {
+        "title": "Cadangan ini tersegel, dan tidak ada frasa sandi untuk membukanya",
+        "cause": "Cadangan dienkripsi dengan frasa sandi cadangan, dan saat ini tidak ada yang diatur.",
+        "impact": "Tidak ada yang dipulihkan atau diubah.",
+        "fix": "Masukkan frasa sandi yang dipakai untuk menyegelnya di Settings, lalu Storage, dan pulihkan lagi."
+      },
+      "backup_wrong_passphrase": {
+        "title": "Frasa sandi cadangan tidak membuka cadangan ini",
+        "cause": "Cadangan ini disegel dengan frasa sandi yang berbeda dari yang diatur sekarang.",
+        "impact": "Tidak ada yang dipulihkan atau diubah.",
+        "fix": "Atur frasa sandi yang dipakai untuk menyegelnya di Settings, lalu Storage, pulihkan, lalu kembalikan frasa sandi saat ini."
+      },
+      "backup_damaged": {
+        "title": "Cadangan ini rusak",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dipulihkan atau diubah.",
+        "fix": "Pulihkan cadangan yang lebih lama, dan periksa penyimpanan tempat cadangan yang rusak berada."
       }
     }
   },
@@ -2674,5 +2696,12 @@
       "linux_amd64": "Linux",
       "linux_arm64": "Linux di Arm"
     }
+  },
+  "backups": {
+    "sealed": "Tersegel",
+    "verify": "Verifikasi",
+    "verifying": "Memverifikasi…",
+    "verified": "Dibuka dan dibaca utuh {{when}}",
+    "verifyFailed": "Tidak terbaca utuh: {{reason}}"
   }
 }

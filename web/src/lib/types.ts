@@ -305,6 +305,12 @@ export type Backup = {
   error_message?: string
   created_at: string
   finished_at?: string
+  /** Sealed with the backup passphrase. */
+  encrypted: boolean
+  /** When it was last downloaded, opened and read through. */
+  verified_at?: string
+  /** Why that did not work, when it did not. */
+  verify_error?: string
 }
 
 export type BackupPolicy = {

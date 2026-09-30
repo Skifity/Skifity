@@ -19,6 +19,7 @@ import (
 	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/mcpserver"
+	"skifity/internal/sealed"
 	"skifity/internal/serverapp"
 	"skifity/internal/version"
 	"skifity/web"
@@ -50,6 +51,16 @@ func main() {
 	case "edge-guard":
 		if err := runGuard(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s edge-guard: %s\n\n", version.Binary, err)
+			os.Exit(1)
+		}
+
+	// A backup job's seal and open steps: the panel's own image, sealing the
+	// dump before it is uploaded and opening it after it is downloaded. The
+	// passphrase arrives in the environment, from a Secret that lives as long
+	// as the job.
+	case "backup-seal", "backup-open":
+		if err := runSeal(args[0], args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "\n%s %s: %s\n\n", version.Binary, args[0], err)
 			os.Exit(1)
 		}
 
@@ -149,4 +160,21 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// runSeal seals or opens one file in place.
+func runSeal(command string, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: %s %s <file>", version.Binary, command)
+	}
+	passphrase := os.Getenv("SKIFITY_BACKUP_PASSPHRASE")
+	if passphrase == "" {
+		return fmt.Errorf("SKIFITY_BACKUP_PASSPHRASE is not set")
+	}
+	if command == "backup-seal" {
+		fmt.Println("==> Sealing the backup")
+		return sealed.SealFile(args[0], passphrase)
+	}
+	fmt.Println("==> Opening the backup")
+	return sealed.OpenFile(args[0], passphrase)
 }

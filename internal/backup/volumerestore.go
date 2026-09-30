@@ -68,6 +68,17 @@ func (m *Manager) RestoreVolume(ctx context.Context, backupID string, overwrite 
 		return store.Operation{}, err
 	}
 
+	// Before the app is stopped: a passphrase that does not open the backup
+	// should cost nothing.
+	storage, err := LoadStorage(ctx, m.db, m.keyring)
+	if err != nil {
+		return store.Operation{}, err
+	}
+	plan, err := m.opening(ctx, storage, backup)
+	if err != nil {
+		return store.Operation{}, err
+	}
+
 	op := store.Operation{
 		TeamID: teamID, Kind: "volume.restore",
 		TargetType: "volume", TargetID: volume.ID,
@@ -76,12 +87,12 @@ func (m *Manager) RestoreVolume(ctx context.Context, backupID string, overwrite 
 		return store.Operation{}, err
 	}
 
-	go m.runVolumeRestore(context.WithoutCancel(ctx), op, backup, app, env, volume)
+	go m.runVolumeRestore(context.WithoutCancel(ctx), op, backup, app, env, volume, plan)
 	return op, nil
 }
 
 func (m *Manager) runVolumeRestore(ctx context.Context, op store.Operation, backup store.Backup,
-	app store.App, env store.Environment, volume store.Volume,
+	app store.App, env store.Environment, volume store.Volume, plan sealPlan,
 ) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
@@ -152,7 +163,7 @@ func (m *Manager) runVolumeRestore(ctx context.Context, op store.Operation, back
 			m.log.Warn("could not remove the restore URL secret", "operation", op.ID, "error", err)
 		}
 	}()
-	if err := client.Applier().Apply(ctx, URLSecret(secretName, env.Namespace, presigned)); err != nil {
+	if err := client.Applier().Apply(ctx, JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
 		fail("restore", err)
 		return
 	}
@@ -164,6 +175,7 @@ func (m *Manager) runVolumeRestore(ctx context.Context, op store.Operation, back
 		URLSecret: secretName,
 		Restore:   true,
 		BackupID:  backup.ID,
+		SealImage: plan.image,
 		// No co-location: the app is stopped, so there is no pod to sit beside
 		// and an affinity to pods that do not exist can never be satisfied.
 	})

@@ -1234,6 +1234,10 @@
       "signin_oidc_group_roles": {
         "label": "群组到团队",
         "help": "每行一条：一个群组，然后是它授予的团队和角色，例如 platform-admins = acme:admin。这里列出的团队在每次单点登录时都跟随群组：一个人获得其群组给予的最高角色，若没有任何群组给予则离开团队。未在此列出的团队保持不变，团队的最后一位所有者永远不会被移除。"
+      },
+      "storage_backup_passphrase": {
+        "label": "备份口令",
+        "help": "设置后，每个备份在离开集群之前都会用它加密，存储桶的所有者无法读取。请在别处保存一份：没有它就无法恢复备份，面板也无法再次告诉您。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -2352,6 +2356,24 @@
         "cause": "{{0}}",
         "impact": "没有部署任何内容。",
         "fix": "请在同一项目两个环境中的同一应用之间，从已成功部署的版本进行提升。"
+      },
+      "backup_passphrase_missing": {
+        "title": "此备份已加密，但没有可用于打开它的口令",
+        "cause": "该备份使用备份口令加密，而当前未设置口令。",
+        "impact": "没有恢复或更改任何内容。",
+        "fix": "请在 Settings 的 Storage 中输入加密时使用的口令，然后重新恢复。"
+      },
+      "backup_wrong_passphrase": {
+        "title": "备份口令无法打开此备份",
+        "cause": "此备份使用的口令与当前设置的不同。",
+        "impact": "没有恢复或更改任何内容。",
+        "fix": "请在 Settings 的 Storage 中设置加密时使用的口令，完成恢复后再改回当前口令。"
+      },
+      "backup_damaged": {
+        "title": "此备份已损坏",
+        "cause": "{{0}}",
+        "impact": "没有恢复或更改任何内容。",
+        "fix": "请恢复较早的备份，并检查存放损坏备份的存储。"
       }
     }
   },
@@ -2674,5 +2696,12 @@
       "linux_amd64": "Linux",
       "linux_arm64": "Arm 版 Linux"
     }
+  },
+  "backups": {
+    "sealed": "已加密",
+    "verify": "验证",
+    "verifying": "正在验证…",
+    "verified": "已于 {{when}} 打开并完整读取",
+    "verifyFailed": "无法完整读取：{{reason}}"
   }
 }

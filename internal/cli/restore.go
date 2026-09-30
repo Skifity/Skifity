@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"skifity/internal/config"
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
+	"skifity/internal/sealed"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 	"skifity/internal/version"
@@ -171,6 +173,28 @@ func unpackBackup(source, path string) error {
 	defer in.Close()
 
 	buffered := bufio.NewReader(in)
+	// A sealed backup is opened into a file of its own first, and used only
+	// once all of it has been authenticated: a file cut short must not become
+	// a database with half its rows.
+	if start, err := buffered.Peek(sealed.HeaderSize); err == nil && sealed.IsSealed(start) {
+		passphrase := os.Getenv("SKIFITY_BACKUP_PASSPHRASE")
+		if passphrase == "" {
+			return errors.New("it is sealed with the backup passphrase: set SKIFITY_BACKUP_PASSPHRASE to it and run this again")
+		}
+		opened, err := os.CreateTemp(filepath.Dir(path), ".restore-open-*")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(opened.Name())
+		defer opened.Close()
+		if err := sealed.Open(opened, buffered, passphrase); err != nil {
+			return fmt.Errorf("open it: %w", err)
+		}
+		if _, err := opened.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		buffered = bufio.NewReader(opened)
+	}
 	var reader io.Reader = buffered
 	if magic, err := buffered.Peek(2); err == nil && magic[0] == 0x1f && magic[1] == 0x8b {
 		zr, err := gzip.NewReader(buffered)

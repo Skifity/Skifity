@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { BackupVerification } from "@/components/backup-verification"
 import { useConfirm, useDeleteConfirm } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay, toProblem } from "@/components/error-display"
@@ -448,6 +449,11 @@ function VolumeBackupsDialog({
                       {t(`databases.backupStatus.${backup.status}`, {
                         defaultValue: backup.status,
                       })}
+                      <BackupVerification
+                        backup={backup}
+                        verifyPath={`/api/apps/${appID}/volumes/${volume.id}/backups/${backup.id}/verify`}
+                        listKey={["volume-backups", volume.id]}
+                      />
                     </TableCell>
                     <TableCell className="text-right">
                       {backup.status === "succeeded" && (

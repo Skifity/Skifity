@@ -5121,6 +5121,53 @@ another team's and another project's; and where a version can be promoted to.
 
 Not executed: a promoted image pulled by a second namespace in a real cluster.
 
+## Phase 104 — backups sealed with a passphrase, and checked
+
+Gap 16. A backup is every row of a database, and it sat in a bucket as a gzip
+that whoever runs the bucket could read; and nothing had ever shown one could
+be restored short of restoring it. Cloudron, Dokploy and Dokku encrypt with a
+passphrase; Cloudron checks.
+
+`internal/sealed` is the format, a package of its own because the backup jobs,
+the panel verifying a backup and `restore-db` all need it and cannot all import
+the backup package: a header of magic, a per-file Argon2id salt, a key-check
+value and a nonce prefix, then AES-256-GCM chunks of 64 KiB whose nonces carry
+their number and a last-chunk flag and which authenticate the header too. A
+changed, dropped, reordered or appended chunk, and a file cut short at or
+between chunks, are refused; a wrong passphrase is told apart from damage.
+
+A **Backup passphrase** setting (secret, at least 12 characters) turns it on.
+Database and volume jobs gain a step between making the archive and uploading
+it — the panel's own image, running the new hidden `backup-seal` command — and
+restores one between downloading and loading (`backup-open`); the passphrase
+travels in the job's Secret beside the upload URL. A backup meant to be sealed
+fails rather than going up in the clear when the panel's image cannot be found.
+The panel's own backup is sealed in-process. Backups record whether they are
+sealed (migration 0031), and a restore of a sealed one checks the passphrase
+against the object's header, read with a ranged request, before anything is
+stopped. `restore-db` opens a sealed panel backup with
+`SKIFITY_BACKUP_PASSPHRASE`, into a file of its own used only once whole.
+
+**Verify** (`POST …/backups/{id}/verify`, from each list: a database's, a
+volume's, the panel's) downloads a backup in the background, opens it when
+sealed and reads the gzip to its end, recording when it last worked or why it
+did not. The lists show sealed and verified.
+
+On the way: `ExpiredBackups` scanned its own column list, which a new column
+would have broken silently — retention would have stopped deleting anything.
+Every backup query now shares one list and one scanner, and the panel-backup
+retention test caught it.
+
+Tested: round trips at every chunk boundary, two seals of one file differing,
+the wrong passphrase, seven kinds of damage; reading a backup through, sealed or
+not, and six ways one fails; the jobs with and without a seal step and the
+Secret with and without a passphrase; `restore-db` with the passphrase, without
+it and with the wrong one, leaving nothing behind; the verify route belonging
+to its list.
+
+Not executed: the seal step in a real cluster, where the pod's group is what
+lets three containers running as three users share the workspace.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

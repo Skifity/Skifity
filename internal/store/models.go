@@ -491,6 +491,12 @@ type Backup struct {
 	ErrorMessage string    `json:"error_message,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	FinishedAt   time.Time `json:"finished_at,omitzero"`
+	// Encrypted is sealed with the backup passphrase. See backup/seal.go.
+	Encrypted bool `json:"encrypted"`
+	// VerifiedAt is when it was last downloaded, opened and read through;
+	// VerifyError is why that did not work, empty when it did.
+	VerifiedAt  time.Time `json:"verified_at,omitzero"`
+	VerifyError string    `json:"verify_error,omitempty"`
 }
 
 // GitSource is a connection to a Git host.

@@ -25,6 +25,7 @@ import (
 type recordingBackups struct {
 	restoredVolume string
 	overwrite      bool
+	verified       string
 }
 
 func (r *recordingBackups) Run(context.Context, string, string, string) (store.Backup, error) {
@@ -41,6 +42,11 @@ func (r *recordingBackups) RestoreVolume(_ context.Context, backupID string, ove
 }
 
 func (r *recordingBackups) Verify(context.Context) error { return nil }
+
+func (r *recordingBackups) VerifyBackup(_ context.Context, backupID string) error {
+	r.verified = backupID
+	return nil
+}
 
 func (r *recordingBackups) BackupPanel(context.Context, string) (store.Backup, error) {
 	return store.Backup{ID: "bkp_panel", TargetType: "panel", TargetID: "panel", Status: "succeeded"}, nil
@@ -241,5 +247,25 @@ func TestCreatingAnAppAlwaysAnswersWithTheAppInside(t *testing.T) {
 					"file naming nothing: %s", body)
 			}
 		})
+	}
+}
+
+// A backup is verified from where it is listed, and only a backup of the thing
+// that route is about can be named there.
+func TestABackupIsVerifiedFromWhereItIsListed(t *testing.T) {
+	h := newHarness(t)
+	recorder := &recordingBackups{}
+	h.api.backups = recorder
+	owner := h.newTenant("verifier")
+	mine, backup := h.volumeWithBackup(t, owner, "mine-app")
+	_, theirs := h.volumeWithBackup(t, owner, "other-app")
+	path := "/api/apps/" + mine.AppID + "/volumes/" + mine.ID + "/backups/"
+
+	if status, body := h.do(owner, http.MethodPost, path+backup.ID+"/verify", nil); status != http.StatusAccepted || recorder.verified != backup.ID {
+		t.Fatalf("verifying answered %d (%s), and %q was verified", status, body, recorder.verified)
+	}
+	recorder.verified = ""
+	if status, _ := h.do(owner, http.MethodPost, path+theirs.ID+"/verify", nil); status != http.StatusNotFound || recorder.verified != "" {
+		t.Fatalf("another volume's backup answered %d, and %q was verified", status, recorder.verified)
 	}
 }

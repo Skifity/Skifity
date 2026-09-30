@@ -1248,6 +1248,10 @@
       "signin_oidc_group_roles": {
         "label": "Groups to teams",
         "help": "One per line: a group, then the team and the role it gives, as platform-admins = acme:admin. A team named here follows the groups at every single sign-on: a person gets the highest role their groups give, and leaves the team when none do. Teams not named here are left alone, and a team's last owner is never removed."
+      },
+      "storage_backup_passphrase": {
+        "label": "Backup passphrase",
+        "help": "When set, every backup is encrypted with it before it leaves the cluster, so the bucket's owner cannot read it. Keep a copy somewhere else: a backup cannot be restored without it, and the panel cannot tell it to you again."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -2366,6 +2370,24 @@
         "cause": "{{0}}",
         "impact": "Nothing was deployed.",
         "fix": "Promote between the same app in two environments of one project, from a version that deployed."
+      },
+      "backup_passphrase_missing": {
+        "title": "This backup is sealed, and there is no passphrase to open it",
+        "cause": "The backup was encrypted with the backup passphrase, and none is set now.",
+        "impact": "Nothing was restored or changed.",
+        "fix": "Enter the passphrase it was sealed with under Settings, then Storage, and restore again."
+      },
+      "backup_wrong_passphrase": {
+        "title": "The backup passphrase does not open this backup",
+        "cause": "This backup was sealed with a different passphrase than the one set now.",
+        "impact": "Nothing was restored or changed.",
+        "fix": "Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back."
+      },
+      "backup_damaged": {
+        "title": "This backup is damaged",
+        "cause": "{{0}}",
+        "impact": "Nothing was restored or changed.",
+        "fix": "Restore an earlier backup, and check the storage the damaged one is in."
       }
     }
   },
@@ -2690,5 +2712,12 @@
       "linux_amd64": "Linux",
       "linux_arm64": "Linux on Arm"
     }
+  },
+  "backups": {
+    "sealed": "Sealed",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "verified": "Opened and read through {{when}}",
+    "verifyFailed": "Did not read through: {{reason}}"
   }
 }

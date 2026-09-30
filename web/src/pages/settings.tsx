@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
+import { BackupVerification } from "@/components/backup-verification"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
@@ -532,6 +533,11 @@ function PanelBackupsCard() {
                         {backup.error_message}
                       </p>
                     )}
+                    <BackupVerification
+                      backup={backup}
+                      verifyPath={`/api/panel/backups/${backup.id}/verify`}
+                      listKey={["panel-backups"]}
+                    />
                   </TableCell>
                   <TableCell className="hidden tabular-nums sm:table-cell">
                     {backup.size_bytes ? formatBytes(backup.size_bytes) : "—"}

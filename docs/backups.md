@@ -23,6 +23,43 @@ restore.
 That is why backup storage is configured once, centrally, rather than per app:
 there is nothing to hand out.
 
+## Encryption
+
+Whoever runs the bucket can read what is in it. Set a **Backup passphrase**
+under **Settings → Backup storage** and every backup — databases, volumes and
+the panel's own — is encrypted before it leaves the cluster, with a key the
+bucket's owner never sees.
+
+In a backup job, a step running the panel's own image seals the dump between
+making it and uploading it; a restore opens it between downloading and
+loading. The passphrase reaches the job the way the upload URL does, in a
+Secret that exists for as long as the job. If the panel's image cannot be
+found, the backup fails rather than going up unencrypted.
+
+The format is AES-256-GCM in 64 KiB chunks, with a key derived from the
+passphrase by Argon2id and a fresh salt for every file. Every chunk is
+authenticated along with its position and whether it is the last, so a backup
+that was changed, reordered or cut short is refused rather than restored as a
+smaller database — and the header carries a check value, so the wrong
+passphrase is told apart from damage.
+
+**Keep the passphrase somewhere else.** The panel stores it encrypted and never
+shows it again, and a sealed backup cannot be restored without it — which is
+the point, and also what makes losing it final. Changing it affects backups
+taken afterwards; restoring an older one asks for the passphrase it was sealed
+with, and the panel checks that against the backup before stopping or
+overwriting anything. Backups taken before a passphrase was set stay as they
+were, and are restored as they were.
+
+## Verifying
+
+A backup nobody has tried to restore is a hope. **Verify** beside a backup
+downloads it, opens it when it is sealed, and reads the archive through to the
+end in the background; the list then says when it was last read through, or why
+it could not be — a wrong passphrase, a chunk missing or changed, an archive cut
+short or not an archive at all. It proves everything a restore depends on
+except whether the database accepts the dump, which only a restore does.
+
 ## Schedules
 
 Each database has its own schedule, set on its Backups tab, written as cron:
@@ -102,6 +139,11 @@ Download the copy from the bucket to the panel's server, then:
 ```sh
 sudo skifity admin restore-db ./20260930-031700-bak-9f2c-panel.db.gz
 ```
+
+A sealed copy needs its passphrase in the environment:
+`sudo SKIFITY_BACKUP_PASSPHRASE='…' skifity admin restore-db ./…panel.db.gz`.
+The file is opened into a copy of its own and used only once every chunk has
+been authenticated.
 
 Without `--yes` it changes nothing. It checks that the file is a panel's
 database, that SQLite finds it whole, that it has at least one account, and
