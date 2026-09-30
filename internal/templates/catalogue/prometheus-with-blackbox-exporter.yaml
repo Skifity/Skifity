@@ -1,0 +1,107 @@
+id: prometheus-with-blackbox-exporter
+name: Prometheus With Blackbox Exporter
+description: Probe websites and services from the outside over HTTP, TCP and DNS, and keep the results in
+  Prometheus.
+category: monitoring
+website: https://github.com/prometheus/blackbox_exporter
+services:
+- name: prometheus
+  image: prom/prometheus:v3.15.0
+  port: 9090
+  public: true
+  health_path: /-/ready
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  volumes:
+  - name: prometheus-data
+    mount_path: /prometheus
+    size_gb: 20
+  files:
+  - path: /etc/prometheus/prometheus.yml
+    content: |
+      # Prometheus reads this at start. Each address under "targets" in the
+      # blackbox job is probed through the blackbox exporter next to it; add
+      # yours there and redeploy.
+      global:
+        scrape_interval: 30s
+        evaluation_interval: 30s
+
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets: ["localhost:9090"]
+
+        - job_name: blackbox-exporter
+          static_configs:
+            - targets: ["blackbox-exporter:9115"]
+
+        - job_name: blackbox-http
+          metrics_path: /probe
+          params:
+            module: [http_2xx]
+          static_configs:
+            - targets:
+                - https://example.com
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: blackbox-exporter:9115
+- name: blackbox-exporter
+  image: prom/blackbox-exporter:v0.28.0
+  port: 9115
+  public: false
+  health_path: /-/healthy
+  mem_request_mb: 32
+  mem_limit_mb: 128
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  files:
+  - path: /etc/blackbox_exporter/config.yml
+    content: |
+      # The ways of probing a target. Prometheus names one in the "module"
+      # parameter of a scrape job.
+      modules:
+        http_2xx:
+          prober: http
+          timeout: 10s
+          http:
+            preferred_ip_protocol: ip4
+            follow_redirects: true
+        http_post_2xx:
+          prober: http
+          timeout: 10s
+          http:
+            method: POST
+            preferred_ip_protocol: ip4
+        tcp_connect:
+          prober: tcp
+          timeout: 10s
+          tcp:
+            preferred_ip_protocol: ip4
+        tls_connect:
+          prober: tcp
+          timeout: 10s
+          tcp:
+            tls: true
+            preferred_ip_protocol: ip4
+        dns_example:
+          prober: dns
+          timeout: 5s
+          dns:
+            query_name: example.com
+            query_type: A
+            preferred_ip_protocol: ip4
+notes: This template installs 2 apps. Prometheus probes https://example.com through the blackbox
+  exporter every thirty seconds; replace it with your own addresses by editing
+  /etc/prometheus/prometheus.yml on the prometheus app's Files and redeploying. probe_success and
+  probe_duration_seconds are the series to graph and alert on. The exporter has no domain on purpose - a
+  public one would probe anything for anybody. Prometheus has no sign-in of its own, so keep its address
+  to yourself, or make it internal and read it through Grafana in the same environment. ICMP pings are
+  not included; they need a capability containers here do not get. The exporter's image starts as root
+  and Prometheus's names its user rather than giving a uid, so the environment needs the baseline pod
+  security level.

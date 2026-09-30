@@ -1,0 +1,61 @@
+id: answer
+name: Apache Answer
+description: A Q&A platform for teams and communities - a help center, a knowledge base or a community
+  forum.
+category: communication
+website: https://answer.apache.org
+services:
+- name: answer
+  image: apache/answer:2.0.2
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TIMEZONE: UTC
+    AUTO_INSTALL: 'true'
+    DB_TYPE: postgres
+    LANGUAGE: en-US
+    SITE_NAME: Answer
+    ADMIN_NAME: admin
+  # Answer wants the database as host:port in one value; the command joins
+  # the two pieces the link delivers before handing over to the image.
+  command: export DB_HOST="${ANSWER_DB_HOST}:${ANSWER_DB_PORT}"; exec /entrypoint.sh
+  volumes:
+  - name: answer-data
+    mount_path: /data
+    size_gb: 5
+databases:
+- name: answer-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - answer
+  var_name: ANSWER_DATABASE_URL
+  vars:
+    host: ANSWER_DB_HOST
+    port: ANSWER_DB_PORT
+    name: DB_NAME
+    user: DB_USERNAME
+    password: DB_PASSWORD
+inputs:
+- key: SITE_URL
+  label: Public URL
+  help: The address Answer will be reached at, including https://.
+  required: true
+- key: CONTACT_EMAIL
+  label: Contact email
+  required: true
+- key: ADMIN_EMAIL
+  label: Admin email
+  required: true
+- key: ADMIN_PASSWORD
+  label: Admin password
+  help: 8 to 32 characters.
+  secret: true
+  generate: true
+notes: The first start installs Answer into the database with the details from the install; sign in with
+  the admin email and password. Uploads and the configuration it writes live on the app's disk. The image
+  starts as root, so the environment needs the baseline pod security level.

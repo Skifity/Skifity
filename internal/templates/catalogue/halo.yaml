@@ -1,0 +1,47 @@
+id: halo
+name: Halo
+description: A powerful and easy-to-use website builder and blogging platform, with themes and plugins.
+category: cms
+website: https://www.halo.run
+services:
+- name: halo
+  image: halohub/halo:2.26.1
+  port: 8090
+  public: true
+  mem_request_mb: 512
+  mem_limit_mb: 1536
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  variables:
+    TZ: UTC
+    JVM_OPTS: -XX:MaxRAMPercentage=60.0
+    SPRING_SQL_INIT_PLATFORM: postgresql
+  # Halo takes its database as an R2DBC URL only, so the URL is put together
+  # from the pieces the link delivers, by the shell the command runs in.
+  command: export SPRING_R2DBC_URL="r2dbc:pool:postgresql://${HALO_DB_HOST}:${HALO_DB_PORT}/${HALO_DB_NAME}";
+    exec java ${JVM_OPTS} -XX:SharedArchiveFile=application.jsa -jar application.jar
+  volumes:
+  - name: halo-data
+    mount_path: /root/.halo2
+    size_gb: 5
+databases:
+- name: halo-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - halo
+  var_name: HALO_DATABASE_URL
+  vars:
+    host: HALO_DB_HOST
+    port: HALO_DB_PORT
+    name: HALO_DB_NAME
+    user: SPRING_R2DBC_USERNAME
+    password: SPRING_R2DBC_PASSWORD
+inputs:
+- key: HALO_EXTERNAL_URL
+  label: Public URL
+  help: The address the site will be reached at, including https://.
+  required: true
+notes: Open the app's address to run the setup wizard, which creates the administrator; the console is
+  at /console. Themes, plugins and attachments are kept on the app's disk. The image starts as root, so
+  the environment needs the baseline pod security level.

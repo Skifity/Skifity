@@ -1,0 +1,83 @@
+id: grafana-with-prometheus
+name: Grafana With Prometheus
+description: Grafana dashboards on top of a Prometheus that is already connected, ready for metrics.
+category: monitoring
+website: https://grafana.com/docs/grafana/latest/getting-started/get-started-grafana-prometheus/
+services:
+- name: grafana
+  image: grafana/grafana:13.2.3
+  port: 3000
+  public: true
+  health_path: /api/health
+  mem_request_mb: 192
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GF_SECURITY_ADMIN_USER: admin
+    GF_ANALYTICS_REPORTING_ENABLED: 'false'
+  volumes:
+  - name: grafana-data
+    mount_path: /var/lib/grafana
+    size_gb: 5
+  files:
+  - path: /etc/grafana/provisioning/datasources/prometheus.yaml
+    content: |
+      # Provisioned at start: the Prometheus installed next to Grafana,
+      # reached by its name inside the environment.
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+          editable: false
+- name: prometheus
+  image: prom/prometheus:v3.15.0
+  port: 9090
+  public: false
+  health_path: /-/ready
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  volumes:
+  - name: prometheus-data
+    mount_path: /prometheus
+    size_gb: 20
+  files:
+  - path: /etc/prometheus/prometheus.yml
+    content: |
+      # Prometheus reads this at start. Add a job under scrape_configs for each
+      # thing to watch, then redeploy. Another app in the same environment is
+      # reached by its name and port.
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets: ["localhost:9090"]
+        - job_name: grafana
+          static_configs:
+            - targets: ["grafana:3000"]
+inputs:
+- key: GF_SECURITY_ADMIN_PASSWORD
+  label: Admin password
+  help: The password for the admin user.
+  secret: true
+  generate: true
+- key: GF_SERVER_ROOT_URL
+  label: Public URL
+  help: The address Grafana will be reached at, including https://. Links in alerts and invitations use
+    it.
+  required: true
+notes: This template installs 2 apps. Sign in to Grafana as admin with the password from the install; the
+  Prometheus data source is already there, and Prometheus is scraping itself and Grafana. Prometheus has
+  no domain and no sign-in of its own - it is reached only by Grafana, inside the environment. Add
+  targets by editing /etc/prometheus/prometheus.yml on the prometheus app's Files and redeploying it. The
+  Prometheus image runs as the user nobody, named rather than given as a uid, which the restricted level
+  cannot check, so the environment needs the baseline pod security level.

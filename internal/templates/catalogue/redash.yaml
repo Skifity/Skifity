@@ -1,0 +1,85 @@
+id: redash
+name: Redash
+description: Connect to your databases, query them in SQL, and share the results as visualisations and
+  dashboards.
+category: analytics
+website: https://redash.io
+services:
+- name: redash
+  image: redash/redash:26.9.0
+  port: 5000
+  public: true
+  health_path: /ping
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    PYTHONUNBUFFERED: '0'
+    REDASH_LOG_LEVEL: INFO
+    REDASH_WEB_WORKERS: '2'
+  command: /app/bin/docker-entrypoint manage database create_tables && /app/bin/docker-entrypoint manage db
+    upgrade && exec /app/bin/docker-entrypoint server
+- name: redash-worker
+  image: redash/redash:26.9.0
+  port: 0
+  public: false
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    PYTHONUNBUFFERED: '0'
+    REDASH_LOG_LEVEL: INFO
+    QUEUES: queries,scheduled_queries,schemas,periodic,emails,default
+    WORKERS_COUNT: '2'
+  command: exec /app/bin/docker-entrypoint worker
+- name: redash-scheduler
+  image: redash/redash:26.9.0
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  variables:
+    PYTHONUNBUFFERED: '0'
+    REDASH_LOG_LEVEL: INFO
+  command: exec /app/bin/docker-entrypoint scheduler
+databases:
+- name: redash-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - redash
+  - redash-worker
+  - redash-scheduler
+  var_name: REDASH_DATABASE_URL
+- name: redash-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - redash
+  - redash-worker
+  - redash-scheduler
+  var_name: REDASH_REDIS_URL
+inputs:
+- key: REDASH_HOST
+  label: Public URL
+  help: The address Redash will be reached at, including https://. Links in emails use it.
+  required: true
+- key: REDASH_COOKIE_SECRET
+  label: Cookie secret
+  secret: true
+  generate: true
+- key: REDASH_SECRET_KEY
+  label: Secret key
+  help: Encrypts the data source credentials stored in the database. Keep it.
+  secret: true
+  generate: true
+notes: This template installs 3 apps from the same image, started three ways - the web server, a worker
+  for queries, schema refreshes and emails, and the scheduler. The web server creates the tables on the
+  first start and runs the migrations on every start. Open its address to create the admin account and
+  the first data source. Email is off until the REDASH_MAIL_ variables are set on all three. The image
+  runs as the user redash, named rather than given as a uid, which the restricted level cannot check, so
+  the environment needs the baseline pod security level.

@@ -1,0 +1,60 @@
+id: gatus
+name: Gatus
+description: A status page and uptime monitor configured in one YAML file, with HTTP, TCP, DNS and
+  certificate checks and alerts.
+category: monitoring
+website: https://gatus.io
+services:
+- name: gatus
+  image: twinproduction/gatus:v5.37.0
+  port: 8080
+  public: true
+  health_path: /health
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  variables:
+    GATUS_CONFIG_PATH: /config/config.yaml
+  volumes:
+  - name: gatus-data
+    mount_path: /data
+    size_gb: 1
+  files:
+  - path: /config/config.yaml
+    content: |
+      # Everything Gatus checks is listed here. Add an endpoint, redeploy, and
+      # it appears on the status page. Conditions, alerting and the rest:
+      # https://github.com/TwiN/gatus#configuration
+      storage:
+        type: sqlite
+        path: /data/data.db
+
+      ui:
+        title: Status
+        header: Status
+
+      endpoints:
+        - name: Example website
+          group: Websites
+          url: https://example.com
+          interval: 5m
+          conditions:
+            - "[STATUS] == 200"
+            - "[RESPONSE_TIME] < 2000"
+            - "[CERTIFICATE_EXPIRATION] > 168h"
+
+        - name: Cloudflare DNS
+          group: Infrastructure
+          url: 1.1.1.1
+          interval: 5m
+          dns:
+            query-name: example.com
+            query-type: A
+          conditions:
+            - "[DNS_RCODE] == NOERROR"
+notes: Gatus checks example.com and a DNS resolver to show it working. Replace them with your own by
+  editing /config/config.yaml on the app's Files and redeploying; an app in the same environment is
+  reached by its name and port. History is kept in SQLite on the app's disk. The status page is public by
+  design; add a security section with basic or OIDC authentication to the file if it should not be. The
+  image starts as root, so the environment needs the baseline pod security level.

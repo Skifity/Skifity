@@ -1,0 +1,38 @@
+id: xwiki
+name: XWiki
+description: An enterprise wiki and application platform - structured pages, rights, an extension
+  repository and apps built inside the wiki.
+category: productivity
+website: https://www.xwiki.org
+services:
+- name: xwiki
+  image: xwiki:18.7.0-postgres-tomcat
+  port: 8080
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 3072
+  cpu_request_m: 250
+  cpu_limit_m: 2000
+  variables:
+    JAVA_OPTS: -XX:MaxRAMPercentage=60.0
+  volumes:
+  - name: xwiki-data
+    mount_path: /usr/local/xwiki
+    size_gb: 10
+databases:
+- name: xwiki-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - xwiki
+  var_name: XWIKI_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_DATABASE
+    user: DB_USER
+    password: DB_PASSWORD
+notes: The first visit opens the distribution wizard, which creates the admin account and installs the
+  standard flavour from extensions.xwiki.org - it needs outbound internet and takes several minutes. The
+  permanent directory with attachments, extensions and the search index is on the app's disk. The image
+  starts as root, so the environment needs the baseline pod security level.

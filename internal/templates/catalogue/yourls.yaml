@@ -1,0 +1,44 @@
+id: yourls
+name: YOURLS
+description: Your Own URL Shortener - short links on your own domain, with click statistics, an API and
+  plugins.
+category: productivity
+website: https://yourls.org
+services:
+- name: yourls
+  image: yourls:1.10.6-apache
+  port: 8080
+  public: true
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+databases:
+- name: yourls-db
+  engine: mysql
+  storage_gb: 2
+  link_to:
+  - yourls
+  var_name: YOURLS_DATABASE_URL
+  vars:
+    host: YOURLS_DB_HOST
+    name: YOURLS_DB_NAME
+    user: YOURLS_DB_USER
+    password: YOURLS_DB_PASS
+inputs:
+- key: YOURLS_SITE
+  label: Public URL
+  help: The address the short links will use, including https://, in lower case and with no trailing
+    slash, such as https://sho.rt.
+  required: true
+- key: YOURLS_USER
+  label: Admin user
+  default: admin
+- key: YOURLS_PASS
+  label: Admin password
+  secret: true
+  generate: true
+notes: Open /admin/ on the app's address and press Install once to create the tables; the root address
+  shows an error until then. Sign in with the admin user and password from the install. Links, clicks
+  and settings are all in the database. The image starts as root, so the environment needs the baseline
+  pod security level.

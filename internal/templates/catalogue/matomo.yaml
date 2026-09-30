@@ -1,0 +1,40 @@
+id: matomo
+name: Matomo
+description: Google Analytics alternative that keeps your visitors' data on your own server.
+category: analytics
+website: https://matomo.org
+services:
+- name: matomo
+  image: matomo:5.14.0-apache
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    PHP_MEMORY_LIMIT: 512M
+  volumes:
+  - name: matomo-data
+    mount_path: /var/www/html
+    size_gb: 5
+databases:
+- name: matomo-db
+  engine: mysql
+  storage_gb: 10
+  link_to:
+  - matomo
+  var_name: MATOMO_DATABASE_URL
+  vars:
+    host: MATOMO_DATABASE_HOST
+    name: MATOMO_DATABASE_DBNAME
+    user: MATOMO_DATABASE_USERNAME
+    password: MATOMO_DATABASE_PASSWORD
+notes: Open the app's address and follow the installer. The database step is already filled in from the
+  database this template created - leave it as it is - and the next steps create the super user and the
+  first website to track. If Matomo's links and tracking code come out as http://, add
+  assume_secure_protocol = 1 under [General] in config/config.ini.php from the app's shell - HTTPS ends
+  at the ingress in front of it. Reports are built when somebody views them, which is fine for small sites;
+  for busy ones, run ./console core:archive every hour from the app's scheduled commands and turn off
+  browser-triggered archiving. The image starts as root, so the environment needs the baseline pod
+  security level.

@@ -1,0 +1,50 @@
+id: zabbix
+name: Zabbix
+description: Enterprise-class monitoring for servers, networks, applications and services, with its web
+  frontend.
+category: monitoring
+website: https://www.zabbix.com
+services:
+- name: zabbix-web
+  image: zabbix/zabbix-web-nginx-pgsql:alpine-7.4.15
+  port: 8080
+  public: true
+  health_path: /ping
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ZBX_SERVER_HOST: zabbix-server
+    ZBX_SERVER_PORT: '10051'
+    ZBX_SERVER_NAME: Zabbix
+    PHP_TZ: UTC
+- name: zabbix-server
+  image: zabbix/zabbix-server-pgsql:alpine-7.4.15
+  port: 10051
+  public: false
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    ZBX_CACHESIZE: 64M
+databases:
+- name: zabbix-db
+  engine: postgres
+  storage_gb: 20
+  link_to:
+  - zabbix-server
+  - zabbix-web
+  var_name: ZABBIX_DATABASE_URL
+  vars:
+    host: DB_SERVER_HOST
+    port: DB_SERVER_PORT
+    name: POSTGRES_DB
+    user: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+notes: This template installs 2 apps - the Zabbix server and its web frontend, which reach each other by
+  name. The server creates the schema on its first start, which takes a minute; then sign in to the
+  frontend as Admin with the password zabbix and change it straight away. The server reaches out to
+  passive agents on their port 10050; agents outside the cluster cannot open a connection in to it, so
+  use passive checks for them.

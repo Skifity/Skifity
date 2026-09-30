@@ -1,0 +1,39 @@
+id: evershop
+name: EverShop
+description: A TypeScript-first e-commerce platform - storefront, admin panel, catalogue, checkout and
+  extensions.
+category: productivity
+website: https://evershop.io
+services:
+- name: evershop
+  image: evershop/evershop:2.2.1
+  port: 3000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+    DB_SSLMODE: disable
+  volumes:
+  - name: evershop-media
+    mount_path: /app/media
+    size_gb: 10
+databases:
+- name: evershop-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - evershop
+  var_name: EVERSHOP_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_NAME
+    user: DB_USER
+    password: DB_PASSWORD
+notes: The first start creates the tables. There is no admin account until you make one - from the app's
+  shell run npm run user:create -- --email you@example.com --password a-long-password1 --name "Your
+  Name" - then sign in at /admin. Product images are kept on the app's disk. The image starts as root, so
+  the environment needs the baseline pod security level.

@@ -1,0 +1,115 @@
+id: mediacms
+name: MediaCMS
+description: A video and media content management system - upload, transcode to adaptive streams, and
+  share, with playlists and categories.
+category: media
+website: https://mediacms.io
+services:
+- name: mediacms
+  image: mediacms/mediacms:7.2.0
+  port: 80
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 4096
+  cpu_request_m: 500
+  cpu_limit_m: 4000
+  variables:
+    PORTAL_NAME: MediaCMS
+    ADMIN_USER: admin
+  volumes:
+  - name: mediacms-media
+    mount_path: /home/mediacms.io/mediacms/media_files
+    size_gb: 100
+  - name: mediacms-logs
+    mount_path: /home/mediacms.io/mediacms/logs
+    size_gb: 1
+  files:
+  - path: /home/mediacms.io/mediacms/deploy/docker/local_settings.py
+    content: |
+      # The image's own deploy/docker/local_settings.py from MediaCMS 7.2.0,
+      # which its entrypoint copies into place on every start, with the last
+      # two settings added: behind an ingress that ends TLS, Django has to be
+      # told the request was HTTPS, or it refuses every sign-in as a
+      # cross-site request.
+      import os
+
+      FRONTEND_HOST = os.getenv('FRONTEND_HOST', 'http://localhost')
+      PORTAL_NAME = os.getenv('PORTAL_NAME', 'MediaCMS')
+      SECRET_KEY = os.getenv('SECRET_KEY', 'ma!s3^b-cw!f#7s6s0m3*jx77a@riw(7701**(r=ww%w!2+yk2')
+      REDIS_LOCATION = os.getenv('REDIS_LOCATION', 'redis://redis:6379/1')
+
+      DATABASES = {
+          "default": {
+              "ENGINE": "django.db.backends.postgresql",
+              "NAME": os.getenv('POSTGRES_NAME', 'mediacms'),
+              "HOST": os.getenv('POSTGRES_HOST', 'db'),
+              "PORT": os.getenv('POSTGRES_PORT', '5432'),
+              "USER": os.getenv('POSTGRES_USER', 'mediacms'),
+              "PASSWORD": os.getenv('POSTGRES_PASSWORD', 'mediacms'),
+              "OPTIONS": {'pool': True},
+          }
+      }
+
+      CACHES = {
+          "default": {
+              "BACKEND": "django_redis.cache.RedisCache",
+              "LOCATION": REDIS_LOCATION,
+              "OPTIONS": {
+                  "CLIENT_CLASS": "django_redis.client.DefaultClient",
+              },
+          }
+      }
+
+      # CELERY STUFF
+      BROKER_URL = REDIS_LOCATION
+      CELERY_RESULT_BACKEND = BROKER_URL
+
+      MP4HLS_COMMAND = "/home/mediacms.io/bento4/bin/mp4hls"
+
+      DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+      SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+      CSRF_TRUSTED_ORIGINS = [FRONTEND_HOST]
+databases:
+- name: mediacms-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - mediacms
+  var_name: MEDIACMS_DATABASE_URL
+  vars:
+    host: POSTGRES_HOST
+    port: POSTGRES_PORT
+    name: POSTGRES_NAME
+    user: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+- name: mediacms-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - mediacms
+  var_name: REDIS_LOCATION
+inputs:
+- key: FRONTEND_HOST
+  label: Public URL
+  help: The address MediaCMS will be reached at, including https:// and with no trailing slash.
+  required: true
+- key: ADMIN_EMAIL
+  label: Admin email
+  required: true
+- key: ADMIN_PASSWORD
+  label: Admin password
+  help: The password of the admin user, created on the first start.
+  secret: true
+  generate: true
+- key: SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+notes: Sign in as admin with the password from the install. Everything runs in the one container, as the
+  image does by default - the web server, the migrations on start, and the Celery workers that transcode
+  uploads - so transcoding shares the app's CPU and memory. Uploaded and transcoded media live on the
+  app's disk; size it for your library. The default avatar and channel banner ship inside the image's
+  media directory, which the disk covers, so they show as missing until users upload their own or you
+  copy user.jpg and banner.jpg from the project's media_files/userlogos into it from the app's shell. The
+  image starts as root, so the environment needs the baseline pod security level.

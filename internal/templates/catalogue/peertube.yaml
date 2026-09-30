@@ -1,0 +1,74 @@
+id: peertube
+name: PeerTube
+description: A federated video platform - host, transcode and stream videos and live streams, and follow
+  other instances.
+category: media
+website: https://joinpeertube.org
+services:
+- name: peertube
+  image: chocobozzz/peertube:v8.3.1
+  port: 9000
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 4096
+  cpu_request_m: 500
+  cpu_limit_m: 4000
+  variables:
+    PEERTUBE_WEBSERVER_PORT: '443'
+    PEERTUBE_WEBSERVER_HTTPS: 'true'
+    PEERTUBE_DB_SSL: 'false'
+    PEERTUBE_LOG_LEVEL: info
+  volumes:
+  - name: peertube-data
+    mount_path: /data
+    size_gb: 100
+  - name: peertube-config
+    mount_path: /config
+    size_gb: 1
+databases:
+- name: peertube-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - peertube
+  var_name: PEERTUBE_DATABASE_URL
+  vars:
+    host: PEERTUBE_DB_HOSTNAME
+    port: PEERTUBE_DB_PORT
+    name: PEERTUBE_DB_NAME
+    user: PEERTUBE_DB_USERNAME
+    password: PEERTUBE_DB_PASSWORD
+- name: peertube-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - peertube
+  var_name: PEERTUBE_REDIS_URL
+  vars:
+    host: PEERTUBE_REDIS_HOSTNAME
+    port: PEERTUBE_REDIS_PORT
+    password: PEERTUBE_REDIS_AUTH
+inputs:
+- key: PEERTUBE_WEBSERVER_HOSTNAME
+  label: Domain
+  help: The domain PeerTube will be reached at, without https://, such as videos.example.com. It cannot
+    be changed later - other instances know your videos by it.
+  required: true
+- key: PEERTUBE_ADMIN_EMAIL
+  label: Admin email
+  required: true
+- key: PT_INITIAL_ROOT_PASSWORD
+  label: Admin password
+  help: The password of the root user, set on the first start.
+  secret: true
+  generate: true
+- key: PEERTUBE_SECRET
+  label: Secret
+  secret: true
+  generate: true
+notes: Sign in as root with the admin password from the install. Videos, thumbnails and transcoded files
+  live on the app's disk, so size it for your library, or move them to object storage with the
+  PEERTUBE_OBJECT_STORAGE_ variables. Transcoding runs in the same app and is CPU-heavy. Email is off
+  until the PEERTUBE_SMTP_ variables are set. Live streaming needs RTMP on port 1935, which is not
+  exposed here. The image starts as root and drops to its own user, so the environment needs the baseline
+  pod security level.

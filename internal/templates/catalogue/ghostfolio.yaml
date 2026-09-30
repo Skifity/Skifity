@@ -1,0 +1,47 @@
+id: ghostfolio
+name: Ghostfolio
+description: Open source wealth management - track stocks, ETFs and cryptocurrencies across accounts and
+  see how your portfolio performs.
+category: finance
+website: https://ghostfol.io
+services:
+- name: ghostfolio
+  image: ghostfolio/ghostfolio:3.76.0
+  port: 3333
+  public: true
+  health_path: /api/v1/health
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+databases:
+- name: ghostfolio-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - ghostfolio
+  var_name: DATABASE_URL
+- name: ghostfolio-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - ghostfolio
+  var_name: GHOSTFOLIO_REDIS_URL
+  vars:
+    host: REDIS_HOST
+    port: REDIS_PORT
+    password: REDIS_PASSWORD
+inputs:
+- key: ACCESS_TOKEN_SALT
+  label: Access token salt
+  secret: true
+  generate: true
+- key: JWT_SECRET_KEY
+  label: JWT secret key
+  secret: true
+  generate: true
+notes: Open the app's address and press Get Started; the first account created becomes the administrator,
+  and signs in afterwards with the security token shown once at sign-up - keep it. The first start runs
+  the database migrations and seeds the market data sources. The image runs as the user node, named
+  rather than given as a uid, which the restricted level cannot check, so the environment needs the
+  baseline pod security level.

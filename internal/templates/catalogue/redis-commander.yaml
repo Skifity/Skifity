@@ -1,0 +1,37 @@
+id: redis-commander
+name: Redis Commander
+description: A web interface to view, edit and manage Redis keys, with a managed Redis to go with it.
+category: developer
+website: https://github.com/joeferner/redis-commander
+services:
+- name: redis-commander
+  image: ghcr.io/joeferner/redis-commander:0.9.1
+  port: 8081
+  public: true
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  variables:
+    K8S_SIGTERM: '1'
+    HTTP_USER: admin
+databases:
+- name: redis-commander-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - redis-commander
+  var_name: REDIS_COMMANDER_REDIS_URL
+  vars:
+    host: REDIS_HOST
+    port: REDIS_PORT
+    password: REDIS_PASSWORD
+inputs:
+- key: HTTP_PASSWORD
+  label: Password
+  help: Redis Commander asks for the user admin and this password before showing anything.
+  secret: true
+  generate: true
+notes: Sign in as admin with the password from the install. It is connected to the Redis this template
+  created; to look at another Redis in the environment, change REDIS_HOST, REDIS_PORT and REDIS_PASSWORD
+  on the app and redeploy.

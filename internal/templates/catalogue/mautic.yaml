@@ -1,0 +1,51 @@
+id: mautic
+name: Mautic
+description: Open source marketing automation - contacts, segments, campaigns, emails, forms and landing
+  pages.
+category: communication
+website: https://mautic.org
+services:
+- name: mautic
+  image: mautic/mautic:7.2.1-apache
+  port: 80
+  public: true
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  variables:
+    DOCKER_MAUTIC_ROLE: mautic_web
+    MAUTIC_CONFIG_PARAMETERS: '{"trusted_proxies":["0.0.0.0/0"]}'
+  command: DOCKER_MAUTIC_ROLE=mautic_cron /entrypoint.sh & exec /entrypoint.sh apache2-foreground
+  volumes:
+  - name: mautic-config
+    mount_path: /var/www/html/config
+    size_gb: 1
+  - name: mautic-logs
+    mount_path: /var/www/html/var/logs
+    size_gb: 2
+  - name: mautic-files
+    mount_path: /var/www/html/docroot/media/files
+    size_gb: 5
+  - name: mautic-images
+    mount_path: /var/www/html/docroot/media/images
+    size_gb: 5
+databases:
+- name: mautic-db
+  engine: mysql
+  storage_gb: 10
+  link_to:
+  - mautic
+  var_name: MAUTIC_DATABASE_URL
+  vars:
+    host: MAUTIC_DB_HOST
+    port: MAUTIC_DB_PORT
+    name: MAUTIC_DB_DATABASE
+    user: MAUTIC_DB_USER
+    password: MAUTIC_DB_PASSWORD
+notes: Open the app's address and follow the installer; the database step is already filled in, so keep
+  it, and enter the site URL with https://. The image's cron role - segments, campaigns and their
+  triggers every fifteen minutes - runs beside the web server in the same app rather than as a second
+  container, because it has to read the same configuration directory; it waits until the installer has
+  finished. Emails are sent straight away rather than queued, which is Mautic's default and needs no
+  worker. The image starts as root, so the environment needs the baseline pod security level.

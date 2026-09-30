@@ -1,0 +1,57 @@
+id: espocrm
+name: EspoCRM
+description: A CRM for contacts, accounts, leads, opportunities, cases and email, with a workflow of its
+  own.
+category: productivity
+website: https://www.espocrm.com
+services:
+- name: espocrm
+  image: espocrm/espocrm:10.0.9-apache
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    ESPOCRM_DATABASE_PLATFORM: Mysql
+    ESPOCRM_ADMIN_USERNAME: admin
+    ESPOCRM_TIME_ZONE: UTC
+  command: (while true; do sleep 60; docker-daemon.sh; done) & exec docker-entrypoint.sh apache2-foreground
+  volumes:
+  - name: espocrm-data
+    mount_path: /var/www/html/data
+    size_gb: 5
+  - name: espocrm-custom
+    mount_path: /var/www/html/custom
+    size_gb: 1
+  - name: espocrm-client-custom
+    mount_path: /var/www/html/client/custom
+    size_gb: 1
+databases:
+- name: espocrm-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - espocrm
+  var_name: ESPOCRM_DATABASE_URL
+  vars:
+    host: ESPOCRM_DATABASE_HOST
+    port: ESPOCRM_DATABASE_PORT
+    name: ESPOCRM_DATABASE_NAME
+    user: ESPOCRM_DATABASE_USER
+    password: ESPOCRM_DATABASE_PASSWORD
+inputs:
+- key: ESPOCRM_SITE_URL
+  label: Public URL
+  help: The address EspoCRM will be reached at, including https://.
+  required: true
+- key: ESPOCRM_ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: The first start installs EspoCRM into the database, which takes a minute. Sign in as admin with
+  the password from the install. The daemon that runs scheduled jobs - fetching email, reminders,
+  workflows - is the image's own docker-daemon.sh, started beside the web server in the same app rather
+  than as a second container, because it has to see the same data directory. The image starts as root,
+  so the environment needs the baseline pod security level.

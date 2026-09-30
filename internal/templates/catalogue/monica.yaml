@@ -1,0 +1,54 @@
+id: monica
+name: Monica
+description: A personal CRM - remember everything about your friends and family, and the conversations
+  you had.
+category: productivity
+website: https://www.monicahq.com
+services:
+- name: monica
+  image: monica:4.1.2-apache
+  port: 80
+  public: true
+  mem_request_mb: 192
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    APP_ENV: production
+    APP_DEBUG: 'false'
+    APP_FORCE_URL: 'true'
+    APP_TRUSTED_PROXIES: '*'
+    APP_DISABLE_SIGNUP: 'true'
+    LOG_CHANNEL: stderr
+    MAIL_MAILER: log
+  command: cron.sh & exec entrypoint.sh apache2-foreground
+  volumes:
+  - name: monica-storage
+    mount_path: /var/www/html/storage
+    size_gb: 5
+databases:
+- name: monica-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - monica
+  var_name: DATABASE_URL
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address Monica will be reached at, including https://.
+  required: true
+- key: APP_KEY
+  label: Application key
+  help: Encrypts sessions and stored secrets; the generated one is the 32 characters it needs. Keep it.
+  secret: true
+  generate: true
+- key: HASH_SALT
+  label: Hash salt
+  secret: true
+  generate: true
+notes: Open the app's address and register; the first account is created even though sign-up is closed
+  to everybody after it. The first start runs the migrations and creates the API keys in the app's
+  storage, which takes a minute. The image's own cron.sh, which sends reminders every minute, runs beside
+  the web server in the same app. Reminder emails go to the log until MAIL_MAILER is smtp with the MAIL_
+  variables set. The image starts as root, so the environment needs the baseline pod security level.

@@ -1,0 +1,52 @@
+id: sonarqube
+name: SonarQube
+description: Continuous code quality and security - static analysis of bugs, vulnerabilities and code
+  smells in thirty languages.
+category: developer
+website: https://www.sonarsource.com/products/sonarqube/
+services:
+- name: sonarqube
+  image: sonarqube:26.9.0.129388-community
+  port: 9000
+  public: true
+  mem_request_mb: 2048
+  mem_limit_mb: 4096
+  cpu_request_m: 500
+  cpu_limit_m: 2000
+  variables:
+    SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
+    SONAR_TELEMETRY_ENABLE: 'false'
+  # SonarQube takes its database as a JDBC URL only, so the URL is put
+  # together from the pieces the link delivers, by the shell the command runs in.
+  command: export SONAR_JDBC_URL="jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}";
+    exec /opt/sonarqube/docker/entrypoint.sh
+  volumes:
+  - name: sonarqube-data
+    mount_path: /opt/sonarqube/data
+    size_gb: 10
+  - name: sonarqube-extensions
+    mount_path: /opt/sonarqube/extensions
+    size_gb: 2
+  - name: sonarqube-logs
+    mount_path: /opt/sonarqube/logs
+    size_gb: 2
+databases:
+- name: sonarqube-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - sonarqube
+  var_name: SONARQUBE_DATABASE_URL
+  vars:
+    host: POSTGRES_HOST
+    port: POSTGRES_PORT
+    name: POSTGRES_DB
+    user: SONAR_JDBC_USERNAME
+    password: SONAR_JDBC_PASSWORD
+notes: Sign in as admin with the password admin; SonarQube asks for a new one straight away. The first
+  start creates the schema and its search index, which takes a few minutes and about two gigabytes of
+  memory. SonarQube's embedded Elasticsearch prefers vm.max_map_count of at least 524288 on the server;
+  a container cannot set that, so its start-up checks are turned off here - raise the limit on the
+  servers with sysctl if large projects fail to index. The image runs as the user sonarqube, named
+  rather than given as a uid, which the restricted level cannot check, so the environment needs the
+  baseline pod security level.

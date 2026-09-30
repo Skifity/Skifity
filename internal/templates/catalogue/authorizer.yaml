@@ -1,0 +1,66 @@
+id: authorizer
+name: Authorizer
+description: An open source authentication and authorization server - sign-up, login, OAuth, magic links
+  and roles, with a GraphQL API.
+category: security
+website: https://authorizer.dev
+services:
+- name: authorizer
+  image: quay.io/authorizer/authorizer:2.4.1
+  port: 8080
+  public: true
+  health_path: /healthz
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  # Authorizer 2 reads its configuration from flags only, not the
+  # environment, so the command hands the variables over as flags.
+  command: exec ./authorizer --env=production --database-type=postgres --database-url="$DATABASE_URL"
+    --redis-url="$REDIS_URL" --url="$AUTHORIZER_URL" --client-id="$CLIENT_ID" --client-secret="$CLIENT_SECRET"
+    --admin-secret="$ADMIN_SECRET" --jwt-type=HS256 --jwt-secret="$JWT_SECRET" --encryption-key="$ENCRYPTION_KEY"
+databases:
+- name: authorizer-db
+  engine: postgres
+  storage_gb: 2
+  link_to:
+  - authorizer
+  var_name: DATABASE_URL
+- name: authorizer-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - authorizer
+  var_name: REDIS_URL
+inputs:
+- key: AUTHORIZER_URL
+  label: Public URL
+  help: The address Authorizer will be reached at, including https://.
+  required: true
+- key: ADMIN_SECRET
+  label: Admin secret
+  help: The password for the dashboard at /dashboard.
+  secret: true
+  generate: true
+- key: CLIENT_ID
+  label: Client ID
+  help: The client ID your applications identify themselves with.
+  generate: true
+- key: CLIENT_SECRET
+  label: Client secret
+  secret: true
+  generate: true
+- key: JWT_SECRET
+  label: JWT secret
+  secret: true
+  generate: true
+- key: ENCRYPTION_KEY
+  label: Encryption key
+  help: Encrypts stored secrets. Keep it.
+  secret: true
+  generate: true
+notes: Open /dashboard on the app's address and sign in with the admin secret. Point your applications at
+  the public URL with the client ID. Email verification and magic links need SMTP, which is set with
+  --smtp-host, --smtp-port, --smtp-username, --smtp-password and --smtp-sender-email added to the app's
+  start command. The image runs as the user authorizer, named rather than given as a uid, which the
+  restricted level cannot check, so the environment needs the baseline pod security level.

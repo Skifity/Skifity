@@ -1,0 +1,58 @@
+id: alertmanager
+name: Alertmanager
+description: Receives alerts from Prometheus, groups and silences them, and sends them to email, chat or
+  a webhook.
+category: monitoring
+website: https://prometheus.io/docs/alerting/latest/alertmanager/
+services:
+- name: alertmanager
+  image: prom/alertmanager:v0.34.1
+  port: 9093
+  public: true
+  health_path: /-/ready
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  volumes:
+  - name: alertmanager-data
+    mount_path: /alertmanager
+    size_gb: 1
+  files:
+  - path: /etc/alertmanager/alertmanager.yml
+    content: |
+      # Alertmanager reads this at start. Every alert goes to the "default"
+      # receiver, which sends nothing until one of the examples below is
+      # filled in and uncommented. Redeploy after changing it.
+      route:
+        receiver: default
+        group_by: ["alertname", "job"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+
+      receivers:
+        - name: default
+          # email_configs:
+          #   - to: oncall@example.com
+          #     from: alertmanager@example.com
+          #     smarthost: smtp.example.com:587
+          #     auth_username: alertmanager@example.com
+          #     auth_password: change-me
+          # webhook_configs:
+          #   - url: https://hooks.example.com/alertmanager
+          # slack_configs:
+          #   - api_url: https://hooks.slack.com/services/change/me
+          #     channel: "#alerts"
+
+      inhibit_rules:
+        - source_matchers: [severity="critical"]
+          target_matchers: [severity="warning"]
+          equal: ["alertname", "job"]
+notes: Alerts are received and shown, and sent nowhere, until a receiver is set. Edit
+  /etc/alertmanager/alertmanager.yml on the app's Files - an email, Slack or webhook example is in it -
+  and redeploy. Point Prometheus at it with an alerting section naming alertmanager:9093 when both are in
+  the same environment. Alertmanager has no sign-in of its own, so anybody with the address can see and
+  silence alerts; keep the address to yourself, or make the app internal once Prometheus is next to it.
+  The image runs as the user nobody, named rather than given as a uid, which the restricted level cannot
+  check, so the environment needs the baseline pod security level.

@@ -1,0 +1,71 @@
+id: element
+name: Element
+description: The Matrix web client, served from your own domain and pointed at your own homeserver.
+category: communication
+website: https://element.io
+services:
+- name: element
+  image: vectorim/element-web:v1.12.30
+  port: 8080
+  public: true
+  health_path: /config.json
+  mem_request_mb: 32
+  mem_limit_mb: 128
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  variables:
+    ELEMENT_WEB_PORT: '8080'
+  files:
+  - path: /app/config.json
+    content: |
+      {
+          "default_server_config": {
+              "m.homeserver": {
+                  "base_url": "https://matrix-client.matrix.org",
+                  "server_name": "matrix.org"
+              }
+          },
+          "brand": "Element",
+          "disable_custom_urls": false,
+          "disable_guests": true,
+          "disable_3pid_login": false,
+          "default_theme": "light",
+          "show_labs_settings": false,
+          "room_directory": {
+              "servers": []
+          },
+          "element_call": {
+              "use_exclusively": false
+          }
+      }
+  - path: /docker-entrypoint.d/19-skifity-homeserver.sh
+    executable: true
+    content: |
+      #!/bin/sh
+      # Runs after the image's own script has copied config.json to the
+      # directory it is served from, and writes in the homeserver the install
+      # asked for. The image ships jq and sponge for exactly this.
+      set -e
+      config=/tmp/element-web-config/config.json
+      if [ -n "${MATRIX_HOMESERVER_URL:-}" ]; then
+          jq --arg url "$MATRIX_HOMESERVER_URL" --arg name "${MATRIX_SERVER_NAME:-}" '
+              .default_server_config["m.homeserver"].base_url = $url
+              | .default_server_config["m.homeserver"].server_name = $name
+              | .room_directory.servers = [$name]
+          ' "$config" | sponge "$config"
+      fi
+inputs:
+- key: MATRIX_HOMESERVER_URL
+  label: Homeserver URL
+  help: The address of your Matrix homeserver's client API, including https://, such as
+    https://matrix.example.com.
+  required: true
+- key: MATRIX_SERVER_NAME
+  label: Server name
+  help: The part after the colon in your users' IDs, such as example.com for @alice:example.com.
+  required: true
+notes: Element is only the client; it needs a Matrix homeserver, such as the Matrix Synapse template. Open
+  this app's address and sign in with an account on the homeserver you entered. To change more than the
+  homeserver - branding, Jitsi, integrations - edit /app/config.json on the app's Files and redeploy. The
+  image runs as the user nginx, named rather than given as a uid, which the restricted level cannot
+  check, so the environment needs the baseline pod security level.

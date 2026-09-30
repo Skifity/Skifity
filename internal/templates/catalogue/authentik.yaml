@@ -1,0 +1,65 @@
+id: authentik
+name: authentik
+description: An identity provider for single sign-on - OAuth2, OpenID Connect, SAML, LDAP and proxy
+  authentication, with flows you can shape.
+category: security
+website: https://goauthentik.io
+services:
+- name: authentik-server
+  image: ghcr.io/goauthentik/server:2026.8.3
+  port: 9000
+  public: true
+  health_path: /-/health/live/
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  command: exec dumb-init -- ak server
+  volumes:
+  - name: authentik-data
+    mount_path: /data
+    size_gb: 5
+- name: authentik-worker
+  image: ghcr.io/goauthentik/server:2026.8.3
+  port: 0
+  public: false
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  command: exec dumb-init -- ak worker
+databases:
+- name: authentik-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - authentik-server
+  - authentik-worker
+  var_name: AUTHENTIK_DATABASE_URL
+  vars:
+    host: AUTHENTIK_POSTGRESQL__HOST
+    port: AUTHENTIK_POSTGRESQL__PORT
+    name: AUTHENTIK_POSTGRESQL__NAME
+    user: AUTHENTIK_POSTGRESQL__USER
+    password: AUTHENTIK_POSTGRESQL__PASSWORD
+inputs:
+- key: AUTHENTIK_SECRET_KEY
+  label: Secret key
+  help: Signs cookies and tokens. Keep it; changing it signs everybody out.
+  secret: true
+  generate: true
+- key: AUTHENTIK_BOOTSTRAP_EMAIL
+  label: Admin email
+  help: The email of the akadmin user created on the first start.
+  required: true
+- key: AUTHENTIK_BOOTSTRAP_PASSWORD
+  label: Admin password
+  help: The password of the akadmin user created on the first start.
+  secret: true
+  generate: true
+notes: This template installs 2 apps from the same image, started two ways - the server and the worker
+  that runs background tasks and blueprints. authentik 2025.10 and later keep their cache and task queue
+  in PostgreSQL, so there is no Redis. The first start runs the migrations, which takes a minute or two;
+  then sign in as akadmin with the admin password from the install. Uploaded icons and backgrounds are
+  kept on the server's disk; outposts deployed by the worker through Docker or Kubernetes are not
+  available here, so run outposts yourself or use the embedded one.

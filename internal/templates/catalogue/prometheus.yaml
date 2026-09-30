@@ -1,0 +1,41 @@
+id: prometheus
+name: Prometheus
+description: The open source monitoring system and time series database that scrapes metrics and alerts
+  on them.
+category: monitoring
+website: https://prometheus.io
+services:
+- name: prometheus
+  image: prom/prometheus:v3.15.0
+  port: 9090
+  public: true
+  health_path: /-/ready
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  volumes:
+  - name: prometheus-data
+    mount_path: /prometheus
+    size_gb: 20
+  files:
+  - path: /etc/prometheus/prometheus.yml
+    content: |
+      # Prometheus reads this at start. Add a job under scrape_configs for each
+      # thing to watch, then redeploy. Another app in the same environment is
+      # reached by its name and port, such as grafana:3000.
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets: ["localhost:9090"]
+notes: Prometheus starts scraping itself, which is enough to see it working. Add targets by editing
+  /etc/prometheus/prometheus.yml on the app's Files and redeploying; another app in the same environment
+  is reached by its name and port. Data is kept for fifteen days. Prometheus has no sign-in of its own,
+  so anybody with the address can query it - keep the address to yourself, or make the app internal and
+  read it through Grafana in the same environment. The image runs as the user nobody, named rather than
+  given as a uid, which the restricted level cannot check, so the environment needs the baseline pod
+  security level.

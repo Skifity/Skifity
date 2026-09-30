@@ -1,0 +1,63 @@
+id: freescout
+name: FreeScout
+description: A help desk and shared inbox - an open source Help Scout and Zendesk alternative with modules.
+category: communication
+website: https://freescout.net
+services:
+- name: freescout
+  image: nfrastack/freescout:2.2.14
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    TIMEZONE: UTC
+    DB_TYPE: mariadb
+    ADMIN_FIRST_NAME: Admin
+    ADMIN_LAST_NAME: User
+    SCHEDULER_TYPE: service
+    FREESCOUT_APP_TRUSTED_PROXIES: '*'
+    FREESCOUT_APP_LOCALE: en
+  volumes:
+  - name: freescout-data
+    mount_path: /data
+    size_gb: 10
+  - name: freescout-logs
+    mount_path: /logs
+    size_gb: 1
+databases:
+- name: freescout-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - freescout
+  var_name: FREESCOUT_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_NAME
+    user: DB_USER
+    password: DB_PASS
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address FreeScout will be reached at, including https://.
+  required: true
+- key: ADMIN_EMAIL
+  label: Admin email
+  help: The first administrator, created on the first start.
+  required: true
+- key: ADMIN_PASS
+  label: Admin password
+  secret: true
+  generate: true
+notes: The first start creates the schema and the administrator, which takes a few minutes; sign in with
+  the admin email and password from the install. The web server only answers once that is done, so on a
+  slow server the first start can be restarted part-way; if you then cannot sign in, create the
+  administrator from the app's shell with php /www/html/artisan freescout:create-user --role=admin. The
+  queue worker and the scheduler that fetches mail run
+  inside the same container. Mailboxes are connected in the settings, and FreeScout's own emails go
+  through the FREESCOUT_MAIL_ variables. Uploads and modules live on the app's disk. The image starts as
+  root, so the environment needs the baseline pod security level.

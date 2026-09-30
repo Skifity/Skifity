@@ -1,0 +1,64 @@
+id: lychee
+name: Lychee
+description: A photo-management system for albums and galleries, with sharing, maps and smart albums.
+category: media
+website: https://lycheeorg.dev
+services:
+- name: lychee
+  image: lycheeorg/lychee:v7.10.0
+  port: 8000
+  public: true
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  variables:
+    APP_NAME: Lychee
+    APP_ENV: production
+    APP_DEBUG: 'false'
+    APP_TIMEZONE: UTC
+    APP_FORCE_HTTPS: 'true'
+    LOG_VIEWER_ENABLED: 'false'
+  # The image refuses to start without DB_CONNECTION. It names a driver, not
+  # a host, but as a variable its name reads like database wiring to the
+  # catalogue's check, so the command sets it instead.
+  command: export DB_CONNECTION=pgsql; exec /usr/local/bin/entrypoint.sh php artisan octane:start --server=frankenphp
+    --host=0.0.0.0 --port=8000
+  volumes:
+  - name: lychee-uploads
+    mount_path: /app/public/uploads
+    size_gb: 50
+  - name: lychee-logs
+    mount_path: /app/storage/logs
+    size_gb: 1
+  - name: lychee-tmp
+    mount_path: /app/storage/tmp
+    size_gb: 5
+databases:
+- name: lychee-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - lychee
+  var_name: LYCHEE_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_DATABASE
+    user: DB_USERNAME
+    password: DB_PASSWORD
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address Lychee will be reached at, including https://.
+  required: true
+- key: APP_KEY
+  label: Application key
+  help: 'The prefix base64 and a colon, followed by 32 random bytes in base64 - the image checks for
+    exactly that. Create one with echo "base64:$(openssl rand -base64 32)". Keep it; data encrypted with
+    it cannot be read with another.'
+  secret: true
+  required: true
+notes: Open the app's address; the first visit asks you to create the admin account. Photos live on the
+  app's disk, so size it for your library. The image starts as root and drops to www-data, so the
+  environment needs the baseline pod security level.

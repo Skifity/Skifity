@@ -1,0 +1,45 @@
+id: flarum
+name: Flarum
+description: Simple, fast forum software for building communities, with extensions for everything else.
+category: communication
+website: https://flarum.org
+services:
+- name: flarum
+  image: crazymax/flarum:1.8.19
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TZ: UTC
+    FLARUM_FORUM_TITLE: Forum
+    UPLOAD_MAX_SIZE: 16M
+    LISTEN_IPV6: 'false'
+  volumes:
+  - name: flarum-data
+    mount_path: /data
+    size_gb: 5
+databases:
+- name: flarum-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - flarum
+  var_name: FLARUM_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_NAME
+    user: DB_USER
+    password: DB_PASSWORD
+inputs:
+- key: FLARUM_BASE_URL
+  label: Public URL
+  help: The address the forum will be reached at, including https://.
+  required: true
+notes: The first start installs Flarum and creates an administrator called flarum with the password
+  flarum - sign in and change it straight away. Extensions are installed with composer from the app's
+  shell and kept on the app's disk. Flarum sends no email until SMTP is set in the admin panel. The image
+  starts as root and drops to its own user, so the environment needs the baseline pod security level.

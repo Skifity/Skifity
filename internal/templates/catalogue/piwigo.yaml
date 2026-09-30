@@ -1,0 +1,38 @@
+id: piwigo
+name: Piwigo
+description: Photo gallery software for the web - albums, tags, permissions and plugins, for families and
+  organisations.
+category: media
+website: https://piwigo.org
+services:
+- name: piwigo
+  image: linuxserver/piwigo:16.4.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: UTC
+  volumes:
+  - name: piwigo-config
+    mount_path: /config
+    size_gb: 2
+  - name: piwigo-gallery
+    mount_path: /gallery
+    size_gb: 50
+databases:
+- name: piwigo-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - piwigo
+  var_name: PIWIGO_DATABASE_URL
+notes: Piwigo reads its database settings from the installer, not from the environment. Open the app's
+  address and fill in the host, user, password and database name shown by Show credentials on the
+  piwigo-db database, then create the webmaster account on the same page. Photos live on the app's disk;
+  size it for your library. The image starts as root and drops to its own user, so the environment needs
+  the baseline pod security level.

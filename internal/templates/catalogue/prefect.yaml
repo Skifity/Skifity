@@ -1,0 +1,52 @@
+id: prefect
+name: Prefect
+description: Workflow orchestration for Python - the Prefect server and its UI, to schedule, run and watch
+  your flows.
+category: automation
+website: https://www.prefect.io
+services:
+- name: prefect
+  image: prefecthq/prefect:3.8.7-python3.12
+  port: 4200
+  public: true
+  health_path: /api/health
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  variables:
+    PREFECT_SERVER_DATABASE_DRIVER: postgresql+asyncpg
+    PREFECT_SERVER_ANALYTICS_ENABLED: 'false'
+    PREFECT_SERVER_UI_SHOW_PROMOTIONAL_CONTENT: 'false'
+  command: exec /usr/bin/tini -g -- /opt/prefect/entrypoint.sh prefect server start --host 0.0.0.0 --port
+    4200
+databases:
+- name: prefect-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - prefect
+  var_name: PREFECT_DATABASE_URL
+  vars:
+    host: PREFECT_SERVER_DATABASE_HOST
+    port: PREFECT_SERVER_DATABASE_PORT
+    name: PREFECT_SERVER_DATABASE_NAME
+    user: PREFECT_SERVER_DATABASE_USER
+    password: PREFECT_SERVER_DATABASE_PASSWORD
+inputs:
+- key: PREFECT_UI_API_URL
+  label: API URL
+  help: The public address followed by /api, such as https://prefect.example.com/api. The UI in the
+    browser talks to the server there.
+  required: true
+- key: PREFECT_SERVER_API_AUTH_STRING
+  label: Sign-in
+  help: A user name and password joined by a colon, such as admin:a-long-password. The UI and every
+    client must present it; without it anybody with the address can run your flows.
+  secret: true
+  required: true
+notes: Open the app's address and sign in with the user and password you entered. Point workers and the
+  prefect CLI at it with PREFECT_API_URL set to the API URL and PREFECT_API_AUTH_STRING set to the same
+  sign-in. This installs the server only; flows run on workers you start where your code lives, such as
+  prefect worker start --pool default. The image starts as root, so the environment needs the baseline
+  pod security level.

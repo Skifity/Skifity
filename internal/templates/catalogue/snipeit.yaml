@@ -1,0 +1,54 @@
+id: snipeit
+name: Snipe-IT
+description: IT asset management - track hardware, licences, accessories and who has them checked out.
+category: productivity
+website: https://snipeitapp.com
+services:
+- name: snipeit
+  image: snipe/snipe-it:v8.8.0
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    APP_ENV: production
+    APP_DEBUG: 'false'
+    APP_TIMEZONE: UTC
+    APP_LOCALE: en-US
+    APP_TRUSTED_PROXIES: '*'
+    SECURE_COOKIES: 'true'
+    MAIL_MAILER: log
+  volumes:
+  - name: snipeit-data
+    mount_path: /var/lib/snipeit
+    size_gb: 5
+databases:
+- name: snipeit-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - snipeit
+  var_name: SNIPEIT_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_DATABASE
+    user: DB_USERNAME
+    password: DB_PASSWORD
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address Snipe-IT will be reached at, including https://.
+  required: true
+- key: APP_KEY
+  label: Application key
+  help: Encrypts stored secrets and sessions; the generated one is the 32 characters Laravel needs. Keep
+    it, because data encrypted with it cannot be read with another.
+  secret: true
+  generate: true
+notes: Open the app's address to run the setup wizard, which checks the configuration and creates the
+  first admin account. Email is written to the log until you set MAIL_MAILER to smtp with MAIL_HOST,
+  MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD and MAIL_FROM_ADDR on the app and redeploy. Uploads live on the
+  app's disk. The image starts as root, so the environment needs the baseline pod security level.

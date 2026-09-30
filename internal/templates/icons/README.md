@@ -41,5 +41,5 @@ collection has one, WebP where it does not: the same picture as the PNG at
 roughly a third of the bytes, and a 260 KB logo drawn at 40 pixels is a waste
 nobody sees and everybody carries.
 
-91 of the 339 templates have no logo in the collection. They show a letter, and
+99 of the 374 templates have no logo in the collection. They show a letter, and
 adding one is adding a file here with the right name.

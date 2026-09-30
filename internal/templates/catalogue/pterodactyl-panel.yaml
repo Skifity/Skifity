@@ -1,0 +1,69 @@
+id: pterodactyl-panel
+name: Pterodactyl Panel
+description: The web panel for managing game servers - users, servers, allocations and nodes running
+  Wings.
+category: developer
+website: https://pterodactyl.io
+services:
+- name: pterodactyl-panel
+  image: ghcr.io/pterodactyl/panel:v1.15.1
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    APP_ENV: production
+    APP_ENVIRONMENT_ONLY: 'false'
+    APP_TIMEZONE: UTC
+    CACHE_DRIVER: redis
+    SESSION_DRIVER: redis
+    QUEUE_DRIVER: redis
+    TRUSTED_PROXIES: '*'
+    HASHIDS_LENGTH: '8'
+    MAIL_DRIVER: log
+  volumes:
+  - name: pterodactyl-var
+    mount_path: /app/var
+    size_gb: 1
+  - name: pterodactyl-logs
+    mount_path: /app/storage/logs
+    size_gb: 1
+databases:
+- name: pterodactyl-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - pterodactyl-panel
+  var_name: PTERODACTYL_DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_DATABASE
+    user: DB_USERNAME
+    password: DB_PASSWORD
+- name: pterodactyl-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - pterodactyl-panel
+  var_name: PTERODACTYL_REDIS_URL
+  vars:
+    host: REDIS_HOST
+    port: REDIS_PORT
+    password: REDIS_PASSWORD
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address the panel will be reached at, including https://.
+  required: true
+- key: APP_SERVICE_AUTHOR
+  label: Author email
+  help: The email eggs exported from this panel are attributed to.
+  required: true
+notes: The first start creates the application key in the app's disk and migrates the database. Create
+  the first administrator from the app's shell with php artisan p:user:make, then sign in. Game servers
+  run on nodes with Wings - the Wings template, or Wings installed on a machine of its own - which you add
+  under Nodes. The queue worker and the scheduler run inside the same container. The image starts as
+  root, so the environment needs the baseline pod security level.

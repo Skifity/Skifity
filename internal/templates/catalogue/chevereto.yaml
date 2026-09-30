@@ -1,0 +1,64 @@
+id: chevereto
+name: Chevereto
+description: A self-hosted image and video hosting platform, for a personal media library or a public
+  sharing site.
+category: media
+website: https://chevereto.com
+services:
+- name: chevereto
+  image: ghcr.io/chevereto/chevereto:4.5.7
+  port: 8080
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1536
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    CHEVERETO_HOSTNAME_PATH: /
+    CHEVERETO_HTTPS: '1'
+    CHEVERETO_HEADER_CLIENT_IP: X-Real-IP
+    CHEVERETO_MAX_UPLOAD_SIZE: 256M
+    CHEVERETO_CACHE_DRIVER: redis
+  volumes:
+  - name: chevereto-images
+    mount_path: /var/www/html/images
+    size_gb: 20
+databases:
+- name: chevereto-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - chevereto
+  var_name: CHEVERETO_DATABASE_URL
+  vars:
+    host: CHEVERETO_DB_HOST
+    port: CHEVERETO_DB_PORT
+    name: CHEVERETO_DB_NAME
+    user: CHEVERETO_DB_USER
+    password: CHEVERETO_DB_PASS
+- name: chevereto-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - chevereto
+  var_name: CHEVERETO_REDIS_URL
+  vars:
+    host: CHEVERETO_CACHE_HOST
+    port: CHEVERETO_CACHE_PORT
+    password: CHEVERETO_CACHE_PASSWORD
+inputs:
+- key: CHEVERETO_HOSTNAME
+  label: Domain
+  help: The domain Chevereto will be reached at, without https://, such as images.example.com.
+  required: true
+- key: CHEVERETO_ENCRYPTION_KEY
+  label: Encryption key
+  help: 32 random bytes in base64 - create one with openssl rand -base64 32. It encrypts secrets in the
+    database; keep it.
+  secret: true
+  required: true
+notes: Open the app's address to create the admin account on the first visit. This is the free edition
+  from Chevereto's own registry; uploads are kept on the app's disk. Sessions are kept inside the
+  container, so a restart signs people out. The image runs as the user www-data, named rather than given
+  as a uid, which the restricted level cannot check, so the environment needs the baseline pod security
+  level.

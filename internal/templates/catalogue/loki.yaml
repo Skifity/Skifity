@@ -1,0 +1,70 @@
+id: loki
+name: Loki
+description: Grafana's log aggregation system - like Prometheus, but for logs - with its data on local
+  disk.
+category: monitoring
+website: https://grafana.com/oss/loki/
+services:
+- name: loki
+  image: grafana/loki:3.7.8
+  port: 3100
+  public: true
+  health_path: /ready
+  mem_request_mb: 256
+  mem_limit_mb: 1536
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  volumes:
+  - name: loki-data
+    mount_path: /loki
+    size_gb: 20
+  files:
+  - path: /etc/loki/local-config.yaml
+    content: |
+      # A single Loki keeping everything on its own disk, with logs deleted
+      # after 31 days. Redeploy after changing this.
+      auth_enabled: false
+
+      server:
+        http_listen_port: 3100
+        grpc_listen_port: 9096
+
+      common:
+        instance_addr: 127.0.0.1
+        path_prefix: /loki
+        storage:
+          filesystem:
+            chunks_directory: /loki/chunks
+            rules_directory: /loki/rules
+        replication_factor: 1
+        ring:
+          kvstore:
+            store: inmemory
+
+      schema_config:
+        configs:
+          - from: 2024-01-01
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+
+      limits_config:
+        retention_period: 744h
+
+      compactor:
+        working_directory: /loki/compactor
+        retention_enabled: true
+        delete_request_store: filesystem
+
+      analytics:
+        reporting_enabled: false
+notes: 'Loki has no page of its own: add it to Grafana as a Loki data source at this app''s address, or
+  at http://loki:3100 from a Grafana in the same environment. Ship logs to /loki/api/v1/push with Grafana
+  Alloy, Vector or Fluent Bit. Loki runs with authentication off, as its single-binary mode does, so
+  anybody with the address can push and read logs: keep the address to yourself, put a proxy that signs
+  requests in front of it, or make the app internal when everything that ships to it is in the same
+  environment. Logs are kept for 31 days; change retention_period in /etc/loki/local-config.yaml on the
+  app''s Files.'

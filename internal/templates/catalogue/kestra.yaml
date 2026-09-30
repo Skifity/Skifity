@@ -1,0 +1,70 @@
+id: kestra
+name: Kestra
+description: Event-driven orchestration - declarative YAML workflows for data pipelines, automations and
+  infrastructure, with a UI to build and watch them.
+category: automation
+website: https://kestra.io
+services:
+- name: kestra
+  image: kestra/kestra:v2.0.4
+  port: 8080
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 4096
+  cpu_request_m: 250
+  cpu_limit_m: 2000
+  variables:
+    MICRONAUT_CONFIG_FILES: /etc/kestra/application.yaml
+  command: exec docker-entrypoint.sh server standalone
+  volumes:
+  - name: kestra-storage
+    mount_path: /app/storage
+    size_gb: 10
+  files:
+  - path: /etc/kestra/application.yaml
+    content: |
+      # Kestra's configuration. The ${...} placeholders are filled from the
+      # environment when Kestra starts; the database's arrive from the link.
+      datasources:
+        postgres:
+          url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_NAME}
+          driver-class-name: org.postgresql.Driver
+          username: ${POSTGRES_USER}
+          password: ${POSTGRES_PASSWORD}
+      kestra:
+        repository:
+          type: postgres
+        queue:
+          type: postgres
+        storage:
+          type: local
+          local:
+            base-path: /app/storage
+        tasks:
+          tmp-dir:
+            path: /tmp/kestra-wd/tmp
+databases:
+- name: kestra-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - kestra
+  var_name: KESTRA_DATABASE_URL
+  vars:
+    host: POSTGRES_HOST
+    port: POSTGRES_PORT
+    name: POSTGRES_NAME
+    user: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+inputs:
+- key: KESTRA_URL
+  label: Public URL
+  help: The address Kestra will be reached at, including https:// and a trailing slash.
+  required: true
+notes: The first visit asks you to create the admin account. Everything runs in one process - the
+  standalone server - with flows and executions in PostgreSQL and files on the app's disk. There is no
+  Docker here, so script tasks cannot use Kestra's default Docker task runner; give them taskRunner with
+  type io.kestra.plugin.core.runner.Process to run them in the Kestra container, which has Python
+  available. The JVM needs a minute to start. The image runs as the user kestra, named rather than given
+  as a uid, which the restricted level cannot check, so the environment needs the baseline pod security
+  level.
