@@ -10,10 +10,17 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
 
 // The one-click catalogue: finding a template, and installing it.
+//
+// The catalogue is the one built into the panel and the team's own: a team
+// can add catalogues of its own templates, which the panel lists for that team
+// beside the built-in ones. An id is unique within a catalogue and not across
+// them, so a template from a team catalogue carries the catalogue's id, and
+// installing it passes that id back.
 
 type listTemplatesInput struct {
 	Query    string `json:"query,omitempty" jsonschema:"words to look for in the name and description, such as wordpress or analytics; every word has to match"`
@@ -30,7 +37,11 @@ type listTemplatesOutput struct {
 }
 
 type templateSummary struct {
-	ID          string          `json:"id"`
+	ID string `json:"id"`
+	// CatalogueID and Catalogue name the team catalogue a template is in,
+	// and are empty for a built-in one.
+	CatalogueID string          `json:"catalogue_id,omitempty"`
+	Catalogue   string          `json:"catalogue,omitempty"`
 	Name        string          `json:"name"`
 	Category    string          `json:"category"`
 	Description string          `json:"description"`
@@ -68,10 +79,18 @@ type catalogueEntry struct {
 	} `json:"databases"`
 	Inputs []templateInput `json:"inputs"`
 	Notes  string          `json:"notes"`
+	// Catalogue is the team catalogue it came from; nil for a built-in one.
+	// Only its id and name are read: nothing else about a catalogue is an
+	// assistant's business.
+	Catalogue *struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"catalogue"`
 }
 
 type installTemplateInput struct {
 	TemplateID    string            `json:"template_id" jsonschema:"the template's id, as returned by list_templates"`
+	CatalogueID   string            `json:"catalogue_id,omitempty" jsonschema:"the catalogue_id list_templates returned with it, for a template from the team's own catalogue; left out for a built-in one"`
 	EnvironmentID string            `json:"environment_id" jsonschema:"where to install it, as returned by list_projects"`
 	Name          string            `json:"name,omitempty" jsonschema:"what to call the app instead of the template's own name; only for a template with one app, and how a second copy of it gets a name of its own"`
 	Values        map[string]string `json:"values,omitempty" jsonschema:"the template's inputs, by key. Leave out one marked generate and a random secret is made for it"`
@@ -97,6 +116,8 @@ func (s *Server) registerTemplates() {
 		Name:        "list_templates",
 		Annotations: reads("List templates"),
 		Description: "Search the one-click catalogue of self-hosted software — WordPress, n8n, Uptime Kuma, Plausible and a few hundred more — by words or by category. " +
+			"It includes the templates of the team's own catalogues, each with a catalogue_id and the catalogue's name; " +
+			"the same id can be in two catalogues, so pass catalogue_id on to install_template. " +
 			"Returns each match's id, the apps and databases it creates, the inputs install_template takes, and its notes. " +
 			"Look here before building well-known software by hand: a template comes with its database, volumes and settings already wired together.",
 	}, s.listTemplates)
@@ -105,6 +126,7 @@ func (s *Server) registerTemplates() {
 		Name:        "install_template",
 		Annotations: changes("Install a template", false, false),
 		Description: "Install a template from list_templates into an environment. Its apps, databases and volumes are created and linked, and its apps start deploying from prebuilt images. " +
+			"For a template from the team's own catalogue, pass the catalogue_id list_templates gave with it; without one, the built-in template of that id is installed. " +
 			"Pass its inputs as values; ask the person for the ones marked required rather than inventing them, and leave out the ones marked generate so a random secret is made. " +
 			"Returns the apps and databases created, and the template's notes: the steps it could not do automatically, which the person needs to hear. " +
 			"An environment has one app of a name, so installing the same template there again is refused; a second copy of a one-app template needs a name of its own.",
@@ -115,7 +137,16 @@ func (s *Server) listTemplates(ctx context.Context, _ *mcp.CallToolRequest, in l
 	var response struct {
 		Items []catalogueEntry `json:"items"`
 	}
-	if err := s.client.Do(ctx, "GET", "/api/templates", nil, &response); err != nil {
+	// The catalogue as the team sees it, its own catalogues' templates
+	// among the built-in ones. A token that cannot say which team is still
+	// shown the built-in catalogue, and told why that is all.
+	path, only := "/api/templates", ""
+	if team, err := s.teamID(ctx); err == nil {
+		path = "/api/teams/" + url.PathEscape(team) + "/templates"
+	} else {
+		only = " These are the built-in templates only; the team's own catalogues need a team: " + errdoc.From(err).Title + "."
+	}
+	if err := s.client.Do(ctx, "GET", path, nil, &response); err != nil {
 		return errorResult(err), listTemplatesOutput{}, nil
 	}
 
@@ -135,6 +166,9 @@ func (s *Server) listTemplates(ctx context.Context, _ *mcp.CallToolRequest, in l
 			continue
 		}
 		haystack := strings.ToLower(entry.ID + " " + entry.Name + " " + entry.Description + " " + entry.Category)
+		if entry.Catalogue != nil {
+			haystack += " " + strings.ToLower(entry.Catalogue.Name)
+		}
 		if !containsAll(haystack, words) {
 			continue
 		}
@@ -169,7 +203,7 @@ func (s *Server) listTemplates(ctx context.Context, _ *mcp.CallToolRequest, in l
 		text = fmt.Sprintf("%d template(s) match; the first %d are here. Narrow the search to see others.",
 			len(matches), len(out.Templates))
 	}
-	return textResult(text), out, nil
+	return textResult(text + only), out, nil
 }
 
 func containsAll(haystack string, words []string) bool {
@@ -200,6 +234,9 @@ func summariseTemplate(entry catalogueEntry) templateSummary {
 		ID: entry.ID, Name: entry.Name, Category: entry.Category, Description: entry.Description,
 		Beta: entry.Beta, Notes: entry.Notes, Apps: []string{},
 	}
+	if entry.Catalogue != nil {
+		summary.CatalogueID, summary.Catalogue = entry.Catalogue.ID, entry.Catalogue.Name
+	}
 	for _, service := range entry.Services {
 		summary.Apps = append(summary.Apps, service.Name)
 	}
@@ -220,6 +257,9 @@ func summariseTemplate(entry catalogueEntry) templateSummary {
 
 func (s *Server) installTemplate(ctx context.Context, _ *mcp.CallToolRequest, in installTemplateInput) (*mcp.CallToolResult, installTemplateOutput, error) {
 	body := map[string]any{"environment_id": in.EnvironmentID}
+	if in.CatalogueID != "" {
+		body["catalogue_id"] = in.CatalogueID
+	}
 	if in.Name != "" {
 		body["name"] = in.Name
 	}

@@ -4,12 +4,20 @@ import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { BoxesIcon, ExternalLinkIcon, InfoIcon, SearchIcon } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  BoxesIcon,
+  ExternalLinkIcon,
+  InfoIcon,
+  LibraryIcon,
+  SearchIcon,
+} from "lucide-react"
 import { cn } from "cn"
 
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
+import { TemplateCataloguesSheet, useTemplateCatalogues } from "@/components/template-catalogues"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -40,13 +48,27 @@ import type { Environment, Project, Template } from "@/lib/types"
 
 export function TemplatesPage() {
   const { t } = useTranslation()
+  const { team } = useSession()
   const [search, setSearch] = useState("")
   const [installing, setInstalling] = useState<Template | null>(null)
+  const [managing, setManaging] = useState(false)
 
+  // The catalogue as this team sees it: its own catalogues' templates, then
+  // the built-in ones. Without a team there is only the built-in one.
   const templates = useQuery({
-    queryKey: ["templates"],
-    queryFn: () => api.get<List<Template>>("/api/templates"),
+    queryKey: ["templates", team?.id ?? null],
+    queryFn: () =>
+      api.get<List<Template>>(team ? `/api/teams/${team.id}/templates` : "/api/templates"),
   })
+  const catalogues = useTemplateCatalogues()
+  // How many of the team's templates were refused, and whether any
+  // catalogue's last refresh failed: both worth a line above the cards,
+  // because a template that is simply missing reads as a bug.
+  const refused = (catalogues.data?.items ?? []).reduce(
+    (total, catalogue) => total + (catalogue.problems?.length ?? 0),
+    0,
+  )
+  const stale = (catalogues.data?.items ?? []).filter((catalogue) => catalogue.last_error).length
 
   const items = useMemo(() => templates.data?.items ?? [], [templates.data])
   const shown = useMemo(() => {
@@ -56,7 +78,8 @@ export function TemplatesPage() {
       (template) =>
         template.name.toLowerCase().includes(needle) ||
         template.description.toLowerCase().includes(needle) ||
-        template.category.toLowerCase().includes(needle),
+        template.category.toLowerCase().includes(needle) ||
+        (template.catalogue?.name.toLowerCase().includes(needle) ?? false),
     )
   }, [items, search])
 
@@ -75,7 +98,35 @@ export function TemplatesPage() {
 
   return (
     <Page>
-      <PageHeader title={t("templates.title")} description={t("templates.subtitle")} />
+      <PageHeader
+        title={t("templates.title")}
+        description={t("templates.subtitle")}
+        actions={
+          team &&
+          !team.scoped && (
+            <Button variant="outline" onClick={() => setManaging(true)}>
+              <LibraryIcon className="size-4" />
+              {t("templates.catalogues.button")}
+            </Button>
+          )
+        }
+      />
+
+      {(refused > 0 || stale > 0) && (
+        <Alert>
+          <AlertTriangleIcon />
+          <AlertTitle>
+            {refused > 0
+              ? t("templates.catalogues.notice", { count: refused })
+              : t("templates.catalogues.staleNotice", { count: stale })}
+          </AlertTitle>
+          <AlertDescription>
+            <Button variant="link" className="h-auto p-0" onClick={() => setManaging(true)}>
+              {t("templates.catalogues.review")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <InputGroup className="max-w-sm">
         <InputGroupAddon>
@@ -125,7 +176,9 @@ export function TemplatesPage() {
                 .filter((template) => template.category === category)
                 .map((template) => (
                   <Card
-                    key={template.id}
+                    // An id is unique within its catalogue, not across them:
+                    // a team's own wiki and the built-in one are two cards.
+                    key={`${template.catalogue?.id ?? ""}/${template.id}`}
                     className="flex h-full flex-col transition-colors hover:border-primary/40"
                   >
                     <CardHeader>
@@ -155,6 +208,15 @@ export function TemplatesPage() {
                             {template.beta && (
                               <Badge variant="outline" className="text-[10px]">
                                 {t("common.beta")}
+                              </Badge>
+                            )}
+                            {template.catalogue && (
+                              <Badge
+                                variant="secondary"
+                                className="max-w-32 shrink truncate text-[10px]"
+                                title={template.catalogue.name}
+                              >
+                                <span className="truncate">{template.catalogue.name}</span>
                               </Badge>
                             )}
                           </div>
@@ -188,6 +250,7 @@ export function TemplatesPage() {
       )}
 
       {installing && <InstallDialog template={installing} onClose={() => setInstalling(null)} />}
+      <TemplateCataloguesSheet open={managing} onOpenChange={setManaging} />
     </Page>
   )
 }
@@ -258,7 +321,7 @@ function TemplateIcon({ template }: { template: Template }) {
   return (
     <span aria-hidden className={cn(shell, "overflow-hidden bg-background p-1.5")}>
       <img
-        src={`/api/templates/${template.id}/icon`}
+        src={iconURL(template)}
         alt=""
         loading="lazy"
         className="size-full object-contain"
@@ -266,6 +329,18 @@ function TemplateIcon({ template }: { template: Template }) {
       />
     </span>
   )
+}
+
+/**
+ * Where a template's logo is served from. Always the panel: one from a team's
+ * own catalogue was fetched from the catalogue's host when the catalogue was,
+ * so the browser is never sent anywhere else to draw it.
+ */
+function iconURL(template: Template): string {
+  const path = `/api/templates/${encodeURIComponent(template.id)}/icon`
+  return template.catalogue
+    ? `${path}?catalogue=${encodeURIComponent(template.catalogue.id)}`
+    : path
 }
 
 /** What POST /api/templates/{id}/install answers with. */
@@ -316,8 +391,11 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
 
   const install = useMutation({
     mutationFn: () =>
-      api.post<Installed>(`/api/templates/${template.id}/install`, {
+      api.post<Installed>(`/api/templates/${encodeURIComponent(template.id)}/install`, {
         environment_id: chosen,
+        // Which catalogue it is in: an id is only unique within one, and the
+        // panel looks for it among this team's own and nobody else's.
+        ...(template.catalogue ? { catalogue_id: template.catalogue.id } : {}),
         name: name.trim(),
         // A generated value is filled in by the panel, so anything left empty
         // is sent empty rather than as an accidental literal.
@@ -354,7 +432,10 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{template.name}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {template.name}
+            {template.catalogue && <Badge variant="secondary">{template.catalogue.name}</Badge>}
+          </DialogTitle>
           <DialogDescription>{template.description}</DialogDescription>
         </DialogHeader>
 

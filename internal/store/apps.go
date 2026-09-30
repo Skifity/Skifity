@@ -488,6 +488,7 @@ var sealedSources = []sealedSource{
 	{table: "app_files", valueCol: "content_enc", ctxPrefix: "file"},
 	{table: "registry_credentials", valueCol: "password_enc", ctxPrefix: "registry"},
 	{table: "certificates", valueCol: "key_enc", ctxPrefix: "certificate"},
+	{table: "template_catalogues", valueCol: "auth_value_enc", ctxPrefix: "template_catalogue"},
 	{table: "servers", valueCol: "ssh_key_enc", ctxPrefix: "server_key"},
 	{table: "databases", valueCol: "credentials_enc", ctxPrefix: "database_credentials"},
 	{table: "git_sources", valueCol: "config_enc", ctxPrefix: "git_source"},

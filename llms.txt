@@ -53,6 +53,8 @@ skifity run -- npm run migrate    Run a command once, in the app's image
 skifity processes set worker -- <command>  A worker beside the app, same build
 skifity files set /etc/app.conf ./app.conf  A file the app reads, mounted at that path
 skifity ports open 25565          Open a port that is not HTTP on every server
+skifity templates                 What the team can install, built in and its own
+skifity templates catalogues add <name> <https url>  Add a catalogue of the team's own templates
 skifity plan                      What skifity.yaml would change in the environment
 skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
@@ -106,8 +108,8 @@ Tools, in the order they are usually needed:
 | `list_projects` | Projects and the environments inside them. Where an app goes. |
 | `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
 | `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
-| `list_templates` | Searches the one-click catalogue by words or category: what each template creates and the inputs it takes. |
-| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together. Relays the template's notes. |
+| `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, and the catalogue it is in. |
+| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together. Takes the catalogue_id of a team template. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
 | `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
@@ -222,6 +224,10 @@ GET    /api/database-engines                  the engines, their versions, and w
 GET    /api/databases/{db}/backups            backups
 POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
 GET    /api/events?topics=team:{team}         everything happening, as events
+GET    /api/teams/{team}/templates            the templates the team can install: its own catalogues', then the built-in ones
+GET    /api/teams/{team}/template-catalogues  the team's own template catalogues, and why any of their templates is refused
+POST   /api/teams/{team}/template-catalogues  add one (name, url, auth_header_name, auth_header_value); downloaded and read first
+POST   /api/templates/{template}/install      install one (environment_id, catalogue_id for a team template, values)
 GET    /api/teams/{team}/registries           private registries the team pulls from
 PUT    /api/teams/{team}/registries           save one; the registry is asked first
 GET    /api/teams/{team}/certificates         the team's own TLS certificates, and which domains use each; never a key

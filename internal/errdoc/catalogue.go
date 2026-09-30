@@ -338,6 +338,86 @@ func TemplateNeedsBackups(app string) *Problem {
 		WithDocs("/docs/templates#updates")
 }
 
+// TemplateCatalogueAddress is an address a team's catalogue cannot be fetched
+// from: not https, or carrying a credential that belongs in the header.
+func TemplateCatalogueAddress(reason string) *Problem {
+	return New("template.catalogue_address", "That address cannot be a template catalogue").
+		WithCause("%s", reason).
+		WithImpact("Nothing was saved.").
+		WithFix("Give the https address of a YAML or JSON index of templates, or of a .tar.gz or .zip of them. " +
+			"A token for a private Git host goes in the header, where it is sealed, and not in the address.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/templates#private-catalogues")
+}
+
+// TemplateCatalogueHeader is a header a catalogue cannot be fetched with.
+func TemplateCatalogueHeader(reason string) *Problem {
+	return New("template.catalogue_header", "That header cannot be sent with the catalogue's download").
+		WithCause("%s", reason).
+		WithImpact("Nothing was saved.").
+		WithFix("Name the header the Git host reads a token from — Authorization, or PRIVATE-TOKEN for GitLab — and give its whole value, such as Bearer followed by the token.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/templates#private-catalogues")
+}
+
+// TemplateCatalogueFetchFailed is a catalogue being added whose address did
+// not answer with something the panel could keep.
+func TemplateCatalogueFetchFailed(address, reason string) *Problem {
+	return New("template.catalogue_fetch_failed", "The catalogue could not be downloaded").
+		WithCause("%s did not answer with a catalogue: %s", address, reason).
+		WithImpact("Nothing was saved: a catalogue is kept once it has been downloaded and read.").
+		WithFix("Open the address in a browser, check the header for a private host, and check this server can reach it. " +
+			"An address on this machine or the cloud's metadata service is refused on purpose, and so is a redirect to a private address.").
+		WithStatus(http.StatusBadGateway).
+		WithDocs("/docs/templates#private-catalogues").
+		Retry()
+}
+
+// TemplateCatalogueUnreadable is a download that is not a catalogue at all.
+func TemplateCatalogueUnreadable(address, reason string) *Problem {
+	return New("template.catalogue_unreadable", "That is not a template catalogue").
+		WithCause("What %s answered could not be read: %s", address, reason).
+		WithImpact("Nothing was saved.").
+		WithFix("Point it at a YAML or JSON file with a list of templates under templates:, or at a .tar.gz or .zip of " +
+			"*.yaml files in the same schema as the built-in catalogue. A raw file's address, not the page that shows it.").
+		WithStatus(http.StatusUnprocessableEntity).
+		WithDocs("/docs/templates#private-catalogues")
+}
+
+// TemplateCatalogueRefreshFailed is a refresh that did not work. The copy
+// downloaded before is still the one templates are installed from.
+func TemplateCatalogueRefreshFailed(name, reason string) *Problem {
+	return New("template.catalogue_refresh_failed", "The catalogue could not be refreshed").
+		WithCause("%s could not be downloaded or read again: %s", name, reason).
+		WithImpact("Its templates are still installed from the copy downloaded before, which was kept.").
+		WithFix("Check the address still answers with the catalogue and the header is still valid, then refresh it again. " +
+			"It is also tried again every day.").
+		WithStatus(http.StatusBadGateway).
+		WithDocs("/docs/templates#private-catalogues").
+		Retry()
+}
+
+// TooManyTemplateCatalogues is a team adding a catalogue past the limit.
+func TooManyTemplateCatalogues(max int) *Problem {
+	return New("template.catalogue_limit", "This team has as many catalogues as it can").
+		WithCause("A team can have %d template catalogues.", max).
+		WithImpact("Nothing was saved.").
+		WithFix("Remove one it no longer uses, or put the templates of several into one catalogue.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/templates#private-catalogues")
+}
+
+// TemplateNotInstallable is a template in a team's catalogue that does not
+// pass the checks every template is held to.
+func TemplateNotInstallable(id, catalogue, why string) *Problem {
+	return New("template.not_installable", "This template cannot be installed").
+		WithCause("%s in %s does not pass the checks every template is held to: %s", id, catalogue, why).
+		WithImpact("Nothing was created.").
+		WithFix("Correct the template in the catalogue and refresh it. The catalogue's entry under Templates lists why each template was refused.").
+		WithStatus(http.StatusUnprocessableEntity).
+		WithDocs("/docs/templates#private-catalogues")
+}
+
 // PromotionBuiltDifferently is an image built from other build settings or
 // build-time variables than the app it is promoted to has.
 func PromotionBuiltDifferently(app string) *Problem {

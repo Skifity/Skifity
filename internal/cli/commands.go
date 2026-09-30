@@ -87,6 +87,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdScan(ctx, rest, stdout)
 	case "certs":
 		err = cmdCerts(ctx, rest, stdout)
+	case "templates":
+		err = cmdTemplates(ctx, rest, stdout)
 	case "plan", "apply":
 		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
@@ -256,6 +258,10 @@ Working with apps:
 Described in a file:
   plan                  Say what skifity.yaml would change in the environment
   apply                 Make the environment what skifity.yaml says
+
+Templates:
+  templates             List the templates the team can install, built in and its own
+  templates catalogues  List, add, refresh or remove the team's own template catalogues
 
 Databases:
   db                    List the managed databases in an environment

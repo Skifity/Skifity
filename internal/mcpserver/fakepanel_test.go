@@ -31,9 +31,12 @@ const (
 	plantedVariable = "planted-variable-value"
 	plantedFile     = "planted-file-content"
 	plantedPassword = "planted-database-password"
+	// plantedCatalogueHeader is the token a team catalogue is fetched with,
+	// which the real panel never answers with anything.
+	plantedCatalogueHeader = "planted-catalogue-header"
 )
 
-var planted = []string{plantedVariable, plantedFile, plantedPassword}
+var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader}
 
 type fakePanel struct {
 	t      *testing.T
@@ -112,6 +115,41 @@ func newFakePanel(t *testing.T) *fakePanel {
 		return map[string]any{"items": values, "total": len(values)}
 	}
 
+	// The built-in catalogue, and the same as the team sees it: its own
+	// catalogue's WordPress first, under the same id as the built-in one.
+	builtIn := []any{
+		map[string]any{
+			"id": "wordpress-with-mariadb", "name": "WordPress with MariaDB", "category": "cms",
+			"description": "The blogging platform, with its database.",
+			"services":    []any{map[string]any{"name": "wordpress"}}, "databases": []any{map[string]any{"engine": "mysql"}},
+		},
+		map[string]any{
+			"id": "wordpress", "name": "WordPress", "category": "cms", "description": "The blogging platform.",
+			"services": []any{map[string]any{"name": "wordpress"}},
+		},
+		map[string]any{
+			"id": "plausible", "name": "Plausible Analytics", "category": "analytics", "beta": true,
+			"description": "Privacy-friendly website analytics.",
+			"services":    []any{map[string]any{"name": "plausible"}}, "databases": []any{map[string]any{"engine": "postgres"}},
+			"inputs": []any{
+				map[string]any{"key": "SECRET_KEY_BASE", "label": "Secret key base", "secret": true, "generate": true},
+				map[string]any{"key": "BASE_URL", "label": "Public URL", "required": true},
+			},
+			"notes": "Plausible also needs ClickHouse for its event data.",
+		},
+	}
+	teamOwn := map[string]any{
+		"id": "wordpress", "name": "WordPress, Acme's build", "category": "cms",
+		"description": "The blogging platform, with Acme's theme baked in.",
+		"services":    []any{map[string]any{"name": "wordpress"}},
+		"catalogue": map[string]any{
+			"id": "tcat_1", "name": "Acme",
+			// What the panel never answers, handed over here so that a tool
+			// passing a catalogue on whole is caught doing it.
+			"auth_header_value": plantedCatalogueHeader,
+		},
+	}
+
 	answers := map[string]any{
 		"GET /api/teams/{team}/projects":           items(map[string]any{"id": "prj_1", "team_id": "team_1", "name": "acme"}),
 		"GET /api/projects/{project}/environments": items(map[string]any{"id": "env_1", "project_id": "prj_1", "name": "production", "slug": "production", "kind": "standard"}),
@@ -188,27 +226,8 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"POST /api/databases/{db}/restore/{backup}":           map[string]any{"id": "op_1"},
 		"POST /api/apps/{app}/volumes/{volume}/restore/{bak}": map[string]any{"id": "op_1"},
 
-		"GET /api/templates": items(
-			map[string]any{
-				"id": "wordpress-with-mariadb", "name": "WordPress with MariaDB", "category": "cms",
-				"description": "The blogging platform, with its database.",
-				"services":    []any{map[string]any{"name": "wordpress"}}, "databases": []any{map[string]any{"engine": "mysql"}},
-			},
-			map[string]any{
-				"id": "wordpress", "name": "WordPress", "category": "cms", "description": "The blogging platform.",
-				"services": []any{map[string]any{"name": "wordpress"}},
-			},
-			map[string]any{
-				"id": "plausible", "name": "Plausible Analytics", "category": "analytics", "beta": true,
-				"description": "Privacy-friendly website analytics.",
-				"services":    []any{map[string]any{"name": "plausible"}}, "databases": []any{map[string]any{"engine": "postgres"}},
-				"inputs": []any{
-					map[string]any{"key": "SECRET_KEY_BASE", "label": "Secret key base", "secret": true, "generate": true},
-					map[string]any{"key": "BASE_URL", "label": "Public URL", "required": true},
-				},
-				"notes": "Plausible also needs ClickHouse for its event data.",
-			},
-		),
+		"GET /api/templates":              items(builtIn...),
+		"GET /api/teams/{team}/templates": items(append([]any{teamOwn}, builtIn...)...),
 		"POST /api/templates/{template}/install": map[string]any{
 			"apps":      []any{map[string]any{"id": "app_9", "name": "plausible", "image": "ghcr.io/plausible/community-edition:v2.1.5"}},
 			"databases": []any{database},

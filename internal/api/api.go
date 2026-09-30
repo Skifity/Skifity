@@ -21,6 +21,7 @@ import (
 	"skifity/internal/plugins"
 	"skifity/internal/runsafe"
 	"skifity/internal/store"
+	"skifity/internal/templates/remote"
 	"skifity/internal/upload"
 )
 
@@ -75,6 +76,13 @@ type Server struct {
 	// traffic says whether the ingress's request counters could be read. Nil
 	// is a panel with no watcher, which reads nothing.
 	traffic TrafficSource
+
+	// catalogueFetcher downloads teams' own template catalogues, through
+	// internal/netguard; a test points it at a server of its own.
+	catalogueFetcher *remote.Fetcher
+	// catalogues keeps each of them read, and says whether the daily
+	// refresh is running. See template_catalogues.go.
+	catalogues *catalogueCache
 
 	// frontend serves the embedded UI.
 	frontend http.Handler
@@ -145,6 +153,9 @@ func New(opts Options) *Server {
 		frontend:    opts.Frontend,
 		setup:       newSetupState(opts.SetupToken),
 		metrics:     opts.Metrics,
+
+		catalogueFetcher: &remote.Fetcher{},
+		catalogues:       &catalogueCache{},
 	}
 	if s.metrics == nil {
 		s.metrics = metrics.New()
@@ -272,6 +283,14 @@ func (s *Server) routes() chi.Router {
 				// Looking at a repository before creating anything from it.
 				team.Post("/detect", s.handleDetect)
 				team.Post("/detect-upload", s.handleDetectUpload)
+
+				// The team's own template catalogues, and the catalogue as
+				// the team sees it: theirs, then the built-in one.
+				team.Get("/templates", s.handleListTeamTemplates)
+				team.Get("/template-catalogues", s.handleListTemplateCatalogues)
+				team.Post("/template-catalogues", s.handleAddTemplateCatalogue)
+				team.Delete("/template-catalogues/{catalogueID}", s.handleDeleteTemplateCatalogue)
+				team.Post("/template-catalogues/{catalogueID}/refresh", s.handleRefreshTemplateCatalogue)
 
 				team.Get("/registries", s.handleListRegistries)
 				team.Put("/registries", s.handleSetRegistry)

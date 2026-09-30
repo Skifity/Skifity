@@ -3,26 +3,10 @@ package templates
 import (
 	"encoding/json"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
-
-	"skifity/internal/dbsvc/engine"
-	"skifity/internal/kube"
 )
-
-// The engines Skifity provisions come from the catalogue in
-// internal/dbsvc/engine, which imports nothing of the panel's and so can be
-// read from here; internal/dbsvc itself reaches internal/api, which reaches
-// this package, and could not be.
-var engines = func() map[string]bool {
-	out := map[string]bool{}
-	for _, name := range engine.Names() {
-		out[name] = true
-	}
-	return out
-}()
 
 // The catalogue is data, and data goes wrong quietly.
 //
@@ -31,107 +15,39 @@ var engines = func() map[string]bool {
 // that is created and never linked, or an app that comes up as software nobody
 // chose. These check the shape of every entry, because the catalogue is the one
 // part of this product a user runs without looking at first.
+//
+// Each check is a function in validate.go rather than a loop in here, because a
+// team's own catalogue is held to exactly the same rules when it is loaded: a
+// template of theirs that fails one is listed with why and cannot be installed.
+// The tests below run those same functions over the catalogue in the binary,
+// and TestEveryCheckRefusesWhatItIsFor makes sure none of them has quietly
+// become a check that passes everything.
 
-func TestEveryTemplateIsComplete(t *testing.T) {
-	seen := map[string]string{}
+// report fails the test once for every problem a check found in the built-in
+// catalogue.
+func report(t *testing.T, check Check) {
+	t.Helper()
 	for _, tpl := range All() {
-		if tpl.ID == "" {
-			t.Fatalf("a template has no id: %+v", tpl)
-		}
-		if other, clash := seen[tpl.ID]; clash {
-			t.Errorf("%s and %s share the id %q, so Lookup returns whichever is first", other, tpl.Name, tpl.ID)
-		}
-		seen[tpl.ID] = tpl.Name
-
-		if kube.Slugify(tpl.ID) != tpl.ID {
-			t.Errorf("%s: the id %q is not already a slug, and it ends up in a URL", tpl.Name, tpl.ID)
-		}
-		for field, value := range map[string]string{
-			"name": tpl.Name, "description": tpl.Description,
-			"category": tpl.Category, "website": tpl.Website,
-		} {
-			if strings.TrimSpace(value) == "" {
-				t.Errorf("%s has no %s, and the card shows it", tpl.ID, field)
-			}
-		}
-		if !strings.HasPrefix(tpl.Website, "https://") {
-			t.Errorf("%s links to %q; a link out of the panel must be https", tpl.ID, tpl.Website)
-		}
-		if len(tpl.Services) == 0 {
-			t.Errorf("%s installs nothing", tpl.ID)
+		for _, problem := range check(tpl) {
+			t.Error(problem)
 		}
 	}
 }
 
-func TestEveryServiceCouldRun(t *testing.T) {
+func TestEveryTemplateIsComplete(t *testing.T) {
 	for _, tpl := range All() {
-		public := 0
-		names := map[string]bool{}
-		for _, svc := range tpl.Services {
-			if svc.Name == "" || kube.Slugify(svc.Name) != svc.Name {
-				t.Errorf("%s: the service name %q is not a slug, and it becomes a Kubernetes object", tpl.ID, svc.Name)
-			}
-			if names[svc.Name] {
-				t.Errorf("%s: two services are called %q, and the second takes the first's Service over", tpl.ID, svc.Name)
-			}
-			names[svc.Name] = true
-
-			// A worker does not listen, and Skifity runs one as an app with
-			// no port: no Service, no probes, no ingress. Inventing a port for
-			// a Sidekiq gives it a readiness check against something that
-			// never answers, and an app that is "starting" forever.
-			if svc.Port == 0 {
-				if svc.Public {
-					t.Errorf("%s/%s is public and listens on nothing", tpl.ID, svc.Name)
-				}
-				if svc.HealthPath != "" {
-					t.Errorf("%s/%s has a health path and no port to check it on", tpl.ID, svc.Name)
-				}
-			} else if svc.Port < 1 || svc.Port > 65535 {
-				t.Errorf("%s/%s listens on %d", tpl.ID, svc.Name, svc.Port)
-			}
-			// A port that is not HTTP is as much a way in: a game server
-			// has nothing else.
-			if svc.Public || len(svc.Ports) > 0 {
-				public++
-			}
-			for _, p := range svc.Ports {
-				if err := kube.ValidatePublicPort(p.Port, protocolOr(p.Protocol)); err != nil {
-					t.Errorf("%s/%s: %v", tpl.ID, svc.Name, err)
-				}
-			}
-			// Root is never pinned: 0 is "the image decides", and a uid is
-			// only given so the kubelet can see a named user is not root.
-			if svc.RunAsUser < 0 || svc.RunAsUser > 1<<31-1 {
-				t.Errorf("%s/%s runs as %d, which is not a uid", tpl.ID, svc.Name, svc.RunAsUser)
-			}
-			if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
-				t.Errorf("%s/%s has the health path %q, which is not a path", tpl.ID, svc.Name, svc.HealthPath)
-			}
-			if svc.MemLimitMB > 0 && svc.MemRequestMB > svc.MemLimitMB {
-				t.Errorf("%s/%s asks for more memory than it is allowed, so it can never be scheduled", tpl.ID, svc.Name)
-			}
-			if svc.CPULimitM > 0 && svc.CPURequestM > svc.CPULimitM {
-				t.Errorf("%s/%s asks for more CPU than it is allowed", tpl.ID, svc.Name)
-			}
-			for key := range svc.Variables {
-				if _, err := kube.SanitiseEnvKey(key); err != nil {
-					t.Errorf("%s/%s sets %q, which a container cannot carry: %v", tpl.ID, svc.Name, key, err)
-				}
-			}
-			for _, vol := range svc.Volumes {
-				if !strings.HasPrefix(vol.MountPath, "/") {
-					t.Errorf("%s/%s mounts %q, which is not an absolute path", tpl.ID, svc.Name, vol.MountPath)
-				}
-				if vol.SizeGB < 0 {
-					t.Errorf("%s/%s asks for %d GB", tpl.ID, svc.Name, vol.SizeGB)
-				}
-			}
-		}
-		if public == 0 {
-			t.Errorf("%s has no public service, so nothing it installs can be opened", tpl.ID)
+		if tpl.ID == "" {
+			t.Fatalf("a template has no id: %+v", tpl)
 		}
 	}
+	for _, problem := range DuplicateIDs(All()) {
+		t.Error(problem)
+	}
+	report(t, CheckComplete)
+}
+
+func TestEveryServiceCouldRun(t *testing.T) {
+	report(t, CheckServices)
 }
 
 // TestNoWorkerIsTreatedAsAWebApp: a queue consumer, a Sidekiq, a scheduler —
@@ -140,17 +56,7 @@ func TestEveryServiceCouldRun(t *testing.T) {
 // and the app stays "starting" until somebody reads the events. The converter
 // that built this catalogue marked one worker public twice before this existed.
 func TestNoWorkerIsTreatedAsAWebApp(t *testing.T) {
-	worker := regexp.MustCompile(
-		`(^|[-_])(workers?|sidekiq|celery|beat|scheduler|cron|queue|consumer|` +
-			`runners?|supervisor|jobs?)([-_]|$)`)
-	for _, tpl := range All() {
-		for _, svc := range tpl.Services {
-			if worker.MatchString(svc.Name) && svc.Public {
-				t.Errorf("%s/%s is named for a worker and is public; a queue consumer has no page to open",
-					tpl.ID, svc.Name)
-			}
-		}
-	}
+	report(t, CheckWorkers)
 }
 
 // TestEveryDatabaseReachesTheServiceItIsFor: a LinkTo that names no service is
@@ -159,61 +65,8 @@ func TestNoWorkerIsTreatedAsAWebApp(t *testing.T) {
 // variable it cannot run without — and crash-loops with nothing on screen
 // saying why.
 func TestEveryDatabaseReachesTheServiceItIsFor(t *testing.T) {
-	for _, tpl := range All() {
-		services := map[string]bool{}
-		for _, svc := range tpl.Services {
-			services[svc.Name] = true
-		}
-		for _, db := range tpl.Databases {
-			if db.Name == "" || kube.Slugify(db.Name) != db.Name {
-				t.Errorf("%s: the database name %q is not a slug", tpl.ID, db.Name)
-			}
-			if !engines[db.Engine] {
-				t.Errorf("%s: %q is not an engine Skifity runs", tpl.ID, db.Engine)
-			}
-			if db.StorageGB <= 0 {
-				t.Errorf("%s/%s asks for %d GB of storage", tpl.ID, db.Name, db.StorageGB)
-			}
-			if len(db.LinkTo) == 0 {
-				t.Errorf("%s: the database %s is created and linked to nothing", tpl.ID, db.Name)
-			}
-			for _, target := range db.LinkTo {
-				if !services[target] {
-					t.Errorf("%s: the database %s links to %q, which is not a service in this template",
-						tpl.ID, db.Name, target)
-				}
-			}
-			if db.VarName != "" {
-				if _, err := kube.SanitiseEnvKey(db.VarName); err != nil {
-					t.Errorf("%s/%s arrives as %q, which a container cannot carry: %v",
-						tpl.ID, db.Name, db.VarName, err)
-				}
-			}
-		}
-	}
+	report(t, CheckDatabases)
 }
-
-// floatingTag matches a tag that means "whatever is newest".
-//
-// `latest` is only the most honest spelling of it. `main`, `main-stable`,
-// `16-master`, `release` and `postgresql-edge` all move under the app, and the
-// first version of this caught none of them: litellm reached the catalogue on
-// `main-stable`, which is a branch with a nicer name.
-var floatingTag = regexp.MustCompile(`(^|[-_.])(latest|main|master|stable|edge|nightly|release|dev)$`)
-
-// majorOnlyTag matches a tag that names a major version and nothing else: `1`,
-// `v2`, `15`, `5-alpine`, `3-management`.
-//
-// That is whatever is newest with a fence around it. Upstream moves it on every
-// minor and patch release, so two installs a week apart run different software
-// and a rollback restores the tag rather than the image that worked, exactly as
-// with `latest`; all the fence promises is that the next image is not a new
-// major. This directory's README once recommended these, and thirty-seven
-// services ran on one.
-//
-// Four digits or more is not a major version. `260919` is a date, and a
-// project that numbers its builds that way means each number to name one image.
-var majorOnlyTag = regexp.MustCompile(`^v?[0-9]{1,3}(-[a-z][a-z0-9]*)*$`)
 
 // TestNoTemplateRunsWhateverIsNewest: an image on a floating tag is not a
 // version. Two deploys of the same app run different software, a rollback
@@ -221,48 +74,13 @@ var majorOnlyTag = regexp.MustCompile(`^v?[0-9]{1,3}(-[a-z][a-z0-9]*)*$`)
 // arrives on a restart nobody asked for. The product promises rollback, so the
 // catalogue has to name what it runs.
 func TestNoTemplateRunsWhateverIsNewest(t *testing.T) {
-	for _, tpl := range All() {
-		for _, svc := range tpl.Services {
-			// A registry host may carry a port, so the tag is after the last
-			// colon and only if there is no slash after it.
-			colon := strings.LastIndex(svc.Image, ":")
-			if colon < 0 || strings.Contains(svc.Image[colon:], "/") {
-				t.Errorf("%s/%s runs %q with no tag, which means latest", tpl.ID, svc.Name, svc.Image)
-				continue
-			}
-			tag := svc.Image[colon+1:]
-			if floatingTag.MatchString(tag) {
-				t.Errorf("%s/%s runs %q: %q is whatever is newest, so this app cannot be rolled back",
-					tpl.ID, svc.Name, svc.Image, tag)
-			}
-			if majorOnlyTag.MatchString(tag) {
-				t.Errorf("%s/%s runs %q: %q is whatever is newest in that major version; "+
-					"name the release inside it that it runs", tpl.ID, svc.Name, svc.Image, tag)
-			}
-		}
-	}
+	report(t, CheckVersions)
 }
 
 // An input that is neither required, nor generated, nor defaulted is a field
 // the installer asks for and then does nothing about when it is empty.
 func TestEveryInputIsAskedForOrFilledIn(t *testing.T) {
-	for _, tpl := range All() {
-		for _, input := range tpl.Inputs {
-			if input.Key == "" || input.Label == "" {
-				t.Errorf("%s has an input with no key or no label: %+v", tpl.ID, input)
-			}
-			if _, err := kube.SanitiseEnvKey(input.Key); err != nil {
-				t.Errorf("%s asks for %q, which a container cannot carry: %v", tpl.ID, input.Key, err)
-			}
-			if !input.Required && !input.Generate && input.Default == "" {
-				t.Errorf("%s asks for %s and does nothing when it is left empty", tpl.ID, input.Key)
-			}
-			if input.Generate && input.Default != "" {
-				t.Errorf("%s/%s is both generated and defaulted; the default wins and the generator never runs",
-					tpl.ID, input.Key)
-			}
-		}
-	}
+	report(t, CheckInputs)
 }
 
 func TestSearchAndLookupFindWhatIsThere(t *testing.T) {
@@ -294,70 +112,10 @@ func TestSearchAndLookupFindWhatIsThere(t *testing.T) {
 // fails to resolve a hostname nobody recognises, and crash-loops.
 //
 // This caught bookstack, glpi, metabase, redmine and keycloak on the first
-// import, which is a fifth of the templates that bring a database.
+// import, which is a fifth of the templates that bring a database. See
+// CheckWiring for the rest of what it reads.
 func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
-	datastore := regexp.MustCompile(
-		`(^|_)(DB|DATABASE|POSTGRES|POSTGRESQL|PG|MYSQL|MARIADB|REDIS|VALKEY|KEYDB|MONGO|MONGODB|` +
-			`CACHE|QUEUE|BROKER|AMQP|RABBITMQ|ELASTIC|ELASTICSEARCH|MEILI|CLICKHOUSE)($|_)`)
-	address := regexp.MustCompile(`(^|_)(HOST|HOSTNAME|PORT|SERVER|ADDR|ADDRESS|URL|URI|DSN|CONNECTION|CONNECTIONSTRING)$`)
-
-	// A URL names a host whatever the variable that holds it is called.
-	// PAPERLESS_REDIS=redis://redis:6379 went past the check on names, because
-	// PAPERLESS_REDIS ends in neither HOST nor URL, and gave Paperless a Redis
-	// the template never installed. A host with no dot in it is either the
-	// container itself (localhost) or something in the same environment,
-	// reached by name: a service of this template, or one of its managed
-	// databases. Anything else — including grampsweb_redis, which no resolver
-	// would even look up — is a container that is not there.
-	urlHost := regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://(?:[^@/?#\s]*@)?([^:/?#\s\[\]]*)`)
-
-	for _, tpl := range All() {
-		reachable := map[string]bool{"localhost": true}
-		services := map[string]bool{}
-		for _, svc := range tpl.Services {
-			reachable[svc.Name] = true
-			services[svc.Name] = true
-		}
-		// A datastore that is a service of the template — a MongoDB, which
-		// Skifity does not manage — is reached by name like any sibling, and
-		// the address of one is not wiring a managed database by hand.
-		pointsAtService := func(value string) bool {
-			for _, match := range urlHost.FindAllStringSubmatch(value, -1) {
-				if services[strings.ToLower(match[1])] {
-					return true
-				}
-			}
-			host, _, _ := strings.Cut(value, ":")
-			return services[host]
-		}
-		for _, db := range tpl.Databases {
-			reachable[db.Name] = true
-		}
-		for _, svc := range tpl.Services {
-			for key, value := range svc.Variables {
-				for _, match := range urlHost.FindAllStringSubmatch(value, -1) {
-					host := strings.ToLower(match[1])
-					if host == "" || strings.Contains(host, ".") || reachable[host] {
-						continue
-					}
-					t.Errorf("%s/%s sets %s=%q; %q is neither a service in this template nor one of its "+
-						"databases, so this points at a container that does not exist",
-						tpl.ID, svc.Name, key, value, host)
-				}
-				upper := strings.ToUpper(key)
-				if datastore.MatchString(upper) && address.MatchString(upper) && !pointsAtService(value) {
-					t.Errorf("%s/%s sets %s=%q; Skifity injects a connection string instead, "+
-						"and this points at a container that does not exist",
-						tpl.ID, svc.Name, key, value)
-				}
-				// A value the source file expected a shell to expand is not a
-				// value; it reaches the container as the literal text.
-				if strings.Contains(value, "$") {
-					t.Errorf("%s/%s sets %s=%q, which was never expanded", tpl.ID, svc.Name, key, value)
-				}
-			}
-		}
-	}
+	report(t, CheckWiring)
 }
 
 // The catalogue is read from files at startup. A file that does not parse is a
@@ -544,11 +302,4 @@ func TestATemplateWithNoIconSaysSoRatherThanBreaking(t *testing.T) {
 	if _, _, ok := ReadIcon("a-template-that-does-not-exist"); ok {
 		t.Error("an icon was served for a template that does not exist")
 	}
-}
-
-func protocolOr(protocol string) string {
-	if protocol == "" {
-		return "tcp"
-	}
-	return protocol
 }

@@ -691,6 +691,35 @@ export type Template = {
     generate?: boolean
   }[]
   notes?: string
+  /** The team catalogue it came from; absent for a built-in template. */
+  catalogue?: { id: string; name: string }
+}
+
+/** A template in a team's catalogue that cannot be installed, and why. */
+export type TemplateCatalogueProblem = {
+  /** The file in an archive, or the place in an index's list. */
+  file: string
+  id?: string
+  name?: string
+  errors: string[]
+}
+
+/** One of a team's own template catalogues. Never the header's value. */
+export type TemplateCatalogue = {
+  id: string
+  team_id: string
+  name: string
+  url: string
+  auth_header_name?: string
+  format?: "index" | "tar.gz" | "zip"
+  fetched_at: string
+  attempted_at: string
+  last_error?: string
+  /** How many of its templates can be installed. */
+  templates: number
+  problems: TemplateCatalogueProblem[]
+  created_at: string
+  updated_at: string
 }
 
 export type APIToken = {

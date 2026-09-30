@@ -59,9 +59,32 @@ func (s *Server) templateView(ctx context.Context, app store.App) (templateView,
 	}
 	view := templateView{FromTemplate: true, AppTemplate: record, Current: app.Image}
 	view.ChangedByHand = app.Image != record.InstalledImage
-	tpl, ok := templates.Lookup(record.TemplateID)
-	if !ok {
-		return view, templates.Service{}, nil
+	// Looked for in the catalogue the app came from and nowhere else: a
+	// team's catalogue may have a template with a built-in one's id.
+	var tpl templates.Template
+	if record.CatalogueID == "" {
+		found, ok := templates.Lookup(record.TemplateID)
+		if !ok {
+			return view, templates.Service{}, nil
+		}
+		tpl = found
+	} else {
+		teamID, err := s.db.TeamIDForApp(ctx, app.ID)
+		if err != nil {
+			return view, templates.Service{}, err
+		}
+		found, err := s.resolveTemplate(ctx, teamID, record.CatalogueID, record.TemplateID)
+		var gone *errdoc.Problem
+		switch {
+		case errors.As(err, &gone):
+			// The catalogue was removed, no longer offers the template, or
+			// offers one that does not pass: there is no version to update
+			// to, which is what the view says.
+			return view, templates.Service{}, nil
+		case err != nil:
+			return view, templates.Service{}, err
+		}
+		tpl = found
 	}
 	view.Name = tpl.Name
 	for _, service := range tpl.Services {

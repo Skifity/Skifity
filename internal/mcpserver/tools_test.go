@@ -334,7 +334,7 @@ func TestListTemplatesFindsWhatWasAskedForFirst(t *testing.T) {
 	s := New(panel.config())
 
 	_, out, _ := s.listTemplates(t.Context(), nil, listTemplatesInput{Query: "WordPress"})
-	if out.Matches != 2 || out.Templates[0].ID != "wordpress" {
+	if out.Matches != 3 || out.Templates[0].ID != "wordpress" || out.Templates[1].ID != "wordpress" {
 		t.Errorf("searching for WordPress found %+v", out.Templates)
 	}
 	if !slices.Equal(out.Categories, []string{"analytics", "cms"}) {
@@ -345,8 +345,56 @@ func TestListTemplatesFindsWhatWasAskedForFirst(t *testing.T) {
 		t.Errorf("the analytics templates are %+v", out.Templates)
 	}
 	_, out, _ = s.listTemplates(t.Context(), nil, listTemplatesInput{Limit: 1})
-	if out.Matches != 3 || len(out.Templates) != 1 {
+	if out.Matches != 4 || len(out.Templates) != 1 {
 		t.Errorf("a limit of one returned %d of %d", len(out.Templates), out.Matches)
+	}
+}
+
+// The team's own catalogue is part of the catalogue an assistant searches,
+// and a template from it says which catalogue it is in: the same id can be in
+// two. Installing one passes the catalogue on, and installing the built-in
+// one of that id does not.
+func TestATeamsOwnTemplateIsFoundAndInstalledFromItsCatalogue(t *testing.T) {
+	panel := newFakePanel(t)
+	s := New(panel.config())
+
+	_, out, _ := s.listTemplates(t.Context(), nil, listTemplatesInput{Query: "acme"})
+	if out.Matches != 1 || out.Templates[0].ID != "wordpress" || out.Templates[0].CatalogueID != "tcat_1" ||
+		out.Templates[0].Catalogue != "Acme" {
+		t.Fatalf("searching for the catalogue's name found %+v", out.Templates)
+	}
+	if _, ok := panel.last("GET", "/api/teams/team_1/templates"); !ok {
+		t.Errorf("the team's catalogue was not asked for: %+v", panel.requests())
+	}
+	_, out, _ = s.listTemplates(t.Context(), nil, listTemplatesInput{Query: "wordpress", Category: "cms"})
+	builtIn := 0
+	for _, template := range out.Templates {
+		if template.ID == "wordpress" && template.CatalogueID == "" {
+			builtIn++
+		}
+	}
+	if builtIn != 1 {
+		t.Errorf("the built-in WordPress is not told apart from the team's: %+v", out.Templates)
+	}
+
+	session := connect(t, New(panel.config()))
+	if text, failed := call(t, session, "install_template", map[string]any{
+		"template_id": "wordpress", "catalogue_id": "tcat_1", "environment_id": "env_1",
+	}); failed {
+		t.Fatalf("install_template failed: %s", text)
+	}
+	request, _ := panel.last("POST", "/api/templates/wordpress/install")
+	if want := map[string]any{"environment_id": "env_1", "catalogue_id": "tcat_1"}; !reflect.DeepEqual(request.Body, want) {
+		t.Errorf("installing the team's template sent %v, want %v", request.Body, want)
+	}
+	if text, failed := call(t, session, "install_template", map[string]any{
+		"template_id": "wordpress", "environment_id": "env_1",
+	}); failed {
+		t.Fatalf("install_template failed: %s", text)
+	}
+	request, _ = panel.last("POST", "/api/templates/wordpress/install")
+	if _, sent := request.Body["catalogue_id"]; sent {
+		t.Errorf("installing the built-in template named a catalogue: %v", request.Body)
 	}
 }
 

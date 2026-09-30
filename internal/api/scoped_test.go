@@ -27,6 +27,7 @@ var limitedMemberMayUse = map[string]string{
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches":     "and the branches of the one picked",
 	"POST /api/teams/{teamID}/detect":                             "looking at a repository creates nothing, and comes before creating an app",
 	"POST /api/teams/{teamID}/detect-upload":                      "the same, for uploaded code",
+	"GET /api/teams/{teamID}/templates":                           "the templates they install into their own projects, the team's own among them",
 }
 
 // otherProject makes a second project in a tenant's team, with an environment,

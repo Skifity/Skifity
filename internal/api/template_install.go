@@ -25,8 +25,12 @@ type installedTemplate struct {
 // Databases come first so their connection strings exist before the services
 // that need them start, which is the difference between a template that works
 // on the first try and one that crash-loops until someone redeploys it.
+//
+// catalogueID is the team catalogue the template came from, "" for the
+// built-in one, and is remembered with each app so an update is looked for
+// in the same place.
 func (s *Server) installTemplate(
-	r *http.Request, tpl templates.Template, env store.Environment,
+	r *http.Request, catalogueID string, tpl templates.Template, env store.Environment,
 	user store.User, nameOverride string, values map[string]string,
 ) (installedTemplate, error) {
 	result := installedTemplate{Notes: tpl.Notes}
@@ -96,7 +100,7 @@ func (s *Server) installTemplate(
 		}
 		// Remembered, so a newer version of the template can be offered.
 		if err := s.db.RecordAppTemplate(r.Context(), store.AppTemplate{
-			AppID: app.ID, TemplateID: tpl.ID, Service: svc.Name, InstalledImage: svc.Image,
+			AppID: app.ID, TemplateID: tpl.ID, CatalogueID: catalogueID, Service: svc.Name, InstalledImage: svc.Image,
 		}); err != nil {
 			return result, err
 		}

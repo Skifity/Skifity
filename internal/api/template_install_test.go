@@ -105,7 +105,7 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 			Vars:    templates.DatabaseVars{Host: "DB_HOST", Port: "DB_PORT", Name: "DB_DATABASE", User: "DB_USERNAME", Password: "DB_PASSWORD"}}},
 	}
 	request := httptest.NewRequest(http.MethodPost, "/api/templates/assets/install", nil).WithContext(t.Context())
-	result, err := h.api.installTemplate(request, tpl, acme.env, acme.user, "", nil)
+	result, err := h.api.installTemplate(request, "", tpl, acme.env, acme.user, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

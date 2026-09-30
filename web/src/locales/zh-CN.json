@@ -351,7 +351,10 @@
       "app.drift_auto_repair_off": "停止自动恢复应用",
       "certificate.saved": "上传了证书",
       "certificate.replaced": "上传了证书的新版本",
-      "certificate.deleted": "删除了证书"
+      "certificate.deleted": "删除了证书",
+      "template_catalogue.added": "添加了模板目录",
+      "template_catalogue.refreshed": "刷新了模板目录",
+      "template_catalogue.removed": "删除了模板目录"
     }
   },
   "projects": {
@@ -1240,7 +1243,37 @@
       "security": "安全",
       "storage": "存储与文件"
     },
-    "installWhere": "装到哪里"
+    "installWhere": "装到哪里",
+    "catalogues": {
+      "button": "目录",
+      "title": "模板目录",
+      "help": "你的团队自己的模板，来自发布在 https 地址上的文件。它们只对本团队显示在内置模板旁边，接受同样的检查，并且每天重新下载。",
+      "empty": "这个团队还没有自己的目录。",
+      "add": "添加目录",
+      "docs": "如何编写",
+      "name": "名称",
+      "nameHelp": "显示在其每个模板上的标记。",
+      "url": "地址",
+      "urlHelp": "通过 https 访问的原始文件：YAML 或 JSON 索引，或模板的 .tar.gz 或 .zip。令牌不要写在这里，它应放在请求头中。",
+      "headerName": "请求头",
+      "headerValue": "请求头的值",
+      "headerHelp": "仅用于私有 Git 主机：Authorization，或 GitLab 的 PRIVATE-TOKEN。该值会被密封，只发送到目录自己的主机，并且不会再显示。",
+      "save": "下载并添加",
+      "adding": "正在下载…",
+      "added_other": "已添加 {{name}}，有 {{count}} 个模板可安装。",
+      "refresh": "刷新 {{name}}",
+      "refreshed": "已重新下载 {{name}}。",
+      "remove": "删除 {{name}}",
+      "removeConfirm": "它的模板会从此页面消失。已经从它安装的应用会继续运行，但不再提供来自它的更新。",
+      "fetched": "下载于 {{when}}",
+      "installable_other": "{{count}} 个模板可安装",
+      "withHeader": "使用 {{header}} 获取",
+      "lastError": "上次刷新失败。模板仍从之前下载的副本安装。",
+      "problems_other": "{{count}} 个模板无法安装",
+      "notice_other": "你的目录中有 {{count}} 个模板无法安装。",
+      "staleNotice_other": "{{count}} 个目录无法刷新，仍在使用其最后一份正常的副本。",
+      "review": "查看原因"
+    }
   },
   "settings": {
     "title": "设置",
@@ -3056,6 +3089,48 @@
         "cause": "检查令牌时，{{0}}。",
         "impact": "连接未保存。",
         "fix": "检查此服务器能否通过 HTTPS 访问 api.bitbucket.org，然后重试。"
+      },
+      "template_catalogue_address": {
+        "title": "该地址不能作为模板目录",
+        "cause": "{{0}}",
+        "impact": "没有保存任何内容。",
+        "fix": "请提供模板的 YAML 或 JSON 索引的 https 地址，或模板的 .tar.gz 或 .zip 的地址。私有 Git 主机的令牌应放在请求头中（会被密封），而不是地址里。"
+      },
+      "template_catalogue_header": {
+        "title": "该请求头不能随目录下载一起发送",
+        "cause": "{{0}}",
+        "impact": "没有保存任何内容。",
+        "fix": "填写 Git 主机读取令牌的请求头（Authorization，或 GitLab 的 PRIVATE-TOKEN），并填写完整的值，例如 Bearer 加上令牌。"
+      },
+      "template_catalogue_fetch_failed": {
+        "title": "无法下载目录",
+        "cause": "{{0}} 没有返回目录：{{1}}",
+        "impact": "没有保存任何内容：目录只有在成功下载并读取后才会保存。",
+        "fix": "在浏览器中打开该地址，检查私有主机的请求头，并确认本服务器能访问它。本机地址和云元数据服务会被有意拒绝，重定向到私有地址也会被拒绝。"
+      },
+      "template_catalogue_unreadable": {
+        "title": "这不是模板目录",
+        "cause": "无法读取 {{0}} 返回的内容：{{1}}",
+        "impact": "没有保存任何内容。",
+        "fix": "请指向一个在 templates: 下列出模板的 YAML 或 JSON 文件，或一个包含与内置目录相同格式的 *.yaml 文件的 .tar.gz 或 .zip。请使用原始文件的地址，而不是展示它的页面。"
+      },
+      "template_catalogue_refresh_failed": {
+        "title": "无法刷新目录",
+        "cause": "无法重新下载或读取 {{0}}：{{1}}",
+        "impact": "它的模板仍从之前下载并保留的副本安装。",
+        "fix": "检查该地址是否仍返回目录、请求头是否仍然有效，然后再次刷新。系统每天也会自动重试。"
+      },
+      "template_catalogue_limit": {
+        "title": "这个团队的目录已达上限",
+        "cause": "一个团队最多可以有 {{0}} 个模板目录。",
+        "impact": "没有保存任何内容。",
+        "fix": "删除不再使用的目录，或把多个目录的模板合并到一个目录中。"
+      },
+      "template_not_installable": {
+        "title": "无法安装此模板",
+        "cause": "{{1}} 中的 {{0}} 未通过每个模板都要接受的检查：{{2}}",
+        "impact": "没有创建任何内容。",
+        "fix": "在目录中修正该模板并刷新目录。模板页面中该目录的条目列出了每个模板被拒绝的原因。"
       }
     }
   },

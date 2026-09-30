@@ -185,7 +185,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	defer stopBackground()
 	go server.Background(background)
 	sweepUploads(ctx, db, uploads, log)
-	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, log)
+	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, server.RefreshTemplateCatalogues, log)
 	go watcher.Run(background)
 
 	httpServer := &http.Server{
@@ -441,7 +441,11 @@ type rescanner interface {
 }
 
 // runScheduler fires scheduled backups once a minute.
-func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store, notifier notify.Notifier, log *slog.Logger) {
+//
+// refreshCatalogues is handed each minute and refreshes the teams' own
+// template catalogues that are due; see api.Server.RefreshTemplateCatalogues.
+func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store,
+	notifier notify.Notifier, refreshCatalogues func(context.Context, time.Time), log *slog.Logger) {
 	// Align to the start of the next minute so a schedule of "0 3 * * *" fires
 	// at 03:00 rather than at whatever second the panel happened to start.
 	timer := time.NewTimer(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
@@ -502,6 +506,14 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 					defer runsafe.Recover(log, "the registry sweep", nil)
 					c.MaintainRegistry(ctx)
 				}()
+			}
+			// A team's template catalogues are downloaded once a day each,
+			// beside the tick for the same reason as the sweep: a slow host
+			// is thirty seconds a catalogue, and a backup due in that time
+			// is not to wait for it. Due-ness is read from the database, so
+			// a restart neither skips a day nor repeats one.
+			if refreshCatalogues != nil {
+				runsafe.Go(log, "refreshing template catalogues", func() { refreshCatalogues(ctx, now) })
 			}
 		}()
 		select {

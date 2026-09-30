@@ -11,6 +11,10 @@ import (
 type AppTemplate struct {
 	AppID      string `json:"app_id"`
 	TemplateID string `json:"template_id"`
+	// CatalogueID is the team catalogue the template came from, and empty
+	// for the catalogue built into the panel. An id is only unique within
+	// its catalogue.
+	CatalogueID string `json:"catalogue_id,omitempty"`
 	// Service is which of the template's services this app is.
 	Service string `json:"service"`
 	// InstalledImage is the image the template set, at install or at the last
@@ -32,11 +36,11 @@ const (
 
 // RecordAppTemplate remembers which template an app came from.
 func (db *DB) RecordAppTemplate(ctx context.Context, t AppTemplate) error {
-	_, err := db.Exec(ctx, `INSERT INTO app_templates (app_id, template_id, service, installed_image, installed_at)
-		VALUES (?,?,?,?,?)
-		ON CONFLICT (app_id) DO UPDATE SET template_id = excluded.template_id, service = excluded.service,
-			installed_image = excluded.installed_image, installed_at = excluded.installed_at`,
-		t.AppID, t.TemplateID, t.Service, t.InstalledImage, Now())
+	_, err := db.Exec(ctx, `INSERT INTO app_templates (app_id, template_id, catalogue_id, service, installed_image, installed_at)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT (app_id) DO UPDATE SET template_id = excluded.template_id, catalogue_id = excluded.catalogue_id,
+			service = excluded.service, installed_image = excluded.installed_image, installed_at = excluded.installed_at`,
+		t.AppID, t.TemplateID, t.CatalogueID, t.Service, t.InstalledImage, Now())
 	if err != nil {
 		return fmt.Errorf("record the template of %s: %w", t.AppID, err)
 	}
@@ -46,9 +50,10 @@ func (db *DB) RecordAppTemplate(ctx context.Context, t AppTemplate) error {
 // GetAppTemplate returns the template an app came from, or ErrNotFound.
 func (db *DB) GetAppTemplate(ctx context.Context, appID string) (AppTemplate, error) {
 	t := AppTemplate{AppID: appID}
-	err := db.QueryRowContext(ctx, `SELECT template_id, service, installed_image, installed_at,
+	err := db.QueryRowContext(ctx, `SELECT template_id, catalogue_id, service, installed_image, installed_at,
 		update_status, update_to, update_error FROM app_templates WHERE app_id = ?`, appID).
-		Scan(&t.TemplateID, &t.Service, &t.InstalledImage, &t.InstalledAt, &t.UpdateStatus, &t.UpdateTo, &t.UpdateError)
+		Scan(&t.TemplateID, &t.CatalogueID, &t.Service, &t.InstalledImage, &t.InstalledAt,
+			&t.UpdateStatus, &t.UpdateTo, &t.UpdateError)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}

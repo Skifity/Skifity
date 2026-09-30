@@ -1052,6 +1052,100 @@ paths:
                       files: {type: integer, description: 'How many files the archive holds.'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/templates:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listTeamTemplates
+      tags: [Templates]
+      summary: The catalogue as a team sees it
+      description: >-
+        Viewer, including a member limited to some projects. The templates of
+        the team's own catalogues that pass every check, each naming its
+        catalogue, then the built-in ones. An id may appear twice, once per
+        catalogue; install names the catalogue to say which.
+      responses:
+        '200':
+          description: The team's templates, then the built-in ones.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateList'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/template-catalogues:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listTemplateCatalogues
+      tags: [Templates]
+      summary: The team's own template catalogues
+      description: >-
+        Viewer, not limited to projects. Each with when it was last downloaded,
+        why the last refresh failed if it did, how many of its templates can be
+        installed and why each of the others cannot. Never the value of the
+        header it is fetched with.
+      responses:
+        '200':
+          description: The catalogues, by name.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateCatalogueList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: addTemplateCatalogue
+      tags: [Templates]
+      summary: Add a template catalogue
+      description: >-
+        Admin. The address is downloaded and read before anything is kept, through
+        the same guard as every address the panel is given, and its templates are
+        held to the checks the built-in ones are. The header's value is sealed and
+        never answered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddTemplateCatalogueRequest'}
+      responses:
+        '201':
+          description: The catalogue as it was read.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateCatalogue'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/template-catalogues/{catalogueID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/catalogueID'
+    delete:
+      operationId: removeTemplateCatalogue
+      tags: [Templates]
+      summary: Remove a template catalogue
+      description: Admin. Apps installed from it stay, and are no longer offered updates from it.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/template-catalogues/{catalogueID}/refresh:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/catalogueID'
+    post:
+      operationId: refreshTemplateCatalogue
+      tags: [Templates]
+      summary: Download a template catalogue again
+      description: >-
+        Admin. Also done every day. A download that fails or does not read is
+        recorded on the catalogue and answered as an error, and the copy it had
+        is kept and still installed from.
+      responses:
+        '200':
+          description: The catalogue as it now reads.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateCatalogue'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/registries:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -3738,7 +3832,15 @@ paths:
       operationId: templateIcon
       tags: [Templates]
       summary: A template's logo
-      description: Served from inside the binary, never from another site. Cached for a day.
+      description: >-
+        Served from inside the binary, never from another site, and cached for a
+        day. With catalogue, a logo of one of that team's catalogues, which the
+        panel fetched from the catalogue's own host when it fetched the catalogue.
+      parameters:
+        - name: catalogue
+          in: query
+          description: The team catalogue the template is in. Left out for the built-in one.
+          schema: {type: string}
       responses:
         '200':
           description: The logo.
@@ -3747,6 +3849,8 @@ paths:
               schema: {type: string}
             image/png:
               schema: {type: string, contentMediaType: image/png}
+            image/webp:
+              schema: {type: string, contentMediaType: image/webp}
         '404':
           description: The template has no logo. Plain text, for an img tag that cannot read an error.
           content:
@@ -3761,7 +3865,11 @@ paths:
       operationId: installTemplate
       tags: [Templates]
       summary: Install a template into an environment
-      description: Member, in the environment named in the body. Its databases are made first, then its apps.
+      description: >-
+        Member, in the environment named in the body. Its databases are made first,
+        then its apps. catalogue_id names the team catalogue the template is in; it
+        is looked for among the catalogues of the environment's team, so another
+        team's is not found.
       requestBody:
         required: true
         content:
@@ -4193,6 +4301,7 @@ components:
     channelID: {name: channelID, in: path, required: true, description: 'A notification channel''s id.', schema: {type: string}}
     pluginID: {name: pluginID, in: path, required: true, description: 'A plugin''s id, reverse-DNS, such as com.example.backup.', schema: {type: string}}
     templateID: {name: templateID, in: path, required: true, description: 'A template''s id, such as uptime-kuma.', schema: {type: string}}
+    catalogueID: {name: catalogueID, in: path, required: true, description: 'A team template catalogue''s id.', schema: {type: string}}
     componentName: {name: name, in: path, required: true, description: 'A component''s name, such as keda.', schema: {type: string}}
     metricsRange:
       name: range
@@ -6854,6 +6963,13 @@ components:
               generate: {type: boolean, description: 'Filled with a random secret when left empty.'}
         notes: {type: string}
         icon: {type: string, description: 'The logo''s file name, when there is one.'}
+        catalogue:
+          type: object
+          description: The team catalogue it came from. Absent for a built-in template.
+          required: [id, name]
+          properties:
+            id: {type: string}
+            name: {type: string}
 
     TemplateList:
       type: object
@@ -6868,11 +6984,60 @@ components:
       additionalProperties: false
       properties:
         environment_id: {type: string}
+        catalogue_id: {type: string, description: 'The team catalogue the template is in. Left out for the built-in one.'}
         name: {type: string, description: 'Used in place of the template''s name.'}
         values:
           type: object
           description: The template's inputs, by key.
           additionalProperties: {type: string}
+
+    TemplateCatalogue:
+      type: object
+      required: [id, team_id, name, url, fetched_at, attempted_at, templates, problems, created_at, updated_at]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        name: {type: string, description: 'The badge on each of its templates.'}
+        url: {type: string, description: 'An https address with no credential in it.'}
+        auth_header_name: {type: string, description: 'The header it is fetched with. Its value is never answered.'}
+        format: {type: string, enum: [index, tar.gz, zip]}
+        fetched_at: {type: string, format: date-time, description: 'When the copy templates are installed from was downloaded.'}
+        attempted_at: {type: string, format: date-time, description: 'The last refresh, whether or not it worked.'}
+        last_error: {type: string, description: 'Why the last refresh did not work. Empty when it did.'}
+        templates: {type: integer, description: 'How many of its templates can be installed.'}
+        problems:
+          type: array
+          description: Its templates that cannot be installed, and why.
+          items: {$ref: '#/components/schemas/TemplateCatalogueProblem'}
+        created_by: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    TemplateCatalogueProblem:
+      type: object
+      required: [file, errors]
+      properties:
+        file: {type: string, description: 'The file in an archive, or the place in an index''s list.'}
+        id: {type: string}
+        name: {type: string}
+        errors: {type: array, items: {type: string}}
+
+    TemplateCatalogueList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/TemplateCatalogue'}}
+        total: {type: integer}
+
+    AddTemplateCatalogueRequest:
+      type: object
+      required: [name, url]
+      additionalProperties: false
+      properties:
+        name: {type: string, maxLength: 40}
+        url: {type: string, description: 'https, to a YAML or JSON index or to a .tar.gz or .zip of templates.'}
+        auth_header_name: {type: string, description: 'Such as Authorization, or PRIVATE-TOKEN for GitLab.'}
+        auth_header_value: {type: string, writeOnly: true, description: 'Sealed, and never answered.'}
 
     InstalledTemplate:
       type: object

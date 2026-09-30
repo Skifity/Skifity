@@ -351,7 +351,10 @@
       "app.drift_auto_repair_off": "Berhenti mengembalikan aplikasi secara otomatis",
       "certificate.saved": "mengunggah sertifikat",
       "certificate.replaced": "mengunggah versi baru sertifikat",
-      "certificate.deleted": "menghapus sertifikat"
+      "certificate.deleted": "menghapus sertifikat",
+      "template_catalogue.added": "menambahkan katalog template",
+      "template_catalogue.refreshed": "menyegarkan katalog template",
+      "template_catalogue.removed": "menghapus katalog template"
     }
   },
   "projects": {
@@ -1240,7 +1243,37 @@
       "security": "Keamanan",
       "storage": "Penyimpanan dan berkas"
     },
-    "installWhere": "Dipasang di mana"
+    "installWhere": "Dipasang di mana",
+    "catalogues": {
+      "button": "Katalog",
+      "title": "Katalog template",
+      "help": "Template milik tim Anda sendiri, dari berkas yang diterbitkan di alamat https. Template ini muncul di samping template bawaan hanya untuk tim ini, diperiksa dengan aturan yang sama, dan diunduh ulang setiap hari.",
+      "empty": "Tim ini belum punya katalog sendiri.",
+      "add": "Tambah katalog",
+      "docs": "Cara menulisnya",
+      "name": "Nama",
+      "nameHelp": "Lencana pada setiap templatenya.",
+      "url": "Alamat",
+      "urlHelp": "Berkas mentahnya, lewat https: indeks YAML atau JSON, atau .tar.gz atau .zip berisi template. Jangan taruh token di sini: token masuk ke header.",
+      "headerName": "Header",
+      "headerValue": "Nilai header",
+      "headerHelp": "Hanya untuk host Git privat: Authorization, atau PRIVATE-TOKEN untuk GitLab. Nilainya disegel, hanya dikirim ke host katalog itu sendiri, dan tidak pernah ditampilkan lagi.",
+      "save": "Unduh dan tambahkan",
+      "adding": "Mengunduh...",
+      "added_other": "{{name}} ditambahkan, dengan {{count}} template yang bisa dipasang.",
+      "refresh": "Segarkan {{name}}",
+      "refreshed": "{{name}} sudah diunduh ulang.",
+      "remove": "Hapus {{name}}",
+      "removeConfirm": "Templatenya hilang dari halaman ini. Aplikasi yang sudah dipasang darinya tetap berjalan, tetapi tidak lagi ditawari pembaruan darinya.",
+      "fetched": "Diunduh {{when}}",
+      "installable_other": "{{count}} template bisa dipasang",
+      "withHeader": "diambil dengan {{header}}",
+      "lastError": "Penyegaran terakhir gagal. Salinan yang diunduh sebelumnya masih dipakai untuk memasang template.",
+      "problems_other": "{{count}} template tidak bisa dipasang",
+      "notice_other": "{{count}} template di katalog Anda tidak bisa dipasang.",
+      "staleNotice_other": "{{count}} katalog tidak bisa disegarkan, dan salinan baik terakhirnya masih dipakai.",
+      "review": "Lihat alasannya"
+    }
   },
   "settings": {
     "title": "Pengaturan",
@@ -3056,6 +3089,48 @@
         "cause": "Saat memeriksa token, {{0}}.",
         "impact": "Koneksi tidak disimpan.",
         "fix": "Pastikan server ini bisa menjangkau api.bitbucket.org lewat HTTPS, lalu coba lagi."
+      },
+      "template_catalogue_address": {
+        "title": "Alamat itu tidak bisa menjadi katalog template",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Berikan alamat https dari indeks template YAML atau JSON, atau dari .tar.gz atau .zip berisi template. Token untuk host Git privat dimasukkan ke header, tempat ia disegel, bukan ke alamat."
+      },
+      "template_catalogue_header": {
+        "title": "Header itu tidak bisa dikirim bersama unduhan katalog",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Sebutkan header tempat host Git membaca token — Authorization, atau PRIVATE-TOKEN untuk GitLab — dan berikan nilainya secara utuh, misalnya Bearer diikuti token."
+      },
+      "template_catalogue_fetch_failed": {
+        "title": "Katalog tidak bisa diunduh",
+        "cause": "{{0}} tidak menjawab dengan katalog: {{1}}",
+        "impact": "Tidak ada yang disimpan: katalog baru disimpan setelah berhasil diunduh dan dibaca.",
+        "fix": "Buka alamat itu di peramban, periksa header untuk host privat, dan pastikan server ini bisa menjangkaunya. Alamat di mesin ini atau layanan metadata cloud sengaja ditolak, begitu juga pengalihan ke alamat privat."
+      },
+      "template_catalogue_unreadable": {
+        "title": "Itu bukan katalog template",
+        "cause": "Jawaban dari {{0}} tidak bisa dibaca: {{1}}",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Arahkan ke berkas YAML atau JSON berisi daftar template di bawah templates:, atau ke .tar.gz atau .zip berisi berkas *.yaml dengan skema yang sama seperti katalog bawaan. Gunakan alamat berkas mentah, bukan halaman yang menampilkannya."
+      },
+      "template_catalogue_refresh_failed": {
+        "title": "Katalog tidak bisa disegarkan",
+        "cause": "{{0}} tidak bisa diunduh atau dibaca lagi: {{1}}",
+        "impact": "Templatenya masih dipasang dari salinan yang diunduh sebelumnya, yang tetap disimpan.",
+        "fix": "Pastikan alamat itu masih menjawab dengan katalog dan header-nya masih berlaku, lalu segarkan lagi. Katalog juga dicoba lagi setiap hari."
+      },
+      "template_catalogue_limit": {
+        "title": "Tim ini sudah mencapai batas jumlah katalog",
+        "cause": "Satu tim bisa punya {{0}} katalog template.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Hapus katalog yang tidak dipakai lagi, atau gabungkan template dari beberapa katalog ke dalam satu katalog."
+      },
+      "template_not_installable": {
+        "title": "Template ini tidak bisa dipasang",
+        "cause": "{{0}} di {{1}} tidak lolos pemeriksaan yang berlaku untuk setiap template: {{2}}",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Perbaiki template itu di katalog lalu segarkan katalognya. Entri katalog di halaman Template mencantumkan alasan setiap template ditolak."
       }
     }
   },

@@ -87,7 +87,9 @@ that line, so a template names the exact release instead, and a test refuses the
 first kind as it refuses the second.
 
 So a template does not update itself. Moving one forward is a change to Skifity,
-and a newer version arrives when the panel is upgraded.
+and a newer version arrives when the panel is upgraded — or, for a template in a
+team's own catalogue, when the catalogue is refreshed; see
+[Private catalogues](#private-catalogues).
 
 ## Updates
 
@@ -124,7 +126,162 @@ require touching any Go. The README in that directory has the format and the two
 rules that are not obvious: name a version, and do not wire the database by
 hand. `make check` tells you whether it is right.
 
-That is how this catalogue can keep growing without a release.
+That is how this catalogue can keep growing without a release. Templates that
+belong to one team rather than to everybody go in a catalogue of the team's own;
+see [Private catalogues](#private-catalogues).
+
+## Private catalogues
+
+The built-in catalogue is fixed when the panel is built, and your own software —
+the internal wiki, the licence server, a pinned fork of something public — has no
+place in it. A team can add catalogues of its own: a name and an https address
+that answers a file of templates, in the same schema as the built-in ones.
+
+Their templates appear on the **Templates** page beside the built-in ones, with a
+badge naming the catalogue, for that team and nobody else. They install exactly
+as a built-in template does, and an app installed from one is an ordinary app.
+
+**Templates → Catalogues** lists them, with when each was last downloaded, how
+many of its templates can be installed, and why each of the others cannot.
+Adding, refreshing and removing one is an owner's or an administrator's; anybody
+in the team sees the list. From a terminal:
+
+```sh
+skifity templates catalogues                  # the team's catalogues
+skifity templates catalogues add Acme https://raw.githubusercontent.com/acme/templates/v1.4.0/catalogue.yaml
+skifity templates catalogues add Acme 'https://git.acme.example/api/v4/projects/7/repository/archive.tar.gz?sha=v1.4.0' --header PRIVATE-TOKEN
+skifity templates catalogues refresh Acme     # download it again now
+skifity templates catalogues remove Acme
+skifity templates --search acme               # what the team can install
+```
+
+`--header` asks for the header's value rather than taking it as an argument, so
+the token is not left in your shell's history; piped in, it is read from stdin.
+Every command takes `--json`.
+
+### The file
+
+Either one YAML or JSON document with the templates in a list under
+`templates:`, or a `.tar.gz` or `.zip` laid out like the built-in catalogue: one
+template per `*.yaml` file, in a `catalogue/` directory or at the top, and logos
+beside them as `icons/<id>.svg`, `.png` or `.webp`. The archive GitHub, GitLab or
+Gitea makes of a repository wraps everything in one directory named after the
+commit, and that directory is looked through, so the address of a tag's archive
+works as it is.
+
+Each template is exactly what a file in the built-in catalogue holds; the
+README beside those files, `internal/templates/catalogue/README.md`, describes
+every field. One more field is read here: `icon`, the address of its logo.
+
+```yaml
+templates:
+  - id: wiki
+    name: Acme Wiki
+    description: The internal wiki, with its database.
+    category: productivity
+    website: https://wiki.acme.example/about
+    icon: icons/wiki.svg          # relative to this file, on the same host
+    services:
+      - name: wiki
+        image: registry.acme.example/wiki:3.2.1
+        port: 3000
+        public: true
+        health_path: /healthz
+        volumes:
+          - name: uploads
+            mount_path: /app/uploads
+            size_gb: 5
+    databases:
+      - name: wiki-db
+        engine: postgres
+        storage_gb: 5
+        link_to: [wiki]
+        var_name: DATABASE_URL
+    inputs:
+      - key: SESSION_SECRET
+        label: Session secret
+        secret: true
+        generate: true
+```
+
+### What is checked
+
+Every template in a catalogue is held to the checks the built-in ones are held
+to in the panel's own tests: an id that is a slug, an https website, at least
+one service somebody can open, an image that names a release — never `latest`,
+a branch or a bare major version — mount paths that are absolute, databases of
+an engine Skifity runs and linked to services the template has, no database
+wired by hand, ports and files that can be opened and mounted, and inputs that
+are asked for or filled in. A field the panel does not know is refused rather
+than ignored, so a misspelt `mount_path` is an error rather than a volume that
+is mounted nowhere.
+
+Each template is checked on its own. One that fails is listed with why and
+cannot be installed; the rest of the catalogue loads. A file that is not a
+catalogue at all — an HTML login page answered with a 200, an archive that does
+not open, a document with no templates in it — is refused as a whole.
+
+### The same id in two places
+
+An id only has to be unique within its catalogue. A team's catalogue may have a
+`wiki` when another team's has one too, or a `wordpress` when the built-in
+catalogue does: each is its own card under its own badge, and installing one
+names the catalogue it is in. The catalogue is looked for among the team's own,
+so no team can install from another's, whatever id it asks for.
+
+An app remembers the catalogue it came from. When a refresh brings a newer image
+for its template, the app's **Settings** tab offers the update exactly as it
+does for a built-in one — backing up first — and removing the catalogue leaves
+the app running with nothing to offer.
+
+### A private Git host
+
+A catalogue on a private repository needs a token. Give the header the host
+reads one from — `Authorization` with `Bearer` and the token, or `PRIVATE-TOKEN`
+for GitLab — and its value. The value is sealed with the panel's master key,
+bound to the team, the catalogue and its address, and never answered by any API
+or shown again. It is sent to the catalogue's own host and nowhere else: a
+redirect to another host goes without it.
+
+An address with a credential in it — `https://user:token@…`, or a query
+parameter such as `?private_token=` or a signature — is refused, because the
+address is shown to everybody in the team. Put the token in the header.
+
+### Downloading, refreshing, and the last good copy
+
+A catalogue is downloaded and read when it is added, and kept only if it reads.
+After that it is downloaded again every day, at a minute between two and six in
+the morning (UTC) of its own, and whenever somebody presses **Refresh**; a panel
+that was not running at that minute catches up when it starts.
+
+A refresh replaces the copy only with one that reads. One that fails — the host
+is down, the token has expired, the file has become something else — is recorded
+on the catalogue, shown on its entry, and changes nothing else: its templates are
+still installed from the copy downloaded before.
+
+The download is the panel's own request, so it goes through the same guard as
+every other address you give the panel: the cloud metadata service and the
+panel's own machine are refused. It is limited to 5 MB and 30 seconds, and an
+archive to 32 MB unpacked, 1 MB a template and a thousand templates. A redirect
+must stay on https, stops after five, and may not lead to a private address the
+catalogue's own address did not: a Gitea on your network is fine when that is the
+address you gave, and a public host answering "go to 10.0.0.5 instead" is not.
+
+### Logos
+
+A logo is never loaded by your browser from somewhere else. The panel's own
+policy allows pictures from the panel only, and a page that loads them from
+another server tells that server who is looking at what, and when.
+
+So a catalogue's logos come with it. An archive carries them in `icons/`. A
+template's `icon:` is fetched by the panel itself, when the catalogue is — not
+when a page is opened — through the same guard as the catalogue, with the same
+header, and only from the catalogue's own host: an `icon:` on any other host is
+ignored, so a catalogue cannot point the panel, or anybody's browser, at a third
+party. What comes back is kept only if its bytes are an SVG, a PNG or a WebP,
+whatever the host said it was, up to 256 KB, and it is served by the panel with
+the same sandbox as the built-in logos. A template without one shows its first
+letter.
 
 ## Changing what a template made
 

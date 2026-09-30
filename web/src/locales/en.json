@@ -359,7 +359,10 @@
       "app.drift_auto_repair_off": "Stopped putting the app back automatically",
       "certificate.saved": "uploaded a certificate",
       "certificate.replaced": "uploaded a new version of a certificate",
-      "certificate.deleted": "removed a certificate"
+      "certificate.deleted": "removed a certificate",
+      "template_catalogue.added": "added a template catalogue",
+      "template_catalogue.refreshed": "refreshed a template catalogue",
+      "template_catalogue.removed": "removed a template catalogue"
     }
   },
   "projects": {
@@ -1252,7 +1255,42 @@
       "security": "Security",
       "storage": "Storage and files"
     },
-    "installWhere": "Where to install it"
+    "installWhere": "Where to install it",
+    "catalogues": {
+      "button": "Catalogues",
+      "title": "Template catalogues",
+      "help": "Your team's own templates, from a file published at an https address. They appear beside the built-in ones for this team only, are held to the same checks, and are downloaded again every day.",
+      "empty": "This team has no catalogues of its own yet.",
+      "add": "Add a catalogue",
+      "docs": "How to write one",
+      "name": "Name",
+      "nameHelp": "The badge on each of its templates.",
+      "url": "Address",
+      "urlHelp": "The raw file, over https: a YAML or JSON index, or a .tar.gz or .zip of templates. Not a token: that goes in the header.",
+      "headerName": "Header",
+      "headerValue": "Header value",
+      "headerHelp": "For a private Git host only: Authorization, or PRIVATE-TOKEN for GitLab. The value is sealed, sent only to the catalogue's own host, and never shown again.",
+      "save": "Download and add",
+      "adding": "Downloading...",
+      "added_one": "{{name}} added, with {{count}} template to install.",
+      "added_other": "{{name}} added, with {{count}} templates to install.",
+      "refresh": "Refresh {{name}}",
+      "refreshed": "{{name}} downloaded again.",
+      "remove": "Remove {{name}}",
+      "removeConfirm": "Its templates leave this page. Apps already installed from it keep running, and are no longer offered its updates.",
+      "fetched": "Downloaded {{when}}",
+      "installable_one": "{{count}} template to install",
+      "installable_other": "{{count}} templates to install",
+      "withHeader": "fetched with {{header}}",
+      "lastError": "The last refresh failed. The copy downloaded before is still the one templates install from.",
+      "problems_one": "{{count}} template cannot be installed",
+      "problems_other": "{{count}} templates cannot be installed",
+      "notice_one": "{{count}} template in your catalogues cannot be installed.",
+      "notice_other": "{{count}} templates in your catalogues cannot be installed.",
+      "staleNotice_one": "{{count}} catalogue could not be refreshed, and its last good copy is still in use.",
+      "staleNotice_other": "{{count}} catalogues could not be refreshed, and their last good copies are still in use.",
+      "review": "See why"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -3070,6 +3108,48 @@
         "cause": "Checking the token, {{0}}.",
         "impact": "The connection was not saved.",
         "fix": "Check that this server can reach api.bitbucket.org over HTTPS, then try again."
+      },
+      "template_catalogue_address": {
+        "title": "That address cannot be a template catalogue",
+        "cause": "{{0}}",
+        "impact": "Nothing was saved.",
+        "fix": "Give the https address of a YAML or JSON index of templates, or of a .tar.gz or .zip of them. A token for a private Git host goes in the header, where it is sealed, and not in the address."
+      },
+      "template_catalogue_header": {
+        "title": "That header cannot be sent with the catalogue's download",
+        "cause": "{{0}}",
+        "impact": "Nothing was saved.",
+        "fix": "Name the header the Git host reads a token from — Authorization, or PRIVATE-TOKEN for GitLab — and give its whole value, such as Bearer followed by the token."
+      },
+      "template_catalogue_fetch_failed": {
+        "title": "The catalogue could not be downloaded",
+        "cause": "{{0}} did not answer with a catalogue: {{1}}",
+        "impact": "Nothing was saved: a catalogue is kept once it has been downloaded and read.",
+        "fix": "Open the address in a browser, check the header for a private host, and check this server can reach it. An address on this machine or the cloud's metadata service is refused on purpose, and so is a redirect to a private address."
+      },
+      "template_catalogue_unreadable": {
+        "title": "That is not a template catalogue",
+        "cause": "What {{0}} answered could not be read: {{1}}",
+        "impact": "Nothing was saved.",
+        "fix": "Point it at a YAML or JSON file with a list of templates under templates:, or at a .tar.gz or .zip of *.yaml files in the same schema as the built-in catalogue. A raw file's address, not the page that shows it."
+      },
+      "template_catalogue_refresh_failed": {
+        "title": "The catalogue could not be refreshed",
+        "cause": "{{0}} could not be downloaded or read again: {{1}}",
+        "impact": "Its templates are still installed from the copy downloaded before, which was kept.",
+        "fix": "Check the address still answers with the catalogue and the header is still valid, then refresh it again. It is also tried again every day."
+      },
+      "template_catalogue_limit": {
+        "title": "This team has as many catalogues as it can",
+        "cause": "A team can have {{0}} template catalogues.",
+        "impact": "Nothing was saved.",
+        "fix": "Remove one it no longer uses, or put the templates of several into one catalogue."
+      },
+      "template_not_installable": {
+        "title": "This template cannot be installed",
+        "cause": "{{0}} in {{1}} does not pass the checks every template is held to: {{2}}",
+        "impact": "Nothing was created.",
+        "fix": "Correct the template in the catalogue and refresh it. The catalogue's entry under Templates lists why each template was refused."
       }
     }
   },

@@ -147,3 +147,9 @@ template does not install.
 
 Run `make check` before opening a pull request. A template that fails is not a
 template.
+
+The checks are functions in `internal/templates/validate.go`, not loops in the
+tests, because a team's own catalogue is held to exactly the same ones when the
+panel reads it: a template of theirs that fails one is listed with why and
+cannot be installed. The format above is also what such a catalogue is written
+in; see the private catalogues section of `docs/templates.md`.

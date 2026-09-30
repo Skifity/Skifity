@@ -207,6 +207,8 @@ skifity certs remove wildcard     # its hostnames go back to Let's Encrypt
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches
+skifity templates                 # what the team can install; --search narrows it
+skifity templates catalogues      # the team's own template catalogues; add, refresh, remove
 skifity db                        # the managed databases
 skifity db connect orders         # reach one from this computer; see below
 skifity export --out ./leaving    # the whole team, as JSON and Kubernetes YAML

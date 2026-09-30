@@ -582,8 +582,15 @@ func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 // else's server tells that server which self-hosted apps each user is
 // browsing. It also means an install with no outbound network still has a
 // catalogue worth looking at.
+//
+// ?catalogue= names a team's own catalogue, whose logos the panel fetched
+// when it fetched the catalogue; see handleTemplateCatalogueIcon.
 func (s *Server) handleTemplateIcon(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "templateID")
+	if catalogue := r.URL.Query().Get("catalogue"); catalogue != "" {
+		s.handleTemplateCatalogueIcon(w, r, catalogue, id)
+		return
+	}
 	body, contentType, ok := templates.ReadIcon(id)
 	if !ok {
 		// Not an errdoc: the caller is an <img> tag, which cannot read one.
@@ -608,18 +615,17 @@ func (s *Server) handleTemplateIcon(w http.ResponseWriter, r *http.Request) {
 }
 
 type installTemplateRequest struct {
-	EnvironmentID string            `json:"environment_id"`
-	Name          string            `json:"name,omitempty"`
-	Values        map[string]string `json:"values,omitempty"`
+	EnvironmentID string `json:"environment_id"`
+	// CatalogueID is the team catalogue the template is in, and empty for
+	// the one built into the panel: an id is only unique within its
+	// catalogue.
+	CatalogueID string            `json:"catalogue_id,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	Values      map[string]string `json:"values,omitempty"`
 }
 
 func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "templateID")
-	tpl, ok := templates.Lookup(templateID)
-	if !ok {
-		writeError(w, r, errdoc.NotFound("template", templateID))
-		return
-	}
 	var req installTemplateRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, r, err)
@@ -630,13 +636,25 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-
-	created, err := s.installTemplate(r, tpl, env, user, req.Name, req.Values)
+	// The template is found by the catalogue it is in and the team of the
+	// environment it is going into, so a catalogue of another team is not
+	// found at all — the same answer as one that does not exist.
+	teamID, err := s.db.TeamIDForEnvironment(r.Context(), env.ID)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)
+	tpl, err := s.resolveTemplate(r.Context(), teamID, strings.TrimSpace(req.CatalogueID), templateID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	created, err := s.installTemplate(r, strings.TrimSpace(req.CatalogueID), tpl, env, user, req.Name, req.Values)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	s.audit(r, teamID, "template.installed", "environment", env.ID, tpl.Name)
 	writeJSON(w, http.StatusCreated, created)
 }
