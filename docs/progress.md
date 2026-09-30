@@ -5465,8 +5465,12 @@ The first review read the fourteen newest phases. This one sent six reviewers
 at what it had not: the fixes it made, the API's authorization end to end, the
 deploy pipeline and builder, sign-in and encryption, the integrations, and the
 interface and the CLI. They found more than eighty things, a handful of them
-serious; each was checked in the code before anything changed, and each fix has
-a test that fails without it.
+serious; each was checked in the code before anything changed. The fixes in Go
+have a test that fails without them, apart from two that need what this
+sandbox does not have: the order a deploy applies things in and the ingress
+setting need a cluster, and are said below where they are. The interface's
+fixes are checked by the type checker, the linter and the Playwright run, which
+covers first run, the shell and the languages, not each form.
 
 The serious ones were all the same mistake: something panel-wide guarded by a
 team role, when any signed-in user can create a team and be its owner.
