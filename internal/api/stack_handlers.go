@@ -84,6 +84,10 @@ func (s *Server) handleCreateStack(w http.ResponseWriter, r *http.Request) {
 		}
 		repoURL = checked
 	}
+	if err := s.checkGitSource(r, req.GitSourceID, env.ID); err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	// Everything is checked before anything is created, so a problem with the
 	// fourth service does not leave three apps behind it.

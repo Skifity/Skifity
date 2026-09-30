@@ -297,6 +297,10 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if err := s.checkGitSource(r, req.GitSourceID, env.ID); err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	// An app and a database in one environment share a namespace, and both
 	// render a Service under their slug. Two of them under one name is not two
@@ -399,6 +403,26 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusCreated, answer)
+}
+
+// checkGitSource refuses a Git connection that is not the environment's
+// team's. An app's connection is what its builds clone with, what registers
+// its webhook and what reads its repository, so another team's, named by its
+// id, was that team's credential used sideways: their private repositories
+// cloned into this team's app, and webhooks made with their token.
+func (s *Server) checkGitSource(r *http.Request, sourceID, envID string) error {
+	if sourceID == "" {
+		return nil
+	}
+	teamID, err := s.db.TeamIDForEnvironment(r.Context(), envID)
+	if err != nil {
+		return err
+	}
+	source, err := s.db.GetGitSource(r.Context(), sourceID)
+	if err != nil || source.TeamID != teamID {
+		return errdoc.NotFound("Git connection", sourceID)
+	}
+	return nil
 }
 
 // webhookStatus is what the panel can tell somebody about deploy on push.
