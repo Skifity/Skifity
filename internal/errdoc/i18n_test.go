@@ -82,7 +82,7 @@ func TestEveryErrorHasItsWordsInTheInterface(t *testing.T) {
 		// internal/provision, enumerates those from where they are declared and
 		// checks the same locales.
 		for key := range locale.Errors.Catalogue {
-			if strings.HasPrefix(key, "preflight_") {
+			if strings.HasPrefix(key, "preflight_") || raisedByTheInterface[key] {
 				continue
 			}
 			if _, ok := problems[strings.ReplaceAll(key, "_", ".")]; !ok {
@@ -93,6 +93,12 @@ func TestEveryErrorHasItsWordsInTheInterface(t *testing.T) {
 		}
 	}
 }
+
+// raisedByTheInterface are the codes the interface makes itself, for what the
+// panel never answered: a response that was not the panel's JSON — a 502 while
+// it restarts — in web/src/lib/api.ts, and a request the browser could not
+// send at all in web/src/components/error-display.tsx. No Go raises them.
+var raisedByTheInterface = map[string]bool{"network": true, "unexpected": true}
 
 // reachable reports whether a locale key belongs to one of the codes found.
 // The mapping is one-way — a code may contain an underscore of its own — so

@@ -228,7 +228,19 @@ export function DeploymentsTab({ app }: { app: App }) {
 
               {deployment.error_message && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                  <p className="font-medium">{deployment.error_message}</p>
+                  {/* The headline in the reader's language, from the error's
+                      code; the particulars below are the server's, which
+                      carry the names and numbers a translation cannot. */}
+                  {deployment.error_code && (
+                    <p className="font-medium">
+                      {t(`errors.catalogue.${deployment.error_code.replaceAll(".", "_")}.title`, {
+                        defaultValue: deployment.error_message,
+                      })}
+                    </p>
+                  )}
+                  <p className={deployment.error_code ? "mt-1" : "font-medium"}>
+                    {deployment.error_message}
+                  </p>
                   {deployment.error_hint && (
                     <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
                   )}
@@ -276,7 +288,12 @@ function RollbackDialog({
   const rollback = useMutation({
     mutationFn: () => api.post(`/api/apps/${app.id}/rollback/${target.id}`),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["deployments", app.id] })
+      // A rollback puts the app's settings back — port, health path, start
+      // command, scaling — so what the settings and scaling forms hold is
+      // stale: the next Save wrote the pre-rollback values back.
+      for (const key of ["deployments", "app", "scaling", "processes"]) {
+        void queryClient.invalidateQueries({ queryKey: [key, app.id] })
+      }
       onClose()
     },
   })
@@ -494,8 +511,16 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
   }, [lines.length])
 
   if (stored.isLoading) return <Skeleton className="h-40" />
+  if (stored.error) return <ErrorDisplay error={stored.error} compact />
   if (lines.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t("deploy.reusedImage")}</p>
+    // No lines is only "nothing was built" once the deployment is over: a
+    // queued one, or a build before its first line, has simply not said
+    // anything yet.
+    return (
+      <p className="text-sm text-muted-foreground">
+        {finished ? t("deploy.reusedImage") : t("deploy.noLogYet")}
+      </p>
+    )
   }
 
   return (

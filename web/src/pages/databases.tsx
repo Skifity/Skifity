@@ -64,7 +64,8 @@ export function DatabasesPage() {
     {
       database: () => void queryClient.invalidateQueries({ queryKey: ["databases"] }),
     },
-    Boolean(team),
+    // Refused to a member limited to projects, who is polled instead.
+    Boolean(team) && !team?.scoped,
   )
 
   const projectItems = useMemo(() => projects.data?.items ?? [], [projects.data])
@@ -90,6 +91,7 @@ export function DatabasesPage() {
     queries: environments.map(({ environment }) => ({
       queryKey: ["databases", environment.id],
       queryFn: () => api.get<List<Database>>(`/api/environments/${environment.id}/databases`),
+      refetchInterval: team?.scoped ? 15_000 : (false as const),
     })),
   })
 

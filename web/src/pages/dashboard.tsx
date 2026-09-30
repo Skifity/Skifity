@@ -103,7 +103,10 @@ export function DashboardPage() {
   const summary = cluster.data
   const loading = servers.isLoading || cluster.isLoading
 
-  const firstRun = teamWide && !loading && serverItems.length === 0
+  // Only an answer of "none" is none: a list that failed to load is not an
+  // empty one, and taking it for one showed first-run setup to a team with
+  // servers whenever the request hiccuped.
+  const firstRun = teamWide && servers.isSuccess && serverItems.length === 0
   const firstEnvironment = useFirstEnvironment(!firstRun)
 
   return (
@@ -162,7 +165,10 @@ export function DashboardPage() {
         </Alert>
       )}
 
-      {!user?.recovery_saved && (
+      {/* Only a panel administrator can download the recovery key or say it
+          is saved; shown to everybody, it was a warning a member could never
+          clear, whose button answered 403. */}
+      {user?.is_admin && !user.recovery_saved && (
         <Alert>
           <ShieldAlertIcon />
           <AlertTitle>{t("auth.recoveryKeyReminder")}</AlertTitle>
@@ -177,6 +183,9 @@ export function DashboardPage() {
 
       {cluster.error && (
         <ErrorDisplay error={cluster.error} onRetry={() => void cluster.refetch()} />
+      )}
+      {servers.error && (
+        <ErrorDisplay error={servers.error} onRetry={() => void servers.refetch()} />
       )}
 
       {firstRun ? (

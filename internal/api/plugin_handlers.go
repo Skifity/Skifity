@@ -286,6 +286,8 @@ func (s *Server) handleUpdatePlugin(w http.ResponseWriter, r *http.Request) {
 	for _, setting := range manifest.Settings {
 		declared[setting.Key] = setting
 	}
+	// Every value is checked before any is written, so a refused one does not
+	// leave the others half saved.
 	for key, value := range req.Settings {
 		setting, ok := declared[key]
 		if !ok {
@@ -293,6 +295,13 @@ func (s *Server) handleUpdatePlugin(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("%q is not a setting this plugin declared.", key)))
 			return
 		}
+		if err := setting.Check(value); err != nil {
+			writeError(w, r, errdoc.BadRequest(capitalise(err.Error())+"."))
+			return
+		}
+	}
+	for key, value := range req.Settings {
+		setting := declared[key]
 		if strings.TrimSpace(value) == "" {
 			if err := s.db.DeletePluginSetting(r.Context(), id, key); err != nil {
 				writeError(w, r, err)

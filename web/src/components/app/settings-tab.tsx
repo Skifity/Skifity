@@ -25,6 +25,33 @@ import { queryClient } from "@/lib/query"
 import type { App } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
 
+/**
+ * What the settings form edits, as one string. The form keeps its own copy of
+ * each field while somebody types, so it is keyed on this where it is shown:
+ * when any of them changes underneath it — a rollback puts the port, health
+ * path and commands back — the form starts again from the app, instead of the
+ * next Save writing the values from before the rollback over them.
+ */
+export function settingsKey(app: App): string {
+  return JSON.stringify([
+    app.name,
+    app.branch,
+    app.root_dir,
+    app.image,
+    app.port,
+    app.health_path,
+    app.build_command,
+    app.static_dir,
+    app.start_command,
+    app.release_command,
+    app.auto_deploy,
+    app.preview_deploys,
+    app.preview_seed,
+    app.watch_paths,
+    app.internal,
+  ])
+}
+
 export function SettingsTab({ app }: { app: App }) {
   const { t } = useTranslation()
   const navigate = useNavigate()

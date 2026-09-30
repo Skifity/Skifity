@@ -180,6 +180,9 @@ function fallbackProblem(response: Response): Problem {
     cause: `The request to ${response.url} answered ${response.status}.`,
     impact: "The page may be showing stale information.",
     fix: "Check your connection and reload. If the panel is restarting, this clears up on its own.",
+    // So the sentence can be said in the reader's language, like a
+    // server's: a 502 while the panel restarts was English in all five.
+    args: { cause: [response.url, String(response.status)] },
     severity: "error",
     retryable: true,
     at: new Date().toISOString(),

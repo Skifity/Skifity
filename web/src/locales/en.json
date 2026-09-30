@@ -581,7 +581,12 @@
       "upToDate": "Up to date with the template."
     },
     "previewSeed": "Seed for previews",
-    "previewSeedHelp": "Runs once in each new preview, after its first deploy, to fill its empty database with something to look at. Not in this environment, and not again on later pushes."
+    "previewSeedHelp": "Runs once in each new preview, after its first deploy, to fill its empty database with something to look at. Not in this environment, and not again on later pushes.",
+    "runExitStatus": "It failed: the command exited with status {{code}}.",
+    "runOutcomeUnknown": "How the command ended could not be read. It may still be running; the output above is what it had printed.",
+    "logsQuiet": "Nothing has been printed yet. New lines appear here as the app writes them.",
+    "logsStreamFailed": "The log stream could not be opened: the app may not be running, or the panel cannot reach the cluster.",
+    "logsReconnecting": "The log stream was interrupted. Reconnecting…"
   },
   "deploy": {
     "title": "Deployments",
@@ -648,7 +653,8 @@
     "promoteTo": "Promote to {{environment}}",
     "promoteAnyway": "Promote anyway",
     "promoted": "Promoting #{{number}} to {{environment}}",
-    "promoteEnvironment": "The environment to promote to"
+    "promoteEnvironment": "The environment to promote to",
+    "noLogYet": "Nothing has been written to the build log yet."
   },
   "variables": {
     "title": "Variables",
@@ -2527,6 +2533,18 @@
         "cause": "{{0}} says the app is on {{1}}, and you are signed in to {{2}}.",
         "impact": "The command did not run.",
         "fix": "Sign in to {{0}} with `{{1}} login`, or set SKIFITY_URL and SKIFITY_TOKEN for it."
+      },
+      "network": {
+        "title": "The panel could not be reached",
+        "cause": "The request to {{0}} answered {{1}}.",
+        "impact": "The page may be showing stale information.",
+        "fix": "Check your connection and reload. If the panel is restarting, this clears up on its own."
+      },
+      "unexpected": {
+        "title": "Something went wrong",
+        "cause": "{{0}}",
+        "impact": "The action may not have completed.",
+        "fix": "Try again. If it keeps happening, copy this and open an issue."
       }
     }
   },

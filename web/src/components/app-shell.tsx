@@ -491,7 +491,7 @@ function AccountMenu() {
               {initial}
             </AvatarFallback>
           </Avatar>
-          {!user?.recovery_saved && (
+          {user?.is_admin && !user.recovery_saved && (
             <span className="absolute top-1 right-1 size-2 rounded-full bg-warning ring-2 ring-background" />
           )}
         </Button>
@@ -517,7 +517,7 @@ function AccountMenu() {
           <UserIcon />
           {t("nav.account")}
         </DropdownMenuItem>
-        {!user?.recovery_saved && (
+        {user?.is_admin && !user.recovery_saved && (
           <DropdownMenuItem onSelect={() => navigate("/account?recovery=1")}>
             <ShieldAlertIcon className="text-warning" />
             <span className="text-warning">{t("auth.recoveryKeyReminder")}</span>

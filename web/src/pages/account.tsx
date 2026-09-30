@@ -62,7 +62,7 @@ export function AccountPage() {
     <Page width="narrow">
       <PageHeader title={t("nav.account")} description={t("auth.subtitle")} />
 
-      {params.get("recovery") === "1" && !user?.recovery_saved && (
+      {params.get("recovery") === "1" && user?.is_admin && !user.recovery_saved && (
         <RecoveryReminder onAcknowledged={() => void refresh()} />
       )}
 

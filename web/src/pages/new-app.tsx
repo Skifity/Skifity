@@ -115,16 +115,24 @@ export function NewAppPage() {
   // Explicit rather than on every keystroke: a provider's rate limit is shared
   // by the whole panel, and a form that quietly makes requests while somebody
   // types is one that runs out of them on the day it matters.
+  const detectTarget = {
+    repo_url: repoURL.trim(),
+    branch: branch.trim(),
+    root_dir: rootDir.trim(),
+    git_source_id: gitSourceID,
+  }
   const detect = useMutation({
-    mutationFn: () =>
-      api.post<Detection>(`/api/teams/${team!.id}/detect`, {
-        repo_url: repoURL.trim(),
-        branch: branch.trim(),
-        root_dir: rootDir.trim(),
-        git_source_id: gitSourceID,
-      }),
+    mutationFn: (target: typeof detectTarget) =>
+      api.post<Detection>(`/api/teams/${team!.id}/detect`, target),
     onSuccess: (found) => applyDetection(found),
   })
+  // What was detected belongs to what was looked at. Changing the repository
+  // after Detect kept the first one's databases, processes and seed, and
+  // Create made the second app with them.
+  const detected =
+    detect.data && JSON.stringify(detect.variables) === JSON.stringify(detectTarget)
+      ? detect.data
+      : undefined
 
   // A folder picked on this computer: packed here, leaving out what
   // .gitignore, node_modules and every .env are, and read by the panel the way
@@ -180,7 +188,7 @@ export function NewAppPage() {
     }
     if (!dockerfilePath && found.dockerfile_path) setDockerfilePath(found.dockerfile_path)
   }
-  const found = sourceType === "upload" ? pick.data?.detection : detect.data
+  const found = sourceType === "upload" ? pick.data?.detection : detected
   const folder = sourceType === "upload" ? pick.data?.folder : undefined
 
   const pasted = parseDotEnv(pastedEnv)
@@ -457,7 +465,7 @@ export function NewAppPage() {
                       size="sm"
                       className="-ml-2 h-7"
                       disabled={!repoURL.trim() || detect.isPending}
-                      onClick={() => detect.mutate()}
+                      onClick={() => detect.mutate(detectTarget)}
                     >
                       {detect.isPending ? <Spinner /> : <SparklesIcon className="size-3.5" />}
                       {t("apps.detect")}

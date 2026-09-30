@@ -100,8 +100,8 @@ export function VariablesEditor({
     mutationFn: (variable: {
       key: string
       value: string
-      is_secret: boolean
-      build_time: boolean
+      is_secret?: boolean
+      build_time?: boolean
     }) => api.put<{ requires_rebuild: boolean }>(`${base}/variables`, variable),
     // The answer to "does changing this rebuild my app?" is the single most
     // asked question about this screen, so the panel answers it every time
@@ -147,11 +147,9 @@ export function VariablesEditor({
       // One request for the lot: all of them or none, and one rollout. One
       // request per line rolled the app out once per line, each time with
       // half a configuration.
-      const set = Object.entries(parseDotEnv(text)).map(([key, value]) => ({
-        key,
-        value,
-        build_time: false,
-      }))
+      // build_time is left out for the same reason: false took every variable
+      // the build reads out of the build, and the next build went without it.
+      const set = Object.entries(parseDotEnv(text)).map(([key, value]) => ({ key, value }))
       if (set.length > 0) await api.post(`${base}/variables/batch`, { set })
     },
     onSuccess: () => {
@@ -428,8 +426,8 @@ function NewVariableRow({
   onSave: (variable: {
     key: string
     value: string
-    is_secret: boolean
-    build_time: boolean
+    is_secret?: boolean
+    build_time?: boolean
   }) => void
   onCancel: () => void
 }) {
@@ -451,7 +449,16 @@ function NewVariableRow({
           onSubmit={(event) => {
             event.preventDefault()
             if (invalid) return
-            onSave({ key: key.trim(), value, is_secret: isSecret, build_time: buildTime })
+            // A box left unticked says nothing rather than no. Saying no made a
+            // secret re-added with a new value a plain one, shown to viewers,
+            // and a build variable a runtime one; unticked, the panel keeps
+            // what the variable was.
+            onSave({
+              key: key.trim(),
+              value,
+              is_secret: isSecret || undefined,
+              build_time: buildTime || undefined,
+            })
           }}
         >
           <div className="grid gap-4 sm:grid-cols-2">

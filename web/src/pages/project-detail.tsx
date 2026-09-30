@@ -103,7 +103,10 @@ export function ProjectDetailPage() {
       "app.deleted": () => void queryClient.invalidateQueries({ queryKey: ["apps"] }),
       database: () => void queryClient.invalidateQueries({ queryKey: ["databases"] }),
     },
-    Boolean(team),
+    // A member limited to some projects is refused the team's stream — it
+    // carries every project's events — so the lists below are asked again
+    // instead; subscribing anyway left a database "creating" until a reload.
+    Boolean(team) && !team?.scoped,
   )
 
   const environments = useQuery({
@@ -260,15 +263,20 @@ export function ProjectDetailPage() {
 
 function EnvironmentServices({ environmentId }: { environmentId: string }) {
   const { t } = useTranslation()
+  const { team } = useSession()
   const [newDatabase, setNewDatabase] = useState(false)
+  // No live stream for a member limited to projects; see the page above.
+  const poll = team?.scoped ? 15_000 : false
 
   const apps = useQuery({
     queryKey: ["apps", environmentId],
     queryFn: () => api.get<List<App>>(`/api/environments/${environmentId}/apps`),
+    refetchInterval: poll,
   })
   const databases = useQuery({
     queryKey: ["databases", environmentId],
     queryFn: () => api.get<List<Database>>(`/api/environments/${environmentId}/databases`),
+    refetchInterval: poll,
   })
 
   const appItems = apps.data?.items ?? []

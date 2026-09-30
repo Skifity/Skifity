@@ -13,7 +13,7 @@ import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
 import { ProcessesCard } from "@/components/app/processes"
-import { SettingsTab } from "@/components/app/settings-tab"
+import { SettingsTab, settingsKey } from "@/components/app/settings-tab"
 import { StorageTab } from "@/components/app/storage-tab"
 import { useConfirm } from "@/components/confirm-dialog"
 import { CopyButton } from "@/components/copy-button"
@@ -262,7 +262,7 @@ export function AppDetailPage() {
           <StorageTab app={current} />
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
-          <SettingsTab app={current} />
+          <SettingsTab key={settingsKey(current)} app={current} />
         </TabsContent>
         <TabsContent value="advanced" className="pt-4">
           <AdvancedTab app={current} />

@@ -5701,6 +5701,34 @@ The CLI, which a review ran against a fake panel:
   access and an expiry, which the API took and the form never asked for, and the
   CLI's documentation says what the CLI does.
 
+And the interface:
+
+* **The Console said a command had finished while it ran.** It read the output
+  without following it, so a migration showed "printed nothing" and went on. It
+  follows to the end now, and says when the command failed and with what status.
+* **A rollback was undone by the next Save.** The rollback puts the port, health
+  path and commands back, and the settings and resource forms held their values
+  from before it; saving anything wrote them back. The forms start again from the
+  app when it changes underneath them, and a rollback refreshes what it changed.
+* **Adding a variable made a secret plain,** and a build variable a runtime one:
+  an unticked box was sent as "no". Unticked now says nothing, and the panel
+  keeps what the variable was; bulk edit no longer sends "not for the build".
+* **Things that looked like other things.** The recovery-key warning showed to
+  every member, who could never clear it; it is an administrator's. A queued
+  build said nothing needed building. The Logs tab showed the last 200 lines
+  again on every reconnect and pause, and a stream that failed looked like an app
+  with nothing running. A failed load of the scaling settings was a skeleton for
+  ever. A failed list of servers showed first-run setup to a team with servers.
+* **Detection kept the first repository's findings** — its databases, processes
+  and seed — after the address was changed to another, and Create used them.
+* **English in every language.** A 502 while the panel restarts, a browser that
+  is offline, and a failed deployment's headline were not translated.
+* **Members limited to projects** were refused the team's live stream, so a
+  database stayed "creating" until a reload. Those pages ask again instead.
+* **Plugin settings** were all text boxes, and the panel took any value for any
+  kind; a switch, a list and a number are offered now, and a value that does not
+  fit is refused. Turning a plugin on or off no longer discards unsaved edits.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

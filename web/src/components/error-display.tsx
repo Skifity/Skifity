@@ -149,12 +149,15 @@ export function toProblem(error: unknown): Problem | null {
   if (!error) return null
   if (error instanceof ApiError) return error.problem
   if (error instanceof Error) {
+    // The title is fixed, so it is translated; the browser's own words —
+    // "Failed to fetch" when offline — are the cause.
     return {
       code: "unexpected",
-      title: error.message || "Something went wrong",
-      cause: error.message,
+      title: "Something went wrong",
+      cause: error.message || "The browser gave no reason.",
       impact: "The action may not have completed.",
       fix: "Try again. If it keeps happening, copy this and open an issue.",
+      args: { cause: [error.message || "The browser gave no reason."] },
       severity: "error",
       retryable: true,
       at: new Date().toISOString(),

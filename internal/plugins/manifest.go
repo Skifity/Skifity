@@ -40,6 +40,8 @@ package plugins
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -416,4 +418,33 @@ func (m Manifest) BlocksDeploys() bool {
 		}
 	}
 	return false
+}
+
+// Check says whether a value fits a setting: a number that is one, a bool that
+// is true or false, a choice among the options. Nothing checked, so a setting
+// declared as a number took "ten" and the plugin was handed it; and an empty
+// value for a required setting took it away.
+func (s Setting) Check(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		if s.Required {
+			return fmt.Errorf("%s is required", s.Label)
+		}
+		return nil
+	}
+	switch s.Kind {
+	case "number":
+		if _, err := strconv.ParseFloat(value, 64); err != nil {
+			return fmt.Errorf("%s is a number, and %q is not one", s.Label, value)
+		}
+	case "bool":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("%s is true or false, not %q", s.Label, value)
+		}
+	case "choice":
+		if !slices.Contains(s.Options, value) {
+			return fmt.Errorf("%s is one of %s, not %q", s.Label, strings.Join(s.Options, ", "), value)
+		}
+	}
+	return nil
 }

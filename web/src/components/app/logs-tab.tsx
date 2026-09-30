@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { HistoryIcon, PauseIcon, PlayIcon, RadioIcon, ScrollTextIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -45,6 +46,12 @@ export function LogsTab({ app }: { app: App }) {
   const [source, setSource] = useState<"live" | "previous">("live")
   /** Which process: "web" is the app itself, anything else one beside it. */
   const [process, setProcess] = useState("web")
+  /** Where the live stream is. Set by the stream's own events, never copied. */
+  const [stream, setStream] = useState<"connecting" | "open" | "reconnecting" | "failed">(
+    "connecting",
+  )
+  /** Bumped by Retry, to open a stream that gave up. */
+  const [attempt, setAttempt] = useState(0)
   const bottom = useRef<HTMLDivElement>(null)
 
   const processes = useQuery({
@@ -65,8 +72,22 @@ export function LogsTab({ app }: { app: App }) {
   useEffect(() => {
     if (!following || source !== "live") return
 
-    const stream = new EventSource(`/api/apps/${app.id}/logs?follow=true&tail=200${which}`)
-    stream.addEventListener("log", (message) => {
+    const events = new EventSource(`/api/apps/${app.id}/logs?follow=true&tail=200${which}`)
+    // Every connection — the first, a reconnect after a dropped one, a
+    // resume after a pause — starts with the last 200 lines again. Appended,
+    // they were on screen twice, three times; the lines already shown are
+    // what the replay is, so they are replaced by it.
+    events.addEventListener("open", () => {
+      setLines([])
+      setStream("open")
+    })
+    // A stream that fails is said, rather than looking like an app with
+    // nothing running. The browser retries one that dropped by itself, and
+    // gives up on one the panel refused.
+    events.addEventListener("error", () => {
+      setStream(events.readyState === EventSource.CLOSED ? "failed" : "reconnecting")
+    })
+    events.addEventListener("log", (message) => {
       try {
         const line = JSON.parse((message as MessageEvent).data) as string
         setLines((previous) => {
@@ -77,8 +98,8 @@ export function LogsTab({ app }: { app: App }) {
         // A frame we cannot parse is not worth tearing the stream down for.
       }
     })
-    return () => stream.close()
-  }, [app.id, following, source, which])
+    return () => events.close()
+  }, [app.id, following, source, which, attempt])
 
   // Derived, not copied: which set of lines is on screen follows the tab, and
   // the filter is applied in the same pass so nothing has to be kept in step.
@@ -170,11 +191,32 @@ export function LogsTab({ app }: { app: App }) {
         <ErrorDisplay error={earlier.error} compact />
       )}
 
+      {source === "live" && following && stream === "failed" && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{t("apps.logsStreamFailed")}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStream("connecting")
+                setAttempt((n) => n + 1)
+              }}
+            >
+              {t("common.retry")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {source === "live" && following && stream === "reconnecting" && (
+        <p className="text-xs text-muted-foreground">{t("apps.logsReconnecting")}</p>
+      )}
+
       {all.length === 0 ? (
         <EmptyState
           icon={ScrollTextIcon}
           title={t("apps.logs")}
-          description={source === "previous" ? t("apps.logsPreviousNone") : t("apps.noInstances")}
+          description={source === "previous" ? t("apps.logsPreviousNone") : t("apps.logsQuiet")}
         />
       ) : (
         <ScrollArea className="h-[28rem] rounded-md border bg-muted/30">

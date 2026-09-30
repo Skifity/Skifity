@@ -571,7 +571,12 @@
       "upToDate": "与模板保持一致。"
     },
     "previewSeed": "预览的种子数据",
-    "previewSeedHelp": "在每个新预览第一次部署后运行一次，给它空的数据库填上可以看的内容。不会在这个环境里运行，之后的推送也不会再运行。"
+    "previewSeedHelp": "在每个新预览第一次部署后运行一次，给它空的数据库填上可以看的内容。不会在这个环境里运行，之后的推送也不会再运行。",
+    "runExitStatus": "失败：命令以状态 {{code}} 退出。",
+    "runOutcomeUnknown": "无法读取命令的结束状态。它可能仍在运行；上面是它已打印的输出。",
+    "logsQuiet": "还没有任何输出。应用写出新内容时会显示在这里。",
+    "logsStreamFailed": "无法打开日志流：应用可能没有运行，或面板无法连接到集群。",
+    "logsReconnecting": "日志流已中断，正在重新连接…"
   },
   "deploy": {
     "title": "部署记录",
@@ -638,7 +643,8 @@
     "promoteTo": "提升到 {{environment}}",
     "promoteAnyway": "仍然提升",
     "promoted": "正在将 #{{number}} 提升到 {{environment}}",
-    "promoteEnvironment": "要提升到的环境"
+    "promoteEnvironment": "要提升到的环境",
+    "noLogYet": "构建日志中还没有任何内容。"
   },
   "variables": {
     "title": "变量",
@@ -2513,6 +2519,18 @@
         "cause": "{{0}} 表示应用位于 {{1}}，而你登录的是 {{2}}。",
         "impact": "命令未运行。",
         "fix": "使用 `{{1}} login` 登录 {{0}}，或为其设置 SKIFITY_URL 和 SKIFITY_TOKEN。"
+      },
+      "network": {
+        "title": "无法连接到面板",
+        "cause": "对 {{0}} 的请求返回了 {{1}}。",
+        "impact": "页面显示的信息可能已过时。",
+        "fix": "检查网络连接并刷新页面。如果面板正在重启，这会自行恢复。"
+      },
+      "unexpected": {
+        "title": "出了点问题",
+        "cause": "{{0}}",
+        "impact": "操作可能未完成。",
+        "fix": "请重试。如果问题持续出现，请复制此信息并提交 issue。"
       }
     }
   },

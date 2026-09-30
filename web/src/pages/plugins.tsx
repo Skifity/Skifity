@@ -30,6 +30,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
@@ -111,6 +118,65 @@ export function PluginsPage() {
   )
 }
 
+type DeclaredSetting = NonNullable<InstalledPlugin["decoded"]["settings"]>[number]
+
+/**
+ * One setting, as the input its kind asks for. Every kind was a text box, so
+ * a yes-or-no was typed as a word and a choice was guessed at; the panel now
+ * refuses a value that does not fit, and this offers only ones that do.
+ */
+function SettingInput({
+  id,
+  setting,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string
+  setting: DeclaredSetting
+  value: string
+  placeholder?: string
+  onChange: (value: string) => void
+}) {
+  if (setting.kind === "bool") {
+    return (
+      <Switch id={id} checked={value === "true"} onCheckedChange={(on) => onChange(String(on))} />
+    )
+  }
+  if (setting.kind === "choice" && (setting.options?.length ?? 0) > 0) {
+    return (
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id} className="w-full sm:w-64">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {setting.options!.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
+  return (
+    <Input
+      id={id}
+      type={
+        setting.secret || setting.kind === "password"
+          ? "password"
+          : setting.kind === "number"
+            ? "number"
+            : "text"
+      }
+      placeholder={placeholder}
+      value={value}
+      required={setting.required}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  )
+}
+
 /** One installed plugin: what it is, what it may do, and its own settings. */
 function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
   const { t } = useTranslation()
@@ -121,8 +187,10 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
   const update = useMutation({
     mutationFn: (body: { enabled?: boolean; settings?: Record<string, string> }) =>
       api.patch<InstalledPlugin>(`/api/plugins/${plugin.id}`, body),
-    onSuccess: () => {
-      setValues({})
+    // Only a save of the settings is done with the edits. Turning the plugin
+    // on or off cleared them too, and whatever had been typed was gone.
+    onSuccess: (_, body) => {
+      if (body.settings) setValues({})
       void queryClient.invalidateQueries({ queryKey: ["plugins"] })
     },
   })
@@ -202,9 +270,9 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
                     {setting.label}
                     {setting.required && <span className="text-destructive"> *</span>}
                   </Label>
-                  <Input
+                  <SettingInput
                     id={`${plugin.id}-${setting.key}`}
-                    type={setting.secret ? "password" : "text"}
+                    setting={setting}
                     // A secret's stored value is never sent back, so the field
                     // is empty and says it is already set rather than showing
                     // dots that could be typed over by accident.
@@ -212,7 +280,7 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
                       stored?.configured && setting.secret ? t("plugins.secretStored") : undefined
                     }
                     value={values[setting.key] ?? (setting.secret ? "" : (stored?.value ?? ""))}
-                    onChange={(e) => setValues({ ...values, [setting.key]: e.target.value })}
+                    onChange={(value) => setValues({ ...values, [setting.key]: value })}
                   />
                   {setting.help && <p className="text-xs text-muted-foreground">{setting.help}</p>}
                 </div>

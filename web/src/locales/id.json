@@ -571,7 +571,12 @@
       "upToDate": "Sudah sesuai dengan templat."
     },
     "previewSeed": "Seed untuk pratinjau",
-    "previewSeedHelp": "Dijalankan sekali di setiap pratinjau baru, setelah deploy pertamanya, untuk mengisi database kosongnya dengan sesuatu untuk dilihat. Tidak di environment ini, dan tidak lagi pada push berikutnya."
+    "previewSeedHelp": "Dijalankan sekali di setiap pratinjau baru, setelah deploy pertamanya, untuk mengisi database kosongnya dengan sesuatu untuk dilihat. Tidak di environment ini, dan tidak lagi pada push berikutnya.",
+    "runExitStatus": "Gagal: perintah keluar dengan status {{code}}.",
+    "runOutcomeUnknown": "Cara perintah berakhir tidak bisa dibaca. Mungkin masih berjalan; output di atas adalah yang sudah dicetaknya.",
+    "logsQuiet": "Belum ada yang dicetak. Baris baru muncul di sini saat aplikasi menulisnya.",
+    "logsStreamFailed": "Aliran log tidak bisa dibuka: aplikasi mungkin tidak berjalan, atau panel tidak bisa menjangkau cluster.",
+    "logsReconnecting": "Aliran log terputus. Menyambung kembali…"
   },
   "deploy": {
     "title": "Deployment",
@@ -638,7 +643,8 @@
     "promoteTo": "Promosikan ke {{environment}}",
     "promoteAnyway": "Tetap promosikan",
     "promoted": "Mempromosikan #{{number}} ke {{environment}}",
-    "promoteEnvironment": "Environment tujuan promosi"
+    "promoteEnvironment": "Environment tujuan promosi",
+    "noLogYet": "Belum ada yang ditulis ke log build."
   },
   "variables": {
     "title": "Variabel",
@@ -2513,6 +2519,18 @@
         "cause": "{{0}} menyebut aplikasinya ada di {{1}}, sedangkan Anda masuk ke {{2}}.",
         "impact": "Perintah tidak dijalankan.",
         "fix": "Masuk ke {{0}} dengan `{{1}} login`, atau atur SKIFITY_URL dan SKIFITY_TOKEN untuk panel itu."
+      },
+      "network": {
+        "title": "Panel tidak bisa dihubungi",
+        "cause": "Permintaan ke {{0}} dijawab {{1}}.",
+        "impact": "Halaman ini mungkin menampilkan informasi yang sudah usang.",
+        "fix": "Periksa koneksi Anda lalu muat ulang. Jika panel sedang dimulai ulang, ini akan beres dengan sendirinya."
+      },
+      "unexpected": {
+        "title": "Terjadi kesalahan",
+        "cause": "{{0}}",
+        "impact": "Tindakan itu mungkin tidak selesai.",
+        "fix": "Coba lagi. Jika terus terjadi, salin ini dan buka issue."
       }
     }
   },

@@ -27,6 +27,9 @@ import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
 import type { App, AppJob } from "@/lib/types"
 
+/** A run's output, and how it ended once it has. */
+type RunOutput = { lines: string[]; finished: boolean; exit_code?: number }
+
 /**
  * One-off commands.
  *
@@ -38,7 +41,7 @@ import type { App, AppJob } from "@/lib/types"
 export function ConsoleTab({ app }: { app: App }) {
   const { t } = useTranslation()
   const [command, setCommand] = useState("")
-  const [output, setOutput] = useState<string[] | null>(null)
+  const [result, setResult] = useState<RunOutput | null>(null)
   const [ran, setRan] = useState("")
 
   const run = useMutation({
@@ -46,13 +49,17 @@ export function ConsoleTab({ app }: { app: App }) {
       const started = await api.post<{ run: string }>(`/api/apps/${app.id}/run`, {
         command: command.trim(),
       })
-      return api.get<{ lines: string[] }>(`/api/apps/${app.id}/runs/${started.run}/logs`)
+      // Followed to the end. Without it the panel answered with whatever the
+      // container had printed when its pod was first seen running — usually
+      // nothing — and this said the command had finished while it ran on.
+      return api.get<RunOutput>(`/api/apps/${app.id}/runs/${started.run}/logs?follow=true`)
     },
-    onSuccess: (result) => {
-      setOutput(result.lines)
+    onSuccess: (answer) => {
+      setResult(answer)
       setRan(command.trim())
     },
   })
+  const output = result?.lines ?? null
 
   return (
     <div className="space-y-6">
@@ -107,6 +114,18 @@ export function ConsoleTab({ app }: { app: App }) {
       ) : (
         <div className="space-y-2">
           <p className="font-mono text-xs text-muted-foreground">$ {ran}</p>
+          {result?.finished && result.exit_code !== 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {t("apps.runExitStatus", { code: result.exit_code })}
+              </AlertDescription>
+            </Alert>
+          )}
+          {result && !result.finished && (
+            <Alert>
+              <AlertDescription>{t("apps.runOutcomeUnknown")}</AlertDescription>
+            </Alert>
+          )}
           <ScrollArea className="h-80 rounded-md border bg-muted/30">
             <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
               {output.length > 0 ? output.join("\n") : t("apps.runNoOutput")}

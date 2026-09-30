@@ -207,3 +207,25 @@ func TestACallNamesThePluginAndNotOnlyTheProviderID(t *testing.T) {
 		t.Errorf("the provider was not named: %v", asked)
 	}
 }
+
+func TestASettingTakesOnlyWhatItDeclares(t *testing.T) {
+	cases := []struct {
+		setting Setting
+		value   string
+		ok      bool
+	}{
+		{Setting{Label: "Retries", Kind: "number"}, "3", true},
+		{Setting{Label: "Retries", Kind: "number"}, "ten", false},
+		{Setting{Label: "Verbose", Kind: "bool"}, "true", true},
+		{Setting{Label: "Verbose", Kind: "bool"}, "yes", false},
+		{Setting{Label: "Region", Kind: "choice", Options: []string{"eu", "us"}}, "eu", true},
+		{Setting{Label: "Region", Kind: "choice", Options: []string{"eu", "us"}}, "mars", false},
+		{Setting{Label: "Token", Required: true}, "", false},
+		{Setting{Label: "Note"}, "", true},
+	}
+	for _, tc := range cases {
+		if err := tc.setting.Check(tc.value); (err == nil) != tc.ok {
+			t.Errorf("%s = %q: %v", tc.setting.Label, tc.value, err)
+		}
+	}
+}

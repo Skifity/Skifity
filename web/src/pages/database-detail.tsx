@@ -80,7 +80,8 @@ export function DatabaseDetailPage() {
       backups: () => void queryClient.invalidateQueries({ queryKey: ["backups", databaseId] }),
       operation: () => void queryClient.invalidateQueries({ queryKey: ["database", databaseId] }),
     },
-    Boolean(team),
+    // Refused to a member limited to projects, who is polled instead.
+    Boolean(team) && !team?.scoped,
   )
 
   const database = useQuery({
@@ -451,12 +452,18 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
 function BackupsPanel({ databaseId }: { databaseId: string }) {
   const { t } = useTranslation()
   const confirmRestore = useConfirm()
+  // A member limited to projects has no live stream to hear of a new backup.
+  const scoped = Boolean(useSession().team?.scoped)
 
   const backups = useQuery({
     queryKey: ["backups", databaseId],
     queryFn: () => api.get<List<Backup>>(`/api/databases/${databaseId}/backups`),
     refetchInterval: (query) =>
-      (query.state.data?.items ?? []).some((backup) => backup.status === "running") ? 5_000 : false,
+      (query.state.data?.items ?? []).some((backup) => backup.status === "running")
+        ? 5_000
+        : scoped
+          ? 30_000
+          : false,
   })
 
   const policy = useQuery({

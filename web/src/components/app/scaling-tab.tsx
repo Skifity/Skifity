@@ -54,19 +54,38 @@ export function ScalingTab({ app }: { app: App }) {
     },
   })
 
+  // The same for the resources: edits over what the app says now. Copied into
+  // state once, they outlived a rollback that changed them, and the next Save
+  // put the values from before the rollback back.
+  type Resources = { cpuRequest: string; cpuLimit: string; memRequest: string; memLimit: string }
+  const [resourceDraft, setResourceDraft] = useState<Partial<Resources>>({})
+  const resourceValues: Resources = {
+    cpuRequest: resourceDraft.cpuRequest ?? String(app.cpu_request_m),
+    cpuLimit: resourceDraft.cpuLimit ?? String(app.cpu_limit_m),
+    memRequest: resourceDraft.memRequest ?? String(app.mem_request_mb),
+    memLimit: resourceDraft.memLimit ?? String(app.mem_limit_mb),
+  }
+  const { cpuRequest, cpuLimit, memRequest, memLimit } = resourceValues
+  const edit = (field: keyof Resources) => (value: string) =>
+    setResourceDraft((previous) => ({ ...previous, [field]: value }))
+  const setCPURequest = edit("cpuRequest")
+  const setCPULimit = edit("cpuLimit")
+  const setMemRequest = edit("memRequest")
+  const setMemLimit = edit("memLimit")
+
   const resources = useMutation({
     mutationFn: (next: Partial<App>) => api.patch(`/api/apps/${app.id}`, next),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
+    onSuccess: () => {
+      setResourceDraft({})
+      void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
+    },
   })
 
-  const [cpuRequest, setCPURequest] = useState(String(app.cpu_request_m))
-  const [cpuLimit, setCPULimit] = useState(String(app.cpu_limit_m))
-  const [memRequest, setMemRequest] = useState(String(app.mem_request_mb))
-  const [memLimit, setMemLimit] = useState(String(app.mem_limit_mb))
-
-  if (scaling.isLoading || !form) return <Skeleton className="h-64" />
+  // The error first: a failed load leaves no form, and checking for the form
+  // first showed a skeleton for ever with the retry button out of reach.
   if (scaling.error)
     return <ErrorDisplay error={scaling.error} onRetry={() => void scaling.refetch()} />
+  if (scaling.isLoading || !form) return <Skeleton className="h-64" />
 
   const findings = readiness.data?.items ?? []
 
@@ -190,9 +209,7 @@ export function ScalingTab({ app }: { app: App }) {
             of quiet lie this panel is meant not to tell.
           */}
           {form.autoscale && form.scale_to_zero && (
-            <p className="text-xs text-muted-foreground">
-              {t("scaling.scaleToZeroUsesRequests")}
-            </p>
+            <p className="text-xs text-muted-foreground">{t("scaling.scaleToZeroUsesRequests")}</p>
           )}
 
           <p className="text-xs text-muted-foreground">{t("scaling.spreadHelp")}</p>
@@ -343,5 +360,10 @@ function TextField({
  * English on a Russian page until the catalogue existed.
  */
 function say(t: TFunction, finding: ScalingFinding, field: "title" | "detail" | "fix"): string {
-  return translated(t, `scaling.finding.${finding.code}.${field}`, finding[field], finding.args?.[field])
+  return translated(
+    t,
+    `scaling.finding.${finding.code}.${field}`,
+    finding[field],
+    finding.args?.[field],
+  )
 }
