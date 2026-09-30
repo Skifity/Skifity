@@ -132,6 +132,43 @@ func ExplainImageRunsAsRoot() string {
 		"so the app still cannot reach the server it runs on."
 }
 
+// ExplainNamedUser is the kubelet's other refusal at the strict level, of an
+// image whose USER is a name: `container has runAsNonRoot and image has
+// non-numeric user (nobody), cannot verify user is non-root`. The image is
+// not root; the kubelet only cannot tell from a name. Giving the number is
+// the fix that keeps the environment strict.
+func ExplainNamedUser(message string) string {
+	return namedUserPrefix + namedUser(message) + namedUserRest
+}
+
+// namedUserPrefix and namedUserRest are ExplainNamedUser's sentence around
+// the name, so the app's summary can recognise what describePod wrote.
+const (
+	namedUserPrefix = "This image names its user ("
+	namedUserRest   = ") instead of numbering it, so the cluster " +
+		"cannot check that it is not root, and this environment refuses what it cannot check. " +
+		"Set \"Run as user\" in the app's settings to that user's number — 65534 for nobody — " +
+		"and deploy again, or change the environment's confinement to \"baseline\" under the project."
+)
+
+// namedUser is the name in the kubelet's message, or a stand-in.
+func namedUser(message string) string {
+	name := "a name"
+	if start := strings.Index(message, "non-numeric user ("); start >= 0 {
+		rest := message[start+len("non-numeric user ("):]
+		if end := strings.Index(rest, ")"); end > 0 {
+			name = rest[:end]
+		}
+	}
+	return name
+}
+
+// NamedUserRefusal reports whether a container's message is that refusal.
+func NamedUserRefusal(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "runasnonroot") && strings.Contains(lower, "non-numeric user")
+}
+
 // RunsAsRootRefusal reports whether a container's message is that refusal.
 func RunsAsRootRefusal(message string) bool {
 	lower := strings.ToLower(message)

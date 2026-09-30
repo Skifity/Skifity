@@ -94,6 +94,11 @@ func TestEveryServiceCouldRun(t *testing.T) {
 					t.Errorf("%s/%s: %v", tpl.ID, svc.Name, err)
 				}
 			}
+			// Root is never pinned: 0 is "the image decides", and a uid is
+			// only given so the kubelet can see a named user is not root.
+			if svc.RunAsUser < 0 || svc.RunAsUser > 1<<31-1 {
+				t.Errorf("%s/%s runs as %d, which is not a uid", tpl.ID, svc.Name, svc.RunAsUser)
+			}
 			if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
 				t.Errorf("%s/%s has the health path %q, which is not a path", tpl.ID, svc.Name, svc.HealthPath)
 			}

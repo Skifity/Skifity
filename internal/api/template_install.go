@@ -84,6 +84,7 @@ func (s *Server) installTemplate(
 			MemLimitMB:    orDefault(svc.MemLimitMB, 512),
 			AutoDeploy:    false,
 			StartCommand:  svc.Command,
+			RunAsUser:     svc.RunAsUser,
 			// A template says which of its services the public reaches.
 			// This was read and never used, so a search index or a worker
 			// with a port got a public address like the app in front of it.

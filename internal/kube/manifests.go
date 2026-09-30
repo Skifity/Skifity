@@ -110,7 +110,7 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 			// was the wrong one for 120 of the 124 catalogue images whose
 			// configuration could be read from their registries.
 			RunAsUser:  confinement.RunAsUser(),
-			RunAsGroup: confinement.RunAsUser(),
+			RunAsGroup: confinement.RunAsGroup(),
 			// FSGroup stays at 1000 whatever the image runs as. It sets the
 			// group on a mounted volume and adds that group to the container's
 			// supplementary groups, which is what makes a volume writable by a

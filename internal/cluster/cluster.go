@@ -459,6 +459,7 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		// an image reference somebody typed or a template chose, and the only
 		// honest thing to say about its user is what the image itself says.
 		ImageBuiltHere: app.SourceType == "git" || app.SourceType == "upload",
+		RunAsUser:      app.RunAsUser,
 	}
 	// How the app's instances are checked. Runtime settings: they reach the
 	// probes and never the build fingerprint, so changing one is a rollout

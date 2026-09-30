@@ -15,7 +15,7 @@ const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_so
 	health_check, health_start_seconds, health_timeout_seconds, start_command, release_command, replicas,
 	autoscale, min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero,
 	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths,
-	deploy_trigger, tag_pattern, internal, preview_seed, seeded_at, status, created_at, updated_at`
+	deploy_trigger, tag_pattern, run_as_user, internal, preview_seed, seeded_at, status, created_at, updated_at`
 
 // appDestinations is where each of appColumns is scanned to, in order. One
 // list, for every query that selects appColumns: ListDeployedApps had its own
@@ -26,7 +26,7 @@ func appDestinations(a *App, created, updated *string) []any {
 		&a.HealthCheck, &a.HealthStartSeconds, &a.HealthTimeoutSeconds,
 		&a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas, &a.CPUTarget,
 		&a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM, &a.MemRequestMB, &a.MemLimitMB,
-		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.DeployTrigger, &a.TagPattern, &a.Internal, &a.PreviewSeed,
+		&a.AutoDeploy, &a.PreviewDeploys, &a.WatchPaths, &a.DeployTrigger, &a.TagPattern, &a.RunAsUser, &a.Internal, &a.PreviewSeed,
 		&a.SeededAt, &a.Status, created, updated}
 }
 
@@ -78,14 +78,14 @@ func (db *DB) CreateApp(ctx context.Context, a *App) error {
 		 health_check, health_start_seconds, health_timeout_seconds, start_command, release_command, replicas, autoscale,
 		 min_replicas, max_replicas, cpu_target, memory_target, scale_to_zero, cpu_request_m, cpu_limit_m,
 		 mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys, watch_paths, deploy_trigger, tag_pattern,
-		 internal, preview_seed, status, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 run_as_user, internal, preview_seed, status, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.EnvironmentID, a.Name, a.Slug, defaultStr(a.SourceType, "git"), NullString(a.GitSourceID),
 		a.RepoURL, a.Branch, a.RootDir, defaultStr(a.Builder, "auto"), a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image,
 		a.Port, a.HealthPath, a.HealthCheck, a.HealthStartSeconds, a.HealthTimeoutSeconds, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale, a.MinReplicas, a.MaxReplicas,
 		a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM, a.CPULimitM, a.MemRequestMB,
 		a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths, a.DeployTrigger, a.TagPattern,
-		a.Internal, a.PreviewSeed, defaultStr(a.Status, "created"), now, now)
+		a.RunAsUser, a.Internal, a.PreviewSeed, defaultStr(a.Status, "created"), now, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this environment already has an app named %s", ErrConflict, a.Name)
@@ -225,14 +225,14 @@ func (db *DB) UpdateApp(ctx context.Context, a *App) error {
 		health_check=?, health_start_seconds=?, health_timeout_seconds=?, start_command=?, release_command=?, replicas=?, autoscale=?,
 		min_replicas=?, max_replicas=?, cpu_target=?, memory_target=?, scale_to_zero=?, cpu_request_m=?,
 		cpu_limit_m=?, mem_request_mb=?, mem_limit_mb=?, auto_deploy=?, preview_deploys=?, watch_paths=?,
-		deploy_trigger=?, tag_pattern=?, internal=?, preview_seed=?, status=?, updated_at=?
+		deploy_trigger=?, tag_pattern=?, run_as_user=?, internal=?, preview_seed=?, status=?, updated_at=?
 		WHERE id=?`,
 		a.Name, a.Slug, a.SourceType, NullString(a.GitSourceID), a.RepoURL, a.Branch, a.RootDir, a.Builder,
 		a.DockerfilePath, a.BuildCommand, a.StaticDir, a.Image, a.Port, a.HealthPath,
 		a.HealthCheck, a.HealthStartSeconds, a.HealthTimeoutSeconds, a.StartCommand, a.ReleaseCommand, a.Replicas, a.Autoscale,
 		a.MinReplicas, a.MaxReplicas, a.CPUTarget, a.MemoryTarget, a.ScaleToZero, a.CPURequestM,
 		a.CPULimitM, a.MemRequestMB, a.MemLimitMB, a.AutoDeploy, a.PreviewDeploys, a.WatchPaths,
-		defaultStr(a.DeployTrigger, "branch"), defaultStr(a.TagPattern, "v*"), a.Internal, a.PreviewSeed, a.Status, now, a.ID)
+		defaultStr(a.DeployTrigger, "branch"), defaultStr(a.TagPattern, "v*"), a.RunAsUser, a.Internal, a.PreviewSeed, a.Status, now, a.ID)
 	if err != nil {
 		return fmt.Errorf("update app: %w", err)
 	}

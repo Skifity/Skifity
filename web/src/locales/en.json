@@ -627,7 +627,10 @@
     "healthStart": "Time to start (seconds)",
     "healthStartHelp": "How long a new instance may take before it has to answer, from {{min}} to {{max}}. Two minutes suits most apps; a JVM, or an image that migrates its database before it listens, may need five to ten.",
     "healthTimeout": "Check timeout (seconds)",
-    "healthTimeoutHelp": "How long one check waits for an answer, from {{min}} to {{max}}."
+    "healthTimeoutHelp": "How long one check waits for an answer, from {{min}} to {{max}}.",
+    "runAsUser": "Run as user",
+    "runAsUserPlaceholder": "The image decides",
+    "runAsUserHelp": "The user id to run this image as. Only needed for an image that names its user, such as nobody, which the strictest confinement refuses because it cannot see a name is not root: give its number (65534 for nobody). Empty leaves it to the image; root cannot be chosen."
   },
   "deploy": {
     "title": "Deployments",

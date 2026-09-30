@@ -128,6 +128,9 @@ type databaseResult struct {
 // room for none of them twice and a margin.
 const maxInitialDatabases = 4
 
+// maxRunAsUser is the largest uid a container can be given.
+const maxRunAsUser = 1<<31 - 1
+
 // validateInitialDatabases refuses a bad request before anything is created,
 // so a typo cannot leave a half-made app behind it.
 func validateInitialDatabases(requested []initialDatabase) ([]initialDatabase, error) {
@@ -643,17 +646,20 @@ type updateAppRequest struct {
 	HealthStartSeconds   *int    `json:"health_start_seconds,omitempty"`
 	HealthTimeoutSeconds *int    `json:"health_timeout_seconds,omitempty"`
 	// PreviewSeed runs once in each new preview of the app.
-	PreviewSeed    *string `json:"preview_seed,omitempty"`
-	WatchPaths     *string `json:"watch_paths,omitempty"`
-	DeployTrigger  *string `json:"deploy_trigger,omitempty"`
-	TagPattern     *string `json:"tag_pattern,omitempty"`
-	Internal       *bool   `json:"internal,omitempty"`
-	AutoDeploy     *bool   `json:"auto_deploy,omitempty"`
-	PreviewDeploys *bool   `json:"preview_deploys,omitempty"`
-	CPURequestM    *int    `json:"cpu_request_m,omitempty"`
-	CPULimitM      *int    `json:"cpu_limit_m,omitempty"`
-	MemRequestMB   *int    `json:"mem_request_mb,omitempty"`
-	MemLimitMB     *int    `json:"mem_limit_mb,omitempty"`
+	PreviewSeed   *string `json:"preview_seed,omitempty"`
+	WatchPaths    *string `json:"watch_paths,omitempty"`
+	DeployTrigger *string `json:"deploy_trigger,omitempty"`
+	TagPattern    *string `json:"tag_pattern,omitempty"`
+	// RunAsUser is the uid for an image that names its user; 0 leaves it to
+	// the image. A runtime setting, like the health check.
+	RunAsUser      *int  `json:"run_as_user,omitempty"`
+	Internal       *bool `json:"internal,omitempty"`
+	AutoDeploy     *bool `json:"auto_deploy,omitempty"`
+	PreviewDeploys *bool `json:"preview_deploys,omitempty"`
+	CPURequestM    *int  `json:"cpu_request_m,omitempty"`
+	CPULimitM      *int  `json:"cpu_limit_m,omitempty"`
+	MemRequestMB   *int  `json:"mem_request_mb,omitempty"`
+	MemLimitMB     *int  `json:"mem_limit_mb,omitempty"`
 }
 
 func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
@@ -691,6 +697,21 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	assignString(&app.Image, req.Image)
+	if req.RunAsUser != nil {
+		if *req.RunAsUser < 0 || *req.RunAsUser > maxRunAsUser {
+			writeError(w, r, errdoc.BadRequest(fmt.Sprintf(
+				"Run as user is a uid from 1 to %d, or 0 to leave it to the image; root cannot be pinned.", maxRunAsUser)))
+			return
+		}
+		// An image this panel builds runs as 1000 whatever is said here, so
+		// saying something else would be a setting that does nothing.
+		if *req.RunAsUser != 0 && (app.SourceType == "git" || app.SourceType == "upload") {
+			writeError(w, r, errdoc.BadRequest(
+				"Run as user is for an image somebody else built; an app built here always runs as 1000."))
+			return
+		}
+		app.RunAsUser = *req.RunAsUser
+	}
 	pathWas := app.HealthPath
 	assignString(&app.HealthPath, req.HealthPath)
 	if err := applyHealthSettings(&app, req.HealthCheck, req.HealthStartSeconds, req.HealthTimeoutSeconds,

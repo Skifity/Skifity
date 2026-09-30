@@ -97,6 +97,20 @@ still lists everything the strict profile would have refused.
 Changing the level changes the environment's namespace immediately, and reaches
 each app the next time it is deployed.
 
+#### An image that names its user
+
+Some images do not start as root at all, and are refused anyway. Their
+Dockerfile says `USER nobody` or `USER sonarqube` rather than a number, and at
+**Strictest** the cluster refuses a user it cannot check: a name could be
+root. The app's page says so, in those words, rather than the kubelet's
+"non-numeric user".
+
+The fix keeps the environment strict. Give the user's number as **Run as
+user** in the app's settings — 65534 for `nobody` — and deploy again. Only the
+user is pinned; the group stays whatever the image says. Root cannot be
+chosen, and an app Skifity builds does not have the setting, because it always
+runs as 1000.
+
 ## Variables, and why some rebuild and some do not
 
 An app's variables become environment variables inside it. There are two kinds,

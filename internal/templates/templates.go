@@ -213,6 +213,10 @@ type Service struct {
 	// Ports are connections that are not HTTP — a game server's, an MQTT
 	// broker's — opened on every server at the same number.
 	Ports []PortSpec `json:"ports,omitempty"`
+	// RunAsUser is the number of the user an image names — 65534 for
+	// prom/prometheus's nobody — so it runs at the strict confinement
+	// level, where the kubelet refuses a user it cannot see is not root.
+	RunAsUser int `json:"run_as_user,omitempty"`
 }
 
 // PortSpec is a port a template's service takes connections on that is not

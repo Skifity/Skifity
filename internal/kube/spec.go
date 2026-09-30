@@ -115,6 +115,9 @@ type AppSpec struct {
 	// uid is a guess, and it was wrong for 120 of the 124 catalogue images
 	// whose configuration could be read from their registries.
 	ImageBuiltHere bool
+	// RunAsUser is the uid given for an image that names its user. See
+	// Confinement.RunAsUser.
+	RunAsUser int
 
 	// ImagePullSecret is the Secret the kubelet reads to pull this image, for
 	// an app whose image lives in a registry that is not the one in the
@@ -138,6 +141,7 @@ func (s AppSpec) Confinement() Confinement {
 		Level:     NormalizePodSecurity(string(s.PodSecurity)),
 		BuiltHere: s.ImageBuiltHere,
 		Port:      s.Port,
+		User:      s.RunAsUser,
 	}
 }
 

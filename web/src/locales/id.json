@@ -617,7 +617,10 @@
     "healthStart": "Waktu untuk mulai (detik)",
     "healthStartHelp": "Berapa lama instance baru boleh mulai sebelum harus menjawab, dari {{min}} sampai {{max}}. Dua menit cukup untuk kebanyakan aplikasi; JVM, atau image yang memigrasi database sebelum mendengarkan, mungkin butuh lima sampai sepuluh menit.",
     "healthTimeout": "Batas waktu pemeriksaan (detik)",
-    "healthTimeoutHelp": "Berapa lama satu pemeriksaan menunggu jawaban, dari {{min}} sampai {{max}}."
+    "healthTimeoutHelp": "Berapa lama satu pemeriksaan menunggu jawaban, dari {{min}} sampai {{max}}.",
+    "runAsUser": "Jalankan sebagai pengguna",
+    "runAsUserPlaceholder": "Ditentukan oleh image",
+    "runAsUserHelp": "ID pengguna untuk menjalankan image ini. Hanya diperlukan untuk image yang menamai penggunanya, seperti nobody, yang ditolak oleh pembatasan paling ketat karena tidak bisa memastikan sebuah nama bukan root: isikan nomornya (65534 untuk nobody). Kosongkan untuk menyerahkannya pada image; root tidak dapat dipilih."
   },
   "deploy": {
     "title": "Deployment",

@@ -177,6 +177,8 @@ export type App = {
   health_start_seconds: number
   /** How long one check waits for an answer, in seconds. */
   health_timeout_seconds: number
+  /** The uid an image that names its user runs as; 0 when the image decides. */
+  run_as_user: number
   build_command: string
   static_dir: string
   start_command: string

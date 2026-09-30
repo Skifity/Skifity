@@ -71,6 +71,9 @@ type Confinement struct {
 	BuiltHere bool
 	// Port is what the app listens on, which decides one sysctl.
 	Port int
+	// User is the uid given for an image that names its user rather than
+	// numbering it; 0 when nobody gave one.
+	User int
 }
 
 // RunAsUser is the uid to pin, or nil to let the image decide.
@@ -79,12 +82,34 @@ type Confinement struct {
 // rather than a guess: Railpack and Nixpacks both produce a process running as
 // 1000. For anybody else's image the right answer is the USER the image
 // declares, which is what leaving this unset means.
+//
+// The one exception is a uid somebody gave for an image that names its user
+// — USER nobody, USER sonarqube. The kubelet cannot tell whether a name is
+// root, so at the strict level it refuses such an image outright; the number
+// is what lets it check, and what lets the image run without lowering the
+// environment. Root is never pinned: 0 means nothing was given.
 func (c Confinement) RunAsUser() *int64 {
 	if !c.BuiltHere {
-		return nil
+		if c.User <= 0 {
+			return nil
+		}
+		uid := int64(c.User)
+		return &uid
 	}
 	uid := int64(1000)
 	return &uid
+}
+
+// RunAsGroup is the gid to pin: the builders' 1000 for an image Skifity
+// built, and nothing otherwise. A uid given for somebody else's image leaves
+// the group to the image, which may well be 0 on purpose — OpenShift-style
+// images make their writable directories the root group's, and a group is
+// not root.
+func (c Confinement) RunAsGroup() *int64 {
+	if !c.BuiltHere {
+		return nil
+	}
+	return c.RunAsUser()
 }
 
 // RunAsNonRoot reports whether the kubelet must refuse an image that starts as

@@ -317,6 +317,10 @@ type App struct {
 	// TagPattern. See gitsrc.DeployOnBranch and migration 0041.
 	DeployTrigger string `json:"deploy_trigger"`
 	TagPattern    string `json:"tag_pattern"`
+	// RunAsUser is the uid an image that names its user runs as, so the
+	// kubelet can see it is not root. 0 leaves it to the image. See
+	// kube.Confinement and migration 0046.
+	RunAsUser int `json:"run_as_user"`
 	// Internal is reachable by name from the environment's other apps and
 	// from nowhere else: no automatic address, no Ingress.
 	Internal bool `json:"internal"`

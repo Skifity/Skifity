@@ -486,6 +486,8 @@ func describePod(pod corev1.Pod) Instance {
 			inst.Message = cs.State.Waiting.Message
 			if RunsAsRootRefusal(inst.Message) {
 				inst.Message = ExplainImageRunsAsRoot()
+			} else if NamedUserRefusal(inst.Message) {
+				inst.Message = ExplainNamedUser(inst.Message)
 			}
 		case cs.State.Terminated != nil:
 			inst.Status = cs.State.Terminated.Reason
@@ -544,7 +546,7 @@ func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, st
 			}
 			// describePod has already replaced the kubelet's wording, so this
 			// matches what the panel will show rather than what it was sent.
-			if inst.Message == ExplainImageRunsAsRoot() {
+			if inst.Message == ExplainImageRunsAsRoot() || strings.HasPrefix(inst.Message, namedUserPrefix) {
 				return "failed", inst.Message
 			}
 			// describePod has already turned the scheduler's own message into

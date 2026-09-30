@@ -65,6 +65,7 @@ export function settingsKey(app: App): string {
     app.watch_paths,
     app.deploy_trigger,
     app.tag_pattern,
+    app.run_as_user,
     app.internal,
   ])
 }
@@ -94,6 +95,10 @@ export function SettingsTab({ app }: { app: App }) {
   const [deployTrigger, setDeployTrigger] = useState(app.deploy_trigger)
   const [tagPattern, setTagPattern] = useState(app.tag_pattern)
   const [internal, setInternal] = useState(app.internal)
+  const [runAsUser, setRunAsUser] = useState(app.run_as_user ? String(app.run_as_user) : "")
+  // An image this panel built always runs as 1000; the uid is for anybody
+  // else's image, and the API refuses it for the rest.
+  const builtHere = app.source_type === "git" || app.source_type === "upload"
 
   const save = useMutation({
     mutationFn: () =>
@@ -120,6 +125,7 @@ export function SettingsTab({ app }: { app: App }) {
         deploy_trigger: deployTrigger,
         tag_pattern: tagPattern.trim(),
         internal,
+        ...(builtHere ? {} : { run_as_user: Number(runAsUser) || 0 }),
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
   })
@@ -344,6 +350,22 @@ export function SettingsTab({ app }: { app: App }) {
             />
             <FieldDescription>{t("apps.releaseCommandHelp")}</FieldDescription>
           </Field>
+
+          {!builtHere && (
+            <Field>
+              <FieldLabel htmlFor="settings-run-as-user">{t("apps.runAsUser")}</FieldLabel>
+              <Input
+                id="settings-run-as-user"
+                type="number"
+                min={0}
+                value={runAsUser}
+                onChange={(event) => setRunAsUser(event.target.value)}
+                placeholder={t("apps.runAsUserPlaceholder")}
+                className="w-48 font-mono"
+              />
+              <FieldDescription>{t("apps.runAsUserHelp")}</FieldDescription>
+            </Field>
+          )}
 
           <Field orientation="horizontal">
             <FieldContent>

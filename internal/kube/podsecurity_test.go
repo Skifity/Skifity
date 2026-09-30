@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +26,46 @@ func TestOnlyAnImageWeBuiltGetsItsUidPinned(t *testing.T) {
 			t.Errorf("at %q somebody else's image was pinned to uid %d instead of its own USER",
 				level, *uid)
 		}
+	}
+}
+
+// An image that names its user — USER nobody — is refused at the strict
+// level, because the kubelet cannot see a name is not root. A uid given for
+// it is pinned, and only the uid: the group stays the image's, which an
+// OpenShift-style image makes root's on purpose.
+func TestAGivenUidIsPinnedForSomebodyElsesImage(t *testing.T) {
+	for _, level := range PodSecurityLevels {
+		c := Confinement{Level: level, User: 65534}
+		if uid := c.RunAsUser(); uid == nil || *uid != 65534 {
+			t.Errorf("at %q the uid given was not pinned: %v", level, uid)
+		}
+		if gid := c.RunAsGroup(); gid != nil {
+			t.Errorf("at %q the group was pinned to %d instead of left to the image", level, *gid)
+		}
+	}
+	// Built here, the builders' 1000 wins: the setting is for an image
+	// somebody else made.
+	built := Confinement{Level: PodSecurityRestricted, BuiltHere: true, User: 65534}
+	if uid := built.RunAsUser(); uid == nil || *uid != 1000 {
+		t.Errorf("an image built here ran as %v", uid)
+	}
+	if gid := built.RunAsGroup(); gid == nil || *gid != 1000 {
+		t.Errorf("an image built here has the group %v", gid)
+	}
+	// Root is never pinned.
+	for _, user := range []int{0, -1} {
+		if uid := (Confinement{User: user}).RunAsUser(); uid != nil {
+			t.Errorf("user %d pinned uid %d", user, *uid)
+		}
+	}
+
+	message := `container has runAsNonRoot and image has non-numeric user (nobody), cannot verify user is non-root (pod: "web-1", container: web)`
+	if !NamedUserRefusal(message) || RunsAsRootRefusal(message) {
+		t.Fatal("the kubelet's named-user refusal is not recognised as itself")
+	}
+	if got := ExplainNamedUser(message); !strings.HasPrefix(got, namedUserPrefix+"nobody)") ||
+		!strings.Contains(got, "Run as user") {
+		t.Errorf("the explanation is %q", got)
 	}
 }
 
