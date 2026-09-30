@@ -203,6 +203,23 @@ type Service struct {
 	CPULimitM    int               `json:"cpu_limit_m,omitempty"`
 	// Public means this service gets a domain; a worker does not.
 	Public bool `json:"public"`
+	// Command replaces how the image starts, run by /bin/sh -c: authentik's
+	// worker is its server's image started differently. Empty keeps the
+	// image's own, which is almost always what is wanted.
+	Command string `json:"command,omitempty"`
+	// Files are mounted read-only at their paths: the prometheus.yml,
+	// the Caddyfile, the settings file an image reads and has no variable
+	// for. Plenty of software is configured no other way.
+	Files []FileSpec `json:"files,omitempty"`
+}
+
+// FileSpec is a file a template's service reads.
+type FileSpec struct {
+	Path       string `json:"path"`
+	Content    string `json:"content"`
+	Executable bool   `json:"executable,omitempty"`
+	// Secret hides the content once installed, as a secret variable is.
+	Secret bool `json:"secret,omitempty"`
 }
 
 // VolumeSpec is persistent storage a template needs.
@@ -225,6 +242,35 @@ type DatabaseSpec struct {
 	// starts without the variable it cannot run without.
 	LinkTo  []string `json:"link_to"`
 	VarName string   `json:"var_name"`
+	// Vars delivers the connection in pieces as well, for software that
+	// asks for a host, a port, a user and a password and has no setting for
+	// a URL — Snipe-IT, Matomo, EspoCRM and a good part of what is written
+	// in PHP. Each names the variable that piece arrives as; one left empty
+	// is not delivered.
+	Vars DatabaseVars `json:"vars,omitempty"`
+}
+
+// DatabaseVars names the variables a database's connection arrives as, piece
+// by piece.
+type DatabaseVars struct {
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// Pieces returns the named pieces as variable name to what it carries.
+func (v DatabaseVars) Pieces() map[string]string {
+	out := map[string]string{}
+	for piece, name := range map[string]string{
+		"host": v.Host, "port": v.Port, "name": v.Name, "user": v.User, "password": v.Password,
+	} {
+		if name != "" {
+			out[name] = piece
+		}
+	}
+	return out
 }
 
 // Input is a value asked for at install time.

@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
@@ -81,6 +82,7 @@ func (s *Server) installTemplate(
 			MemRequestMB:  orDefault(svc.MemRequestMB, 128),
 			MemLimitMB:    orDefault(svc.MemLimitMB, 512),
 			AutoDeploy:    false,
+			StartCommand:  svc.Command,
 			// A template says which of its services the public reaches.
 			// This was read and never used, so a search index or a worker
 			// with a port got a public address like the app in front of it.
@@ -111,6 +113,11 @@ func (s *Server) installTemplate(
 				if err := s.setTemplateVariable(r, app.ID, input.Key, value, input.Secret); err != nil {
 					return result, err
 				}
+			}
+		}
+		for _, file := range svc.Files {
+			if err := s.setTemplateFile(r, app.ID, file); err != nil {
+				return result, err
 			}
 		}
 		for _, vol := range svc.Volumes {
@@ -160,6 +167,9 @@ func (s *Server) installTemplate(
 				return result, err
 			}
 		}
+		if err := s.setDatabasePieces(r, record.ID, spec, created); err != nil {
+			return result, err
+		}
 	}
 
 	// Deploy only once everything is wired up.
@@ -186,6 +196,51 @@ func (s *Server) setTemplateVariable(r *http.Request, appID, key, value string, 
 	}
 	variable := store.Variable{AppID: appID, Key: cleanKey, IsSecret: secret}
 	return s.db.SetVariable(r.Context(), &variable, sealed)
+}
+
+// setTemplateFile saves one of a template service's files on its app.
+func (s *Server) setTemplateFile(r *http.Request, appID string, file templates.FileSpec) error {
+	if err := kube.ValidateFilePath(file.Path); err != nil {
+		return errdoc.BadRequest(err.Error())
+	}
+	sealed, err := s.keyring.Seal([]byte(file.Content), store.FileContext(appID, file.Path))
+	if err != nil {
+		return err
+	}
+	return s.db.SetFile(r.Context(), &store.AppFile{
+		AppID: appID, Path: file.Path, Size: len(file.Content),
+		IsSecret: file.Secret, Executable: file.Executable,
+	}, sealed)
+}
+
+// setDatabasePieces delivers a database's connection in pieces to the
+// services it is linked to, for software with no setting for a URL.
+//
+// They are variables of the app, written once here, where the URL is a link
+// the panel keeps: unlinking the database does not remove them. The password
+// is a secret like the URL it is part of.
+func (s *Server) setDatabasePieces(r *http.Request, databaseID string, spec templates.DatabaseSpec, created map[string]store.App) error {
+	pieces := spec.Vars.Pieces()
+	if len(pieces) == 0 {
+		return nil
+	}
+	credentials, err := s.databases.Credentials(r.Context(), databaseID)
+	if err != nil {
+		return err
+	}
+	values := map[string]string{
+		"host": credentials.Host, "port": strconv.Itoa(credentials.Port), "name": credentials.Database,
+		"user": credentials.Username, "password": credentials.Password,
+	}
+	for _, target := range spec.LinkTo {
+		app := created[target]
+		for name, piece := range pieces {
+			if err := s.setTemplateVariable(r, app.ID, name, values[piece], piece == "password"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func orDefault(v, fallback int) int {

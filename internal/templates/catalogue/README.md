@@ -25,12 +25,25 @@ services:
     mem_limit_mb: 1024
     cpu_request_m: 50
     cpu_limit_m: 1000
+    command: example serve --port 8080   # optional; replaces how the image starts
+    files:                       # optional; mounted read-only at each path
+      - path: /etc/example/config.yml
+        content: |
+          listen: 0.0.0.0:8080
+        executable: false        # true for a script the image runs at start
+        secret: false            # true hides the content once installed
 databases:                       # optional; created before the app starts
   - name: example-db
     engine: postgres             # postgres, mysql or redis
     storage_gb: 5
     link_to: [example, worker]   # every service that needs it, not just one
     var_name: DATABASE_URL       # how the connection string arrives
+    vars:                        # optional; the same connection in pieces
+      host: DB_HOST
+      port: DB_PORT
+      name: DB_DATABASE
+      user: DB_USERNAME
+      password: DB_PASSWORD
 inputs:                          # optional; asked for at install time
   - key: SECRET_KEY
     label: Secret key
@@ -69,6 +82,24 @@ volume is shared; a Skifity volume belongs to one app and is read-write-once, so
 two apps mounting the same path get two different directories. Where that
 matters, say so in `notes` and point people at object storage.
 
+## A command, files, and a database in pieces
+
+Three things software written for Compose takes for granted, and a template can
+ask for:
+
+* **`command`** replaces how the image starts, and is run by `/bin/sh -c`. It
+  is for one image started two ways — a server and its worker — not for
+  repeating the image's own default. An image with no shell cannot take one.
+* **`files`** are mounted read-only at their paths, each replacing only that
+  file: a `prometheus.yml`, a `Caddyfile`, a settings file the software reads
+  and has no variable for. Configuration-sized: 256 KiB each, 900 KiB per
+  service. A test checks every path can be mounted.
+* **`vars`** under a database delivers its connection as a host, a port, a
+  database name, a user and a password, for software that asks for those and
+  has no setting for a URL. Each piece arrives under the name given; the
+  password as a secret. They are written once at install, unlike `var_name`,
+  which the panel keeps linked.
+
 ## The two rules that are not obvious
 
 **Name a version.** `latest` is not a version: two deploys of the same app would
@@ -86,9 +117,10 @@ somebody's branch is not a version of the application, however precise it looks.
 
 **Do not wire the database by hand.** A Compose file points services at each
 other by name (`DB_HOST=mariadb`). There is no sibling container here — the
-database is a managed one and arrives as the `var_name` above — so a variable
-like `DB_HOST`, `REDIS_PORT` or `MB_DB_URL` points at nothing and the app will
-crash-loop with a hostname nobody recognises. A test refuses those too.
+database is a managed one and arrives as the `var_name` above, or in pieces
+through `vars` — so a variable like `DB_HOST`, `REDIS_PORT` or `MB_DB_URL`
+written by hand points at nothing and the app will crash-loop with a hostname
+nobody recognises. A test refuses those too.
 
 ## What the tests check
 
