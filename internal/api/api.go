@@ -312,6 +312,7 @@ func (s *Server) routes() chi.Router {
 				// Several at once, one rollout: a pasted .env, `env import`.
 				app.Post("/variables/batch", s.handleChangeVariables)
 				app.Delete("/variables/{key}", s.handleDeleteVariable)
+				app.Put("/variables/{key}/preview", s.handleSetVariablePreview)
 				app.Get("/domains", s.handleListDomains)
 				app.Post("/domains", s.handleAddDomain)
 				app.Delete("/domains/{domainID}", s.handleDeleteDomain)

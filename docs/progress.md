@@ -4711,6 +4711,37 @@ an empty group list and a demotion.
 
 Not executed: a sign-in against a real provider sending groups.
 
+## Phase 93 — what a preview gets for each variable
+
+Half of gap 8. Vercel, Netlify, Railway, Render and Coolify all let a value be
+different in previews. Skifity copied every variable of the app into a pull
+request's preview — the database link excepted since Phase 76 — so a branch got
+the live payment key and the production mail settings, and a preview could
+charge real cards or write to real customers.
+
+A variable now says what previews get: the same value (the default), a value of
+their own, or nothing (migration 0023). The preview's own value is sealed like
+the variable, under a context of its own so the two ciphertexts cannot be
+swapped, and it is listed with the other sealed columns so key rotation
+rewraps it; the test that walks the schema for sealed columns holds that. A
+secret's preview value is never shown back, as the secret is not.
+`PUT /api/apps/{app}/variables/{key}/preview` sets it without rolling anything
+out, since the app does not change. `copyPreviewVariables` reads it when a
+preview is made; the fork rule still comes first, so a fork gets no secret
+variable whatever its preview value.
+
+The Variables tab marks a variable whose previews differ and sets it from a
+dialog; an empty box for a secret's preview value is "not typed yet", so saving
+it is disabled rather than blanking the value.
+
+Tested through the preview webhook path: the preview gets the test key, not
+the live one; does not get the variable marked none; gets the same value for
+one left alone; the app's own value is untouched; an unknown variable is 404
+and an unknown mode 400; and the list hides a secret's preview value while
+showing the modes.
+
+Still open from gap 8: previews of several apps together, with a seed step.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

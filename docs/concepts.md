@@ -354,6 +354,22 @@ you can see it, rather than quietly connecting somewhere it should not.
 A pull request from a fork gets no database and no secret variables, since
 anybody can open one.
 
+### A preview's variables
+
+A preview starts with the app's variables — unless the app says otherwise, one
+variable at a time, with the pull-request icon beside it on the **Variables**
+tab. A preview can get:
+
+* **the same value**, which is the default;
+* **a value of its own** — the payment provider's test key rather than the live
+  one, a sandbox mail server, a staging API; or
+* **nothing**, for a variable a preview should not have at all.
+
+A value of its own is sealed like the variable itself, and a secret's is as
+hidden as the secret. It is read when a preview is made, so previews already
+running keep what they were given and the next one made gets the new setting.
+The app itself never changes when you set these.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

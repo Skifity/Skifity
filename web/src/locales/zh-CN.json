@@ -290,7 +290,8 @@
       "shared_variables.changed": "已更改共享变量",
       "team.strong_auth_required": "已要求团队使用双重验证",
       "team.strong_auth_relaxed": "已取消团队的双重验证要求",
-      "team.member_synced": "已按单点登录群组调整成员身份"
+      "team.member_synced": "已按单点登录群组调整成员身份",
+      "variable.preview_set": "已更改变量在预览中的取值"
     }
   },
   "projects": {
@@ -522,7 +523,19 @@
     "invalidKey": "名称只能包含字母、数字和下划线，且不能以数字开头。",
     "rebuildQueued": "已保存。该值会写入镜像，因此正在重新构建应用。",
     "deleteConfirm": "应用会在没有它的情况下重新上线。",
-    "deleteSecretConsequence": "这个值已被封存，无法再读出来，所以你需要回到它的来源重新填一次。"
+    "deleteSecretConsequence": "这个值已被封存，无法再读出来，所以你需要回到它的来源重新填一次。",
+    "previewTitle": "预览中的 {{key}}",
+    "previewHelp": "拉取请求的预览为这个变量获得什么。每个预览都带着正式支付密钥，就是一个分支向真实银行卡扣款的方式。它在创建预览时读取，所以已经在运行的预览保留原来得到的值。",
+    "previewMode": "预览获得",
+    "previewSame": "相同的值",
+    "previewOwn": "自己的值",
+    "previewNone": "不提供",
+    "previewValue": "预览使用的值",
+    "previewSecretPlaceholder": "已隐藏。输入预览应获得的值。",
+    "previewBadge": {
+      "value": "预览中使用自己的值",
+      "none": "预览中不提供"
+    }
   },
   "domains": {
     "title": "域名",

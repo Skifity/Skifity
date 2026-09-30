@@ -717,10 +717,17 @@ func (s *Server) handleListVariables(w http.ResponseWriter, r *http.Request) {
 		v := row.Variable
 		if v.IsSecret {
 			// A secret is never shown again after it is set. This is the whole
-			// point of storing it encrypted.
+			// point of storing it encrypted. Nor is its preview value.
 			v.Value = ""
-		} else if plaintext, err := s.keyring.Open(row.Sealed, variableContext(app.ID, v.Key)); err == nil {
-			v.Value = string(plaintext)
+		} else {
+			if plaintext, err := s.keyring.Open(row.Sealed, variableContext(app.ID, v.Key)); err == nil {
+				v.Value = string(plaintext)
+			}
+			if v.PreviewMode == store.PreviewValue && row.PreviewSealed != "" {
+				if plaintext, err := s.keyring.Open(row.PreviewSealed, previewVariableContext(app.ID, v.Key)); err == nil {
+					v.PreviewValue = string(plaintext)
+				}
+			}
 		}
 		out = append(out, v)
 	}
@@ -993,6 +1000,61 @@ func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret ma
 		batch.keys = append(batch.keys, "-"+key)
 	}
 	return batch, nil
+}
+
+type variablePreviewRequest struct {
+	// Mode is "same", "value" or "none".
+	Mode  string `json:"mode"`
+	Value string `json:"value,omitempty"`
+}
+
+// handleSetVariablePreview says what a pull request's preview gets for one
+// variable: the app's own value, a value of its own, or nothing.
+//
+// Copying every value is how a branch ends up charging real cards with the
+// live payment key or mailing real customers. A preview-only value is the
+// test key; none is a variable a preview should not have at all. Nothing is
+// rolled out: the app itself does not change, and the next preview made is
+// the first to see it.
+func (s *Server) handleSetVariablePreview(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	key := chi.URLParam(r, "key")
+	var req variablePreviewRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	mode, sealed := store.PreviewSame, ""
+	switch req.Mode {
+	case "", "same":
+	case store.PreviewNone:
+		mode = store.PreviewNone
+	case store.PreviewValue:
+		mode = store.PreviewValue
+		if sealed, err = s.keyring.Seal([]byte(req.Value), previewVariableContext(app.ID, key)); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	default:
+		writeError(w, r, errdoc.BadRequest(`A preview gets "same", its own "value", or "none".`))
+		return
+	}
+	if err := s.db.SetVariablePreview(r.Context(), app.ID, key, mode, sealed); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, r, errdoc.NotFound("variable", key))
+			return
+		}
+		writeError(w, r, err)
+		return
+	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	// The key and the mode, never the value.
+	s.audit(r, teamID, "variable.preview_set", "app", app.ID, key+": "+defaultString(mode, "same"))
+	writeOK(w)
 }
 
 func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
@@ -1506,6 +1568,12 @@ func (s *Server) handleDeleteVolume(w http.ResponseWriter, r *http.Request) {
 // variableContext and sharedVariableContext bind a sealed value to exactly one
 // row, so a ciphertext copied between rows cannot be decrypted.
 func variableContext(appID, key string) string { return "variable:" + appID + ":" + key }
+
+// previewVariableContext is a variable's preview value's own context, so the
+// one ciphertext cannot be moved into the other's column and read as it.
+func previewVariableContext(appID, key string) string {
+	return "variable_preview:" + appID + ":" + key
+}
 func sharedVariableContext(projectID, key string) string {
 	return "shared_variable:" + projectID + ":" + key
 }

@@ -139,6 +139,7 @@ POST   /api/apps/{app}/jobs                   add one (name, schedule, command)
 GET    /api/apps/{app}/variables              variables
 PUT    /api/apps/{app}/variables              set one
 POST   /api/apps/{app}/variables/batch        set and remove several, all or none, one rollout
+PUT    /api/apps/{app}/variables/{key}/preview what previews get: same, value, or none
 GET    /api/apps/{app}/domains                domains
 POST   /api/apps/{app}/domains                add one
 GET    /api/apps/{app}/scaling                scaling

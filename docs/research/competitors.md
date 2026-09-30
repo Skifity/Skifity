@@ -131,7 +131,7 @@ here, or needs `make verify` on a real server.
 | 5 | The environment described in a file in the repository (`skifity.yaml`), with plan and apply | Render, DigitalOcean, Porter, Railway, Portainer | L | Yes |
 | 6 | A Compose file deployed as one stack of apps | Coolify, CapRover, Sealos, Render | M | Yes, except running it |
 | 7 | Promote the exact image from one environment to the next | Heroku, Northflank, Vercel, Render | M | Mostly |
-| 8 | Preview-only variable values; previews of the whole stack with a seed step | Vercel, Netlify, Railway, Render, Coolify | M | Yes |
+| 8 | **Half closed in Phase 93** (preview-only values). Still open: previews of the whole stack with a seed step | Vercel, Netlify, Railway, Render, Coolify | M | Yes |
 | 9 | Honour a Procfile's `release` and `worker` lines and `app.json` | Heroku | M | Yes |
 | 10 | Several processes (web, worker) from one build; service types in the new-app form | Fly, Dokku, Render | M–L | Manifests yes |
 | 11 | `skifity db connect`: reach a private database from a laptop | Coolify, Fly, Sealos, Epinio | M | Partly |

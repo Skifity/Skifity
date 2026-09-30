@@ -221,6 +221,7 @@ export function AppDetailPage() {
             base={`/api/apps/${appId}`}
             queryKey={["variables", appId]}
             showBuildTime
+            showPreviews
           />
         </TabsContent>
         <TabsContent value="domains" className="pt-4">

@@ -315,7 +315,20 @@ type Variable struct {
 	BuildTime bool      `json:"build_time"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// PreviewMode is what a pull request's preview gets: PreviewSame (the
+	// empty default) is this value, PreviewValue is PreviewValue, and
+	// PreviewNone is nothing.
+	PreviewMode string `json:"preview_mode,omitempty"`
+	// PreviewValue is shown only for a variable that is not a secret.
+	PreviewValue string `json:"preview_value,omitempty"`
 }
+
+// What a preview gets for a variable.
+const (
+	PreviewSame  = ""
+	PreviewValue = "value"
+	PreviewNone  = "none"
+)
 
 // SharedVariable is a project-wide variable inherited by every app in it.
 type SharedVariable struct {

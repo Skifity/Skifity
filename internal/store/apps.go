@@ -280,11 +280,29 @@ func (db *DB) ChangeVariables(ctx context.Context, appID string, set []VariableC
 type variableRow struct {
 	Variable
 	Sealed string
+	// PreviewSealed is the preview's own value, when PreviewMode says it has
+	// one.
+	PreviewSealed string
+}
+
+// SetVariablePreview says what a preview gets for one of an app's variables.
+// sealed is the preview's own value for PreviewValue, and empty otherwise.
+func (db *DB) SetVariablePreview(ctx context.Context, appID, key, mode, sealed string) error {
+	res, err := db.Exec(ctx, `UPDATE app_variables SET preview_mode = ?, preview_value_enc = ?, updated_at = ?
+		WHERE app_id = ? AND key = ?`, mode, sealed, Now(), appID, key)
+	if err != nil {
+		return fmt.Errorf("set a variable's preview value: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ListVariables returns an app's variables with their sealed values.
 func (db *DB) ListVariables(ctx context.Context, appID string) ([]variableRow, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at
+	rows, err := db.QueryContext(ctx, `SELECT id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at,
+		preview_mode, preview_value_enc
 		FROM app_variables WHERE app_id = ? ORDER BY key`, appID)
 	if err != nil {
 		return nil, fmt.Errorf("list variables: %w", err)
@@ -294,7 +312,8 @@ func (db *DB) ListVariables(ctx context.Context, appID string) ([]variableRow, e
 	for rows.Next() {
 		var r variableRow
 		var created, updated string
-		if err := rows.Scan(&r.ID, &r.AppID, &r.Key, &r.Sealed, &r.IsSecret, &r.BuildTime, &created, &updated); err != nil {
+		if err := rows.Scan(&r.ID, &r.AppID, &r.Key, &r.Sealed, &r.IsSecret, &r.BuildTime, &created, &updated,
+			&r.PreviewMode, &r.PreviewSealed); err != nil {
 			return nil, fmt.Errorf("scan variable: %w", err)
 		}
 		r.CreatedAt, _ = ParseTime(created)
@@ -418,6 +437,7 @@ type sealedSource struct {
 
 var sealedSources = []sealedSource{
 	{table: "app_variables", valueCol: "value_enc", ctxPrefix: "variable"},
+	{table: "app_variables", valueCol: "preview_value_enc", ctxPrefix: "variable_preview"},
 	{table: "shared_variables", valueCol: "value_enc", ctxPrefix: "shared_variable"},
 	{table: "servers", valueCol: "ssh_key_enc", ctxPrefix: "server_key"},
 	{table: "databases", valueCol: "credentials_enc", ctxPrefix: "database_credentials"},

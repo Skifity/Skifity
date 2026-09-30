@@ -298,7 +298,8 @@
       "shared_variables.changed": "Shared variables changed",
       "team.strong_auth_required": "Two-factor required for the team",
       "team.strong_auth_relaxed": "Two-factor no longer required for the team",
-      "team.member_synced": "Membership brought in line with single sign-on groups"
+      "team.member_synced": "Membership brought in line with single sign-on groups",
+      "variable.preview_set": "What previews get for a variable changed"
     }
   },
   "projects": {
@@ -530,7 +531,19 @@
     "invalidKey": "A name can only contain letters, digits and underscores, and cannot start with a digit.",
     "rebuildQueued": "Saved. This value is baked into the image, so the app is being rebuilt.",
     "deleteConfirm": "The app is rolled out again without it.",
-    "deleteSecretConsequence": "This value is sealed and cannot be read back, so you will have to enter it again from wherever it came from."
+    "deleteSecretConsequence": "This value is sealed and cannot be read back, so you will have to enter it again from wherever it came from.",
+    "previewTitle": "{{key}} in previews",
+    "previewHelp": "What a pull request's preview gets for this variable. The live payment key in every preview is how a branch charges real cards. It is read when a preview is made, so the ones already running keep what they were given.",
+    "previewMode": "Previews get",
+    "previewSame": "The same value",
+    "previewOwn": "A value of their own",
+    "previewNone": "Nothing",
+    "previewValue": "Value for previews",
+    "previewSecretPlaceholder": "Hidden. Type the value previews should get.",
+    "previewBadge": {
+      "value": "Own value in previews",
+      "none": "Not in previews"
+    }
   },
   "domains": {
     "title": "Domains",

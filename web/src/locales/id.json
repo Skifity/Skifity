@@ -290,7 +290,8 @@
       "shared_variables.changed": "Variabel bersama diubah",
       "team.strong_auth_required": "Dua faktor diwajibkan untuk tim",
       "team.strong_auth_relaxed": "Dua faktor tidak lagi diwajibkan untuk tim",
-      "team.member_synced": "Keanggotaan disesuaikan dengan grup single sign-on"
+      "team.member_synced": "Keanggotaan disesuaikan dengan grup single sign-on",
+      "variable.preview_set": "Isi variabel untuk preview diubah"
     }
   },
   "projects": {
@@ -522,7 +523,19 @@
     "invalidKey": "Nama hanya boleh berisi huruf, angka, dan garis bawah, serta tidak boleh diawali angka.",
     "rebuildQueued": "Disimpan. Nilai ini ikut tertanam di image, jadi aplikasi sedang dibangun ulang.",
     "deleteConfirm": "Aplikasi akan di-rollout ulang tanpa variabel ini.",
-    "deleteSecretConsequence": "Nilai ini tersegel dan tidak bisa dibaca lagi, jadi kamu harus memasukkannya ulang dari sumber aslinya."
+    "deleteSecretConsequence": "Nilai ini tersegel dan tidak bisa dibaca lagi, jadi kamu harus memasukkannya ulang dari sumber aslinya.",
+    "previewTitle": "{{key}} di preview",
+    "previewHelp": "Apa yang didapat preview pull request untuk variabel ini. Kunci pembayaran live di setiap preview adalah cara sebuah branch menagih kartu sungguhan. Dibaca saat preview dibuat, jadi preview yang sudah berjalan tetap memakai apa yang diberikan kepadanya.",
+    "previewMode": "Preview mendapat",
+    "previewSame": "Nilai yang sama",
+    "previewOwn": "Nilai sendiri",
+    "previewNone": "Tidak ada",
+    "previewValue": "Nilai untuk preview",
+    "previewSecretPlaceholder": "Tersembunyi. Ketik nilai yang harus didapat preview.",
+    "previewBadge": {
+      "value": "Nilai sendiri di preview",
+      "none": "Tidak ada di preview"
+    }
   },
   "domains": {
     "title": "Domain",

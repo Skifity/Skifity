@@ -340,7 +340,17 @@ func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string
 		if linked[row.Key] {
 			continue
 		}
-		plaintext, err := s.keyring.Open(row.Sealed, variableContext(fromAppID, row.Key))
+		// What the app said its previews get: nothing, a value of their own
+		// — the test key rather than the live one — or its own.
+		var plaintext []byte
+		switch row.PreviewMode {
+		case store.PreviewNone:
+			continue
+		case store.PreviewValue:
+			plaintext, err = s.keyring.Open(row.PreviewSealed, previewVariableContext(fromAppID, row.Key))
+		default:
+			plaintext, err = s.keyring.Open(row.Sealed, variableContext(fromAppID, row.Key))
+		}
 		if err != nil {
 			return err
 		}
