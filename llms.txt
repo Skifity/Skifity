@@ -92,7 +92,8 @@ with that token, so it can do exactly what the token can. `deploy_folder` is not
 offered there: it would read the panel's disk, not yours.
 
 Every tool is annotated: read-only or not, and if not, whether it can destroy
-something (a deploy, a rollback, a command, an overwritten variable).
+something (a deploy, a rollback, a command, an overwritten variable or file, a
+removed domain or port, a backup that rotates out the oldest).
 
 Tools, in the order they are usually needed:
 
@@ -101,6 +102,8 @@ Tools, in the order they are usually needed:
 | `list_projects` | Projects and the environments inside them. Where an app goes. |
 | `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
 | `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
+| `list_templates` | Searches the one-click catalogue by words or category: what each template creates and the inputs it takes. |
+| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
 | `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
@@ -109,11 +112,35 @@ Tools, in the order they are usually needed:
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
 | `list_variables` | An app's variables. Secret values are never returned. |
 | `set_variable` | Sets one. Says whether it causes a rebuild. |
+| `set_variables` | Sets and removes several at once: all or none, one rollout. |
+| `delete_variable` | Removes one. |
+| `list_files` | The files an app reads at a path, and one file's content. A secret file's content is never returned. |
+| `set_file` | Saves a config file at a path, or replaces it. Rolled out, never rebuilt. |
+| `list_databases` | The managed databases in an environment. |
+| `create_database` | Creates a PostgreSQL, Redis or MySQL database. |
+| `link_database` | Gives an app a database's connection string as a secret variable. |
+| `get_database_status` | Whether a database is running, and which apps use it. Never the password. |
+| `list_backups` | A database's or an app's volumes' backups, newest first. |
+| `run_backup` | Backs one up now. Counts against the retention, so the oldest may go. |
+| `list_domains` | The hostnames an app answers on, and the DNS record each of your own needs. |
+| `add_domain` | Puts an app on a hostname, with HTTPS. Returns the DNS record to create. |
+| `remove_domain` | Takes one off. |
+| `list_ports` | Ports that are not HTTP, and the addresses they are reached at. |
+| `open_port` | Opens a TCP or UDP port on every server. |
+| `close_port` | Closes one. |
 | `scale_app` | Changes the instance count or turns on autoscaling. |
 | `set_process` | Runs a worker or other process beside an app, on its image, or changes one. |
 | `check_scaling_readiness` | What would break if this app ran more than one instance. |
 | `rollback_app` | Restores a previous version's image and settings. |
+| `lock_deploys` | Stops every deploy and rollback of an app, with a reason, until it is unlocked. |
+| `unlock_deploys` | Lifts that. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
+
+Two things are deliberately not tools. A database's password: an app gets its
+connection string from `link_database`, and a password that has been in an
+assistant's context cannot be taken back out. And restoring a backup: it
+replaces everything with an older copy and has no undo, so the panel asks a
+person to confirm it in words, and an assistant finds the backup and says which.
 
 Every tool returns errors as a cause, an impact and a suggested fix, not a
 status code.

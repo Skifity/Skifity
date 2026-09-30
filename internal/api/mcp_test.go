@@ -206,3 +206,74 @@ func TestAnAssistantChangesAProcessCommandAndKeepsItsCount(t *testing.T) {
 		t.Fatalf("the process is now %+v", processes)
 	}
 }
+
+// The tools that take an app the rest of the way, through the panel's own
+// endpoint and its real handlers: what they send is what the API reads, and
+// what the API holds back stays held back on the way to an assistant.
+func TestAnAssistantConfiguresAnAppThroughThePanelsOwnMCPEndpoint(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	session := h.connectMCP(t, acme)
+	must := func(tool string, args map[string]any) string {
+		t.Helper()
+		text, failed := callText(t, session, tool, args)
+		if failed {
+			t.Fatalf("%s failed: %s", tool, text)
+		}
+		return text
+	}
+
+	// Several variables in one go, one of them a secret it never shows again.
+	must("set_variables", map[string]any{"app_id": app.ID, "set": []any{
+		map[string]any{"key": "GREETING", "value": "hello", "is_secret": false},
+		map[string]any{"key": "API_KEY", "value": "sk_test_not_a_real_key", "is_secret": true},
+	}})
+	if text := must("list_variables", map[string]any{"app_id": app.ID}); !strings.Contains(text, "hello") ||
+		strings.Contains(text, "sk_test_not_a_real_key") {
+		t.Fatalf("list_variables answered: %s", text)
+	}
+	must("delete_variable", map[string]any{"app_id": app.ID, "key": "GREETING"})
+	if variables, _ := h.db.ListVariables(t.Context(), app.ID); len(variables) != 1 || variables[0].Key != "API_KEY" {
+		t.Fatalf("the variables are now %+v", variables)
+	}
+
+	// A secret file, saved and not read back.
+	must("set_file", map[string]any{"app_id": app.ID, "path": "/app/secrets.yml",
+		"content": "token: not-a-real-token", "is_secret": true})
+	if text := must("list_files", map[string]any{"app_id": app.ID, "path": "/app/secrets.yml"}); strings.Contains(text, "not-a-real-token") {
+		t.Fatalf("a secret file was read back: %s", text)
+	}
+
+	// A domain of its own, and taking it off again.
+	must("add_domain", map[string]any{"app_id": app.ID, "hostname": "shop.example.test"})
+	domains, _ := h.db.ListDomains(t.Context(), app.ID)
+	if len(domains) != 1 || domains[0].Hostname != "shop.example.test" {
+		t.Fatalf("the domains are %+v", domains)
+	}
+	must("remove_domain", map[string]any{"app_id": app.ID, "domain_id": domains[0].ID})
+	if domains, _ := h.db.ListDomains(t.Context(), app.ID); len(domains) != 0 {
+		t.Fatalf("the domain is still there: %+v", domains)
+	}
+
+	// A port that is not HTTP, opened and closed.
+	must("open_port", map[string]any{"app_id": app.ID, "port": 25565, "protocol": "tcp"})
+	ports, _ := h.db.ListPorts(t.Context(), app.ID)
+	if len(ports) != 1 || ports[0].PublicPort != 25565 {
+		t.Fatalf("the ports are %+v", ports)
+	}
+	must("close_port", map[string]any{"app_id": app.ID, "port_id": ports[0].ID})
+	if ports, _ := h.db.ListPorts(t.Context(), app.ID); len(ports) != 0 {
+		t.Fatalf("the port is still open: %+v", ports)
+	}
+
+	// A lock, with the reason whoever finds it will read.
+	must("lock_deploys", map[string]any{"app_id": app.ID, "reason": "launch day"})
+	if lock, err := h.db.GetDeployLock(t.Context(), app.ID); err != nil || lock.Reason != "launch day" {
+		t.Fatalf("the lock is %+v (%v)", lock, err)
+	}
+	must("unlock_deploys", map[string]any{"app_id": app.ID})
+	if _, err := h.db.GetDeployLock(t.Context(), app.ID); err == nil {
+		t.Fatal("the app is still locked")
+	}
+}

@@ -75,18 +75,7 @@ func contains(names []string, want string) bool {
 // listTools asks a server for its tools the way an assistant's client does.
 func listTools(t *testing.T, s *Server) []*mcp.Tool {
 	t.Helper()
-	serverSide, clientSide := mcp.NewInMemoryTransports()
-	session, err := s.mcp.Connect(t.Context(), serverSide, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
-	client, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(t.Context(), clientSide, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = client.Close() })
-	result, err := client.ListTools(t.Context(), nil)
+	result, err := connect(t, s).ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,12 +87,18 @@ func listTools(t *testing.T, s *Server) []*mcp.Tool {
 // every such call, so an unannotated list_apps is a question nobody needed.
 // And a tool that changes something without saying whether it can destroy
 // something is one the client cannot weigh at all.
+//
+// The description is what the model reads to decide whether this is the tool
+// at all, so a tool without a real one is a tool chosen by its name alone.
 func TestEveryToolSaysWhatItDoes(t *testing.T) {
 	tools := listTools(t, New(cli.Config{PanelURL: "https://panel.example", Token: "skf_test"}))
-	if len(tools) < 10 {
+	if len(tools) < 30 {
 		t.Fatalf("only %d tools", len(tools))
 	}
 	for _, tool := range tools {
+		if len(strings.Fields(tool.Description)) < 12 {
+			t.Errorf("%s does not say what it does, what it returns and when to use it: %q", tool.Name, tool.Description)
+		}
 		a := tool.Annotations
 		if a == nil || a.Title == "" {
 			t.Errorf("%s says nothing about what it does", tool.Name)

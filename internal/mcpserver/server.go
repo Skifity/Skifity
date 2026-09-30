@@ -89,6 +89,11 @@ impact and a suggested fix; relay all three rather than only the first line.
 
 Changing an environment variable or the instance count does not rebuild the
 app, so those are cheap. Deploying a new commit does rebuild and takes minutes.
+
+For well-known software — WordPress, n8n, Uptime Kuma and a few hundred more —
+look in list_templates before building it by hand. A database is
+create_database and then link_database: the app gets its connection string as
+a secret variable, and nobody, you included, is shown the password.
 `),
 	})
 	s.register()
@@ -156,7 +161,7 @@ type createAppOutput struct {
 	Note         string `json:"note"`
 }
 
-type listAppsInput struct {
+type environmentInput struct {
 	EnvironmentID string `json:"environment_id,omitempty" jsonschema:"the environment to list; omitted means the default one"`
 }
 
@@ -487,6 +492,13 @@ func (s *Server) register() {
 		Annotations: reads("Check scaling readiness"),
 		Description: "Report what would break if this app ran more than one instance, such as local file storage or in-memory sessions, with a suggested fix for each.",
 	}, s.checkReadiness)
+
+	s.registerTemplates()
+	s.registerVariables()
+	s.registerFiles()
+	s.registerDatabases()
+	s.registerDomains()
+	s.registerLocks()
 }
 
 // --- handlers ---
@@ -581,7 +593,7 @@ func (s *Server) createApp(ctx context.Context, _ *mcp.CallToolRequest, in creat
 	return textResult(fmt.Sprintf("Created %s (%s). %s", out.Name, out.AppID, out.Note)), out, nil
 }
 
-func (s *Server) listApps(ctx context.Context, _ *mcp.CallToolRequest, in listAppsInput) (*mcp.CallToolResult, listAppsOutput, error) {
+func (s *Server) listApps(ctx context.Context, _ *mcp.CallToolRequest, in environmentInput) (*mcp.CallToolResult, listAppsOutput, error) {
 	environment := in.EnvironmentID
 	if environment == "" {
 		resolved, err := s.defaultEnvironment(ctx)
@@ -783,11 +795,19 @@ func (s *Server) listVariables(ctx context.Context, _ *mcp.CallToolRequest, in a
 
 	var out listVariablesOutput
 	for _, variable := range response.Items {
+		// The panel never sends a secret's value, and this does not rest on
+		// that alone: a value that has reached an assistant's context is in
+		// its provider's logs and can be repeated anywhere, and there is no
+		// taking it back.
+		value := variable.Value
+		if variable.IsSecret {
+			value = ""
+		}
 		out.Variables = append(out.Variables, struct {
 			Key      string `json:"key"`
 			Value    string `json:"value,omitempty"`
 			IsSecret bool   `json:"is_secret"`
-		}{Key: variable.Key, Value: variable.Value, IsSecret: variable.IsSecret})
+		}{Key: variable.Key, Value: value, IsSecret: variable.IsSecret})
 	}
 	out.Note = "Secrets are stored encrypted and are never returned. You can set a new value but not read the current one."
 	return textResult(fmt.Sprintf("%d variable(s).", len(out.Variables))), out, nil

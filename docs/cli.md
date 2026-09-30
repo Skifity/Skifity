@@ -443,6 +443,16 @@ something — a deploy replaces what is running, a variable is overwritten, a
 command does whatever it does — so an assistant's client can ask before those
 and not before `list_apps`.
 
+An assistant can take an app the whole way: install it from a template or
+create it, give it a database, set its variables and files, put it on a domain
+or open a port, back it up and lock its deploys. Two things it cannot do, on
+purpose. It is never shown a database's password: `link_database` gives the app
+its connection string as a secret variable, and a password that has been in an
+assistant's context is in its provider's logs for good. And it cannot restore a
+backup: a restore replaces everything with an older copy and cannot be undone,
+so it is done in the panel, where it asks for a person's confirmation in words.
+The assistant can list the backups and say which one.
+
 The tools are listed in [llms.txt](../llms.txt). They are named for what someone
 would ask for — `get_app_logs`, `check_scaling_readiness`, `rollback_app` — and
 every error comes back as a cause, an impact and a suggested fix rather than a
