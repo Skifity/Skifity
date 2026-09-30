@@ -214,6 +214,16 @@ func TestNoScriptPutsThePasswordOnACommandLine(t *testing.T) {
 		} {
 			dir := t.TempDir()
 			seen := filepath.Join(dir, "seen")
+			// The scripts work in /work, which a test run as anybody but root
+			// cannot create; a directory of its own serves the same.
+			script := strings.ReplaceAll(side.script, workspace, dir)
+			var archive bytes.Buffer
+			writer := gzip.NewWriter(&archive)
+			_, _ = writer.Write([]byte("header and some data\n"))
+			_ = writer.Close()
+			if err := os.WriteFile(filepath.Join(dir, filepath.Base(dumpFile)), archive.Bytes(), 0o600); err != nil {
+				t.Fatal(err)
+			}
 			// The stub writes its arguments and the environment variable it
 			// should have been given, and enough output for the script to go on.
 			stub := "#!/bin/sh\nprintf 'ARGS %s\\nENV %s\\n' \"$*\" \"$" + tool.env + "\" >> " + shellQuote(seen) +
@@ -221,7 +231,7 @@ func TestNoScriptPutsThePasswordOnACommandLine(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, side.tool), []byte(stub), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("sh", "-c", side.script)
+			cmd := exec.Command("sh", "-c", script)
 			cmd.Env = append(os.Environ(),
 				"PATH="+dir+":"+os.Getenv("PATH"),
 				"DB_NAME=shop", "DB_HOST=db.test", "DB_PORT=5432",
