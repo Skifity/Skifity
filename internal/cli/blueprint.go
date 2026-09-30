@@ -7,8 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"skifity/internal/blueprint"
 	"skifity/internal/errdoc"
@@ -70,6 +72,8 @@ func cmdBlueprint(ctx context.Context, command string, args []string, out io.Wri
 	}
 
 	applied, err := applySteps(ctx, client, state, steps, *asJSON, out)
+	// What was done, not what was planned: after a failure they differ.
+	create, change, _ = blueprint.Counts(applied)
 	if *asJSON {
 		answer := map[string]any{"file": where, "applied": applied, "create": create, "change": change, "note": note}
 		if err != nil {
@@ -143,6 +147,15 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 	}
 	state.Databases = databases.Items
 
+	// The team's Git connections, when the file names one for a repository.
+	if slices.ContainsFunc(slices.Collect(maps.Values(file.Apps)), func(app blueprint.App) bool { return app.Git != "" }) {
+		sources, err := gitSources(ctx, client, environment)
+		if err != nil {
+			return state, err
+		}
+		state.GitSources = sources
+	}
+
 	// Which app reads which database as what.
 	links := map[string]map[string]string{}
 	for _, database := range databases.Items {
@@ -174,6 +187,7 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 				{base + "/processes", &listOf[store.AppProcess]{}},
 				{base + "/domains", &listOf[store.Domain]{}},
 				{base + "/jobs", &listOf[store.AppJob]{}},
+				{base + "/deployments?limit=1", &listOf[store.Deployment]{}},
 			} {
 				if err := client.Do(ctx, "GET", part.path, nil, part.into); err != nil {
 					return state, err
@@ -187,6 +201,8 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 					one.Domains = list.Items
 				case *listOf[store.AppJob]:
 					one.Jobs = list.Items
+				case *listOf[store.Deployment]:
+					one.Deployed = len(list.Items) > 0
 				}
 			}
 		}
@@ -199,8 +215,27 @@ type listOf[T any] struct {
 	Items []T `json:"items"`
 }
 
+// gitSources are the Git connections of the team an environment is in.
+func gitSources(ctx context.Context, client *Client, environment string) ([]store.GitSource, error) {
+	var env store.Environment
+	if err := client.Do(ctx, "GET", "/api/environments/"+environment, nil, &env); err != nil {
+		return nil, err
+	}
+	var project store.Project
+	if err := client.Do(ctx, "GET", "/api/projects/"+env.ProjectID, nil, &project); err != nil {
+		return nil, err
+	}
+	var sources listOf[store.GitSource]
+	if err := client.Do(ctx, "GET", "/api/teams/"+project.TeamID+"/git-sources", nil, &sources); err != nil {
+		return nil, err
+	}
+	return sources.Items, nil
+}
+
 // applySteps sends each step's call in order, filling in the ids of what the
-// earlier ones made, and stops at the first that fails.
+// earlier ones made, and stops at the first that fails. A step with no call
+// that is not a note is part of the next call — the variables of one app are
+// sent together — and is done when that call is.
 func applySteps(ctx context.Context, client *Client, state blueprint.State, steps []blueprint.Step, quiet bool, out io.Writer) ([]blueprint.Step, error) {
 	ids := map[string]string{}
 	for _, app := range state.Apps {
@@ -210,23 +245,35 @@ func applySteps(ctx context.Context, client *Client, state blueprint.State, step
 		ids["database:"+database.Name], ids["database:"+database.Slug] = database.ID, database.ID
 	}
 
-	var applied []blueprint.Step
+	applied := []blueprint.Step{}
+	var batch []blueprint.Step
+	say := func(mark string, done []blueprint.Step) {
+		if quiet {
+			return
+		}
+		for _, step := range done {
+			fmt.Fprintf(out, "  %s %s\n", mark, describe(step))
+		}
+	}
 	for _, step := range steps {
 		if step.Call == nil {
-			if !quiet {
-				printStep(out, step)
+			if step.Op == "note" {
+				say(stepMarks["note"], []blueprint.Step{step})
+			} else {
+				batch = append(batch, step)
 			}
 			continue
 		}
+		done := append(batch, step)
+		batch = nil
 		call, err := blueprint.Resolve(*step.Call, ids)
 		if err != nil {
+			say("✗", done)
 			return applied, err
 		}
 		var answer json.RawMessage
 		if err := client.DoLong(ctx, call.Method, call.Path, call.Body, &answer); err != nil {
-			if !quiet {
-				fmt.Fprintf(out, "  ✗ %s\n", describe(step))
-			}
+			say("✗", done)
 			return applied, err
 		}
 		if call.Creates != "" {
@@ -236,10 +283,8 @@ func applySteps(ctx context.Context, client *Client, state blueprint.State, step
 			}
 			ids[call.Creates] = id
 		}
-		applied = append(applied, step)
-		if !quiet {
-			fmt.Fprintf(out, "  ✓ %s\n", describe(step))
-		}
+		applied = append(applied, done...)
+		say("✓", done)
 	}
 	return applied, nil
 }
@@ -272,8 +317,9 @@ func describe(step blueprint.Step) string {
 	text := step.Kind + " " + step.Name
 	switch {
 	case step.App == "" || step.Kind == "app" || step.Kind == "deploy":
-	case step.App == step.Name:
-		// An app's own settings and scaling: "web: scaling".
+	case step.Kind == "settings" || step.Kind == "scaling" || step.Kind == "source":
+		// The app's own settings, scaling and source: "web: scaling". A
+		// process named like its app is still "worker: process worker".
 		text = step.App + ": " + step.Kind
 	default:
 		text = step.App + ": " + text

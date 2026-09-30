@@ -638,6 +638,10 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	assignString(&app.Branch, req.Branch)
 	assignString(&app.RootDir, req.RootDir)
+	// As creating the app has it: a root is inside the repository, so a
+	// leading slash says nothing, and one kept would make "/apps/web" and
+	// "apps/web" two different settings.
+	app.RootDir = strings.TrimPrefix(app.RootDir, "/")
 	assignString(&app.Builder, req.Builder)
 	assignString(&app.DockerfilePath, req.DockerfilePath)
 	assignString(&app.Image, req.Image)
@@ -1388,9 +1392,7 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	hostname := strings.ToLower(strings.TrimSpace(req.Hostname))
-	hostname = strings.TrimPrefix(strings.TrimPrefix(hostname, "https://"), "http://")
-	hostname = strings.TrimSuffix(strings.Split(hostname, "/")[0], ".")
+	hostname := kube.CleanHostname(req.Hostname)
 	if !kube.ValidHostname(hostname) {
 		writeError(w, r, errdoc.BadRequest("That does not look like a domain name. Enter something like app.example.com."))
 		return

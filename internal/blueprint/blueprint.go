@@ -29,7 +29,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"skifity/internal/builder"
+	"skifity/internal/cron"
 	"skifity/internal/errdoc"
+	"skifity/internal/kube"
 )
 
 // FileName is where the CLI looks for a blueprint.
@@ -50,6 +52,9 @@ type App struct {
 	Branch string `json:"branch,omitempty"`
 	Root   string `json:"root,omitempty"`
 	Image  string `json:"image,omitempty"`
+	// Git is the name of the team's Git connection a private repository is
+	// read through, as it is listed under Settings. A public one needs none.
+	Git string `json:"git,omitempty"`
 
 	Builder    string `json:"builder,omitempty"`
 	Dockerfile string `json:"dockerfile,omitempty"`
@@ -141,7 +146,10 @@ type Database struct {
 }
 
 var (
-	validKey      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9_]{0,61}[a-z0-9])?$`)
+	// validKey is a name that is its own slug: an underscore or two hyphens
+	// would be folded into one hyphen by the panel, and the file would then
+	// name an app the environment calls something else.
+	validKey      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 	validVariable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
@@ -163,8 +171,11 @@ func Parse(data []byte) (File, error) {
 	}
 	for _, name := range sortedKeys(file.Databases) {
 		database := file.Databases[name]
-		if !validKey.MatchString(name) {
-			say("database %q: a name is lowercase letters, digits and hyphens", name)
+		if !validKey.MatchString(name) || strings.Contains(name, "--") {
+			say("database %q: a name is lowercase letters, digits and single hyphens", name)
+		}
+		if _, clash := file.Apps[name]; clash {
+			say("%s is both an app and a database; in one environment they need names of their own", name)
 		}
 		if !contains(Engines, database.Engine) {
 			say("database %s: engine is one of %s, not %q", name, strings.Join(Engines, ", "), database.Engine)
@@ -176,11 +187,14 @@ func Parse(data []byte) (File, error) {
 	for _, name := range sortedKeys(file.Apps) {
 		app := file.Apps[name]
 		where := "app " + name
-		if !validKey.MatchString(name) {
-			say("app %q: a name is lowercase letters, digits and hyphens", name)
+		if !validKey.MatchString(name) || strings.Contains(name, "--") {
+			say("app %q: a name is lowercase letters, digits and single hyphens", name)
 		}
 		if app.Repo != "" && app.Image != "" {
 			say("%s: it comes from a repository or an image, not both", where)
+		}
+		if app.Git != "" && app.Repo == "" {
+			say("%s: git names the connection a repository is read through, and there is no repo", where)
 		}
 		if app.Image != "" && (app.Build != "" || app.Dockerfile != "" || app.Builder != "") {
 			say("%s: an image is not built, so build, builder and dockerfile do not apply", where)
@@ -219,8 +233,11 @@ func Parse(data []byte) (File, error) {
 			}
 		}
 		for _, schedule := range sortedKeys(app.Schedules) {
-			if s := app.Schedules[schedule]; strings.TrimSpace(s.Schedule) == "" || strings.TrimSpace(s.Command) == "" {
+			s := app.Schedules[schedule]
+			if strings.TrimSpace(s.Schedule) == "" || strings.TrimSpace(s.Command) == "" {
 				say("%s: schedule %s needs a schedule and a command", where, schedule)
+			} else if _, err := cron.Canonical(strings.TrimSpace(s.Schedule)); err != nil {
+				say("%s: schedule %s: %q is not five cron fields, such as \"0 3 * * *\"", where, schedule, s.Schedule)
 			}
 		}
 		for database, variable := range app.Databases {
@@ -233,7 +250,42 @@ func Parse(data []byte) (File, error) {
 		sort.Strings(problems)
 		return File{}, errdoc.BlueprintInvalid(strings.Join(problems, "; "))
 	}
+	normalize(&file)
 	return file, nil
+}
+
+// normalize writes the file's values the way the panel stores them — trimmed,
+// a root without its leading slash, a schedule in its canonical form, a
+// hostname bare and lowercase — so that a plan made right after an apply is
+// empty rather than the same change again, forever.
+func normalize(file *File) {
+	for name, app := range file.Apps {
+		for _, field := range []*string{&app.Repo, &app.Branch, &app.Image, &app.Git, &app.Builder, &app.Dockerfile,
+			&app.Build, &app.Static, &app.Start, &app.Release, &app.Health, &app.PreviewSeed} {
+			*field = strings.TrimSpace(*field)
+		}
+		app.Root = strings.TrimPrefix(strings.TrimSpace(app.Root), "/")
+		watch := app.Watch[:0:0]
+		for _, pattern := range app.Watch {
+			if pattern = strings.TrimSpace(pattern); pattern != "" {
+				watch = append(watch, pattern)
+			}
+		}
+		app.Watch = watch
+		for i, hostname := range app.Domains {
+			app.Domains[i] = kube.CleanHostname(hostname)
+		}
+		for key, process := range app.Processes {
+			process.Command = strings.TrimSpace(process.Command)
+			app.Processes[key] = process
+		}
+		for key, schedule := range app.Schedules {
+			schedule.Command = strings.TrimSpace(schedule.Command)
+			schedule.Schedule, _ = cron.Canonical(strings.TrimSpace(schedule.Schedule))
+			app.Schedules[key] = schedule
+		}
+		file.Apps[name] = app
+	}
 }
 
 // cleanYAMLError drops the library's prefix, which names a Go type nobody

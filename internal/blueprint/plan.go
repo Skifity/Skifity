@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,9 @@ type State struct {
 	EnvironmentID string
 	Apps          []AppState
 	Databases     []store.Database
+	// GitSources are the team's Git connections, read when the file names
+	// one.
+	GitSources []store.GitSource
 }
 
 // AppState is one app and what hangs off it.
@@ -26,6 +30,9 @@ type AppState struct {
 	Jobs      []store.AppJob
 	// Links are its databases: variable name to database id.
 	Links map[string]string
+	// Deployed is whether it has ever been deployed. An app made by an apply
+	// that stopped before its first deploy is still owed one.
+	Deployed bool
 }
 
 // Step is one line of a plan, and what applying it sends.
@@ -57,7 +64,7 @@ type Call struct {
 // before its variables, and a new app's first deploy last, so it never
 // starts without what the file gives it.
 func Plan(file File, state State) ([]Step, error) {
-	var steps []Step
+	steps := []Step{}
 	existingDatabase := map[string]store.Database{}
 	for _, database := range state.Databases {
 		existingDatabase[database.Name] = database
@@ -82,10 +89,17 @@ func Plan(file File, state State) ([]Step, error) {
 		}
 		// A database's engine, version and size are not changed from a file:
 		// each is a migration of somebody's data, and deserves the panel.
+		var differs []string
 		if have.Engine != want.Engine || (want.Version != "" && have.EngineVersion != want.Version) {
+			differs = append(differs, fmt.Sprintf("is %s %s here and %s %s in the file",
+				have.Engine, have.EngineVersion, want.Engine, want.Version))
+		}
+		if want.Storage > 0 && have.StorageGB != want.Storage {
+			differs = append(differs, fmt.Sprintf("has %d GB here and %d GB in the file", have.StorageGB, want.Storage))
+		}
+		if len(differs) > 0 {
 			steps = append(steps, Step{Op: "note", Kind: "database", Name: name,
-				Detail: fmt.Sprintf("is %s %s here and %s %s in the file; a database is not changed from a file",
-					have.Engine, have.EngineVersion, want.Engine, want.Version)})
+				Detail: strings.Join(differs, ", and ") + "; a database is not changed from a file"})
 		}
 	}
 	// databaseRef is a database's id, or the reference to the one the plan
@@ -116,18 +130,30 @@ func Plan(file File, state State) ([]Step, error) {
 		if exists {
 			ref = have.App.ID
 		} else {
-			create, err := createApp(name, want, state.EnvironmentID)
+			gitSource, err := gitSourceID(name, want, state.GitSources)
+			if err != nil {
+				return nil, err
+			}
+			create, err := createApp(name, want, state.EnvironmentID, gitSource)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, create)
-			if want.Repo != "" || want.Image != "" {
-				deploys = append(deploys, Step{Op: "create", Kind: "deploy", App: name, Name: name,
-					Detail: "its first deploy, once everything above is in place",
-					Call:   &Call{Method: "POST", Path: "/api/apps/" + ref + "/deploy", Body: map[string]any{}}})
-			}
 		}
-		steps = append(steps, appSteps(name, ref, want, have, exists)...)
+		changes, redeploy := appSteps(name, ref, want, have, exists)
+		steps = append(steps, changes...)
+		switch {
+		case !exists || (!have.Deployed && have.App.SourceType != "upload"):
+			// A new app's first deploy, or the one an apply that stopped
+			// part-way never got to. A folder sent with `skifity up` is
+			// deployed by sending it.
+			deploys = append(deploys, Step{Op: "create", Kind: "deploy", App: name, Name: name,
+				Detail: "its first deploy, once everything above is in place",
+				Call:   &Call{Method: "POST", Path: "/api/apps/" + ref + "/deploy", Body: map[string]any{}}})
+		case redeploy != "":
+			deploys = append(deploys, Step{Op: "change", Kind: "deploy", App: name, Name: name, Detail: redeploy,
+				Call: &Call{Method: "POST", Path: "/api/apps/" + ref + "/deploy", Body: map[string]any{}}})
+		}
 
 		for _, database := range sortedKeys(want.Databases) {
 			id, engine, ok := databaseRef(database)
@@ -169,10 +195,28 @@ func Plan(file File, state State) ([]Step, error) {
 	return append(steps, deploys...), nil
 }
 
+// gitSourceID is the id of the Git connection the file names for an app, or
+// "" when it names none.
+func gitSourceID(name string, want App, sources []store.GitSource) (string, error) {
+	if want.Git == "" {
+		return "", nil
+	}
+	for _, source := range sources {
+		if source.Name == want.Git {
+			return source.ID, nil
+		}
+	}
+	return "", errdoc.BlueprintInvalid(fmt.Sprintf(
+		"app %s is read through the Git connection %q, and the team has none of that name", name, want.Git))
+}
+
 // createApp is the request that makes an app, with what the create form
 // takes; the rest follows as ordinary changes to it.
-func createApp(name string, want App, envID string) (Step, error) {
+func createApp(name string, want App, envID, gitSource string) (Step, error) {
 	body := map[string]any{"name": name, "deploy": false}
+	if gitSource != "" {
+		body["git_source_id"] = gitSource
+	}
 	detail := ""
 	switch {
 	case want.Image != "":
@@ -205,9 +249,9 @@ func createApp(name string, want App, envID string) (Step, error) {
 }
 
 // appSteps are the changes to one app, new or not: its settings, scaling,
-// variables, processes, domains and schedules.
-func appSteps(name, ref string, want App, have AppState, exists bool) []Step {
-	var steps []Step
+// variables, processes, domains and schedules. redeploy says why the app has
+// to be deployed again for them to take effect, when one does.
+func appSteps(name, ref string, want App, have AppState, exists bool) (steps []Step, redeploy string) {
 	current := have.App
 
 	// Settings, sent together. A new app got most of them when it was made.
@@ -221,10 +265,15 @@ func appSteps(name, ref string, want App, have AppState, exists bool) []Step {
 		changed = append(changed, fmt.Sprintf("%s %q → %q", label, haveValue, wantValue))
 	}
 	if exists {
-		field("repository", "repo_url", want.Repo, current.RepoURL)
+		steps = append(steps, sourceNotes(name, want, current)...)
+		if current.SourceType == "image" && want.Image != "" && want.Image != current.Image {
+			// An image app runs the image its last deployment ran: a new
+			// one is a new deployment, not a setting.
+			field("image", "image", want.Image, current.Image)
+			redeploy = "to run " + want.Image
+		}
 		field("branch", "branch", want.Branch, current.Branch)
 		field("root", "root_dir", want.Root, current.RootDir)
-		field("image", "image", want.Image, current.Image)
 		field("builder", "builder", want.Builder, current.Builder)
 		field("dockerfile", "dockerfile_path", want.Dockerfile, current.DockerfilePath)
 		field("build", "build_command", want.Build, current.BuildCommand)
@@ -299,7 +348,9 @@ func appSteps(name, ref string, want App, have AppState, exists bool) []Step {
 		default:
 			continue
 		}
-		set = append(set, map[string]any{"key": key, "value": value, "is_secret": false})
+		// A variable the build reads stays one: the file says its value, not
+		// when it is read, and sending false would move it out of the build.
+		set = append(set, map[string]any{"key": key, "value": value, "is_secret": false, "build_time": variable.BuildTime})
 	}
 	if len(set) > 0 {
 		steps[len(steps)-1].Call = &Call{Method: "POST", Path: "/api/apps/" + ref + "/variables/batch",
@@ -369,13 +420,46 @@ func appSteps(name, ref string, want App, have AppState, exists bool) []Step {
 				Call: &Call{Method: "POST", Path: "/api/apps/" + ref + "/jobs",
 					Body: map[string]any{"name": schedule, "schedule": s.Schedule, "command": s.Command}}})
 		case job.Schedule != s.Schedule || job.Command != s.Command:
+			// The whole command, as the panel's form sends it: its name, and
+			// whether it is switched on, which the file does not say and a
+			// change of time must not.
 			steps = append(steps, Step{Op: "change", Kind: "schedule", App: name, Name: schedule,
 				Detail: fmt.Sprintf("%s %s → %s %s", job.Schedule, job.Command, s.Schedule, s.Command),
 				Call: &Call{Method: "PATCH", Path: "/api/apps/" + ref + "/jobs/" + job.ID,
-					Body: map[string]any{"schedule": s.Schedule, "command": s.Command}}})
+					Body: map[string]any{"name": job.Name, "schedule": s.Schedule, "command": s.Command, "enabled": job.Enabled}}})
 		}
 	}
-	return steps
+	return steps, redeploy
+}
+
+// sourceNotes are where an app comes from, when the file says otherwise:
+// said, and not changed, because where an app is built from is changed on its
+// page, where the panel can say what else that changes.
+func sourceNotes(name string, want App, current store.App) []Step {
+	note := func(detail string) Step {
+		return Step{Op: "note", Kind: "source", App: name, Name: name, Detail: detail}
+	}
+	switch {
+	case want.Image != "" && current.SourceType != "image":
+		return []Step{note("is built from its source here and the file names the image " + want.Image +
+			"; an app's source is changed on its page")}
+	case want.Repo != "" && current.SourceType != "git":
+		return []Step{note("is not built from a repository here and the file names " + want.Repo +
+			"; an app's source is changed on its page")}
+	case want.Repo != "" && !sameRepository(want.Repo, current.RepoURL):
+		return []Step{note("comes from " + current.RepoURL + " here and " + want.Repo +
+			" in the file; an app's repository is changed on its page")}
+	}
+	return nil
+}
+
+// sameRepository compares two repository addresses the way a person would:
+// case, a trailing slash and ".git" aside.
+func sameRepository(a, b string) bool {
+	clean := func(url string) string {
+		return strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(strings.TrimSpace(url)), "/"), ".git")
+	}
+	return clean(a) == clean(b)
 }
 
 // scaling is the change to an app's instances, if there is one.
@@ -422,28 +506,25 @@ func Counts(steps []Step) (create, change, note int) {
 	return create, change, note
 }
 
-// Resolve fills a call's references to what earlier calls created.
+// reference is a placeholder for something the plan makes before it.
+var reference = regexp.MustCompile(`\{(?:app|database):[a-z0-9-]+\}`)
+
+// Resolve fills a call's references to what earlier calls created. A body
+// value is one only when it is nothing else: `{ a; b; }` is a shell command,
+// not a reference to anything.
 func Resolve(call Call, ids map[string]string) (Call, error) {
 	var missing []string
-	fill := func(text string) string {
-		for {
-			start := strings.Index(text, "{")
-			end := strings.Index(text, "}")
-			if start < 0 || end < start {
-				return text
-			}
-			ref := text[start+1 : end]
-			id, ok := ids[ref]
-			if !ok {
-				missing = append(missing, ref)
-				return text
-			}
-			text = text[:start] + id + text[end+1:]
+	fill := func(ref string) string {
+		id, ok := ids[ref[1:len(ref)-1]]
+		if !ok {
+			missing = append(missing, ref[1:len(ref)-1])
+			return ref
 		}
+		return id
 	}
-	out := Call{Method: call.Method, Path: fill(call.Path), Creates: call.Creates, Body: map[string]any{}}
+	out := Call{Method: call.Method, Path: reference.ReplaceAllStringFunc(call.Path, fill), Creates: call.Creates, Body: map[string]any{}}
 	for key, value := range call.Body {
-		if text, ok := value.(string); ok && strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") {
+		if text, ok := value.(string); ok && reference.FindString(text) == text && text != "" {
 			value = fill(text)
 		}
 		out.Body[key] = value

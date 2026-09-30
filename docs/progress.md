@@ -5409,6 +5409,17 @@ it. What they found, and what changed:
   lasts at most twelve hours. A client that half-closed lost the database's
   answer, because the first end of stream closed both ways, and a failed accept
   in the CLI waited for every open connection before it returned.
+* **`skifity.yaml`.** Changing a schedule from the file was refused every time
+  (its name was not sent) and would have switched a stopped one back on; a
+  schedule written `1-5` never matched the `1,2,3,4,5` the panel keeps; a
+  repository in the file was sent in a change the API refuses, taking the app's
+  other settings with it; an apply that stopped after making an app never
+  deployed it; a new value for a build-time variable moved it out of the build;
+  a new image was reported and not run; a domain in capitals was added again on
+  every apply; `{ a; b; }` was taken for a reference; and a name such as `my_app`
+  planned an app the panel then called taken. Each is fixed, a private
+  repository can name the Git connection it is read through, and a plan made
+  right after an apply is empty — tested through the real API with the real CLI.
 * **Words in the interface.** Detection's notes and the components' names were
   English in every language; they are now codes the interface translates.
 

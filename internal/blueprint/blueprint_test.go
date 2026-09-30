@@ -241,11 +241,108 @@ func TestReferencesAreFilledFromWhatWasMade(t *testing.T) {
 	}
 }
 
+func TestANameIsItsOwnSlug(t *testing.T) {
+	// my_app and my--app are both my-app to the panel, so a file calling an
+	// app that would plan to make it and be refused as taken.
+	for _, text := range []string{
+		"apps:\n  my_app:\n    image: nginx\n",
+		"apps:\n  my--app:\n    image: nginx\n",
+		"databases:\n  main: {engine: postgres}\napps:\n  main:\n    image: nginx\n",
+		"apps:\n  web:\n    image: nginx\n    git: github\n",
+		"apps:\n  web:\n    image: nginx\n    schedules:\n      x: {schedule: every day, command: run}\n",
+	} {
+		if _, err := Parse([]byte(text)); err == nil {
+			t.Errorf("accepted:\n%s", text)
+		}
+	}
+}
+
+func TestWhereAnAppComesFromIsSaidAndNotChanged(t *testing.T) {
+	state := matching()
+	state.Apps[0].App.RepoURL = "https://github.com/acme/shop.git"
+	steps, _ := Plan(mustParse(t, shop), state)
+	for _, step := range steps {
+		if step.Kind == "source" || step.Kind == "settings" {
+			t.Fatalf("a repository that differs by .git: %+v", step)
+		}
+	}
+
+	state.Apps[0].App.RepoURL = "https://github.com/acme/old-shop"
+	state.Apps[1].App.SourceType = "git"
+	steps, _ = Plan(mustParse(t, shop), state)
+	var notes []string
+	for _, step := range steps {
+		if step.Call != nil && step.Call.Body["repo_url"] != nil {
+			t.Fatalf("a repository was sent in a change the API refuses: %+v", step.Call)
+		}
+		if step.Kind == "source" && step.Op == "note" {
+			notes = append(notes, step.App)
+		}
+	}
+	if strings.Join(notes, " ") != "cache web" {
+		t.Fatalf("the source notes are for %v", notes)
+	}
+}
+
+func TestAnAppOwedItsFirstDeployIsDeployed(t *testing.T) {
+	state := matching()
+	state.Apps[0].Deployed = false
+	state.Apps[1].Deployed = false
+	state.Apps[1].App.SourceType = "upload"
+	steps, _ := Plan(mustParse(t, shop), state)
+	var deployed []string
+	for _, step := range steps {
+		if step.Kind == "deploy" {
+			deployed = append(deployed, step.Name)
+		}
+	}
+	// A folder sent with `skifity up` is deployed by sending it again.
+	if strings.Join(deployed, " ") != "web" {
+		t.Fatalf("deploys planned for %v", deployed)
+	}
+}
+
+func TestADatabaseOfAnotherSizeIsSaid(t *testing.T) {
+	state := matching()
+	state.Databases[0].StorageGB = 20
+	steps, _ := Plan(mustParse(t, shop), state)
+	for _, step := range steps {
+		if step.Kind == "database" {
+			if step.Op != "note" || !strings.Contains(step.Detail, "20 GB here and 10 GB in the file") {
+				t.Fatalf("a database of another size: %+v", step)
+			}
+			return
+		}
+	}
+	t.Fatal("a database of another size was not mentioned")
+}
+
+func TestAPrivateRepositoryIsReadThroughTheConnectionNamed(t *testing.T) {
+	file := mustParse(t, "apps:\n  web:\n    repo: https://github.com/acme/private\n    git: acme-github\n")
+	steps, err := Plan(file, State{EnvironmentID: "env_1", GitSources: []store.GitSource{{ID: "gs_1", Name: "acme-github"}}})
+	if err != nil || steps[0].Call.Body["git_source_id"] != "gs_1" {
+		t.Fatalf("the app is made with %+v (%v)", steps[0].Call, err)
+	}
+	if _, err := Plan(file, State{EnvironmentID: "env_1"}); err == nil || !strings.Contains(err.Error(), "acme-github") {
+		t.Fatalf("a connection the team does not have: %v", err)
+	}
+}
+
+func TestACommandInBracesIsNotAReference(t *testing.T) {
+	call, err := Resolve(Call{Path: "/api/apps/{app:web}/processes/worker",
+		Body: map[string]any{"command": "{ npm run a; npm run b; }", "app_id": "{app:web}"}},
+		map[string]string{"app:web": "app_1"})
+	if err != nil || call.Body["command"] != "{ npm run a; npm run b; }" || call.Body["app_id"] != "app_1" ||
+		call.Path != "/api/apps/app_1/processes/worker" {
+		t.Fatalf("resolved %+v (%v)", call, err)
+	}
+}
+
 // matching is an environment that is what shop describes.
 func matching() State {
 	return State{
 		EnvironmentID: "env_1",
-		Databases:     []store.Database{{ID: "db_1", Name: "main", Slug: "main", Engine: "postgres", EngineVersion: "17"}},
+		Databases:     []store.Database{{ID: "db_1", Name: "main", Slug: "main", Engine: "postgres", EngineVersion: "17", StorageGB: 10}},
 		Apps: []AppState{
 			{
 				App: store.App{ID: "app_web", Name: "web", Slug: "web", SourceType: "git", RepoURL: "https://github.com/acme/shop",
@@ -255,11 +352,13 @@ func matching() State {
 				Variables: []store.Variable{{Key: "LOG_LEVEL", Value: "info"}, {Key: "STRIPE_KEY", IsSecret: true}},
 				Processes: []store.AppProcess{{Name: "worker", Command: "npm run worker", Instances: 1},
 					{Name: "clock", Command: "npm run clock", Instances: 0}},
-				Domains: []store.Domain{{Hostname: "shop.example.com"}, {Hostname: "web-production.203.0.113.10.sslip.io", Auto: true}},
-				Jobs:    []store.AppJob{{ID: "job_1", Name: "nightly", Schedule: "0 3 * * *", Command: "npm run report"}},
-				Links:   map[string]string{"DATABASE_URL": "db_1"},
+				Domains:  []store.Domain{{Hostname: "shop.example.com"}, {Hostname: "web-production.203.0.113.10.sslip.io", Auto: true}},
+				Jobs:     []store.AppJob{{ID: "job_1", Name: "nightly", Schedule: "0 3 * * *", Command: "npm run report", Enabled: true}},
+				Links:    map[string]string{"DATABASE_URL": "db_1"},
+				Deployed: true,
 			},
-			{App: store.App{ID: "app_cache", Name: "cache", Slug: "cache", SourceType: "image", Image: "valkey/valkey:8", Port: 6379, Internal: true}},
+			{App: store.App{ID: "app_cache", Name: "cache", Slug: "cache", SourceType: "image", Image: "valkey/valkey:8", Port: 6379, Internal: true},
+				Deployed: true},
 		},
 	}
 }

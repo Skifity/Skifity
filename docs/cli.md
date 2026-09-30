@@ -263,6 +263,7 @@ databases:
 apps:
   web:
     repo: https://github.com/acme/shop
+    git: acme-github        # private: the team's Git connection to read it through
     branch: main
     root: apps/web
     start: npm start
@@ -317,6 +318,10 @@ What it does, and does not:
 * **A database's engine, version and size are not changed from it** — each of
   those is a migration of somebody's data. The plan says when the file and the
   database disagree.
+* **Nor is where an app comes from.** A repository other than the app's, or an
+  image for an app built from source, is said in the plan and changed on the
+  app's page. An app that runs an image and has a new one in the file is
+  deployed with it.
 * **The order is worked out:** databases before the apps linked to them, an app
   before its variables, and a new app's first deploy last, so it never starts
   without what the file gives it. A change to an existing app rolls out the way
@@ -327,7 +332,14 @@ What it does, and does not:
 * **It goes through the API**, with your token: a viewer can `plan` and cannot
   `apply`, every change is checked as it would be in the panel, and each is in
   the activity log under your name. If one fails, apply stops there; what was
-  done stays done and the next plan shows what is left.
+  done stays done and the next plan shows what is left — a new app's first
+  deploy included, when the apply stopped before it.
+* **What the file says is read the way the panel stores it:** a schedule such as
+  `0 9 * * 1-5` matches the one the panel keeps, a domain is compared lowercase
+  and without `https://`, and a root without its leading slash. A plan straight
+  after an apply is empty.
+* **A variable the build reads stays one.** The file gives its value; whether it
+  is read at build time is set in the panel and kept.
 
 The file is read from the current directory or the nearest one above it;
 `--file` names another, and `--env` an environment other than the one this
@@ -336,7 +348,9 @@ is, on this computer; `skifity.yaml` is what an environment should be, for
 everybody.
 
 A misspelt field is an error rather than a setting quietly ignored, and every
-problem in the file is reported at once.
+problem in the file is reported at once. Names are lowercase letters, digits and
+single hyphens — what the panel would make of `my_app` is `my-app`, so the file
+has to say that — and an app and a database in one file need different ones.
 
 ## Recovering access
 

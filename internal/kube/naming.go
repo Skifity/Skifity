@@ -65,6 +65,14 @@ func ValidLabel(name string) bool {
 	return name != "" && len(name) <= maxLabelLength && validLabel.MatchString(name)
 }
 
+// CleanHostname is a domain as it is stored: lowercase, without a scheme, a
+// path or a trailing dot, so "https://Shop.example.com./" is shop.example.com.
+func CleanHostname(text string) string {
+	hostname := strings.ToLower(strings.TrimSpace(text))
+	hostname = strings.TrimPrefix(strings.TrimPrefix(hostname, "https://"), "http://")
+	return strings.TrimSuffix(strings.Split(hostname, "/")[0], ".")
+}
+
 // ValidHostname reports whether a string is a usable DNS hostname.
 func ValidHostname(host string) bool {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))

@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -49,10 +51,34 @@ apps:
     internal: true
 `
 
-func TestSkifityYAMLIsAppliedThroughTheAPI(t *testing.T) {
+// storingDeployer records a deployment the way the real one does, so a plan
+// after an apply knows the apps it deployed were.
+type storingDeployer struct {
+	recordingDeployer
+	db *store.DB
+}
+
+func (d *storingDeployer) Deploy(ctx context.Context, req DeployRequest) (store.Deployment, error) {
+	d.requests = append(d.requests, req)
+	deployment := store.Deployment{AppID: req.AppID, Trigger: "manual"}
+	err := d.db.CreateDeployment(ctx, &deployment)
+	return deployment, err
+}
+
+// blueprintRun is a panel with a database manager and a deployer that keeps
+// its deployments, and the CLI pointed at it with one tenant's token.
+type blueprintRun struct {
+	h        *harness
+	acme     tenant
+	deployer *storingDeployer
+	path     string
+}
+
+func newBlueprintRun(t *testing.T) blueprintRun {
+	t.Helper()
 	h := newHarness(t)
 	acme := h.newTenant("acme")
-	deployer := &recordingDeployer{fakeDeployer: fakeDeployer{log: &recorder{}}}
+	deployer := &storingDeployer{recordingDeployer: recordingDeployer{fakeDeployer: fakeDeployer{log: &recorder{}}}, db: h.db}
 	h.server.Config.Handler = New(Options{
 		DB: h.db, Keyring: h.keyring, Auth: h.auth,
 		Hub: events.NewHub(16), Logger: slog.New(slog.DiscardHandler),
@@ -62,21 +88,39 @@ func TestSkifityYAMLIsAppliedThroughTheAPI(t *testing.T) {
 	t.Setenv("SKIFITY_CONFIG", filepath.Join(t.TempDir(), "none.json"))
 	t.Setenv("SKIFITY_URL", h.server.URL)
 	t.Setenv("SKIFITY_TOKEN", acme.token)
-	path := filepath.Join(t.TempDir(), "skifity.yaml")
-	write := func(text string) {
-		t.Helper()
-		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	return blueprintRun{h: h, acme: acme, deployer: deployer, path: filepath.Join(t.TempDir(), "skifity.yaml")}
+}
+
+func (b blueprintRun) write(t *testing.T, text string) {
+	t.Helper()
+	if err := os.WriteFile(b.path, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	run := func(command string) string {
-		t.Helper()
-		var out, errs bytes.Buffer
-		if code := cli.Run(t.Context(), []string{command, "--file", path, "--env", acme.env.ID}, &out, &errs); code != 0 {
-			t.Fatalf("%s exited %d:\n%s\n%s", command, code, out.String(), errs.String())
-		}
-		return out.String()
+}
+
+// cli runs a command and answers what it printed, what it printed as
+// errors, and its exit code.
+func (b blueprintRun) cli(t *testing.T, args ...string) (string, string, int) {
+	t.Helper()
+	var out, errs bytes.Buffer
+	code := cli.Run(t.Context(), append(args, "--file", b.path, "--env", b.acme.env.ID), &out, &errs)
+	return out.String(), errs.String(), code
+}
+
+func (b blueprintRun) run(t *testing.T, command string) string {
+	t.Helper()
+	out, errs, code := b.cli(t, command)
+	if code != 0 {
+		t.Fatalf("%s exited %d:\n%s\n%s", command, code, out, errs)
 	}
+	return out
+}
+
+func TestSkifityYAMLIsAppliedThroughTheAPI(t *testing.T) {
+	b := newBlueprintRun(t)
+	h, acme, deployer := b.h, b.acme, b.deployer
+	write := func(text string) { t.Helper(); b.write(t, text) }
+	run := func(command string) string { t.Helper(); return b.run(t, command) }
 
 	write(blueprintShop)
 	plan := run("plan")
@@ -171,5 +215,137 @@ func TestSkifityYAMLIsAMembersToApply(t *testing.T) {
 	}
 	if apps, _ := h.db.ListApps(t.Context(), acme.env.ID); len(apps) != 0 {
 		t.Fatal("a viewer's apply made an app")
+	}
+}
+
+func TestAFileThatMatchesStaysMatched(t *testing.T) {
+	// What the panel stores is not always what the file says: a schedule in
+	// its canonical form, a hostname lowercased, a root without its slash, a
+	// command without its trailing newline. None of that is a change.
+	b := newBlueprintRun(t)
+	b.write(t, `
+apps:
+  web:
+    repo: https://github.com/acme/shop
+    root: /apps/web
+    start: |
+      npm start
+    domains: [Shop.Example.com.]
+    schedules:
+      weekdays: {schedule: "0 9 * * 1-5", command: "npm run report  "}
+`)
+	b.run(t, "apply")
+	if again := b.run(t, "plan"); !strings.Contains(again, "Nothing to change") {
+		t.Fatalf("a plan straight after an apply:\n%s", again)
+	}
+
+	// A schedule changed from the file keeps its name, and stays switched off
+	// when somebody switched it off.
+	apps, _ := b.h.db.ListApps(t.Context(), b.acme.env.ID)
+	web := apps[0]
+	jobs, _ := b.h.db.ListAppJobs(t.Context(), web.ID)
+	jobs[0].Enabled = false
+	if err := b.h.db.UpdateAppJob(t.Context(), &jobs[0]); err != nil {
+		t.Fatal(err)
+	}
+	b.write(t, `
+apps:
+  web:
+    repo: https://github.com/acme/shop.git
+    root: apps/web
+    schedules:
+      weekdays: {schedule: "30 9 * * 1-5", command: npm run report}
+`)
+	b.run(t, "apply")
+	jobs, _ = b.h.db.ListAppJobs(t.Context(), web.ID)
+	if jobs[0].Name != "weekdays" || jobs[0].Enabled || !strings.HasPrefix(jobs[0].Schedule, "30 9 ") {
+		t.Fatalf("the schedule became %+v", jobs[0])
+	}
+}
+
+func TestAnApplyKeepsWhatTheFileDoesNotSay(t *testing.T) {
+	b := newBlueprintRun(t)
+	b.write(t, "apps:\n  web:\n    repo: https://github.com/acme/shop\n    variables: {NEXT_PUBLIC_API: https://old.example.com}\n")
+	b.run(t, "apply")
+	apps, _ := b.h.db.ListApps(t.Context(), b.acme.env.ID)
+	web := apps[0]
+
+	// Read by the build, as somebody marked it in the panel.
+	if status, body := b.h.do(b.acme, "POST", "/api/apps/"+web.ID+"/variables/batch", map[string]any{
+		"set": []map[string]any{{"key": "NEXT_PUBLIC_API", "value": "https://old.example.com", "is_secret": false, "build_time": true}},
+	}); status >= 400 {
+		t.Fatalf("marking it build-time answered %d: %s", status, body)
+	}
+	b.write(t, "apps:\n  web:\n    repo: https://github.com/acme/shop\n    variables: {NEXT_PUBLIC_API: https://new.example.com}\n")
+	b.run(t, "apply")
+	variables, _ := b.h.db.ListVariables(t.Context(), web.ID)
+	for _, variable := range variables {
+		if variable.Key != "NEXT_PUBLIC_API" {
+			continue
+		}
+		value, err := b.h.keyring.Open(variable.Sealed, variableContext(web.ID, variable.Key))
+		if err != nil || !variable.BuildTime || string(value) != "https://new.example.com" {
+			t.Fatalf("a new value from the file made the variable %q, build-time %v (%v)", value, variable.BuildTime, err)
+		}
+	}
+}
+
+func TestAnImageChangedInTheFileIsDeployed(t *testing.T) {
+	b := newBlueprintRun(t)
+	b.write(t, "apps:\n  cache:\n    image: valkey/valkey:8\n")
+	b.run(t, "apply")
+	b.write(t, "apps:\n  cache:\n    image: valkey/valkey:8.1\n")
+	plan := b.run(t, "plan")
+	if !strings.Contains(plan, "~ deploy cache") {
+		t.Fatalf("a new image is not deployed:\n%s", plan)
+	}
+	b.run(t, "apply")
+	if len(b.deployer.requests) != 2 {
+		t.Fatalf("%d deploys; the new image was not deployed", len(b.deployer.requests))
+	}
+}
+
+func TestAnApplyThatStoppedIsFinishedByTheNext(t *testing.T) {
+	// The app is made, and then the apply stops before its first deploy —
+	// here on a schedule a member may not write. The next plan still owes it
+	// that deploy, rather than finding nothing to change.
+	b := newBlueprintRun(t)
+	member := b.h.newMember(b.acme, "dev", store.RoleMember)
+	t.Setenv("SKIFITY_TOKEN", member.token)
+	b.write(t, `
+apps:
+  web:
+    repo: https://github.com/acme/shop
+    variables: {A: "1", B: "2"}
+    schedules:
+      nightly: {schedule: "0 3 * * *", command: npm run report}
+`)
+	out, _, code := b.cli(t, "apply", "--json")
+	if code == 0 {
+		t.Fatalf("a member's apply of a schedule succeeded:\n%s", out)
+	}
+	var answer struct {
+		Applied []struct{ Kind, Name string } `json:"applied"`
+		Create  int                           `json:"create"`
+	}
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		t.Fatalf("%v in %s", err, out)
+	}
+	// The app and both of its variables, sent as one request, are what was
+	// done; the counts are of that, not of the plan.
+	if len(answer.Applied) != 3 || answer.Create != 3 {
+		t.Fatalf("applied %+v, counted %d", answer.Applied, answer.Create)
+	}
+	if len(b.deployer.requests) != 0 {
+		t.Fatal("an app was deployed before what the file gives it was in place")
+	}
+
+	t.Setenv("SKIFITY_TOKEN", b.acme.token)
+	if plan := b.run(t, "plan"); !strings.Contains(plan, "+ deploy web") || !strings.Contains(plan, "+ web: schedule nightly") {
+		t.Fatalf("the plan after a stopped apply:\n%s", plan)
+	}
+	b.run(t, "apply")
+	if len(b.deployer.requests) != 1 {
+		t.Fatalf("%d deploys after finishing", len(b.deployer.requests))
 	}
 }
