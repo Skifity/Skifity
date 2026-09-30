@@ -295,7 +295,9 @@
       "auth.sso_unlinked": "Unlinked single sign-on",
       "panel.backed_up": "Panel backed up",
       "variables.changed": "Variables changed",
-      "shared_variables.changed": "Shared variables changed"
+      "shared_variables.changed": "Shared variables changed",
+      "team.strong_auth_required": "Two-factor required for the team",
+      "team.strong_auth_relaxed": "Two-factor no longer required for the team"
     }
   },
   "projects": {
@@ -1113,7 +1115,12 @@
     "limitToProjectsHelp": "They see only the projects ticked below — not the others, the servers or the team's settings.",
     "limitChooseOne": "Choose at least one project.",
     "changeAccess": "Change access",
-    "memberAdded": "They already had an account, so they were added to the team directly."
+    "memberAdded": "They already had an account, so they were added to the team directly.",
+    "requireStrongAuth": "Require two-factor or single sign-on",
+    "requireStrongAuthHelp": "Everybody in this team, owners included, has to sign in with a second factor or through single sign-on. A password alone sees nothing in the team, and neither does a token whose owner has neither.",
+    "strongAuthNeededTitle": "{{team}} asks for two-factor authentication",
+    "strongAuthNeeded": "You signed in with a password alone, so nothing in this team is shown to you. Turn on two-factor authentication, or sign in with single sign-on.",
+    "strongAuthTurnOn": "Turn on two-factor"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2092,6 +2099,18 @@
         "cause": "{{0}}",
         "impact": "The upgrade was not started. The panel is still running the current version.",
         "fix": "Make room on the disk the database is on, then upgrade again."
+      },
+      "auth_strong_auth_required": {
+        "title": "This team asks for two-factor authentication",
+        "cause": "Everybody in this team has to sign in with a second factor or with single sign-on, and this sign-in used neither.",
+        "impact": "Nothing in the team was shown or changed.",
+        "fix": "Turn on two-factor authentication under Account, or sign in with single sign-on."
+      },
+      "team_strong_auth_self": {
+        "title": "Turn on two-factor for yourself first",
+        "cause": "This team is about to require a second factor or single sign-on, and you signed in with neither.",
+        "impact": "Nothing was changed. Turning it on now would have locked you out of this team.",
+        "fix": "Turn on two-factor authentication under Account, or sign in with single sign-on, then turn this on."
       }
     }
   },

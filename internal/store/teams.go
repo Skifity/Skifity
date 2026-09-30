@@ -35,8 +35,8 @@ func (db *DB) CreateTeam(ctx context.Context, t *Team) error {
 func (db *DB) GetTeam(ctx context.Context, id string) (Team, error) {
 	var t Team
 	var created string
-	err := db.QueryRowContext(ctx, `SELECT id, name, slug, created_at FROM teams WHERE id = ?`, id).
-		Scan(&t.ID, &t.Name, &t.Slug, &created)
+	err := db.QueryRowContext(ctx, `SELECT id, name, slug, created_at, require_strong_auth FROM teams WHERE id = ?`, id).
+		Scan(&t.ID, &t.Name, &t.Slug, &created, &t.RequireStrongAuth)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return t, ErrNotFound
@@ -49,7 +49,7 @@ func (db *DB) GetTeam(ctx context.Context, id string) (Team, error) {
 
 // ListTeamsForUser returns the teams a user belongs to, with their role in each.
 func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]Team, error) {
-	rows, err := db.QueryContext(ctx, `SELECT t.id, t.name, t.slug, t.created_at, m.role, m.scoped
+	rows, err := db.QueryContext(ctx, `SELECT t.id, t.name, t.slug, t.created_at, m.role, m.scoped, t.require_strong_auth
 		FROM teams t JOIN memberships m ON m.team_id = t.id
 		WHERE m.user_id = ? ORDER BY t.created_at`, userID)
 	if err != nil {
@@ -59,7 +59,7 @@ func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]Team, erro
 	for rows.Next() {
 		var t Team
 		var created string
-		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &created, &t.Role, &t.Scoped); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &created, &t.Role, &t.Scoped, &t.RequireStrongAuth); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan team: %w", err)
 		}
@@ -83,7 +83,8 @@ func (db *DB) ListTeamsForUser(ctx context.Context, userID string) ([]Team, erro
 
 // UpdateTeam renames a team.
 func (db *DB) UpdateTeam(ctx context.Context, t *Team) error {
-	res, err := db.Exec(ctx, `UPDATE teams SET name = ?, slug = ? WHERE id = ?`, t.Name, t.Slug, t.ID)
+	res, err := db.Exec(ctx, `UPDATE teams SET name = ?, slug = ?, require_strong_auth = ? WHERE id = ?`,
+		t.Name, t.Slug, t.RequireStrongAuth, t.ID)
 	if err != nil {
 		return fmt.Errorf("update team: %w", err)
 	}
@@ -160,9 +161,10 @@ func (db *DB) memberProjects(ctx context.Context, teamID, userID string) ([]stri
 func (db *DB) GetMembership(ctx context.Context, teamID, userID string) (Membership, error) {
 	var m Membership
 	var created string
-	err := db.QueryRowContext(ctx, `SELECT team_id, user_id, role, scoped, created_at FROM memberships
-		WHERE team_id = ? AND user_id = ?`, teamID, userID).
-		Scan(&m.TeamID, &m.UserID, &m.Role, &m.Scoped, &created)
+	err := db.QueryRowContext(ctx, `SELECT m.team_id, m.user_id, m.role, m.scoped, m.created_at, t.require_strong_auth
+		FROM memberships m JOIN teams t ON t.id = m.team_id
+		WHERE m.team_id = ? AND m.user_id = ?`, teamID, userID).
+		Scan(&m.TeamID, &m.UserID, &m.Role, &m.Scoped, &created, &m.StrongAuthRequired)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return m, ErrNotFound

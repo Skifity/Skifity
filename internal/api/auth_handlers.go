@@ -90,6 +90,10 @@ type meResponse struct {
 	// It is on this response because the account page is the only place that
 	// can tell somebody they are down to their last one.
 	RecoveryCodesLeft int `json:"recovery_codes_left"`
+	// StrongAuth is whether this sign-in would pass a team's requirement for
+	// a second factor or single sign-on, so the panel can say why a team is
+	// refusing rather than only that it is.
+	StrongAuth bool `json:"strong_auth"`
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +121,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, meResponse{
 		User: user, Teams: teams, RecoverySaved: user.RecoverySaved, RecoveryCodesLeft: codesLeft,
+		StrongAuth: s.strongAuth(r, user),
 	})
 }
 

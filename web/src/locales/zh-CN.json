@@ -287,7 +287,9 @@
       "auth.sso_unlinked": "已取消关联单点登录",
       "panel.backed_up": "已备份面板",
       "variables.changed": "已更改变量",
-      "shared_variables.changed": "已更改共享变量"
+      "shared_variables.changed": "已更改共享变量",
+      "team.strong_auth_required": "已要求团队使用双重验证",
+      "team.strong_auth_relaxed": "已取消团队的双重验证要求"
     }
   },
   "projects": {
@@ -1101,7 +1103,12 @@
     "limitToProjectsHelp": "他们只能看到下面勾选的项目——看不到其他项目、服务器或团队设置。",
     "limitChooseOne": "请至少选择一个项目。",
     "changeAccess": "更改访问权限",
-    "memberAdded": "对方已有账号，因此已直接加入团队。"
+    "memberAdded": "对方已有账号，因此已直接加入团队。",
+    "requireStrongAuth": "要求双重验证或单点登录",
+    "requireStrongAuthHelp": "这个团队中的每个人（包括所有者）都必须使用第二重验证或通过单点登录登录。仅凭密码在团队中什么也看不到，所有者两者都没有的令牌也一样。",
+    "strongAuthNeededTitle": "{{team}} 要求双重验证",
+    "strongAuthNeeded": "你仅用密码登录，因此这个团队的内容不会向你显示。请开启双重验证，或通过单点登录登录。",
+    "strongAuthTurnOn": "开启双重验证"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2080,6 +2087,18 @@
         "cause": "{{0}}",
         "impact": "升级没有开始。面板仍在运行当前版本。",
         "fix": "在数据库所在的磁盘上腾出空间，然后再次升级。"
+      },
+      "auth_strong_auth_required": {
+        "title": "这个团队要求双重验证",
+        "cause": "这个团队中的每个人都必须使用第二重验证或单点登录登录，而这次登录两者都没有使用。",
+        "impact": "团队中的内容没有显示，也没有更改。",
+        "fix": "在“账户”中开启双重验证，或通过单点登录登录。"
+      },
+      "team_strong_auth_self": {
+        "title": "请先为自己开启双重验证",
+        "cause": "这个团队即将要求第二重验证或单点登录，而你登录时两者都没有使用。",
+        "impact": "没有更改任何内容。现在开启会把你自己锁在这个团队之外。",
+        "fix": "在“账户”中开启双重验证，或通过单点登录登录，然后再开启此项。"
       }
     }
   },

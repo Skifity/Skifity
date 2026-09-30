@@ -73,11 +73,15 @@ func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {
 
 type updateTeamRequest struct {
 	Name string `json:"name"`
+	// RequireStrongAuth, when given, turns the requirement for a second
+	// factor or single sign-on on or off.
+	RequireStrongAuth *bool `json:"require_strong_auth,omitempty"`
 }
 
 func (s *Server) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+	actor, err := s.authorizeTeam(r, teamID, store.RoleAdmin)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -96,11 +100,33 @@ func (s *Server) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		// The slug is not changed: it is baked into namespace names, and
 		// renaming a namespace would mean recreating every workload in it.
 	}
+	changedRequirement := req.RequireStrongAuth != nil && *req.RequireStrongAuth != team.RequireStrongAuth
+	if changedRequirement {
+		// Turning it on from a sign-in that would not pass it would lock the
+		// person doing it out of the team they were securing, on the next
+		// request.
+		if *req.RequireStrongAuth && !s.strongAuth(r, actor) {
+			writeError(w, r, errdoc.New("team.strong_auth_self", "Turn on two-factor for yourself first").
+				WithCause("This team is about to require a second factor or single sign-on, and you signed in with neither.").
+				WithImpact("Nothing was changed. Turning it on now would have locked you out of this team.").
+				WithFix("Turn on two-factor authentication under Account, or sign in with single sign-on, then turn this on.").
+				WithStatus(http.StatusConflict))
+			return
+		}
+		team.RequireStrongAuth = *req.RequireStrongAuth
+	}
 	if err := s.db.UpdateTeam(r.Context(), &team); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	s.audit(r, teamID, "team.updated", "team", teamID, team.Name)
+	if changedRequirement {
+		action := "team.strong_auth_relaxed"
+		if team.RequireStrongAuth {
+			action = "team.strong_auth_required"
+		}
+		s.audit(r, teamID, action, "team", teamID, team.Name)
+	}
 	writeJSON(w, http.StatusOK, team)
 }
 

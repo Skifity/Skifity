@@ -37,6 +37,8 @@ export type Team = {
   /** Limited to some of the team's projects, and which. */
   scoped?: boolean
   projects?: string[]
+  /** Everybody in it has to sign in with a second factor or single sign-on. */
+  require_strong_auth?: boolean
 }
 
 /** One person in a team, as the members list shows them. */

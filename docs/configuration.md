@@ -167,6 +167,18 @@ counts, so in practice this is one dialog a few minutes into a session. An API
 token cannot take these actions at all — there is nobody at the keyboard for it
 to ask.
 
+**A team can require more than a password.** Under **Settings → Members**, an
+admin or owner can require two-factor or single sign-on of everybody in the
+team, themselves included. A sign-in with a password alone then sees nothing in
+the team — every page and every API request in it answers
+`auth.strong_auth_required` — while the account page stays reachable, which is
+where two-factor is turned on; the panel says so at the top of every page. A
+session counts when it was signed into through the identity provider, or its
+person has two-factor on. An API token cannot say how it was minted, so it
+counts when its owner has two-factor on or has linked the identity provider.
+Turning the requirement on from a sign-in that would not pass it is refused
+rather than locking out whoever did it.
+
 **Put a domain on the panel.** The panel's cookies carry the `__Host-` prefix,
 which a browser refuses to store if a cookie names a domain — so no page on a
 sibling subdomain can write them. That prefix requires HTTPS. The default

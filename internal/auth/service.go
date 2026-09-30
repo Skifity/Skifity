@@ -239,7 +239,11 @@ func (s *Service) Login(ctx context.Context, email, password, totpCode, ip, user
 		}
 	}
 
-	result, err := s.issueSession(ctx, user, ip, userAgent)
+	method := MethodPassword
+	if user.TOTPEnabled {
+		method = MethodTOTP
+	}
+	result, err := s.issueSession(ctx, user, ip, userAgent, method)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -254,13 +258,22 @@ func (s *Service) Login(ctx context.Context, email, password, totpCode, ip, user
 	return result, nil
 }
 
-// IssueSession creates a session without checking a password. Used right after
-// first-run setup, where the setup token has already proved authority.
-func (s *Service) IssueSession(ctx context.Context, user store.User, ip, userAgent string) (LoginResult, error) {
-	return s.issueSession(ctx, user, ip, userAgent)
+// How a session was signed into. A team that requires a second factor or
+// single sign-on reads it; see authorizeTeamMember in internal/api.
+const (
+	MethodPassword = "password"
+	MethodTOTP     = "totp"
+	MethodSSO      = "sso"
+)
+
+// IssueSession creates a session without checking a password, for a caller
+// that has already established who this is some other way — the setup token,
+// an invitation, the identity provider — and says which with method.
+func (s *Service) IssueSession(ctx context.Context, user store.User, ip, userAgent, method string) (LoginResult, error) {
+	return s.issueSession(ctx, user, ip, userAgent, method)
 }
 
-func (s *Service) issueSession(ctx context.Context, user store.User, ip, userAgent string) (LoginResult, error) {
+func (s *Service) issueSession(ctx context.Context, user store.User, ip, userAgent, method string) (LoginResult, error) {
 	token, err := crypto.RandomToken(32)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("generate session token: %w", err)
@@ -282,6 +295,7 @@ func (s *Service) issueSession(ctx context.Context, user store.User, ip, userAge
 		ExpiresAt: expires,
 		// Signing in is proving who you are, so the step-up window starts now.
 		ReauthAt: now,
+		Method:   method,
 	}
 	if err := s.db.CreateSession(ctx, &session); err != nil {
 		return LoginResult{}, fmt.Errorf("create session: %w", err)

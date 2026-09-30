@@ -225,7 +225,7 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent())
+	result, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent(), auth.MethodSSO)
 	if err != nil {
 		s.log.Error("could not start a session for a single sign-on user", "error", err)
 		fail("server")

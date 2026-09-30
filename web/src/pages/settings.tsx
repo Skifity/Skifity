@@ -407,6 +407,46 @@ function VersionCard() {
 }
 
 /**
+ * Whether everybody in the team has to sign in with more than a password.
+ *
+ * Only an admin or an owner can change it, and the server refuses to turn it
+ * on from a sign-in that would not pass it — which would lock out the person
+ * doing it — so the error that comes back is the whole explanation.
+ */
+function StrongAuthCard() {
+  const { t } = useTranslation()
+  const { team, refresh } = useSession()
+
+  const update = useMutation({
+    mutationFn: (required: boolean) =>
+      api.patch(`/api/teams/${team!.id}`, { require_strong_auth: required }),
+    onSuccess: () => void refresh(),
+  })
+
+  if (!team || (team.role !== "admin" && team.role !== "owner")) return null
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-6">
+        <Field orientation="horizontal">
+          <Switch
+            id="require-strong-auth"
+            checked={team.require_strong_auth ?? false}
+            disabled={update.isPending}
+            onCheckedChange={(checked) => update.mutate(checked)}
+          />
+          <FieldContent>
+            <FieldLabel htmlFor="require-strong-auth">{t("settings.requireStrongAuth")}</FieldLabel>
+            <FieldDescription>{t("settings.requireStrongAuthHelp")}</FieldDescription>
+          </FieldContent>
+        </Field>
+        {update.error != null && <ErrorDisplay error={update.error} compact />}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
  * The panel's own database, copied to the bucket.
  *
  * Everything else here is about what the panel looks after; this is the panel
@@ -768,6 +808,8 @@ function MembersPanel() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("settings.roleHelp")}</p>
+
+      <StrongAuthCard />
 
       <Card>
         <CardContent className="p-0">

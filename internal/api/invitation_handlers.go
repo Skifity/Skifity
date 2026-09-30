@@ -277,7 +277,7 @@ func (s *Server) handleAcceptInvitation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent())
+	result, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent(), auth.MethodPassword)
 	if err != nil {
 		writeError(w, r, err)
 		return

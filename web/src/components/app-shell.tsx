@@ -114,6 +114,7 @@ export function AppShell() {
             navigating away is what clears it.
           */}
           <InstallNotes />
+          <StrongAuthNotice />
           <ReadOnlyNotice />
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
@@ -122,6 +123,29 @@ export function AppShell() {
       </SidebarInset>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </SidebarProvider>
+  )
+}
+
+/**
+ * A team that requires a second factor refuses every page in it to a sign-in
+ * with a password alone. Said here, once, with the way through, rather than as
+ * the same refusal on every card.
+ */
+function StrongAuthNotice() {
+  const { t } = useTranslation()
+  const { team, strongAuth } = useSession()
+  if (!team?.require_strong_auth || strongAuth) return null
+  return (
+    <Alert variant="warning" className="mb-6">
+      <ShieldAlertIcon />
+      <AlertTitle>{t("settings.strongAuthNeededTitle", { team: team.name })}</AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center gap-3">
+        <span>{t("settings.strongAuthNeeded")}</span>
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/account">{t("settings.strongAuthTurnOn")}</Link>
+        </Button>
+      </AlertDescription>
+    </Alert>
   )
 }
 

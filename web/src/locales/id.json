@@ -287,7 +287,9 @@
       "auth.sso_unlinked": "Tautan single sign-on dilepas",
       "panel.backed_up": "Panel dicadangkan",
       "variables.changed": "Variabel diubah",
-      "shared_variables.changed": "Variabel bersama diubah"
+      "shared_variables.changed": "Variabel bersama diubah",
+      "team.strong_auth_required": "Dua faktor diwajibkan untuk tim",
+      "team.strong_auth_relaxed": "Dua faktor tidak lagi diwajibkan untuk tim"
     }
   },
   "projects": {
@@ -1101,7 +1103,12 @@
     "limitToProjectsHelp": "Mereka hanya melihat proyek yang dicentang di bawah — bukan proyek lain, server, atau pengaturan tim.",
     "limitChooseOne": "Pilih setidaknya satu proyek.",
     "changeAccess": "Ubah akses",
-    "memberAdded": "Mereka sudah punya akun, jadi langsung ditambahkan ke tim."
+    "memberAdded": "Mereka sudah punya akun, jadi langsung ditambahkan ke tim.",
+    "requireStrongAuth": "Wajibkan dua faktor atau single sign-on",
+    "requireStrongAuthHelp": "Semua orang di tim ini, termasuk pemilik, harus masuk dengan faktor kedua atau lewat single sign-on. Kata sandi saja tidak melihat apa pun di tim, begitu pula token yang pemiliknya tidak punya keduanya.",
+    "strongAuthNeededTitle": "{{team}} meminta autentikasi dua faktor",
+    "strongAuthNeeded": "Anda masuk hanya dengan kata sandi, jadi tidak ada isi tim ini yang ditampilkan. Aktifkan autentikasi dua faktor, atau masuk dengan single sign-on.",
+    "strongAuthTurnOn": "Aktifkan dua faktor"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2080,6 +2087,18 @@
         "cause": "{{0}}",
         "impact": "Upgrade tidak dimulai. Panel masih menjalankan versi saat ini.",
         "fix": "Kosongkan ruang di disk tempat database berada, lalu upgrade lagi."
+      },
+      "auth_strong_auth_required": {
+        "title": "Tim ini meminta autentikasi dua faktor",
+        "cause": "Semua orang di tim ini harus masuk dengan faktor kedua atau single sign-on, dan proses masuk ini tidak memakai keduanya.",
+        "impact": "Tidak ada isi tim yang ditampilkan atau diubah.",
+        "fix": "Aktifkan autentikasi dua faktor di Akun, atau masuk dengan single sign-on."
+      },
+      "team_strong_auth_self": {
+        "title": "Aktifkan dua faktor untuk diri Anda dulu",
+        "cause": "Tim ini akan mewajibkan faktor kedua atau single sign-on, dan Anda masuk tanpa keduanya.",
+        "impact": "Tidak ada yang diubah. Mengaktifkannya sekarang akan mengunci Anda dari tim ini.",
+        "fix": "Aktifkan autentikasi dua faktor di Akun, atau masuk dengan single sign-on, lalu aktifkan ini."
       }
     }
   },

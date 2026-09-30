@@ -4652,6 +4652,37 @@ the restore copy alone.
 
 The upgrade is documented in `docs/configuration.md`, with the way back.
 
+## Phase 91 — a team that requires more than a password
+
+Half of gap 15, from Portainer, Epinio and Dokploy. Two-factor was something
+each person chose; nothing let a team say that everybody in it had to have it.
+
+A session now records how it was signed into — `password`, `totp` or `sso`
+(migration 0022; sessions from before say nothing, which counts as a password
+alone) — and a team has `require_strong_auth`. The check sits in
+`membershipIn`, the one place every team, project, app and database
+authorization passes through, and reads the flag in the same query as the
+membership, so it costs nothing and cannot be forgotten by a handler. A session
+passes when it came through the identity provider or its person has two-factor
+on; a token, which cannot say how it was minted, passes when its owner has
+two-factor on or a linked identity. A refusal is `auth.strong_auth_required`,
+403 — not 404: the person is in the team, and being told so with the fix is the
+point. `/me` carries `strong_auth`, so the panel shows one notice with a link to
+Account rather than the same refusal on every card.
+
+Turning it on is `PATCH /api/teams/{team}` with `require_strong_auth`, by an
+admin or owner, from Settings → Members. Turning it on from a sign-in that
+would not pass it answers `team.strong_auth_self` and changes nothing, because
+the next request would have locked out whoever did it. Both directions are
+audited.
+
+Tested: a password-only session refused on the team's list and on an app in
+it, `/me` still answering and saying why; the same session let in once
+two-factor is on; an SSO session let in without it; a token let in once its
+owner links an identity; and turning it on refused, then accepted, and audited.
+
+Still open from gap 15: mapping the identity provider's groups to roles.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -225,7 +225,7 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	login, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent())
+	login, err := s.auth.IssueSession(r.Context(), user, clientIPFrom(r.Context()), r.UserAgent(), auth.MethodPassword)
 	if err != nil {
 		writeError(w, r, err)
 		return

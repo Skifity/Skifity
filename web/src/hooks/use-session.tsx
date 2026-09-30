@@ -23,6 +23,11 @@ type SessionState = {
   meta: Meta | null
   /** Unused two-factor recovery codes, so the account page can say so. */
   recoveryCodesLeft: number
+  /**
+   * Whether this sign-in would pass a team's requirement for a second factor
+   * or single sign-on, so the panel can say why such a team refuses.
+   */
+  strongAuth: boolean
   setTeam: (team: Team) => void
   refresh: () => Promise<void>
   signOut: () => Promise<void>
@@ -39,6 +44,7 @@ type Bootstrap = {
   user: User | null
   teams: Team[]
   recoveryCodesLeft: number
+  strongAuth: boolean
 }
 
 async function loadSession(): Promise<Bootstrap> {
@@ -47,13 +53,21 @@ async function loadSession(): Promise<Bootstrap> {
     api.anonymous<Meta>("/api/meta"),
   ])
   if (status.needs_setup) {
-    return { needsSetup: true, meta, user: null, teams: [], recoveryCodesLeft: 0 }
+    return {
+      needsSetup: true,
+      meta,
+      user: null,
+      teams: [],
+      recoveryCodesLeft: 0,
+      strongAuth: false,
+    }
   }
   try {
     const me = await api.anonymous<{
       user: User
       teams: Team[]
       recovery_codes_left?: number
+      strong_auth?: boolean
     }>("/api/me")
     return {
       needsSetup: false,
@@ -61,10 +75,18 @@ async function loadSession(): Promise<Bootstrap> {
       user: me.user,
       teams: me.teams,
       recoveryCodesLeft: me.recovery_codes_left ?? 0,
+      strongAuth: me.strong_auth ?? false,
     }
   } catch {
     // Not signed in. That is an answer, not a failure.
-    return { needsSetup: false, meta, user: null, teams: [], recoveryCodesLeft: 0 }
+    return {
+      needsSetup: false,
+      meta,
+      user: null,
+      teams: [],
+      recoveryCodesLeft: 0,
+      strongAuth: false,
+    }
   }
 }
 
@@ -136,6 +158,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       team,
       meta: session.data?.meta ?? null,
       recoveryCodesLeft: session.data?.recoveryCodesLeft ?? 0,
+      strongAuth: session.data?.strongAuth ?? false,
       setTeam,
       refresh,
       signOut,

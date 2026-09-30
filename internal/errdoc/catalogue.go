@@ -52,6 +52,17 @@ func SchemaNewer(have, know int) *Problem {
 		WithDocs("/docs/configuration#upgrading")
 }
 
+// StrongAuthRequired is somebody signed in with a password alone asking for a
+// team that requires more.
+func StrongAuthRequired() *Problem {
+	return New("auth.strong_auth_required", "This team asks for two-factor authentication").
+		WithCause("Everybody in this team has to sign in with a second factor or with single sign-on, and this sign-in used neither.").
+		WithImpact("Nothing in the team was shown or changed.").
+		WithFix("Turn on two-factor authentication under Account, or sign in with single sign-on.").
+		WithDocs("/docs/configuration#signing-in").
+		WithStatus(http.StatusForbidden)
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

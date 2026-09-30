@@ -166,9 +166,9 @@ func (db *DB) CreateSession(ctx context.Context, s *Session) error {
 		reauth = FormatTime(s.ReauthAt)
 	}
 	_, err := db.Exec(ctx, `INSERT INTO sessions
-		(id, user_id, token_hash, csrf_hash, ip, user_agent, created_at, last_seen_at, expires_at, reauth_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		s.ID, s.UserID, s.TokenHash, s.CSRFHash, s.IP, s.UserAgent, now, now, FormatTime(s.ExpiresAt), reauth)
+		(id, user_id, token_hash, csrf_hash, ip, user_agent, created_at, last_seen_at, expires_at, reauth_at, method)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		s.ID, s.UserID, s.TokenHash, s.CSRFHash, s.IP, s.UserAgent, now, now, FormatTime(s.ExpiresAt), reauth, s.Method)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
@@ -181,9 +181,9 @@ func (db *DB) CreateSession(ctx context.Context, s *Session) error {
 func (db *DB) GetSessionByHash(ctx context.Context, hash string) (Session, error) {
 	var s Session
 	var created, lastSeen, expires, reauth string
-	err := db.QueryRowContext(ctx, `SELECT id, user_id, token_hash, csrf_hash, ip, user_agent, created_at, last_seen_at, expires_at, reauth_at
+	err := db.QueryRowContext(ctx, `SELECT id, user_id, token_hash, csrf_hash, ip, user_agent, created_at, last_seen_at, expires_at, reauth_at, method
 		FROM sessions WHERE token_hash = ?`, hash).
-		Scan(&s.ID, &s.UserID, &s.TokenHash, &s.CSRFHash, &s.IP, &s.UserAgent, &created, &lastSeen, &expires, &reauth)
+		Scan(&s.ID, &s.UserID, &s.TokenHash, &s.CSRFHash, &s.IP, &s.UserAgent, &created, &lastSeen, &expires, &reauth, &s.Method)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return s, ErrNotFound

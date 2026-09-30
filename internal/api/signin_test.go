@@ -211,7 +211,7 @@ func TestASessionStopsAtItsCeiling(t *testing.T) {
 	h := newHarness(t)
 	user := h.person(t, "old@example.test", "correct horse battery staple")
 
-	result, err := h.auth.IssueSession(t.Context(), user, "10.0.0.1", "test")
+	result, err := h.auth.IssueSession(t.Context(), user, "10.0.0.1", "test", auth.MethodPassword)
 	if err != nil {
 		t.Fatalf("issue session: %v", err)
 	}

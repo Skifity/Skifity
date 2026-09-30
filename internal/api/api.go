@@ -477,7 +477,35 @@ func (s *Server) membershipIn(r *http.Request, teamID string) (store.User, store
 		}
 		return store.User{}, store.Membership{}, err
 	}
+	// A team that requires a second factor or single sign-on is not shown to
+	// a sign-in that used neither — members, viewers, admins and owners alike,
+	// since a borrowed password is as much a way in to one as another.
+	if membership.StrongAuthRequired && !s.strongAuth(r, user) {
+		return store.User{}, store.Membership{}, errdoc.StrongAuthRequired()
+	}
 	return user, membership, nil
+}
+
+// strongAuth reports whether the request was signed into with more than a
+// password.
+//
+// A browser session says how it was signed into. Somebody with two-factor on
+// needs it at every sign-in, so their sessions count whatever they say — one
+// from before they turned it on included, since turning it on took a step-up.
+// An API token was minted by somebody signed in, and cannot say how; it counts
+// when its owner has two-factor on, or signs in through the identity provider.
+func (s *Server) strongAuth(r *http.Request, user store.User) bool {
+	if user.TOTPEnabled {
+		return true
+	}
+	if session, ok := sessionFrom(r.Context()); ok {
+		return session.Method == auth.MethodSSO
+	}
+	if _, ok := apiTokenFrom(r.Context()); ok {
+		identities, err := s.db.IdentitiesForUser(r.Context(), user.ID)
+		return err == nil && len(identities) > 0
+	}
+	return false
 }
 
 // authorizeInProject checks that the caller's membership reaches a project and

@@ -56,6 +56,9 @@ type Team struct {
 	// the team's projects, and which.
 	Scoped   bool     `json:"scoped,omitempty"`
 	Projects []string `json:"projects,omitempty"`
+	// RequireStrongAuth asks everybody in the team to sign in with a second
+	// factor or single sign-on.
+	RequireStrongAuth bool `json:"require_strong_auth"`
 }
 
 // Membership joins a user to a team with a role.
@@ -68,6 +71,9 @@ type Membership struct {
 	// projects left sees none of the team's: see 0021_project_members.sql.
 	Scoped   bool     `json:"scoped"`
 	Projects []string `json:"projects,omitempty"`
+	// StrongAuthRequired is the team's own setting, read with the membership
+	// because every check that reads one needs the other.
+	StrongAuthRequired bool `json:"-"`
 }
 
 // Reaches reports whether the membership covers a project.
@@ -498,6 +504,9 @@ type Session struct {
 	// ReauthAt is when the person last proved who they are with a password or
 	// a second factor, rather than by holding this cookie. Zero means never.
 	ReauthAt time.Time `json:"-"`
+	// Method is how it was signed into: "password", "totp" or "sso". Empty
+	// for a session from before it was recorded, which is a password alone.
+	Method string `json:"method,omitempty"`
 }
 
 // APIToken authenticates the CLI and the MCP server.
