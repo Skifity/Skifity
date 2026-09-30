@@ -348,7 +348,8 @@
       "auth.password_reset": "reset their password through a link",
       "environment.cloned": "Environment cloned",
       "notification.updated": "Notification channel changed",
-      "server.ssh_passwords_off": "SSH passwords turned off on a server"
+      "server.ssh_passwords_off": "SSH passwords turned off on a server",
+      "domain.redirect_changed": "Domain redirect changed"
     }
   },
   "projects": {
@@ -795,7 +796,11 @@
     "dnsUnknownHelp": "This panel does not know its own public address, so it cannot tell whether that is here. An administrator can set it under Settings, Domains.",
     "dnsCertificateSoon": "The certificate is issued once DNS points here, so it should follow within a few minutes.",
     "dnsCertificateAfter": "The certificate is issued once DNS points here.",
-    "dnsRecordsFound": "Records found:"
+    "dnsRecordsFound": "Records found:",
+    "visitors": "Visitors",
+    "servesTheApp": "Get the app",
+    "redirectTo": "Go to {{hostname}}",
+    "redirectHelp": "Visitors to {{hostname}} are sent to {{target}} permanently, with the same path. Search engines move the page to {{target}} too."
   },
   "scaling": {
     "title": "Scaling",

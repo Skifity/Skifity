@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
+  ArrowRightIcon,
   BookOpenIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -25,6 +26,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -67,6 +75,14 @@ export function DomainsTab({ app }: { app: App }) {
 
   const remove = useMutation({
     mutationFn: (domainID: string) => api.delete(`/api/apps/${app.id}/domains/${domainID}`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["domains", app.id] }),
+  })
+
+  // One hostname sending its visitors to another of the app's: www to the
+  // bare domain, or an old name to the new one.
+  const redirect = useMutation({
+    mutationFn: ({ domainID, target }: { domainID: string; target: string }) =>
+      api.patch<Domain>(`/api/apps/${app.id}/domains/${domainID}`, { redirect_to: target }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["domains", app.id] }),
   })
 
@@ -166,6 +182,12 @@ export function DomainsTab({ app }: { app: App }) {
                     {t("domains.automatic")}
                   </Badge>
                 )}
+                {domain.redirect_to && (
+                  <Badge variant="outline" className="gap-1 text-[10px]">
+                    <ArrowRightIcon className="size-2.5" />
+                    {domain.redirect_to}
+                  </Badge>
+                )}
                 <StatusBadge
                   status={domain.status}
                   label={t(`domains.status${statusKey(domain.status)}`, {
@@ -186,8 +208,51 @@ export function DomainsTab({ app }: { app: App }) {
                 )}
               </div>
 
+              {items.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">{t("domains.visitors")}</span>
+                  <Select
+                    value={domain.redirect_to || "serve"}
+                    disabled={redirect.isPending}
+                    onValueChange={(value) =>
+                      redirect.mutate({
+                        domainID: domain.id,
+                        target: value === "serve" ? "" : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-8 w-auto min-w-56"
+                      aria-label={t("domains.visitors")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="serve">{t("domains.servesTheApp")}</SelectItem>
+                      {items
+                        .filter((other) => other.id !== domain.id && !other.redirect_to)
+                        .map((other) => (
+                          <SelectItem key={other.id} value={other.hostname}>
+                            {t("domains.redirectTo", { hostname: other.hostname })}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* A redirecting hostname is answered here too, so its DNS has
+                  to point here like any other's. */}
               {!domain.auto && (
                 <DomainDNS app={app} domain={domain} whenAdded={dnsWhenAdded[domain.id]} />
+              )}
+              {domain.redirect_to && (
+                <p className="text-sm text-muted-foreground">
+                  {t("domains.redirectHelp", {
+                    hostname: domain.hostname,
+                    target: domain.redirect_to,
+                  })}
+                </p>
               )}
 
               {/* A certificate that stopped trying says why, and cert-manager's
@@ -206,6 +271,7 @@ export function DomainsTab({ app }: { app: App }) {
       </div>
 
       {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+      {redirect.error != null && <ErrorDisplay error={redirect.error} compact />}
     </div>
   )
 }

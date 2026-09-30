@@ -294,6 +294,8 @@ export type Domain = {
   status_detail?: string
   /** Where this hostname has to point. Worked out per request, not stored. */
   dns_target?: string
+  /** Another of the app's hostnames this one permanently redirects to. */
+  redirect_to?: string
   created_at: string
 }
 

@@ -158,6 +158,9 @@ type DomainSpec struct {
 	Hostname string
 	Path     string
 	TLS      bool
+	// RedirectTo is another of the app's hostnames this one sends its
+	// visitors to, permanently. See hostredirect.go.
+	RedirectTo string
 }
 
 // Validate reports problems that would make Kubernetes reject the objects, with

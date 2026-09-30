@@ -340,7 +340,8 @@
       "auth.password_reset": "mereset kata sandinya lewat tautan",
       "environment.cloned": "Lingkungan dikloning",
       "notification.updated": "Saluran notifikasi diubah",
-      "server.ssh_passwords_off": "Kata sandi SSH dimatikan di server"
+      "server.ssh_passwords_off": "Kata sandi SSH dimatikan di server",
+      "domain.redirect_changed": "Pengalihan domain diubah"
     }
   },
   "projects": {
@@ -785,7 +786,11 @@
     "dnsUnknownHelp": "Panel ini tidak tahu alamat publiknya sendiri, jadi tidak bisa memastikan apakah itu di sini. Administrator bisa mengaturnya di Pengaturan, Domain.",
     "dnsCertificateSoon": "Sertifikat diterbitkan begitu DNS mengarah ke sini, jadi seharusnya menyusul dalam beberapa menit.",
     "dnsCertificateAfter": "Sertifikat diterbitkan begitu DNS mengarah ke sini.",
-    "dnsRecordsFound": "Record yang ditemukan:"
+    "dnsRecordsFound": "Record yang ditemukan:",
+    "visitors": "Pengunjung",
+    "servesTheApp": "Membuka aplikasi",
+    "redirectTo": "Dialihkan ke {{hostname}}",
+    "redirectHelp": "Pengunjung {{hostname}} dialihkan secara permanen ke {{target}}, dengan path yang sama. Mesin pencari juga memindahkan halaman ke {{target}}."
   },
   "scaling": {
     "title": "Penskalaan",

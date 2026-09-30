@@ -297,6 +297,12 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 	if s.Protected {
 		middlewares = append(middlewares, s.Namespace+"-"+GuardMiddleware+"@kubernetescrd")
 	}
+	// A hostname that redirects, before the redirect to HTTPS: it goes to the
+	// target's own scheme, so http://www.example.com is one hop from
+	// https://example.com rather than two. Each matches only its own host.
+	for _, d := range hostRedirects(s) {
+		middlewares = append(middlewares, s.Namespace+"-"+HostRedirectMiddlewareName(s.Name, d.Hostname)+"@kubernetescrd")
+	}
 	if len(tlsHosts) > 0 && s.ClusterIssuer != "" {
 		annotations["cert-manager.io/cluster-issuer"] = s.ClusterIssuer
 		middlewares = append(middlewares, s.Namespace+"-"+RedirectMiddleware+"@kubernetescrd")

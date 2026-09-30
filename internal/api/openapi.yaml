@@ -2649,9 +2649,37 @@ paths:
       operationId: deleteDomain
       tags: [Domains]
       summary: Remove a domain
-      description: Member. The automatic domain cannot be removed.
+      description: >-
+        Member. The automatic domain cannot be removed. A domain that
+        redirected to this one serves the app again.
       responses:
         '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: setDomainRedirect
+      tags: [Domains]
+      summary: Redirect a domain to another of the app's, or stop
+      description: >-
+        Member. A permanent (308) redirect, path and query kept, to another
+        hostname of the same app that serves it; empty serves the app on this
+        hostname again. A redirect to a redirect, or redirecting a hostname
+        others redirect to, is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [redirect_to]
+              additionalProperties: false
+              properties:
+                redirect_to: {type: string, description: 'Another of the app''s hostnames, or empty.'}
+      responses:
+        '200':
+          description: The domain as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Domain'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/domains/{domainID}/check:
@@ -5824,6 +5852,7 @@ components:
         status_detail: {type: string}
         created_at: {type: string, format: date-time}
         dns_target: {type: string, description: 'Where a domain of your own has to point.'}
+        redirect_to: {type: string, description: 'Another of the app''s hostnames this one permanently redirects to. Absent when it serves the app.'}
 
     AddedDomain:
       allOf:
@@ -5879,6 +5908,7 @@ components:
         hostname: {type: string}
         tls: {type: boolean, default: true}
         path: {type: string, default: /}
+        redirect_to: {type: string, description: 'Another of the app''s hostnames to send this one''s visitors to, permanently.'}
 
     # --- scaling and processes ---
 

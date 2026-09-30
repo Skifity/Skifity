@@ -172,6 +172,14 @@ own rate limit, so cert-manager can ask for a certificate and keep renewing it.
 Your app keeps its original address too, so nothing breaks while DNS
 propagates.
 
+To have `www.example.com` and `example.com` both work, add both, and set
+**Visitors** on the one you do not want people to stay on to **Go to** the
+other. Visitors there are sent on permanently, with the same path and query,
+in one step even from plain HTTP, and search engines keep one address instead
+of two. The same works for an old name you are moving away from. Both names are
+on the app's certificate, so the redirecting one still needs its DNS pointed
+here.
+
 ## 5. Add a second server
 
 One server is fine to start — you already have one, the machine you installed

@@ -609,10 +609,10 @@ func (db *DB) CreateDomain(ctx context.Context, d *Domain) error {
 		d.ID = NewID("dom")
 	}
 	now := Now()
-	_, err := db.Exec(ctx, `INSERT INTO domains (id, app_id, hostname, path, tls, auto, status, status_detail, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+	_, err := db.Exec(ctx, `INSERT INTO domains (id, app_id, hostname, path, tls, auto, status, status_detail, redirect_to, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		d.ID, d.AppID, d.Hostname, defaultStr(d.Path, "/"), d.TLS, d.Auto,
-		defaultStr(d.Status, "pending"), d.StatusDetail, now)
+		defaultStr(d.Status, "pending"), d.StatusDetail, d.RedirectTo, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: %s is already used by another app", ErrConflict, d.Hostname)
@@ -647,7 +647,7 @@ func (db *DB) DomainOwner(ctx context.Context, hostname string) (string, error) 
 
 // ListDomains returns an app's domains.
 func (db *DB) ListDomains(ctx context.Context, appID string) ([]Domain, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, app_id, hostname, path, tls, auto, status, status_detail, created_at
+	rows, err := db.QueryContext(ctx, `SELECT id, app_id, hostname, path, tls, auto, status, status_detail, redirect_to, created_at
 		FROM domains WHERE app_id = ? ORDER BY auto DESC, hostname`, appID)
 	if err != nil {
 		return nil, fmt.Errorf("list domains: %w", err)
@@ -657,7 +657,7 @@ func (db *DB) ListDomains(ctx context.Context, appID string) ([]Domain, error) {
 	for rows.Next() {
 		var d Domain
 		var created string
-		if err := rows.Scan(&d.ID, &d.AppID, &d.Hostname, &d.Path, &d.TLS, &d.Auto, &d.Status, &d.StatusDetail, &created); err != nil {
+		if err := rows.Scan(&d.ID, &d.AppID, &d.Hostname, &d.Path, &d.TLS, &d.Auto, &d.Status, &d.StatusDetail, &d.RedirectTo, &created); err != nil {
 			return nil, fmt.Errorf("scan domain: %w", err)
 		}
 		d.CreatedAt, _ = ParseTime(created)
@@ -672,11 +672,31 @@ func (db *DB) ListDomains(ctx context.Context, appID string) ([]Domain, error) {
 // It touches only the automatic domain: one somebody typed in themselves is
 // theirs, and a settings change must never rewrite it.
 func (db *DB) SetAutoDomain(ctx context.Context, id, hostname string, tls bool) error {
-	_, err := db.Exec(ctx,
-		`UPDATE domains SET hostname = ?, tls = ?, status = 'pending', status_detail = '' WHERE id = ? AND auto = 1`,
-		hostname, tls, id)
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		// A redirect to the old address follows it to the new one.
+		if _, err := tx.ExecContext(ctx, `UPDATE domains SET redirect_to = ?
+			WHERE redirect_to != '' AND redirect_to = (SELECT hostname FROM domains WHERE id = ? AND auto = 1)
+			AND app_id = (SELECT app_id FROM domains WHERE id = ?)`, hostname, id, id); err != nil {
+			return fmt.Errorf("move redirects to the automatic domain: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE domains SET hostname = ?, tls = ?, status = 'pending', status_detail = '' WHERE id = ? AND auto = 1`,
+			hostname, tls, id); err != nil {
+			return fmt.Errorf("move the automatic domain: %w", err)
+		}
+		return nil
+	})
+}
+
+// SetDomainRedirect makes a domain redirect to another hostname of its app,
+// or, with an empty target, serve the app again.
+func (db *DB) SetDomainRedirect(ctx context.Context, id, target string) error {
+	res, err := db.Exec(ctx, `UPDATE domains SET redirect_to = ? WHERE id = ?`, target, id)
 	if err != nil {
-		return fmt.Errorf("move the automatic domain: %w", err)
+		return fmt.Errorf("set the domain's redirect: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -690,13 +710,28 @@ func (db *DB) SetDomainStatus(ctx context.Context, id, status, detail string) er
 	return nil
 }
 
-// DeleteDomain detaches a hostname.
+// DeleteDomain detaches a hostname. A domain of the same app that redirected
+// to it serves the app again rather than redirecting to nothing.
 func (db *DB) DeleteDomain(ctx context.Context, id string) error {
-	res, err := db.Exec(ctx, `DELETE FROM domains WHERE id = ?`, id)
+	var n int64
+	err := db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE domains SET redirect_to = ''
+			WHERE redirect_to != ''
+			AND redirect_to = (SELECT hostname FROM domains WHERE id = ?)
+			AND app_id = (SELECT app_id FROM domains WHERE id = ?)`, id, id); err != nil {
+			return fmt.Errorf("clear redirects to the domain: %w", err)
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM domains WHERE id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("delete domain: %w", err)
+		}
+		n, _ = res.RowsAffected()
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("delete domain: %w", err)
+		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil

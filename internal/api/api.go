@@ -379,6 +379,7 @@ func (s *Server) routes() chi.Router {
 				app.Get("/domains", s.handleListDomains)
 				app.Post("/domains", s.handleAddDomain)
 				app.Delete("/domains/{domainID}", s.handleDeleteDomain)
+				app.Patch("/domains/{domainID}", s.handleSetDomainRedirect)
 				// Whether its DNS points here yet; see domain_dns.go.
 				app.Post("/domains/{domainID}/check", s.handleCheckDomainDNS)
 				app.Get("/scaling", s.handleGetScaling)

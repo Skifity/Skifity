@@ -383,6 +383,9 @@ type Domain struct {
 	Status       string    `json:"status"`
 	StatusDetail string    `json:"status_detail,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+	// RedirectTo is another of the app's hostnames this one permanently
+	// redirects to; empty when it serves the app. See migration 0051.
+	RedirectTo string `json:"redirect_to,omitempty"`
 
 	// DNSTarget is where this hostname has to point, filled in when a list is
 	// built rather than stored: it is a property of the cluster, not of the

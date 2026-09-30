@@ -221,6 +221,9 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
 	}
+	for _, redirect := range kube.BuildHostRedirects(spec) {
+		objects = append(objects, redirect)
+	}
 	processes, err := c.db.ListProcesses(ctx, app.ID)
 	if err != nil {
 		return "", err
@@ -550,7 +553,9 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	// had.
 	if !app.Internal {
 		for _, d := range domains {
-			spec.Domains = append(spec.Domains, kube.DomainSpec{Hostname: d.Hostname, Path: d.Path, TLS: d.TLS})
+			spec.Domains = append(spec.Domains, kube.DomainSpec{
+				Hostname: d.Hostname, Path: d.Path, TLS: d.TLS, RedirectTo: d.RedirectTo,
+			})
 		}
 		spec.URL = primaryURL(domains)
 	}
@@ -762,9 +767,17 @@ func primaryURL(domains []store.Domain) string {
 	if len(domains) == 0 {
 		return ""
 	}
+	// A hostname that only redirects is not the app's address: its first
+	// own domain is, and the automatic one when it has none.
 	chosen := domains[0]
 	for _, domain := range domains {
-		if !domain.Auto {
+		if domain.RedirectTo == "" {
+			chosen = domain
+			break
+		}
+	}
+	for _, domain := range domains {
+		if !domain.Auto && domain.RedirectTo == "" {
 			chosen = domain
 			break
 		}

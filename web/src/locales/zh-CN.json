@@ -340,7 +340,8 @@
       "auth.password_reset": "通过链接重置了密码",
       "environment.cloned": "环境已克隆",
       "notification.updated": "已更改通知渠道",
-      "server.ssh_passwords_off": "已在服务器上关闭 SSH 密码登录"
+      "server.ssh_passwords_off": "已在服务器上关闭 SSH 密码登录",
+      "domain.redirect_changed": "域名重定向已更改"
     }
   },
   "projects": {
@@ -785,7 +786,11 @@
     "dnsUnknownHelp": "这个面板不知道自己的公网地址，所以无法判断那是不是这里。管理员可以在设置、域名中填写。",
     "dnsCertificateSoon": "DNS 指向这里后才会签发证书，所以证书应该会在几分钟内跟上。",
     "dnsCertificateAfter": "DNS 指向这里后才会签发证书。",
-    "dnsRecordsFound": "找到的记录："
+    "dnsRecordsFound": "找到的记录：",
+    "visitors": "访问者",
+    "servesTheApp": "访问应用",
+    "redirectTo": "跳转到 {{hostname}}",
+    "redirectHelp": "访问 {{hostname}} 的用户会被永久重定向到 {{target}}，路径保持不变。搜索引擎也会将页面迁移到 {{target}}。"
   },
   "scaling": {
     "title": "伸缩",

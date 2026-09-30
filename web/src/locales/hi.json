@@ -348,7 +348,8 @@
       "auth.password_reset": "लिंक से अपना पासवर्ड रीसेट किया",
       "environment.cloned": "एनवायरनमेंट क्लोन किया गया",
       "notification.updated": "नोटिफ़िकेशन चैनल बदला गया",
-      "server.ssh_passwords_off": "सर्वर पर SSH पासवर्ड बंद किए गए"
+      "server.ssh_passwords_off": "सर्वर पर SSH पासवर्ड बंद किए गए",
+      "domain.redirect_changed": "डोमेन रीडायरेक्ट बदला गया"
     }
   },
   "projects": {
@@ -797,7 +798,11 @@
     "dnsUnknownHelp": "यह पैनल अपना सार्वजनिक पता नहीं जानता, इसलिए यह नहीं बता सकता कि वह यहीं है या नहीं। एक एडमिनिस्ट्रेटर इसे सेटिंग्स, डोमेन में सेट कर सकता है।",
     "dnsCertificateSoon": "DNS के यहाँ इशारा करते ही सर्टिफ़िकेट जारी होता है, इसलिए यह कुछ मिनटों में आ जाना चाहिए।",
     "dnsCertificateAfter": "DNS के यहाँ इशारा करते ही सर्टिफ़िकेट जारी होता है।",
-    "dnsRecordsFound": "मिले रिकॉर्ड:"
+    "dnsRecordsFound": "मिले रिकॉर्ड:",
+    "visitors": "विज़िटर",
+    "servesTheApp": "ऐप खोलें",
+    "redirectTo": "{{hostname}} पर भेजें",
+    "redirectHelp": "{{hostname}} पर आने वाले विज़िटर उसी पाथ के साथ स्थायी रूप से {{target}} पर भेजे जाते हैं। सर्च इंजन भी पेज को {{target}} पर ले जाते हैं।"
   },
   "scaling": {
     "title": "स्केलिंग",

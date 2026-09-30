@@ -1490,6 +1490,9 @@ type addDomainRequest struct {
 	Hostname string `json:"hostname"`
 	TLS      *bool  `json:"tls,omitempty"`
 	Path     string `json:"path,omitempty"`
+	// RedirectTo is another of the app's hostnames this one sends its
+	// visitors to, permanently: www.example.com to example.com.
+	RedirectTo string `json:"redirect_to,omitempty"`
 }
 
 func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
@@ -1524,11 +1527,23 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 		tls = *req.TLS
 	}
 	domain := store.Domain{
-		AppID:    app.ID,
-		Hostname: hostname,
-		Path:     defaultString(req.Path, "/"),
-		TLS:      tls,
-		Status:   "pending",
+		AppID:      app.ID,
+		Hostname:   hostname,
+		Path:       defaultString(req.Path, "/"),
+		TLS:        tls,
+		Status:     "pending",
+		RedirectTo: kube.CleanHostname(req.RedirectTo),
+	}
+	if domain.RedirectTo != "" {
+		existing, err := s.db.ListDomains(r.Context(), app.ID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if err := checkRedirect(existing, domain, domain.RedirectTo); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 	if err := s.db.CreateDomain(r.Context(), &domain); err != nil {
 		if errors.Is(err, store.ErrConflict) {

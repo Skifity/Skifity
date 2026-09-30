@@ -434,6 +434,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		kube.BuildPasswordSecret(spec),
 		kube.BuildPasswordMiddleware(spec),
 	}
+	for _, redirect := range kube.BuildHostRedirects(spec) {
+		objects = append(objects, redirect)
+	}
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
 	}
@@ -631,6 +634,22 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 		if err := applier.Delete(ctx, "v1", "Secret",
 			spec.Namespace, kube.PasswordSecretName(spec.Name)); err != nil {
 			d.log.Warn("could not remove the password secret", "app", app.ID, "error", err)
+		}
+	}
+	// A redirect somebody took off, or whose hostname went, is not left to
+	// answer for a name the Ingress no longer routes.
+	wanted := map[string]bool{}
+	for _, redirect := range kube.BuildHostRedirects(spec) {
+		wanted[redirect.GetName()] = true
+	}
+	if middlewares, err := applier.List(ctx, "traefik.io/v1alpha1", "Middleware", spec.Namespace); err == nil {
+		for _, middleware := range middlewares {
+			if kube.IsHostRedirectOf(middleware, spec.Name) && !wanted[middleware.GetName()] {
+				if err := applier.Delete(ctx, "traefik.io/v1alpha1", "Middleware",
+					spec.Namespace, middleware.GetName()); err != nil {
+					d.log.Warn("could not remove a redirect", "app", app.ID, "error", err)
+				}
+			}
 		}
 	}
 	if !kube.ScaleToZeroEnabled(spec) {
