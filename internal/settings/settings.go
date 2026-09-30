@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"skifity/internal/cron"
 	"skifity/internal/pluginstore"
 )
 
@@ -135,6 +136,8 @@ const (
 	KeyS3Endpoint            = "storage.s3_endpoint"
 	KeyS3Region              = "storage.s3_region"
 	KeyS3Bucket              = "storage.s3_bucket"
+	KeyPanelBackupSchedule   = "storage.panel_backup_schedule"
+	KeyPanelBackupKeep       = "storage.panel_backup_keep"
 	KeyS3AccessKey           = "storage.s3_access_key"
 	KeyS3SecretKey           = "storage.s3_secret_key"
 	KeyS3PathStyle           = "storage.s3_path_style"
@@ -372,6 +375,18 @@ var Definitions = []Definition{
 		Help: "Stored encrypted and never shown again."},
 	{Key: KeyS3PathStyle, Label: "Use path-style URLs", Group: GroupStorage, Kind: KindBool, Validate: validateBool,
 		Help: "Turn this on for MinIO and most self-hosted S3 services."},
+	{
+		Key: KeyPanelBackupSchedule, Label: "Back up this panel", Group: GroupStorage,
+		Help:        "When to copy this panel's own database to the bucket above, as a cron schedule in UTC. Empty copies it every day at 03:17; off turns it off. The master key is never uploaded: keep it somewhere else, because a restore needs both.",
+		Placeholder: "17 3 * * *",
+		Validate:    validatePanelBackupSchedule,
+	},
+	{
+		Key: KeyPanelBackupKeep, Label: "Panel backups to keep", Group: GroupStorage,
+		Help:        "How many copies of this panel's database to keep in the bucket. Older ones are deleted after a new one succeeds, never before. Empty keeps 14.",
+		Placeholder: "14",
+		Kind:        KindNumber, Validate: validatePanelBackupKeep,
+	},
 	{Key: KeySMTPHost, Label: "SMTP host", Group: GroupEmail, Placeholder: "smtp.example.com",
 		Help: "Needed for email notifications and for password reset emails."},
 	{Key: KeySMTPPort, Label: "SMTP port", Group: GroupEmail, Placeholder: "587",
@@ -488,6 +503,30 @@ func LookupComponent(name string) (Component, bool) {
 
 // k3sVersionPattern is a k3s release tag: a Kubernetes version and a k3s build.
 var k3sVersionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+\+k3s\d+$`)
+
+// validatePanelBackupSchedule accepts a five-field cron expression, or "off".
+func validatePanelBackupSchedule(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "off" {
+		return nil
+	}
+	if _, err := cron.ParseSchedule(value); err != nil {
+		return fmt.Errorf("that is not a schedule: %w. Write five fields, such as 17 3 * * *, or off", err)
+	}
+	return nil
+}
+
+// validatePanelBackupKeep accepts a count from 1 to 365.
+func validatePanelBackupKeep(value string) error {
+	if value == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n < 1 || n > 365 {
+		return fmt.Errorf("keep between 1 and 365 copies")
+	}
+	return nil
+}
 
 // IsK3sVersion reports whether a version is one the k3s installer can be told
 // to install, such as v1.34.1+k3s1.

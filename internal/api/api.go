@@ -365,6 +365,8 @@ func (s *Server) routes() chi.Router {
 				admin.Post("/security/recovery-key/saved", s.handleRecoveryKeySaved)
 				admin.Get("/upgrade", s.handleUpgradeStatus)
 				admin.Post("/upgrade", s.handleUpgrade)
+				admin.Get("/panel/backups", s.handleListPanelBackups)
+				admin.Post("/panel/backups", s.handleBackUpPanel)
 				// Behind the same authentication as everything else. A
 				// metrics page says how many apps and servers exist and how
 				// the panel is doing, which is not a thing to hand to

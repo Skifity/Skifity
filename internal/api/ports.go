@@ -294,4 +294,6 @@ type BackupManager interface {
 	RestoreVolume(ctx context.Context, backupID string, overwrite bool) (store.Operation, error)
 	// Verify checks that configured storage is reachable and writable.
 	Verify(ctx context.Context) error
+	// BackupPanel copies the panel's own database to backup storage.
+	BackupPanel(ctx context.Context, kind string) (store.Backup, error)
 }

@@ -284,7 +284,8 @@
       "app.password_set": "Password app dipasang",
       "app.password_removed": "Password app dihapus",
       "auth.sso_linked": "Single sign-on ditautkan",
-      "auth.sso_unlinked": "Tautan single sign-on dilepas"
+      "auth.sso_unlinked": "Tautan single sign-on dilepas",
+      "panel.backed_up": "Panel dicadangkan"
     }
   },
   "projects": {
@@ -1070,10 +1071,24 @@
       "storage_s3_secret_key": {
         "label": "Secret key S3",
         "help": "Disimpan terenkripsi dan tidak pernah ditampilkan lagi."
+      },
+      "storage_panel_backup_schedule": {
+        "label": "Cadangkan panel ini",
+        "help": "Kapan database panel ini disalin ke bucket di atas, sebagai jadwal cron dalam UTC. Kosong berarti setiap hari pukul 03:17; off mematikannya. Kunci master tidak pernah diunggah: simpan di tempat lain, karena pemulihan membutuhkan keduanya."
+      },
+      "storage_panel_backup_keep": {
+        "label": "Cadangan panel yang disimpan",
+        "help": "Berapa salinan database panel ini yang disimpan di bucket. Salinan lama dihapus setelah salinan baru berhasil, tidak pernah sebelumnya. Kosong berarti 14."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
-    "revokeInvitationConfirm": "Tautan yang dikirim ke {{email}} berhenti berfungsi."
+    "revokeInvitationConfirm": "Tautan yang dikirim ke {{email}} berhenti berfungsi.",
+    "panelBackups": "Cadangan panel ini",
+    "panelBackupsHelp": "Salinan database milik panel ini sendiri — aplikasi, tim, pengaturan, dan riwayat — di bucket yang diatur pada Penyimpanan cadangan, tempat Anda juga menentukan kapan dan berapa banyak. Rahasia tetap tersegel dengan kunci master, dan kunci itu tidak pernah diunggah: simpan di tempat lain.",
+    "panelBackupsNone": "Belum ada salinan. Setelah penyimpanan cadangan diatur, salinan dibuat sesuai jadwal, atau buat satu sekarang.",
+    "panelBackupObject": "Di bucket",
+    "panelBackupTaken": "Salinan panel ini sudah ada di bucket.",
+    "panelBackupsRestore": "Untuk memulihkannya, unduh salinan dari bucket ke server, hentikan panel, lalu jalankan:"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2016,6 +2031,18 @@
         "cause": "{{0}}",
         "impact": "Server tidak digabungkan. Server harus menjalankan versi yang sama dengan cluster yang digabunginya.",
         "fix": "Pastikan panel bisa menjangkau API Kubernetes, lalu coba lagi."
+      },
+      "admin_restore_unreadable": {
+        "title": "Cadangan itu tidak bisa dibaca",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Berikan file persis seperti yang keluar dari bucket: .db.gz, atau .db dari `{{0}} admin backup-db`."
+      },
+      "admin_restore_not_a_panel": {
+        "title": "Itu bukan database panel yang utuh",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Gunakan cadangan lain. Yang terbaru di folder skifity/panel/ pada bucket biasanya yang tepat."
       }
     }
   },

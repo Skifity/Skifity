@@ -292,7 +292,8 @@
       "app.password_set": "App password set",
       "app.password_removed": "App password removed",
       "auth.sso_linked": "Linked single sign-on",
-      "auth.sso_unlinked": "Unlinked single sign-on"
+      "auth.sso_unlinked": "Unlinked single sign-on",
+      "panel.backed_up": "Panel backed up"
     }
   },
   "projects": {
@@ -1082,10 +1083,24 @@
       "storage_s3_secret_key": {
         "label": "S3 secret key",
         "help": "Stored encrypted and never shown again."
+      },
+      "storage_panel_backup_schedule": {
+        "label": "Back up this panel",
+        "help": "When to copy this panel's own database to the bucket above, as a cron schedule in UTC. Empty copies it every day at 03:17; off turns it off. The master key is never uploaded: keep it somewhere else, because a restore needs both."
+      },
+      "storage_panel_backup_keep": {
+        "label": "Panel backups to keep",
+        "help": "How many copies of this panel's database to keep in the bucket. Older ones are deleted after a new one succeeds, never before. Empty keeps 14."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
-    "revokeInvitationConfirm": "The link sent to {{email}} stops working."
+    "revokeInvitationConfirm": "The link sent to {{email}} stops working.",
+    "panelBackups": "Backups of this panel",
+    "panelBackupsHelp": "Copies of this panel's own database — apps, teams, settings and history — in the bucket set under Backup storage, which is also where you say when and how many. Secrets stay sealed with the master key, and the key is never uploaded: keep it somewhere else.",
+    "panelBackupsNone": "No copies yet. Once backup storage is set, one is taken on schedule, or take one now.",
+    "panelBackupObject": "In the bucket",
+    "panelBackupTaken": "A copy of this panel is in the bucket.",
+    "panelBackupsRestore": "To put one back, download it from the bucket to the server, stop the panel, and run:"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2028,6 +2043,18 @@
         "cause": "{{0}}",
         "impact": "The server was not joined. A server has to run the same version as the cluster it joins.",
         "fix": "Check that the panel can reach the Kubernetes API, then retry."
+      },
+      "admin_restore_unreadable": {
+        "title": "That backup could not be read",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Give the file exactly as it came out of the bucket: a .db.gz, or a .db from `{{0}} admin backup-db`."
+      },
+      "admin_restore_not_a_panel": {
+        "title": "That is not a whole panel database",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Take a different backup. The newest one in the bucket's skifity/panel/ folder is usually the one to use."
       }
     }
   },

@@ -6,6 +6,7 @@ import {
   BookOpenIcon,
   CheckCircle2Icon,
   CopyIcon,
+  DatabaseBackupIcon,
   DownloadIcon,
   KeyRoundIcon,
   LinkIcon,
@@ -21,6 +22,7 @@ import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
 import { NotificationChannels } from "@/components/settings/notification-channels"
+import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -56,10 +58,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
-import { formatDateTime } from "@/lib/format"
+import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type {
   AuditEvent,
+  Backup,
   Component,
   Invitation,
   Role,
@@ -128,6 +131,7 @@ export function SettingsPage() {
         <TabsContent value="panel" className="space-y-6 pt-4">
           {/* Git and plugins have tabs of their own, below. */}
           <SettingGroups except={["git", "plugins"]} />
+          <PanelBackupsCard />
           <ExportCard />
           <VersionCard />
         </TabsContent>
@@ -242,7 +246,6 @@ function SettingGroups({ only, except }: { only?: string[]; except?: string[] })
               {t("common.cancel")}
             </Button>
             <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-              {save.isPending && <Spinner />}
               {save.isPending && <Spinner />}
               {save.isPending ? t("common.saving") : t("common.save")}
             </Button>
@@ -389,6 +392,114 @@ function VersionCard() {
         <p className="text-xs text-muted-foreground">
           {t("settings.noUpdateCheck", { product: meta?.product ?? "Skifity" })}
         </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * The panel's own database, copied to the bucket.
+ *
+ * Everything else here is about what the panel looks after; this is the panel
+ * looking after itself. The schedule and how many to keep are ordinary
+ * settings in the Backup storage card above. This lists what is in the bucket
+ * and takes a copy on demand, which is what you want right before an upgrade.
+ * Putting one back happens with the panel stopped, so it is a command and not
+ * a button.
+ */
+function PanelBackupsCard() {
+  const { t } = useTranslation()
+
+  const backups = useQuery({
+    queryKey: ["panel-backups"],
+    queryFn: () => api.get<List<Backup>>("/api/panel/backups"),
+  })
+
+  const backupNow = useMutation({
+    mutationFn: () => api.post<Backup>("/api/panel/backups"),
+    onSuccess: () => toast.success(t("settings.panelBackupTaken")),
+    // A failure is recorded too, so the list is refreshed either way.
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["panel-backups"] }),
+  })
+
+  const items = backups.data?.items ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("settings.panelBackups")}</CardTitle>
+        <CardDescription>{t("settings.panelBackupsHelp")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={backupNow.isPending}
+            onClick={() => backupNow.mutate()}
+          >
+            {backupNow.isPending ? <Spinner /> : <DatabaseBackupIcon />}
+            {t("databases.backupNow")}
+          </Button>
+        </div>
+
+        {backupNow.error != null && <ErrorDisplay error={backupNow.error} />}
+
+        {backups.isLoading ? (
+          <Skeleton className="h-24" />
+        ) : backups.error ? (
+          <ErrorDisplay error={backups.error} onRetry={() => void backups.refetch()} />
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("settings.panelBackupsNone")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("common.created")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t("common.size")}</TableHead>
+                <TableHead className="hidden md:table-cell">
+                  {t("settings.panelBackupObject")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((backup) => (
+                <TableRow key={backup.id}>
+                  <TableCell>
+                    <div className="text-sm">{formatDateTime(backup.created_at)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatRelative(backup.created_at)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge
+                      status={backup.status}
+                      label={t(`databases.backupStatus.${backup.status}`, {
+                        defaultValue: backup.status,
+                      })}
+                    />
+                    {backup.error_message && (
+                      <p className="mt-1 max-w-xs text-xs break-words text-destructive">
+                        {backup.error_message}
+                      </p>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden tabular-nums sm:table-cell">
+                    {backup.size_bytes ? formatBytes(backup.size_bytes) : "—"}
+                  </TableCell>
+                  <TableCell className="hidden font-mono text-xs break-all md:table-cell">
+                    {backup.location || "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        <p className="text-xs text-muted-foreground">{t("settings.panelBackupsRestore")}</p>
+        <code className="block rounded bg-muted px-2 py-1 font-mono text-xs break-all">
+          skifity admin restore-db ./panel.db.gz
+        </code>
       </CardContent>
     </Card>
   )

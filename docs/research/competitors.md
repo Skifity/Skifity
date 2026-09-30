@@ -125,7 +125,7 @@ here, or needs `make verify` on a real server.
 | # | Gap | Cited by | Size | Without a cluster |
 |---|---|---|---|---|
 | 1 | Metrics history with charts, and threshold alerts (memory, disk, crash loops, out-of-memory) | Coolify, Dokploy, Railway, Render, Heroku, Northflank, Vercel, Netlify, Canine, Kubero, Easypanel, Cloudron | M | The storage, API and charts; real numbers need one |
-| 2 | Scheduled off-site backup of the panel's own database, and a restore command | Coolify, Dokploy, CapRover, Cloudron, Portainer | S–M | Yes |
+| 2 | **Closed in Phase 84.** Scheduled off-site backup of the panel's own database, and a restore command | Coolify, Dokploy, CapRover, Cloudron, Portainer | S–M | Yes |
 | 3 | A read-only role, and members limited to projects | Coolify, Fly, Portainer, Dokploy, Easypanel, Kubero, Canine, Netlify | M | Yes |
 | 4 | A remote MCP endpoint over HTTP, and read-only/destructive annotations on the tools | Coolify, Canine, Vercel, Netlify, Dokploy, Easypanel, Portainer | M | Yes |
 | 5 | The environment described in a file in the repository (`skifity.yaml`), with plan and apply | Render, DigitalOcean, Porter, Railway, Portainer | L | Yes |

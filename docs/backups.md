@@ -1,7 +1,7 @@
 # Backups
 
-Skifity backs up managed databases — PostgreSQL, MariaDB and Redis — and the
-volumes your apps write files to.
+Skifity backs up managed databases — PostgreSQL, MariaDB and Redis — the
+volumes your apps write files to, and [its own database](#the-panel-itself).
 
 Nothing is backed up until you say where to put it.
 
@@ -37,7 +37,7 @@ Each database has its own schedule, set on its Backups tab, written as cron:
 successful new one, never before: a retention rule must not be able to leave you
 with nothing.
 
-Times are the server's, not yours.
+Times are UTC, not your local time.
 
 ## Restoring
 
@@ -72,15 +72,65 @@ message says how much it wanted.
 because the app never wrote to the one you think it did. Check which database
 the app is actually connected to on its Variables tab.
 
+## The panel itself
+
+The panel's own database — teams, apps, domains, settings, variables and
+history — is copied to the same bucket, on its own schedule, once backup storage
+is set up. It is a file on the first control plane server, and that server's
+disk is the thing that fails; a copy beside it goes with it.
+
+Under **Settings → Backup storage**:
+
+* **Back up this panel** is when, as cron in UTC. Empty is every day at 03:17;
+  `off` turns it off.
+* **Panel backups to keep** is how many. Empty keeps 14. As with everything
+  else, the old ones go after a new one succeeds, never before.
+
+**Backups of this panel**, on the same page, lists what is in the bucket and
+takes a copy now — which is what you want right before an upgrade. A copy that
+fails is recorded there and sent to the notification channels of every team an
+administrator belongs to, because it is not one team's problem.
+
+The copies are in the bucket under `skifity/panel/`, named by date, compressed
+with gzip. The secrets inside are sealed with the master key, which is never
+uploaded: a bucket that leaks hands over ciphertext.
+
+### Putting it back
+
+Download the copy from the bucket to the panel's server, then:
+
+```sh
+sudo skifity admin restore-db ./20260930-031700-bak-9f2c-panel.db.gz
+```
+
+Without `--yes` it changes nothing. It checks that the file is a panel's
+database, that SQLite finds it whole, that it has at least one account, and
+whether its secrets open with the master key on this server — then prints what
+it found and the three commands to run:
+
+```sh
+kubectl -n skifity-system scale deployment/skifity-panel --replicas=0
+sudo skifity admin restore-db --yes ./20260930-031700-bak-9f2c-panel.db.gz
+kubectl -n skifity-system scale deployment/skifity-panel --replicas=1
+```
+
+The database it replaces is not deleted: it is kept beside the new one as
+`panel.db.before-restore-<time>`. A backup from an older version is brought up
+to date the first time it is opened, the same way an upgrade would.
+
+If it says the secrets do not open with the master key, put the key the backup
+was taken with at `/etc/skifity/master.key` before starting the panel, or pass
+the one you have with `--master-key`. A panel started with the wrong key comes
+up with every secret unreadable.
+
 ## What is not backed up
 
-The panel's own state and the master key. They are files on the control plane
-server, and [Configuration](configuration.md) says which ones and why they
-should not be kept together.
-
-A backup of a database is useless without the master key that decrypts the
-credentials stored alongside it, so back that up somewhere else, once, and
-properly.
+The master key. A backup of anything — a database, a volume, the panel itself —
+is useless without the key that decrypts the credentials stored alongside it,
+and uploading it next to them would make the bucket the one thing an attacker
+needs. Back it up somewhere else, once, and properly: the recovery key the panel
+asked you to download at setup is the same secret in a form you can write on
+paper. [Configuration](configuration.md#what-to-back-up) has the details.
 
 
 ## Volumes

@@ -4389,6 +4389,55 @@ Firecrawl ran out of credits partway through and GitHub's API is blocked from
 this sandbox; the files say which sources were read another way, and which
 figures could not be confirmed.
 
+## Phase 84 — the panel backed everything up except itself
+
+Gap 2 of the research's ranked list, named by five of the twenty-two. The panel
+backed up every database and volume it looked after to a bucket, on a schedule,
+with retention and a notification when it failed — and its own database, which
+holds every team, app, domain and variable, it copied only when somebody ran
+`skifity admin backup-db` by hand, to a path on the same disk. That disk is the
+first control plane server's, which is the one thing a panel backup is for
+losing. And there was no command to put a copy back: the troubleshooting page
+said to move a file into place, with nothing checking the file first.
+
+Now the backup manager copies the panel's database to the backup bucket on its
+own schedule — every day at 03:17 UTC unless the new **Back up this panel**
+setting says otherwise, `off` to turn it off — and keeps fourteen unless **Panel
+backups to keep** says otherwise. The copy is `db.Snapshot` (the same consistent
+copy `backup-db` takes, safe while the panel runs), gzipped, uploaded by the
+panel itself rather than a Job because the file is the panel's, under
+`skifity/panel/<time>-<backup id>-panel.db.gz`. Retention runs only after a copy
+succeeds. A copy that fails is recorded and sent to the channels of every team
+an administrator belongs to, since notification channels belong to teams and
+this is not one team's problem. With no bucket configured, nothing is recorded
+and nobody is told: there is nowhere to put it yet. The master key is never
+uploaded, and every page that mentions the backup says so.
+
+`GET` and `POST /api/panel/backups` (administrators) list the copies and take
+one now; the settings page has a card for both, the audit log records
+`panel.backed_up`. `skifity admin restore-db <file>` takes a copy as it comes
+out of the bucket, or a `backup-db` file, unpacks it beside the database, opens
+it the way the panel will (which also migrates an older one), runs SQLite's
+`integrity_check`, requires at least one account, and checks that a sealed
+setting opens with the master key on this server. Without `--yes` it removes
+the candidate and prints what it found and the three commands to run; with it,
+the current database and its `-wal` and `-shm` are renamed aside, not deleted,
+and the candidate renamed into place on the same filesystem. Anything it refuses
+has an errdoc entry, `admin.restore_unreadable` or `admin.restore_not_a_panel`.
+
+Tested: the upload against an in-process S3 that decodes the signed streaming
+body and checks it is a gzipped SQLite database; retention keeping two of three;
+a refused upload recorded and sent to the administrators' team; no storage
+meaning no record; the schedule's default, a set one and `off`. For the command:
+a restore that puts the backup's account in place and keeps the old database's;
+no `--yes` changing no file; a file with no accounts, a truncated gzip, a file
+that is not SQLite and a missing file each refused with nothing moved; and a
+backup sealed with another key called out. Writing the plan also caught that it
+named `deployment/skifity`; the panel's Deployment is `skifity-panel`.
+
+Not executed: an upload to a real S3 service rather than the fake, and a restore
+on a real panel's server.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

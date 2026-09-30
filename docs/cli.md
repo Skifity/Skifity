@@ -204,6 +204,18 @@ Resetting a password signs out every device that was signed in as that account.
 Two-factor authentication stays on, so you will still need your authenticator
 app.
 
+Two more work on the database itself:
+
+```sh
+sudo skifity admin backup-db /root/panel-backup.db
+sudo skifity admin restore-db ./20260930-031700-bak-9f2c-panel.db.gz
+```
+
+`backup-db` takes a consistent copy while the panel runs. `restore-db` puts one
+back — a copy from `backup-db`, or one the panel uploaded to the backup bucket —
+and without `--yes` only checks it and says what it would do. See
+[Backups](backups.md#putting-it-back).
+
 ## AI assistants
 
 The same binary is an MCP server:

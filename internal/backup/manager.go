@@ -460,6 +460,17 @@ func (m *Manager) RunScheduled(ctx context.Context) {
 // that silently did not happen. A policy that matches several of them still
 // runs once: catching up is not a reason to take the same backup twice.
 func (m *Manager) RunScheduledAt(ctx context.Context, minutes []time.Time) {
+	// The panel's own copy, on its own goroutine: an upload of the whole
+	// database must not hold up the minute tick, and it outlives the tick's
+	// context on purpose.
+	if m.panelDue(ctx, minutes) {
+		runsafe.Go(m.log, "back up the panel", func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Minute)
+			defer cancel()
+			m.runScheduledPanel(ctx)
+		})
+	}
+
 	policies, err := m.db.ListEnabledBackupPolicies(ctx)
 	if err != nil {
 		m.log.Warn("could not read the backup schedules", "error", err)

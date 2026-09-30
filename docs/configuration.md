@@ -249,11 +249,15 @@ Two things, and they are not the same thing:
    and history. Your applications' data is in their volumes and databases, and
    is backed up separately by the panel itself.
 
-   Take this copy with `skifity admin backup-db <path>` rather than copying the
-   file. The database runs in WAL mode, so a committed change can still be in
-   `panel.db-wal` and not yet in `panel.db`; a plain copy loses it and says
-   nothing. The command goes through SQLite, works while the panel is running,
-   and writes one file.
+   Once backup storage is set, the panel copies this to the bucket every day
+   by itself: see [Backups](backups.md#the-panel-itself), which also says how
+   to put a copy back with `skifity admin restore-db`.
+
+   To take a copy by hand, use `skifity admin backup-db <path>` rather than
+   copying the file. The database runs in WAL mode, so a committed change can
+   still be in `panel.db-wal` and not yet in `panel.db`; a plain copy loses it
+   and says nothing. The command goes through SQLite, works while the panel is
+   running, and writes one file.
 
 Keep the key somewhere the database backup is not. Together they are everything;
 apart, neither is enough.

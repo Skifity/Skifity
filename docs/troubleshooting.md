@@ -164,6 +164,11 @@ The panel's database and master key live on the first control plane server, in
    `/etc/skifity/master.key` across.
 5. Start it again: `kubectl -n skifity-system scale deploy/skifity-panel --replicas=1`
 
+If the old server is gone rather than being moved, the copy is the newest one
+in the backup bucket under `skifity/panel/`. Install Skifity on the new server,
+put the master key in place, and follow [Putting it back](backups.md#putting-it-back):
+`skifity admin restore-db` checks the copy before it replaces anything.
+
 Without the master key the database is unreadable, which is the point of the
 recovery key you were asked to download. [Configuration](configuration.md) has
 the full list of what to back up.

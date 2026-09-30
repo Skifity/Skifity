@@ -42,6 +42,10 @@ func (r *recordingBackups) RestoreVolume(_ context.Context, backupID string, ove
 
 func (r *recordingBackups) Verify(context.Context) error { return nil }
 
+func (r *recordingBackups) BackupPanel(context.Context, string) (store.Backup, error) {
+	return store.Backup{ID: "bkp_panel", TargetType: "panel", TargetID: "panel", Status: "succeeded"}, nil
+}
+
 // volumeWithBackup gives a tenant an app, a volume on it, and one finished
 // backup of that volume.
 func (h *harness) volumeWithBackup(t *testing.T, owner tenant, name string) (store.Volume, store.Backup) {

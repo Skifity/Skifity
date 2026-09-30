@@ -284,7 +284,8 @@
       "app.password_set": "已设置应用密码",
       "app.password_removed": "已移除应用密码",
       "auth.sso_linked": "已关联单点登录",
-      "auth.sso_unlinked": "已取消关联单点登录"
+      "auth.sso_unlinked": "已取消关联单点登录",
+      "panel.backed_up": "已备份面板"
     }
   },
   "projects": {
@@ -1070,10 +1071,24 @@
       "storage_s3_secret_key": {
         "label": "S3 私密密钥",
         "help": "加密存储，之后不再显示。"
+      },
+      "storage_panel_backup_schedule": {
+        "label": "备份本面板",
+        "help": "何时把本面板自身的数据库复制到上面的存储桶，使用 UTC 时间的 cron 表达式。留空则每天 03:17 备份；填 off 则关闭。主密钥从不上传：请把它保存在别处，因为恢复时两者都需要。"
+      },
+      "storage_panel_backup_keep": {
+        "label": "保留的面板备份数",
+        "help": "在存储桶中保留本面板数据库的几份副本。只有新副本成功后才会删除旧的，绝不提前。留空则保留 14 份。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
-    "revokeInvitationConfirm": "发给 {{email}} 的链接会失效。"
+    "revokeInvitationConfirm": "发给 {{email}} 的链接会失效。",
+    "panelBackups": "本面板的备份",
+    "panelBackupsHelp": "本面板自身数据库（应用、团队、设置和历史记录）的副本，存放在“备份存储”中设置的存储桶里，何时备份、保留几份也在那里设置。密钥仍由主密钥加密，而主密钥从不上传：请把它保存在别处。",
+    "panelBackupsNone": "还没有副本。设置好备份存储后会按计划备份，也可以现在备份一份。",
+    "panelBackupObject": "存储桶中的位置",
+    "panelBackupTaken": "本面板的一份副本已存入存储桶。",
+    "panelBackupsRestore": "要恢复某个副本，请把它从存储桶下载到服务器，停止面板，然后运行："
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2016,6 +2031,18 @@
         "cause": "{{0}}",
         "impact": "服务器未加入。服务器必须运行与所加入集群相同的版本。",
         "fix": "确认面板可以访问 Kubernetes API，然后重试。"
+      },
+      "admin_restore_unreadable": {
+        "title": "无法读取该备份",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "请提供从存储桶中取出的原始文件：.db.gz，或由 `{{0}} admin backup-db` 生成的 .db。"
+      },
+      "admin_restore_not_a_panel": {
+        "title": "这不是一个完整的面板数据库",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "换一个备份。存储桶 skifity/panel/ 文件夹中最新的那个通常就是要用的。"
       }
     }
   },
