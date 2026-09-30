@@ -271,9 +271,18 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 		if err := s.db.CreateApp(r.Context(), &previewApp); err != nil {
 			return "", err
 		}
-		if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, event.Fork); err != nil {
+		links, err := s.db.ListLinksForApp(r.Context(), app.ID)
+		if err != nil {
 			return "", err
 		}
+		linked := map[string]bool{}
+		for _, link := range links {
+			linked[link.VarName] = true
+		}
+		if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, event.Fork, linked); err != nil {
+			return "", err
+		}
+		s.previewDatabases(r, env, previewApp, links, event.Fork)
 		if event.Fork {
 			s.log.Info("a preview from a fork was given no secrets",
 				"app", previewApp.ID, "pull_request", event.PullRequest)
@@ -312,13 +321,22 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 // be one that prints the environment. Somebody with write access to the
 // repository could read them from a deploy anyway, so a same-repository pull
 // request is treated as it was. This is the same line GitHub Actions draws.
-func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string, fork bool) error {
+//
+// A variable a database link wrote is never copied, fork or not: it is the
+// address of the app's own database, and a preview is given one of its own
+// instead (previewDatabases). Copied, it pointed every pull request at the
+// production database — refused by the environment's network policy where one
+// is enforced, and a migration from somebody's branch where one is not.
+func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string, fork bool, linked map[string]bool) error {
 	rows, err := s.db.ListVariables(r.Context(), fromAppID)
 	if err != nil {
 		return err
 	}
 	for _, row := range rows {
 		if fork && row.IsSecret {
+			continue
+		}
+		if linked[row.Key] {
 			continue
 		}
 		plaintext, err := s.keyring.Open(row.Sealed, variableContext(fromAppID, row.Key))
@@ -335,6 +353,61 @@ func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string
 		}
 	}
 	return nil
+}
+
+// previewDatabases gives a new preview a database of its own for each one the
+// app it copies is linked to: the same engine and version, small, empty, in the
+// preview's namespace, linked under the same variable. It goes when the preview
+// does, with the namespace and the environment it belongs to.
+//
+// Empty on purpose. A copy of production's data would put customers' records
+// in every pull request, and a preview whose release command runs migrations
+// is exactly the thing that has to run against something it can break.
+//
+// Not for a fork. Anybody can open a pull request from one, and a database per
+// pull request is a way for a stranger to fill somebody's server. That preview
+// starts without the variable, which fails loudly, rather than with production's.
+//
+// A database that cannot be made is not a reason to refuse the preview: the
+// panel's log says why, and the preview starts without the variable.
+func (s *Server) previewDatabases(r *http.Request, env store.Environment, previewApp store.App, links []store.DatabaseLink, fork bool) {
+	if len(links) == 0 {
+		return
+	}
+	if fork {
+		s.log.Info("a preview from a fork was given no databases", "app", previewApp.ID)
+		return
+	}
+	if s.databases == nil {
+		s.log.Warn("a preview needs a database and this panel cannot create one", "app", previewApp.ID)
+		return
+	}
+	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)
+	for _, link := range links {
+		source, err := s.db.GetDatabase(r.Context(), link.DatabaseID)
+		if err != nil {
+			s.log.Warn("could not read a linked database for a preview", "database", link.DatabaseID, "error", err)
+			continue
+		}
+		record, err := s.databases.Create(r.Context(), env, CreateDatabaseRequest{
+			Name: source.Name, Engine: source.Engine, Version: source.EngineVersion,
+			// A throwaway copy for a pull request: one instance, the least
+			// storage, whatever production asked for.
+			StorageGB: 1, Instances: 1,
+		})
+		if err != nil {
+			s.log.Warn("could not create a database for a preview",
+				"app", previewApp.ID, "engine", source.Engine, "error", err)
+			continue
+		}
+		s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
+		if err := s.databases.Link(r.Context(), record.ID, previewApp.ID, link.VarName); err != nil {
+			s.log.Warn("could not link a preview's database",
+				"app", previewApp.ID, "database", record.ID, "error", err)
+			continue
+		}
+		s.audit(r, teamID, "database.linked", "database", record.ID, previewApp.Name+" as "+link.VarName)
+	}
 }
 
 // cleanupPreviewFor removes the preview environment for a closed pull request or

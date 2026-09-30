@@ -298,6 +298,22 @@ was already reported when it first went out, and saying "live" on it again
 would read as a fresh test. A plain Git connection has no host API to report
 to.
 
+### A preview's databases
+
+A preview starts with the app's variables, and with **a database of its own**
+for each one the app is linked to: the same engine and version, empty, one
+instance and 1 GB, in the preview's environment, under the same variable name.
+It goes when the preview does.
+
+It is never production's. A pull request's code does not get the address of
+the database your customers' data is in, so a migration on a branch runs
+against something it is allowed to break. If the panel cannot make the
+preview's database, the preview starts without the variable and fails where
+you can see it, rather than quietly connecting somewhere it should not.
+
+A pull request from a fork gets no database and no secret variables, since
+anybody can open one.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

@@ -4167,6 +4167,31 @@ rendered objects, the middleware order, the stored hash (checked with bcrypt
 against the password and a wrong one), the API, the preview copy and the panel
 form are all tested; the prompt itself needs a cluster.
 
+## Phase 76 — every preview pointed at production's database
+
+Found by three of the competitor research passes independently, each while
+checking whether Skifity's previews match Railway's, Render's or Vercel's. A
+preview copied every variable of the app it previewed, and a database link is a
+variable: the pull request's copy got production's `DATABASE_URL`, an address in
+production's namespace.
+
+Where the environment's default-deny NetworkPolicy is enforced — k3s enforces it
+— that address is refused, so a preview of any app with a database could never
+connect, and one with a release command failed its first deploy. Where it is not
+enforced, a branch's migration would have run against production. Neither had
+been seen, because nothing here has run on a cluster.
+
+A preview now gets **a database of its own** for each one the app is linked to:
+same engine and version, empty, one instance, 1 GB, in the preview's namespace,
+linked under the same variable, and removed with the preview's environment. The
+linked variable is never copied, so a database that cannot be made leaves the
+preview without the variable rather than with production's. A preview from a
+fork gets none: anybody can open one, and a database per pull request is a way
+for a stranger to fill a server.
+
+The test that checks production's address never reaches a preview was confirmed
+to fail with the old copy put back.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
