@@ -9,6 +9,7 @@ import {
   ChevronsUpDownIcon,
   DatabaseIcon,
   ExternalLinkIcon,
+  EyeIcon,
   FolderIcon,
   InfoIcon,
   LayoutGridIcon,
@@ -113,6 +114,7 @@ export function AppShell() {
             navigating away is what clears it.
           */}
           <InstallNotes />
+          <ReadOnlyNotice />
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
           </ErrorBoundary>
@@ -120,6 +122,26 @@ export function AppShell() {
       </SidebarInset>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </SidebarProvider>
+  )
+}
+
+/**
+ * Said once, at the top, rather than by every button that would refuse.
+ *
+ * A viewer sees the same pages a member does, and the server refuses whatever
+ * they try to change. Without this the first they would hear of being a viewer
+ * is a refusal, after filling in a form.
+ */
+function ReadOnlyNotice() {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  if (team?.role !== "viewer") return null
+  return (
+    <Alert className="mb-6">
+      <EyeIcon />
+      <AlertTitle>{t("settings.readOnlyTitle")}</AlertTitle>
+      <AlertDescription>{t("settings.readOnly", { team: team.name })}</AlertDescription>
+    </Alert>
   )
 }
 

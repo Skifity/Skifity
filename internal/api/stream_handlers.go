@@ -123,7 +123,7 @@ func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
 		}
 		switch kind {
 		case "team":
-			if _, err := s.authorizeTeam(r, id, store.RoleMember); err != nil {
+			if _, err := s.authorizeTeam(r, id, store.RoleViewer); err != nil {
 				return nil, err
 			}
 		case "operation":
@@ -131,7 +131,7 @@ func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
 			if err != nil {
 				return nil, errdoc.NotFound("operation", id)
 			}
-			if _, err := s.authorizeTeam(r, op.TeamID, store.RoleMember); err != nil {
+			if _, err := s.authorizeTeam(r, op.TeamID, store.RoleViewer); err != nil {
 				return nil, err
 			}
 		case "deployment":
@@ -139,11 +139,11 @@ func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
 			if err != nil {
 				return nil, errdoc.NotFound("deployment", id)
 			}
-			if _, _, err := s.authorizeAppID(r, deployment.AppID, store.RoleMember); err != nil {
+			if _, _, err := s.authorizeAppID(r, deployment.AppID, store.RoleViewer); err != nil {
 				return nil, err
 			}
 		case "app-logs":
-			if _, _, err := s.authorizeAppID(r, id, store.RoleMember); err != nil {
+			if _, _, err := s.authorizeAppID(r, id, store.RoleViewer); err != nil {
 				return nil, err
 			}
 		default:
@@ -159,7 +159,7 @@ func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
 // Logs come straight from the Kubernetes API rather than through the event hub,
 // because they can be large and there is no reason to buffer them in the panel.
 func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

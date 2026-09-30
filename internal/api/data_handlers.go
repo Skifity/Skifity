@@ -14,7 +14,7 @@ import (
 )
 
 func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
-	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleMember)
+	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -71,7 +71,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
-	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleMember)
+	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -254,7 +254,7 @@ func defaultVarNameFor(engine string) string {
 // --- backups ---
 
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
-	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleMember)
+	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -326,7 +326,7 @@ func (s *Server) backupPolicyFrom(r *http.Request, req setBackupPolicyRequest, t
 }
 
 func (s *Server) handleGetBackupPolicy(w http.ResponseWriter, r *http.Request) {
-	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleMember)
+	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -831,6 +831,7 @@ function MembersPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="viewer">{t("settings.roleViewer")}</SelectItem>
                     <SelectItem value="member">{t("settings.roleMember")}</SelectItem>
                     <SelectItem value="admin">{t("settings.roleAdmin")}</SelectItem>
                     <SelectItem value="owner">{t("settings.roleOwner")}</SelectItem>

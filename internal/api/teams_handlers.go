@@ -55,7 +55,7 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	user, err := s.authorizeTeam(r, teamID, store.RoleMember)
+	user, err := s.authorizeTeam(r, teamID, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -107,7 +107,7 @@ func (s *Server) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -137,7 +137,7 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !req.Role.Valid() {
-		writeError(w, r, errdoc.BadRequest("Role must be owner, admin or member."))
+		writeError(w, r, errdoc.BadRequest("Role must be owner, admin, member or viewer."))
 		return
 	}
 	// An admin must not be able to make someone an owner and so outrank
@@ -264,7 +264,7 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -339,7 +339,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
-	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleMember)
+	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -409,7 +409,7 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 // --- environments ---
 
 func (s *Server) handleListEnvironments(w http.ResponseWriter, r *http.Request) {
-	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleMember)
+	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -468,7 +468,7 @@ func (s *Server) handleCreateEnvironment(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleGetEnvironment(w http.ResponseWriter, r *http.Request) {
-	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleMember)
+	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -536,7 +536,7 @@ func (s *Server) handleUpdateEnvironment(w http.ResponseWriter, r *http.Request)
 // showed it, so the first sign of reaching one was a deployment that failed with
 // a message about a resource nobody had heard of.
 func (s *Server) handleEnvironmentQuota(w http.ResponseWriter, r *http.Request) {
-	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleMember)
+	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

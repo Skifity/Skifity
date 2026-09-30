@@ -23,7 +23,7 @@ import (
 )
 
 func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
-	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleMember)
+	env, _, err := s.authorizeEnvironment(r, chi.URLParam(r, "envID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -452,7 +452,7 @@ func (s *Server) setInitialVariables(r *http.Request, app store.App, values map[
 }
 
 func (s *Server) handleGetApp(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -606,7 +606,7 @@ func (s *Server) handleDeleteApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -702,7 +702,7 @@ func (s *Server) handleAppAdvanced(w http.ResponseWriter, r *http.Request) {
 // --- variables ---
 
 func (s *Server) handleListVariables(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -835,7 +835,7 @@ func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListSharedVariables(w http.ResponseWriter, r *http.Request) {
-	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleMember)
+	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -934,7 +934,7 @@ func (s *Server) handleDeleteSharedVariable(w http.ResponseWriter, r *http.Reque
 // --- domains ---
 
 func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1113,7 +1113,7 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 // --- volumes ---
 
 func (s *Server) handleListVolumes(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1172,7 +1172,7 @@ func (s *Server) handleCreateVolume(w http.ResponseWriter, r *http.Request) {
 
 // handleListVolumeBackups lists the copies of one volume.
 func (s *Server) handleListVolumeBackups(w http.ResponseWriter, r *http.Request) {
-	volume, _, err := s.authorizeVolume(r, store.RoleMember)
+	volume, _, err := s.authorizeVolume(r, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1249,7 +1249,7 @@ func (s *Server) handleRestoreVolumeBackup(w http.ResponseWriter, r *http.Reques
 // type and a volume is one of them — and there was no way to create it. So the
 // answer to "back up my uploads every night" was to press a button every night.
 func (s *Server) handleGetVolumeBackupPolicy(w http.ResponseWriter, r *http.Request) {
-	volume, _, err := s.authorizeVolume(r, store.RoleMember)
+	volume, _, err := s.authorizeVolume(r, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

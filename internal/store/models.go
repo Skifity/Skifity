@@ -2,19 +2,26 @@ package store
 
 import "time"
 
-// Role is a team membership role. Roles are ordered: owner > admin > member.
+// Role is a team membership role. Roles are ordered:
+// owner > admin > member > viewer.
 type Role string
 
 const (
 	RoleOwner  Role = "owner"
 	RoleAdmin  Role = "admin"
 	RoleMember Role = "member"
+	// RoleViewer can look at everything a member can and change nothing: the
+	// client who wants to see their site's deployments, the manager who wants
+	// the logs, the auditor. Every route that changes something asks for
+	// RoleMember or more, and TestAViewerCanChangeNothing walks the router to
+	// hold that.
+	RoleViewer Role = "viewer"
 )
 
 // AtLeast reports whether r grants everything required grants.
 func (r Role) AtLeast(required Role) bool { return roleRank[r] >= roleRank[required] }
 
-var roleRank = map[Role]int{RoleMember: 1, RoleAdmin: 2, RoleOwner: 3}
+var roleRank = map[Role]int{RoleViewer: 1, RoleMember: 2, RoleAdmin: 3, RoleOwner: 4}
 
 // Valid reports whether r is a role the schema accepts.
 func (r Role) Valid() bool { _, ok := roleRank[r]; return ok }

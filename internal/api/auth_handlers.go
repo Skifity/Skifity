@@ -410,8 +410,12 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest("Give the token a name so you can recognise it later."))
 		return
 	}
-	// A token may not grant more access than the person creating it has.
-	user, err := s.authorizeTeam(r, req.TeamID, store.RoleMember)
+	// A token may not grant more access than the person creating it has, and
+	// it does not: every request it makes is checked against its owner's role
+	// in the team at that moment. So a viewer can have one too — for a
+	// dashboard, or an assistant that should read and never change — and it
+	// reads.
+	user, err := s.authorizeTeam(r, req.TeamID, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

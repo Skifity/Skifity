@@ -12,7 +12,7 @@ import (
 
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -101,7 +101,7 @@ func validateAddServer(req *AddServerRequest) error {
 }
 
 func (s *Server) handleGetServer(w http.ResponseWriter, r *http.Request) {
-	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleMember)
+	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -270,7 +270,7 @@ func (s *Server) handlePromoteServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleServerMetrics(w http.ResponseWriter, r *http.Request) {
-	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleMember)
+	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -299,7 +299,7 @@ func (s *Server) handleServerMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -326,7 +326,7 @@ func (s *Server) handleGetOperation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if _, err := s.authorizeTeam(r, op.TeamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, op.TeamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}

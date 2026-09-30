@@ -21,7 +21,7 @@ import (
 
 func (s *Server) handleListGitSources(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -146,7 +146,7 @@ func (s *Server) webhookURL(r *http.Request, sourceID string) string {
 
 func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleMember); err != nil {
+	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -385,7 +385,7 @@ type canvasEdge struct {
 }
 
 func (s *Server) handleProjectCanvas(w http.ResponseWriter, r *http.Request) {
-	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleMember)
+	project, _, err := s.authorizeProject(r, chi.URLParam(r, "projectID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

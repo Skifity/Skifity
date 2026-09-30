@@ -96,8 +96,18 @@ Somebody who already has an account here does not need a link. Add them by the
 same form and they join directly.
 
 Roles: **owner** administers the team and can delete it, **admin** can invite
-and configure, **member** can deploy. Nobody can invite somebody to a role
-above their own.
+and configure, **member** can deploy, and **viewer** can see everything a member
+can — apps, deployments, logs, metrics, variables that are not secret — and
+change nothing. Nobody can invite somebody to a role above their own.
+
+A viewer is for the client who wants to watch their site's deployments, the
+manager who wants the logs, or an assistant that should read and never act. A
+viewer can make an API token, and the token is exactly as read-only as they
+are: every request is checked against its owner's role in the team at that
+moment, so changing somebody's role changes what their tokens can do too. The
+only things a viewer cannot read are the ones a member cannot either, because
+they are an administrator's: invitations, the audit log, the export, a
+database's password, and the Kubernetes objects under Advanced.
 
 ## Signing in
 

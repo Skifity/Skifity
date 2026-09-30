@@ -54,7 +54,7 @@ const (
 )
 
 func (s *Server) handleGetPassword(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

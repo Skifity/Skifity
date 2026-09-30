@@ -1,6 +1,6 @@
 /** The shapes the API returns. These mirror the Go types in internal/store. */
 
-export type Role = "owner" | "admin" | "member"
+export type Role = "owner" | "admin" | "member" | "viewer"
 
 /** A pending offer to join a team. The link that carries its token is shown once. */
 export type Invitation = {

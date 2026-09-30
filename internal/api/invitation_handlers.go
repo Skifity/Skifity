@@ -69,7 +69,7 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 		role = store.RoleMember
 	}
 	if !role.Valid() {
-		writeError(w, r, errdoc.BadRequest("Role must be owner, admin or member."))
+		writeError(w, r, errdoc.BadRequest("Role must be owner, admin, member or viewer."))
 		return
 	}
 	// The same rule as changing a role: an admin must not be able to invite

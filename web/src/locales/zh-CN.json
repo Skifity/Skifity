@@ -856,7 +856,7 @@
     "roleOwner": "所有者",
     "roleAdmin": "管理员",
     "roleMember": "成员",
-    "roleHelp": "所有者可以做任何事，包括删除团队。管理员管理服务器和设置。成员部署应用。",
+    "roleHelp": "所有者可以做任何事，包括删除团队。管理员管理服务器和设置。成员部署应用。查看者能看到成员能看到的一切，但不能更改任何东西。",
     "removeMember": "移除",
     "configured": "已配置",
     "notConfigured": "尚未配置",
@@ -1088,7 +1088,10 @@
     "panelBackupsNone": "还没有副本。设置好备份存储后会按计划备份，也可以现在备份一份。",
     "panelBackupObject": "存储桶中的位置",
     "panelBackupTaken": "本面板的一份副本已存入存储桶。",
-    "panelBackupsRestore": "要恢复某个副本，请把它从存储桶下载到服务器，停止面板，然后运行："
+    "panelBackupsRestore": "要恢复某个副本，请把它从存储桶下载到服务器，停止面板，然后运行：",
+    "roleViewer": "查看者",
+    "readOnlyTitle": "只能查看，不能更改",
+    "readOnly": "你是 {{team}} 的查看者：你可以查看它的应用、部署和日志，任何更改都会被拒绝。团队管理员可以给你更多权限。"
   },
   "errors": {
     "whatHappened": "发生了什么",

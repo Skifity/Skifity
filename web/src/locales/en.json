@@ -866,7 +866,7 @@
     "roleOwner": "Owner",
     "roleAdmin": "Admin",
     "roleMember": "Member",
-    "roleHelp": "Owners can do anything, including removing the team. Admins manage servers and settings. Members deploy apps.",
+    "roleHelp": "Owners can do anything, including removing the team. Admins manage servers and settings. Members deploy apps. Viewers can see everything a member can and change nothing.",
     "removeMember": "Remove",
     "configured": "Configured",
     "notConfigured": "Not set up",
@@ -1100,7 +1100,10 @@
     "panelBackupsNone": "No copies yet. Once backup storage is set, one is taken on schedule, or take one now.",
     "panelBackupObject": "In the bucket",
     "panelBackupTaken": "A copy of this panel is in the bucket.",
-    "panelBackupsRestore": "To put one back, download it from the bucket to the server, stop the panel, and run:"
+    "panelBackupsRestore": "To put one back, download it from the bucket to the server, stop the panel, and run:",
+    "roleViewer": "Viewer",
+    "readOnlyTitle": "You can look, not change",
+    "readOnly": "You are a viewer in {{team}}: you can see its apps, deployments and logs, and anything you try to change will be refused. An admin of the team can give you more."
   },
   "errors": {
     "whatHappened": "What happened",

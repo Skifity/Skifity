@@ -4438,6 +4438,36 @@ named `deployment/skifity`; the panel's Deployment is `skifity-panel`.
 Not executed: an upload to a real S3 service rather than the fake, and a restore
 on a real panel's server.
 
+## Phase 85 — a role that can look and not touch
+
+The first half of gap 3. Eight of the twenty-two products have a read-only role
+— Coolify, Fly, Portainer, Dokploy, Easypanel, Kubero, Canine, Netlify — and
+Skifity had three roles, the lowest of which can deploy, delete apps and change
+variables. The client who wants to watch their site's deployments had to be
+given all of that or nothing.
+
+`viewer` sits below `member`. The memberships table is rebuilt to let the CHECK
+name it (migration 0020, through the same rebuild path as 0016, with foreign
+keys off so the drop does not cascade). Every handler that only reads now asks
+for `RoleViewer`; everything that changes something still asks for
+`RoleMember` or more, unchanged. Reading a deployment and cancelling one shared
+a helper that asked for one role, so it now takes the role.
+
+The test is a third walk of the router, beside the anonymous one and the
+cross-team one: as a viewer of the team that owns every id in the path, every
+route that is not a GET must answer 403 (57 of them), and every GET must answer
+something other than a refusal (37), except six named in `viewerMayNotRead`
+with a reason each — the same six a member is refused. A second test says every
+name in that list is still a route. The two routes that take their target in
+the body are asked separately: installing a template is refused, and making an
+API token is not — a viewer's token is checked against the viewer's role on
+every request, so it reads and does nothing else, which the test proves by
+reading and then failing to rename a project with it.
+
+In the panel, the role is offered in the members form and on invitations, and
+a viewer sees one notice at the top of every page saying so, rather than
+finding out from the first refusal.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

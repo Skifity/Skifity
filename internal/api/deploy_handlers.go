@@ -55,7 +55,7 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -73,7 +73,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetDeployment(w http.ResponseWriter, r *http.Request) {
-	deployment, err := s.deploymentForApp(r)
+	deployment, err := s.deploymentForApp(r, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -82,7 +82,7 @@ func (s *Server) handleGetDeployment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeploymentLogs(w http.ResponseWriter, r *http.Request) {
-	deployment, err := s.deploymentForApp(r)
+	deployment, err := s.deploymentForApp(r, store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -101,7 +101,7 @@ func (s *Server) handleDeploymentLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCancelDeployment(w http.ResponseWriter, r *http.Request) {
-	deployment, err := s.deploymentForApp(r)
+	deployment, err := s.deploymentForApp(r, store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -164,8 +164,8 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 
 // deploymentForApp loads a deployment and checks it belongs to the app in the
 // URL, so a deployment id from another team cannot be read by guessing.
-func (s *Server) deploymentForApp(r *http.Request) (store.Deployment, error) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+func (s *Server) deploymentForApp(r *http.Request, required store.Role) (store.Deployment, error) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), required)
 	if err != nil {
 		return store.Deployment{}, err
 	}
@@ -193,7 +193,7 @@ type scalingResponse struct {
 }
 
 func (s *Server) handleGetScaling(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -326,7 +326,7 @@ func validateScaling(app *store.App) error {
 }
 
 func (s *Server) handleScalingReadiness(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -386,7 +386,7 @@ func (s *Server) handleRunCommand(w http.ResponseWriter, r *http.Request) {
 
 // handleRunLogs returns a run's output, or streams it while it is still going.
 func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -423,7 +423,7 @@ type appJobRequest struct {
 }
 
 func (s *Server) handleListAppJobs(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
 	if err != nil {
 		writeError(w, r, err)
 		return

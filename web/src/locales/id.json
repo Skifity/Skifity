@@ -856,7 +856,7 @@
     "roleOwner": "Pemilik",
     "roleAdmin": "Admin",
     "roleMember": "Anggota",
-    "roleHelp": "Pemilik bisa melakukan apa saja, termasuk menghapus tim. Admin mengelola server dan pengaturan. Anggota men-deploy aplikasi.",
+    "roleHelp": "Pemilik bisa melakukan apa saja, termasuk menghapus tim. Admin mengelola server dan pengaturan. Anggota men-deploy aplikasi. Pengamat bisa melihat semua yang bisa dilihat anggota dan tidak bisa mengubah apa pun.",
     "removeMember": "Keluarkan",
     "configured": "Sudah diatur",
     "notConfigured": "Belum diatur",
@@ -1088,7 +1088,10 @@
     "panelBackupsNone": "Belum ada salinan. Setelah penyimpanan cadangan diatur, salinan dibuat sesuai jadwal, atau buat satu sekarang.",
     "panelBackupObject": "Di bucket",
     "panelBackupTaken": "Salinan panel ini sudah ada di bucket.",
-    "panelBackupsRestore": "Untuk memulihkannya, unduh salinan dari bucket ke server, hentikan panel, lalu jalankan:"
+    "panelBackupsRestore": "Untuk memulihkannya, unduh salinan dari bucket ke server, hentikan panel, lalu jalankan:",
+    "roleViewer": "Pengamat",
+    "readOnlyTitle": "Anda bisa melihat, bukan mengubah",
+    "readOnly": "Anda adalah pengamat di {{team}}: Anda bisa melihat aplikasi, deployment, dan log-nya, dan apa pun yang Anda coba ubah akan ditolak. Admin tim bisa memberi Anda akses lebih."
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
