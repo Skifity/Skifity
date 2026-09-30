@@ -1471,6 +1471,48 @@ paths:
               schema: {$ref: '#/components/schemas/ServerAlerts'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/servers/{serverID}/hardening:
+    parameters:
+      - $ref: '#/components/parameters/serverID'
+    get:
+      operationId: getServerHardening
+      tags: [Servers]
+      summary: How a server stands up to the internet
+      description: >-
+        Panel administrator. Signs in to the server over SSH with the key
+        Skifity installed and reads, changing nothing: whether SSH takes
+        passwords, whether root can sign in with one, fail2ban, automatic
+        security updates, the firewall, and a pending reboot. Not for a
+        server Skifity did not add.
+      responses:
+        '200':
+          description: The findings, worst first.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HardeningReport'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/servers/{serverID}/hardening/ssh-passwords-off:
+    parameters:
+      - $ref: '#/components/parameters/serverID'
+    post:
+      operationId: turnOffSSHPasswords
+      tags: [Servers]
+      summary: Make a server's SSH take keys only
+      description: >-
+        Panel administrator. Writes a drop-in that turns off password and
+        keyboard-interactive sign-in and root with a password, checks it with
+        sshd -t and that it took, then reloads SSH. Refused, with nothing
+        changed, when the daemon does not accept keys or does not read its
+        drop-in directory.
+      responses:
+        '200':
+          description: The server checked again after the change.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HardeningReport'}
+        default: {$ref: '#/components/responses/Error'}
+
   # --- projects and environments ---
 
   /api/projects/{projectID}:
@@ -4659,6 +4701,26 @@ components:
             used_mb: {type: integer}
             capacity_mb: {type: integer}
             at: {type: string, format: date-time}
+
+    HardeningReport:
+      type: object
+      required: [server_id, checked_at, findings, can_turn_off_passwords]
+      properties:
+        server_id: {type: string}
+        checked_at: {type: string, format: date-time}
+        can_turn_off_passwords: {type: boolean, description: 'SSH still takes a password, and the panel can safely stop it.'}
+        findings:
+          type: array
+          items:
+            type: object
+            required: [code, state, level, detail]
+            properties:
+              code: {type: string, enum: [ssh_passwords, ssh_root, fail2ban, auto_updates, firewall, reboot]}
+              state: {type: string, description: 'Which answer the check gave, such as on, off or absent.'}
+              level: {type: string, enum: [risk, warn, ok]}
+              detail: {type: string}
+              fix: {type: string}
+              firewall: {type: string, description: 'The firewall found: ufw, firewalld or iptables.'}
 
     ServerAlerts:
       type: object

@@ -16,6 +16,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress } from "@/components/operation-progress"
+import { ServerHardening } from "@/components/server-hardening"
 import { ServerUsageCard } from "@/components/server-usage-card"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -272,6 +273,12 @@ export function ServerDetailPage() {
           serverId={serverId}
           canEdit={team?.role === "admin" || team?.role === "owner"}
         />
+      )}
+
+      {/* It signs in over SSH with the key Skifity installed, so it is for a
+          panel administrator, and only on a server Skifity added. */}
+      {canChangeServers && !current.adopted && current.status === "ready" && (
+        <ServerHardening serverId={serverId} />
       )}
 
       {/*

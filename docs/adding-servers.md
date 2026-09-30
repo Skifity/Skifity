@@ -184,6 +184,43 @@ the panel refuses to leave you there.
 Promoting a server moves its instances elsewhere first, then rejoins it as a
 control plane member.
 
+## Hardening
+
+Adding a server opens the ports the cluster needs and closes the rest; it does
+not change how the machine lets people in. A cloud image usually arrives with
+SSH taking passwords and root allowed to sign in with one, and that stays as it
+was.
+
+**Check** on a server's page, for a panel administrator, signs in over SSH with
+the key Skifity installed and reads, changing nothing:
+
+| Check | Fine | Worth fixing, or a risk |
+|---|---|---|
+| SSH passwords | keys only | passwords or keyboard-interactive accepted: anybody can keep guessing |
+| Root over SSH | not at all, or with a key | with a password |
+| fail2ban | running, or not needed because SSH takes no passwords | not installed, or installed and stopped |
+| Security updates | install themselves (`unattended-upgrades`, `dnf-automatic`) | off, or nothing installed to do it |
+| Firewall | ufw, firewalld or iptables rules active | none |
+| Reboot | none waiting | updates installed that need one |
+
+SSH is read from `sshd -T`, the configuration the daemon is really running
+with, rather than from `sshd_config`, which drop-in files override on most
+distributions.
+
+One change is offered, because it matters most and because Skifity can make
+it safely: **Turn off SSH passwords**. It writes
+`/etc/ssh/sshd_config.d/00-skifity-hardening.conf` with
+`PasswordAuthentication no`, `KbdInteractiveAuthentication no` and
+`PermitRootLogin prohibit-password`, checks it with `sshd -t`, checks that the
+daemon's effective setting changed, and only then reloads SSH. It refuses, with
+nothing changed, when the daemon does not accept keys or does not read that
+directory. Keep your own key in `~/.ssh/authorized_keys` first: from then on,
+everybody signs in with a key.
+
+The rest are left to you on purpose. Installing packages and changing how a
+machine updates itself are decisions about somebody else's server that a panel
+should report, not make.
+
 ## When a step fails
 
 Every failure names what happened, what it means and what to do.

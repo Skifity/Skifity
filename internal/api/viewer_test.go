@@ -30,6 +30,8 @@ var viewerMayNotRead = map[string]string{
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/repositories": "read with the team's token for creating an app, " +
 		"which a viewer does not; it names private repositories",
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches": "the same, for one repository's branches",
+	"GET /api/servers/{serverID}/hardening": "it signs in to the machine over SSH, which only a panel " +
+		"administrator's request does",
 }
 
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team

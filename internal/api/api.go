@@ -282,6 +282,8 @@ func (s *Server) routes() chi.Router {
 				server.Get("/usage", s.handleServerUsage)
 				server.Get("/alerts", s.handleGetServerAlerts)
 				server.Put("/alerts", s.handleSetServerAlerts)
+				server.Get("/hardening", s.handleServerHardening)
+				server.Post("/hardening/ssh-passwords-off", s.handleTurnOffSSHPasswords)
 			})
 
 			authed.Route("/projects/{projectID}", func(project chi.Router) {

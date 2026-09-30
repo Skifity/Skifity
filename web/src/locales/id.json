@@ -339,7 +339,8 @@
       "auth.password_reset_requested": "meminta tautan reset kata sandi",
       "auth.password_reset": "mereset kata sandinya lewat tautan",
       "environment.cloned": "Lingkungan dikloning",
-      "notification.updated": "Saluran notifikasi diubah"
+      "notification.updated": "Saluran notifikasi diubah",
+      "server.ssh_passwords_off": "Kata sandi SSH dimatikan di server"
     }
   },
   "projects": {
@@ -984,6 +985,99 @@
       "disk": "disk",
       "memory": "memori",
       "cpu": "CPU"
+    },
+    "hardening": {
+      "title": "Pengerasan keamanan",
+      "description": "Seberapa tahan server ini terhadap internet. Diperiksa lewat SSH saat Anda meminta, dan pemeriksaan tidak mengubah apa pun di server.",
+      "check": "Periksa",
+      "checkAgain": "Periksa lagi",
+      "checkedAt": "Diperiksa {{when}}",
+      "level": {
+        "risk": "Berisiko",
+        "warn": "Perlu diperbaiki",
+        "ok": "Baik"
+      },
+      "passwordsOff": "Matikan kata sandi SSH",
+      "passwordsOffTitle": "Matikan kata sandi SSH di server ini?",
+      "passwordsOffHelp": "SSH di server ini masih menerima kata sandi. Skifity masuk dengan kunci, jadi bisa mematikannya dengan aman.",
+      "passwordsOffConfirm": "Setelah ini, masuk ke server lewat SSH memerlukan kunci bagi semua orang, dan root hanya bisa masuk dengan kunci. Pastikan kunci Anda sendiri ada di ~/.ssh/authorized_keys sebelum melakukannya. Perubahan diperiksa sebelum SSH dimuat ulang, dan dibatalkan jika tidak berlaku.",
+      "checks": {
+        "ssh_passwords": {
+          "title": "Kata sandi SSH",
+          "unknown": {
+            "detail": "Pengaturan daemon SSH tidak bisa dibaca, jadi tidak diketahui apakah menerima kata sandi.",
+            "fix": "Jalankan sshd -T | grep -i passwordauthentication di server sebagai root."
+          },
+          "on": {
+            "detail": "SSH menerima kata sandi, jadi siapa pun di internet bisa terus menebaknya.",
+            "fix": "Matikan kata sandi SSH; Skifity masuk dengan kunci, jadi tidak ada yang dilakukannya yang memerlukan kata sandi."
+          },
+          "off": {
+            "detail": "SSH hanya menerima kunci."
+          }
+        },
+        "ssh_root": {
+          "title": "Root lewat SSH",
+          "password": {
+            "detail": "root bisa masuk lewat SSH dengan kata sandi.",
+            "fix": "Izinkan root hanya dengan kunci (PermitRootLogin prohibit-password); mematikan kata sandi SSH juga melakukan itu."
+          },
+          "none": {
+            "detail": "root tidak bisa masuk lewat SSH."
+          },
+          "key": {
+            "detail": "root hanya bisa masuk lewat SSH dengan kunci."
+          }
+        },
+        "fail2ban": {
+          "title": "fail2ban",
+          "active": {
+            "detail": "fail2ban berjalan dan memblokir alamat yang terus gagal masuk."
+          },
+          "inactive": {
+            "detail": "fail2ban terpasang tetapi tidak berjalan.",
+            "fix": "Jalankan: systemctl enable --now fail2ban."
+          },
+          "absent": {
+            "detail": "fail2ban tidak terpasang.",
+            "fix": "Pasang (apt install fail2ban, atau dnf install fail2ban), atau matikan kata sandi SSH sehingga tidak ada yang bisa ditebak."
+          }
+        },
+        "auto_updates": {
+          "title": "Pembaruan keamanan",
+          "on": {
+            "detail": "Pembaruan keamanan terpasang dengan sendirinya."
+          },
+          "off": {
+            "detail": "Pembaruan otomatis terpasang tetapi dimatikan.",
+            "fix": "Nyalakan: dpkg-reconfigure -plow unattended-upgrades, atau aktifkan dnf-automatic-install.timer."
+          },
+          "absent": {
+            "detail": "Tidak ada yang memasang pembaruan keamanan di server ini secara otomatis.",
+            "fix": "Pasang unattended-upgrades (Debian, Ubuntu) atau dnf-automatic (Fedora, RHEL dan turunannya)."
+          }
+        },
+        "firewall": {
+          "title": "Firewall",
+          "none": {
+            "detail": "Tidak ada firewall aktif, jadi setiap port yang dibuka proses terbuka ke internet.",
+            "fix": "Ulangi penyiapan server, yang mengatur firewall, atau aktifkan ufw dengan port 22, 80 dan 443 terbuka."
+          },
+          "active": {
+            "detail": "Firewall ({{firewall}}) aktif."
+          }
+        },
+        "reboot": {
+          "title": "Mulai ulang",
+          "required": {
+            "detail": "Ada pembaruan terpasang yang baru berlaku setelah server dimulai ulang.",
+            "fix": "Mulai ulang server saat sepi; jika ada lebih dari satu server, satu per satu."
+          },
+          "none": {
+            "detail": "Tidak ada mulai ulang yang tertunda."
+          }
+        }
+      }
     }
   },
   "databases": {
@@ -2698,6 +2792,18 @@
         "cause": "Pencarian {{0}} tidak selesai: server DNS yang ditanya panel kehabisan waktu atau menolak.",
         "impact": "Tidak ada yang diubah. Domainnya tetap terpasang, dan apakah ia mengarah ke sini belum diketahui.",
         "fix": "Coba lagi dalam semenit. Kalau terus gagal, periksa {{0}} dari komputermu sendiri dengan `dig +short {{1}}`; panel yang server-nya tidak bisa me-resolve nama sama sekali punya masalah DNS sendiri."
+      },
+      "server_ssh_failed": {
+        "title": "Tidak bisa masuk ke server ini",
+        "cause": "Masuk ke {{server}} lewat SSH dengan kunci yang dipasang Skifity tidak berhasil.",
+        "impact": "Tidak ada yang diperiksa atau diubah di server. Server tetap berjalan, begitu juga aplikasinya.",
+        "fix": "Pastikan server menyala dan SSH bisa dijangkau dari panel. Jika seseorang menghapus kunci Skifity dari ~/.ssh/authorized_keys, tambahkan kembali, atau hapus server lalu tambahkan lagi."
+      },
+      "server_ssh_hardening_refused": {
+        "title": "Kata sandi SSH tidak dimatikan",
+        "cause": "Perubahan tidak bisa dipastikan di {{server}}, jadi dibatalkan.",
+        "impact": "SSH di server tetap seperti semula: tidak ada yang diubah.",
+        "fix": "Atur PasswordAuthentication no dan KbdInteractiveAuthentication no di /etc/ssh/sshd_config secara manual, periksa dengan sshd -t, lalu muat ulang ssh."
       }
     }
   },

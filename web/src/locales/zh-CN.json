@@ -339,7 +339,8 @@
       "auth.password_reset_requested": "申请了密码重置链接",
       "auth.password_reset": "通过链接重置了密码",
       "environment.cloned": "环境已克隆",
-      "notification.updated": "已更改通知渠道"
+      "notification.updated": "已更改通知渠道",
+      "server.ssh_passwords_off": "已在服务器上关闭 SSH 密码登录"
     }
   },
   "projects": {
@@ -984,6 +985,99 @@
       "disk": "磁盘",
       "memory": "内存",
       "cpu": "CPU"
+    },
+    "hardening": {
+      "title": "安全加固",
+      "description": "此服务器面对互联网的安全程度。在你要求时通过 SSH 检查，检查不会更改服务器上的任何内容。",
+      "check": "检查",
+      "checkAgain": "重新检查",
+      "checkedAt": "检查于 {{when}}",
+      "level": {
+        "risk": "风险",
+        "warn": "建议修复",
+        "ok": "正常"
+      },
+      "passwordsOff": "关闭 SSH 密码登录",
+      "passwordsOffTitle": "要关闭此服务器上的 SSH 密码登录吗？",
+      "passwordsOffHelp": "此服务器上的 SSH 仍接受密码。Skifity 使用密钥登录，因此可以安全地关闭密码登录。",
+      "passwordsOffConfirm": "此后所有人通过 SSH 登录此服务器都需要密钥，root 只能使用密钥登录。操作前请确认你自己的密钥已在 ~/.ssh/authorized_keys 中。更改会在 SSH 重新加载前检查，若未生效则会撤销。",
+      "checks": {
+        "ssh_passwords": {
+          "title": "SSH 密码",
+          "unknown": {
+            "detail": "无法读取 SSH 守护进程的设置，因此不知道它是否接受密码。",
+            "fix": "在服务器上以 root 运行 sshd -T | grep -i passwordauthentication。"
+          },
+          "on": {
+            "detail": "SSH 接受密码，因此互联网上任何人都可以不断猜测。",
+            "fix": "关闭 SSH 密码登录；Skifity 使用密钥登录，它所做的一切都不需要密码。"
+          },
+          "off": {
+            "detail": "SSH 只接受密钥。"
+          }
+        },
+        "ssh_root": {
+          "title": "通过 SSH 登录 root",
+          "password": {
+            "detail": "root 可以用密码通过 SSH 登录。",
+            "fix": "只允许 root 使用密钥（PermitRootLogin prohibit-password）；关闭 SSH 密码登录也会做到这一点。"
+          },
+          "none": {
+            "detail": "root 不能通过 SSH 登录。"
+          },
+          "key": {
+            "detail": "root 只能用密钥通过 SSH 登录。"
+          }
+        },
+        "fail2ban": {
+          "title": "fail2ban",
+          "active": {
+            "detail": "fail2ban 正在运行，会封禁反复登录失败的地址。"
+          },
+          "inactive": {
+            "detail": "fail2ban 已安装但未运行。",
+            "fix": "启动它：systemctl enable --now fail2ban。"
+          },
+          "absent": {
+            "detail": "未安装 fail2ban。",
+            "fix": "安装它（apt install fail2ban 或 dnf install fail2ban），或关闭 SSH 密码登录，这样就没有可猜测的了。"
+          }
+        },
+        "auto_updates": {
+          "title": "安全更新",
+          "on": {
+            "detail": "安全更新会自动安装。"
+          },
+          "off": {
+            "detail": "已安装自动更新，但已关闭。",
+            "fix": "开启它：dpkg-reconfigure -plow unattended-upgrades，或启用 dnf-automatic-install.timer。"
+          },
+          "absent": {
+            "detail": "此服务器上没有任何东西会自动安装安全更新。",
+            "fix": "安装 unattended-upgrades（Debian、Ubuntu）或 dnf-automatic（Fedora、RHEL 及其衍生版）。"
+          }
+        },
+        "firewall": {
+          "title": "防火墙",
+          "none": {
+            "detail": "没有启用防火墙，因此任何进程打开的端口都对互联网开放。",
+            "fix": "重新运行服务器设置（会配置防火墙），或启用 ufw 并开放 22、80 和 443 端口。"
+          },
+          "active": {
+            "detail": "防火墙（{{firewall}}）已启用。"
+          }
+        },
+        "reboot": {
+          "title": "重启",
+          "required": {
+            "detail": "已安装的更新需要重启后才会生效。",
+            "fix": "在空闲时重启服务器；如有多台服务器，逐台进行。"
+          },
+          "none": {
+            "detail": "没有待处理的重启。"
+          }
+        }
+      }
     }
   },
   "databases": {
@@ -2698,6 +2792,18 @@
         "cause": "查询 {{0}} 没有完成：面板所用的 DNS 服务器超时或拒绝了请求。",
         "impact": "没有做任何更改。域名仍然绑定着，但它是否指向这里还不知道。",
         "fix": "一分钟后再试。如果一直失败，就在你自己的电脑上用 `dig +short {{1}}` 检查 {{0}}；如果面板所在的服务器根本无法解析域名，那是它自己的 DNS 问题。"
+      },
+      "server_ssh_failed": {
+        "title": "无法登录此服务器",
+        "cause": "使用 Skifity 安装的密钥通过 SSH 登录 {{server}} 失败。",
+        "impact": "服务器上没有检查或更改任何内容。服务器及其应用继续运行。",
+        "fix": "检查服务器是否在线，以及面板能否访问 SSH。如果有人从 ~/.ssh/authorized_keys 中删除了 Skifity 的密钥，请重新添加，或移除该服务器后重新添加。"
+      },
+      "server_ssh_hardening_refused": {
+        "title": "未关闭 SSH 密码登录",
+        "cause": "无法在 {{server}} 上确认更改，因此已撤销。",
+        "impact": "服务器上的 SSH 保持原样：没有任何更改。",
+        "fix": "在服务器的 /etc/ssh/sshd_config 中手动设置 PasswordAuthentication no 和 KbdInteractiveAuthentication no，用 sshd -t 检查后重新加载 ssh。"
       }
     }
   },

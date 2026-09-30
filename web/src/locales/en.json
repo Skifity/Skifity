@@ -347,7 +347,8 @@
       "auth.password_reset_requested": "asked for a password reset link",
       "auth.password_reset": "reset their password through a link",
       "environment.cloned": "Environment cloned",
-      "notification.updated": "Notification channel changed"
+      "notification.updated": "Notification channel changed",
+      "server.ssh_passwords_off": "SSH passwords turned off on a server"
     }
   },
   "projects": {
@@ -995,6 +996,99 @@
       "disk": "disk",
       "memory": "memory",
       "cpu": "CPU"
+    },
+    "hardening": {
+      "title": "Hardening",
+      "description": "How this server stands up to the internet. Checked over SSH when you ask, and nothing on the server is changed by checking.",
+      "check": "Check",
+      "checkAgain": "Check again",
+      "checkedAt": "Checked {{when}}",
+      "level": {
+        "risk": "Risk",
+        "warn": "Worth fixing",
+        "ok": "Fine"
+      },
+      "passwordsOff": "Turn off SSH passwords",
+      "passwordsOffTitle": "Turn off SSH passwords on this server?",
+      "passwordsOffHelp": "SSH on this server still accepts passwords. Skifity signs in with a key, so it can turn them off safely.",
+      "passwordsOffConfirm": "Signing in to this server over SSH will need a key from then on, for everybody, and root will be able to sign in with a key only. Keep your own key in ~/.ssh/authorized_keys before you do this. The change is checked before SSH reloads, and undone if it does not take.",
+      "checks": {
+        "ssh_passwords": {
+          "title": "SSH passwords",
+          "unknown": {
+            "detail": "The SSH daemon's settings could not be read, so whether it takes passwords is not known.",
+            "fix": "Run sshd -T | grep -i passwordauthentication on the server as root."
+          },
+          "on": {
+            "detail": "SSH accepts passwords, so anybody on the internet can keep guessing one.",
+            "fix": "Turn SSH passwords off; Skifity signs in with a key, so nothing it does needs them."
+          },
+          "off": {
+            "detail": "SSH accepts keys only."
+          }
+        },
+        "ssh_root": {
+          "title": "Root over SSH",
+          "password": {
+            "detail": "root can sign in over SSH with a password.",
+            "fix": "Allow root keys only (PermitRootLogin prohibit-password); turning SSH passwords off does that too."
+          },
+          "none": {
+            "detail": "root cannot sign in over SSH."
+          },
+          "key": {
+            "detail": "root can sign in over SSH with a key only."
+          }
+        },
+        "fail2ban": {
+          "title": "fail2ban",
+          "active": {
+            "detail": "fail2ban is running and bans addresses that keep failing to sign in."
+          },
+          "inactive": {
+            "detail": "fail2ban is installed and not running.",
+            "fix": "Start it: systemctl enable --now fail2ban."
+          },
+          "absent": {
+            "detail": "fail2ban is not installed.",
+            "fix": "Install it (apt install fail2ban, or dnf install fail2ban), or turn SSH passwords off, which leaves nothing to guess."
+          }
+        },
+        "auto_updates": {
+          "title": "Security updates",
+          "on": {
+            "detail": "Security updates install themselves."
+          },
+          "off": {
+            "detail": "Automatic updates are installed and turned off.",
+            "fix": "Turn them on: dpkg-reconfigure -plow unattended-upgrades, or enable dnf-automatic-install.timer."
+          },
+          "absent": {
+            "detail": "Nothing installs security updates on this server by itself.",
+            "fix": "Install unattended-upgrades (Debian, Ubuntu) or dnf-automatic (Fedora, RHEL and their kin)."
+          }
+        },
+        "firewall": {
+          "title": "Firewall",
+          "none": {
+            "detail": "No firewall is active, so every port a process opens is open to the internet.",
+            "fix": "Retry the server's setup, which configures the firewall, or enable ufw with ports 22, 80 and 443 open."
+          },
+          "active": {
+            "detail": "A firewall ({{firewall}}) is active."
+          }
+        },
+        "reboot": {
+          "title": "Reboot",
+          "required": {
+            "detail": "Updates are installed that take effect only after a reboot.",
+            "fix": "Reboot the server at a quiet moment; with more than one server, one at a time."
+          },
+          "none": {
+            "detail": "No reboot is waiting."
+          }
+        }
+      }
     }
   },
   "databases": {
@@ -2712,6 +2806,18 @@
         "cause": "Looking up {{0}} did not finish: the DNS server the panel asks timed out or refused.",
         "impact": "Nothing was changed. The domain is still attached, and whether it points here is not known yet.",
         "fix": "Try again in a minute. If it keeps failing, check {{0}} from your own computer with `dig +short {{1}}`; a panel whose server cannot resolve names at all has a DNS problem of its own."
+      },
+      "server_ssh_failed": {
+        "title": "Could not sign in to this server",
+        "cause": "Signing in to {{server}} over SSH with the key Skifity installed on it did not work.",
+        "impact": "Nothing was checked or changed on the server. It keeps running, and so do its apps.",
+        "fix": "Check that the server is up and that SSH is reachable from the panel. If somebody removed Skifity's key from ~/.ssh/authorized_keys, add it back, or remove the server and add it again."
+      },
+      "server_ssh_hardening_refused": {
+        "title": "SSH passwords were not turned off",
+        "cause": "The change could not be confirmed on {{server}}, so it was undone.",
+        "impact": "SSH on the server is as it was: nothing was changed.",
+        "fix": "Set PasswordAuthentication no and KbdInteractiveAuthentication no in /etc/ssh/sshd_config on the server by hand, check it with sshd -t, and reload ssh."
       }
     }
   },

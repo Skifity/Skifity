@@ -434,3 +434,56 @@ func serverAdmin(user store.User) error {
 	}
 	return nil
 }
+
+// handleServerHardening reads how a server stands up to the internet. It
+// signs in over SSH and changes nothing, but it is a panel administrator's,
+// like everything else that reaches into a machine.
+func (s *Server) handleServerHardening(w http.ResponseWriter, r *http.Request) {
+	server, ok := s.hardeningServer(w, r)
+	if !ok {
+		return
+	}
+	report, err := s.provisioner.AuditServer(r.Context(), server.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+// handleTurnOffSSHPasswords makes a server's SSH take keys only.
+func (s *Server) handleTurnOffSSHPasswords(w http.ResponseWriter, r *http.Request) {
+	server, ok := s.hardeningServer(w, r)
+	if !ok {
+		return
+	}
+	report, err := s.provisioner.TurnOffSSHPasswords(r.Context(), server.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.audit(r, server.TeamID, "server.ssh_passwords_off", "server", server.ID, server.Host)
+	writeJSON(w, http.StatusOK, report)
+}
+
+// hardeningServer is the server a hardening request is about, once the
+// caller may reach into it and the panel has a way in.
+func (s *Server) hardeningServer(w http.ResponseWriter, r *http.Request) (store.Server, bool) {
+	server, user, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	if err == nil {
+		err = serverAdmin(user)
+	}
+	if err != nil {
+		writeError(w, r, err)
+		return server, false
+	}
+	if server.Adopted {
+		writeError(w, r, errdoc.ServerNotOurs(server.Name, "Checking the server's hardening"))
+		return server, false
+	}
+	if s.provisioner == nil {
+		writeError(w, r, errdoc.NotConfigured("Server provisioning", "the panel's cluster connection"))
+		return server, false
+	}
+	return server, true
+}

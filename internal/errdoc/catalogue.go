@@ -652,6 +652,43 @@ func ServerNotOurs(name, action string) *Problem {
 		With("server", name)
 }
 
+// ServerSSHFailed means the panel could not sign in to a server it added,
+// for something done after it was added: a hardening check, a change to it.
+func ServerSSHFailed(name string, err error) *Problem {
+	return New("server.ssh_failed", "Could not sign in to this server").
+		WithCause("Signing in to %s over SSH with the key Skifity installed on it did not work.", name).
+		WithImpact("Nothing was checked or changed on the server. It keeps running, and so do its apps.").
+		WithFix("Check that the server is up and that SSH is reachable from the panel. If somebody removed Skifity's key from ~/.ssh/authorized_keys, add it back, or remove the server and add it again.").
+		WithDocs("/docs/adding-servers#hardening").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("server", name).
+		Wrap(err)
+}
+
+// SSHHardeningRefused means turning SSH passwords off was not done, and why.
+func SSHHardeningRefused(name, outcome string) *Problem {
+	cause := "The change could not be confirmed on " + name + ", so it was undone."
+	switch outcome {
+	case "no_pubkey":
+		cause = "The SSH daemon on " + name + " does not accept keys, so turning passwords off would leave no way in."
+	case "no_dropins":
+		cause = "The SSH daemon on " + name + " does not read /etc/ssh/sshd_config.d, so the change would not take."
+	case "no_sshd":
+		cause = "No SSH daemon was found on " + name + "."
+	case "invalid":
+		cause = "The SSH daemon on " + name + " refused the new configuration, so it was removed again."
+	}
+	return New("server.ssh_hardening_refused", "SSH passwords were not turned off").
+		WithCause("%s", cause).
+		WithImpact("SSH on the server is as it was: nothing was changed.").
+		WithFix("Set PasswordAuthentication no and KbdInteractiveAuthentication no in /etc/ssh/sshd_config on the server by hand, check it with sshd -t, and reload ssh.").
+		WithDocs("/docs/adding-servers#hardening").
+		WithStatus(http.StatusConflict).
+		With("server", name).
+		With("outcome", outcome)
+}
+
 // K3sInstallFailed reports a failed k3s installation on a node.
 func K3sInstallFailed(host string, exitCode int, output string) *Problem {
 	return New("k3s.install_failed", "Kubernetes could not be installed on this server").

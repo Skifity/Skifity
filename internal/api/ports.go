@@ -210,6 +210,38 @@ type Provisioner interface {
 	PromoteServer(ctx context.Context, serverID string) (store.Operation, error)
 	// Cancel stops a running operation.
 	Cancel(ctx context.Context, operationID string) error
+	// AuditServer reads how a server stands up to the internet, changing
+	// nothing on it.
+	AuditServer(ctx context.Context, serverID string) (HardeningReport, error)
+	// TurnOffSSHPasswords makes a server's SSH take keys only.
+	TurnOffSSHPasswords(ctx context.Context, serverID string) (HardeningReport, error)
+}
+
+// A HardeningFinding is one check of a server. The interface translates it
+// as servers.hardening.checks.<code>.<state>; Detail and Fix are the English
+// for the CLI and the API.
+type HardeningFinding struct {
+	Code string `json:"code"`
+	// State is which of the check's answers this is — on, off, absent — and
+	// what the interface's sentence is looked up by.
+	State  string `json:"state"`
+	Level  string `json:"level"`
+	Detail string `json:"detail"`
+	Fix    string `json:"fix,omitempty"`
+	// Firewall names the firewall found, for the sentence that says so.
+	Firewall string `json:"firewall,omitempty"`
+}
+
+// HardeningReport is a server's findings, worst first, and whether the one
+// change the panel can make for it is on offer.
+type HardeningReport struct {
+	ServerID  string             `json:"server_id"`
+	CheckedAt time.Time          `json:"checked_at"`
+	Findings  []HardeningFinding `json:"findings"`
+	// CanTurnOffPasswords is true when SSH still takes a password and the
+	// panel can safely stop it: it signs in with a key, and the daemon reads
+	// the drop-in directory the change is written to.
+	CanTurnOffPasswords bool `json:"can_turn_off_passwords"`
 }
 
 // AddServerRequest is what the Add Server form submits.

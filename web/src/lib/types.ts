@@ -898,6 +898,25 @@ export type StackNote = {
 
 /** One of an app's other processes: its image, its own command, no port. */
 /** A port an app takes connections on that is not HTTP, open on every server. */
+/** One check of a server's hardening. */
+export type HardeningFinding = {
+  code: "ssh_passwords" | "ssh_root" | "fail2ban" | "auto_updates" | "firewall" | "reboot"
+  /** Which answer the check gave, and what its sentence is looked up by. */
+  state: string
+  level: "risk" | "warn" | "ok"
+  detail: string
+  fix?: string
+  firewall?: string
+}
+
+/** A server's hardening, worst first. */
+export type HardeningReport = {
+  server_id: string
+  checked_at: string
+  findings: HardeningFinding[]
+  can_turn_off_passwords: boolean
+}
+
 export type AppPort = {
   id: string
   app_id: string
