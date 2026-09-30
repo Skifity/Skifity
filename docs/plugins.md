@@ -134,12 +134,17 @@ two of these events were ever actually sent: a plugin could subscribe to
 standard and the panel's own source and fails when an event in one is missing
 from the other, which is the only way a promise like this stays true.
 
+**Only a panel administrator installs, changes or removes a plugin.** A plugin
+runs beside the panel, and one that provides a notification channel is offered
+to every team, so it is not one team's decision — and owning a team is no bar,
+since anybody signed in can make one.
+
 **You hear about the teams whoever installed you is in, and no others.** A
 plugin is installed panel-wide and given a token belonging to the person who
 installed it, so it can already read what they can read; the events draw the
 same line. On a panel with one team that is everything. On a panel with several,
-an owner of one team cannot install a plugin and have it watch — or, with a
-blocking hook, stop — another team's deploys.
+a plugin installed by an administrator who is in one team does not watch — or,
+with a blocking hook, stop — another team's deploys.
 
 **Blocking is only for an event that happens before something.** Refusing a
 deploy is a decision; refusing to acknowledge that a backup already finished is

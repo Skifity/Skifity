@@ -115,12 +115,13 @@ func (d *Dispatcher) Notify(ctx context.Context, teamID, event string, msg Messa
 				"channel", channel.ID, "kind", channel.Kind, "error", err)
 			continue
 		}
+		sendWith := ctx
 		if channel.Kind == "email" {
-			d.fillSMTPFromSettings(ctx, config)
+			sendWith = PrepareEmail(ctx, d.db, d.keyring, d.log, config)
 		}
 
 		d.wg.Add(1)
-		go func(kind, id string, config map[string]string) {
+		go func(ctx context.Context, kind, id string, config map[string]string) {
 			defer d.wg.Done()
 			// A notification is the least important thing the panel does and
 			// used to be able to end it: a malformed channel configuration
@@ -139,7 +140,7 @@ func (d *Dispatcher) Notify(ctx context.Context, teamID, event string, msg Messa
 				return
 			}
 			d.log.Debug("notification delivered", "channel", id, "kind", kind, "event", event)
-		}(channel.Kind, channel.ID, config)
+		}(sendWith, channel.Kind, channel.ID, config)
 	}
 }
 
@@ -180,34 +181,59 @@ var smtpSettings = map[string]string{
 	settings.KeySMTPTLS:      "smtp_tls",
 }
 
-// fillSMTPFromSettings fills in what the channel did not say for itself.
+// SettingsReader reads a panel-wide setting, and says whether it was sealed.
+type SettingsReader interface {
+	GetSetting(ctx context.Context, key string) (string, bool, error)
+}
+
+// panelServer marks a context whose email goes to the panel's own SMTP server,
+// which its administrator chose, rather than to one a channel named.
+type panelServer struct{}
+
+// PrepareEmail fills in what an email channel did not say from the panel's
+// Email settings, and answers the context to send it with.
 //
-// The channel wins where it has an answer: somebody who put a different server
-// on one channel meant it. Everything else falls back to the panel's own
-// settings, so an email channel is a list of recipients and nothing more.
-func (d *Dispatcher) fillSMTPFromSettings(ctx context.Context, config map[string]string) {
+// A channel that names no server is a list of recipients, and gets the whole
+// of the panel's: server, port, user, password, sender. A channel that names a
+// server of its own gets none of it. It used to get whatever it left out —
+// including the password — so a team admin who created a channel with only a
+// server they ran received the panel's SMTP credentials on the team's next
+// event. The panel's user and password belong to the panel's server and go
+// nowhere else.
+func PrepareEmail(ctx context.Context, db SettingsReader, keyring Keyring, log *slog.Logger, config map[string]string) context.Context {
+	read := func(key string) string {
+		value, encrypted, err := db.GetSetting(ctx, key)
+		if err != nil {
+			log.Warn("could not read an SMTP setting", "setting", key, "error", err)
+			return ""
+		}
+		if encrypted && value != "" {
+			plaintext, err := keyring.Open(value, settings.Context(key))
+			if err != nil {
+				log.Warn("could not read the SMTP password", "error", err)
+				return ""
+			}
+			value = string(plaintext)
+		}
+		return value
+	}
+	own := strings.TrimSpace(config["smtp_host"])
+	panelHost := strings.TrimSpace(read(settings.KeySMTPHost))
+	if own != "" && !strings.EqualFold(own, panelHost) {
+		return ctx
+	}
 	for key, field := range smtpSettings {
 		if strings.TrimSpace(config[field]) != "" {
 			continue
 		}
-		value, encrypted, err := d.db.GetSetting(ctx, key)
-		if err != nil {
-			d.log.Warn("could not read an SMTP setting", "setting", key, "error", err)
-			continue
+		if value := read(key); value != "" {
+			config[field] = value
 		}
-		if value == "" {
-			continue
-		}
-		if encrypted {
-			plaintext, err := d.keyring.Open(value, settings.Context(key))
-			if err != nil {
-				d.log.Warn("could not read the SMTP password", "error", err)
-				continue
-			}
-			value = string(plaintext)
-		}
-		config[field] = value
 	}
+	if panelHost == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, panelServer{}, true)
 }
 
 // subscribes reports whether a channel's stored event list covers an event.

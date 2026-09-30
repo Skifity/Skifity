@@ -245,7 +245,9 @@ function AppSidebar() {
         ]
       : []),
     { to: "/templates", label: t("nav.templates"), icon: BoxesIcon },
-    { to: "/plugins", label: t("nav.plugins"), icon: PuzzleIcon },
+    // Plugins run beside the panel for everybody, so only its administrator
+    // installs or changes them.
+    ...(user?.is_admin ? [{ to: "/plugins", label: t("nav.plugins"), icon: PuzzleIcon }] : []),
     { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },
   ]
 

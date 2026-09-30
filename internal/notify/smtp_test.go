@@ -2,9 +2,14 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"testing"
+	"time"
 
+	"skifity/internal/netguard"
+	"skifity/internal/runsafe"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 )
@@ -38,7 +43,7 @@ func TestAnEmailChannelFallsBackToThePanelsSMTPSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the channel: %v", err)
 	}
-	dispatcher.fillSMTPFromSettings(t.Context(), config)
+	PrepareEmail(t.Context(), db, fakeKeyring{}, slog.New(slog.DiscardHandler), config)
 
 	for field, want := range map[string]string{
 		"smtp_host":     "smtp.example.test",
@@ -57,8 +62,10 @@ func TestAnEmailChannelFallsBackToThePanelsSMTPSettings(t *testing.T) {
 	}
 }
 
-// A channel that names its own server meant it.
-func TestAChannelsOwnSMTPSettingsWin(t *testing.T) {
+// A channel that names its own server meant it — and gets nothing of the
+// panel's: its user and password belong to the panel's server. Filling them
+// in handed the panel's SMTP password to whatever server a team admin named.
+func TestAChannelsOwnServerIsNotGivenThePanelsCredentials(t *testing.T) {
 	db := fakeStore{
 		channels: []store.NotificationChannel{{
 			ID: "ch_1", Name: "alerts", Kind: "email", Enabled: true,
@@ -76,16 +83,54 @@ func TestAChannelsOwnSMTPSettingsWin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the channel: %v", err)
 	}
-	dispatcher.fillSMTPFromSettings(t.Context(), config)
+	ctx := PrepareEmail(t.Context(), db, fakeKeyring{}, slog.New(slog.DiscardHandler), config)
 
-	if config["smtp_host"] != "other.example.test" {
-		t.Errorf("the channel's own server was overwritten: %q", config["smtp_host"])
+	if config["smtp_host"] != "other.example.test" || config["smtp_user"] != "alerts" {
+		t.Errorf("the channel's own settings were overwritten: %v", config)
 	}
-	if config["smtp_user"] != "alerts" {
-		t.Errorf("the channel's own user was overwritten: %q", config["smtp_user"])
+	if config["smtp_password"] != "" {
+		t.Fatalf("the panel's SMTP password was handed to a server a channel named: %q", config["smtp_password"])
 	}
-	// And what it did not say still comes from the panel.
+	if ctx.Value(panelServer{}) != nil {
+		t.Fatal("a channel's own server is dialled as if the administrator had chosen it")
+	}
+
+	// The panel's own server named again, in any case, is the panel's.
+	config = map[string]string{"to": "ops@example.test", "smtp_host": "SMTP.example.test"}
+	PrepareEmail(t.Context(), db, fakeKeyring{}, slog.New(slog.DiscardHandler), config)
 	if config["smtp_password"] != "a-password" {
-		t.Errorf("the panel's password was not filled in: %q", config["smtp_password"])
+		t.Fatalf("the panel's own server was not given its password: %v", config)
+	}
+}
+
+func TestAServerAChannelNamesIsDialledCarefully(t *testing.T) {
+	// The panel's own machine is not somewhere a team's email goes.
+	err := sendEmail(t.Context(), map[string]string{"to": "a@example.test", "smtp_host": "127.0.0.1", "smtp_port": "2525"}, Message{Title: "t"})
+	var blocked *netguard.Blocked
+	if !errors.As(err, &blocked) {
+		t.Fatalf("a channel's server on loopback: %v", err)
+	}
+
+	// A server that accepts and never speaks does not hold the sender past
+	// its deadline.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		defer runsafe.Recover(nil, "the silent SMTP server", nil)
+		conn, err := listener.Accept()
+		if err == nil {
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+	host, port, _ := net.SplitHostPort(listener.Addr().String())
+	ctx, cancel := context.WithTimeout(context.WithValue(t.Context(), panelServer{}, true), 300*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err = sendEmail(ctx, map[string]string{"to": "a@example.test", "smtp_host": host, "smtp_port": port}, Message{Title: "t"})
+	if err == nil || time.Since(started) > 5*time.Second {
+		t.Fatalf("a silent server: %v after %s", err, time.Since(started))
 	}
 }

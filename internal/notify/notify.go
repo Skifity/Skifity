@@ -393,30 +393,55 @@ func sendEmail(ctx context.Context, config map[string]string, msg Message) error
 		auth = smtp.PlainAuth("", user, config["smtp_password"], host)
 	}
 
+	// The panel's own server is where its administrator said; one a channel
+	// named is dialled the way every other address a team gives the panel
+	// is, never the metadata service or the panel's own machine.
+	dialer := netguard.Dialer(15 * time.Second)
+	if ctx.Value(panelServer{}) != nil {
+		dialer = &net.Dialer{Timeout: 15 * time.Second}
+	}
+	var conn net.Conn
 	// Port 465 is implicit TLS; everything else starts plain and upgrades.
 	if port == 465 {
-		dialer := &tls.Dialer{Config: &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}}
-		conn, err := dialer.DialContext(ctx, "tcp", address)
-		if err != nil {
-			return fmt.Errorf("connect to %s over TLS: %w", address, err)
-		}
-		defer conn.Close()
-		c, err := smtp.NewClient(conn, host)
-		if err != nil {
-			return fmt.Errorf("start SMTP session: %w", err)
-		}
-		defer c.Quit()
-		return deliver(c, auth, from, recipients, body.Bytes())
+		tlsDialer := &tls.Dialer{NetDialer: dialer, Config: &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}}
+		conn, err = tlsDialer.DialContext(ctx, "tcp", address)
+	} else {
+		conn, err = dialer.DialContext(ctx, "tcp", address)
 	}
-
-	c, err := smtp.Dial(address)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", address, err)
 	}
+	defer conn.Close()
+	// net/smtp has no context: without a deadline a server that accepts and
+	// never answers held this goroutine, and the panel's shutdown that waits
+	// for it, for good.
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	defer context.AfterFunc(ctx, func() { _ = conn.Close() })()
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("start SMTP session with %s: %w", address, err)
+	}
 	defer c.Quit()
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
-			return fmt.Errorf("start TLS with %s: %w", host, err)
+	if port != 465 {
+		// "Use STARTTLS" on means required, off means never; unset takes it
+		// when the server offers it.
+		offered, _ := c.Extension("STARTTLS")
+		switch config["smtp_tls"] {
+		case "false":
+		case "true":
+			if !offered {
+				return fmt.Errorf("%s does not offer STARTTLS, and the settings require it", host)
+			}
+			fallthrough
+		default:
+			if offered {
+				if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+					return fmt.Errorf("start TLS with %s: %w", host, err)
+				}
+			}
 		}
 	}
 	return deliver(c, auth, from, recipients, body.Bytes())

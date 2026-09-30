@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,7 +52,7 @@ type pluginSettingView struct {
 }
 
 func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requireOwnerSomewhere(r); err != nil {
+	if _, err := s.requirePluginAdmin(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -77,6 +79,11 @@ type inspectPluginRequest struct {
 	// out to the internet, and how an author tries their own before publishing.
 	URL      string `json:"url,omitempty"`
 	Manifest string `json:"manifest,omitempty"`
+	// SHA256 is the digest a signed store listed for the manifest at URL. The
+	// file fetched, for the review and again for the install, has to hash to
+	// it: without that, whoever serves the address could put another image
+	// behind the one an administrator read — under a page saying "verified".
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 // inspectPluginResponse is what an administrator is shown before deciding.
@@ -93,7 +100,7 @@ type inspectPluginResponse struct {
 
 // handleInspectPlugin reads a manifest and says what installing it would mean.
 func (s *Server) handleInspectPlugin(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requireOwnerSomewhere(r); err != nil {
+	if _, err := s.requirePluginAdmin(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -128,7 +135,7 @@ type installPluginRequest struct {
 }
 
 func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	user, err := s.requireOwnerSomewhere(r)
+	user, err := s.requirePluginAdmin(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -211,7 +218,7 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requireOwnerSomewhere(r); err != nil {
+	if _, err := s.requirePluginAdmin(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -253,7 +260,7 @@ type updatePluginRequest struct {
 }
 
 func (s *Server) handleUpdatePlugin(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requireOwnerSomewhere(r); err != nil {
+	if _, err := s.requirePluginAdmin(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -359,6 +366,16 @@ func (s *Server) fetchManifest(r *http.Request, req inspectPluginRequest) (plugi
 		if err != nil {
 			return plugins.Manifest{}, nil, err
 		}
+		if want := strings.TrimSpace(req.SHA256); want != "" {
+			sum := sha256.Sum256(fetched)
+			if got := hex.EncodeToString(sum[:]); !strings.EqualFold(got, want) {
+				return plugins.Manifest{}, nil, errdoc.New("plugin.manifest_changed", "That manifest is not the one the store signed").
+					WithCause("The store listed a manifest with the digest %s, and the file at %s now has the digest %s.", want, req.URL, got).
+					WithImpact("Nothing was installed.").
+					WithFix("Tell the store's publisher; install it from the store again once the two agree.").
+					WithStatus(http.StatusConflict)
+			}
+		}
 		raw = fetched
 	}
 	manifest, err := plugins.Parse(raw)
@@ -436,26 +453,23 @@ func (s *Server) pluginView(r *http.Request, record store.Plugin) (pluginView, e
 	return view, nil
 }
 
-// requireOwnerSomewhere allows a request from somebody who owns a team.
+// requirePluginAdmin allows a request from a panel administrator.
 //
 // Installing a plugin is not a team's decision: the container runs beside the
-// panel and its token reaches the whole install. There is no "plugins team", so
-// the nearest honest rule is that you have to own something here.
-func (s *Server) requireOwnerSomewhere(r *http.Request) (store.User, error) {
+// panel, its token reaches the whole install, and a plugin that provides a
+// notification channel is offered to every team. It used to be enough to own
+// a team — and any signed-in user can make one, so any of them could install
+// images, rewrite another plugin's settings or remove somebody's deploy
+// policy. Only whoever administers the panel may now.
+func (s *Server) requirePluginAdmin(r *http.Request) (store.User, error) {
 	user, ok := UserFrom(r.Context())
 	if !ok {
 		return store.User{}, errdoc.Unauthorized()
 	}
-	teams, err := s.db.ListTeamsForUser(r.Context(), user.ID)
-	if err != nil {
-		return store.User{}, err
+	if !user.IsAdmin {
+		return store.User{}, errdoc.Forbidden("installing, changing and removing plugins, which only a panel administrator may do")
 	}
-	for _, team := range teams {
-		if team.Role == store.RoleOwner {
-			return user, nil
-		}
-	}
-	return store.User{}, errdoc.Forbidden("installing and removing plugins")
+	return user, nil
 }
 
 func samePermissions(agreed, asked []string) bool {
@@ -529,7 +543,7 @@ type storeCatalogueResponse struct {
 // three different things, and a page that showed an empty list for all three
 // would send somebody looking in the wrong place.
 func (s *Server) handleStoreCatalogue(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requireOwnerSomewhere(r); err != nil {
+	if _, err := s.requirePluginAdmin(r); err != nil {
 		writeError(w, r, err)
 		return
 	}

@@ -285,7 +285,14 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 		Body:  "If you are reading this, notifications from " + version.Name + " are working.",
 		Level: "info",
 	}
-	if err := notify.Send(r.Context(), channel.Kind, config, message, s.channels); err != nil {
+	// The same settings a real delivery is sent with: an email channel that
+	// names only its recipients failed every test for want of a server it
+	// would have been given.
+	ctx := r.Context()
+	if channel.Kind == "email" {
+		ctx = notify.PrepareEmail(ctx, s.db, s.keyring, s.log, config)
+	}
+	if err := notify.Send(ctx, channel.Kind, config, message, s.channels); err != nil {
 		writeError(w, r, errdoc.New("notification.test_failed", "The test message could not be sent").
 			WithCause("%s", err.Error()).
 			WithImpact("This channel will not deliver notifications until it works.").

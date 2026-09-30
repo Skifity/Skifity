@@ -2461,6 +2461,12 @@
         "cause": "Penyegelan menjalankan image panel sendiri di job backup, dan Deployment panel tidak dapat dibaca untuk menemukannya: {{0}}",
         "impact": "Tidak ada yang di-backup, dipulihkan, atau diubah, dan tidak ada yang dikirim ke bucket tanpa enkripsi.",
         "fix": "Ini berfungsi bila panel berjalan di dalam klaster yang dikelolanya, seperti yang disiapkan installer. Panel di luarnya hanya dapat mem-backup tanpa passphrase, sehingga backup dikirim tanpa enkripsi."
+      },
+      "plugin_manifest_changed": {
+        "title": "Manifest itu bukan yang ditandatangani toko",
+        "cause": "Toko mencantumkan manifest dengan digest {{0}}, dan file di {{1}} sekarang memiliki digest {{2}}.",
+        "impact": "Tidak ada yang dipasang.",
+        "fix": "Beri tahu penerbit toko; pasang lagi dari toko setelah keduanya cocok."
       }
     }
   },

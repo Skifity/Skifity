@@ -37,12 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { api, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
-import type {
-  InstalledPlugin,
-  PluginInspection,
-  StoreCatalogue,
-  StoreEntry,
-} from "@/lib/types"
+import type { InstalledPlugin, PluginInspection, StoreCatalogue, StoreEntry } from "@/lib/types"
 
 /**
  * Plugins.
@@ -56,14 +51,17 @@ import type {
 export function PluginsPage() {
   const { t } = useTranslation()
   const [pending, setPending] = useState<PluginInspection | null>(null)
-  const [source, setSource] = useState<{ url?: string; manifest?: string }>({})
+  const [source, setSource] = useState<{ url?: string; manifest?: string; sha256?: string }>({})
 
   const installed = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api.get<List<InstalledPlugin>>("/api/plugins"),
   })
 
-  function review(inspection: PluginInspection, from: { url?: string; manifest?: string }) {
+  function review(
+    inspection: PluginInspection,
+    from: { url?: string; manifest?: string; sha256?: string },
+  ) {
     setSource(from)
     setPending(inspection)
   }
@@ -91,9 +89,7 @@ export function PluginsPage() {
               description={t("plugins.emptyHelp")}
             />
           ) : (
-            installed.data?.items.map((plugin) => (
-              <InstalledCard key={plugin.id} plugin={plugin} />
-            ))
+            installed.data?.items.map((plugin) => <InstalledCard key={plugin.id} plugin={plugin} />)
           )}
         </TabsContent>
 
@@ -213,18 +209,12 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
                     // is empty and says it is already set rather than showing
                     // dots that could be typed over by accident.
                     placeholder={
-                      stored?.configured && setting.secret
-                        ? t("plugins.secretStored")
-                        : undefined
+                      stored?.configured && setting.secret ? t("plugins.secretStored") : undefined
                     }
                     value={values[setting.key] ?? (setting.secret ? "" : (stored?.value ?? ""))}
-                    onChange={(e) =>
-                      setValues({ ...values, [setting.key]: e.target.value })
-                    }
+                    onChange={(e) => setValues({ ...values, [setting.key]: e.target.value })}
                   />
-                  {setting.help && (
-                    <p className="text-xs text-muted-foreground">{setting.help}</p>
-                  )}
+                  {setting.help && <p className="text-xs text-muted-foreground">{setting.help}</p>}
                 </div>
               )
             })}
@@ -251,7 +241,7 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
 function StoreTab({
   onReview,
 }: {
-  onReview: (inspection: PluginInspection, from: { url?: string }) => void
+  onReview: (inspection: PluginInspection, from: { url?: string; sha256?: string }) => void
 }) {
   const { t } = useTranslation()
   const [inspecting, setInspecting] = useState<string | null>(null)
@@ -264,7 +254,12 @@ function StoreTab({
 
   const inspect = useMutation({
     mutationFn: (entry: StoreEntry) =>
-      api.post<PluginInspection>("/api/plugins/inspect", { url: entry.manifest_url }),
+      // The digest the signed index gave, so what is reviewed — and later
+      // installed — is the file the store vouched for.
+      api.post<PluginInspection>("/api/plugins/inspect", {
+        url: entry.manifest_url,
+        sha256: entry.manifest_sha256,
+      }),
   })
 
   if (store.isLoading) return <Skeleton className="h-40" />
@@ -345,13 +340,14 @@ function StoreTab({
                       setInspecting(entry.id)
                       inspect.mutate(entry, {
                         onSuccess: (inspection) =>
-                          onReview(inspection, { url: entry.manifest_url }),
+                          onReview(inspection, {
+                            url: entry.manifest_url,
+                            sha256: entry.manifest_sha256,
+                          }),
                       })
                     }}
                   >
-                    {inspect.isPending && inspecting === entry.id && (
-                      <Spinner className="size-4" />
-                    )}
+                    {inspect.isPending && inspecting === entry.id && <Spinner className="size-4" />}
                     {t("plugins.review")}
                   </Button>
                 )}
@@ -435,7 +431,7 @@ function ReviewDialog({
   onOpenChange,
 }: {
   inspection: PluginInspection | null
-  source: { url?: string; manifest?: string }
+  source: { url?: string; manifest?: string; sha256?: string }
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
