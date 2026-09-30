@@ -25,6 +25,7 @@ import { BackupVerification } from "@/components/backup-verification"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
+import { RegistriesCard } from "@/components/settings/registries"
 import {
   AccessSummary,
   ChangeAccessDialog,
@@ -149,6 +150,7 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="git" className="space-y-6 pt-4">
           <GitSources />
+          <RegistriesCard />
           <SettingGroups only={["git"]} />
         </TabsContent>
         <TabsContent value="notifications" className="pt-4">

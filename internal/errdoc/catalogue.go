@@ -343,6 +343,17 @@ func TooManyFiles(limit int) *Problem {
 		WithDocs("/docs/concepts#files")
 }
 
+// RegistryLoginRefused is a registry that answered and turned the
+// credentials down.
+func RegistryLoginRefused(host string) *Problem {
+	return New("registry.login_refused", "The registry turned these credentials down").
+		WithCause("%s answered that this username and password cannot sign in.", host).
+		WithImpact("The credentials were not saved, so nothing will pull with them.").
+		WithFix("Check the username, and use a token with permission to read packages — ghcr.io and Docker Hub want a token in place of the account's password.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#private-registries")
+}
+
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.
 func TunnelUnreachable(database string) *Problem {
 	return New("database.tunnel_unreachable", "The panel could not reach this database").

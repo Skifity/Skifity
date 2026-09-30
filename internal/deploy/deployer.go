@@ -327,6 +327,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	if err := d.ensureRegistryAuth(ctx, env.Namespace); err != nil {
 		return nil, err
 	}
+	if err := d.ensureTeamRegistries(ctx, env.Namespace, teamID); err != nil {
+		return nil, err
+	}
 	// An internal app is reached by name from its environment and has no
 	// address to give.
 	if !app.Internal {
@@ -1132,6 +1135,45 @@ func (d *Deployer) ensureRegistryAuth(ctx context.Context, appNamespace string) 
 		if err := d.cluster.Client().Applier().Apply(ctx, secret); err != nil {
 			return fmt.Errorf("place the registry credentials in %s: %w", namespace, err)
 		}
+	}
+	return nil
+}
+
+// teamLogins opens a team's registry credentials.
+func (d *Deployer) teamLogins(ctx context.Context, teamID string) ([]kube.RegistryLogin, error) {
+	rows, err := d.db.ListRegistryCredentials(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	logins := make([]kube.RegistryLogin, 0, len(rows))
+	for _, row := range rows {
+		password, err := d.keyring.Open(row.SealedPassword, store.RegistryContext(teamID, row.Host))
+		if err != nil {
+			return nil, fmt.Errorf("read the credentials for %s: %w", row.Host, err)
+		}
+		logins = append(logins, kube.RegistryLogin{Host: row.Host, Username: row.Username, Password: string(password)})
+	}
+	return logins, nil
+}
+
+// ensureTeamRegistries writes the team's registry credentials into an app's
+// namespace, or removes them when the team has none left: a credential
+// somebody took away is not left where a pod could still pull with it.
+func (d *Deployer) ensureTeamRegistries(ctx context.Context, namespace, teamID string) error {
+	logins, err := d.teamLogins(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	applier := d.cluster.Client().Applier()
+	if len(logins) == 0 {
+		return applier.Delete(ctx, "v1", "Secret", namespace, kube.TeamRegistriesSecretName)
+	}
+	secret, err := kube.PullSecret(kube.TeamRegistriesSecretName, namespace, logins)
+	if err != nil {
+		return err
+	}
+	if err := applier.Apply(ctx, secret); err != nil {
+		return fmt.Errorf("place the team's registry credentials in %s: %w", namespace, err)
 	}
 	return nil
 }

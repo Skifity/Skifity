@@ -168,6 +168,27 @@ skifity files rm /etc/nginx/conf.d/default.conf
   `/dev`, or exactly where a volume is mounted. Inside a volume is fine, which
   is how a settings file sits beside the data it configures.
 
+## Private registries
+
+An app can run an image from a private repository — a ghcr.io package, a
+private Docker Hub repository, a Harbor of your own — once the team has the
+credentials for it. **Settings → Git → Private registries** holds one set per
+registry host, and an administrator adds them:
+
+* **The registry is asked first.** The panel signs in the way `docker login`
+  does and refuses credentials the registry turns down, so a typo is found then
+  rather than as an app stuck pulling its image. A registry on a private network,
+  which the panel will not dial, is saved and marked as not checked.
+* **Every app in the team pulls with them**, and every build pulls its base
+  image with them: a `FROM ghcr.io/acme/base` in a Dockerfile works the same
+  way. The kubelet picks the credential for the host each image names, so
+  there is nothing to choose per app.
+* **Use a token that can only read packages** rather than an account's
+  password. The password is stored encrypted and never shown again; a build
+  gets it for as long as it runs, in a Secret of its own that is removed after.
+* Removing one takes effect at each app's next deploy, which is when the
+  credentials in its environment are written again.
+
 ## Deployments and rollback
 
 Each deployment records the image it produced *and* the settings it ran with:

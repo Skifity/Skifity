@@ -543,10 +543,13 @@ func buildResources(s AppSpec) corev1.ResourceRequirements {
 
 // pullSecrets is the one secret an external registry needs, or nothing.
 func pullSecrets(s AppSpec) []corev1.LocalObjectReference {
-	if s.ImagePullSecret == "" {
-		return nil
+	var out []corev1.LocalObjectReference
+	for _, name := range []string{s.ImagePullSecret, s.TeamPullSecret} {
+		if name != "" {
+			out = append(out, corev1.LocalObjectReference{Name: name})
+		}
 	}
-	return []corev1.LocalObjectReference{{Name: s.ImagePullSecret}}
+	return out
 }
 
 func probeHandler(s AppSpec) corev1.ProbeHandler {

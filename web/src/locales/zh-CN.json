@@ -319,7 +319,9 @@
       "cluster.k3s_upgrade_started": "k3s 升级已开始",
       "git_source.webhook_viewed": "查看了 Webhook 密钥",
       "file.saved": "保存了一个文件",
-      "file.deleted": "删除了一个文件"
+      "file.deleted": "删除了一个文件",
+      "registry.saved": "保存了仓库凭据",
+      "registry.deleted": "删除了仓库凭据"
     }
   },
   "projects": {
@@ -2545,6 +2547,12 @@
         "cause": "一个应用最多有 {{0}} 个文件。",
         "impact": "文件未添加。",
         "fix": "删除不再需要的文件，或将多个设置放在一个文件中。"
+      },
+      "registry_login_refused": {
+        "title": "仓库拒绝了这些凭据",
+        "cause": "{{0}} 回复该用户名和密码无法登录。",
+        "impact": "凭据未保存，因此不会用它们拉取任何内容。",
+        "fix": "检查用户名，并使用有读取包权限的令牌——ghcr.io 和 Docker Hub 要求使用令牌代替账户密码。"
       }
     }
   },
@@ -3032,5 +3040,20 @@
     "executable": "可执行",
     "executableHelp": "用于镜像运行的脚本，例如 /docker-entrypoint.d 中的脚本。",
     "restartNote": "保存会重启应用以读取该文件，不会重新构建。"
+  },
+  "registries": {
+    "title": "私有镜像仓库",
+    "help": "存放私有镜像的仓库凭据。团队中的每个应用都用它们拉取镜像，每次构建也用它们拉取基础镜像。",
+    "empty": "无。公共镜像无需在此配置。",
+    "add": "添加仓库",
+    "save": "检查并保存",
+    "host": "仓库",
+    "username": "用户名",
+    "password": "密码或令牌",
+    "formHelp": "ghcr.io、docker.io 或你自己的仓库主机。请使用只能读取包的令牌，而不是账户密码。保存前会先向仓库验证。",
+    "checked": "{{host}} 接受了凭据。",
+    "unchecked": "已保存，但无法从面板向 {{host}} 验证。",
+    "remove": "删除 {{host}}",
+    "removeConfirm": "从下一次部署开始，应用将不再使用这些凭据从 {{host}} 拉取。"
   }
 }

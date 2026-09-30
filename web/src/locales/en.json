@@ -327,7 +327,9 @@
       "cluster.k3s_upgrade_started": "k3s upgrade started",
       "git_source.webhook_viewed": "Webhook secret viewed",
       "file.saved": "saved a file",
-      "file.deleted": "removed a file"
+      "file.deleted": "removed a file",
+      "registry.saved": "saved registry credentials",
+      "registry.deleted": "removed registry credentials"
     }
   },
   "projects": {
@@ -2559,6 +2561,12 @@
         "cause": "An app has at most {{0}} files.",
         "impact": "The file was not added.",
         "fix": "Remove one it no longer needs, or put several settings in one file."
+      },
+      "registry_login_refused": {
+        "title": "The registry turned these credentials down",
+        "cause": "{{0}} answered that this username and password cannot sign in.",
+        "impact": "The credentials were not saved, so nothing will pull with them.",
+        "fix": "Check the username, and use a token with permission to read packages — ghcr.io and Docker Hub want a token in place of the account's password."
       }
     }
   },
@@ -3048,5 +3056,20 @@
     "executable": "Executable",
     "executableHelp": "For a script the image runs, such as one in /docker-entrypoint.d.",
     "restartNote": "Saving restarts the app so it reads the file. It does not rebuild it."
+  },
+  "registries": {
+    "title": "Private registries",
+    "help": "Credentials for the registries your private images live in. Every app in the team pulls with them, and every build pulls its base image with them.",
+    "empty": "None. Public images need nothing here.",
+    "add": "Add a registry",
+    "save": "Check and save",
+    "host": "Registry",
+    "username": "Username",
+    "password": "Password or token",
+    "formHelp": "ghcr.io, docker.io or your own registry's host. Use a token that can only read packages rather than an account's password. The registry is asked before anything is saved.",
+    "checked": "{{host}} accepted the credentials.",
+    "unchecked": "Saved, but {{host}} could not be asked from the panel.",
+    "remove": "Remove {{host}}",
+    "removeConfirm": "Apps stop pulling from {{host}} with these credentials from their next deploy."
   }
 }

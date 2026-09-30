@@ -113,6 +113,9 @@ type AppSpec struct {
 	// an app whose image lives in a registry that is not the one in the
 	// cluster. Empty for everything else, which is the common case.
 	ImagePullSecret string
+	// TeamPullSecret holds the team's own registry credentials, when it has
+	// any: a private image of theirs on ghcr.io or Docker Hub.
+	TeamPullSecret string
 
 	// Files are mounted read-only into every container the app runs, from
 	// the Secret FilesSecretName names. See files.go.

@@ -464,6 +464,15 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	if strings.TrimSpace(external) != "" {
 		spec.ImagePullSecret = kube.RegistrySecretName
 	}
+	// The team's own registries, named only when it has some, for the same
+	// reason: the deployer writes the Secret into the namespace then.
+	logins, err := c.db.ListRegistryCredentials(ctx, project.TeamID)
+	if err != nil {
+		return kube.AppSpec{}, err
+	}
+	if len(logins) > 0 {
+		spec.TeamPullSecret = kube.TeamRegistriesSecretName
+	}
 	if app.StartCommand != "" {
 		// A start command is a shell line, so it runs through a shell rather
 		// than being split here and getting quoting subtly wrong.

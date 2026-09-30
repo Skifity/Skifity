@@ -104,6 +104,19 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	if len(buildArgs) > 0 {
 		spec.BuildVarsSecret = kube.ResourceName(spec.Name, "vars")
 	}
+	// A Dockerfile whose FROM is the team's own private image pulls it with
+	// the team's credentials, which live beside the panel's for this build
+	// only: the build namespace is every team's, and a Secret left there would
+	// be one team's password where another's build runs.
+	auth, err := d.buildAuth(ctx, app, registry, registrySecret)
+	if err != nil {
+		return "", err
+	}
+	if auth != nil {
+		auth.Name = kube.ResourceName(spec.Name, "auth")
+		auth.Namespace = spec.Namespace
+		spec.RegistrySecret = auth.Name
+	}
 
 	job, err := builder.BuildJob(spec)
 	if err != nil {
@@ -129,6 +142,12 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		}
 		defer d.removeBuildVars(ctx, spec)
 	}
+	if auth != nil {
+		if err := d.cluster.Client().Applier().Apply(ctx, auth); err != nil {
+			return "", fmt.Errorf("hand the build its registry credentials: %w", err)
+		}
+		defer d.removeBuildSecret(ctx, spec.Namespace, auth.Name)
+	}
 
 	d.warnAboutAdvisories(ctx, deployment, app)
 	d.appendLog(ctx, deployment.ID, fmt.Sprintf("Building %s with the %s builder.", app.Name, chosen))
@@ -136,6 +155,9 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", fmt.Errorf("start the build: %w", err)
 	}
 	d.ownBuildVars(ctx, spec)
+	if auth != nil {
+		d.ownBuildSecret(ctx, spec, auth)
+	}
 	// A build cancelled or replaced stops here, and its Job has to stop with
 	// it: left running, it finished later and pushed an image nobody asked
 	// for, over a tag the build that replaced it may be using.
@@ -560,6 +582,64 @@ func (d *Deployer) ownBuildVars(ctx context.Context, spec builder.JobSpec) {
 	}}
 	if err := applier.Apply(ctx, vars); err != nil {
 		d.log.Warn("could not make the build own its variables", "job", spec.Name, "error", err)
+	}
+}
+
+// buildAuth is the Docker config a build pulls and pushes with when the team
+// has registry credentials of its own: theirs, and the panel's external
+// registry's when there is one, so the push keeps working. Nil when the team
+// has none, and the build mounts the panel's Secret as before.
+func (d *Deployer) buildAuth(ctx context.Context, app store.App, registry, registrySecret string) (*corev1.Secret, error) {
+	teamID, err := d.db.TeamIDForApp(ctx, app.ID)
+	if err != nil {
+		return nil, err
+	}
+	logins, err := d.teamLogins(ctx, teamID)
+	if err != nil || len(logins) == 0 {
+		return nil, err
+	}
+	if registrySecret != "" {
+		username, err := d.settingValue(ctx, settings.KeyRegistryUser)
+		if err != nil {
+			return nil, err
+		}
+		password, err := d.settingValue(ctx, settings.KeyRegistryPassword)
+		if err != nil {
+			return nil, err
+		}
+		if username != "" || password != "" {
+			// Last, so the panel's own registry wins over a team's credential
+			// for the same host: it is where the image is pushed.
+			logins = append(logins, kube.RegistryLogin{Host: registryHost(registry), Username: username, Password: password})
+		}
+	}
+	return kube.PullSecret("build-auth", "", logins)
+}
+
+// ownBuildSecret makes the build's Job the owner of a Secret made for it, so
+// the cluster collects it with the Job if the panel stops first.
+func (d *Deployer) ownBuildSecret(ctx context.Context, spec builder.JobSpec, secret *corev1.Secret) {
+	applier := d.cluster.Client().Applier()
+	job, err := applier.Get(ctx, "batch/v1", "Job", spec.Namespace, spec.Name)
+	if err != nil {
+		d.log.Warn("could not read the build to give it its credentials", "job", spec.Name, "error", err)
+		return
+	}
+	owned := secret.DeepCopy()
+	owned.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "batch/v1", Kind: "Job", Name: job.GetName(), UID: job.GetUID(),
+	}}
+	if err := applier.Apply(ctx, owned); err != nil {
+		d.log.Warn("could not make the build own its credentials", "job", spec.Name, "error", err)
+	}
+}
+
+// removeBuildSecret deletes a Secret made for one build once it has finished.
+func (d *Deployer) removeBuildSecret(ctx context.Context, namespace, name string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	if err := d.cluster.Client().Applier().Delete(ctx, "v1", "Secret", namespace, name); err != nil {
+		d.log.Warn("could not remove a finished build's credentials", "secret", name, "error", err)
 	}
 }
 

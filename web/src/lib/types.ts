@@ -819,6 +819,17 @@ export type StackNote = {
 }
 
 /** One of an app's other processes: its image, its own command, no port. */
+/** Credentials a team pulls private images with. The password never comes back. */
+export type RegistryCredential = {
+  id: string
+  team_id: string
+  name: string
+  host: string
+  username: string
+  created_at: string
+  updated_at: string
+}
+
 /** A file an app's containers read, mounted read-only at its path. */
 export type AppFile = {
   id: string

@@ -235,6 +235,9 @@ func (s *Server) routes() chi.Router {
 				team.Post("/detect", s.handleDetect)
 				team.Post("/detect-upload", s.handleDetectUpload)
 
+				team.Get("/registries", s.handleListRegistries)
+				team.Put("/registries", s.handleSetRegistry)
+				team.Delete("/registries/{registryID}", s.handleDeleteRegistry)
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,28 +35,43 @@ const RegistrySecretName = "skifity-registry-auth"
 // password is a normal thing to run inside a private network, and the caller
 // decides whether to apply a secret at all.
 func RegistrySecret(namespace, server, username, password string) (*corev1.Secret, error) {
-	server = strings.TrimSuffix(strings.TrimSpace(server), "/")
-	if server == "" {
-		return nil, fmt.Errorf("a registry secret needs the registry's address")
-	}
-	// Docker's own config uses this URL for Docker Hub rather than the short
-	// name an image reference carries, and a credential filed under the short
-	// name is one the kubelet never finds.
-	if server == "docker.io" || server == "index.docker.io" {
-		server = "https://index.docker.io/v1/"
-	}
+	return PullSecret(RegistrySecretName, namespace, []RegistryLogin{{Host: server, Username: username, Password: password}})
+}
 
-	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-	config := map[string]any{
-		"auths": map[string]any{
-			server: map[string]string{
-				"username": username,
-				"password": password,
-				"auth":     auth,
-			},
-		},
+// TeamRegistriesSecretName is the Secret in each of a team's namespaces
+// holding the team's own registry credentials, beside the panel's.
+const TeamRegistriesSecretName = "skifity-team-registries"
+
+// RegistryLogin is one registry's credentials.
+type RegistryLogin struct {
+	Host     string
+	Username string
+	Password string
+}
+
+// PullSecret renders a dockerconfigjson Secret holding every login given, for
+// the kubelet and for buildctl alike. Each picks the entry for the host an
+// image names.
+func PullSecret(name, namespace string, logins []RegistryLogin) (*corev1.Secret, error) {
+	auths := map[string]any{}
+	for _, login := range logins {
+		server := strings.TrimSuffix(strings.TrimSpace(login.Host), "/")
+		if server == "" {
+			return nil, fmt.Errorf("a registry secret needs the registry's address")
+		}
+		// Docker's own config uses this URL for Docker Hub rather than the
+		// short name an image reference carries, and a credential filed under
+		// the short name is one the kubelet never finds.
+		if server == "docker.io" || server == "index.docker.io" || server == "registry-1.docker.io" {
+			server = "https://index.docker.io/v1/"
+		}
+		auths[server] = map[string]string{
+			"username": login.Username,
+			"password": login.Password,
+			"auth":     base64.StdEncoding.EncodeToString([]byte(login.Username + ":" + login.Password)),
+		}
 	}
-	encoded, err := json.Marshal(config)
+	encoded, err := json.Marshal(map[string]any{"auths": auths})
 	if err != nil {
 		return nil, fmt.Errorf("build the registry credentials: %w", err)
 	}
@@ -63,11 +79,45 @@ func RegistrySecret(namespace, server, username, password string) (*corev1.Secre
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      RegistrySecretName,
+			Name:      name,
 			Namespace: namespace,
 			Labels:    map[string]string{"app.kubernetes.io/managed-by": version.Binary},
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{corev1.DockerConfigJsonKey: encoded},
 	}, nil
+}
+
+// registryHost is a registry's host as an image reference names it, and
+// optionally its port.
+var registryHost = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?$`)
+
+// NormalizeRegistryHost turns what somebody typed — https://ghcr.io/,
+// Docker Hub's several names — into the host an image reference carries, or
+// says why it cannot be one.
+func NormalizeRegistryHost(input string) (string, error) {
+	host := strings.ToLower(strings.TrimSpace(input))
+	host = strings.TrimPrefix(strings.TrimPrefix(host, "https://"), "http://")
+	host = strings.TrimSuffix(host, "/")
+	if i := strings.Index(host, "/"); i >= 0 {
+		return "", fmt.Errorf("%q has a path; a registry is a host, such as ghcr.io or registry.example.com:5000", input)
+	}
+	switch host {
+	case "index.docker.io", "registry-1.docker.io", "hub.docker.com":
+		host = "docker.io"
+	}
+	if !registryHost.MatchString(host) {
+		return "", fmt.Errorf("%q is not a registry's host, such as ghcr.io or registry.example.com:5000", input)
+	}
+	return host, nil
+}
+
+// ImageHost is the registry an image reference pulls from: docker.io for a
+// name with no host in it, as Docker reads one.
+func ImageHost(image string) string {
+	first, _, found := strings.Cut(image, "/")
+	if !found || (!strings.ContainsAny(first, ".:") && first != "localhost") {
+		return "docker.io"
+	}
+	return strings.ToLower(first)
 }

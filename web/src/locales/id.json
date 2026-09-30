@@ -319,7 +319,9 @@
       "cluster.k3s_upgrade_started": "Peningkatan k3s dimulai",
       "git_source.webhook_viewed": "Secret webhook dilihat",
       "file.saved": "menyimpan sebuah berkas",
-      "file.deleted": "menghapus sebuah berkas"
+      "file.deleted": "menghapus sebuah berkas",
+      "registry.saved": "menyimpan kredensial registry",
+      "registry.deleted": "menghapus kredensial registry"
     }
   },
   "projects": {
@@ -2545,6 +2547,12 @@
         "cause": "Sebuah aplikasi memiliki paling banyak {{0}} berkas.",
         "impact": "Berkas tidak ditambahkan.",
         "fix": "Hapus yang tidak lagi diperlukan, atau gabungkan beberapa pengaturan dalam satu berkas."
+      },
+      "registry_login_refused": {
+        "title": "Registry menolak kredensial ini",
+        "cause": "{{0}} menjawab bahwa nama pengguna dan kata sandi ini tidak dapat masuk.",
+        "impact": "Kredensial tidak disimpan, jadi tidak ada yang akan menarik dengannya.",
+        "fix": "Periksa nama pengguna, dan gunakan token dengan izin membaca paket — ghcr.io dan Docker Hub meminta token sebagai ganti kata sandi akun."
       }
     }
   },
@@ -3032,5 +3040,20 @@
     "executable": "Dapat dieksekusi",
     "executableHelp": "Untuk skrip yang dijalankan image, misalnya di /docker-entrypoint.d.",
     "restartNote": "Menyimpan akan memulai ulang aplikasi agar membaca berkas. Tidak membangun ulang."
+  },
+  "registries": {
+    "title": "Registry privat",
+    "help": "Kredensial untuk registry tempat image privat Anda berada. Setiap aplikasi di tim menarik image dengannya, dan setiap build menarik image dasarnya dengannya.",
+    "empty": "Tidak ada. Image publik tidak memerlukan apa pun di sini.",
+    "add": "Tambah registry",
+    "save": "Periksa dan simpan",
+    "host": "Registry",
+    "username": "Nama pengguna",
+    "password": "Kata sandi atau token",
+    "formHelp": "ghcr.io, docker.io, atau host registry Anda sendiri. Gunakan token yang hanya dapat membaca paket, bukan kata sandi akun. Registry ditanya sebelum apa pun disimpan.",
+    "checked": "{{host}} menerima kredensial.",
+    "unchecked": "Tersimpan, tetapi {{host}} tidak dapat ditanya dari panel.",
+    "remove": "Hapus {{host}}",
+    "removeConfirm": "Aplikasi berhenti menarik dari {{host}} dengan kredensial ini sejak deploy berikutnya."
   }
 }

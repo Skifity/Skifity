@@ -228,6 +228,9 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 	if err := d.ensureRegistryAuth(ctx, env.Namespace); err != nil {
 		return err
 	}
+	if err := d.ensureTeamRegistries(ctx, env.Namespace, project.TeamID); err != nil {
+		return err
+	}
 	variables, err := d.runtimeVariables(ctx, app, env)
 	if err != nil {
 		return err

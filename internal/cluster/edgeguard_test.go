@@ -288,3 +288,28 @@ func TestAnAppsSpecCarriesWhereItsFilesGo(t *testing.T) {
 		t.Fatalf("the spec's files are %+v", spec.Files)
 	}
 }
+
+// A team with registry credentials pulls with them; one without names no
+// Secret, which would not be in its namespaces.
+func TestAnAppPullsWithItsTeamsRegistriesOnlyWhenItHasSome(t *testing.T) {
+	c, db, app, env, _ := autoDomainFixture(t)
+	spec, err := c.SpecFor(t.Context(), app, env, "ghcr.io/acme/web:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.TeamPullSecret != "" {
+		t.Fatalf("a team without credentials pulls with %q", spec.TeamPullSecret)
+	}
+	project, err := db.GetProject(t.Context(), env.ProjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetRegistryCredential(t.Context(), &store.RegistryCredential{
+		TeamID: project.TeamID, Name: "ghcr", Host: "ghcr.io", Username: "acme-bot",
+	}, "sealed-not-read-here"); err != nil {
+		t.Fatal(err)
+	}
+	if spec, _ = c.SpecFor(t.Context(), app, env, "ghcr.io/acme/web:1"); spec.TeamPullSecret != kube.TeamRegistriesSecretName {
+		t.Fatalf("a team with credentials pulls with %q", spec.TeamPullSecret)
+	}
+}
