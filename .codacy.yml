@@ -1,0 +1,29 @@
+---
+# What the Codacy workflow (.github/workflows/codacy.yml) leaves out.
+#
+# Without a project token the Codacy CLI runs every tool it has with that
+# tool's defaults, and on this repository most of them read files in a language
+# they do not speak. The first runs uploaded about 1,600 findings, and none of
+# them was a security problem: every one came from a file listed here.
+# Leaving these out is what lets the tab show the findings that matter.
+#
+# The same checks still run where they belong: make check lints the shell
+# (scripts/lint-shell.sh), the Go (golangci-lint) and the frontend (ESLint 9),
+# and CodeQL reads the Go and TypeScript.
+exclude_paths:
+  # Prose. remark-lint's default preset reports list markers, emphasis style
+  # and line breaks: about 900 findings about typography in the documentation.
+  - "*.md"
+  - "**/*.md"
+  # SQLite. Codacy's SQL linter is TSQLLint, for SQL Server's dialect, and it
+  # reads every migration as broken T-SQL.
+  - "internal/store/migrations/**"
+  # Tailwind 4 writes its theme with its own at-rules (@theme, @custom-variant,
+  # @utility), which csslint and stylelint's defaults do not know.
+  - "web/src/index.css"
+  # An ES module that jshint reads as ES5. ESLint 9 checks the frontend with
+  # this very file.
+  - "web/eslint.config.js"
+  # Built and fetched, never written by hand.
+  - "web/dist/**"
+  - "web/node_modules/**"

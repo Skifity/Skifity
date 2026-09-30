@@ -34,17 +34,15 @@ fi
 # `local` and `pipefail` in the cluster tests, which are bash and say so on
 # their first line — noise that teaches people to ignore the linter.
 #
-# SC2015 is excluded. The test scripts are written as `check ... && ok "..." ||
-# no "..."`, hundreds of times, and shellcheck is right that it is not
-# if-then-else — but here it is deliberate and the third branch running is
-# exactly what is wanted when the second one fails. Annotating every line would
-# be noise of a different kind.
+# What is switched off, and why, is in .shellcheckrc at the root, which the
+# linter reads by itself: the same settings hold for this check and for any
+# scanner that runs it one file at a time, as the Codacy workflow does.
 #
 # Everything else is reported down to style, and that is not fussiness:
 # SC2086, the unquoted expansion that broke every build from a private
 # repository, is reported at "info". A threshold that sounds sensible lets
 # through the one finding this check exists for.
 # shellcheck disable=SC2086
-shellcheck --severity=style --exclude=SC2015 $files
+shellcheck --severity=style $files
 
 echo "shell: $(echo "$files" | wc -l | tr -d ' ') scripts, no findings."

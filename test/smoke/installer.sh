@@ -49,7 +49,7 @@ fi
 
 # --- the installer's helpers ------------------------------------------------
 
-# shellcheck disable=SC1091
+# shellcheck source=../../installer/install.sh
 SKIFITY_INSTALLER_LIB=1 . "$ROOT/installer/install.sh"
 
 # Every message helper has to work when the output is not a terminal, which is

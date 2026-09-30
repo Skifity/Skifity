@@ -53,8 +53,12 @@ KINDS = ("svg", "webp")
 
 
 def get(url: str, binary: bool = False):
+    # The icon collection's CDN, over https: urlopen also takes file:// and
+    # ftp://, and an icon's name comes from a template somebody else wrote.
+    if not url.startswith("https://"):
+        raise ValueError(f"not an https address: {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "skifity-icons/1"})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310
         data = response.read()
     return data if binary else data.decode("utf-8")
 

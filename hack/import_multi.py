@@ -19,7 +19,11 @@ What it refuses matters more than what it converts:
     It is dropped and named in the notes, because the step is usually still
     needed and silently skipping it is how a template half-works.
 """
-import base64, json, re, sys, yaml
+import base64, re, sys, yaml
+
+from collections import Counter
+
+import workdir
 
 DB_IMAGE = re.compile(r'\b(postgres|postgis|pgvector|mysql|mariadb|redis|valkey|keydb|mongo)\b', re.I)
 ONESHOT = re.compile(r'(^|[-_])(init|migrat\w*|setup|bootstrap|seed|token-generator|schema-\w+|createbuckets?|install)([-_]|$)', re.I)
@@ -174,7 +178,7 @@ def peer_port(name, body, services):
         aliases.add(str(body["container_name"]))
     pattern = re.compile(r'(?:^|[/@\s"\'(])(' + "|".join(re.escape(a) for a in sorted(aliases))
                          + r'):(\d{2,5})(?![\d.])')
-    for other, peer in services.items():
+    for peer in services.values():
         for match in pattern.finditer(str(peer.get("environment") or "")):
             port = int(match.group(2))
             if 1 <= port <= 65535:
@@ -468,22 +472,22 @@ def align_versions(key, compose, pinned):
                   f"{', '.join(names)} have", file=sys.stderr)
 
 
-if __name__ == "__main__":
-    sys.path.insert(0, "hack")
-    coolify = json.load(open("/tmp/tpl/coolify.json"))
+def main():
+    coolify = workdir.read_json("coolify.json")
     pinned = {}
-    for source in ("/tmp/tpl/multi-resolved.json",):
-        for key, value in json.load(open(source)).items():
+    for source in ("multi-resolved.json",):
+        for key, value in workdir.read_json(source).items():
             if value["to"]:
                 pinned[key] = value["to"]
-    for image, to in json.load(open("/tmp/tpl/already.json")).items():
+    for image, to in workdir.read_json("already.json").items():
         pinned[image] = to
 
     made, skipped = {}, {}
     for key, template in coolify.items():
         try:
             compose = yaml.safe_load(base64.b64decode(template["compose"]).decode())
-        except Exception:
+        except (ValueError, yaml.YAMLError) as err:
+            skipped[key] = f"its compose file does not read: {err}"
             continue
         align_versions(key, compose, pinned)
         out, why = convert(key, template, compose, pinned)
@@ -492,8 +496,11 @@ if __name__ == "__main__":
         elif why != "not multi-service":
             skipped[key] = why
 
-    json.dump(made, open("/tmp/tpl/converted-multi.json", "w"), indent=1)
+    workdir.write_json("converted-multi.json", made)
     print(f"converted {len(made)}, skipped {len(skipped)}", file=sys.stderr)
-    from collections import Counter
     for reason, count in Counter(skipped.values()).most_common(10):
         print(f"  {count:4}  {reason}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

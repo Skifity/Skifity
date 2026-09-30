@@ -11,7 +11,11 @@ Eight templates were written by hand before any of this existed and are still
 the reference for what a good one looks like. They are never overwritten: an
 importer that quietly replaced them would be losing work, not doing it.
 """
-import json, os, re, sys, yaml
+import os, re, sys, yaml
+
+from collections import Counter
+
+import workdir
 
 CATALOGUE = "internal/templates/catalogue"
 ORDER = ["id", "name", "description", "category", "website", "beta",
@@ -82,8 +86,8 @@ def usable(template):
 
 
 def main():
-    converted = json.load(open("/tmp/tpl/converted.json"))
-    for key, template in json.load(open("/tmp/tpl/converted-multi.json")).items():
+    converted = workdir.read_json("converted.json")
+    for key, template in workdir.read_json("converted-multi.json").items():
         converted[key] = template  # a multi-service stack wins: it is the whole app
 
     before = {f for f in os.listdir(CATALOGUE) if f.endswith(".yaml")}
@@ -100,7 +104,7 @@ def main():
         # A description is a sentence on a card, not a paragraph.
         template["description"] = template["description"].strip().rstrip(".") + "."
         body = {k: template[k] for k in ORDER if template.get(k)}
-        with open(f"{CATALOGUE}/{template['id']}.yaml", "w") as fh:
+        with open(f"{CATALOGUE}/{template['id']}.yaml", "w", encoding="utf-8") as fh:
             yaml.safe_dump(body, fh, sort_keys=False, default_flow_style=False,
                            allow_unicode=True, width=100)
         written.add(template["id"] + ".yaml")
@@ -113,7 +117,6 @@ def main():
 
     print(f"wrote {len(written)}, kept {len(kept)} hand-written, "
           f"removed {len(stale)} stale, dropped {len(dropped)}", file=sys.stderr)
-    from collections import Counter
     for reason, count in Counter(dropped.values()).most_common():
         print(f"  {count:4}  {reason}", file=sys.stderr)
 

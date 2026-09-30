@@ -28,9 +28,13 @@ class Undetermined(Exception):
 
 
 def open_url(request):
+    # Registries only, over https: urlopen also takes file:// and ftp://, and
+    # an image reference is text somebody else wrote.
+    if urllib.parse.urlsplit(request.full_url).scheme != "https":
+        raise ValueError(f"not an https address: {request.full_url}")
     for attempt in range(4):
         try:
-            return urllib.request.urlopen(request, timeout=TIMEOUT)
+            return urllib.request.urlopen(request, timeout=TIMEOUT)  # nosec B310
         except urllib.error.HTTPError as err:
             if err.code not in RETRY or attempt == 3:
                 raise
@@ -367,7 +371,7 @@ def exists(image):
     return False
 
 
-if __name__ == "__main__":
+def main():
     images = json.load(sys.stdin)
     out = {}
     for key, image in images.items():
@@ -384,3 +388,7 @@ if __name__ == "__main__":
         out[key] = {"from": image, "to": pinned, "why": why}
         print(f"{key:36} {image:55} -> {pinned or 'SKIP'} ({why})", file=sys.stderr)
     json.dump(out, sys.stdout, indent=1)
+
+
+if __name__ == "__main__":
+    main()

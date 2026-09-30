@@ -9,10 +9,14 @@ Nothing here runs at build time. It is a one-off that produced the files in
 internal/templates/catalogue, kept so the next batch is a re-run rather than an
 afternoon of copying.
 """
-import base64, json, re, sys, yaml
+import base64, re, sys, yaml
 
 sys.path.insert(0, "hack")
 from import_multi import declared_port, fqdn_marker, known_port, self_check_port
+
+from collections import Counter
+
+import workdir
 
 DB_IMAGE = re.compile(r'\b(postgres|postgis|pgvector|mysql|mariadb|redis|valkey|keydb|mongo)\b', re.I)
 ENGINE = [("postgres", ("postgres", "postgis", "pgvector")),
@@ -155,19 +159,25 @@ def convert(key, template, resolved, compose):
     return out, "ok"
 
 
-if __name__ == "__main__":
-    coolify = json.load(open("/tmp/tpl/coolify.json"))
-    resolved = json.load(open("/tmp/tpl/resolved.json"))
+def main():
+    coolify = workdir.read_json("coolify.json")
+    resolved = workdir.read_json("resolved.json")
     made, skipped = {}, {}
     for key, template in coolify.items():
         try:
             compose = yaml.safe_load(base64.b64decode(template["compose"]).decode())
-        except Exception:
+        except (ValueError, yaml.YAMLError):
             skipped[key] = "unreadable compose"
             continue
         out, why = convert(key, template, resolved, compose)
-        (made if out else skipped).__setitem__(key, out or why)
-    json.dump(made, open("/tmp/tpl/converted.json", "w"), indent=1)
+        if out:
+            made[key] = out
+        else:
+            skipped[key] = why
+    workdir.write_json("converted.json", made)
     print(f"converted {len(made)}, skipped {len(skipped)}", file=sys.stderr)
-    from collections import Counter
     print(Counter(skipped.values()).most_common(8), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

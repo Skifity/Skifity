@@ -1,0 +1,16 @@
+# ShellCheck's settings for every shell file in this repository, read by
+# scripts/lint-shell.sh and by any other tool that runs shellcheck here, one
+# file at a time or all at once — which is the point of keeping them in a file
+# rather than on one command line.
+
+# A script that sources another is checked with it, so a variable set here for
+# the sourced file to read is not reported as unused. Paths in `source=`
+# directives are relative to the script that has them.
+external-sources=true
+source-path=SCRIPTDIR
+
+# SC2015: the test scripts are written as `check ... && ok "..." || no "..."`,
+# hundreds of times. ShellCheck is right that it is not if-then-else, but here
+# it is deliberate: the third branch running is exactly what is wanted when the
+# second one fails. Annotating every line would be noise of a different kind.
+disable=SC2015
