@@ -82,7 +82,7 @@ func (c *Cluster) Summary(ctx context.Context) (api.ClusterSummary, error) {
 			InternalIP: n.InternalIP, ExternalIP: n.ExternalIP, OS: n.OS,
 			Architecture: n.Architecture, KubeletVer: n.KubeletVer,
 			CPUCapacityM: n.CPUCapacityM, MemCapacityMB: n.MemCapacityMB,
-			CPUUsedM: n.CPUUsedM, MemUsedMB: n.MemUsedMB, PodCount: n.PodCount,
+			CPUUsedM: n.CPUUsedM, MemUsedMB: n.MemUsedMB, UsageKnown: n.UsageKnown, PodCount: n.PodCount,
 			Labels: n.Labels, Schedulable: n.Schedulable,
 		})
 	}
@@ -124,7 +124,7 @@ func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api
 		out.Instances = append(out.Instances, api.InstanceInfo{
 			Name: inst.Name, Status: inst.Status, Ready: inst.Ready,
 			Restarts: inst.Restarts, Node: inst.Node, StartedAt: inst.StartedAt,
-			Message: inst.Message, CPUM: inst.CPUM, MemoryMB: inst.MemoryMB,
+			Message: inst.Message, CPUM: inst.CPUM, MemoryMB: inst.MemoryMB, UsageKnown: inst.UsageKnown,
 		})
 	}
 	return out, nil

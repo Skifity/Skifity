@@ -159,11 +159,20 @@ func (s *Server) handleEndMaintenance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	before, err := s.db.GetMaintenance(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if err := s.db.EndMaintenance(r.Context(), app.ID); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	if err := s.applyMaintenance(r, app); err != nil {
+		// Still in force, so still recorded: the page says what visitors see.
+		if restoreErr := s.db.StartMaintenance(r.Context(), &before); restoreErr != nil {
+			s.log.Warn("could not record maintenance as still in force", "app", app.ID, "error", restoreErr)
+		}
 		writeError(w, r, err)
 		return
 	}
@@ -175,25 +184,30 @@ func (s *Server) handleEndMaintenance(w http.ResponseWriter, r *http.Request) {
 // applyMaintenance makes what is stored true in the cluster: the guard
 // running, its rules rewritten, and the app's Ingress with or without the
 // middleware in front of it.
+//
+// Every step has to have happened for it to be true: a guard installed and an
+// Ingress that does not send visitors through it is maintenance on a page and
+// not in front of anybody.
 func (s *Server) applyMaintenance(r *http.Request, app store.App) error {
-	if s.cluster != nil {
-		// The guard is what answers. It is installed on first use, the way
-		// autoscaling installs KEDA: maintenance is wanted in a hurry, and
-		// "install the firewall first" is not an answer to give then.
-		if component, err := s.cluster.ComponentStatus(r.Context(), "firewall"); err != nil || component.Status != "installed" {
-			if active, _ := s.db.AppInMaintenance(r.Context(), app.ID); active {
-				if err := s.cluster.InstallComponent(r.Context(), "firewall"); err != nil {
-					return err
-				}
+	if s.cluster == nil {
+		return errdoc.ClusterUnreachable(nil)
+	}
+	// The guard is what answers. It is installed on first use, the way
+	// autoscaling installs KEDA: maintenance is wanted in a hurry, and
+	// "install the firewall first" is not an answer to give then.
+	if component, err := s.cluster.ComponentStatus(r.Context(), "firewall"); err != nil || component.Status != "installed" {
+		if active, _ := s.db.AppInMaintenance(r.Context(), app.ID); active {
+			if err := s.cluster.InstallComponent(r.Context(), "firewall"); err != nil {
+				return err
 			}
 		}
-		if err := s.cluster.RefreshFirewall(r.Context()); err != nil {
-			return err
-		}
+	}
+	if err := s.cluster.RefreshFirewall(r.Context()); err != nil {
+		return err
 	}
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("maintenance changed but the app was not re-applied", "app", app.ID, "error", err)
+			return err
 		}
 	}
 	return nil

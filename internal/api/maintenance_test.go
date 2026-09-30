@@ -147,3 +147,44 @@ func TestMaintenanceThatCannotBeEnforcedIsNotRecorded(t *testing.T) {
 		t.Fatal("maintenance nobody sees was recorded as started")
 	}
 }
+
+// failingSyncDeployer cannot re-apply an app: the Kubernetes API refused.
+type failingSyncDeployer struct{ fakeDeployer }
+
+func (*failingSyncDeployer) Sync(context.Context, string) error {
+	return errors.New("the API server refused")
+}
+
+func TestMaintenanceWhoseIngressWasNotChangedIsNotInForce(t *testing.T) {
+	// The guard can be installed and its rules written while the app's
+	// Ingress, which is what sends visitors through it, is not changed.
+	// That was logged and answered as success: a page telling the team
+	// visitors see the notice while they see the app.
+	h := newHarness(t)
+	h.withCluster(&guardCluster{})
+	h.api.deployer = &failingSyncDeployer{fakeDeployer{log: &recorder{}}}
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	if err := h.db.CreateDomain(t.Context(), &store.Domain{AppID: app.ID, Hostname: "web.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/apps/" + app.ID + "/maintenance"
+	if status, _ := h.do(acme, http.MethodPut, path, map[string]any{"message": "m"}); status < 400 {
+		t.Fatalf("starting answered %d", status)
+	}
+	if _, err := h.db.GetMaintenance(t.Context(), app.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("maintenance nobody is sent through was recorded as started")
+	}
+
+	// Ended while the Ingress cannot be changed: still in force, so still
+	// recorded.
+	if err := h.db.StartMaintenance(t.Context(), &store.Maintenance{AppID: app.ID, Message: "m", StartedBy: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := h.do(acme, http.MethodDelete, path, nil); status < 400 {
+		t.Fatalf("ending answered %d", status)
+	}
+	if _, err := h.db.GetMaintenance(t.Context(), app.ID); err != nil {
+		t.Fatal("maintenance still in force was recorded as over")
+	}
+}

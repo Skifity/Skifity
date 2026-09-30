@@ -106,8 +106,9 @@ func ClientIP(peer netip.Addr, headers Headers, trust Trust) netip.Addr {
 
 	// Cloudflare replaces this header at its edge with the address it saw, and
 	// a client cannot set it: whatever it sends is overwritten. We only believe
-	// it because the hop that handed it to us is ours.
-	if trust.Cloudflare {
+	// it when the request came to our proxy through the tunnel — see
+	// throughTunnel — since a node's own ports 80 and 443 are open too.
+	if throughTunnel(peer, headers, trust) {
 		if ip, err := netip.ParseAddr(LastHeaderValue(headers, "CF-Connecting-IP")); err == nil {
 			return ip.Unmap()
 		}
@@ -152,7 +153,7 @@ func ClientIP(peer netip.Addr, headers Headers, trust Trust) netip.Addr {
 // that is right about a proxy, a VPN exit and a mobile carrier without the
 // panel downloading anything.
 func ClientCountry(peer netip.Addr, headers Headers, trust Trust) string {
-	if headers == nil || !trust.Cloudflare || !trust.Contains(peer.Unmap()) {
+	if headers == nil || !throughTunnel(peer.Unmap(), headers, trust) {
 		return ""
 	}
 	country := strings.ToUpper(LastHeaderValue(headers, "CF-IPCountry"))
@@ -204,4 +205,28 @@ func ParseProxies(value string) []netip.Prefix {
 		}
 	}
 	return prefixes
+}
+
+// throughTunnel reports whether a request reached our proxy from inside our
+// own network — from the tunnel's connector — rather than straight from the
+// internet.
+//
+// Trusting the peer is not enough. The peer is always our proxy, and with the
+// tunnel installed a node still answers on ports 80 and 443: a request sent
+// there directly, carrying a CF-Connecting-IP or CF-IPCountry of its author's
+// choosing, used to be believed, and walked past an allow list or a country
+// rule. Our proxy appends the address that connected to it to
+// X-Forwarded-For; when that is one of ours, the request came through the
+// connector and Cloudflare wrote those headers.
+func throughTunnel(peer netip.Addr, headers Headers, trust Trust) bool {
+	if !trust.Cloudflare || !trust.Contains(peer) {
+		return false
+	}
+	chain := strings.Split(strings.Join(headerValues(headers, "X-Forwarded-For"), ","), ",")
+	last := strings.TrimSpace(chain[len(chain)-1])
+	if last == "" {
+		return true
+	}
+	hop, err := netip.ParseAddr(last)
+	return err == nil && trust.Contains(hop.Unmap())
 }

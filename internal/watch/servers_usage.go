@@ -27,6 +27,13 @@ func (w *Watcher) recordServers(ctx context.Context, servers []store.Server, nod
 		if server.NodeName == "" || !present || !node.Ready {
 			continue
 		}
+		// metrics-server had nothing for the node: its usage is not zero,
+		// it is not known, and a minute recorded as 0% drew a false dip in
+		// the graph and ended an alert exactly when the server was under
+		// pressure. The minute is left out; the graph shows a gap.
+		if !node.UsageKnown {
+			continue
+		}
 		sample := store.ServerSample{
 			At: now, CPUM: node.CPUUsedM, CPUCapacityM: node.CPUCapacityM,
 			MemoryMB: node.MemUsedMB, MemoryCapacityMB: node.MemCapacityMB, Pods: node.PodCount,
@@ -47,28 +54,45 @@ func (w *Watcher) recordServers(ctx context.Context, servers []store.Server, nod
 	}
 }
 
-// evaluateServer decides which of a server's thresholds are crossed, from its
-// recent samples, oldest first. Like evaluate, a function of its arguments.
-func evaluateServer(thresholds store.ServerAlerts, recent []store.ServerSample) []alert {
+// clearMargin is how far under a threshold a reading has to stay for the
+// warning to end: a disk hovering at 85% would otherwise warn and un-warn
+// every few minutes.
+const clearMargin = 5
+
+// evaluateServer decides which of a server's thresholds are crossed and which
+// are clearly clear, from its recent samples, oldest first. A threshold that
+// is neither — too few readings, one not known, or one between the line and
+// the margin under it — is left as it was. Like evaluate, a function of its
+// arguments.
+func evaluateServer(thresholds store.ServerAlerts, recent []store.ServerSample) (crossed []alert, clear []string) {
 	last := recent
 	if len(last) > sustained {
 		last = last[len(last)-sustained:]
 	}
-	// A minute whose number is not known is not a minute above the
-	// threshold: three minutes means three readings.
-	above := func(threshold int, share func(store.ServerSample) (int, bool)) (bool, int) {
+	// state is "above" when every one of the last few minutes was at or over
+	// the threshold, "below" when every one was under it by the margin, and
+	// "" otherwise. A minute whose number is not known is neither.
+	state := func(threshold int, share func(store.ServerSample) (int, bool)) (string, int) {
 		if threshold <= 0 || len(last) < sustained {
-			return false, 0
+			return "", 0
 		}
-		latest := 0
+		above, below, latest := true, true, 0
 		for _, s := range last {
 			pct, known := share(s)
-			if !known || pct < threshold {
-				return false, 0
+			if !known {
+				return "", 0
 			}
+			above = above && pct >= threshold
+			below = below && pct < threshold-clearMargin
 			latest = pct
 		}
-		return true, latest
+		switch {
+		case above:
+			return "above", latest
+		case below:
+			return "below", latest
+		}
+		return "", latest
 	}
 	disk := func(s store.ServerSample) (int, bool) {
 		return store.Percent(s.DiskUsedMB, s.DiskCapacityMB), s.DiskCapacityMB > 0
@@ -80,28 +104,33 @@ func evaluateServer(thresholds store.ServerAlerts, recent []store.ServerSample) 
 		return store.Percent(s.CPUM, s.CPUCapacityM), s.CPUCapacityM > 0
 	}
 
-	var out []alert
-	if crossed, now := above(thresholds.DiskPct, disk); crossed {
+	if where, now := state(thresholds.DiskPct, disk); where == "above" {
 		latest := last[len(last)-1]
-		out = append(out, alert{"disk", fmt.Sprintf(
+		crossed = append(crossed, alert{"disk", fmt.Sprintf(
 			"Its disk has been %d%% full or more for %d minutes; now %d%%, %s of %s. "+
 				"At 90%% Kubernetes starts stopping instances on it to free space. "+
 				"Old images and logs are the usual cause.",
 			thresholds.DiskPct, sustained, now, gigabytes(latest.DiskUsedMB), gigabytes(latest.DiskCapacityMB))})
+	} else if where == "below" || thresholds.DiskPct <= 0 {
+		clear = append(clear, "disk")
 	}
-	if crossed, now := above(thresholds.MemoryPct, memory); crossed {
-		out = append(out, alert{"memory", fmt.Sprintf(
+	if where, now := state(thresholds.MemoryPct, memory); where == "above" {
+		crossed = append(crossed, alert{"memory", fmt.Sprintf(
 			"Its memory has been %d%% used or more for %d minutes; now %d%%. "+
 				"When it runs out, instances on it are stopped to make room.",
 			thresholds.MemoryPct, sustained, now)})
+	} else if where == "below" || thresholds.MemoryPct <= 0 {
+		clear = append(clear, "memory")
 	}
-	if crossed, now := above(thresholds.CPUPct, cpu); crossed {
-		out = append(out, alert{"cpu", fmt.Sprintf(
+	if where, now := state(thresholds.CPUPct, cpu); where == "above" {
+		crossed = append(crossed, alert{"cpu", fmt.Sprintf(
 			"Its CPU has been %d%% busy or more for %d minutes; now %d%%. "+
 				"Apps on it are slowed down, not stopped.",
 			thresholds.CPUPct, sustained, now)})
+	} else if where == "below" || thresholds.CPUPct <= 0 {
+		clear = append(clear, "cpu")
 	}
-	return out
+	return crossed, clear
 }
 
 func gigabytes(mb int64) string {
@@ -121,11 +150,20 @@ func (w *Watcher) checkServerAlerts(ctx context.Context, server store.Server, no
 		w.log.Warn("could not read a server's recent usage", "server", server.ID, "error", err)
 		return
 	}
-	crossed := evaluateServer(thresholds, recent)
+	crossed, clear := evaluateServer(thresholds, recent)
 
-	names := make([]string, 0, len(crossed))
+	// What fires now: what was firing and has not clearly ended, and what
+	// has just crossed.
+	names := make([]string, 0, len(crossed)+len(thresholds.Firing))
+	for _, was := range thresholds.Firing {
+		if !slices.Contains(clear, was) {
+			names = append(names, was)
+		}
+	}
 	for _, a := range crossed {
-		names = append(names, a.name)
+		if !slices.Contains(names, a.name) {
+			names = append(names, a.name)
+		}
 		if !slices.Contains(thresholds.Firing, a.name) {
 			w.notifyTeam(ctx, server.TeamID, notify.EventServerAlert, notify.Message{
 				Title:  serverAlertTitle(server.Name, a.name),

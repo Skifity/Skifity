@@ -174,7 +174,7 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 			// A monorepo app whose paths the push did not touch has nothing
 			// new to build. The host shows this answer in its delivery log,
 			// which is where somebody looks for why a push did not deploy.
-			if patterns, _ := gitsrc.ParseWatchPaths(app.WatchPaths); !event.Touches(patterns) {
+			if patterns, _ := gitsrc.ParseWatchPaths(app.WatchPaths); !event.Touches(patterns) && s.runsFrom(r, app.ID, event.Before) {
 				result.Skipped = append(result.Skipped, app.Name+" (nothing it watches changed)")
 				continue
 			}
@@ -213,6 +213,19 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 		}
 	}
 	return result
+}
+
+// runsFrom reports whether an app's running version was built from a
+// commit. A push's files are the difference from the commit before it, so
+// they say nothing changed for an app only when that app runs that commit: a
+// push that was never deployed — the app was locked, or its build failed —
+// is otherwise skipped for good by the next push that touches nothing of it.
+func (s *Server) runsFrom(r *http.Request, appID, commit string) bool {
+	if commit == "" {
+		return false
+	}
+	last, err := s.db.LatestSuccessfulDeployment(r.Context(), appID)
+	return err == nil && last.CommitSHA == commit
 }
 
 // previewRef identifies the preview environment for a branch or pull

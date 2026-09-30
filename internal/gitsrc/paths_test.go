@@ -2,7 +2,6 @@ package gitsrc
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -135,32 +134,42 @@ func TestAPushWhoseFilesAreUncertainTouchesEverything(t *testing.T) {
 	}
 }
 
-func TestAGitLabPushSaysWhichFilesItChanged(t *testing.T) {
+func TestAGitLabOrGiteaPushDeploysEveryApp(t *testing.T) {
+	// Neither says whether a push was forced, and a force push lists the
+	// commits it added and not the ones it took away: an app a removed
+	// commit had changed would be skipped and keep running code no longer on
+	// the branch. So for them every push deploys.
 	header := http.Header{}
 	header.Set("X-Gitlab-Event", "Push Hook")
-	body := func(before string, total int) []byte {
-		return []byte(`{
-			"ref": "refs/heads/main",
-			"before": "` + before + `",
-			"after": "2222222222222222222222222222222222222222",
-			"total_commits_count": ` + strconv.Itoa(total) + `,
-			"project": {"git_http_url": "https://gitlab.example.com/acme/shop.git"},
-			"commits": [{"id": "a", "message": "m", "added": [], "modified": ["services/api/main.go"], "removed": []}]
-		}`)
-	}
-	ev, err := ParseWebhook(header, body("1111111111111111111111111111111111111111", 1))
+	ev, err := ParseWebhook(header, []byte(`{
+		"ref": "refs/heads/main",
+		"before": "1111111111111111111111111111111111111111",
+		"after": "2222222222222222222222222222222222222222",
+		"total_commits_count": 1,
+		"project": {"git_http_url": "https://gitlab.example.com/acme/shop.git"},
+		"commits": [{"id": "a", "message": "m", "added": [], "modified": ["docs/readme.md"], "removed": []}]
+	}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ev.FilesKnown || ev.Touches([]string{"services/web"}) || !ev.Touches([]string{"services/api"}) {
-		t.Fatalf("known=%v files=%v", ev.FilesKnown, ev.ChangedFiles)
+	if ev.FilesKnown || !ev.Touches([]string{"services/api"}) || ev.Before != "1111111111111111111111111111111111111111" {
+		t.Fatalf("GitLab: known=%v before=%s", ev.FilesKnown, ev.Before)
 	}
-	// GitLab lists twenty commits and says how many there were.
-	if ev, _ := ParseWebhook(header, body("1111111111111111111111111111111111111111", 40)); ev.FilesKnown {
-		t.Error("a push with more commits than listed was believed")
+
+	gitea := http.Header{}
+	gitea.Set("X-Gitea-Event", "push")
+	ev, err = ParseWebhook(gitea, []byte(`{
+		"ref": "refs/heads/main",
+		"before": "1111111111111111111111111111111111111111",
+		"after": "2222222222222222222222222222222222222222",
+		"total_commits": 1,
+		"repository": {"clone_url": "https://gitea.example.com/acme/shop.git"},
+		"commits": [{"id": "a", "modified": ["docs/readme.md"]}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
 	}
-	// A new branch starts from all zeroes.
-	if ev, _ := ParseWebhook(header, body("0000000000000000000000000000000000000000", 1)); ev.FilesKnown {
-		t.Error("a new branch was believed")
+	if ev.FilesKnown || !ev.Touches([]string{"services/api"}) {
+		t.Fatalf("Gitea: known=%v", ev.FilesKnown)
 	}
 }

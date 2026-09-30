@@ -472,10 +472,18 @@ offer to watch the root directory.
 When Skifity cannot be sure which files a push changed, it deploys: the first
 push of a branch, a force push, a push of twenty or more commits (where hosts
 stop listing them), and a commit that changes no files — which is how
-`git commit --allow-empty` asks for a redeploy. GitLab and Gitea do not say
-when a push was forced, so a force push there that only takes changes away from
-an app's paths is not seen; press **Redeploy** for that. Pull requests are not
-filtered: their webhooks do not list files, and every one gets its preview.
+`git commit --allow-empty` asks for a redeploy. It deploys, too, when the app is
+not running the commit the push started from — the push before was never
+deployed, because the app was locked or its build failed — since this push's
+files are not everything the app is missing.
+
+Watch paths skip deploys only for pushes from **GitHub**. GitLab and Gitea list
+what a force push added and not what it took away, and do not say that it was
+one, so an app a removed commit had changed would be skipped and go on running
+code that is no longer on the branch. From them, every push deploys every app.
+
+Pull requests are not filtered: their webhooks do not list files, and every one
+gets its preview.
 
 A skipped app is named in the webhook's answer, which your Git host shows in
 its delivery log: `web (nothing it watches changed)`.

@@ -565,7 +565,15 @@ func ConvertCompose(raw map[string]any) ([]ComposeService, []string) {
 		}
 
 		for _, entry := range toSlice(body["ports"]) {
-			if port := parseComposePort(entry); port > 0 {
+			port := parseComposePort(entry)
+			switch {
+			case port <= 0:
+			case composePortIsLocal(entry):
+				// Published to the machine's own loopback only: for tools on
+				// the developer's computer, not for the internet. Reachable by
+				// the other services, as an exposed port is, and no more.
+				service.Expose = append(service.Expose, port)
+			default:
 				service.Ports = append(service.Ports, port)
 			}
 		}
@@ -602,6 +610,14 @@ func ConvertCompose(raw map[string]any) ([]ComposeService, []string) {
 			// behaviour a user wants is what they get.
 			service.Unsupported = append(service.Unsupported,
 				"restart is not needed: instances are restarted automatically.")
+		}
+		// Compose lets services reach each other on any port without saying
+		// which; here a service is reached through a Service, which needs
+		// one. A worker has none and needs none; anything else is said.
+		if service.ContainerPort() == 0 {
+			service.Unsupported = append(service.Unsupported,
+				"no port is published or exposed, and its image's is not known: nothing can reach it by name. "+
+					"If another service connects to it, give it an expose line with the port it listens on.")
 		}
 		sort.Strings(service.Unsupported)
 		services = append(services, service)
@@ -735,6 +751,33 @@ func parseComposePort(entry any) int {
 		return port
 	}
 	return 0
+}
+
+// composePortIsLocal reports whether a Compose ports entry binds the host's
+// loopback only — "127.0.0.1:9200:9200", "[::1]:5432:5432", or the long
+// form's host_ip. Compose publishes such a port to the machine it runs on and
+// to nothing else, and a database a Compose file published that way "for
+// local tools" is not something to give an address on the internet.
+func composePortIsLocal(entry any) bool {
+	host := ""
+	switch value := entry.(type) {
+	case string:
+		text, _, _ := strings.Cut(value, "/")
+		if strings.HasPrefix(text, "[") {
+			if end := strings.Index(text, "]"); end > 0 {
+				host = text[1:end]
+			}
+		} else if parts := strings.Split(text, ":"); len(parts) == 3 {
+			host = parts[0]
+		}
+	case map[string]any:
+		host, _ = value["host_ip"].(string)
+	}
+	switch strings.ToLower(host) {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return strings.HasPrefix(host, "127.")
 }
 
 // Note is one of a detection's notes as a code and its values.

@@ -50,7 +50,8 @@ func TestAServerThresholdIsCrossedOnlyWhenItStays(t *testing.T) {
 	}
 	for _, tc := range cases {
 		var got []string
-		for _, a := range evaluateServer(thresholds, tc.recent) {
+		crossed, _ := evaluateServer(thresholds, tc.recent)
+		for _, a := range crossed {
 			got = append(got, a.name)
 		}
 		if strings.Join(got, ",") != tc.want {
@@ -58,11 +59,11 @@ func TestAServerThresholdIsCrossedOnlyWhenItStays(t *testing.T) {
 		}
 	}
 
-	full := evaluateServer(thresholds, serverSamples(start, diskAt(90), diskAt(90), diskAt(92)))
+	full, _ := evaluateServer(thresholds, serverSamples(start, diskAt(90), diskAt(90), diskAt(92)))
 	if len(full) != 1 || !strings.Contains(full[0].detail, "92%, 92.0 GB of 100.0 GB") {
 		t.Fatalf("the disk warning says %+v", full)
 	}
-	if got := evaluateServer(store.ServerAlerts{}, serverSamples(start, diskAt(99), diskAt(99), diskAt(99))); len(got) != 0 {
+	if got, _ := evaluateServer(store.ServerAlerts{}, serverSamples(start, diskAt(99), diskAt(99), diskAt(99))); len(got) != 0 {
 		t.Errorf("thresholds that are off fired: %+v", got)
 	}
 }
@@ -77,7 +78,7 @@ func TestAServersUsageIsRecordedWithItsDisk(t *testing.T) {
 	}
 	c := &fakeCluster{
 		nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUUsedM: 500, CPUCapacityM: 2000,
-			MemUsedMB: 1024, MemCapacityMB: 4096, PodCount: 12}},
+			MemUsedMB: 1024, MemCapacityMB: 4096, PodCount: 12, UsageKnown: true}},
 		disks: map[string]api.NodeDisk{"web-1": {UsedMB: 30000, CapacityMB: 40000}},
 	}
 	w, _ := testWatcher(t, db, c)
@@ -101,7 +102,7 @@ func TestADiskWarningIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 	db := newFakeStore()
 	db.servers = []store.Server{{ID: "srv_1", TeamID: "team_1", Name: "web-1", NodeName: "web-1", Status: store.ServerReady}}
 	c := &fakeCluster{
-		nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUCapacityM: 2000, MemCapacityMB: 4096}},
+		nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUCapacityM: 2000, MemCapacityMB: 4096, UsageKnown: true}},
 		disks: map[string]api.NodeDisk{"web-1": {UsedMB: 93, CapacityMB: 100}},
 	}
 	w, notifier := testWatcher(t, db, c)
@@ -117,13 +118,39 @@ func TestADiskWarningIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 		t.Fatalf("firing is %v", firing)
 	}
 
+	// One reading under it is not the end: after a restart there are too
+	// few to say, and a disk at 84% is not clear of 85%.
+	c.disks["web-1"] = api.NodeDisk{UsedMB: 84, CapacityMB: 100}
+	db.serverSamples["srv_1"] = serverSamples(now.Add(-2*time.Minute), diskAt(84), diskAt(84))
+	w.Once(t.Context())
+	if n := notifier.eventsOf(notify.EventServerAlert); n != 1 {
+		t.Fatalf("a disk just under its threshold ended the warning: %d messages", n)
+	}
 	c.disks["web-1"] = api.NodeDisk{UsedMB: 40, CapacityMB: 100}
 	db.serverSamples["srv_1"] = nil
+	w.Once(t.Context())
+	if n := notifier.eventsOf(notify.EventServerAlert); n != 1 {
+		t.Fatalf("a single reading after a gap ended the warning: %d messages", n)
+	}
+	db.serverSamples["srv_1"] = serverSamples(now.Add(-2*time.Minute), diskAt(40), diskAt(40))
 	w.Once(t.Context())
 	if n := notifier.eventsOf(notify.EventServerAlert); n != 2 {
 		t.Fatalf("the end of the warning was not said: %d messages", n)
 	}
 	if last := notifier.sent[len(notifier.sent)-1]; last.msg.Level != "success" || !strings.Contains(last.msg.Title, "disk") {
 		t.Fatalf("the last message was %+v", last)
+	}
+}
+
+// metrics-server had nothing for the node: a minute of 0% CPU and memory is a
+// false dip in the graph and ended alerts when the server was under pressure.
+func TestAServerWhoseUsageIsNotKnownIsNotRecordedAsIdle(t *testing.T) {
+	db := newFakeStore()
+	db.servers = []store.Server{{ID: "srv_1", TeamID: "team_1", Name: "web-1", NodeName: "web-1", Status: store.ServerReady}}
+	c := &fakeCluster{nodes: []api.NodeInfo{{Name: "web-1", Ready: true, CPUCapacityM: 2000, MemCapacityMB: 4096}}}
+	w, _ := testWatcher(t, db, c)
+	w.Once(t.Context())
+	if len(db.serverSamples["srv_1"]) != 0 {
+		t.Fatalf("a minute nobody measured was recorded as %+v", db.serverSamples["srv_1"])
 	}
 }

@@ -19,6 +19,7 @@ func TestAPushDeploysOnlyTheAppsWhosePathsItTouched(t *testing.T) {
 	h.api.deployer = &fakeDeployer{log: deploys}
 	acme := h.newTenant("acme")
 	const repo = "https://github.com/acme/monorepo"
+	ids := map[string]string{}
 	for name, watch := range map[string]string{
 		"web":      "apps/web\npackages/ui",
 		"api":      "apps/api",
@@ -29,10 +30,13 @@ func TestAPushDeploysOnlyTheAppsWhosePathsItTouched(t *testing.T) {
 		if err := h.db.CreateApp(t.Context(), &app); err != nil {
 			t.Fatal(err)
 		}
+		ids[name] = app.ID
+		// Each runs the commit the pushes below start from.
+		deployedAt(t, h, app.ID, "base")
 	}
 	source := store.GitSource{TeamID: acme.team.ID}
 	push := func(event gitsrc.PushEvent) webhookResult {
-		event.Kind, event.RepoURL, event.Branch, event.CommitSHA = "push", repo, "main", "abc"
+		event.Kind, event.RepoURL, event.Branch, event.CommitSHA, event.Before = "push", repo, "main", "abc", "base"
 		request := httptest.NewRequest(http.MethodPost, "/api/webhooks/git/src", nil)
 		return h.api.dispatchGitEvent(request, source, event)
 	}
@@ -50,6 +54,27 @@ func TestAPushDeploysOnlyTheAppsWhosePathsItTouched(t *testing.T) {
 	result = push(gitsrc.PushEvent{FilesKnown: false})
 	if len(result.Deployments) != 3 || len(deploys.all())-before != 3 {
 		t.Fatalf("a push with unknown files deployed %d apps, want all three: %+v", len(result.Deployments), result)
+	}
+
+	// The api does not run the commit this push starts from — the push
+	// before it was never deployed, say while it was locked — so this push's
+	// files do not describe everything the api is missing, and it deploys.
+	deployedAt(t, h, ids["api"], "older")
+	result = push(gitsrc.PushEvent{FilesKnown: true, ChangedFiles: []string{"docs/readme.md"}})
+	if slices.Contains(result.Skipped, "api (nothing it watches changed)") {
+		t.Fatal("an app behind the push's starting commit was skipped for good")
+	}
+}
+
+// deployedAt records that an app's running version was built from a commit.
+func deployedAt(t *testing.T, h *harness, appID, commit string) {
+	t.Helper()
+	deployment := store.Deployment{AppID: appID, Status: store.DeployQueued, CommitSHA: commit, Image: "registry.internal/x:" + commit}
+	if err := h.db.CreateDeployment(t.Context(), &deployment); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.UpdateDeploymentStatus(t.Context(), deployment.ID, store.DeploySucceeded, "", "", ""); err != nil {
+		t.Fatal(err)
 	}
 }
 

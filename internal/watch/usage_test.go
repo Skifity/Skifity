@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -46,7 +47,8 @@ func TestThresholdsAreCrossedOnlyWhenTheyStay(t *testing.T) {
 	}
 	for _, tc := range cases {
 		var got []string
-		for _, a := range evaluate(thresholds, tc.recent, now) {
+		crossed, _ := evaluate(thresholds, tc.recent, now)
+		for _, a := range crossed {
 			got = append(got, a.name)
 		}
 		if len(got) != len(tc.want) || len(got) > 0 && got[0] != tc.want[0] {
@@ -56,7 +58,7 @@ func TestThresholdsAreCrossedOnlyWhenTheyStay(t *testing.T) {
 
 	// Zero is off.
 	off := store.AppAlerts{}
-	if got := evaluate(off, samples(start, store.AppSample{MemoryPeakPct: 100, Restarts: 0},
+	if got, _ := evaluate(off, samples(start, store.AppSample{MemoryPeakPct: 100, Restarts: 0},
 		store.AppSample{MemoryPeakPct: 100, Restarts: 50}, store.AppSample{MemoryPeakPct: 100}), now); len(got) != 0 {
 		t.Errorf("thresholds that are off fired: %+v", got)
 	}
@@ -113,10 +115,19 @@ func TestAnAlertIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 		t.Fatalf("firing is %v", firing)
 	}
 
-	// Back under it.
+	// One minute under it after a gap — the panel restarted — is too few to
+	// say it is over.
 	c.apps["web"] = api.AppRuntimeStatus{DesiredReplicas: 1, ReadyReplicas: 1,
 		Instances: []api.InstanceInfo{{MemoryMB: 40}}}
 	db.samples["app_1"] = nil
+	w.Once(t.Context())
+	if n := notifier.eventsOf(notify.EventAppAlert); n != 1 {
+		t.Fatalf("one reading after a gap ended the alert: %d messages", n)
+	}
+
+	// Back under it, for long enough.
+	db.samples["app_1"] = samples(now.Add(-3*time.Minute),
+		store.AppSample{MemoryPeakPct: 40}, store.AppSample{MemoryPeakPct: 40})
 	w.Once(t.Context())
 	if n := notifier.eventsOf(notify.EventAppAlert); n != 2 {
 		t.Fatalf("the end of the alert was not said: %d messages", n)
@@ -126,5 +137,37 @@ func TestAnAlertIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 	}
 	if firing := db.alerts["app_1"].Firing; len(firing) != 0 {
 		t.Fatalf("firing is %v after coming back under", firing)
+	}
+}
+
+// A running instance metrics-server had nothing for is not idle.
+func TestAMinuteWhoseUsageIsNotKnownIsLeftOut(t *testing.T) {
+	db := newFakeStore()
+	db.apps = []store.DeployedApp{{App: store.App{ID: "app_1", Name: "web", Slug: "web", Status: "running",
+		CPULimitM: 1000, MemLimitMB: 512}, TeamID: "team_1", Namespace: "ns"}}
+	c := &fakeCluster{apps: map[string]api.AppRuntimeStatus{"web": {
+		DesiredReplicas: 1, ReadyReplicas: 1,
+		Instances: []api.InstanceInfo{{Ready: true}},
+	}}}
+	w, _ := testWatcher(t, db, c)
+	w.Once(t.Context())
+	if len(db.samples["app_1"]) != 0 {
+		t.Fatalf("a minute nobody measured was recorded as %+v", db.samples["app_1"])
+	}
+}
+
+// Hovering at the threshold is one warning, not one every few minutes.
+func TestAnAlertDoesNotEndJustUnderItsThreshold(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	thresholds := store.AppAlerts{MemoryPct: 90}
+	_, clear := evaluate(thresholds, samples(now.Add(-3*time.Minute),
+		store.AppSample{MemoryPeakPct: 88}, store.AppSample{MemoryPeakPct: 89}, store.AppSample{MemoryPeakPct: 87}), now)
+	if slices.Contains(clear, "memory") {
+		t.Fatal("two points under the line ended the warning")
+	}
+	_, clear = evaluate(thresholds, samples(now.Add(-3*time.Minute),
+		store.AppSample{MemoryPeakPct: 60}, store.AppSample{MemoryPeakPct: 61}, store.AppSample{MemoryPeakPct: 62}), now)
+	if !slices.Contains(clear, "memory") {
+		t.Fatal("well under the line for three minutes did not end it")
 	}
 }

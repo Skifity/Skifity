@@ -46,7 +46,15 @@ type PushEvent struct {
 	// FilesKnown is false whenever the host's list might not be the whole
 	// story: a new branch, a force push, a list the host cut short, a commit
 	// that names no files. Not knowing is treated as "everything changed".
+	//
+	// Only GitHub says whether a push was forced. GitLab and Gitea list what
+	// a force push added and not what it took away, and do not say it was
+	// one, so for them a push's files are never known and every push deploys.
 	FilesKnown bool
+	// Before is the commit the branch pointed at before the push. The files
+	// are the difference from it, so they only describe what changed since
+	// an app's running version when that version was built from it.
+	Before string
 }
 
 // pushCommit is one commit in a push, as GitHub, GitLab and Gitea all describe
@@ -173,8 +181,11 @@ func ParseWebhook(header http.Header, body []byte) (PushEvent, error) {
 	case header.Get("X-Gitlab-Event") != "":
 		return parseGitLab(header.Get("X-Gitlab-Event"), body)
 	case header.Get("X-Gitea-Event") != "":
-		// Gitea copies GitHub's payload shape closely enough to share a parser.
-		return parseGitHub(header.Get("X-Gitea-Event"), body)
+		// Gitea copies GitHub's payload shape closely enough to share a parser,
+		// except for saying whether a push was forced.
+		ev, err := parseGitHub(header.Get("X-Gitea-Event"), body)
+		ev.ChangedFiles, ev.FilesKnown = nil, false
+		return ev, err
 	default:
 		return PushEvent{}, fmt.Errorf("this request has no event header, so Skifity cannot tell which Git host sent it")
 	}
@@ -255,6 +266,7 @@ func parseGitHub(event string, body []byte) (PushEvent, error) {
 			Branch:    branch,
 			CommitSHA: payload.After,
 			Deleted:   payload.Deleted,
+			Before:    payload.Before,
 		}
 		if payload.HeadCommit != nil {
 			ev.CommitMessage = firstLine(payload.HeadCommit.Message)
@@ -366,9 +378,9 @@ func parseGitLab(event string, body []byte) (PushEvent, error) {
 			last := payload.Commits[len(payload.Commits)-1]
 			ev.CommitMessage = firstLine(last.Message)
 		}
-		if !zeroSHA(payload.Before) {
-			ev.ChangedFiles, ev.FilesKnown = changedFiles(payload.Commits, payload.TotalCommitsCount)
-		}
+		// No FilesKnown: GitLab does not say whether a push was forced, and a
+		// force push lists what it added and not what it took away.
+		ev.Before = payload.Before
 		return ev, nil
 
 	case "Merge Request Hook":

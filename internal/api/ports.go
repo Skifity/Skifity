@@ -16,22 +16,25 @@ import (
 
 // NodeInfo is one cluster node as the panel presents it.
 type NodeInfo struct {
-	Name          string            `json:"name"`
-	Ready         bool              `json:"ready"`
-	Reason        string            `json:"reason,omitempty"`
-	Roles         []string          `json:"roles"`
-	InternalIP    string            `json:"internal_ip"`
-	ExternalIP    string            `json:"external_ip"`
-	OS            string            `json:"os"`
-	Architecture  string            `json:"architecture"`
-	KubeletVer    string            `json:"kubelet_version"`
-	CPUCapacityM  int64             `json:"cpu_capacity_m"`
-	MemCapacityMB int64             `json:"memory_capacity_mb"`
-	CPUUsedM      int64             `json:"cpu_used_m"`
-	MemUsedMB     int64             `json:"memory_used_mb"`
-	PodCount      int               `json:"pod_count"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Schedulable   bool              `json:"schedulable"`
+	Name          string   `json:"name"`
+	Ready         bool     `json:"ready"`
+	Reason        string   `json:"reason,omitempty"`
+	Roles         []string `json:"roles"`
+	InternalIP    string   `json:"internal_ip"`
+	ExternalIP    string   `json:"external_ip"`
+	OS            string   `json:"os"`
+	Architecture  string   `json:"architecture"`
+	KubeletVer    string   `json:"kubelet_version"`
+	CPUCapacityM  int64    `json:"cpu_capacity_m"`
+	MemCapacityMB int64    `json:"memory_capacity_mb"`
+	CPUUsedM      int64    `json:"cpu_used_m"`
+	MemUsedMB     int64    `json:"memory_used_mb"`
+	// UsageKnown is false when metrics-server had nothing for the node: the
+	// two above are then not zero, they are not known.
+	UsageKnown  bool              `json:"usage_known"`
+	PodCount    int               `json:"pod_count"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Schedulable bool              `json:"schedulable"`
 	// DiskUsedMB and DiskCapacityMB come from the watcher's last reading,
 	// at most a minute old: the kubelet's summary is too heavy to ask for on
 	// every page. Zero capacity is not known yet.
@@ -64,6 +67,8 @@ type InstanceInfo struct {
 	Message   string    `json:"message,omitempty"`
 	CPUM      int64     `json:"cpu_m"`
 	MemoryMB  int64     `json:"memory_mb"`
+	// UsageKnown is false when metrics-server had nothing for the instance.
+	UsageKnown bool `json:"usage_known"`
 }
 
 // AppRuntimeStatus is what the app page shows at the top.

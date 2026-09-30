@@ -407,6 +407,34 @@ func TestComposePortForms(t *testing.T) {
 	if got := parseComposePort(map[string]any{"target": float64(9000), "published": float64(80)}); got != 9000 {
 		t.Errorf("long-form port parsed as %d, want 9000", got)
 	}
+
+	// Bound to the loopback, a port is for the machine's own tools and is
+	// not what makes a service public.
+	for entry, want := range map[any]bool{
+		"127.0.0.1:9200:9200": true, "localhost:8080:80": true, "[::1]:5432:5432": true,
+		"0.0.0.0:80:80": false, "8080:80": false, "3000": false, "10.0.0.5:80:80": false,
+	} {
+		if got := composePortIsLocal(entry); got != want {
+			t.Errorf("composePortIsLocal(%v) = %v, want %v", entry, got, want)
+		}
+	}
+	if !composePortIsLocal(map[string]any{"target": float64(5432), "host_ip": "127.0.0.1"}) {
+		t.Error("the long form's host_ip was not read")
+	}
+	services, _, _ := ParseCompose("services:\n  search:\n    image: elasticsearch:8\n    ports: [\"127.0.0.1:9200:9200\"]\n" +
+		"  web:\n    build: .\n    ports: [\"80:3000\"]\n")
+	for _, service := range services {
+		switch service.Name {
+		case "search":
+			if service.Public() || service.ContainerPort() != 9200 {
+				t.Errorf("a loopback-only search engine is public: %+v", service)
+			}
+		case "web":
+			if !service.Public() {
+				t.Error("a published web service is internal")
+			}
+		}
+	}
 }
 
 func TestConvertComposeWithoutServices(t *testing.T) {

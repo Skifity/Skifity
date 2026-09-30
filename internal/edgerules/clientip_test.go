@@ -80,11 +80,24 @@ func TestClientIP(t *testing.T) {
 		{
 			// Cloudflare overwrites this header at its edge, so a client cannot
 			// set it — but only a trusted peer may hand it to us.
+			// Our proxy records the address that connected to it last: the
+			// tunnel's connector, inside the cluster.
 			name:    "the Cloudflare header from our own tunnel",
+			peer:    "10.42.1.5",
+			headers: hdr("CF-Connecting-IP", "203.0.113.7", "X-Forwarded-For", "10.42.0.7"),
+			trust:   Trust{Proxies: clusterTrust().Proxies, Cloudflare: true},
+			want:    "203.0.113.7",
+		},
+		{
+			// A node's ports 80 and 443 are open with the tunnel installed. A
+			// request sent there directly, with a CF-Connecting-IP of its
+			// author's choosing, reached our proxy from the internet, and its
+			// Cloudflare headers were written by nobody we trust.
+			name:    "a Cloudflare header sent straight to a node",
 			peer:    "10.42.1.5",
 			headers: hdr("CF-Connecting-IP", "203.0.113.7", "X-Forwarded-For", "198.51.100.9"),
 			trust:   Trust{Proxies: clusterTrust().Proxies, Cloudflare: true},
-			want:    "203.0.113.7",
+			want:    "198.51.100.9",
 		},
 		{
 			name: "the same header from somebody on the internet",
@@ -146,6 +159,16 @@ func TestClientCountry(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+	// The same header sent straight to a node, past the tunnel, is its
+	// author's choice of country.
+	direct := hdr("CF-IPCountry", "ID", "X-Forwarded-For", "198.51.100.9")
+	if got := ClientCountry(netip.MustParseAddr("10.42.1.5"), direct, tunnel); got != "" {
+		t.Errorf("a country sent straight to a node was believed: %q", got)
+	}
+	through := hdr("CF-IPCountry", "ID", "X-Forwarded-For", "10.42.0.7")
+	if got := ClientCountry(netip.MustParseAddr("10.42.1.5"), through, tunnel); got != "ID" {
+		t.Errorf("a country through the tunnel was not believed: %q", got)
 	}
 }
 

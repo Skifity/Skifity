@@ -28,6 +28,14 @@ const restartWindow = 10 * time.Minute
 func (w *Watcher) recordUsage(ctx context.Context, app store.DeployedApp, status api.AppRuntimeStatus, at time.Time) {
 	sample := store.AppSample{At: at, Ready: status.ReadyReplicas, Desired: status.DesiredReplicas}
 	for _, instance := range status.Instances {
+		// A running instance metrics-server had nothing for is not idle; its
+		// use is not known, and the minute is left out rather than drawn as
+		// a dip that ends an alert when the app is under pressure.
+		if instance.Ready && !instance.UsageKnown {
+			return
+		}
+	}
+	for _, instance := range status.Instances {
 		sample.CPUM += instance.CPUM
 		sample.MemoryMB += instance.MemoryMB
 		sample.Restarts += instance.Restarts
@@ -51,55 +59,74 @@ type alert struct {
 	name, detail string
 }
 
-// evaluate decides which of an app's thresholds are crossed, from its recent
-// samples, oldest first. It is a function of its arguments and nothing else,
+// evaluate decides which of an app's thresholds are crossed and which are
+// clearly clear, from its recent samples, oldest first. One that is neither —
+// too few minutes to tell, or a peak between the line and the margin under
+// it — is left as it was. It is a function of its arguments and nothing else,
 // so the rules can be tested without a cluster or a clock.
-func evaluate(thresholds store.AppAlerts, recent []store.AppSample, now time.Time) []alert {
-	var out []alert
+func evaluate(thresholds store.AppAlerts, recent []store.AppSample, now time.Time) (crossed []alert, clear []string) {
 	last := recent
 	if len(last) > sustained {
 		last = last[len(last)-sustained:]
 	}
-	above := func(threshold int, peak func(store.AppSample) int) (bool, int) {
+	state := func(threshold int, peak func(store.AppSample) int) (string, int) {
 		if threshold <= 0 || len(last) < sustained {
-			return false, 0
+			return "", 0
 		}
-		lowest := 100000
+		lowest, highest := 100000, 0
 		for _, s := range last {
-			lowest = min(lowest, peak(s))
+			lowest, highest = min(lowest, peak(s)), max(highest, peak(s))
 		}
-		return lowest >= threshold, peak(last[len(last)-1])
+		switch {
+		case lowest >= threshold:
+			return "above", peak(last[len(last)-1])
+		case highest < threshold-clearMargin:
+			return "below", 0
+		}
+		return "", 0
 	}
-	if crossed, now := above(thresholds.MemoryPct, func(s store.AppSample) int { return s.MemoryPeakPct }); crossed {
-		out = append(out, alert{"memory", fmt.Sprintf(
+	if where, now := state(thresholds.MemoryPct, func(s store.AppSample) int { return s.MemoryPeakPct }); where == "above" {
+		crossed = append(crossed, alert{"memory", fmt.Sprintf(
 			"The busiest instance has been at %d%% of its memory limit or more for %d minutes; now %d%%. "+
 				"At the limit it is killed and restarted.", thresholds.MemoryPct, sustained, now)})
+	} else if where == "below" || thresholds.MemoryPct <= 0 {
+		clear = append(clear, "memory")
 	}
-	if crossed, now := above(thresholds.CPUPct, func(s store.AppSample) int { return s.CPUPeakPct }); crossed {
-		out = append(out, alert{"cpu", fmt.Sprintf(
+	if where, now := state(thresholds.CPUPct, func(s store.AppSample) int { return s.CPUPeakPct }); where == "above" {
+		crossed = append(crossed, alert{"cpu", fmt.Sprintf(
 			"The busiest instance has been at %d%% of its CPU limit or more for %d minutes; now %d%%. "+
 				"At the limit it is slowed down, not stopped.", thresholds.CPUPct, sustained, now)})
+	} else if where == "below" || thresholds.CPUPct <= 0 {
+		clear = append(clear, "cpu")
 	}
-	if thresholds.Restarts > 0 {
-		// Kubernetes counts restarts per instance and starts again at zero
-		// for a new one, so the count is the sum of the increases, never the
-		// difference between the ends.
-		restarts := 0
-		for i := 1; i < len(recent); i++ {
-			if now.Sub(recent[i].At) > restartWindow {
-				continue
-			}
-			if grew := recent[i].Restarts - recent[i-1].Restarts; grew > 0 {
-				restarts += grew
-			}
+	if thresholds.Restarts <= 0 {
+		clear = append(clear, "restarts")
+		return crossed, clear
+	}
+	// Kubernetes counts restarts per instance and starts again at zero for a
+	// new one, so the count is the sum of the increases, never the
+	// difference between the ends.
+	restarts := 0
+	for i := 1; i < len(recent); i++ {
+		if now.Sub(recent[i].At) > restartWindow {
+			continue
 		}
-		if restarts >= thresholds.Restarts {
-			out = append(out, alert{"restarts", fmt.Sprintf(
-				"Its instances restarted %d times in the last %d minutes. The reason is in the logs of the instance before the restart.",
-				restarts, int(restartWindow.Minutes()))})
+		if grew := recent[i].Restarts - recent[i-1].Restarts; grew > 0 {
+			restarts += grew
 		}
 	}
-	return out
+	switch {
+	case restarts >= thresholds.Restarts:
+		crossed = append(crossed, alert{"restarts", fmt.Sprintf(
+			"Its instances restarted %d times in the last %d minutes. The reason is in the logs of the instance before the restart.",
+			restarts, int(restartWindow.Minutes()))})
+	case restarts == 0 && len(recent) > sustained:
+		// None at all over enough minutes to count them in: over. One or two
+		// under the threshold, or too few minutes after a restart of the
+		// panel, is not yet the end.
+		clear = append(clear, "restarts")
+	}
+	return crossed, clear
 }
 
 // checkAlerts says when an app crosses a threshold, and when it comes back,
@@ -115,11 +142,20 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 		w.log.Warn("could not read an app's recent usage", "app", app.ID, "error", err)
 		return
 	}
-	crossed := evaluate(thresholds, recent, now)
+	crossed, clear := evaluate(thresholds, recent, now)
 
-	names := make([]string, 0, len(crossed))
+	// What fires now: what was firing and has not clearly ended, and what
+	// has just crossed.
+	names := make([]string, 0, len(crossed)+len(thresholds.Firing))
+	for _, was := range thresholds.Firing {
+		if !slices.Contains(clear, was) {
+			names = append(names, was)
+		}
+	}
 	for _, a := range crossed {
-		names = append(names, a.name)
+		if !slices.Contains(names, a.name) {
+			names = append(names, a.name)
+		}
 		if !slices.Contains(thresholds.Firing, a.name) {
 			w.notifyTeam(ctx, app.TeamID, notify.EventAppAlert, notify.Message{
 				Title:  alertTitle(app.Name, a.name),

@@ -214,6 +214,7 @@ func (c *Client) Summary(ctx context.Context) (Summary, error) {
 		if u, ok := usage[node.Name]; ok {
 			info.CPUUsedM = u.cpuMilli
 			info.MemUsedMB = u.memoryMB
+			info.UsageKnown = true
 		}
 		info.PodCount = podCounts[node.Name]
 
@@ -267,9 +268,12 @@ type Node struct {
 	MemCapacityMB int64
 	CPUUsedM      int64
 	MemUsedMB     int64
-	PodCount      int
-	Labels        map[string]string
-	Schedulable   bool
+	// UsageKnown is false when metrics-server had nothing for the node, in
+	// which case the two above are not zero, they are not known.
+	UsageKnown  bool
+	PodCount    int
+	Labels      map[string]string
+	Schedulable bool
 }
 
 func describeNode(node corev1.Node) Node {
@@ -427,6 +431,7 @@ func (c *Client) AppStatus(ctx context.Context, namespace, appSlug string) (AppS
 		instance := describePod(pod)
 		if used, ok := usage[pod.Name]; ok {
 			instance.CPUM, instance.MemoryMB = used.cpuMilli, used.memoryMB
+			instance.UsageKnown = true
 		}
 		status.Instances = append(status.Instances, instance)
 	}
@@ -457,6 +462,8 @@ type Instance struct {
 	Message   string
 	CPUM      int64
 	MemoryMB  int64
+	// UsageKnown is false when metrics-server had nothing for the pod.
+	UsageKnown bool
 }
 
 func describePod(pod corev1.Pod) Instance {
