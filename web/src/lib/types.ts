@@ -428,6 +428,37 @@ export type Component = {
   /** Installed with Helm rather than by the panel. */
   external: boolean
   docs?: string
+  /** What this panel would install now. */
+  wanted_version?: string
+  upgrade_available: boolean
+}
+
+/** A reason a k3s upgrade cannot start, or something worth knowing about one. */
+export type UpgradeReason = {
+  code: string
+  params?: Record<string, string>
+  text: string
+}
+
+export type K3sUpgradePlan = {
+  target: string
+  steps: {
+    node: string
+    role: "control-plane" | "worker"
+    from: string
+    to: string
+    upgrade: boolean
+  }[]
+  blockers: UpgradeReason[]
+  warnings: UpgradeReason[]
+  nothing: boolean
+}
+
+export type K3sUpgrade = {
+  nodes: { name: string; control_plane: boolean; ready: boolean; version: string }[]
+  releases: { channel: string; version: string; stable?: boolean }[]
+  releases_error?: string
+  plan?: K3sUpgradePlan
 }
 
 export type Template = {

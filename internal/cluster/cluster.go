@@ -631,6 +631,7 @@ func (c *Cluster) InstallComponent(ctx context.Context, name string) error {
 
 	return c.db.SetComponent(ctx, store.ClusterComponent{
 		Name: name, Status: "installed", InstalledAt: time.Now(), Detail: "",
+		Version: c.ComponentVersion(ctx, name),
 	})
 }
 

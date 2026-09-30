@@ -304,7 +304,9 @@
       "database.tunnel_opened": "Terowongan database dibuka",
       "app.process_set": "Proses diubah",
       "app.process_removed": "Proses dihapus",
-      "environment.previews_changed": "Pratinjau environment diubah"
+      "environment.previews_changed": "Pratinjau environment diubah",
+      "component.upgraded": "Komponen ditingkatkan",
+      "cluster.k3s_upgrade_started": "Peningkatan k3s dimulai"
     }
   },
   "projects": {
@@ -1271,7 +1273,11 @@
     "requireStrongAuthHelp": "Semua orang di tim ini, termasuk pemilik, harus masuk dengan faktor kedua atau lewat single sign-on. Kata sandi saja tidak melihat apa pun di tim, begitu pula token yang pemiliknya tidak punya keduanya.",
     "strongAuthNeededTitle": "{{team}} meminta autentikasi dua faktor",
     "strongAuthNeeded": "Anda masuk hanya dengan kata sandi, jadi tidak ada isi tim ini yang ditampilkan. Aktifkan autentikasi dua faktor, atau masuk dengan single sign-on.",
-    "strongAuthTurnOn": "Aktifkan dua faktor"
+    "strongAuthTurnOn": "Aktifkan dua faktor",
+    "componentUpgrade": "Tingkatkan ke {{version}}",
+    "componentUpgradeTitle": "Tingkatkan {{name}}?",
+    "componentUpgradeConfirm": "Manifest versi {{to}} diterapkan di atas {{from}}, sesuai cara proyek itu mendokumentasikan peningkatannya. Komponennya dimulai ulang; aplikasi Anda tidak.",
+    "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2442,6 +2448,12 @@
         "cause": "Direktori ini maupun direktori di atasnya tidak memilikinya.",
         "impact": "Tidak ada yang dibaca atau diubah.",
         "fix": "Tulis satu — contoh di dokumentasi bisa menjadi awal — atau gunakan --file."
+      },
+      "k3s_upgrade_blocked": {
+        "title": "k3s belum bisa ditingkatkan",
+        "cause": "{{0}}.",
+        "impact": "Tidak ada yang diubah; setiap server menjalankan versi yang sama seperti sebelumnya.",
+        "fix": "Selesaikan setiap alasannya lalu periksa rencananya lagi."
       }
     }
   },
@@ -2789,5 +2801,38 @@
     "formHelp": "Namanya huruf kecil, seperti di Procfile: worker, clock. Nama yang sama lagi mengubah perintahnya. 0 instans menghentikan proses dan menyimpannya.",
     "detected": "Proses dari Procfile",
     "detectedHelp": "Yang dicentang berjalan di samping aplikasi sejak deploy pertama, dengan build yang sama. Hilangkan centang untuk melewatinya; proses bisa ditambahkan nanti di Penskalaan."
+  },
+  "k3s": {
+    "title": "Kubernetes (k3s)",
+    "help": "Versi yang dijalankan setiap server. Peningkatan dilakukan satu versi minor setiap kali, control plane sebelum worker, satu server setiap kali.",
+    "server": "Server",
+    "role": "Peran",
+    "version": "Versi",
+    "roleControlPlane": "Control plane",
+    "roleWorker": "Worker",
+    "target": "Tingkatkan ke",
+    "recommended": "{{version}} (disarankan)",
+    "check": "Periksa",
+    "start": "Tingkatkan",
+    "upToDate": "Setiap server sudah menjalankan versi ini.",
+    "alreadyThere": "sudah di versi ini",
+    "blockers": "Mengapa belum bisa dimulai",
+    "warnings": "Perlu diketahui",
+    "releasesUnavailable": "Daftar rilis k3s tidak bisa dibaca. Ketik versinya, seperti yang tertulis di halaman rilis k3s.",
+    "confirmTitle": "Tingkatkan k3s ke {{version}}?",
+    "confirm": "Setiap server di-cordon, ditingkatkan, lalu dikembalikan bergiliran, control plane lebih dulu. Ini tidak bisa dibatalkan dari sini: k3s tidak diturunkan versinya.",
+    "started": "Peningkatan sudah dimulai. Versi setiap server berubah di sini dan di halaman Server setelah selesai.",
+    "reason": {
+      "not_a_release": "{{target}} bukan rilis k3s; penulisannya seperti v1.31.4+k3s1.",
+      "no_servers": "Cluster tidak melaporkan server apa pun.",
+      "unknown_version": "{{server}} melaporkan {{version}}, yang bukan versi k3s yang bisa dinilai di sini.",
+      "downgrade": "{{server}} sudah menjalankan {{version}}, lebih baru dari {{target}}; k3s tidak diturunkan versinya.",
+      "major": "{{server}} menjalankan {{version}}, versi mayor yang berbeda dari {{target}}.",
+      "not_ready": "{{server}} belum siap. Setiap server harus siap, karena masing-masing dikeluarkan bergiliran dan harus kembali.",
+      "skips_minor": "{{target}} melompati {{next}}. Kubernetes ditingkatkan satu versi minor setiap kali, jadi tingkatkan ke {{next}} terbaru lebih dulu.",
+      "no_backup": "Belum ada cadangan database panel dari sehari terakhir. Buat satu lebih dulu di Cadangan panel ini: dari situlah panel dipulihkan jika peningkatan ikut merusak servernya.",
+      "one_control_plane": "Hanya ada satu control plane, jadi API Kubernetes tidak bisa dijangkau sekitar satu menit saat dimulai ulang. Aplikasi tetap melayani, dan panel tersambung kembali dengan sendirinya.",
+      "only_server": "Ini satu-satunya server. Tidak ada yang baru dijadwalkan selama di-cordon, jadi deploy selama peningkatan akan menunggu."
+    }
   }
 }

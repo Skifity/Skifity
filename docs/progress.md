@@ -5327,6 +5327,47 @@ made; and `skifity plan` and `apply` run by the CLI against the real API —
 everything made, applied twice being applied once, a changed file changing only
 that, and a viewer's apply refused with nothing made.
 
+## Phase 109 — upgrading the components, and k3s
+
+Gap 12, the last. The installer put k3s on every server and nothing moved it;
+Kubernetes supports a minor version for about fourteen months. Components were
+installed once, never re-applied, and their `version` column was never written,
+so a panel release with a newer cert-manager changed nothing on an existing
+install. Kubero and Epinio leave both to the operator.
+
+Components now record the version they were installed at — from the manifest
+address they were applied from (the last version-looking part of it, so
+CloudNativePG's `release-1.29/…/cnpg-1.29.0.yaml` is 1.29.0), or from the image
+they run — and the list says what this panel would install now. `POST
+/api/components/{name}/upgrade` applies that version's manifest over the
+installed one, which is how each project documents its upgrade; a failure
+leaves it installed at its old version with the reason, and a success is
+audited with both versions.
+
+k3s: `kube.PlanK3sUpgrade` orders the nodes control plane first, then workers,
+and returns every reason not to start as a code with values — a target that is
+not a release, a skipped minor version, a node already newer, a different major,
+a node not ready — plus warnings for a single control plane or a single server;
+the API adds the absence of a panel backup from the last day. `GET
+/api/k3s/upgrade` shows the nodes, the latest release of each minor from k3s's
+channel server, and the plan for a version; `POST` checks it again and hands the
+work to Rancher's system-upgrade-controller (v0.20.2, installed as the
+*Kubernetes upgrades* component on first use) as the two Plans the k3s
+documentation gives, with an explicit version, one node at a time, cordoned and
+not drained. The Settings page's Components tab has the card; its reasons are
+translated from their codes.
+
+Tested: versions read from every default manifest, from a manifest setting, and
+from images; the channel feed parsed, sorted and the stable one marked; the
+planner's order, a node at the target left alone, each blocker and warning; the
+Plans as documented, never draining, the agents waiting for the servers; the
+routes refusing without a backup and with a skipped minor, starting once both
+hold, audited, and refused to a team owner who is not a panel administrator; a
+component offering its newer version, upgrading, and an external one refused.
+
+Not executed: an upgrade of a real cluster, which is the one thing here that
+cannot be tried without one.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

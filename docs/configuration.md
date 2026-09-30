@@ -387,6 +387,55 @@ which is another reason to go back soon or not at all.
 Migrations only go forward. A version skipped is fine: the one you upgrade to
 applies every migration it has that the database does not.
 
+### Upgrading components
+
+The components the panel installs — HTTPS certificates, PostgreSQL, scale to
+zero, the builder, the registry, cross-node storage, the Cloudflare tunnel —
+each record the version they were installed at, under **Settings → Components**.
+A panel release that ships a newer version of one says so beside it, with an
+**Upgrade to …** button: the newer release's manifest is applied over the one
+that is running, which is how each of these projects documents its own upgrade.
+The component restarts; the apps using it do not. A version you chose yourself,
+by pointing a component's manifest setting at another address, is the version
+it is compared with.
+
+A component installed before versions were recorded shows no version and is
+offered the current one. An upgrade that fails leaves the component as it was,
+marked installed, with the reason beside it.
+
+### Upgrading k3s
+
+Kubernetes supports each minor version for about fourteen months, and the
+installer put one on every server that nothing moved since. **Settings →
+Components → Kubernetes (k3s)** lists each server's version, offers the latest
+release of each minor version from k3s's own release channels (or takes one
+typed, for a panel that cannot reach them), and **Check** shows the plan before
+anything happens:
+
+* The order: control-plane servers first, then workers, one at a time — a
+  worker newer than the API it talks to is the one version skew Kubernetes does
+  not allow.
+* Every reason not to start: a version that skips a minor version (1.35 to 1.37
+  has to go through 1.36), a server that already runs something newer, one that
+  is not ready, and **no backup of the panel's own database from the last day**.
+  The upgrade does not start until the list is empty; starting checks it again
+  rather than trusting the one on screen.
+* What is worth knowing: with one control plane, the Kubernetes API is away for
+  about a minute while it restarts. Apps keep serving; the panel reconnects.
+
+**Upgrade** hands the work to Rancher's system-upgrade-controller, which is how
+k3s documents upgrading from inside a cluster: it is installed the first time
+(it appears under Components as *Kubernetes upgrades*), and given two plans for
+the version — the control plane, one server at a time, then the workers, one at
+a time once the control plane is done. Each server is cordoned, so nothing new
+is scheduled on it, while its k3s binary is replaced and restarted; running
+containers keep running through a k3s restart, so it is not drained. The
+servers' versions change on the Servers page as each is done.
+
+It cannot be undone from the panel: k3s is not downgraded. The backup the plan
+insisted on is what the panel is restored from if an upgrade takes its own
+server with it.
+
 ## Monitoring the panel
 
 The panel watches the cluster; this is how you watch the panel. `GET

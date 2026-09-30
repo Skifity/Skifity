@@ -499,6 +499,8 @@ var Components = []Component{
 		Description: "Rules on who may reach an app: by address, by country, by network, by path or by header, combined with and and or. Needs Traefik, which k3s installs by default.", MemoryMB: 128},
 	{Name: "cloudflare-tunnel", Title: "Cloudflare tunnel", Optional: true,
 		Description: "Puts your apps on the internet with no public IP and no port open, through Cloudflare. Needs a tunnel token in Settings, under Domains and HTTPS.", MemoryMB: 64},
+	{Name: "system-upgrade", Title: "Kubernetes upgrades", Optional: true,
+		Description: "Upgrades k3s on every server, one at a time, when you ask for it under Settings. Installed with the first upgrade.", MemoryMB: 30},
 	{Name: "monitoring", Title: "Full monitoring", Optional: true, External: true,
 		Description: "Prometheus and Grafana, installed with Helm rather than by the panel. Skifity shows CPU and memory for every server and every instance without it.",
 		Docs:        "/docs/troubleshooting#full-monitoring", MemoryMB: 900},

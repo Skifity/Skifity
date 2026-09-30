@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
+  ArrowUpCircleIcon,
   BookOpenIcon,
   CheckCircle2Icon,
   CopyIcon,
@@ -19,6 +20,7 @@ import {
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
+import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
@@ -675,6 +677,11 @@ function ComponentsPanel() {
     mutationFn: (name: string) => api.post(`/api/components/${name}/install`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["components"] }),
   })
+  const upgrade = useMutation({
+    mutationFn: (name: string) => api.post(`/api/components/${name}/upgrade`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["components"] }),
+  })
+  const confirmUpgrade = useConfirm()
 
   if (components.isLoading) return <Skeleton className="h-64" />
   if (components.error) {
@@ -683,6 +690,7 @@ function ComponentsPanel() {
 
   return (
     <div className="space-y-4">
+      <K3sUpgradeCard />
       <p className="text-sm text-muted-foreground">{t("settings.componentsHelp")}</p>
       <div className="space-y-3">
         {components.data?.items.map((component) => (
@@ -701,6 +709,11 @@ function ComponentsPanel() {
                       {t("settings.componentMemory", { mb: component.approximate_memory_mb })}
                     </span>
                   )}
+                  {component.status === "installed" && component.version && (
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      {component.version}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{component.description}</p>
                 {component.detail && (
@@ -716,6 +729,33 @@ function ComponentsPanel() {
                     <BookOpenIcon className="size-4" />
                     {t("settings.componentExternal")}
                   </Link>
+                </Button>
+              ) : component.upgrade_available ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={upgrade.isPending}
+                  onClick={() =>
+                    void confirmUpgrade({
+                      title: t("settings.componentUpgradeTitle", { name: component.title }),
+                      description: t("settings.componentUpgradeConfirm", {
+                        from: component.version || t("settings.componentVersionUnknown"),
+                        to: component.wanted_version,
+                      }),
+                      confirmLabel: t("settings.componentUpgrade", {
+                        version: component.wanted_version,
+                      }),
+                    }).then((yes) => {
+                      if (yes) upgrade.mutate(component.name)
+                    })
+                  }
+                >
+                  {upgrade.isPending && upgrade.variables === component.name ? (
+                    <Spinner />
+                  ) : (
+                    <ArrowUpCircleIcon className="size-4" />
+                  )}
+                  {t("settings.componentUpgrade", { version: component.wanted_version })}
                 </Button>
               ) : component.status === "installed" ? (
                 <span className="flex items-center gap-1.5 text-sm text-success">
@@ -738,6 +778,7 @@ function ComponentsPanel() {
         ))}
       </div>
       {install.error != null && <ErrorDisplay error={install.error} />}
+      {upgrade.error != null && <ErrorDisplay error={upgrade.error} />}
     </div>
   )
 }

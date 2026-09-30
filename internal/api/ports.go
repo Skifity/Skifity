@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"skifity/internal/kube"
 	"skifity/internal/plugins"
 	"skifity/internal/store"
 )
@@ -36,6 +37,14 @@ type NodeInfo struct {
 	// every page. Zero capacity is not known yet.
 	DiskUsedMB     int64 `json:"disk_used_mb,omitempty"`
 	DiskCapacityMB int64 `json:"disk_capacity_mb,omitempty"`
+}
+
+// K3sRelease is the latest k3s release of one minor version.
+type K3sRelease struct {
+	Channel string `json:"channel"`
+	Version string `json:"version"`
+	// Stable is the release k3s recommends.
+	Stable bool `json:"stable,omitempty"`
 }
 
 // NodeDisk is how full a node's disk is, as the kubelet measures it.
@@ -144,6 +153,17 @@ type Cluster interface {
 	RefreshCloudflareTunnel(ctx context.Context) error
 	// ComponentStatus reports whether an add-on is present.
 	ComponentStatus(ctx context.Context, name string) (store.ClusterComponent, error)
+	// ComponentVersion is the version of an add-on this panel installs now,
+	// or "" for one that moves with the panel.
+	ComponentVersion(ctx context.Context, name string) string
+	// UpgradeInstalledComponent applies that version over an installed one.
+	UpgradeInstalledComponent(ctx context.Context, name string) error
+	// K3sUpgradeNodes is every node's role, readiness and k3s version.
+	K3sUpgradeNodes(ctx context.Context) ([]kube.UpgradeNode, error)
+	// StartK3sUpgrade hands an upgrade to the system-upgrade-controller.
+	StartK3sUpgrade(ctx context.Context, target kube.K3sVersion) error
+	// K3sReleases is the latest k3s release of each minor version.
+	K3sReleases(ctx context.Context) ([]K3sRelease, error)
 	// QuotaUsage reports how much of an environment's limits are in use.
 	QuotaUsage(ctx context.Context, namespace string) (EnvironmentQuota, error)
 	// ControlPlaneCount is how many nodes actually run the cluster, which is

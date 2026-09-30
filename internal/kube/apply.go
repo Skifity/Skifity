@@ -85,6 +85,8 @@ func NewApplier(client dynamic.Interface) *Applier {
 			"HTTPScaledObject": {Group: "http.keda.sh", Version: "v1alpha1", Resource: "httpscaledobjects"},
 			// Traefik
 			"Middleware": {Group: "traefik.io", Version: "v1alpha1", Resource: "middlewares"},
+			// Rancher's system-upgrade-controller, which upgrades k3s
+			"Plan": {Group: "upgrade.cattle.io", Version: "v1", Resource: "plans"},
 		},
 	}
 }

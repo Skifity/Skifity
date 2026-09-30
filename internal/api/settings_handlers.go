@@ -149,6 +149,10 @@ func (s *Server) handleListComponents(w http.ResponseWriter, r *http.Request) {
 		MemoryMB    int    `json:"approximate_memory_mb"`
 		External    bool   `json:"external"`
 		Docs        string `json:"docs,omitempty"`
+		// WantedVersion is what this panel would install now; an installed
+		// component at another version can be upgraded to it.
+		WantedVersion    string `json:"wanted_version,omitempty"`
+		UpgradeAvailable bool   `json:"upgrade_available"`
 	}
 	views := make([]componentView, 0, len(settings.Components))
 	for _, def := range settings.Components {
@@ -156,7 +160,13 @@ func (s *Server) handleListComponents(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			component = store.ClusterComponent{Name: def.Name, Status: "absent"}
 		}
+		wanted := ""
+		if s.cluster != nil && !def.External {
+			wanted = s.cluster.ComponentVersion(r.Context(), def.Name)
+		}
 		views = append(views, componentView{
+			WantedVersion:    wanted,
+			UpgradeAvailable: component.Status == "installed" && wanted != "" && component.Version != wanted,
 			ClusterComponent: component,
 			Title:            def.Title,
 			Description:      def.Description,

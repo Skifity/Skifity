@@ -312,7 +312,9 @@
       "database.tunnel_opened": "Database tunnel opened",
       "app.process_set": "Process changed",
       "app.process_removed": "Process removed",
-      "environment.previews_changed": "Previews of the environment changed"
+      "environment.previews_changed": "Previews of the environment changed",
+      "component.upgraded": "Component upgraded",
+      "cluster.k3s_upgrade_started": "k3s upgrade started"
     }
   },
   "projects": {
@@ -1285,7 +1287,11 @@
     "requireStrongAuthHelp": "Everybody in this team, owners included, has to sign in with a second factor or through single sign-on. A password alone sees nothing in the team, and neither does a token whose owner has neither.",
     "strongAuthNeededTitle": "{{team}} asks for two-factor authentication",
     "strongAuthNeeded": "You signed in with a password alone, so nothing in this team is shown to you. Turn on two-factor authentication, or sign in with single sign-on.",
-    "strongAuthTurnOn": "Turn on two-factor"
+    "strongAuthTurnOn": "Turn on two-factor",
+    "componentUpgrade": "Upgrade to {{version}}",
+    "componentUpgradeTitle": "Upgrade {{name}}?",
+    "componentUpgradeConfirm": "The manifest of version {{to}} is applied over {{from}}, which is how the project documents its own upgrade. The component restarts; your apps do not.",
+    "componentVersionUnknown": "the version installed before versions were recorded"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2456,6 +2462,12 @@
         "cause": "Neither this directory nor any above it has one.",
         "impact": "Nothing was read or changed.",
         "fix": "Write one — the documentation's example is a start — or pass --file."
+      },
+      "k3s_upgrade_blocked": {
+        "title": "k3s cannot be upgraded yet",
+        "cause": "{{0}}.",
+        "impact": "Nothing was changed; every server runs the version it did.",
+        "fix": "Deal with each reason and check the plan again."
       }
     }
   },
@@ -2805,5 +2817,38 @@
     "formHelp": "The name is lowercase, as in a Procfile: worker, clock. The same name again changes its command. 0 instances stops a process and keeps it.",
     "detected": "Processes from the Procfile",
     "detectedHelp": "Ticked ones run beside the app from its first deploy, on the same build. Untick one to leave it out; it can be added later under Scaling."
+  },
+  "k3s": {
+    "title": "Kubernetes (k3s)",
+    "help": "The version every server runs. An upgrade goes one minor version at a time, the control plane before the workers, one server at a time.",
+    "server": "Server",
+    "role": "Role",
+    "version": "Version",
+    "roleControlPlane": "Control plane",
+    "roleWorker": "Worker",
+    "target": "Upgrade to",
+    "recommended": "{{version}} (recommended)",
+    "check": "Check",
+    "start": "Upgrade",
+    "upToDate": "Every server already runs this version.",
+    "alreadyThere": "already at this version",
+    "blockers": "Why it cannot start",
+    "warnings": "Worth knowing",
+    "releasesUnavailable": "The list of k3s releases could not be read. Type the version instead, as it is written on the k3s releases page.",
+    "confirmTitle": "Upgrade k3s to {{version}}?",
+    "confirm": "Each server is cordoned, upgraded and brought back in turn, the control plane first. It cannot be undone from here: k3s is not downgraded.",
+    "started": "The upgrade has started. Each server's version changes here and on the Servers page as it is done.",
+    "reason": {
+      "not_a_release": "{{target}} is not a k3s release; they are written like v1.31.4+k3s1.",
+      "no_servers": "The cluster reported no servers.",
+      "unknown_version": "{{server}} reports {{version}}, which is not a k3s version this can reason about.",
+      "downgrade": "{{server}} already runs {{version}}, newer than {{target}}; k3s is not downgraded.",
+      "major": "{{server}} runs {{version}}, a different major version from {{target}}.",
+      "not_ready": "{{server}} is not ready. Every server has to be, since each is taken out in turn and has to come back.",
+      "skips_minor": "{{target}} skips {{next}}. Kubernetes is upgraded one minor version at a time, so upgrade to the latest {{next}} first.",
+      "no_backup": "There is no backup of the panel's own database from the last day. Take one first, under Backups of this panel: it is what the panel is restored from if an upgrade takes its server with it.",
+      "one_control_plane": "There is one control plane, so the Kubernetes API is unreachable for about a minute while it restarts. Apps keep serving, and the panel reconnects by itself.",
+      "only_server": "This is the only server. Nothing new is scheduled while it is cordoned, so a deploy during the upgrade waits for it."
+    }
   }
 }

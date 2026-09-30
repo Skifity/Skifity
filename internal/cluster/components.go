@@ -64,6 +64,8 @@ func (c *Cluster) installComponent(ctx context.Context, name string) error {
 		return c.installFromURL(ctx, name, "longhorn-system", "longhorn-driver-deployer")
 	case "cloudflare-tunnel":
 		return c.installCloudflareTunnel(ctx)
+	case UpgradeComponent:
+		return c.installUpgradeController(ctx)
 	case GuardComponent:
 		return c.installEdgeGuard(ctx)
 	case "monitoring":
@@ -240,7 +242,7 @@ func registryObjects(namespace string) []any {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  "registry",
-						Image: "registry:3",
+						Image: registryImage,
 						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: RegistryPort}},
 						Env: []corev1.EnvVar{
 							{Name: "REGISTRY_STORAGE_DELETE_ENABLED", Value: "true"},
@@ -399,6 +401,9 @@ func buildKitObjects(namespace string) []any {
 // buildKitImage is the rootless builder, pinned by version and digest in one
 // place with the buildctl that talks to it. See builder/images.go.
 const buildKitImage = builder.BuildKitDaemonImage
+
+// registryImage is the in-cluster registry.
+const registryImage = "registry:3"
 
 // buildKitLocalAddress is how the readiness probe reaches buildkitd from
 // inside its own container.

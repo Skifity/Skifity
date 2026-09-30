@@ -304,7 +304,9 @@
       "database.tunnel_opened": "已打开数据库隧道",
       "app.process_set": "进程已修改",
       "app.process_removed": "进程已删除",
-      "environment.previews_changed": "环境的预览设置已修改"
+      "environment.previews_changed": "环境的预览设置已修改",
+      "component.upgraded": "组件已升级",
+      "cluster.k3s_upgrade_started": "k3s 升级已开始"
     }
   },
   "projects": {
@@ -1271,7 +1273,11 @@
     "requireStrongAuthHelp": "这个团队中的每个人（包括所有者）都必须使用第二重验证或通过单点登录登录。仅凭密码在团队中什么也看不到，所有者两者都没有的令牌也一样。",
     "strongAuthNeededTitle": "{{team}} 要求双重验证",
     "strongAuthNeeded": "你仅用密码登录，因此这个团队的内容不会向你显示。请开启双重验证，或通过单点登录登录。",
-    "strongAuthTurnOn": "开启双重验证"
+    "strongAuthTurnOn": "开启双重验证",
+    "componentUpgrade": "升级到 {{version}}",
+    "componentUpgradeTitle": "升级 {{name}}？",
+    "componentUpgradeConfirm": "版本 {{to}} 的清单会应用在 {{from}} 之上，这正是该项目自己文档里的升级方式。重启的是这个组件，不是你的应用。",
+    "componentVersionUnknown": "开始记录版本之前安装的版本"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2442,6 +2448,12 @@
         "cause": "这个目录和它上面的目录里都没有。",
         "impact": "没有读取或修改任何东西。",
         "fix": "写一个——文档里的示例可以作为起点——或者用 --file 指定。"
+      },
+      "k3s_upgrade_blocked": {
+        "title": "k3s 暂时无法升级",
+        "cause": "{{0}}。",
+        "impact": "没有做任何修改；每台服务器仍运行原来的版本。",
+        "fix": "逐一处理每个原因，然后再次检查计划。"
       }
     }
   },
@@ -2789,5 +2801,38 @@
     "formHelp": "名称用小写，和 Procfile 里一样：worker、clock。再次使用同一个名称会修改它的命令。实例数为 0 会停止进程但保留它。",
     "detected": "Procfile 里的进程",
     "detectedHelp": "勾选的进程从第一次部署起就在应用旁边运行，使用同一次构建。取消勾选可以跳过；之后也可以在“伸缩”里添加。"
+  },
+  "k3s": {
+    "title": "Kubernetes (k3s)",
+    "help": "每台服务器运行的版本。升级每次只跨一个次版本，控制平面先于工作节点，一次一台服务器。",
+    "server": "服务器",
+    "role": "角色",
+    "version": "版本",
+    "roleControlPlane": "控制平面",
+    "roleWorker": "工作节点",
+    "target": "升级到",
+    "recommended": "{{version}}（推荐）",
+    "check": "检查",
+    "start": "升级",
+    "upToDate": "每台服务器都已经在运行这个版本。",
+    "alreadyThere": "已经是这个版本",
+    "blockers": "为什么还不能开始",
+    "warnings": "值得知道",
+    "releasesUnavailable": "无法读取 k3s 的发布列表。请按 k3s 发布页面上的写法输入版本。",
+    "confirmTitle": "把 k3s 升级到 {{version}}？",
+    "confirm": "每台服务器会依次被标记为不可调度、升级、再恢复，控制平面优先。这里无法撤销：k3s 不会降级。",
+    "started": "升级已经开始。每台服务器完成后，这里和“服务器”页面上的版本都会随之变化。",
+    "reason": {
+      "not_a_release": "{{target}} 不是 k3s 的发布版本；它们的写法类似 v1.31.4+k3s1。",
+      "no_servers": "集群没有报告任何服务器。",
+      "unknown_version": "{{server}} 报告的是 {{version}}，这不是这里能判断的 k3s 版本。",
+      "downgrade": "{{server}} 已经在运行 {{version}}，比 {{target}} 新；k3s 不会降级。",
+      "major": "{{server}} 运行的是 {{version}}，与 {{target}} 的主版本不同。",
+      "not_ready": "{{server}} 尚未就绪。每台服务器都必须就绪，因为它们会被依次取下并且必须恢复。",
+      "skips_minor": "{{target}} 跳过了 {{next}}。Kubernetes 每次只升级一个次版本，所以请先升级到最新的 {{next}}。",
+      "no_backup": "最近一天内没有面板自身数据库的备份。请先在“本面板的备份”里做一个：如果升级连同服务器一起出了问题，面板就是从它恢复的。",
+      "one_control_plane": "只有一个控制平面，所以它重启时 Kubernetes API 大约有一分钟无法访问。应用照常服务，面板会自己重新连接。",
+      "only_server": "这是唯一的服务器。它被标记为不可调度期间不会调度新的东西，所以升级期间的部署会等待。"
+    }
   }
 }

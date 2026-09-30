@@ -269,6 +269,16 @@ func BackupDamaged(detail string) *Problem {
 		WithDocs("/docs/backups#verifying")
 }
 
+// K3sUpgradeBlocked is a k3s upgrade that cannot start as things are.
+func K3sUpgradeBlocked(reasons string) *Problem {
+	return New("k3s.upgrade_blocked", "k3s cannot be upgraded yet").
+		WithCause("%s.", reasons).
+		WithImpact("Nothing was changed; every server runs the version it did.").
+		WithFix("Deal with each reason and check the plan again.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/configuration#upgrading-k3s")
+}
+
 // BlueprintInvalid is a skifity.yaml that cannot be applied as it is.
 func BlueprintInvalid(detail string) *Problem {
 	return New("blueprint.invalid", "skifity.yaml cannot be applied").
