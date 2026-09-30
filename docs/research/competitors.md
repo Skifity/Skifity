@@ -1,192 +1,191 @@
 # Research: Competing platforms
 
-Researched 2026-09-16, re-researched against live sources 2026-09-17. The second
-pass changed the conclusions, so what follows is the second pass.
+Researched 2026-09-16, re-researched against live sources 2026-09-17, and on
+2026-09-30 researched again **one product at a time, in depth**: twenty-two
+products, each in its own file under [`competitors/`](competitors/). Every file
+has the same nine parts — what the product is and runs on, a feature inventory in
+fourteen groups, what users love, what they complain about, its security record,
+a capability-by-capability table against Skifity with the file each Skifity
+claim was checked in, the gaps worth closing, the things not to copy, and dated
+sources.
 
-## The self-hosted panels
+This page is the summary. The numbers below come from those files, which carry
+the sources and the dates they were read.
 
-| Product | Orchestrator | Idle cost | Stars | State | Licence |
-|---|---|---|---|---|---|
-| Coolify | Docker (Swarm deprecated) | 500 MB – 1.2 GB RAM, 5–7% CPU | ~51–59k | v4.0.0 stable **April 2026**, after four years of beta | Apache 2.0 |
-| Dokploy | Docker Swarm | ~350 MB RAM, 0.8–1.5% CPU | ~26–36k | v0.28.x, **still pre-1.0** | Apache 2.0 + proprietary directories |
-| CapRover | Docker Swarm | light | ~13k | Stable since 2017, development slowed | Apache 2.0 |
-| Dokku | Docker + herokuish | very light | — | Mature, single host | MIT |
-| aaPanel | None (LAMP/Docker manager) | — | — | Mature | Free + paid Pro |
+## The products
 
-### What each one keeps its own state in
-
-Researched 2026-09-17. This is the panel's *own* records — accounts, servers,
-apps — not the databases it provisions for users, which is a different question
-and the one most comparisons answer by mistake.
-
-| Product | Its own state | What that costs to run |
-|---|---|---|
-| **cPanel / WHM** | Flat files: `/var/cpanel/users/*` per account, plus config under `/var/cpanel`. MySQL is for the *hosted* databases, not for cPanel's own records. | Nothing. It is text on disk. |
-| **aaPanel** | SQLite, one file at `/www/server/panel/data/default.db`. | Nothing. |
-| **CapRover** | Flat JSON, `config-captain.json`. | Nothing. |
-| **Plesk** | MySQL/MariaDB, the `psa` database. | A database server. |
-| **Coolify** | PostgreSQL 15 **and** Redis 7 **and** Soketi for websockets, beside a Laravel/PHP app and its queue workers. | Four processes before a single app of yours is running. This is most of the 500 MB – 1.2 GB. |
-| **Dokploy** | PostgreSQL and Redis. | Two. |
-| **Skifity** | SQLite in WAL mode, on the node's disk, through a pure-Go driver — no database server, no libc, no second process. | Nothing. This is most of the 35 MiB. |
-
-The split is not about maturity. The two products with the largest installed
-base in this list, cPanel and aaPanel, both keep their own state in files. A
-control panel has one writer and a few thousand rows; the panel that brings a
-PostgreSQL, a Redis and a websocket server to hold that is paying for a shape it
-does not have.
-
-Where an embedded store stops being right is a **hosted, multi-tenant** control
-plane — many customers, horizontal scale, failover. SQLite is the correct answer
-for one panel on one node and the wrong answer for that, which is worth knowing
-before anybody designs the second thing (see "Renting the panel" below).
-
-**Coolify** is the market leader and the reason is not technical: 280+ one-click
-services, the largest Discord, the most tutorials. When a comparison recommends
-it, "broader community, more one-click services, more tutorial content" is the
-reason given. Its costs are a heavy runtime (Laravel, Postgres, Redis, Soketi
-and workers, all running), no Kubernetes, and the security record below.
-
-**Dokploy** is the fastest-growing, and is lighter than Coolify by roughly 3x. It
-has **already adopted Railpack**, has **SSO/SAML**, which Coolify does not, and
-ships an AI Docker Compose generator. Multi-node stops at Swarm, and scaling
-stops at a Replicas field somebody sets by hand. Its licence is
-Apache 2.0 with proprietary directories carved out.
-
-**aaPanel is not in this category.** It is a cPanel/Plesk replacement — websites,
-PHP, mail, a WordPress toolkit, a Docker manager — sold to agencies running
-hundreds of client servers. Its users praise multi-user account isolation and
-the WP Toolkit; its complaint is annual-only Pro pricing. It competes with
-cPanel, not with a Git-deploy PaaS, and nothing here should be aimed at it.
-
-### The security record, which is the most important fact in this table
-
-On **8 January 2026 Coolify disclosed eleven critical CVEs in one day. Five carry
-CVSS 10.0** — authenticated command injection ending in root on the host
-(CVE-2025-66209 … 66213). One (CVE-2025-64420, also 10.0) let a low-privileged
-user read the root SSH private key. More followed through spring: a Sentinel
-token injection to host RCE (CVE-2026-34034), command injection during
-deployment (CVE-2026-34038), and **an authorization bypass that let users reach
-another team's servers** (CVE-2026-34592). Censys counted **52,890 publicly
-reachable Coolify dashboards** at disclosure.
-
-The analysis of why is worth quoting, because it describes a class rather than a
-mistake: *"user input reaches a shell without enough sanitization, in many
-independent code paths."*
-
-That is the exact class `internal/shellsafe` exists for, and the exact bug found
-in this repository in September 2026 — every generated script used Go's `%q`,
-which is not shell quoting. The difference is not that Skifity avoided the
-mistake. It is that there is now one place where quoting happens, a test that
-runs a real shell against it, and no second path. Coolify's problem is that
-there were many paths and no single place.
-
-Dokploy has no publicly disclosed CVEs. It also has a fraction of the exposure.
-
-## The managed platforms
-
-| Product | What wins | What it costs | Why people leave |
+| Group | Product | What it is, in one line | File |
 |---|---|---|---|
-| **Vercel** | The best PR preview workflow in the industry, image optimisation, edge middleware, native Next.js | Hobby free but explicitly not for production; Pro per-seat plus usage | A bill that is not a function of traffic you chose — one documented case is **$286 from a single morning of bot traffic** crossing a 100k-invocation line |
-| **Railway** | Persistent containers, co-located databases, background jobs, genuinely liked DX | Hobby $5/mo incl. $5 credits, Pro $20/user/mo incl. $20, Enterprise from $2,000/mo | Usage pricing that is fine until it is not |
-| **Heroku** | Predictability, buildpacks, nothing surprising | Performance dynos **$250–500/month each**, add-ons stacked separately | Price, and the free tier's removal — which is what created this entire category |
+| Self-hosted, Docker | Coolify | The market leader: Laravel control plane, PostgreSQL, Redis, Soketi, 359 templates | [coolify.md](competitors/coolify.md) |
+| | Dokploy | The fast grower: Next.js on Docker Swarm, PostgreSQL; still pre-1.0 (v0.30.8) | [dokploy.md](competitors/dokploy.md) |
+| | CapRover | The oldest dashboard panel: Swarm, nginx, a JSON file for state, 360 one-click apps | [caprover.md](competitors/caprover.md) |
+| | Dokku | The original self-hosted Heroku over SSH; has shipped a **k3s scheduler** in core since 2024 | [dokku.md](competitors/dokku.md) |
+| | Easypanel | Commercial, closed-source; Swarm, SQLite state, telemetry on by default | [easypanel.md](competitors/easypanel.md) |
+| | Kamal | 37signals' deploy tool: no control plane, a YAML file and kamal-proxy | [kamal.md](competitors/kamal.md) |
+| Other people's apps | Cloudron | Packaged apps with maintained updates, backups before every update, SSO and mail | [cloudron.md](competitors/cloudron.md) |
+| | Portainer | Container and Kubernetes UI; 3.0 is "Kubernetes-first", Portainer-Run deploys AI-built apps | [portainer.md](competitors/portainer.md) |
+| Self-hosted, Kubernetes | Kubero | Heroku-style operator on your cluster; dormant, with an unpatched critical CVE | [kubero.md](competitors/kubero.md) |
+| | Canine | "Coolify for Kubernetes", in its author's words; Rails, outside the cluster, never released | [canine.md](competitors/canine.md) |
+| | Epinio | `cf push` for Kubernetes; stalled at SUSE, revived by Krumware in 2025 | [epinio.md](competitors/epinio.md) |
+| | Sealos | A Kubernetes installer grown into a "cloud OS"; relicensed in 2025, 8 CPU / 16 GB per node | [sealos.md](competitors/sealos.md) |
+| Kubernetes on your cloud | Porter | Operates EKS/GKE/AKS in your account; no longer open source | [porter.md](competitors/porter.md) |
+| | Qovery | Internal developer platform on your cloud; dropped its single-server k3s offer in 2024 | [qovery.md](competitors/qovery.md) |
+| | Northflank | Kubernetes underneath, hosted or BYOC; environments, workflows, preview blueprints | [northflank.md](competitors/northflank.md) |
+| Managed | Vercel | The developer-experience bar: previews per pull request, instant rollback | [vercel.md](competitors/vercel.md) |
+| | Netlify | Deploy previews and atomic deploys; deploy contexts per branch | [netlify.md](competitors/netlify.md) |
+| | Railway | Canvas and reference variables; no built-in horizontal autoscaler | [railway.md](competitors/railway.md) |
+| | Render | Service types and Blueprints (`render.yaml`); its own Kubernetes on AWS | [render.md](competitors/render.md) |
+| | Heroku | Defined the category; in "sustaining engineering" since 2026-02-06 | [heroku.md](competitors/heroku.md) |
+| | Fly.io | Firecracker Machines and flyctl; recurring reliability complaints | [fly-io.md](competitors/fly-io.md) |
+| | DigitalOcean App Platform | An app spec as the source of truth; still no volumes after five years | [digitalocean-app-platform.md](competitors/digitalocean-app-platform.md) |
 
-What all three sell is the same thing: **you push, and it is live, and you never
-think about a server.** Vercel's preview-per-pull-request is repeatedly called
-the best thing in the industry. That is the bar for developer experience, and it
-is not a bar any self-hosted panel has reached.
+aaPanel was researched on 2026-09-17 and left out: it replaces cPanel, not a
+Git-deploy PaaS.
 
-## What we take from each
+## What the earlier passes got wrong
 
-* **Vercel** — deploy from Git, one preview URL per branch or pull request, one-click rollback.
-* **Railway** — a visual canvas of services, variables shared across a project.
-* **Heroku** — detect the language and build with no Dockerfile.
-* **Cloudflare Workers** — scale-to-zero for idle apps.
-* **Coolify / Dokploy** — one-click templates, S3 backups, being genuinely self-hosted. Coolify's catalogue was the single most-cited reason people choose it, and at eight templates against 342 the gap was the largest we had. It is now 282, converted from that catalogue with every image resolved to a real version and verified against its registry, and the database wiring — which does not apply here — taken out. The catalogue is files rather than Go, which is how Coolify's got large in the first place.
-* **Kubernetes** — self-healing, rolling updates, rollback, node failover, for free.
+The 2026-09-17 conclusions were read back against the new files. Several did not
+survive.
 
-## Where we are actually different
+* **"Nobody else in the category has an MCP server" is false.** Coolify has had a
+  remote one at `/mcp` since v4.1.0 (May 2026); Dokploy's generated one has 508
+  tools; Easypanel shipped one in 2.33.0; Canine, Epinio, Porter, Qovery and
+  Sealos all have one. What still sets Skifity's apart is narrower: its tools
+  never return a secret or a kubeconfig. Canine's hands the stored admin
+  kubeconfig to agents, and Sealos puts a kubeconfig in its MCP URL.
+* **Dokploy's security record is not clean.** The earlier page said it had no
+  disclosed CVEs. It has 60 published GitHub advisories — 34 critical, 42 of them
+  published on 21 July 2026 — mostly command injection and cross-organisation
+  access, including a CVSS 10.0 admin takeover through a hardcoded auth secret
+  (CVE-2026-45631). Its current installer runs PostgreSQL only, not Redis.
+* **Dokku is not a single-server tool any more**, and not clean either. Its k3s
+  scheduler — cert-manager, KEDA with the HTTP add-on, Longhorn volumes — makes it
+  Skifity's closest architectural relative. It published six advisories in 2026,
+  five critical, all user input reaching Bash.
+* **"A config change does not rebuild" is a narrower edge than claimed.** Coolify's
+  documentation now sends runtime-only changes to Restart, which reuses the
+  image. The difference left is that Skifity decides, where Coolify asks the user
+  to pick the right button.
+* **The footprint claim is about the panel, not the stack.** 35 MiB is measured;
+  k3s's own documented minimum is 2 cores and 2 GB, the same as Coolify's, and
+  Skifity's whole-stack footprint has never been measured.
+* **Coolify's catalogue is 359 templates, not 342**, and 45% name `latest`.
+  CapRover's 360 mostly do not, so "more than half ship latest" is about Coolify
+  only.
 
-Ordered by how well the evidence supports it.
+## The security record across the category
 
-1. **One place where user input becomes a shell command.** The leading product in
-   this category shipped five CVSS-10.0 command injections in a day because it
-   had many. This is the strongest claim Skifity has, and it is an architectural
-   one: `shellsafe`, tested against a real `sh`, plus secrets sealed to the
-   context they are stored in, plus one authorization layer that a handler
-   cannot skip without it being visible — against a competitor whose 2026 CVE
-   list includes a cross-team authorization bypass and a readable root SSH key.
-2. **Footprint.** 35 MiB idle, measured, against Coolify's 500 MB–1.2 GB and
-   Dokploy's ~350 MB. On the 1 GB VPS this category sells to, that is the
-   difference between the panel being the problem and the panel being invisible.
-3. **Scaling is a property of the system, not a runbook.** This is stronger than
-   "multi-node that is not Swarm", and it is worth stating precisely because
-   the leaders' own documentation states the other side of it.
+| Product | What was disclosed, 2025–2026 | The class |
+|---|---|---|
+| Coolify | 75 CVEs in NVD, 70 GitHub advisories | 36 command injection, 14 missing authorization, 10 cross-team; an OAuth sign-in matching accounts by email (CVE-2026-86117) |
+| Dokploy | 60 advisories, 34 critical | Command injection, cross-organisation access, a hardcoded auth secret |
+| Dokku | 6 advisories, 5 critical (CVSS 9.0) | Input reaching Bash `eval`, heredocs and `tar` on the host |
+| Portainer | 11 CVEs in 2026 | Authorization bypasses in its Docker/Kubernetes API proxy |
+| Kubero | CVE-2026-92720 (9.1), unpatched | Unauthenticated API returning webhook secrets |
+| Canine | A cross-account cluster lookup, fixed silently 2026-09-18 | Tenant isolation |
+| Vercel | A platform breach, 2026-04-19 | Environment variables not marked sensitive were decrypted |
 
-   Coolify's scaling overview (read 2026-09-17) offers three paths: resize the
-   server, deploy the same image to several standalone servers, or put a
-   provider-managed load balancer in front. It says plainly: **"Coolify does not
-   create or manage that external load balancer for you"**, and lists what
-   remains the operator's: configuring the load balancer and its health checks,
-   securing traffic to it, keeping sessions and uploads available to every
-   instance, and **"monitoring capacity and deciding when to add or remove
-   servers"**. Two further limits: **an application with persistent storage
-   cannot use multi-server deployment at all**, and **Docker Swarm is now marked
-   Deprecated** — "continue only as a temporary legacy setup". Load balancing in
-   practice means hand-writing a Traefik file with the upstream IP addresses in
-   it. Dokploy's equivalent is a **Replicas** field: "set the number of instances
-   of your application that should be running".
+The pattern is the one the 2026-09-17 page named: user input reaching a shell in
+many places, and authorization checked in many places. Skifity has one quoting
+function tested against a real `sh` (`internal/shellsafe`) and one authorization
+layer a route walk proves every route goes through. That is a reason to expect
+fewer of the first two classes. It is not evidence: nobody outside has looked,
+and this pass found three security defects in Skifity's own code by reading it,
+listed below.
 
-   Neither has autoscaling. Skifity has a HorizontalPodAutoscaler on a CPU or
-   memory target, scale-to-zero through KEDA with the ingress routed via its
-   interceptor so a sleeping app is woken rather than 503'd, and the HPA
-   suppressed when scale-to-zero is on so the two do not fight over one
-   Deployment. Rescheduling, node failure and rolling updates come from k3s
-   rather than from panel code.
+## What the research found in Skifity, and what was done about it
 
-   And the list Coolify tells an operator to work through by hand before adding
-   a server — move sessions out of the container, share uploads, add a health
-   endpoint — is the list `ScalingReadiness` reads out of the app's own
-   configuration and reports, naming the variable that is wrong.
+Reading every competitor's feature against Skifity's code found defects, not only
+gaps. Each was fixed the same day, with a test that fails when the fix is taken
+out, and is written up in `docs/progress.md`.
 
-   **One line of Coolify's list applies here too, and it would be dishonest to
-   let this section imply otherwise.** Skifity does not create or manage an
-   external load balancer either. Every server runs the ingress, so an app
-   answers on every server's address — but DNS names one, and if that server
-   goes down the name is dead while the app is still running elsewhere. Round
-   robin DNS, a floating IP or a provider's load balancer is the operator's
-   choice, and `docs/adding-servers.md` says so. The difference from Coolify is
-   narrower than the rest of this point: it is that the app above that front
-   door genuinely reschedules, rolls and autoscales itself, not that the front
-   door is solved.
+| Found by | What was wrong | Commit |
+|---|---|---|
+| Coolify | Single sign-on matched existing accounts by email, and treated a missing `email_verified` as verified: an identity at the provider carrying the owner's address signed in as the owner | `043d60a` |
+| Northflank | A fork's preview was handed the project's shared secret variables at every deploy | `b2a0607` |
+| Netlify, Qovery | Every build variable's value was written into the build Job, readable by anybody who can list Jobs; and Railpack was never given them, so they never reached the build | `cae0a4b` |
+| Dokploy, Kubero, Porter, Qovery, Vercel, Netlify | Every preview copied production's `DATABASE_URL`: refused by the network policy, so previews with a database never worked, or a branch's migration against production where the policy is not enforced | `1ae3276` |
+| Dokploy | Every build image followed `latest`/`master` — and pinning them showed `ghcr.io/railwayapp/railpack` is not a public image (every Railpack build would have failed to pull) and the Nixpacks image has no `nixpacks` in it | `7a909ca` |
+| Dokku | A server added later joined at whatever the stable channel had moved to, possibly newer than the control plane | `15c20cc` |
+| Dokploy | Apps were given `Skifity_APP` in mixed case and nothing else about themselves | `03d9b37` |
+| Vercel, Netlify, Coolify | A preview's address was only in the panel; nothing reached the pull request | `bb30e03` |
+| CapRover, Vercel, Netlify, Coolify, Dokploy | No way to put a password in front of a staging site or a preview | `7865bc8` |
 
-   The honest limit is the same as everywhere else in this document: none of it
-   has run on a real cluster.
-4. **A config change does not rebuild.** The top Coolify complaint, answered by
-   the build fingerprint (ADR-0007).
-5. **Built for assistants.** An MCP server in the same binary, and every failure
-   carrying cause, impact and fix. Nobody else in the category has this.
+None of these had been seen, for the reason `docs/checklist.md` gives: nothing
+here has run on a cluster. Three of them — the Railpack image, the build
+variables and the preview database — would have been the first thing a real run
+hit.
 
-## Where we are not different, and the honest reading
+## Gaps still open, ranked
 
-* **Railpack is no longer a differentiator.** Dokploy already ships it.
-* **SSO: closed.** This was the one straight absence on the list rather than a
-  trade-off. OpenID Connect is in, with PKCE, a verified ID token, a per-sign-in
-  nonce and a single-use state — Okta, Entra, Authentik, Keycloak, Zitadel,
-  Google. SAML is not, and is not planned: a second protocol and a second class
-  of signature bug, for providers that all speak OIDC anyway.
-* **Templates: closed, but not by being better at templates.** 282 against 342, and ours are converted from theirs. What is genuinely ours is that every image names a version that was checked to exist, where more than half of Coolify's ship `latest`.
-* **Kubernetes is a category mismatch, not only an advantage.** Comparison sites
-  exclude k3s and Rancher from "self-hosted PaaS" as *"a different abstraction
-  layer entirely"*, and one of the most-read 2026 guides is titled *"Best
-  Self-Hosted PaaS to Replace Heroku (**No Kubernetes**)"*. The audience is
-  actively selecting away from the thing Skifity is built on. Hiding Kubernetes
-  well is therefore not a bonus feature; it is the entire bet.
-* **The security advantage is architectural, not demonstrated.** Coolify has
-  eleven critical CVEs because 52,890 people run it and researchers look.
-  Skifity has none because nobody has looked. Better structure is a reason to
-  expect fewer, not evidence of fewer. Claiming otherwise in public would be the
-  same kind of unearned statement this project keeps finding in its own
-  documentation.
+Ranked by how many of the twenty-two products win on it and how much a person
+loses without it. "Without a cluster" says whether it can be built and proven
+here, or needs `make verify` on a real server.
+
+| # | Gap | Cited by | Size | Without a cluster |
+|---|---|---|---|---|
+| 1 | Metrics history with charts, and threshold alerts (memory, disk, crash loops, out-of-memory) | Coolify, Dokploy, Railway, Render, Heroku, Northflank, Vercel, Netlify, Canine, Kubero, Easypanel, Cloudron | M | The storage, API and charts; real numbers need one |
+| 2 | Scheduled off-site backup of the panel's own database, and a restore command | Coolify, Dokploy, CapRover, Cloudron, Portainer | S–M | Yes |
+| 3 | A read-only role, and members limited to projects | Coolify, Fly, Portainer, Dokploy, Easypanel, Kubero, Canine, Netlify | M | Yes |
+| 4 | A remote MCP endpoint over HTTP, and read-only/destructive annotations on the tools | Coolify, Canine, Vercel, Netlify, Dokploy, Easypanel, Portainer | M | Yes |
+| 5 | The environment described in a file in the repository (`skifity.yaml`), with plan and apply | Render, DigitalOcean, Porter, Railway, Portainer | L | Yes |
+| 6 | A Compose file deployed as one stack of apps | Coolify, CapRover, Sealos, Render | M | Yes, except running it |
+| 7 | Promote the exact image from one environment to the next | Heroku, Northflank, Vercel, Render | M | Mostly |
+| 8 | Preview-only variable values; previews of the whole stack with a seed step | Vercel, Netlify, Railway, Render, Coolify | M | Yes |
+| 9 | Honour a Procfile's `release` and `worker` lines and `app.json` | Heroku | M | Yes |
+| 10 | Several processes (web, worker) from one build; service types in the new-app form | Fly, Dokku, Render | M–L | Manifests yes |
+| 11 | `skifity db connect`: reach a private database from a laptop | Coolify, Fly, Sealos, Epinio | M | Partly |
+| 12 | Upgrade what the installer installed: components and k3s | Kubero, Epinio | L | The plan yes; the upgrade needs one |
+| 13 | Track which template an app came from, offer its updates, back up first | Cloudron | M | Yes |
+| 14 | More notification channels built in: Slack, Mattermost, ntfy, Pushover | Coolify, Dokploy | S | Yes |
+| 15 | SSO groups mapped to roles, and 2FA or SSO required per team | Portainer, Epinio, Dokploy | S–M | Yes |
+| 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
+| 17 | Set several variables in one rollout, and import a `.env` | Dokku | S | Yes |
+| 18 | Skip a monorepo app whose directory did not change; warn on framework versions with critical advisories | Vercel, Netlify | S–M | Yes |
+| 19 | Maintenance mode; locked deploys; a rollback that shows what it will change | DigitalOcean, Kamal, Easypanel, Netlify | S–M | Yes |
+| 20 | `SECURITY.md` and a support and upgrade policy before the first release | Epinio | S | Yes |
+
+## Where Skifity is actually different
+
+Ordered by how well the evidence supports it, after this pass.
+
+1. **It installs the cluster.** Kubero, Canine and Epinio all need a cluster
+   somebody already runs; Porter and Qovery operate one in a cloud account;
+   Sealos installs one but asks for 8 CPUs and 16 GB per node. None of them puts
+   Kubernetes on one small server with one command. That opening is real — and,
+   like everything else here, Written, never run.
+2. **Scaling is the system's, not a runbook.** Coolify has no replicas until v5,
+   by its maintainer's own account; Dokploy has a replica count; Railway has no
+   built-in horizontal autoscaler. Skifity has an autoscaler, scale to zero
+   through KEDA, and a readiness checker that names what breaks with several
+   instances.
+3. **One place where input becomes a shell command, one place for
+   authorization.** See the security table above. A structural reason to expect
+   fewer of the category's commonest CVEs, and not yet a demonstrated one.
+4. **Secrets that stay secret.** Write-only variables sealed to where they are
+   stored — the design Vercel moved to in August 2026 after its breach — MCP tools
+   that never return one, and, since this pass, build variables that never touch
+   a Job.
+5. **Hiding Kubernetes well is still the whole bet.** Portainer's pivot to a
+   Kubernetes-first 3.0 with a product for deploying AI-built apps is the same
+   pitch sold to enterprises; the "No Kubernetes" guides are the audience the
+   bet is against.
+
+## Things deliberately not copied
+
+Collected from the per-product files, where each says why.
+
+* A web terminal into the host or a container (two CVSS 9.9 CVEs in Coolify).
+* Shell strings built from user input in more than one place.
+* Metered billing, or a quota that pauses a running site.
+* SSO, audit logs or roles behind a licence (Dokploy since January 2026, CapRover's
+  paid two-factor).
+* Telemetry on by default (Easypanel, and Vercel's Claude Code plugin in April 2026).
+* Copying production data into previews.
+* An admin kubeconfig in an MCP URL or an agent's hands.
+* Unpinned images in the catalogue or the build.
+* Installing into somebody's existing cluster before the one-server install is
+  proven — it pulls effort away from the thing nobody else does.
 
 ## Renting the panel out, with the customer's own servers
 
@@ -232,23 +231,6 @@ than a drift.
 
 ## Sources
 
-- https://hostzero.com/articles/is-coolify-safe-2026-cves
-- https://thehackernews.com/2026/01/coolify-discloses-11-critical-flaws.html
-- https://github.com/coollabsio/coolify/security/advisories/GHSA-qqrq-r9h4-x6wp
-- https://www.sentinelone.com/vulnerability-database/cve-2026-34058/
-- https://www.virtua.cloud/learn/en/concepts/coolify-vs-dokploy-self-hosted-paas
-- https://massivegrid.com/blog/dokploy-vs-coolify-vs-caprover/
-- https://contabo.com/blog/self-hosted-paas-replace-heroku/
-- https://lumadock.com/tutorials/coolify-alternatives
-- https://justinmckelvey.com/blog/railway-vs-vercel
-- https://resources.rework.com/tools/dev-tools/best-vercel-alternatives
-- https://medium.com/@allahverdiyev.tural/your-paas-bill-lied-to-you-the-real-cost-of-railway-render-fly-io-and-vercel-in-2026-8b74074014ce
-- https://www.aapanel.com/ and https://www.trustpilot.com/review/aapanel.com
-- https://coolify.io/docs/core/infrastructure/scaling/overview (read 2026-09-17)
-- https://coolify.io/docs/core/networking/proxy/traefik/load-balancing
-- https://docs.dokploy.com/docs/core/applications/advanced
-- https://northflank.com/blog/dokploy-vs-coolify
-- https://coolify.io/docs/get-started/introduction and https://next.coolify.io/docs/start-with-cloud (read 2026-09-17, for Coolify Cloud's BYOS model)
-- https://deepwiki.com/coollabsio/coolify (Coolify's own control-plane stack: Laravel, PostgreSQL, Redis, Soketi)
-- https://www.aapanel.com/forum/ and https://fornex.com/help/database-aapanel/ (aaPanel's SQLite store)
-- https://www.logicweb.com/knowledge-base/cpanel-tutorials/cpanel-directory-structure/ and https://gist.github.com/irazasyed/6488963 (cPanel's flat files under /var/cpanel)
+Each file under [`competitors/`](competitors/) lists its own, with the date each
+was read. The 2026-09-17 sources for this page's earlier version are in the
+repository history.

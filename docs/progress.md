@@ -4365,6 +4365,30 @@ panel run outside the cluster it manages keeps the old behaviour. Both paths are
 tested against the in-process SSH server, including that the cluster's version
 wins over a newer pinned one.
 
+## Phase 83 — the competitors, one at a time
+
+Phase 21 re-researched the market against live sources and compared thirteen
+products in one file. This pass researched twenty-two, one at a time and in
+depth, each in its own file under `docs/research/competitors/` with the same nine
+parts: what it runs on, a feature inventory in fourteen groups, what users love
+and complain about, its security record, a table against Skifity in which every
+Skifity claim names the file it was checked in, the gaps, what not to copy, and
+dated sources. `docs/research/competitors.md` is now the summary: the index, what
+the earlier passes got wrong, the category's security record, and the gaps still
+open, ranked.
+
+Two things came out of it that the earlier page could not have said. The
+research reads each competitor's feature against Skifity's *code*, and that
+turned up defects rather than only gaps — nine, fixed as Phases 74 to 82, three of
+them security and three that the first real build would have hit. And several
+claims on the old page were wrong: other products do have MCP servers, Dokploy
+has sixty security advisories, Dokku runs on k3s, and the footprint figure is the
+panel's, not the stack's.
+
+Firecrawl ran out of credits partway through and GitHub's API is blocked from
+this sandbox; the files say which sources were read another way, and which
+figures could not be confirmed.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
