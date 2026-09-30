@@ -6,6 +6,7 @@ website: https://libretranslate.com/docs/
 services:
 - name: libretranslate
   image: libretranslate/libretranslate:v1.9.6
+  run_as_user: 1032
   port: 5000
   public: true
   mem_request_mb: 128

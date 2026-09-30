@@ -7,6 +7,7 @@ website: https://github.com/prometheus/blackbox_exporter
 services:
 - name: prometheus
   image: prom/prometheus:v3.15.0
+  run_as_user: 65534
   port: 9090
   public: true
   health_path: /-/ready
@@ -102,6 +103,5 @@ notes: This template installs 2 apps. Prometheus probes https://example.com thro
   probe_duration_seconds are the series to graph and alert on. The exporter has no domain on purpose - a
   public one would probe anything for anybody. Prometheus has no sign-in of its own, so keep its address
   to yourself, or make it internal and read it through Grafana in the same environment. ICMP pings are
-  not included; they need a capability containers here do not get. The exporter's image starts as root
-  and Prometheus's names its user rather than giving a uid, so the environment needs the baseline pod
-  security level.
+  not included; they need a capability containers here do not get. The exporter's image starts as root,
+  so the environment needs the baseline pod security level.

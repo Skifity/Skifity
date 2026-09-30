@@ -7,6 +7,7 @@ website: https://kestra.io
 services:
 - name: kestra
   image: kestra/kestra:v2.0.4
+  run_as_user: 1000
   port: 8080
   public: true
   mem_request_mb: 1024
@@ -66,5 +67,5 @@ notes: The first visit asks you to create the admin account. Everything runs in 
   Docker here, so script tasks cannot use Kestra's default Docker task runner; give them taskRunner with
   type io.kestra.plugin.core.runner.Process to run them in the Kestra container, which has Python
   available. The JVM needs a minute to start. The image runs as the user kestra, named rather than given
-  as a uid, which the restricted level cannot check, so the environment needs the baseline pod security
-  level.
+  as a uid, so the template sets Run as user to 1000, its uid, and the app runs at the strictest pod
+  security level.

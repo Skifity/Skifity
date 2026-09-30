@@ -6,6 +6,7 @@ website: https://docs.mattermost.com
 services:
 - name: mattermost
   image: mattermost/mattermost-team-edition:11.11
+  run_as_user: 2000
   port: 8065
   public: true
   mem_request_mb: 128

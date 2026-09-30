@@ -6,6 +6,7 @@ website: https://foundryvtt.com/kb/
 services:
 - name: foundryvtt
   image: felddy/foundryvtt:14.367
+  run_as_user: 1000
   port: 30000
   public: true
   mem_request_mb: 128

@@ -6,6 +6,7 @@ website: https://github.com/metatool-ai/metamcp
 services:
 - name: app
   image: ghcr.io/metatool-ai/metamcp:2.4
+  run_as_user: 1001
   port: 12008
   public: true
   mem_request_mb: 128

@@ -6,6 +6,7 @@ website: https://chaskiq.io
 services:
 - name: chaskiq
   image: chaskiq/chaskiq:2.0.2
+  run_as_user: 1000
   port: 3000
   public: true
   mem_request_mb: 128
@@ -28,6 +29,7 @@ services:
     size_gb: 5
 - name: sidekiq
   image: chaskiq/chaskiq:2.0.2
+  run_as_user: 1000
   port: 0
   public: false
   mem_request_mb: 128

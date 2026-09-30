@@ -6,6 +6,7 @@ website: https://docs.nodebb.org/
 services:
 - name: nodebb
   image: ghcr.io/nodebb/nodebb:4.0
+  run_as_user: 1001
   port: 4567
   public: true
   mem_request_mb: 128

@@ -6,6 +6,7 @@ website: https://wakapi.dev/
 services:
 - name: wakapi
   image: ghcr.io/muety/wakapi:2.18
+  run_as_user: 65532
   port: 3000
   public: true
   mem_request_mb: 128

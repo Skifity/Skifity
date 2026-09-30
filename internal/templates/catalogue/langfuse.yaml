@@ -7,6 +7,7 @@ website: https://langfuse.com/docs
 services:
 - name: langfuse
   image: langfuse/langfuse:3.225.11
+  run_as_user: 1001
   port: 3000
   public: true
   mem_request_mb: 128
@@ -15,6 +16,7 @@ services:
   cpu_limit_m: 1000
 - name: langfuse-worker
   image: langfuse/langfuse-worker:3.225.11
+  run_as_user: 1001
   port: 0
   public: false
   mem_request_mb: 128

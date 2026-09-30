@@ -6,6 +6,7 @@ website: https://element.io
 services:
 - name: element
   image: vectorim/element-web:v1.12.30
+  run_as_user: 101
   port: 8080
   public: true
   health_path: /config.json
@@ -66,6 +67,6 @@ inputs:
   required: true
 notes: Element is only the client; it needs a Matrix homeserver, such as the Matrix Synapse template. Open
   this app's address and sign in with an account on the homeserver you entered. To change more than the
-  homeserver - branding, Jitsi, integrations - edit /app/config.json on the app's Files and redeploy. The
-  image runs as the user nginx, named rather than given as a uid, which the restricted level cannot
-  check, so the environment needs the baseline pod security level.
+  homeserver - branding, Jitsi, integrations - edit /app/config.json on the app's Files and redeploy.
+  The image runs as the user nginx, named rather than given as a uid, so the template sets Run as user
+  to 101, its uid, and the app runs at the strictest pod security level.

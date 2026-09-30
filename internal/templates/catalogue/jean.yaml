@@ -6,6 +6,7 @@ website: https://github.com/coollabsio/jean/blob/main/docs/headless-server.md
 services:
 - name: jean
   image: ghcr.io/coollabsio/jean-server:v0.1.73
+  run_as_user: 1000
   port: 3456
   public: true
   mem_request_mb: 128

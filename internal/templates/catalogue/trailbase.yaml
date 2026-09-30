@@ -6,6 +6,7 @@ website: https://trailbase.io/
 services:
 - name: trailbase
   image: trailbase/trailbase:0.22.6
+  run_as_user: 1000
   port: 4000
   public: true
   mem_request_mb: 128

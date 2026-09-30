@@ -7,6 +7,7 @@ website: https://docs.flowiseai.com/
 services:
 - name: flowise
   image: flowiseai/flowise:3.1.4
+  run_as_user: 1000
   port: 3001
   public: true
   mem_request_mb: 128

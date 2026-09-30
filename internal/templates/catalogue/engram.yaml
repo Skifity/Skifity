@@ -6,6 +6,7 @@ website: https://github.com/Gentleman-Programming/engram
 services:
 - name: engram
   image: ghcr.io/gentleman-programming/engram:2.2.1
+  run_as_user: 10001
   port: 8080
   public: true
   health_path: /health

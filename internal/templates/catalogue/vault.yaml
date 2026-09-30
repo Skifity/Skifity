@@ -6,6 +6,7 @@ website: https://developer.hashicorp.com/vault/docs/deploy/run-container
 services:
 - name: vault
   image: hashicorp/vault:2.1
+  run_as_user: 100
   port: 8200
   public: true
   mem_request_mb: 128

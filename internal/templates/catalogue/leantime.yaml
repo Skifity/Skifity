@@ -6,6 +6,7 @@ website: https://leantime.io
 services:
 - name: leantime
   image: leantime/leantime:3.9.8
+  run_as_user: 1000
   port: 8080
   public: true
   mem_request_mb: 128

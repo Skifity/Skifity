@@ -6,6 +6,7 @@ website: https://rustfs.com
 services:
 - name: rustfs
   image: rustfs/rustfs:1.0.0
+  run_as_user: 10001
   port: 9000
   public: true
   health_path: /health

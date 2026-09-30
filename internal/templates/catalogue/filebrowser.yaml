@@ -6,6 +6,7 @@ website: https://filebrowser.org
 services:
 - name: filebrowser
   image: filebrowser/filebrowser:v2.63.23
+  run_as_user: 1000
   port: 80
   public: true
   mem_request_mb: 128

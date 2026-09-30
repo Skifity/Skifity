@@ -6,6 +6,7 @@ website: https://www.goatcounter.com/help
 services:
 - name: goatcounter
   image: arp242/goatcounter:2.7
+  run_as_user: 1000
   port: 8080
   public: true
   mem_request_mb: 128

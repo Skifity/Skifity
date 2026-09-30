@@ -6,6 +6,7 @@ website: https://languagetool.org
 services:
 - name: languagetool
   image: erikvl87/languagetool:6.8
+  run_as_user: 100
   port: 8010
   public: true
   health_path: /v2/languages

@@ -7,6 +7,7 @@ website: https://prometheus.io/docs/alerting/latest/alertmanager/
 services:
 - name: alertmanager
   image: prom/alertmanager:v0.34.1
+  run_as_user: 65534
   port: 9093
   public: true
   health_path: /-/ready
@@ -54,5 +55,5 @@ notes: Alerts are received and shown, and sent nowhere, until a receiver is set.
   and redeploy. Point Prometheus at it with an alerting section naming alertmanager:9093 when both are in
   the same environment. Alertmanager has no sign-in of its own, so anybody with the address can see and
   silence alerts; keep the address to yourself, or make the app internal once Prometheus is next to it.
-  The image runs as the user nobody, named rather than given as a uid, which the restricted level cannot
-  check, so the environment needs the baseline pod security level.
+  The image runs as the user nobody, named rather than given as a uid, so the template sets Run as user
+  to 65534, its uid, and the app runs at the strictest pod security level.

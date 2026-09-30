@@ -7,6 +7,8 @@ website: https://www.sonarsource.com/products/sonarqube/
 services:
 - name: sonarqube
   image: sonarqube:26.9.0.129388-community
+  # The image's USER is sonarqube; the number lets the strict level check it.
+  run_as_user: 1000
   port: 9000
   public: true
   mem_request_mb: 2048
@@ -48,5 +50,5 @@ notes: Sign in as admin with the password admin; SonarQube asks for a new one st
   memory. SonarQube's embedded Elasticsearch prefers vm.max_map_count of at least 524288 on the server;
   a container cannot set that, so its start-up checks are turned off here - raise the limit on the
   servers with sysctl if large projects fail to index. The image runs as the user sonarqube, named
-  rather than given as a uid, which the restricted level cannot check, so the environment needs the
-  baseline pod security level.
+  rather than given as a uid, so the template sets Run as user to 1000, its uid, and the app runs at the
+  strictest pod security level.

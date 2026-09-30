@@ -6,6 +6,7 @@ website: https://kener.ing
 services:
 - name: kener
   image: rajnandan1/kener:4.1.5
+  run_as_user: 1000
   port: 3000
   public: true
   health_path: /healthcheck

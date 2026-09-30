@@ -6,6 +6,7 @@ website: https://capjs.js.org/guide/
 services:
 - name: cap
   image: tiago2/cap:3.0.4
+  run_as_user: 1000
   port: 3000
   public: true
   mem_request_mb: 128

@@ -8,6 +8,7 @@ beta: true
 services:
 - name: focalboard
   image: mattermost/focalboard:7.11.4
+  run_as_user: 65534
   port: 8000
   public: true
   mem_request_mb: 128

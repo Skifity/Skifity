@@ -6,6 +6,7 @@ website: https://www.bugsink.com/docs/
 services:
 - name: web
   image: bugsink/bugsink:2.6
+  run_as_user: 14237
   port: 8000
   public: true
   mem_request_mb: 128

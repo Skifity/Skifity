@@ -33,6 +33,7 @@ services:
     size_gb: 5
 - name: chrome
   image: ghcr.io/browserless/chrome:v2.56.7
+  run_as_user: 999
   port: 3000
   public: false
   mem_request_mb: 128

@@ -6,6 +6,7 @@ website: https://rybbit.io/docs
 services:
 - name: rybbit
   image: ghcr.io/rybbit-io/rybbit-client:v2.2.3
+  run_as_user: 1001
   port: 3002
   public: true
   mem_request_mb: 128

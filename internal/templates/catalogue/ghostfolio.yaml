@@ -7,6 +7,7 @@ website: https://ghostfol.io
 services:
 - name: ghostfolio
   image: ghostfolio/ghostfolio:3.76.0
+  run_as_user: 1000
   port: 3333
   public: true
   health_path: /api/v1/health
@@ -43,5 +44,5 @@ inputs:
 notes: Open the app's address and press Get Started; the first account created becomes the administrator,
   and signs in afterwards with the security token shown once at sign-up - keep it. The first start runs
   the database migrations and seeds the market data sources. The image runs as the user node, named
-  rather than given as a uid, which the restricted level cannot check, so the environment needs the
-  baseline pod security level.
+  rather than given as a uid, so the template sets Run as user to 1000, its uid, and the app runs at the
+  strictest pod security level.

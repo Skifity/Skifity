@@ -6,6 +6,7 @@ website: https://www.getoutline.com
 services:
 - name: outline
   image: outlinewiki/outline:1.10.1
+  run_as_user: 1001
   port: 3000
   public: true
   health_path: /_health

@@ -5,7 +5,7 @@ category: productivity
 website: https://github.com/sysadminsmedia/homebox
 services:
 - name: homebox
-  image: ghcr.io/sysadminsmedia/homebox:0.15
+  image: ghcr.io/sysadminsmedia/homebox:0.21.0
   port: 7745
   public: true
   mem_request_mb: 128

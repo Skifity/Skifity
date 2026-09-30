@@ -12,6 +12,7 @@ website: https://example.org     # https, and somewhere that explains the app
 services:
   - name: example                # a slug; it becomes a Kubernetes object
     image: example/app:2.4.1     # a release, never `latest` or `2` — see below
+    run_as_user: 65534           # only if the image's USER is a name: its uid
     port: 8080
     public: true                 # gets a domain; a worker would not
     health_path: /healthz        # optional, and only if it really exists

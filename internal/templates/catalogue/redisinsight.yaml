@@ -6,6 +6,7 @@ website: https://redis.io/insight/
 services:
 - name: redisinsight
   image: redis/redisinsight:3.8.0
+  run_as_user: 1000
   port: 5540
   public: true
   health_path: /api/health

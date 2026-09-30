@@ -7,6 +7,7 @@ website: https://docs.castopod.org/main/en/
 services:
 - name: castopod
   image: castopod/castopod:1.15.4
+  run_as_user: 33
   port: 8080
   public: true
   mem_request_mb: 128

@@ -36,6 +36,7 @@ services:
           editable: false
 - name: prometheus
   image: prom/prometheus:v3.15.0
+  run_as_user: 65534
   port: 9090
   public: false
   health_path: /-/ready
@@ -78,6 +79,6 @@ inputs:
 notes: This template installs 2 apps. Sign in to Grafana as admin with the password from the install; the
   Prometheus data source is already there, and Prometheus is scraping itself and Grafana. Prometheus has
   no domain and no sign-in of its own - it is reached only by Grafana, inside the environment. Add
-  targets by editing /etc/prometheus/prometheus.yml on the prometheus app's Files and redeploying it. The
-  Prometheus image runs as the user nobody, named rather than given as a uid, which the restricted level
-  cannot check, so the environment needs the baseline pod security level.
+  targets by editing /etc/prometheus/prometheus.yml on the prometheus app's Files and redeploying it.
+  The Prometheus image runs as the user nobody, named rather than given as a uid, so the template sets
+  Run as user to 65534, its uid, and both apps run at the strictest pod security level.

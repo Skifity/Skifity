@@ -20,6 +20,7 @@ services:
     size_gb: 5
 - name: memcached
   image: memcached:1.6
+  run_as_user: 11211
   port: 11211
   public: false
   mem_request_mb: 128

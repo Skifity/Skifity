@@ -6,6 +6,7 @@ website: https://chibisafe.app/docs/intro
 services:
 - name: chibisafe
   image: chibisafe/chibisafe:v6.5.5
+  run_as_user: 1001
   port: 8001
   public: false
   mem_request_mb: 128

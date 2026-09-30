@@ -7,6 +7,7 @@ website: https://marimo.io/
 services:
 - name: marimo
   image: ghcr.io/marimo-team/marimo:0.24.0
+  run_as_user: 1000
   port: 8080
   public: true
   mem_request_mb: 128

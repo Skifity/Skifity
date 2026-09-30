@@ -6,6 +6,7 @@ website: https://healthchecks.io
 services:
 - name: healthchecks
   image: healthchecks/healthchecks:v4.4
+  run_as_user: 999
   port: 8000
   public: true
   mem_request_mb: 256

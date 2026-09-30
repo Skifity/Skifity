@@ -7,6 +7,8 @@ website: https://guacamole.apache.org
 services:
 - name: guacamole
   image: guacamole/guacamole:1.6.0
+  # The image's USER is guacamole; the number lets the strict level check it.
+  run_as_user: 1001
   port: 8080
   public: true
   mem_request_mb: 256
@@ -21,6 +23,8 @@ services:
     REMOTE_IP_VALVE_ENABLED: 'true'
 - name: guacd
   image: guacamole/guacd:1.6.0
+  # The image's USER is guacd; the number lets the strict level check it.
+  run_as_user: 1000
   port: 4822
   public: false
   mem_request_mb: 128
@@ -873,5 +877,6 @@ notes: This template installs 3 apps - the web application, guacd, which makes t
   connections, and a small one that loads Guacamole's own schema into the database on its first start and
   then only waits. Sign in as guacadmin with the password guacadmin and change it straight away, then add
   connections under Settings. guacd dials the machines you connect to, so they must be reachable from the
-  cluster. The images name their users rather than giving a uid, which the restricted level cannot check,
-  so the environment needs the baseline pod security level.
+  cluster. The images name their users rather than giving a uid, so the template sets Run as user to
+  their uids - 1001 for guacamole and 1000 for guacd - and all three apps run at the strictest pod
+  security level.

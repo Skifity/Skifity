@@ -6,6 +6,7 @@ website: https://github.com/laurent22/joplin/blob/dev/packages/server/README.md
 services:
 - name: joplin
   image: joplin/server:3.7.2
+  run_as_user: 1001
   port: 22300
   public: true
   mem_request_mb: 128

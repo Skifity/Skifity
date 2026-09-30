@@ -6,6 +6,7 @@ website: https://etherpad.org
 services:
 - name: etherpad
   image: etherpad/etherpad:3.3.6
+  run_as_user: 5001
   port: 9001
   public: true
   health_path: /health

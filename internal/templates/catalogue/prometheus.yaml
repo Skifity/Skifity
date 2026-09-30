@@ -7,6 +7,7 @@ website: https://prometheus.io
 services:
 - name: prometheus
   image: prom/prometheus:v3.15.0
+  run_as_user: 65534
   port: 9090
   public: true
   health_path: /-/ready
@@ -37,5 +38,5 @@ notes: Prometheus starts scraping itself, which is enough to see it working. Add
   is reached by its name and port. Data is kept for fifteen days. Prometheus has no sign-in of its own,
   so anybody with the address can query it - keep the address to yourself, or make the app internal and
   read it through Grafana in the same environment. The image runs as the user nobody, named rather than
-  given as a uid, which the restricted level cannot check, so the environment needs the baseline pod
-  security level.
+  given as a uid, so the template sets Run as user to 65534, its uid, and the app runs at the strictest
+  pod security level.

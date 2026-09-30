@@ -22,6 +22,7 @@ services:
     size_gb: 5
 - name: guacd
   image: guacamole/guacd:1.6.0
+  run_as_user: 1000
   port: 4822
   public: false
   mem_request_mb: 128

@@ -6,6 +6,7 @@ website: https://github.com/amancevice/docker-superset
 services:
 - name: superset
   image: amancevice/superset:6.0.0
+  run_as_user: 1000
   port: 8088
   public: true
   mem_request_mb: 128

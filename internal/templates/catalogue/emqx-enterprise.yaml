@@ -6,6 +6,7 @@ website: https://www.emqx.io/docs/en/latest/deploy/install-docker.html
 services:
 - name: emqx
   image: emqx/emqx-enterprise:6.2.0
+  run_as_user: 1000
   port: 18083
   public: true
   mem_request_mb: 128

@@ -111,6 +111,11 @@ user is pinned; the group stays whatever the image says. Root cannot be
 chosen, and an app Skifity builds does not have the setting, because it always
 runs as 1000.
 
+The catalogue's templates carry the number already: every service whose image
+names its user — 109 of them, in 98 templates — has it, read from the image's
+own `/etc/passwd`, so a named user is never why a template needs **Accepts root
+images**.
+
 ## Variables, and why some rebuild and some do not
 
 An app's variables become environment variables inside it. There are two kinds,

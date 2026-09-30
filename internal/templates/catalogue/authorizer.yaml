@@ -7,6 +7,8 @@ website: https://authorizer.dev
 services:
 - name: authorizer
   image: quay.io/authorizer/authorizer:2.4.1
+  # The image's USER is authorizer; the number lets the strict level check it.
+  run_as_user: 1000
   port: 8080
   public: true
   health_path: /healthz
@@ -62,5 +64,5 @@ inputs:
 notes: Open /dashboard on the app's address and sign in with the admin secret. Point your applications at
   the public URL with the client ID. Email verification and magic links need SMTP, which is set with
   --smtp-host, --smtp-port, --smtp-username, --smtp-password and --smtp-sender-email added to the app's
-  start command. The image runs as the user authorizer, named rather than given as a uid, which the
-  restricted level cannot check, so the environment needs the baseline pod security level.
+  start command. The image runs as the user authorizer, named rather than given as a uid, so the
+  template sets Run as user to 1000, its uid, and the app runs at the strictest pod security level.

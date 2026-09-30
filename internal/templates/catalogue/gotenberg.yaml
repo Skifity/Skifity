@@ -6,6 +6,7 @@ website: https://gotenberg.dev/docs/getting-started/introduction
 services:
 - name: gotenberg
   image: gotenberg/gotenberg:8.37
+  run_as_user: 1001
   port: 3000
   public: true
   mem_request_mb: 128

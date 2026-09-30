@@ -18,6 +18,7 @@ services:
     size_gb: 5
 - name: dashboard
   image: ghcr.io/get-convex/convex-dashboard:a9a760ca10399ed42e1b4bb87c78539a235488c7
+  run_as_user: 1001
   port: 6791
   public: true
   mem_request_mb: 128

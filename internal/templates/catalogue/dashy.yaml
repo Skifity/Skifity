@@ -7,6 +7,7 @@ website: https://dashy.to/docs
 services:
 - name: dashy
   image: lissy93/dashy:4.6
+  run_as_user: 1000
   port: 8080
   public: true
   mem_request_mb: 128

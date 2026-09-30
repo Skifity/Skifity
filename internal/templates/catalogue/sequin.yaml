@@ -6,6 +6,7 @@ website: https://sequinstream.com/docs/
 services:
 - name: sequin
   image: sequin/sequin:v0.14.6
+  run_as_user: 1000
   port: 7376
   public: true
   mem_request_mb: 128

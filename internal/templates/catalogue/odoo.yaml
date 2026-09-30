@@ -6,6 +6,7 @@ website: https://www.odoo.com/
 services:
 - name: odoo
   image: odoo:18.0-20260926
+  run_as_user: 100
   port: 8069
   public: true
   mem_request_mb: 128

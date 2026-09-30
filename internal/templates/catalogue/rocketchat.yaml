@@ -8,6 +8,8 @@ beta: true
 services:
 - name: rocketchat
   image: registry.rocket.chat/rocketchat/rocket.chat:8.0.1
+  # The image's USER is rocketchat; the number lets the strict level check it.
+  run_as_user: 65533
   port: 3000
   public: true
   mem_request_mb: 128

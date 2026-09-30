@@ -6,6 +6,7 @@ website: https://docs.browserless.io/
 services:
 - name: browserless
   image: ghcr.io/browserless/chromium:v2.56.7
+  run_as_user: 999
   port: 3000
   public: true
   mem_request_mb: 128

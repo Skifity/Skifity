@@ -6,6 +6,7 @@ website: https://github.com/rahulhaque/soketi-app-manager-filament
 services:
 - name: soketi-app-manager
   image: ghcr.io/rahulhaque/soketi-app-manager-filament-alpine:1.1.7
+  run_as_user: 82
   port: 8080
   public: true
   mem_request_mb: 128

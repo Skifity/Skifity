@@ -6,6 +6,7 @@ website: https://www.drawio.com
 services:
 - name: drawio
   image: jgraph/drawio:31.5.3
+  run_as_user: 1001
   port: 8080
   public: true
   mem_request_mb: 256

@@ -6,6 +6,7 @@ website: https://glitchtip.com
 services:
 - name: web
   image: glitchtip/glitchtip:6.0
+  run_as_user: 5000
   port: 8000
   public: true
   mem_request_mb: 128
@@ -18,6 +19,7 @@ services:
     size_gb: 5
 - name: worker
   image: glitchtip/glitchtip:6.0
+  run_as_user: 5000
   port: 0
   public: false
   mem_request_mb: 128

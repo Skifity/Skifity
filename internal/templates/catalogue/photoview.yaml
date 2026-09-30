@@ -6,6 +6,7 @@ website: https://photoview.github.io
 services:
 - name: photoview
   image: photoview/photoview:2.4.0
+  run_as_user: 999
   port: 8080
   public: true
   mem_request_mb: 256

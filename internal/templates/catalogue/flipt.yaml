@@ -7,6 +7,7 @@ website: https://docs.flipt.io/cloud/overview
 services:
 - name: flipt
   image: flipt/flipt:v2.13.0
+  run_as_user: 100
   port: 8080
   public: true
   mem_request_mb: 128

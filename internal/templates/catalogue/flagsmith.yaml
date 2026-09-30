@@ -6,6 +6,7 @@ website: https://www.flagsmith.com
 services:
 - name: flagsmith
   image: flagsmith/flagsmith:2.278.0
+  run_as_user: 65534
   port: 8000
   public: true
   mem_request_mb: 256

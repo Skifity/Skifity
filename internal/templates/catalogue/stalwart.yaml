@@ -6,6 +6,7 @@ website: https://stalw.art/docs/
 services:
 - name: stalwart
   image: stalwartlabs/stalwart:v0.16.13
+  run_as_user: 2000
   port: 8080
   public: true
   mem_request_mb: 128

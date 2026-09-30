@@ -7,6 +7,7 @@ website: https://docs.anythingllm.com/installation-docker/overview
 services:
 - name: anything-llm
   image: mintplexlabs/anythingllm:1.16
+  run_as_user: 1000
   port: 3001
   public: true
   mem_request_mb: 128

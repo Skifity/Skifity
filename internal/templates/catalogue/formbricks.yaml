@@ -6,6 +6,7 @@ website: https://formbricks.com/docs/self-hosting/setup/docker
 services:
 - name: formbricks
   image: ghcr.io/formbricks/formbricks:4.5.0
+  run_as_user: 1001
   port: 3000
   public: true
   mem_request_mb: 128

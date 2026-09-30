@@ -6,6 +6,7 @@ website: https://invoiceshelf.com
 services:
 - name: invoiceshelf
   image: invoiceshelf/invoiceshelf:2.4.6
+  run_as_user: 82
   port: 8080
   public: true
   mem_request_mb: 192

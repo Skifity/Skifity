@@ -7,6 +7,7 @@ website: https://redash.io
 services:
 - name: redash
   image: redash/redash:26.9.0
+  run_as_user: 1000
   port: 5000
   public: true
   health_path: /ping
@@ -22,6 +23,7 @@ services:
     upgrade && exec /app/bin/docker-entrypoint server
 - name: redash-worker
   image: redash/redash:26.9.0
+  run_as_user: 1000
   port: 0
   public: false
   mem_request_mb: 512
@@ -36,6 +38,7 @@ services:
   command: exec /app/bin/docker-entrypoint worker
 - name: redash-scheduler
   image: redash/redash:26.9.0
+  run_as_user: 1000
   port: 0
   public: false
   mem_request_mb: 128
@@ -81,5 +84,5 @@ notes: This template installs 3 apps from the same image, started three ways - t
   for queries, schema refreshes and emails, and the scheduler. The web server creates the tables on the
   first start and runs the migrations on every start. Open its address to create the admin account and
   the first data source. Email is off until the REDASH_MAIL_ variables are set on all three. The image
-  runs as the user redash, named rather than given as a uid, which the restricted level cannot check, so
-  the environment needs the baseline pod security level.
+  runs as the user redash, named rather than given as a uid, so the template sets Run as user to 1000,
+  its uid, on all three, and they run at the strictest pod security level.

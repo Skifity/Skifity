@@ -6,6 +6,7 @@ website: https://www.adminer.org
 services:
 - name: adminer
   image: adminer:6.1.1
+  run_as_user: 100
   port: 8080
   public: true
   mem_request_mb: 64
