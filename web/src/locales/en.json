@@ -2850,5 +2850,82 @@
       "one_control_plane": "There is one control plane, so the Kubernetes API is unreachable for about a minute while it restarts. Apps keep serving, and the panel reconnects by itself.",
       "only_server": "This is the only server. Nothing new is scheduled while it is cordoned, so a deploy during the upgrade waits for it."
     }
+  },
+  "detect": {
+    "note": {
+      "dockerfile": "Found {{file}}, so it is used as-is.",
+      "compose_found": "Found {{file}}.",
+      "compose_unreadable": "It could not be read: {{error}}.",
+      "compose_empty": "No services were found in it.",
+      "compose_pick": "Skifity runs one service per app, so pick the service this app is. Create the others the same way, in the same environment, where they reach each other by name.",
+      "unknown": "Skifity could not tell what this repository is written in.",
+      "unknown_try": "It will try the zero-config builder, which may still work. If it does not, add a Dockerfile.",
+      "package_json_unparsable": "package.json could not be parsed, so the defaults are used.",
+      "next_port": "Next.js listens on port 3000 by default.",
+      "vite_static": "This looks like a front-end build: `npm run build` runs and the files it writes to `dist` are served directly, with no Node process in the image.",
+      "cra_static": "Create React App writes to `build`, which is served directly.",
+      "angular_static": "Angular writes to `dist/<project>`; check the directory under Source if the site comes up empty.",
+      "start_script": "The `start` script from package.json is used to run the app.",
+      "no_start_script": "package.json has no `start` script, so the builder has to guess how to run this. Adding one makes the deploy predictable.",
+      "node_version": "Node version {{version}} is requested by package.json.",
+      "django": "Django needs DJANGO_SETTINGS_MODULE and ALLOWED_HOSTS set, and collectstatic run during the build.",
+      "flask": "Flask's built-in server is not meant for production; the builder runs it behind gunicorn.",
+      "go_binary": "Go builds to a single binary, so the image will be small.",
+      "go_port": "Read the port from the PORT environment variable rather than hardcoding one.",
+      "laravel": "Laravel needs APP_KEY set. Generate one with `php artisan key:generate --show` and add it as a secret.",
+      "wordpress": "WordPress writes uploads to disk, so add a volume for wp-content/uploads before scaling past one instance.",
+      "php_no_composer": "There is no composer.json, so this was detected from the .php files alone.",
+      "rails": "Rails needs SECRET_KEY_BASE set, and RAILS_SERVE_STATIC_FILES=true unless something else serves the assets.",
+      "rust": "Rust builds take a while the first time; later builds reuse the cache.",
+      "spring": "The JVM needs a memory limit it knows about; the builder sets -XX:MaxRAMPercentage so it respects the container's limit.",
+      "static": "The files are served by a small web server; no application process runs.",
+      "procfile_release": "The Procfile's release line runs after each build and before the new version takes traffic.",
+      "procfile_bad_name": "The Procfile's {{name}} line cannot be a process under that name: add it on the app's page under a lowercase name of up to 20 letters, digits and hyphens.",
+      "procfile_processes": "The Procfile also names {{names}}, which run beside the app as its processes: the same build and variables, a command of their own, no port.",
+      "app_json_unreadable": "app.json could not be read: {{error}}.",
+      "app_json_postdeploy": "app.json's postdeploy script, `{{command}}`, becomes the seed for previews: it runs once in each new one. Run it here once with `skifity run -- {{command}}`."
+    }
+  },
+  "components": {
+    "cert-manager": {
+      "title": "HTTPS certificates",
+      "description": "Issues and renews Let's Encrypt certificates for your domains."
+    },
+    "registry": {
+      "title": "Image registry",
+      "description": "Stores the images Skifity builds, inside the cluster."
+    },
+    "buildkit": {
+      "title": "Builder",
+      "description": "Builds your apps into images, without needing Docker on the host."
+    },
+    "cloudnative-pg": {
+      "title": "PostgreSQL",
+      "description": "Runs and looks after PostgreSQL databases, including backups and failover."
+    },
+    "keda": {
+      "title": "Scale to zero",
+      "description": "Stops idle apps and starts them again on the first request. The HTTP add-on is beta upstream."
+    },
+    "longhorn": {
+      "title": "Cross-node storage",
+      "description": "Replicates volumes between servers so an app with storage survives a node failure. Uses a noticeable amount of memory on every node."
+    },
+    "firewall": {
+      "title": "Firewall",
+      "description": "Rules on who may reach an app: by address, by country, by network, by path or by header, combined with and and or. Needs Traefik, which k3s installs by default."
+    },
+    "cloudflare-tunnel": {
+      "title": "Cloudflare tunnel",
+      "description": "Puts your apps on the internet with no public IP and no port open, through Cloudflare. Needs a tunnel token in Settings, under Domains and HTTPS."
+    },
+    "system-upgrade": {
+      "title": "Kubernetes upgrades",
+      "description": "Upgrades k3s on every server, one at a time, when you ask for it under Settings. Installed with the first upgrade."
+    },
+    "monitoring": {
+      "title": "Full monitoring",
+      "description": "Prometheus and Grafana, installed with Helm rather than by the panel. Skifity shows CPU and memory for every server and every instance without it."
+    }
   }
 }

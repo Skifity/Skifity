@@ -648,6 +648,10 @@ export type Detection = {
   needs?: AppNeed[]
   /** Critical vulnerabilities in the framework versions the source installs. */
   advisories?: Advisory[]
+  /** The notes again, as codes the panel translates, in the same order. */
+  note_codes?: { code: string; params?: Record<string, string> }[]
+  /** app.json's postdeploy script: run once in each new preview. */
+  preview_seed?: string
   /** The Procfile's release line. */
   release_command?: string
   /** The Procfile's other lines, which run beside the app as its processes. */

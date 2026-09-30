@@ -60,3 +60,39 @@ func TestEverySettingHasItsWordsInTheInterface(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryComponentHasItsWordsInTheInterface: the same for the components,
+// whose title and description the Components tab showed in English whatever
+// the language, and whose English copy has to stay this one.
+func TestEveryComponentHasItsWordsInTheInterface(t *testing.T) {
+	locales, err := filepath.Glob(filepath.Join("..", "..", "web", "src", "locales", "*.json"))
+	if err != nil || len(locales) < 5 {
+		t.Fatalf("find the locales: %v", err)
+	}
+	for _, path := range locales {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var locale struct {
+			Components map[string]struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+			} `json:"components"`
+		}
+		if err := json.Unmarshal(body, &locale); err != nil {
+			t.Fatal(err)
+		}
+		english := filepath.Base(path) == "en.json"
+		for _, component := range Components {
+			words, ok := locale.Components[component.Name]
+			if !ok || words.Title == "" || words.Description == "" {
+				t.Errorf("%s: the component %q has no words: add components.%s", filepath.Base(path), component.Name, component.Name)
+				continue
+			}
+			if english && (words.Title != component.Title || words.Description != component.Description) {
+				t.Errorf("the component %q reads differently here and in en.json", component.Name)
+			}
+		}
+	}
+}

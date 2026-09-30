@@ -698,7 +698,9 @@ function ComponentsPanel() {
             <CardContent className="flex flex-wrap items-center gap-4 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{component.title}</span>
+                  <span className="font-medium">
+                    {t(`components.${component.name}.title`, { defaultValue: component.title })}
+                  </span>
                   {component.beta && (
                     <Badge variant="outline" className="text-[10px]">
                       {t("common.beta")}
@@ -715,7 +717,11 @@ function ComponentsPanel() {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">{component.description}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {t(`components.${component.name}.description`, {
+                    defaultValue: component.description,
+                  })}
+                </p>
                 {component.detail && (
                   <p className="mt-0.5 text-xs text-muted-foreground">{component.detail}</p>
                 )}
@@ -737,7 +743,11 @@ function ComponentsPanel() {
                   disabled={upgrade.isPending}
                   onClick={() =>
                     void confirmUpgrade({
-                      title: t("settings.componentUpgradeTitle", { name: component.title }),
+                      title: t("settings.componentUpgradeTitle", {
+                        name: t(`components.${component.name}.title`, {
+                          defaultValue: component.title,
+                        }),
+                      }),
                       description: t("settings.componentUpgradeConfirm", {
                         from: component.version || t("settings.componentVersionUnknown"),
                         to: component.wanted_version,

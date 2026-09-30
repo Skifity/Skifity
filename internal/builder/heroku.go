@@ -62,13 +62,13 @@ func applyProcfile(d *Detection, tree Tree) {
 			}
 		case "release":
 			d.ReleaseCommand = process.Command
-			d.Notes = append(d.Notes, "The Procfile's release line runs after each build and before the new version takes traffic.")
+			d.note("procfile_release", "The Procfile's release line runs after each build and before the new version takes traffic.")
 		default:
 			name, ok := ProcessName(process.Name)
 			if !ok {
-				d.Notes = append(d.Notes, fmt.Sprintf(
+				d.note("procfile_bad_name", fmt.Sprintf(
 					"The Procfile's %s line cannot be a process under that name: add it on the app's page "+
-						"under a lowercase name of up to 20 letters, digits and hyphens.", process.Name))
+						"under a lowercase name of up to 20 letters, digits and hyphens.", process.Name), "name", process.Name)
 				continue
 			}
 			process.Name = name
@@ -80,9 +80,9 @@ func applyProcfile(d *Detection, tree Tree) {
 		for _, process := range d.Processes {
 			names = append(names, process.Name)
 		}
-		d.Notes = append(d.Notes, fmt.Sprintf(
+		d.note("procfile_processes", fmt.Sprintf(
 			"The Procfile also names %s, which run beside the app as its processes: the same build and "+
-				"variables, a command of their own, no port.", strings.Join(names, ", ")))
+				"variables, a command of their own, no port.", strings.Join(names, ", ")), "names", strings.Join(names, ", "))
 	}
 }
 
@@ -138,7 +138,7 @@ func applyAppJSON(d *Detection, tree Tree) {
 	}
 	var manifest appJSON
 	if err := json.Unmarshal([]byte(raw), &manifest); err != nil {
-		d.Notes = append(d.Notes, "app.json could not be read: "+err.Error()+".")
+		d.note("app_json_unreadable", "app.json could not be read: "+err.Error()+".", "error", err.Error())
 		return
 	}
 
@@ -220,10 +220,13 @@ func applyAppJSON(d *Detection, tree Tree) {
 		_ = json.Unmarshal(manifest.Scripts.Postdeploy, &object)
 		postdeploy = object.Command
 	}
+	// Heroku runs postdeploy once in each new review app, which is what a
+	// seed for previews is here.
 	if postdeploy = strings.TrimSpace(postdeploy); postdeploy != "" {
-		d.Notes = append(d.Notes, fmt.Sprintf(
-			"app.json runs `%s` once after the first deploy. Run it the same way with `skifity run -- %s`.",
-			postdeploy, postdeploy))
+		d.PreviewSeed = postdeploy
+		d.note("app_json_postdeploy", fmt.Sprintf(
+			"app.json's postdeploy script, `%s`, becomes the seed for previews: it runs once in each new one. "+
+				"Run it here once with `skifity run -- %s`.", postdeploy, postdeploy), "command", postdeploy)
 	}
 }
 

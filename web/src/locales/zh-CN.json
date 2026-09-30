@@ -2834,5 +2834,82 @@
       "one_control_plane": "只有一个控制平面，所以它重启时 Kubernetes API 大约有一分钟无法访问。应用照常服务，面板会自己重新连接。",
       "only_server": "这是唯一的服务器。它被标记为不可调度期间不会调度新的东西，所以升级期间的部署会等待。"
     }
+  },
+  "detect": {
+    "note": {
+      "dockerfile": "找到了 {{file}}，所以按原样使用。",
+      "compose_found": "找到了 {{file}}。",
+      "compose_unreadable": "无法读取它：{{error}}。",
+      "compose_empty": "里面没有找到任何服务。",
+      "compose_pick": "Skifity 每个应用运行一个服务，所以请选出这个应用对应的服务。其他服务用同样的方式在同一个环境里创建，它们在那里按名称互相访问。",
+      "unknown": "Skifity 看不出这个仓库是用什么语言写的。",
+      "unknown_try": "它会尝试零配置构建器，也许仍然可以。如果不行，请添加一个 Dockerfile。",
+      "package_json_unparsable": "无法解析 package.json，所以使用默认值。",
+      "next_port": "Next.js 默认监听 3000 端口。",
+      "vite_static": "这看起来是一个前端构建：运行 `npm run build`，它写入 `dist` 的文件会被直接提供，镜像里没有 Node 进程。",
+      "cra_static": "Create React App 写入 `build`，该目录会被直接提供。",
+      "angular_static": "Angular 写入 `dist/<project>`；如果网站是空的，请检查“源代码”下的目录。",
+      "start_script": "使用 package.json 里的 `start` 脚本来运行应用。",
+      "no_start_script": "package.json 里没有 `start` 脚本，所以构建器只能猜测怎么运行它。加一个就能让部署可预期。",
+      "node_version": "package.json 要求 Node 版本 {{version}}。",
+      "django": "Django 需要设置 DJANGO_SETTINGS_MODULE 和 ALLOWED_HOSTS，并在构建时运行 collectstatic。",
+      "flask": "Flask 自带的服务器不适合生产环境；构建器会让它运行在 gunicorn 之后。",
+      "go_binary": "Go 会构建成单个二进制文件，所以镜像会很小。",
+      "go_port": "从 PORT 环境变量读取端口，而不是写死在代码里。",
+      "laravel": "Laravel 需要设置 APP_KEY。用 `php artisan key:generate --show` 生成一个，并作为密钥添加。",
+      "wordpress": "WordPress 会把上传文件写到磁盘，所以在扩展到多个实例之前，请为 wp-content/uploads 添加一个卷。",
+      "php_no_composer": "没有 composer.json，所以这是只根据 .php 文件判断的。",
+      "rails": "Rails 需要设置 SECRET_KEY_BASE，并在没有其他东西提供静态资源时设置 RAILS_SERVE_STATIC_FILES=true。",
+      "rust": "Rust 第一次构建需要一些时间；之后的构建会复用缓存。",
+      "spring": "JVM 需要一个它知道的内存上限；构建器会设置 -XX:MaxRAMPercentage，让它遵守容器的上限。",
+      "static": "这些文件由一个小型 Web 服务器提供；没有应用进程在运行。",
+      "procfile_release": "Procfile 的 release 行会在每次构建之后、新版本接收流量之前运行。",
+      "procfile_bad_name": "Procfile 的 {{name}} 行不能用这个名称作为进程：请在应用页面上用最多 20 个小写字母、数字和连字符组成的名称添加它。",
+      "procfile_processes": "Procfile 还列出了 {{names}}，它们作为应用的进程在应用旁边运行：同一次构建和同样的变量，各自的命令，没有端口。",
+      "app_json_unreadable": "无法读取 app.json：{{error}}。",
+      "app_json_postdeploy": "app.json 的 postdeploy 脚本 `{{command}}` 会成为预览的种子数据：在每个新预览里运行一次。可以在这里用 `skifity run -- {{command}}` 运行一次。"
+    }
+  },
+  "components": {
+    "cert-manager": {
+      "title": "HTTPS 证书",
+      "description": "为你的域名签发并续期 Let's Encrypt 证书。"
+    },
+    "registry": {
+      "title": "镜像仓库",
+      "description": "在集群内部保存 Skifity 构建的镜像。"
+    },
+    "buildkit": {
+      "title": "构建器",
+      "description": "把你的应用构建成镜像，主机上不需要 Docker。"
+    },
+    "cloudnative-pg": {
+      "title": "PostgreSQL",
+      "description": "运行并照管 PostgreSQL 数据库，包括备份和故障切换。"
+    },
+    "keda": {
+      "title": "缩容到零",
+      "description": "停止空闲的应用，并在第一个请求到来时重新启动。其 HTTP 插件在上游仍是测试版。"
+    },
+    "longhorn": {
+      "title": "跨节点存储",
+      "description": "在服务器之间复制卷，让带存储的应用在节点故障时仍能存活。每个节点都会占用相当多的内存。"
+    },
+    "firewall": {
+      "title": "防火墙",
+      "description": "规定谁可以访问应用：按地址、国家、网络、路径或请求头，用“且”和“或”组合。需要 k3s 默认安装的 Traefik。"
+    },
+    "cloudflare-tunnel": {
+      "title": "Cloudflare 隧道",
+      "description": "通过 Cloudflare 把你的应用放到互联网上，不需要公网 IP，也不开放端口。需要在“设置”的“域名和 HTTPS”里填写隧道令牌。"
+    },
+    "system-upgrade": {
+      "title": "Kubernetes 升级",
+      "description": "在你于“设置”中要求时，逐台升级每台服务器上的 k3s。随第一次升级安装。"
+    },
+    "monitoring": {
+      "title": "完整监控",
+      "description": "Prometheus 和 Grafana，用 Helm 安装而不是由面板安装。即使没有它们，Skifity 也会显示每台服务器和每个实例的 CPU 与内存。"
+    }
   }
 }

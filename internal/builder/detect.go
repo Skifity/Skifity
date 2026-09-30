@@ -60,7 +60,11 @@ type Detection struct {
 	// question rather than a statement.
 	Confidence string `json:"confidence"`
 	// Notes explain the decision, which is what makes the guess reviewable.
-	Notes []string `json:"notes,omitempty"`
+	// They are English, for the CLI and anything else reading the API;
+	// NoteCodes are the same notes in the same order, as codes the panel says
+	// in the reader's language.
+	Notes     []string `json:"notes,omitempty"`
+	NoteCodes []Note   `json:"note_codes,omitempty"`
 	// Compose are the services read from a Compose file, when the repository
 	// has one. A Compose file describes several services and an app runs one,
 	// so this is a list to choose from rather than something to build: the form
@@ -76,6 +80,9 @@ type Detection struct {
 	// Advisories are critical vulnerabilities in the framework versions the
 	// source installs. See advisories.go.
 	Advisories []Advisory `json:"advisories,omitempty"`
+	// PreviewSeed is app.json's postdeploy script, run once in each new
+	// preview. See heroku.go.
+	PreviewSeed string `json:"preview_seed,omitempty"`
 	// ReleaseCommand is the Procfile's release line. See heroku.go.
 	ReleaseCommand string `json:"release_command,omitempty"`
 	// Processes are the Procfile's other lines — a worker, a clock — which
@@ -166,8 +173,8 @@ func detectBuild(tree Tree) Detection {
 		d := Detection{
 			Builder: BuilderDockerfile, DockerfilePath: dockerfile,
 			Confidence: "high",
-			Notes:      []string{"Found " + dockerfile + ", so it is used as-is."},
 		}
+		d.note("dockerfile", "Found "+dockerfile+", so it is used as-is.", "file", dockerfile)
 		d.Port = portFromDockerfile(tree.Read(dockerfile))
 		d.Language = "Dockerfile"
 		return d
@@ -177,20 +184,19 @@ func detectBuild(tree Tree) Detection {
 		d := Detection{
 			Builder: BuilderCompose, Confidence: "high", Language: "Docker Compose",
 			DockerfilePath: compose,
-			Notes:          []string{"Found " + compose + "."},
 		}
+		d.note("compose_found", "Found "+compose+".", "file", compose)
 		services, warnings, err := ParseCompose(tree.Read(compose))
 		switch {
 		case err != nil:
-			d.Notes = append(d.Notes, "It could not be read: "+err.Error()+".")
+			d.note("compose_unreadable", "It could not be read: "+err.Error()+".", "error", err.Error())
 		case len(services) == 0:
-			d.Notes = append(d.Notes, "No services were found in it.")
+			d.note("compose_empty", "No services were found in it.")
 		default:
 			d.Compose, d.ComposeWarnings = services, warnings
-			d.Notes = append(d.Notes,
-				"Skifity runs one service per app, so pick the service this app is. "+
-					"Create the others the same way, in the same environment, where they "+
-					"reach each other by name.")
+			d.note("compose_pick", "Skifity runs one service per app, so pick the service this app is. "+
+				"Create the others the same way, in the same environment, where they "+
+				"reach each other by name.")
 		}
 		return d
 	}
@@ -220,13 +226,10 @@ func detectBuild(tree Tree) Detection {
 		return d
 	}
 
-	return Detection{
-		Builder: BuilderRailpack, Confidence: "low", Language: "unknown",
-		Notes: []string{
-			"Skifity could not tell what this repository is written in.",
-			"It will try the zero-config builder, which may still work. If it does not, add a Dockerfile.",
-		},
-	}
+	d := Detection{Builder: BuilderRailpack, Confidence: "low", Language: "unknown"}
+	d.note("unknown", "Skifity could not tell what this repository is written in.")
+	d.note("unknown_try", "It will try the zero-config builder, which may still work. If it does not, add a Dockerfile.")
+	return d
 }
 
 func findDockerfile(tree Tree) string {
@@ -268,7 +271,7 @@ func detectNode(tree Tree) (Detection, bool) {
 	if raw := tree.Read("package.json"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &pkg); err != nil {
 			d.Confidence = "medium"
-			d.Notes = append(d.Notes, "package.json could not be parsed, so the defaults are used.")
+			d.note("package_json_unparsable", "package.json could not be parsed, so the defaults are used.")
 		}
 	}
 
@@ -283,7 +286,7 @@ func detectNode(tree Tree) (Detection, bool) {
 	switch {
 	case deps["next"]:
 		d.Framework, d.Port = "Next.js", 3000
-		d.Notes = append(d.Notes, "Next.js listens on port 3000 by default.")
+		d.note("next_port", "Next.js listens on port 3000 by default.")
 	case deps["nuxt"], deps["nuxt3"]:
 		d.Framework, d.Port = "Nuxt", 3000
 	case deps["@nestjs/core"]:
@@ -309,31 +312,27 @@ func detectNode(tree Tree) (Detection, bool) {
 		// with the directory, and the image is built from what it produces.
 		d.Builder, d.Framework, d.Port = BuilderStatic, "Vite", 80
 		d.StaticDir, d.BuildCommand = "dist", "npm run build"
-		d.Notes = append(d.Notes,
-			"This looks like a front-end build: `npm run build` runs and the files it writes to `dist` are served directly, with no Node process in the image.")
+		d.note("vite_static", "This looks like a front-end build: `npm run build` runs and the files it writes to `dist` are served directly, with no Node process in the image.")
 	case deps["react-scripts"] && pkg.Scripts["build"] != "":
 		// Create React App writes to build/ rather than dist/, and a wrong
 		// directory here is an image with nothing in it.
 		d.Builder, d.Framework, d.Port = BuilderStatic, "Create React App", 80
 		d.StaticDir, d.BuildCommand = "build", "npm run build"
-		d.Notes = append(d.Notes,
-			"Create React App writes to `build`, which is served directly.")
+		d.note("cra_static", "Create React App writes to `build`, which is served directly.")
 	case deps["@angular/core"] && pkg.Scripts["build"] != "":
 		d.Builder, d.Framework, d.Port = BuilderStatic, "Angular", 80
 		d.StaticDir, d.BuildCommand = "dist", "npm run build"
-		d.Notes = append(d.Notes,
-			"Angular writes to `dist/<project>`; check the directory under Source if the site comes up empty.")
+		d.note("angular_static", "Angular writes to `dist/<project>`; check the directory under Source if the site comes up empty.")
 	}
 
 	if start := pkg.Scripts["start"]; start != "" {
-		d.Notes = append(d.Notes, "The `start` script from package.json is used to run the app.")
+		d.note("start_script", "The `start` script from package.json is used to run the app.")
 	} else if d.Builder != BuilderStatic {
 		d.Confidence = "medium"
-		d.Notes = append(d.Notes,
-			"package.json has no `start` script, so the builder has to guess how to run this. Adding one makes the deploy predictable.")
+		d.note("no_start_script", "package.json has no `start` script, so the builder has to guess how to run this. Adding one makes the deploy predictable.")
 	}
 	if version := pkg.Engines["node"]; version != "" {
-		d.Notes = append(d.Notes, "Node version "+version+" is requested by package.json.")
+		d.note("node_version", "Node version "+version+" is requested by package.json.", "version", version)
 	}
 	return d, true
 }
@@ -348,15 +347,13 @@ func detectPython(tree Tree) (Detection, bool) {
 	switch {
 	case strings.Contains(requirements, "django"):
 		d.Framework, d.Port = "Django", 8000
-		d.Notes = append(d.Notes,
-			"Django needs DJANGO_SETTINGS_MODULE and ALLOWED_HOSTS set, and collectstatic run during the build.")
+		d.note("django", "Django needs DJANGO_SETTINGS_MODULE and ALLOWED_HOSTS set, and collectstatic run during the build.")
 	case strings.Contains(requirements, "fastapi"):
 		d.Framework, d.Port = "FastAPI", 8000
 		d.HealthPath = "/docs"
 	case strings.Contains(requirements, "flask"):
 		d.Framework, d.Port = "Flask", 8000
-		d.Notes = append(d.Notes,
-			"Flask's built-in server is not meant for production; the builder runs it behind gunicorn.")
+		d.note("flask", "Flask's built-in server is not meant for production; the builder runs it behind gunicorn.")
 	case strings.Contains(requirements, "streamlit"):
 		d.Framework, d.Port = "Streamlit", 8501
 	}
@@ -369,9 +366,8 @@ func detectGo(tree Tree) (Detection, bool) {
 		return Detection{}, false
 	}
 	d := Detection{Builder: BuilderRailpack, Language: "Go", Confidence: "high", Port: 8080}
-	d.Notes = append(d.Notes,
-		"Go builds to a single binary, so the image will be small.",
-		"Read the port from the PORT environment variable rather than hardcoding one.")
+	d.note("go_binary", "Go builds to a single binary, so the image will be small.")
+	d.note("go_port", "Read the port from the PORT environment variable rather than hardcoding one.")
 	return d, true
 }
 
@@ -385,19 +381,17 @@ func detectPHP(tree Tree) (Detection, bool) {
 	case strings.Contains(composer, "laravel/framework"):
 		d.Framework = "Laravel"
 		d.StaticDir = "public"
-		d.Notes = append(d.Notes,
-			"Laravel needs APP_KEY set. Generate one with `php artisan key:generate --show` and add it as a secret.")
+		d.note("laravel", "Laravel needs APP_KEY set. Generate one with `php artisan key:generate --show` and add it as a secret.")
 	case strings.Contains(composer, "symfony/"):
 		d.Framework = "Symfony"
 		d.StaticDir = "public"
 	case tree.Has("wp-config.php") || tree.Has("wp-load.php"):
 		d.Framework = "WordPress"
-		d.Notes = append(d.Notes,
-			"WordPress writes uploads to disk, so add a volume for wp-content/uploads before scaling past one instance.")
+		d.note("wordpress", "WordPress writes uploads to disk, so add a volume for wp-content/uploads before scaling past one instance.")
 	}
 	if !tree.Has("composer.json") {
 		d.Confidence = "medium"
-		d.Notes = append(d.Notes, "There is no composer.json, so this was detected from the .php files alone.")
+		d.note("php_no_composer", "There is no composer.json, so this was detected from the .php files alone.")
 	}
 	return d, true
 }
@@ -409,8 +403,7 @@ func detectRuby(tree Tree) (Detection, bool) {
 	d := Detection{Builder: BuilderRailpack, Language: "Ruby", Confidence: "high", Port: 3000}
 	if strings.Contains(strings.ToLower(tree.Read("Gemfile")), "rails") {
 		d.Framework = "Ruby on Rails"
-		d.Notes = append(d.Notes,
-			"Rails needs SECRET_KEY_BASE set, and RAILS_SERVE_STATIC_FILES=true unless something else serves the assets.")
+		d.note("rails", "Rails needs SECRET_KEY_BASE set, and RAILS_SERVE_STATIC_FILES=true unless something else serves the assets.")
 	}
 	return d, true
 }
@@ -419,10 +412,9 @@ func detectRust(tree Tree) (Detection, bool) {
 	if !tree.Has("Cargo.toml") {
 		return Detection{}, false
 	}
-	return Detection{
-		Builder: BuilderRailpack, Language: "Rust", Confidence: "high", Port: 8080,
-		Notes: []string{"Rust builds take a while the first time; later builds reuse the cache."},
-	}, true
+	d := Detection{Builder: BuilderRailpack, Language: "Rust", Confidence: "high", Port: 8080}
+	d.note("rust", "Rust builds take a while the first time; later builds reuse the cache.")
+	return d, true
 }
 
 func detectJava(tree Tree) (Detection, bool) {
@@ -433,8 +425,7 @@ func detectJava(tree Tree) (Detection, bool) {
 	if strings.Contains(tree.Read("pom.xml")+tree.Read("build.gradle"), "spring-boot") {
 		d.Framework = "Spring Boot"
 		d.HealthPath = "/actuator/health"
-		d.Notes = append(d.Notes,
-			"The JVM needs a memory limit it knows about; the builder sets -XX:MaxRAMPercentage so it respects the container's limit.")
+		d.note("spring", "The JVM needs a memory limit it knows about; the builder sets -XX:MaxRAMPercentage so it respects the container's limit.")
 	}
 	return d, true
 }
@@ -450,11 +441,9 @@ func detectStatic(tree Tree) (Detection, bool) {
 			break
 		}
 	}
-	return Detection{
-		Builder: BuilderStatic, Language: "Static site", Confidence: "high",
-		Port: 80, StaticDir: dir,
-		Notes: []string{"The files are served by a small web server; no application process runs."},
-	}, true
+	d := Detection{Builder: BuilderStatic, Language: "Static site", Confidence: "high", Port: 80, StaticDir: dir}
+	d.note("static", "The files are served by a small web server; no application process runs.")
+	return d, true
 }
 
 // portFromDockerfile reads the first EXPOSE line, which is the closest thing a
@@ -746,4 +735,24 @@ func parseComposePort(entry any) int {
 		return port
 	}
 	return 0
+}
+
+// Note is one of a detection's notes as a code and its values.
+type Note struct {
+	Code   string            `json:"code"`
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// note adds a note in English and as a code, in step, so the panel can say
+// the one and anything else can read the other.
+func (d *Detection) note(code, text string, params ...string) {
+	d.Notes = append(d.Notes, text)
+	n := Note{Code: code}
+	for i := 0; i+1 < len(params); i += 2 {
+		if n.Params == nil {
+			n.Params = map[string]string{}
+		}
+		n.Params[params[i]] = params[i+1]
+	}
+	d.NoteCodes = append(d.NoteCodes, n)
 }

@@ -134,8 +134,9 @@ func TestAnAppJSONSaysWhatTheAppNeeds(t *testing.T) {
 	if strings.Join(missing, ",") != "STRIPE_KEY" {
 		t.Errorf("required with no value: %v", missing)
 	}
-	if !strings.Contains(strings.Join(d.Notes, " "), "skifity run -- npm run seed") {
-		t.Errorf("the postdeploy script was not mentioned: %v", d.Notes)
+	// Heroku runs postdeploy in each new review app: here, a preview's seed.
+	if d.PreviewSeed != "npm run seed" || !strings.Contains(strings.Join(d.Notes, " "), "skifity run -- npm run seed") {
+		t.Errorf("the postdeploy script became seed %q and notes %v", d.PreviewSeed, d.Notes)
 	}
 
 	// Two detections are two secrets.

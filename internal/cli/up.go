@@ -466,6 +466,9 @@ func createUploadApp(ctx context.Context, client *Client, cfg Config, req create
 	if d.ReleaseCommand != "" {
 		body["release_command"] = d.ReleaseCommand
 	}
+	if d.PreviewSeed != "" {
+		body["preview_seed"] = d.PreviewSeed
+	}
 	if len(req.databases) > 0 {
 		body["databases"] = req.databases
 	}

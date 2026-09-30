@@ -55,6 +55,8 @@ type createAppRequest struct {
 	HealthPath     string `json:"health_path,omitempty"`
 	StartCommand   string `json:"start_command,omitempty"`
 	ReleaseCommand string `json:"release_command,omitempty"`
+	// PreviewSeed runs once in each new preview of the app.
+	PreviewSeed string `json:"preview_seed,omitempty"`
 	// WatchPaths are the patterns a push has to touch to deploy the app, one
 	// per line. Empty means every push.
 	WatchPaths string `json:"watch_paths,omitempty"`
@@ -326,6 +328,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		StaticDir:      strings.TrimSpace(req.StaticDir),
 		StartCommand:   strings.TrimSpace(req.StartCommand),
 		ReleaseCommand: strings.TrimSpace(req.ReleaseCommand),
+		PreviewSeed:    strings.TrimSpace(req.PreviewSeed),
 		WatchPaths:     watch,
 		Internal:       req.Internal,
 		// Safe defaults, per the product principles: one instance, modest

@@ -2834,5 +2834,82 @@
       "one_control_plane": "Hanya ada satu control plane, jadi API Kubernetes tidak bisa dijangkau sekitar satu menit saat dimulai ulang. Aplikasi tetap melayani, dan panel tersambung kembali dengan sendirinya.",
       "only_server": "Ini satu-satunya server. Tidak ada yang baru dijadwalkan selama di-cordon, jadi deploy selama peningkatan akan menunggu."
     }
+  },
+  "detect": {
+    "note": {
+      "dockerfile": "{{file}} ditemukan, jadi dipakai apa adanya.",
+      "compose_found": "{{file}} ditemukan.",
+      "compose_unreadable": "Berkas itu tidak bisa dibaca: {{error}}.",
+      "compose_empty": "Tidak ada service di dalamnya.",
+      "compose_pick": "Skifity menjalankan satu service per aplikasi, jadi pilih service yang menjadi aplikasi ini. Buat yang lain dengan cara yang sama, di environment yang sama, tempat mereka saling menjangkau lewat nama.",
+      "unknown": "Skifity tidak bisa mengetahui bahasa yang dipakai repositori ini.",
+      "unknown_try": "Builder tanpa konfigurasi akan dicoba, dan mungkin tetap berhasil. Jika tidak, tambahkan Dockerfile.",
+      "package_json_unparsable": "package.json tidak bisa diurai, jadi nilai bawaan yang dipakai.",
+      "next_port": "Next.js mendengarkan port 3000 secara bawaan.",
+      "vite_static": "Ini tampak seperti build front-end: `npm run build` dijalankan dan berkas yang ditulisnya ke `dist` disajikan langsung, tanpa proses Node di dalam image.",
+      "cra_static": "Create React App menulis ke `build`, yang disajikan langsung.",
+      "angular_static": "Angular menulis ke `dist/<project>`; periksa direktori di bagian Sumber jika situsnya kosong.",
+      "start_script": "Skrip `start` dari package.json dipakai untuk menjalankan aplikasi.",
+      "no_start_script": "package.json tidak punya skrip `start`, jadi builder harus menebak cara menjalankannya. Menambahkannya membuat deploy bisa diperkirakan.",
+      "node_version": "package.json meminta Node versi {{version}}.",
+      "django": "Django membutuhkan DJANGO_SETTINGS_MODULE dan ALLOWED_HOSTS, serta collectstatic yang dijalankan saat build.",
+      "flask": "Server bawaan Flask tidak dimaksudkan untuk produksi; builder menjalankannya di belakang gunicorn.",
+      "go_binary": "Go dibangun menjadi satu berkas biner, jadi image-nya akan kecil.",
+      "go_port": "Baca port dari variabel lingkungan PORT, jangan menuliskannya langsung di kode.",
+      "laravel": "Laravel membutuhkan APP_KEY. Buat dengan `php artisan key:generate --show` lalu tambahkan sebagai rahasia.",
+      "wordpress": "WordPress menulis unggahan ke disk, jadi tambahkan volume untuk wp-content/uploads sebelum menskalakan lebih dari satu instans.",
+      "php_no_composer": "Tidak ada composer.json, jadi ini dideteksi dari berkas .php saja.",
+      "rails": "Rails membutuhkan SECRET_KEY_BASE, dan RAILS_SERVE_STATIC_FILES=true kecuali ada yang lain yang menyajikan aset.",
+      "rust": "Build Rust memakan waktu pada kali pertama; build berikutnya memakai cache.",
+      "spring": "JVM membutuhkan batas memori yang diketahuinya; builder menyetel -XX:MaxRAMPercentage agar mematuhi batas container.",
+      "static": "Berkas-berkasnya disajikan oleh server web kecil; tidak ada proses aplikasi yang berjalan.",
+      "procfile_release": "Baris release di Procfile dijalankan setelah setiap build dan sebelum versi baru menerima lalu lintas.",
+      "procfile_bad_name": "Baris {{name}} di Procfile tidak bisa menjadi proses dengan nama itu: tambahkan di halaman aplikasi dengan nama huruf kecil hingga 20 huruf, angka, dan tanda hubung.",
+      "procfile_processes": "Procfile juga menyebut {{names}}, yang berjalan di samping aplikasi sebagai prosesnya: build dan variabel yang sama, perintah sendiri, tanpa port.",
+      "app_json_unreadable": "app.json tidak bisa dibaca: {{error}}.",
+      "app_json_postdeploy": "Skrip postdeploy app.json, `{{command}}`, menjadi seed untuk pratinjau: dijalankan sekali di setiap pratinjau baru. Jalankan sekali di sini dengan `skifity run -- {{command}}`."
+    }
+  },
+  "components": {
+    "cert-manager": {
+      "title": "Sertifikat HTTPS",
+      "description": "Menerbitkan dan memperbarui sertifikat Let's Encrypt untuk domain Anda."
+    },
+    "registry": {
+      "title": "Registri image",
+      "description": "Menyimpan image yang dibangun Skifity, di dalam cluster."
+    },
+    "buildkit": {
+      "title": "Builder",
+      "description": "Membangun aplikasi Anda menjadi image, tanpa perlu Docker di host."
+    },
+    "cloudnative-pg": {
+      "title": "PostgreSQL",
+      "description": "Menjalankan dan merawat database PostgreSQL, termasuk cadangan dan failover."
+    },
+    "keda": {
+      "title": "Skala ke nol",
+      "description": "Menghentikan aplikasi yang menganggur dan menyalakannya lagi pada permintaan pertama. Add-on HTTP-nya masih beta di hulu."
+    },
+    "longhorn": {
+      "title": "Penyimpanan antar-node",
+      "description": "Mereplikasi volume antar server agar aplikasi dengan penyimpanan bertahan saat sebuah node gagal. Memakai memori yang cukup terasa di setiap node."
+    },
+    "firewall": {
+      "title": "Firewall",
+      "description": "Aturan tentang siapa yang boleh menjangkau aplikasi: berdasarkan alamat, negara, jaringan, path, atau header, digabung dengan dan serta atau. Membutuhkan Traefik, yang dipasang k3s secara bawaan."
+    },
+    "cloudflare-tunnel": {
+      "title": "Tunnel Cloudflare",
+      "description": "Menaruh aplikasi Anda di internet tanpa IP publik dan tanpa port terbuka, melalui Cloudflare. Membutuhkan token tunnel di Pengaturan, bagian Domain dan HTTPS."
+    },
+    "system-upgrade": {
+      "title": "Peningkatan Kubernetes",
+      "description": "Meningkatkan k3s di setiap server, satu per satu, saat Anda memintanya di Pengaturan. Dipasang bersama peningkatan pertama."
+    },
+    "monitoring": {
+      "title": "Pemantauan lengkap",
+      "description": "Prometheus dan Grafana, dipasang dengan Helm, bukan oleh panel. Skifity menampilkan CPU dan memori setiap server dan setiap instans tanpa itu."
+    }
   }
 }

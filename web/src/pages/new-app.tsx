@@ -229,6 +229,8 @@ export function NewAppPage() {
         static_dir: staticDir.trim(),
         start_command: startCommand.trim(),
         release_command: releaseCommand.trim(),
+        // app.json's postdeploy script, which Heroku runs in each review app.
+        preview_seed: sourceType === "image" ? "" : (found?.preview_seed ?? ""),
         // An app from a folder has no code until the folder is sent, which
         // happens below, once it exists.
         deploy: sourceType === "upload" ? false : deployNow,
@@ -874,9 +876,18 @@ function DetectionSummary({ detection }: { detection: Detection }) {
       </p>
       {detection.notes && detection.notes.length > 0 && (
         <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
-          {detection.notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
+          {detection.notes.map((note, index) => {
+            // The code is what is translated; the English is the fallback
+            // for a note this build of the interface has no words for.
+            const coded = detection.note_codes?.[index]
+            return (
+              <li key={note}>
+                {coded
+                  ? t(`detect.note.${coded.code}`, { ...coded.params, defaultValue: note })
+                  : note}
+              </li>
+            )
+          })}
         </ul>
       )}
       {detection.truncated && (
