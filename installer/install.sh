@@ -414,6 +414,12 @@ EOF
 # tell 20 ms from 80. Prometheus metrics themselves, and their per-service
 # labels, are on in k3s's Traefik already and are not touched. Changing this
 # file makes k3s upgrade Traefik, which restarts it one server at a time.
+#
+# An app that scales to zero is reached through an ExternalName Service that
+# aliases the KEDA interceptor (internal/kube/scaletozero.go), and Traefik's
+# Ingress provider refuses ExternalName backends unless told otherwise: every
+# such app answered 404. Only the panel writes Ingresses, so allowing them
+# lets nobody else point one anywhere.
 configure_ingress() {
 	ours="${K3S_MANIFESTS_DIR}/skifity-traefik.yaml"
 	mkdir -p "$K3S_MANIFESTS_DIR"
@@ -423,6 +429,7 @@ configure_ingress() {
 			note "Traefik is configured by $(basename "$other"); it is left as it is."
 			note "Set service.spec.externalTrafficPolicy: Local there, or the firewall sees one address for everybody."
 			note "Keep Traefik's Prometheus metrics on port 9100 there, or apps' requests are not counted."
+			note "Set providers.kubernetesIngress.allowExternalNameServices: true there, or apps that scale to zero answer 404."
 			return 0
 		fi
 	done
@@ -444,6 +451,9 @@ spec:
     metrics:
       prometheus:
         buckets: "0.005,0.01,0.025,0.05,0.1,0.25,0.5,1,2.5,5,10"
+    providers:
+      kubernetesIngress:
+        allowExternalNameServices: true
 TRAEFIK
 	if cmp -s "${ours}.new" "$ours" 2>/dev/null; then
 		rm -f "${ours}.new"

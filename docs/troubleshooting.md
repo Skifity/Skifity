@@ -108,6 +108,18 @@ The Logs tab has the output from before it died.
 If the app worked before, **Roll back**. That restores the previous image *and*
 the settings it ran with, so a bad variable is undone too.
 
+## An app that scales to zero answers 404
+
+An app that scales to zero is reached through a Service that points at KEDA's
+interceptor, and Traefik ignores such a Service unless it is told to accept
+them. Installs made before Skifity told it answer 404 for every app that scales
+to zero, while its other apps are fine.
+
+Run the installer again on the panel's server; it rewrites Traefik's
+configuration and changes nothing else. If Traefik is configured by a
+HelmChartConfig of your own, set
+`providers.kubernetesIngress.allowExternalNameServices: true` in it instead.
+
 ## A domain does not work
 
 The panel shows the DNS record to create, and **Check DNS** on the domain asks

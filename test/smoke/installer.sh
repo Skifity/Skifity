@@ -92,6 +92,12 @@ if grep -q 'buckets: "0.005,' "$manifests/skifity-traefik.yaml" 2>/dev/null; the
 else
   t_fail "Traefik was left with latency buckets too coarse to draw"
 fi
+# An app that scales to zero is routed through an ExternalName Service.
+if grep -q 'allowExternalNameServices: true' "$manifests/skifity-traefik.yaml" 2>/dev/null; then
+  t_pass "Traefik routes to the service an app that scales to zero is reached through"
+else
+  t_fail "Traefik refuses ExternalName backends, so an app that scales to zero answers 404"
+fi
 # An operator's own configuration of Traefik is not fought over.
 theirs="$WORKDIR/theirs"
 mkdir -p "$theirs"
