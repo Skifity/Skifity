@@ -113,6 +113,18 @@ func redactAttr(a slog.Attr) slog.Attr {
 	if a.Value.Kind() == slog.KindString {
 		return slog.String(a.Key, Scrub(a.Value.String()))
 	}
+	// An error is the usual carrier of a secret into a log: net/http's
+	// *url.Error quotes the whole address, with a Telegram bot's token in its
+	// path or a webhook's secret in its query. Only strings were scrubbed, and
+	// every `"error", err` is not one.
+	if a.Value.Kind() == slog.KindAny {
+		switch value := a.Value.Any().(type) {
+		case error:
+			return slog.String(a.Key, Scrub(value.Error()))
+		case fmt.Stringer:
+			return slog.String(a.Key, Scrub(value.String()))
+		}
+	}
 	return a
 }
 
@@ -147,11 +159,33 @@ func LooksSecret(key, value string) bool {
 // how Redis writes a password-only URL.
 var credentialInURL = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]*://[^/\s:@]*:[^/\s@]+@`)
 
+// addressSecrets are the parts of an address that are a secret, with what is
+// left of it: enough to tell which service it was, and not enough to use it.
+var addressSecrets = []struct {
+	re   *regexp.Regexp
+	with string
+}{
+	// scheme://user:password@host — a connection string, or a URL with
+	// credentials in it.
+	{regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.\-]*://[^/\s:@]*:)[^/\s@]+@`), "${1}" + Redacted + "@"},
+	// A Telegram bot's token is part of every address it is called at.
+	{regexp.MustCompile(`/bot\d+:[A-Za-z0-9_\-]{20,}`), "/bot" + Redacted},
+	// A Slack or Discord incoming webhook is its own secret.
+	{regexp.MustCompile(`(hooks\.slack\.com/(?:services|workflows|triggers)/)[A-Za-z0-9/_\-]+`), "${1}" + Redacted},
+	{regexp.MustCompile(`(discord(?:app)?\.com/api/webhooks/\d+/)[A-Za-z0-9_\-]+`), "${1}" + Redacted},
+	// A query parameter named like a secret: a presigned URL's signature and
+	// credential, an ?access_token=, a ?key=.
+	{regexp.MustCompile(`(?i)([?&][^=&\s"']*(?:token|key|secret|signature|password|credential|sig)[^=&\s"']*=)[^&\s"']+`), "${1}" + Redacted},
+}
+
 // Scrub removes secret-shaped substrings from free text. It is exported because
 // command output and build logs pass through it before reaching the UI.
 func Scrub(s string) string {
 	for _, re := range valuePatterns {
 		s = re.ReplaceAllString(s, Redacted)
+	}
+	for _, secret := range addressSecrets {
+		s = secret.re.ReplaceAllString(s, secret.with)
 	}
 	return s
 }

@@ -181,7 +181,11 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if session, ok := sessionFrom(r.Context()); ok {
 		keep = session.ID
 	}
-	if err := s.auth.ChangePassword(r.Context(), &user, req.CurrentPassword, req.NewPassword, keep); err != nil {
+	if err := s.auth.ChangePassword(r.Context(), &user, req.CurrentPassword, req.NewPassword, keep, clientIPFrom(r.Context())); err != nil {
+		if errors.Is(err, auth.ErrLockedOut) {
+			writeError(w, r, errdoc.RateLimited(s.auth.LockoutWindow().String()))
+			return
+		}
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			writeError(w, r, errdoc.BadRequest("Your current password is not correct.").
 				WithStatus(http.StatusUnauthorized))
@@ -326,6 +330,11 @@ type totpSetupResponse struct {
 func (s *Server) handleStartTOTP(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFrom(r.Context())
 	secret, uri, err := s.auth.SetupTOTP(r.Context(), &user, version.Name)
+	if errors.Is(err, auth.ErrTOTPAlreadyOn) {
+		writeError(w, r, errdoc.Conflict("Two-factor authentication is already on for this account.",
+			"Turn it off first, then set it up again with the new device."))
+		return
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -356,7 +365,11 @@ func (s *Server) handleConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.auth.ConfirmTOTP(r.Context(), &user, req.Code); err != nil {
+	keep := ""
+	if session, ok := sessionFrom(r.Context()); ok {
+		keep = session.ID
+	}
+	if err := s.auth.ConfirmTOTP(r.Context(), &user, req.Code, keep); err != nil {
 		if errors.Is(err, auth.ErrInvalidTOTP) {
 			writeError(w, r, errdoc.New("auth.invalid_totp", "That code is not correct").
 				WithCause("The six-digit code did not match the one this panel expects.").

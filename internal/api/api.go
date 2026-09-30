@@ -222,7 +222,7 @@ func (s *Server) routes() chi.Router {
 				team.Get("/audit", s.handleListAudit)
 				// Everything this team has, in one answer, so that leaving is
 				// a command rather than a project. See export_handlers.go.
-				team.Get("/export", s.handleExportTeam)
+				team.With(refuseScopedTokens).Get("/export", s.handleExportTeam)
 
 				team.Get("/projects", s.handleListProjects)
 				team.Post("/projects", s.handleCreateProject)
@@ -356,7 +356,7 @@ func (s *Server) routes() chi.Router {
 			authed.Route("/databases/{databaseID}", func(dbr chi.Router) {
 				dbr.Get("/", s.handleGetDatabase)
 				dbr.Delete("/", s.handleDeleteDatabase)
-				dbr.Get("/credentials", s.handleDatabaseCredentials)
+				dbr.With(refuseScopedTokens).Get("/credentials", s.handleDatabaseCredentials)
 				dbr.Post("/tunnel", s.handleDatabaseTunnel)
 				dbr.Post("/link", s.handleLinkDatabase)
 				dbr.Delete("/link/{appID}", s.handleUnlinkDatabase)
@@ -402,8 +402,12 @@ func (s *Server) routes() chi.Router {
 				admin.Post("/components/{name}/upgrade", s.handleUpgradeComponent)
 				admin.Get("/k3s/upgrade", s.handleK3sUpgradePlan)
 				admin.Post("/k3s/upgrade", s.handleStartK3sUpgrade)
-				admin.Post("/security/rotate-key", s.handleRotateMasterKey)
-				admin.Get("/security/recovery-key", s.handleRecoveryKey)
+				// The recovery key is the master key: every sealed column opens
+				// with it. A token never reads or replaces it, and a session
+				// only straight after its password — an admin's laptop left
+				// unlocked is not the admin.
+				admin.With(s.requireRecentAuth).Post("/security/rotate-key", s.handleRotateMasterKey)
+				admin.With(s.requireRecentAuth).Get("/security/recovery-key", s.handleRecoveryKey)
 				admin.Post("/security/recovery-key/saved", s.handleRecoveryKeySaved)
 				admin.Get("/upgrade", s.handleUpgradeStatus)
 				admin.Post("/upgrade", s.handleUpgrade)
@@ -695,8 +699,12 @@ func (s *Server) audit(r *http.Request, teamID, action, targetType, targetID, ta
 	if err := s.db.RecordAudit(context.WithoutCancel(r.Context()), &event); err != nil {
 		s.log.Warn("could not record audit event", "action", action, "error", err)
 	}
+	// Only that something was recorded: the team's topic is open to viewers,
+	// and the entry — who, from which address, with which command — is the
+	// audit log, which is an admin's to read. The activity page refetches the
+	// list, which checks.
 	if teamID != "" {
-		s.hub.Publish(events.TeamTopic(teamID), "audit", event)
+		s.hub.Publish(events.TeamTopic(teamID), "audit", struct{}{})
 	}
 }
 

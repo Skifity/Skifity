@@ -2,6 +2,7 @@ package builder
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"regexp"
@@ -771,10 +772,15 @@ COPY %s /srv
 	b.WriteString(`RUN printf ':80 {\n  root * /srv\n  file_server\n  try_files {path} /index.html\n  encode gzip\n}\n' > /etc/caddy/Caddyfile` + "\n")
 	b.WriteString("EXPOSE 80\n")
 
-	return fmt.Sprintf(`mkdir -p %s/.skifity
-cat > %s/.skifity/Dockerfile <<'SKIFITY_DOCKERFILE'
-%sSKIFITY_DOCKERFILE
-`, workspace, workspace, b.String())
+	// Written from base64, not a heredoc. The build command and the output
+	// folder are an app's settings, and a heredoc is ended by a line that
+	// says its marker: a build command of "\nSKIFITY_DOCKERFILE\n<anything>"
+	// closed it and ran <anything> in this container, which holds the
+	// registry's credentials for every team's images. Base64 is letters,
+	// digits and three symbols, and quoted besides.
+	encoded := base64.StdEncoding.EncodeToString([]byte(b.String()))
+	return fmt.Sprintf("mkdir -p %s/.skifity\nprintf '%%s' %s | base64 -d > %s/.skifity/Dockerfile\n",
+		workspace, shellsafe.Quote(encoded), workspace)
 }
 
 // cacheRef is where the build cache lives: the image's own repository, at a

@@ -81,6 +81,15 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	if contentType != "" && !strings.HasPrefix(contentType, "application/json") {
 		return errdoc.BadRequest(fmt.Sprintf("This endpoint expects application/json, not %q.", contentType))
 	}
+	// A browser only sends application/json from a page of this panel's own
+	// origin, or after a preflight this panel never answers. A body with no
+	// type at all is what a page on another subdomain can send with the
+	// visitor's cookies — a sign-in as the attacker, fixing the victim's
+	// session to theirs, is the attack — so without a token saying who is
+	// calling, the type is required.
+	if _, byToken := apiTokenFrom(r.Context()); contentType == "" && !byToken {
+		return errdoc.BadRequest("This endpoint expects a JSON body sent as application/json.")
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

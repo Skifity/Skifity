@@ -3,7 +3,10 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -153,6 +156,39 @@ func TestLooksSecretCatchesWhatAPastedEnvFileHolds(t *testing.T) {
 	} {
 		if got := LooksSecret(tc.key, tc.value); got != tc.secret {
 			t.Errorf("LooksSecret(%q, %q) = %v, want %v", tc.key, tc.value, got, tc.secret)
+		}
+	}
+}
+
+func TestAnErrorIsScrubbedLikeAString(t *testing.T) {
+	// net/http quotes the address it failed to reach, and for a Telegram bot
+	// or a Slack webhook the secret is the address. Only string attributes
+	// were scrubbed, and `"error", err` is not a string.
+	failure := &url.Error{Op: "Post", URL: "https://api.telegram.org/bot123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage",
+		Err: errors.New("connection refused")}
+	entry := capture(t, func(log *slog.Logger) {
+		log.Warn("a notification could not be delivered", "error", failure,
+			"wrapped", fmt.Errorf("deliver: %w", errors.New("Bearer abcdefghijklmnopqrstuvwxyz0123")))
+	})
+	for key, secret := range map[string]string{"error": "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw", "wrapped": "abcdefghijklmnopqrstuvwxyz0123"} {
+		text, _ := entry[key].(string)
+		if strings.Contains(text, secret) || text == "" {
+			t.Errorf("%s was logged as %q", key, text)
+		}
+	}
+}
+
+func TestAnAddressKeepsItsHostAndLosesItsSecret(t *testing.T) {
+	for in, want := range map[string]string{
+		"dial postgres://shop:hunter2@db.internal:5432/shop":                                               "dial postgres://shop:[redacted]@db.internal:5432/shop",
+		"POST https://hooks.slack.com/services/T000/B000/XXXXXXXXXXXXXXXXXXXXXXXX":                         "POST https://hooks.slack.com/services/[redacted]",
+		"POST https://discord.com/api/webhooks/1234567890/abcDEF_-token":                                   "POST https://discord.com/api/webhooks/1234567890/[redacted]",
+		"PUT https://s3.example.test/b/k?X-Amz-Credential=AKIA%2F&X-Amz-Signature=deadbeef&x-id=PutObject": "PUT https://s3.example.test/b/k?X-Amz-Credential=[redacted]&X-Amz-Signature=[redacted]&x-id=PutObject",
+		"GET https://api.example.test/v1?access_token=abc123&page=2":                                       "GET https://api.example.test/v1?access_token=[redacted]&page=2",
+		"nothing secret here: https://example.test/path?page=2":                                            "nothing secret here: https://example.test/path?page=2",
+	} {
+		if got := Scrub(in); got != want {
+			t.Errorf("Scrub(%q)\n got %q\nwant %q", in, got, want)
 		}
 	}
 }

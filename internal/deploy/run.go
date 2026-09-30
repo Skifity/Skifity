@@ -15,6 +15,7 @@ import (
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
+	"skifity/internal/logging"
 	"skifity/internal/store"
 )
 
@@ -221,7 +222,11 @@ func (d *Deployer) streamRun(ctx context.Context, deployment store.Deployment, n
 		scanner := bufio.NewScanner(stream)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
-			d.appendLog(ctx, deployment.ID, scanner.Text())
+			// Scrubbed as build output is: a release command runs with every
+			// one of the app's secrets in its environment, and a migration
+			// tool that prints its connection string prints the password —
+			// into a log every viewer of the team can read.
+			d.appendLog(ctx, deployment.ID, logging.Scrub(scanner.Text()))
 		}
 		stream.Close()
 	}

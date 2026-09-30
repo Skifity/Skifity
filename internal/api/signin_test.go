@@ -379,3 +379,25 @@ func TestSteppingUpIsRateLimitedLikeSigningIn(t *testing.T) {
 	}
 	t.Fatalf("%d wrong passwords in a row and the step-up never paused", limit+2)
 }
+
+func TestASignInWithNoContentTypeIsRefused(t *testing.T) {
+	// A page on a sibling subdomain can POST a body with no type and the
+	// visitor's cookies, and read nothing back — enough to sign the visitor in
+	// as the attacker. A body with no type is refused unless a token says who
+	// is calling.
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	body, _ := json.Marshal(map[string]string{"email": acme.user.Email, "password": "whatever"})
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, h.server.URL+"/api/auth/login", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := h.server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest || len(resp.Cookies()) != 0 {
+		t.Fatalf("a sign-in with no content type answered %d with %d cookies", resp.StatusCode, len(resp.Cookies()))
+	}
+}

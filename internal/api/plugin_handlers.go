@@ -135,7 +135,7 @@ type installPluginRequest struct {
 }
 
 func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	user, err := s.requirePluginAdmin(r)
+	user, err := s.requirePluginChange(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -218,7 +218,7 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requirePluginAdmin(r); err != nil {
+	if _, err := s.requirePluginChange(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -260,7 +260,7 @@ type updatePluginRequest struct {
 }
 
 func (s *Server) handleUpdatePlugin(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.requirePluginAdmin(r); err != nil {
+	if _, err := s.requirePluginChange(r); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -468,6 +468,25 @@ func (s *Server) requirePluginAdmin(r *http.Request) (store.User, error) {
 	}
 	if !user.IsAdmin {
 		return store.User{}, errdoc.Forbidden("installing, changing and removing plugins, which only a panel administrator may do")
+	}
+	return user, nil
+}
+
+// requirePluginChange is requirePluginAdmin for installing, changing and
+// removing a plugin, which also wants a person rather than an API token:
+// installing mints a token that outlives the request and is bound to no team,
+// which is what creating a token by hand refuses to a token.
+func (s *Server) requirePluginChange(r *http.Request) (store.User, error) {
+	user, err := s.requirePluginAdmin(r)
+	if err != nil {
+		return store.User{}, err
+	}
+	if _, byToken := apiTokenFrom(r.Context()); byToken {
+		return store.User{}, errdoc.New("auth.needs_person", "This has to be done from the panel").
+			WithCause("Plugins are installed and changed by an administrator signed in to the panel, not by an API token.").
+			WithImpact("Nothing was changed.").
+			WithFix("Sign in to the panel and do it there.").
+			WithStatus(http.StatusForbidden)
 	}
 	return user, nil
 }

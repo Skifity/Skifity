@@ -20,6 +20,18 @@ func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// A token made for one team sees that team: the binding exists so a
+	// token cannot be used to find out which other teams there are, and the
+	// list of them was the one place it did not hold.
+	if token, ok := apiTokenFrom(r.Context()); ok && token.TeamID != "" {
+		bound := teams[:0:0]
+		for _, team := range teams {
+			if team.ID == token.TeamID {
+				bound = append(bound, team)
+			}
+		}
+		teams = bound
+	}
 	writeList(w, teams)
 }
 
@@ -29,6 +41,10 @@ type createTeamRequest struct {
 
 func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFrom(r.Context())
+	if token, ok := apiTokenFrom(r.Context()); ok && token.TeamID != "" {
+		writeError(w, r, errdoc.Forbidden("creating a team with a token made for one team"))
+		return
+	}
 	var req createTeamRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, r, err)
@@ -252,6 +268,13 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrNotFound):
 	case err != nil:
 		writeError(w, r, err)
+		return
+	case !actorMembership.Role.AtLeast(existing.Role):
+		// Changing somebody's role is deciding about them, and an admin does
+		// not decide about an owner: demoting one to viewer and then removing
+		// the viewer was an admin removing an owner, which the removal
+		// check refuses when asked directly.
+		writeError(w, r, errdoc.Forbidden("changing the role of somebody whose role is higher than your own"))
 		return
 	case existing.Role == store.RoleOwner && req.Role != store.RoleOwner:
 		count, err := s.db.CountOwners(r.Context(), teamID)

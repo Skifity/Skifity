@@ -68,6 +68,11 @@ func Allowed(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}
+	for _, metadata := range metadataAddresses {
+		if metadata.Equal(ip) {
+			return false
+		}
+	}
 	switch {
 	case ip.IsUnspecified(),
 		ip.IsLoopback(),
@@ -78,6 +83,17 @@ func Allowed(ip net.IP) bool {
 		return false
 	}
 	return true
+}
+
+// metadataAddresses are the metadata services that do not live on the
+// link-local range the check below already refuses: AWS's over IPv6, which is
+// a unique-local address, Alibaba Cloud's, and Oracle Cloud's second one. Each
+// hands out the machine's credentials to whatever asks, like the one on
+// 169.254.169.254.
+var metadataAddresses = []net.IP{
+	net.ParseIP("fd00:ec2::254"),
+	net.ParseIP("100.100.100.200"),
+	net.ParseIP("192.0.0.192"),
 }
 
 // Dialer is a net.Dialer that refuses the addresses above.

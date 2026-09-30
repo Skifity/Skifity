@@ -94,6 +94,15 @@ func ValidHostname(host string) bool {
 // staying unique.
 func NamespaceFor(teamSlug, projectSlug, envSlug string) string {
 	full := fmt.Sprintf("%s-%s-%s", teamSlug, projectSlug, envSlug)
+	// Team, project and environment are names anybody signed in can choose,
+	// so "skifity", "plugin" and a plugin's id spelled out the namespace a
+	// plugin runs in — and an app there, applied over the plugin's own
+	// objects, was sent the plugin's events and asked to allow deploys. A
+	// namespace that is the panel's, a component's or the cluster's is not
+	// one an environment can have.
+	if ReservedNamespace(full) {
+		full = "env-" + full
+	}
 	if len(full) <= maxLabelLength && ValidLabel(full) {
 		return full
 	}
@@ -106,6 +115,26 @@ func NamespaceFor(teamSlug, projectSlug, envSlug string) string {
 	}
 	head := strings.TrimRight(full[:min(room, len(full))], "-")
 	return head + suffix
+}
+
+// reservedNamespaces are the namespaces, and the prefixes of namespaces, that
+// belong to the panel, the components it installs, or Kubernetes itself.
+var reservedNamespaces = []string{
+	"skifity-", "kube-", "cattle-", "system-", "cert-manager", "cnpg-", "longhorn-", "keda", "tigera-", "calico-",
+}
+
+// ReservedNamespace reports whether a namespace is one no environment may be
+// given.
+func ReservedNamespace(namespace string) bool {
+	if namespace == "default" {
+		return true
+	}
+	for _, reserved := range reservedNamespaces {
+		if strings.HasPrefix(namespace, reserved) {
+			return true
+		}
+	}
+	return false
 }
 
 // ResourceName builds a Kubernetes object name for an app and a suffix, such as

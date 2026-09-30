@@ -460,12 +460,18 @@ func cloneSecretName(gitSourceID string) string {
 	return kube.ResourceName("git", strings.ReplaceAll(gitSourceID, "_", "-"))
 }
 
+// shortID is the part of a deployment's id that tells it apart from every
+// other: the end. An id starts with its time, so the first eight characters
+// were the same for every deployment in the same quarter of a second — and
+// the build Job, and the Secret with its variables, live in one namespace for
+// every team, so two apps called "web" deploying together shared a Job name,
+// deleted each other's builds and could read each other's build values.
 func shortID(id string) string {
 	if idx := strings.IndexByte(id, '_'); idx >= 0 {
 		id = id[idx+1:]
 	}
-	if len(id) > 8 {
-		return id[:8]
+	if len(id) > 10 {
+		return id[len(id)-10:]
 	}
 	return id
 }

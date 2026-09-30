@@ -397,8 +397,15 @@ func (e EventSubscription) Timeout() int {
 	return e.TimeoutSeconds
 }
 
-// Scopes is the permission list as an API token's scope string.
-func (m Manifest) Scopes() string { return strings.Join(m.Permissions, ",") }
+// Scopes is the permission list as an API token's scope string. No
+// permissions is a token that may do nothing, never the empty string, which a
+// token reads as everything.
+func (m Manifest) Scopes() string {
+	if len(m.Permissions) == 0 {
+		return auth.ScopeNone
+	}
+	return strings.Join(m.Permissions, ",")
+}
 
 // BlocksDeploys reports whether this plugin can stop a deploy, which is the one
 // thing an administrator has to be told in plain words before installing.

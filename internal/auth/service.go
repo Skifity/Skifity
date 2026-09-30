@@ -451,6 +451,13 @@ func (s *Service) Logout(ctx context.Context, sessionID string) error {
 // SetupTOTP generates a secret for a user and returns it with its otpauth URI.
 // The secret is not enabled until a code from it is confirmed.
 func (s *Service) SetupTOTP(ctx context.Context, user *store.User, issuer string) (secret, uri string, err error) {
+	// Starting over on an account that has two-factor switched it off until
+	// the new code was confirmed — silently, with nothing in the audit log —
+	// so a step-up on a borrowed session turned protection off by "setting it
+	// up again". Turning it off is its own, audited, step.
+	if user.TOTPEnabled {
+		return "", "", ErrTOTPAlreadyOn
+	}
 	secret, err = GenerateTOTPSecret()
 	if err != nil {
 		return "", "", err
@@ -486,8 +493,14 @@ func (s *Service) RecoveryCodesLeft(ctx context.Context, userID string) (int, er
 	return s.db.CountRecoveryCodes(ctx, userID)
 }
 
-// ConfirmTOTP enables two-factor once the user proves they can generate a code.
-func (s *Service) ConfirmTOTP(ctx context.Context, user *store.User, code string) error {
+// ErrTOTPAlreadyOn is setting two-factor up on an account that has it.
+var ErrTOTPAlreadyOn = errors.New("two-factor authentication is already on; turn it off first to set it up again")
+
+// ConfirmTOTP enables two-factor once the user proves they can generate a code,
+// and signs out every other session. A session somebody else took before now
+// did not pass the second factor, and every session of an account with it
+// counts as having done so.
+func (s *Service) ConfirmTOTP(ctx context.Context, user *store.User, code, keepSessionID string) error {
 	if user.TOTPSecretEnc == "" {
 		return errors.New("two-factor setup has not been started")
 	}
@@ -505,7 +518,19 @@ func (s *Service) ConfirmTOTP(ctx context.Context, user *store.User, code string
 		return err
 	}
 	user.TOTPEnabled = true
-	return s.db.UpdateUser(ctx, user)
+	if err := s.db.UpdateUser(ctx, user); err != nil {
+		return err
+	}
+	sessions, err := s.db.ListSessions(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	for _, session := range sessions {
+		if session.ID != keepSessionID {
+			_ = s.db.DeleteSession(ctx, session.ID)
+		}
+	}
+	return nil
 }
 
 // DisableTOTP turns two-factor off and forgets the secret.
@@ -521,10 +546,18 @@ func (s *Service) DisableTOTP(ctx context.Context, user *store.User) error {
 }
 
 // ChangePassword sets a new password and signs every other session out.
-func (s *Service) ChangePassword(ctx context.Context, user *store.User, current, next, keepSessionID string) error {
+func (s *Service) ChangePassword(ctx context.Context, user *store.User, current, next, keepSessionID, ip string) error {
+	// Metered like signing in and stepping up. Without it a stolen session or
+	// a narrow token was an unmetered way to guess the password — and a right
+	// guess set a new one.
+	if err := s.checkLockout(ctx, user.Email, ip); err != nil {
+		return err
+	}
 	if err := s.verifyPassword(ctx, current, user.PasswordHash); err != nil {
+		s.recordFailure(ctx, user.Email, ip)
 		return ErrInvalidCredentials
 	}
+	_ = s.db.ClearLoginAttempts(ctx, user.Email)
 	if err := DefaultPasswordPolicy().Check(next); err != nil {
 		return err
 	}

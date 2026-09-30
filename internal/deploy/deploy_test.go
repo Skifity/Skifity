@@ -681,3 +681,17 @@ func TestTheDefaultBuilderSettingIsActuallyRead(t *testing.T) {
 		t.Fatalf("a Dockerfile was overruled by the default builder: got %q", got)
 	}
 }
+
+func TestTwoDeploymentsAtOnceHaveTwoBuildNames(t *testing.T) {
+	// Every team's builds share one namespace. Ids made in the same instant
+	// used to give the same build name, and with it one Job and one Secret of
+	// build variables for two apps.
+	seen := map[string]bool{}
+	for range 200 {
+		name := shortID(store.NewID("dep"))
+		if seen[name] {
+			t.Fatalf("two deployments made together share the build name %q", name)
+		}
+		seen[name] = true
+	}
+}

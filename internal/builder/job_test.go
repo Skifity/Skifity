@@ -269,7 +269,7 @@ func TestStaticSiteGeneratesItsOwnDockerfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildJob: %v", err)
 	}
-	script := job.Spec.Template.Spec.Containers[0].Args[0]
+	script := withDockerfile(t, job.Spec.Template.Spec.Containers[0].Args[0])
 	if !strings.Contains(script, "FROM caddy:2-alpine") {
 		t.Fatalf("no Dockerfile was generated for the static site:\n%s", script)
 	}
@@ -499,7 +499,7 @@ func TestAFrontEndIsBuiltBeforeItIsServed(t *testing.T) {
 	spec.BuildCommand = "npm run build"
 	spec.Defaults()
 
-	script := buildScript(spec)
+	script := withDockerfile(t, buildScript(spec))
 
 	if !strings.Contains(script, "AS build") {
 		t.Fatalf("there is no build stage, so nothing produces dist:\n%s", script)
@@ -527,7 +527,7 @@ func TestAPlainStaticSiteIsStillJustCopied(t *testing.T) {
 	spec.StaticDir = "public"
 	spec.Defaults()
 
-	script := buildScript(spec)
+	script := withDockerfile(t, buildScript(spec))
 	if strings.Contains(script, "AS build") {
 		t.Fatalf("a site with nothing to build got a build stage:\n%s", script)
 	}
@@ -549,9 +549,19 @@ func TestAServedImageNeverCarriesTheRepositorysGitDirectory(t *testing.T) {
 		spec.StaticDir = dir
 		spec.Defaults()
 
-		script := buildScript(spec)
+		script := withDockerfile(t, buildScript(spec))
 		if !strings.Contains(script, "rm -rf /srv/.git") {
 			t.Errorf("a static build with dir %q does not remove .git:\n%s", dir, script)
 		}
 	}
+}
+
+// withDockerfile is a build script with the Dockerfile it writes, when it
+// writes one, decoded after it: what a test reads is what runs.
+func withDockerfile(t *testing.T, script string) string {
+	t.Helper()
+	if !strings.Contains(script, "| base64 -d > ") {
+		return script
+	}
+	return script + "\n" + staticDockerfile(t, script)
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -102,6 +103,31 @@ func TestAnAccountWithNoPasswordIsLinkedByItsAddress(t *testing.T) {
 	}
 	if linked, _ := h.db.IdentitiesForUser(t.Context(), existing.ID); len(linked) != 1 {
 		t.Fatalf("the identity was not recorded: %+v", linked)
+	}
+
+	// Once. The account now has an identity, and another one naming the same
+	// address — another provider, or an attacker's account at this one — is
+	// not it.
+	if _, reason := h.api.ssoAccount(ssoRequest(), auth.Identity{
+		Issuer: "https://other-idp.example.test", Subject: "attacker", Email: "sso@example.test",
+	}, auth.OIDCConfig{}); reason != "link_required" {
+		t.Fatalf("a second, unverified identity signed into an account made by single sign-on (reason %q)", reason)
+	}
+}
+
+func TestTheAddressToGoBackToIsOnThisPanel(t *testing.T) {
+	for next, want := range map[string]string{
+		"/apps/app_1":            "/apps/app_1",
+		"//evil.example":         "",
+		"/\\evil.example":        "",
+		"/\t/evil.example":       "",
+		"https://evil.example/x": "",
+		"apps":                   "",
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/api/auth/sso/start?next="+url.QueryEscape(next), nil)
+		if got := safeNext(r); got != want {
+			t.Errorf("next %q became %q, want %q", next, got, want)
+		}
 	}
 }
 

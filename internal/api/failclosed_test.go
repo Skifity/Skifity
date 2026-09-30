@@ -88,6 +88,15 @@ func TestAnAdminCannotRemoveAnOwner(t *testing.T) {
 		t.Fatalf("an admin removed an owner: %d %s", status, body)
 	}
 
+	// Nor in two steps: made a viewer first, then removed as one.
+	status, body = h.do(admin, http.MethodPost, "/api/teams/"+acme.team.ID+"/members",
+		map[string]any{"email": secondOwner.user.Email, "role": "viewer"})
+	if status != http.StatusForbidden {
+		t.Fatalf("an admin demoted an owner: %d %s", status, body)
+	}
+	if membership, _ := h.db.GetMembership(t.Context(), acme.team.ID, secondOwner.user.ID); membership.Role != store.RoleOwner {
+		t.Fatalf("the owner is now %s", membership.Role)
+	}
 }
 
 // The guard above reads the actor's own role a second time, and used to allow

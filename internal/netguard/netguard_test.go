@@ -25,6 +25,10 @@ func TestWhatIsRefusedAndWhatIsNot(t *testing.T) {
 		{"::1", false, "the panel itself, v6"},
 		{"0.0.0.0", false, "the unspecified address"},
 		{"224.0.0.1", false, "multicast"},
+		// The metadata services that are not on the link-local range.
+		{"fd00:ec2::254", false, "AWS's metadata service over IPv6"},
+		{"100.100.100.200", false, "Alibaba Cloud's metadata service"},
+		{"192.0.0.192", false, "Oracle Cloud's metadata service"},
 
 		// Allowed on purpose. A self-hosted Gitea on a private network and a
 		// webhook receiver on the same LAN are what this product is for;

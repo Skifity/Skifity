@@ -264,6 +264,10 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, errdoc.BadRequest("Enter the image to run, for example nginx:1.27."))
 			return
 		}
+		if err := s.checkImageReference(r.Context(), req.Image, env.Namespace); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	case "upload":
 		// The code arrives afterwards, from `skifity up`, and nothing from a
 		// repository or an image applies to it.
@@ -644,6 +648,16 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	app.RootDir = strings.TrimPrefix(app.RootDir, "/")
 	assignString(&app.Builder, req.Builder)
 	assignString(&app.DockerfilePath, req.DockerfilePath)
+	if req.Image != nil {
+		env, err := s.db.GetEnvironment(r.Context(), app.EnvironmentID)
+		if err == nil {
+			err = s.checkImageReference(r.Context(), *req.Image, env.Namespace)
+		}
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
 	assignString(&app.Image, req.Image)
 	assignString(&app.HealthPath, req.HealthPath)
 	assignString(&app.BuildCommand, req.BuildCommand)
@@ -1790,4 +1804,35 @@ func watchPaths(text string) (string, error) {
 		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// checkImageReference refuses an image this panel built for another
+// environment.
+//
+// Built images live at <registry>/<namespace>/<app>:<tag>, in the registry
+// inside the cluster — which every node mirrors on 127.0.0.1 and serves to
+// anybody — or in an external one whose pull secret is in every namespace.
+// Naming another team's path ran their code, and read their image, under an
+// app of one's own. An image from anywhere else is the team's own business.
+func (s *Server) checkImageReference(ctx context.Context, image, namespace string) error {
+	image = strings.TrimSpace(image)
+	prefixes := []string{
+		kube.RegistryHost() + "/",
+		fmt.Sprintf("127.0.0.1:%d/", kube.RegistryNodePort),
+		fmt.Sprintf("localhost:%d/", kube.RegistryNodePort),
+	}
+	if external, _, err := s.db.GetSetting(ctx, settings.KeyRegistryURL); err == nil && strings.TrimSpace(external) != "" {
+		prefixes = append(prefixes, strings.TrimSuffix(strings.TrimSpace(external), "/")+"/")
+	}
+	for _, prefix := range prefixes {
+		rest, ok := strings.CutPrefix(image, prefix)
+		if !ok {
+			continue
+		}
+		if !strings.HasPrefix(rest, namespace+"/") {
+			return errdoc.BadRequest("That image was built by this panel for another environment, and an image from its " +
+				"registry runs only in the environment that built it. Promote the version instead.")
+		}
+	}
+	return nil
 }

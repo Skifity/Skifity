@@ -5459,6 +5459,63 @@ half-close and re-check are tested end to end through the real handler and the
 real CLI; the deploy ordering is not, since the deployer only runs against a
 cluster.
 
+## Phase 111 — a second review, of what nobody had re-read
+
+The first review read the fourteen newest phases. This one sent six reviewers
+at what it had not: the fixes it made, the API's authorization end to end, the
+deploy pipeline and builder, sign-in and encryption, the integrations, and the
+interface and the CLI. They found more than eighty things, a handful of them
+serious; each was checked in the code before anything changed, and each fix has
+a test that fails without it.
+
+The serious ones were all the same mistake: something panel-wide guarded by a
+team role, when any signed-in user can create a team and be its owner.
+
+* **Servers.** Every server that joins is given the cluster's join token, and a
+  control plane's is the whole cluster. A team admin could add one — so anybody
+  could join a machine of their own and read every team's secrets. Adding,
+  retrying, promoting and removing a server now need a panel administrator.
+* **Plugins.** Owning a team was the bar for installing an image beside the
+  panel, rewriting another plugin's settings, or removing a deploy policy. It is
+  a panel administrator, signed in rather than by token. A plugin that asked for
+  no permissions was given a token with no scopes — which is full access — and
+  is now given one that allows nothing. A manifest from the store must still
+  have the digest its signed index gave.
+* **The SMTP password.** An email channel naming its own server was given the
+  panel's SMTP user and password for whatever it left out. A channel's own server
+  now gets none of the panel's settings, and is dialled through netguard with a
+  deadline.
+* **The master key.** The recovery key is the master key, and a token scoped
+  "read" could download it; so could anyone at an unlocked admin's laptop. It now
+  refuses every token and asks for the password again. A database's password and
+  a team's export refuse any token with a scope.
+* **Guessing passwords.** Changing a password checked the current one without
+  counting failures, a leading space was a fresh set of guesses at a locked
+  account, and each IPv6 address counted alone. All three count now, an IPv6
+  address by its /64.
+* **Signing in.** A page on a sibling subdomain could post a sign-in with no
+  content type and fix a visitor's session to the attacker's; a body without a
+  type is refused unless a token says who is calling. The return address after
+  single sign-on let `/\evil.example` through; an account made by single sign-on
+  could be claimed by a second, unverified identity with its address; turning on
+  two-factor left older sessions — which then counted as having passed it — and
+  setting it up again switched it off. Each is closed.
+* **Between teams.** Viewers received every audit entry live, while the audit
+  log is an admin's; the stream now only says that something was recorded. An
+  admin could demote an owner and then remove them. A token made for one team
+  listed the others. An environment could be named into a plugin's or the
+  system's namespace. An image app could run another team's built image. Each is
+  refused.
+* **Builds.** A static site's build command went into a heredoc in the build
+  container, which holds the registry's credentials; a line saying the marker
+  ran anything after it there. The Dockerfile is written from base64. Two builds
+  started in the same quarter of a second shared a Job name — the id's start is
+  its time — and with it a Secret of build variables.
+* **Logs.** Only string values were scrubbed, so an error quoting a Telegram
+  bot's address logged its token; errors are scrubbed, and so are credentials in
+  addresses, webhook paths and signed query strings. A release command's output
+  is scrubbed like a build's.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -24,8 +24,11 @@ import (
 //
 // # The three things that are deliberately not scopes
 //
-// There is no scope that grants the master key, because there is no route that
-// exposes it. There is no scope for another team's data, because the team check
+// There is no scope that grants the master key: the one route that shows it —
+// the recovery key, which is the master key — refuses every token and wants a
+// person who has just typed their password, and the routes that hand out a
+// database's password or a team's export refuse a token that has any scope at
+// all, "read" included. There is no scope for another team's data, because the team check
 // is separate and runs anyway — a scope widens nothing. And there is no
 // `*:write` wildcard: a token that should be able to do everything is a token
 // with no scopes at all, which is the older, plainer way of saying it.
@@ -36,6 +39,10 @@ const (
 	ScopeRead = "read"
 	// ScopeWrite allows everything else, whatever the resource.
 	ScopeWrite = "write"
+	// ScopeNone allows nothing. It is what a plugin that asked for no
+	// permissions is given: an empty scope list is full access, so "asked for
+	// nothing" written as nothing handed it the installer's whole account.
+	ScopeNone = "none"
 )
 
 // Resources a scope may name. The list is closed: a scope naming something
@@ -196,7 +203,7 @@ func ValidateScopes(scopes string) error {
 		if scope == "" {
 			continue
 		}
-		if scope == ScopeRead || scope == ScopeWrite {
+		if scope == ScopeRead || scope == ScopeWrite || scope == ScopeNone {
 			continue
 		}
 		named, action, scoped := strings.Cut(scope, ":")

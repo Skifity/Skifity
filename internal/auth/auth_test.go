@@ -264,6 +264,18 @@ func TestSignInIsRateLimited(t *testing.T) {
 	if _, err := service.Login(ctx, email, "not the password", "", "198.51.100.10", "test"); !errors.Is(err, ErrLockedOut) {
 		t.Fatalf("after %d failures the answer was %v, want ErrLockedOut", limit, err)
 	}
+	// However it is spelled: a leading space was a fresh set of guesses at
+	// the same account, since the account is looked up trimmed.
+	for _, spelling := range []string{" " + email, email + " ", "\t" + strings.ToUpper(email)} {
+		if _, err := service.Login(ctx, spelling, password, "", "203.0.113.99", "test"); !errors.Is(err, ErrLockedOut) {
+			t.Fatalf("%q signed in to a locked-out account: %v", spelling, err)
+		}
+	}
+	// Nor is changing the password a way round the limit: it checks the
+	// current one, and was the one place that did so without counting.
+	if err := service.ChangePassword(ctx, &user, password, "another reasonable passphrase", "", "203.0.113.99"); !errors.Is(err, ErrLockedOut) {
+		t.Fatalf("a locked-out account's password was checked by a password change: %v", err)
+	}
 
 	// The *right* password must be refused too. A limit that lets the correct
 	// password through is not a limit: an attacker who guesses it on the next
@@ -533,7 +545,7 @@ func TestATwoFactorCodeCannotBeUsedTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate a code: %v", err)
 	}
-	if err := service.ConfirmTOTP(ctx, &user, code); err != nil {
+	if err := service.ConfirmTOTP(ctx, &user, code, ""); err != nil {
 		t.Fatalf("confirm two-factor: %v", err)
 	}
 
@@ -667,5 +679,96 @@ func TestUpgradingAHashTouchesNothingElse(t *testing.T) {
 	}
 	if after.Locale != "id" || after.Name != "Renamed" {
 		t.Errorf("the other change was undone: locale %q, name %q", after.Locale, after.Name)
+	}
+}
+
+func TestPasswordChangesAreMeteredAndIPv6CountsByNetwork(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.OpenMemory(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	keyring, err := crypto.InitKeyring(filepath.Join(t.TempDir(), "master.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, keyring, time.Hour, false)
+	hash, err := HashPassword("a reasonable passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := store.User{Email: "owner@example.test", Name: "Owner", PasswordHash: hash}
+	if err := db.CreateUser(ctx, &user); err != nil {
+		t.Fatal(err)
+	}
+	// Guesses through the password form, each from another address in one
+	// IPv6 /64, are the same guesser.
+	limit := DefaultLockout().MaxPerAccount
+	for attempt := range limit {
+		ip := fmt.Sprintf("2001:db8:1:2::%x", attempt+1)
+		if err := service.ChangePassword(ctx, &user, "wrong", "whatever passphrase", "", ip); !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("guess %d: %v", attempt+1, err)
+		}
+	}
+	if err := service.ChangePassword(ctx, &user, "a reasonable passphrase", "a new reasonable passphrase", "", "2001:db8:1:2::ffff"); !errors.Is(err, ErrLockedOut) {
+		t.Fatalf("after %d wrong guesses the right one was checked: %v", limit, err)
+	}
+	_, byIP, err := db.CountFailedLogins(ctx, "", "2001:db8:1:2:dead:beef::1", time.Now().Add(-time.Hour))
+	if err != nil || byIP != limit {
+		t.Fatalf("the /64 counts %d failures (%v), want %d", byIP, err, limit)
+	}
+}
+
+func TestTurningOnTwoFactorSignsOutEveryOtherSession(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.OpenMemory(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	keyring, err := crypto.InitKeyring(filepath.Join(t.TempDir(), "master.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, keyring, time.Hour, false)
+	hash, _ := HashPassword("a reasonable passphrase")
+	user := store.User{Email: "owner@example.test", Name: "Owner", PasswordHash: hash}
+	if err := db.CreateUser(ctx, &user); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := service.Login(ctx, user.Email, "a reasonable passphrase", "", "198.51.100.10", "mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A session somebody else already had, which never passed a second
+	// factor and would count as one that had once it was on.
+	if _, err := service.Login(ctx, user.Email, "a reasonable passphrase", "", "203.0.113.5", "theirs"); err != nil {
+		t.Fatal(err)
+	}
+	_, current, err := service.Authenticate(ctx, mine.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret, _, err := service.SetupTOTP(ctx, &user, "Skifity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _ := TOTPCode(secret, time.Now())
+	if err := service.ConfirmTOTP(ctx, &user, code, current.ID); err != nil {
+		t.Fatal(err)
+	}
+	sessions, _ := db.ListSessions(ctx, user.ID)
+	if len(sessions) != 1 || sessions[0].ID != current.ID {
+		t.Fatalf("after turning two-factor on, %d sessions are left", len(sessions))
+	}
+
+	// And setting it up again is not a way to turn it off.
+	if _, _, err := service.SetupTOTP(ctx, &user, "Skifity"); !errors.Is(err, ErrTOTPAlreadyOn) {
+		t.Fatalf("setting two-factor up again on an account that has it: %v", err)
+	}
+	if again, _ := db.GetUser(ctx, user.ID); !again.TOTPEnabled {
+		t.Fatal("two-factor was switched off by starting to set it up again")
 	}
 }

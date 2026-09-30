@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -121,13 +122,14 @@ func TestEachAppsBuildCacheIsItsOwn(t *testing.T) {
 func TestAFrontEndBuildSeesItsVariables(t *testing.T) {
 	job := mustBuild(t, withVariables(BuilderStatic))
 	script := job.Spec.Template.Spec.Containers[0].Args[0]
-	if !strings.Contains(script, "ARG NEXT_PUBLIC_API_URL\n") {
-		t.Errorf("the build stage does not declare the variable:\n%s", script)
+	dockerfile := staticDockerfile(t, script)
+	if !strings.Contains(dockerfile, "ARG NEXT_PUBLIC_API_URL\n") {
+		t.Errorf("the build stage does not declare the variable:\n%s", dockerfile)
 	}
 	if !strings.Contains(script, `--opt "build-arg:NEXT_PUBLIC_API_URL=${SKIFITY_BUILD_VAR_NEXT_PUBLIC_API_URL}"`) {
 		t.Errorf("the value is not passed to the build:\n%s", script)
 	}
-	serving := script[strings.Index(script, "FROM caddy"):]
+	serving := dockerfile[strings.Index(dockerfile, "FROM caddy"):]
 	if strings.Contains(serving, "ARG ") {
 		t.Errorf("the served image declares a build variable:\n%s", serving)
 	}
@@ -163,4 +165,36 @@ func mustBuild(t *testing.T, spec JobSpec) *batchv1.Job {
 		t.Fatal(err)
 	}
 	return job
+}
+
+// staticDockerfile is the Dockerfile a static build's script writes.
+func staticDockerfile(t *testing.T, script string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(script, "printf '%s' '")
+	encoded, _, found := strings.Cut(rest, "' | base64 -d")
+	if !ok || !found {
+		t.Fatalf("the script writes no Dockerfile:\n%s", script)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("the Dockerfile is not base64: %v", err)
+	}
+	return string(decoded)
+}
+
+func TestABuildCommandCannotRunInTheBuildContainer(t *testing.T) {
+	// The build command went into a heredoc in the build container's own
+	// shell, which holds the registry's credentials. A line saying the
+	// heredoc's marker ended it, and what followed ran there.
+	spec := withVariables(BuilderStatic)
+	spec.BuildCommand = "npm run build\nSKIFITY_DOCKERFILE\ncat /root/.docker/config.json\ncat <<'SKIFITY_DOCKERFILE'"
+	script := mustBuild(t, spec).Spec.Template.Spec.Containers[0].Args[0]
+	for _, line := range strings.Split(script, "\n") {
+		if strings.Contains(line, "/root/.docker/config.json") {
+			t.Fatalf("the build command reached the build container's shell:\n%s", script)
+		}
+	}
+	if !strings.Contains(staticDockerfile(t, script), "cat /root/.docker/config.json") {
+		t.Fatal("the build command is not in the Dockerfile, where it runs inside the build")
+	}
 }

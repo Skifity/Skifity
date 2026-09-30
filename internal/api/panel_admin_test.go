@@ -3,12 +3,19 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"skifity/internal/auth"
+	"skifity/internal/events"
+	"skifity/internal/kube"
+	"skifity/internal/plugins"
 	"skifity/internal/store"
 )
 
@@ -105,5 +112,134 @@ func TestOnlyAPanelAdministratorChangesTheClustersServers(t *testing.T) {
 	}
 	if status, _ := h.do(owner, http.MethodPatch, "/api/servers/"+server.ID, map[string]any{"name": "edge"}); status != http.StatusOK {
 		t.Errorf("a team owner renaming its server answered %d", status)
+	}
+}
+
+func TestALimitedTokenIsNotHandedASecret(t *testing.T) {
+	// The legacy "read" scope allowed every GET, the recovery key — which is
+	// the master key — among them, along with every database's password.
+	h := newHarness(t)
+	admin := adminTenant(h, "ops")
+	database := h.database(admin, "orders")
+	_, readOnly, err := h.auth.CreateAPIToken(t.Context(), admin.user.ID, admin.team.ID, "dashboard", "read", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limited := admin
+	limited.token = readOnly
+	for _, path := range []string{
+		"/api/security/recovery-key",
+		"/api/databases/" + database.ID + "/credentials",
+		"/api/teams/" + admin.team.ID + "/export",
+	} {
+		if status, body := h.do(limited, http.MethodGet, path, nil); status != http.StatusForbidden {
+			t.Errorf("a read-only token: GET %s answered %d: %s", path, status, truncate(body, 120))
+		}
+	}
+	// Not even a token with no scopes reads the master key: that wants a
+	// person who has just typed their password.
+	if status, body := h.do(admin, http.MethodGet, "/api/security/recovery-key", nil); status != http.StatusForbidden ||
+		!strings.Contains(body, "auth.needs_person") {
+		t.Errorf("a full token reading the recovery key answered %d: %s", status, truncate(body, 120))
+	}
+}
+
+func TestAPluginThatAskedForNothingGetsNothing(t *testing.T) {
+	manifest, err := plugins.Parse([]byte(storedManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Permissions) != 0 {
+		t.Fatalf("the test manifest asks for %v", manifest.Permissions)
+	}
+	// An empty scope list is full access: "asked for nothing" written as
+	// nothing handed the plugin the administrator's whole account.
+	scopes := manifest.Scopes()
+	for _, request := range []struct{ method, path string }{
+		{http.MethodGet, "/api/apps/app_1"},
+		{http.MethodDelete, "/api/apps/app_1"},
+		{http.MethodGet, "/api/security/recovery-key"},
+	} {
+		if auth.TokenAllows(scopes, request.method, request.path) {
+			t.Errorf("a plugin with no permissions may %s %s (scopes %q)", request.method, request.path, scopes)
+		}
+	}
+	if err := auth.ValidateScopes(scopes); err != nil {
+		t.Fatalf("its scopes are refused when the token is made: %v", err)
+	}
+}
+
+func TestTheTeamStreamSaysAnEntryWasRecordedAndNotWhatItSays(t *testing.T) {
+	// A viewer may subscribe to the team's stream and may not read the audit
+	// log. Every entry — actor, address, user agent, the full command a run
+	// ran — went out on that stream.
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
+	defer stream.Close()
+
+	if status, body := h.do(acme, http.MethodPost, "/api/teams/"+acme.team.ID+"/projects", map[string]any{"name": "secret plans"}); status >= 400 {
+		t.Fatalf("creating a project answered %d: %s", status, truncate(body, 120))
+	}
+	for {
+		select {
+		case event := <-stream.Events():
+			if event.Type != "audit" {
+				continue
+			}
+			payload, _ := json.Marshal(event.Data)
+			if string(payload) != "{}" {
+				t.Fatalf("the team's stream carried the audit entry: %s", payload)
+			}
+			return
+		case <-time.After(5 * time.Second):
+			t.Fatal("nothing said an entry was recorded, so the activity page never refreshes")
+		}
+	}
+}
+
+func TestATokenMadeForOneTeamSeesThatTeam(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	// The same person owns a second team the token was not made for.
+	other := store.Team{Name: "side project", Slug: "side-project"}
+	if err := h.db.CreateTeam(t.Context(), &other); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.AddMember(t.Context(), other.ID, acme.user.ID, store.RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	_, body := h.do(acme, http.MethodGet, "/api/teams", nil)
+	if strings.Contains(body, other.ID) || !strings.Contains(body, acme.team.ID) {
+		t.Fatalf("a token made for one team listed %s", truncate(body, 300))
+	}
+	if status, _ := h.do(acme, http.MethodPost, "/api/teams", map[string]any{"name": "another"}); status != http.StatusForbidden {
+		t.Fatalf("a token made for one team made another: %d", status)
+	}
+}
+
+func TestAnImageAppCannotRunAnotherEnvironmentsBuild(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	rival := h.newTenant("rival")
+	theirs := kube.RegistryHost() + "/" + rival.env.Namespace + "/web:0123456789ab"
+	path := "/api/environments/" + acme.env.ID + "/apps"
+	for _, image := range []string{theirs, fmt.Sprintf("127.0.0.1:%d/%s/web:d1", kube.RegistryNodePort, rival.env.Namespace)} {
+		if status, body := h.do(acme, http.MethodPost, path, map[string]any{"name": "copy", "source_type": "image", "image": image}); status != http.StatusBadRequest {
+			t.Errorf("an app of another team's build %s answered %d: %s", image, status, truncate(body, 160))
+		}
+	}
+	// Its own environment's build, and any public image, are fine.
+	ours := kube.RegistryHost() + "/" + acme.env.Namespace + "/web:0123456789ab"
+	for i, image := range []string{ours, "nginx:1.27"} {
+		body := map[string]any{"name": fmt.Sprintf("ok%d", i), "source_type": "image", "image": image}
+		if status, answer := h.do(acme, http.MethodPost, path, body); status >= 400 {
+			t.Errorf("%s answered %d: %s", image, status, truncate(answer, 160))
+		}
+	}
+	// And not by changing an existing app's image either.
+	app := h.app(acme, "cache")
+	if status, _ := h.do(acme, http.MethodPatch, "/api/apps/"+app.ID, map[string]any{"image": theirs}); status != http.StatusBadRequest {
+		t.Errorf("changing an app to another team's build answered %d", status)
 	}
 }

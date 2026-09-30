@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode"
 
 	"skifity/internal/auth"
 	"skifity/internal/errdoc"
@@ -299,9 +300,14 @@ func (s *Server) ssoAccount(r *http.Request, identity auth.Identity, config auth
 	case err != nil:
 		s.log.Error("could not look up a single sign-on user", "error", err)
 		return store.User{}, "server"
-	case user.PasswordHash != "" && !identity.EmailVerified:
-		s.log.Warn("single sign-on found an account with a password by an address the provider did not verify; "+
-			"the person can link the provider from their account page after signing in with their password",
+	case !identity.EmailVerified && !s.linkableByAddress(r, user):
+		// An address the provider did not vouch for finds an account only
+		// when that account has nothing to take: no password, and no identity
+		// yet — one made by single sign-on before identities were recorded,
+		// signing in for the first time since. Once it has one, a second
+		// identity naming the same address is somebody else.
+		s.log.Warn("single sign-on found an account by an address the provider did not verify; "+
+			"the person can link the provider from their account page after signing in",
 			"email", identity.Email, "issuer", identity.Issuer)
 		return store.User{}, "link_required"
 	}
@@ -312,6 +318,16 @@ func (s *Server) ssoAccount(r *http.Request, identity auth.Identity, config auth
 	}
 	s.audit(r.WithContext(withUser(r, user)), "", "auth.sso_linked", "user", user.ID, identity.Email)
 	return user, ""
+}
+
+// linkableByAddress reports whether an account may be linked to a provider
+// identity on its address alone: it has no password and no identity yet.
+func (s *Server) linkableByAddress(r *http.Request, user store.User) bool {
+	if user.PasswordHash != "" {
+		return false
+	}
+	linked, err := s.db.IdentitiesForUser(r.Context(), user.ID)
+	return err == nil && len(linked) == 0
 }
 
 // finishSSOLink links a provider identity to the account that asked for it
@@ -431,9 +447,17 @@ func (s *Server) handleUnlinkSSO(w http.ResponseWriter, r *http.Request) {
 // safeNext is where to land after signing in, when the sign-in page asked for
 // somewhere. Only a path on this panel: an absolute URL here is an open
 // redirect, which is how a phishing page borrows a real domain.
+//
+// A browser reads a backslash as a slash and drops tabs and newlines, so
+// "/\evil.example" and "/<tab>/evil.example" are "//evil.example" to it —
+// another site — while looking like paths here. Neither is let through.
 func safeNext(r *http.Request) string {
 	next := r.URL.Query().Get("next")
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") ||
+		strings.ContainsRune(next, '\\') || strings.ContainsFunc(next, unicode.IsControl) {
+		return ""
+	}
+	if parsed, err := url.Parse(next); err != nil || parsed.Scheme != "" || parsed.Host != "" {
 		return ""
 	}
 	return next

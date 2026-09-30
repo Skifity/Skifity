@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 )
@@ -370,11 +371,30 @@ func (db *DB) DeleteAPIToken(ctx context.Context, id, userID string) error {
 // RecordLoginAttempt appends an attempt for rate limiting and for the audit trail.
 func (db *DB) RecordLoginAttempt(ctx context.Context, identifier, ip string, success bool) error {
 	_, err := db.Exec(ctx, `INSERT INTO login_attempts (identifier, ip, success, at) VALUES (?,?,?,?)`,
-		strings.ToLower(identifier), ip, success, Now())
+		attemptIdentifier(identifier), attemptAddress(ip), success, Now())
 	if err != nil {
 		return fmt.Errorf("record login attempt: %w", err)
 	}
 	return nil
+}
+
+// attemptIdentifier is an account as the lockout counts it: the way an
+// account is looked up, which trims and ignores case. Lowercased but not
+// trimmed, " owner@example.com" was a fresh bucket of attempts at the same
+// account, and a leading space unlimited guesses.
+func attemptIdentifier(identifier string) string {
+	return strings.ToLower(strings.TrimSpace(identifier))
+}
+
+// attemptAddress is an address as the lockout counts it. An IPv6 address is
+// counted by its /64, which is what one customer is given: counting each /128
+// gave one attacker eighteen quintillion fresh buckets.
+func attemptAddress(ip string) string {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil || parsed.To4() != nil {
+		return ip
+	}
+	return parsed.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }
 
 // CountFailedLogins counts failures for an identifier or an IP since a time.
@@ -385,14 +405,14 @@ func (db *DB) CountFailedLogins(ctx context.Context, identifier, ip string, sinc
 	if identifier != "" {
 		if err = db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM login_attempts WHERE identifier = ? AND success = 0 AND at > ?`,
-			strings.ToLower(identifier), s).Scan(&byIdentifier); err != nil {
+			attemptIdentifier(identifier), s).Scan(&byIdentifier); err != nil {
 			return 0, 0, fmt.Errorf("count failed logins by identifier: %w", err)
 		}
 	}
 	if ip != "" {
 		if err = db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND success = 0 AND at > ?`,
-			ip, s).Scan(&byIP); err != nil {
+			attemptAddress(ip), s).Scan(&byIP); err != nil {
 			return 0, 0, fmt.Errorf("count failed logins by ip: %w", err)
 		}
 	}
@@ -402,7 +422,7 @@ func (db *DB) CountFailedLogins(ctx context.Context, identifier, ip string, sinc
 // ClearLoginAttempts wipes the failure history after a successful sign-in.
 func (db *DB) ClearLoginAttempts(ctx context.Context, identifier string) error {
 	_, err := db.Exec(ctx, `DELETE FROM login_attempts WHERE identifier = ? AND success = 0`,
-		strings.ToLower(identifier))
+		attemptIdentifier(identifier))
 	if err != nil {
 		return fmt.Errorf("clear login attempts: %w", err)
 	}

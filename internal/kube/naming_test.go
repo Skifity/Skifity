@@ -154,3 +154,22 @@ func TestSanitiseEnvKey(t *testing.T) {
 		}
 	}
 }
+
+func TestAnEnvironmentIsNeverGivenASystemNamespace(t *testing.T) {
+	// Team "skifity", project "plugin", environment named after a plugin's
+	// id: the plugin's own namespace, with an app applied over its objects.
+	for _, parts := range [][3]string{
+		{"skifity", "plugin", "com-example-chat"},
+		{"kube", "node", "lease"},
+		{"system", "upgrade", "x"},
+		{"cert", "manager", "x"},
+	} {
+		got := NamespaceFor(parts[0], parts[1], parts[2])
+		if ReservedNamespace(got) || !ValidLabel(got) {
+			t.Errorf("%v became %q", parts, got)
+		}
+	}
+	if got := NamespaceFor("acme", "shop", "production"); got != "acme-shop-production" {
+		t.Errorf("an ordinary environment became %q", got)
+	}
+}

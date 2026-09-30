@@ -410,6 +410,27 @@ func (s *Server) requireRecentAuth(next http.Handler) http.Handler {
 	})
 }
 
+// refuseScopedTokens keeps a route that hands out a secret — a database's
+// password, a team's export — from a token that was made to be narrow.
+//
+// Scopes decide by direction, and these are reads: the legacy "read" scope
+// allowed every GET, so a token given to a dashboard to look at things could
+// read every database's password. A token with no scopes is full access and
+// may; a person signed in may; a token somebody limited may not.
+func refuseScopedTokens(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if token, ok := apiTokenFrom(r.Context()); ok && strings.TrimSpace(token.Scopes) != "" {
+			writeError(w, r, errdoc.New("auth.token_scope", "This token cannot make that request").
+				WithCause("The token %s is limited to %s, and this answer carries a secret no limited token is given.", token.Name, token.Scopes).
+				WithImpact("The request was refused. Nothing was changed.").
+				WithFix("Use a token without a scope, or sign in to the panel.").
+				WithStatus(http.StatusForbidden))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // noCache stops a proxy or browser caching an API response.
 func noCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

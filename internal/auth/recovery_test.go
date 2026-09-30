@@ -55,7 +55,7 @@ func recoveryFixture(t *testing.T) (*Service, *store.DB, store.User, string, []s
 	if err != nil {
 		t.Fatalf("TOTPCode: %v", err)
 	}
-	if err := service.ConfirmTOTP(ctx, &user, code); err != nil {
+	if err := service.ConfirmTOTP(ctx, &user, code, ""); err != nil {
 		t.Fatalf("ConfirmTOTP: %v", err)
 	}
 
