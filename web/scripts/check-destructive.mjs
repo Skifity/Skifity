@@ -31,6 +31,18 @@ const ALLOWED = new Map([
   // Nothing is lost: the schedule is three fields the user typed and can type
   // again, and the dialog for it is already open when the bin is pressed.
   ["components/app/console-tab.tsx:remove", "asks through its own confirm dialog"],
+  // DELETE is the verb, and nothing is lost: lifting a deploy lock and ending
+  // maintenance give the app back its normal state, and either is put back
+  // with one click. Asking first would only slow down the way out of an
+  // incident.
+  [
+    "components/app/deploy-lock.tsx:unlock",
+    "lifts a lock; nothing is lost and it is put back in one click",
+  ],
+  [
+    "components/app/maintenance.tsx:end",
+    "ends maintenance; nothing is lost and it is started again in one click",
+  ],
 ])
 
 function* walk(directory) {
@@ -50,7 +62,9 @@ for (const file of walk(srcDir)) {
   const source = readFileSync(file, "utf8")
 
   // Every mutation whose body calls api.delete.
-  const mutations = [...source.matchAll(/const (\w+) = useMutation\(\{([\s\S]{0,400}?)\n\s{2}\}\)/g)]
+  const mutations = [
+    ...source.matchAll(/const (\w+) = useMutation\(\{([\s\S]{0,400}?)\n\s{2}\}\)/g),
+  ]
   for (const [, name, body] of mutations) {
     if (!/api\.delete\(/.test(body)) continue
 

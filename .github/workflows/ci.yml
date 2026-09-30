@@ -103,6 +103,11 @@ jobs:
       - name: The browser and the CLI send the same files from a folder
         run: npm run check:ignore
 
+      - name: Every delete asks first
+        # In `make check` from the start and never here, so it went red on
+        # main without anybody seeing it.
+        run: npm run check:destructive
+
       - name: Known vulnerabilities
         # Dev dependencies do not ship, so only what reaches a browser counts.
         run: npm audit --omit=dev --audit-level=high
