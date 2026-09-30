@@ -14,14 +14,21 @@ const appColumns = `id, environment_id, name, slug, source_type, COALESCE(git_so
 	cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, auto_deploy, preview_deploys,
 	status, created_at, updated_at`
 
-func scanApp(row interface{ Scan(...any) error }) (App, error) {
-	var a App
-	var created, updated string
-	err := row.Scan(&a.ID, &a.EnvironmentID, &a.Name, &a.Slug, &a.SourceType, &a.GitSourceID, &a.RepoURL,
+// appDestinations is where each of appColumns is scanned to, in order. One
+// list, for every query that selects appColumns: ListDeployedApps had its own
+// copy, and when build_command and static_dir were added it was not told.
+func appDestinations(a *App, created, updated *string) []any {
+	return []any{&a.ID, &a.EnvironmentID, &a.Name, &a.Slug, &a.SourceType, &a.GitSourceID, &a.RepoURL,
 		&a.Branch, &a.RootDir, &a.Builder, &a.DockerfilePath, &a.BuildCommand, &a.StaticDir, &a.Image, &a.Port, &a.HealthPath,
 		&a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas, &a.CPUTarget,
 		&a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM, &a.MemRequestMB, &a.MemLimitMB,
-		&a.AutoDeploy, &a.PreviewDeploys, &a.Status, &created, &updated)
+		&a.AutoDeploy, &a.PreviewDeploys, &a.Status, created, updated}
+}
+
+func scanApp(row interface{ Scan(...any) error }) (App, error) {
+	var a App
+	var created, updated string
+	err := row.Scan(appDestinations(&a, &created, &updated)...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return a, ErrNotFound
@@ -654,12 +661,7 @@ func (db *DB) ListDeployedApps(ctx context.Context) ([]DeployedApp, error) {
 		var a App
 		var created, updated string
 		var item DeployedApp
-		if err := rows.Scan(&a.ID, &a.EnvironmentID, &a.Name, &a.Slug, &a.SourceType, &a.GitSourceID,
-			&a.RepoURL, &a.Branch, &a.RootDir, &a.Builder, &a.DockerfilePath, &a.Image, &a.Port,
-			&a.HealthPath, &a.StartCommand, &a.ReleaseCommand, &a.Replicas, &a.Autoscale, &a.MinReplicas, &a.MaxReplicas,
-			&a.CPUTarget, &a.MemoryTarget, &a.ScaleToZero, &a.CPURequestM, &a.CPULimitM,
-			&a.MemRequestMB, &a.MemLimitMB, &a.AutoDeploy, &a.PreviewDeploys, &a.Status,
-			&created, &updated, &item.TeamID, &item.Namespace); err != nil {
+		if err := rows.Scan(append(appDestinations(&a, &created, &updated), &item.TeamID, &item.Namespace)...); err != nil {
 			return nil, fmt.Errorf("scan deployed app: %w", err)
 		}
 		a.CreatedAt, _ = ParseTime(created)

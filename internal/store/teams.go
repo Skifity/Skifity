@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"skifity/internal/kube"
@@ -544,11 +545,28 @@ func (db *DB) projectOf(ctx context.Context, kind, query, id string) (string, st
 
 // prefixColumns qualifies a column list with a table alias, so a join can reuse
 // the same constant the plain select uses.
+//
+// A column can be an expression, and appColumns has one: a COALESCE of
+// git_source_id, with a comma between its arguments. This used to split at
+// every comma and prefix each piece, which made "a.COALESCE(git_source_id"
+// and a second piece of its own — SQL that does not parse. Every query built
+// on it failed, every time, and both callers swallowed the error: shared
+// variables never rolled any app out, and the watcher never once checked
+// whether an app had stopped answering.
+// TestEveryColumnListQualifies runs each list against the real schema.
 func prefixColumns(alias, columns string) string {
 	var out []byte
 	for part := range splitColumns(columns) {
 		if len(out) > 0 {
 			out = append(out, ", "...)
+		}
+		if open := strings.IndexByte(part, '('); open >= 0 {
+			// A function of a column: the column is its first argument.
+			out = append(out, part[:open+1]...)
+			out = append(out, alias...)
+			out = append(out, '.')
+			out = append(out, strings.TrimLeft(part[open+1:], " ")...)
+			continue
 		}
 		out = append(out, alias...)
 		out = append(out, '.')
@@ -557,12 +575,21 @@ func prefixColumns(alias, columns string) string {
 	return string(out)
 }
 
-// splitColumns yields each trimmed column name from a comma-separated list.
+// splitColumns yields each trimmed column from a comma-separated list. A
+// comma inside parentheses belongs to an expression, not to the list.
 func splitColumns(columns string) func(func(string) bool) {
 	return func(yield func(string) bool) {
-		start := 0
+		start, depth := 0, 0
 		for i := 0; i <= len(columns); i++ {
-			if i == len(columns) || columns[i] == ',' {
+			if i < len(columns) {
+				switch columns[i] {
+				case '(':
+					depth++
+				case ')':
+					depth--
+				}
+			}
+			if i == len(columns) || columns[i] == ',' && depth == 0 {
 				part := trimSpaceAndNewlines(columns[start:i])
 				if part != "" && !yield(part) {
 					return
