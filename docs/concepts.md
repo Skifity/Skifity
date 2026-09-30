@@ -157,6 +157,30 @@ the disk does not fill. The list says which versions can still be rolled back
 to, and the older ones say "image removed" where the button would be. To go back
 further, deploy that commit again — it builds the same code fresh.
 
+### Promoting a version
+
+An app of the same name in two environments of a project — `web` in staging
+and `web` in production — is the same thing at two stages. **Promote** on a
+version that deployed in one runs that exact image in the other, without
+building it again: what was tested is what ships, and a dependency that would
+have resolved differently on a second build does not get the chance.
+
+The app it is promoted to keeps its own variables, domains, disks and scaling;
+only the image and the commit it came from move. Its release command runs, as
+for any deploy.
+
+An image carries what it was built with, build-time variables included. If
+the app it is promoted to would have built it differently — a
+`NEXT_PUBLIC_API_URL` that is staging's in the image and production's in the
+app — the promotion stops and says so, because the image would run code built
+for the other environment. **Promote anyway** runs it as it was built; deploying
+normally builds it with the app's own. Make those variables runtime ones, or
+the same in both, and promotion is always the same build.
+
+Only a version whose image is still kept can be promoted, the same ten as for a
+rollback. `POST /api/apps/{app}/promote` with the version's `deployment_id` is
+the same for a script; `GET` lists where an app's versions can go.
+
 ## Release command
 
 A command that runs after the image is built and before any traffic reaches the

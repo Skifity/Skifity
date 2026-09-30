@@ -299,7 +299,8 @@
       "app.maintenance_ended": "结束维护",
       "server.alerts_changed": "已更改服务器警告",
       "stack.created": "已创建堆栈",
-      "app.template_update": "已通过模板更新"
+      "app.template_update": "已通过模板更新",
+      "app.promoted": "已提升版本"
     }
   },
   "projects": {
@@ -588,7 +589,8 @@
       "template": "从目录安装",
       "push": "分支收到一次推送",
       "preview": "一个拉取请求的预览",
-      "rollback": "一次回滚"
+      "rollback": "一次回滚",
+      "promote": "从另一个环境提升"
     },
     "rollbackTitle": "回滚到 #{{number}}",
     "rollbackFrom": "当前运行",
@@ -609,7 +611,15 @@
       "port": "端口",
       "health_path": "健康检查路径",
       "start_command": "启动命令"
-    }
+    },
+    "promote": "提升",
+    "promoteTitle": "提升 #{{number}}",
+    "promoteHelp": "将此版本运行的完全相同的镜像部署到另一个环境中的同一应用，无需重新构建。该应用保留自己的变量、域名和扩缩容设置。",
+    "promoteWhat": "#{{number}}（{{commit}}）将成为 {{environment}} 运行的版本。",
+    "promoteTo": "提升到 {{environment}}",
+    "promoteAnyway": "仍然提升",
+    "promoted": "正在将 #{{number}} 提升到 {{environment}}",
+    "promoteEnvironment": "要提升到的环境"
   },
   "variables": {
     "title": "变量",
@@ -2330,6 +2340,18 @@
         "cause": "{{0}} 有磁盘或数据库，更新开始前会先备份它们，但尚未配置备份。",
         "impact": "没有做任何更改。",
         "fix": "请在 Settings 中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
+      },
+      "promote_built_differently": {
+        "title": "此应用会以不同方式构建该版本",
+        "cause": "该镜像使用了与 {{0}} 不同的构建设置或构建时变量，因此会运行为另一个环境构建的代码。",
+        "impact": "没有部署任何内容。",
+        "fix": "使构建时变量保持一致，或仍然提升以按原样运行镜像，或在此处部署以使用本应用自己的设置构建。"
+      },
+      "promote_not_possible": {
+        "title": "该版本无法提升到这里",
+        "cause": "{{0}}",
+        "impact": "没有部署任何内容。",
+        "fix": "请在同一项目两个环境中的同一应用之间，从已成功部署的版本进行提升。"
       }
     }
   },

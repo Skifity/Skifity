@@ -217,6 +217,28 @@ func TemplateNeedsBackups(app string) *Problem {
 		WithDocs("/docs/templates#updates")
 }
 
+// PromotionBuiltDifferently is an image built from other build settings or
+// build-time variables than the app it is promoted to has.
+func PromotionBuiltDifferently(app string) *Problem {
+	return New("promote.built_differently", "This app would build that version differently").
+		WithCause("The image was built with other build settings or build-time variables than %s has, so it would run code built for the other environment.", app).
+		WithImpact("Nothing was deployed.").
+		WithFix("Make the build-time variables match, promote anyway to run the image as it was built, or deploy here to build it with this app's own.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#promoting-a-version")
+}
+
+// PromotionNotPossible is a promotion between two apps that are not stages
+// of the same thing.
+func PromotionNotPossible(reason string) *Problem {
+	return New("promote.not_possible", "That version cannot be promoted here").
+		WithCause("%s", reason).
+		WithImpact("Nothing was deployed.").
+		WithFix("Promote between the same app in two environments of one project, from a version that deployed.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#promoting-a-version")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

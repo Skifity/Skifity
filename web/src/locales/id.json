@@ -299,7 +299,8 @@
       "app.maintenance_ended": "Pemeliharaan diakhiri",
       "server.alerts_changed": "Peringatan server diubah",
       "stack.created": "Stack dibuat",
-      "app.template_update": "Diperbarui lewat templatnya"
+      "app.template_update": "Diperbarui lewat templatnya",
+      "app.promoted": "Versi dipromosikan"
     }
   },
   "projects": {
@@ -588,7 +589,8 @@
       "template": "Dipasang dari katalog",
       "push": "Push ke branch",
       "preview": "Pratinjau sebuah pull request",
-      "rollback": "Sebuah rollback"
+      "rollback": "Sebuah rollback",
+      "promote": "Dipromosikan dari environment lain"
     },
     "rollbackTitle": "Rollback ke #{{number}}",
     "rollbackFrom": "Berjalan sekarang",
@@ -609,7 +611,15 @@
       "port": "Port",
       "health_path": "Path cek kesehatan",
       "start_command": "Perintah mulai"
-    }
+    },
+    "promote": "Promosikan",
+    "promoteTitle": "Promosikan #{{number}}",
+    "promoteHelp": "Image persis yang dijalankan versi ini, di-deploy ke aplikasi yang sama di environment lain, tanpa dibangun ulang. Aplikasi itu tetap memakai variabel, domain, dan skala miliknya sendiri.",
+    "promoteWhat": "#{{number}} ({{commit}}) menjadi versi yang dijalankan {{environment}}.",
+    "promoteTo": "Promosikan ke {{environment}}",
+    "promoteAnyway": "Tetap promosikan",
+    "promoted": "Mempromosikan #{{number}} ke {{environment}}",
+    "promoteEnvironment": "Environment tujuan promosi"
   },
   "variables": {
     "title": "Variabel",
@@ -2330,6 +2340,18 @@
         "cause": "{{0}} punya disk atau database, dan pembaruan mencadangkannya sebelum dimulai, tetapi pencadangan belum dikonfigurasi.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Atur penyimpanan cadangan di Settings, atau perbarui tanpa cadangan jika Anda punya cadangan sendiri."
+      },
+      "promote_built_differently": {
+        "title": "Aplikasi ini akan membangun versi itu secara berbeda",
+        "cause": "Image dibangun dengan pengaturan build atau variabel waktu build yang berbeda dari milik {{0}}, jadi akan menjalankan kode yang dibangun untuk environment lain.",
+        "impact": "Tidak ada yang di-deploy.",
+        "fix": "Samakan variabel waktu build, tetap promosikan untuk menjalankan image apa adanya, atau deploy di sini agar dibangun dengan milik aplikasi ini."
+      },
+      "promote_not_possible": {
+        "title": "Versi itu tidak bisa dipromosikan ke sini",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang di-deploy.",
+        "fix": "Promosikan antara aplikasi yang sama di dua environment dalam satu proyek, dari versi yang berhasil di-deploy."
       }
     }
   },

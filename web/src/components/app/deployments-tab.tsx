@@ -3,12 +3,14 @@ import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
+  ArrowUpRightIcon,
   CircleDotIcon,
   GitCommitHorizontalIcon,
   RocketIcon,
   RotateCcwIcon,
   XIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "cn"
 
 import { EmptyState } from "@/components/empty-state"
@@ -24,13 +26,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useEvents } from "@/hooks/use-events"
-import { api, type List } from "@/lib/api"
+import { ApiError, api, type List } from "@/lib/api"
 import { formatDuration, formatRelative, shortCommit } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App, Deployment, LogLine } from "@/lib/types"
@@ -70,6 +79,15 @@ export function DeploymentsTab({ app }: { app: App }) {
   // would put back and what it would leave.
   const [rollingBackTo, setRollingBackTo] = useState<Deployment | null>(null)
 
+  // The same app in the project's other environments, which a version that
+  // deployed here can be promoted to without building it again.
+  const targets = useQuery({
+    queryKey: ["promote-targets", app.id],
+    queryFn: () => api.get<List<PromoteTarget>>(`/api/apps/${app.id}/promote`),
+  })
+  const promoteTargets = targets.data?.items ?? []
+  const [promoting, setPromoting] = useState<Deployment | null>(null)
+
   const cancel = useMutation({
     mutationFn: (deploymentID: string) =>
       api.post(`/api/apps/${app.id}/deployments/${deploymentID}/cancel`),
@@ -94,6 +112,14 @@ export function DeploymentsTab({ app }: { app: App }) {
   return (
     <div className="space-y-3">
       {cancel.error && <ErrorDisplay error={cancel.error} />}
+      {promoting != null && promoteTargets.length > 0 && (
+        <PromoteDialog
+          key={promoting.id}
+          source={promoting}
+          targets={promoteTargets}
+          onClose={() => setPromoting(null)}
+        />
+      )}
       {rollingBackTo != null && (
         <RollbackDialog
           key={rollingBackTo.id}
@@ -147,6 +173,17 @@ export function DeploymentsTab({ app }: { app: App }) {
                     <span>{formatDuration(deployment.started_at, deployment.finished_at)}</span>
                   )}
                 </div>
+
+                {/* The version that is serving is the one most worth promoting,
+                    so this is offered on it too, unlike a rollback. */}
+                {deployment.status === "succeeded" &&
+                  deployment.can_rollback !== false &&
+                  promoteTargets.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => setPromoting(deployment)}>
+                      <ArrowUpRightIcon className="size-3.5" />
+                      {t("deploy.promote")}
+                    </Button>
+                  )}
 
                 {TERMINAL.has(deployment.status) ? (
                   // Not on the version that is already serving: rolling back to
@@ -307,6 +344,99 @@ function RollbackDialog({
   )
 }
 
+type PromoteTarget = {
+  app_id: string
+  app_name: string
+  environment_id: string
+  environment_name: string
+}
+
+/**
+ * Promoting a version: the exact image this environment runs, deployed to the
+ * same app in another, without building it again. When the other app would
+ * have built it differently — its own build-time variables — that is said,
+ * and running it anyway is a second, deliberate click.
+ */
+function PromoteDialog({
+  source,
+  targets,
+  onClose,
+}: {
+  source: Deployment
+  targets: PromoteTarget[]
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const [targetID, setTargetID] = useState(targets[0].app_id)
+  const target = targets.find((candidate) => candidate.app_id === targetID) ?? targets[0]
+  const promote = useMutation({
+    mutationFn: (force: boolean) =>
+      api.post(`/api/apps/${target.app_id}/promote`, { deployment_id: source.id, force }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["deployments", target.app_id] })
+      toast.success(
+        t("deploy.promoted", { number: source.number, environment: target.environment_name }),
+      )
+      onClose()
+    },
+  })
+  const builtDifferently =
+    promote.error instanceof ApiError && promote.error.problem.code === "promote.built_differently"
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("deploy.promoteTitle", { number: source.number })}</DialogTitle>
+          <DialogDescription>{t("deploy.promoteHelp")}</DialogDescription>
+        </DialogHeader>
+        {targets.length > 1 && (
+          <Select value={targetID} onValueChange={setTargetID}>
+            <SelectTrigger aria-label={t("deploy.promoteEnvironment")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {targets.map((candidate) => (
+                <SelectItem key={candidate.app_id} value={candidate.app_id}>
+                  {candidate.environment_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <p className="text-sm">
+          {t("deploy.promoteWhat", {
+            number: source.number,
+            commit: source.commit_sha ? shortCommit(source.commit_sha) : "—",
+            environment: target.environment_name,
+          })}
+        </p>
+        {promote.error != null && <ErrorDisplay error={promote.error} compact />}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          {builtDifferently ? (
+            <Button
+              variant="destructive"
+              disabled={promote.isPending}
+              onClick={() => promote.mutate(true)}
+            >
+              {promote.isPending ? <Spinner /> : <ArrowUpRightIcon />}
+              {t("deploy.promoteAnyway")}
+            </Button>
+          ) : (
+            <Button disabled={promote.isPending} onClick={() => promote.mutate(false)}>
+              {promote.isPending ? <Spinner /> : <ArrowUpRightIcon />}
+              {t("deploy.promoteTo", { environment: target.environment_name })}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /**
  * What started this deployment, in the reader's language.
  *
@@ -320,7 +450,7 @@ function triggerLabel(t: TFunction, deployment: Deployment): string {
   if (deployment.trigger === "rollback" && deployment.rollback_of) {
     return t("deploy.triggerRollbackTo", { number: deployment.rollback_of })
   }
-  const known = ["manual", "create", "template", "push", "preview", "rollback"]
+  const known = ["manual", "create", "template", "push", "preview", "rollback", "promote"]
   if (known.includes(deployment.trigger)) return t(`deploy.trigger.${deployment.trigger}`)
   return deployment.trigger
 }

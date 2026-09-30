@@ -86,7 +86,8 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	// Empty means the build clones the branch tip, and the image is tagged with
 	// the deployment number instead of a commit.
 	commit := req.CommitSHA
-	if app.SourceType == "upload" {
+	promoting := req.Image != ""
+	if app.SourceType == "upload" && !promoting {
 		// An upload's hash stands where a commit would, so the fingerprint
 		// changes exactly when the code does.
 		if commit, err = d.uploadToDeploy(app, req.CommitSHA); err != nil {
@@ -102,6 +103,13 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	if app.SourceType == "image" {
 		// A prebuilt image is its own fingerprint: nothing is built.
 		fingerprint = "image:" + app.Image
+	}
+	// A promoted image was built with the other environment's build settings
+	// and build-time variables. When this app's would give a different build
+	// — a NEXT_PUBLIC_API_URL for staging baked into production — running it
+	// is running code built for somewhere else, and that has to be asked for.
+	if promoting && app.SourceType != "image" && fingerprint != req.Fingerprint && !req.Force {
+		return store.Deployment{}, errdoc.PromotionBuiltDifferently(app.Name)
 	}
 
 	runtimeSpec, err := d.runtimeSpec(ctx, app, env)
@@ -122,7 +130,12 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	// The heart of ADR-0007: when the build inputs have not changed, the
 	// existing image is reused and this is a rollout, not a build. Changing an
 	// environment variable or a replica count never rebuilds.
-	if !req.Force && app.SourceType != "image" {
+	if promoting {
+		deployment.Image = req.Image
+		deployment.CommitMessage = req.CommitMessage
+		deployment.CommitAuthor = req.CommitAuthor
+		deployment.BuildFingerprint = req.Fingerprint
+	} else if !req.Force && app.SourceType != "image" {
 		if previous, err := d.db.FindDeploymentByFingerprint(ctx, app.ID, fingerprint); err == nil {
 			deployment.Image = previous.Image
 			deployment.CommitSHA = previous.CommitSHA

@@ -209,8 +209,17 @@ type DeployRequest struct {
 	Trigger   string
 	CommitSHA string
 	CreatedBy string
-	// Force skips the build-fingerprint shortcut and rebuilds regardless.
+	// Force skips the build-fingerprint shortcut and rebuilds regardless. For
+	// a promotion, it deploys the image even though this app would have built
+	// it differently.
 	Force bool
+	// Image, for a promotion, is another environment's image to run as it is,
+	// with the commit it was built from and the fingerprint of its build.
+	// Nothing is built.
+	Image         string
+	CommitMessage string
+	CommitAuthor  string
+	Fingerprint   string
 }
 
 // RunHandle identifies a one-off command that has been started.

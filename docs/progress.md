@@ -5087,6 +5087,40 @@ the private service internal.
 
 Not executed: a real backup job ahead of a real deploy.
 
+## Phase 103 — promoting a version from one environment to the next
+
+Gap 7. Deploying the same commit to production after staging built it a
+second time, and a second build is where "it worked in staging" stops being
+true: a dependency resolved differently, a base image moved. Heroku's
+pipelines, Render and Northflank promote the artifact itself.
+
+`POST /api/apps/{app}/promote` takes a deployment of the same app — same name,
+same kind of source — in another environment of the project, and deploys its
+image here without building: `DeployRequest` carries the image, the commit and
+the build's fingerprint, and the deployer creates the deployment around them
+(trigger `promote`). The target keeps its own variables, domains, disks and
+scaling, and its release command runs. A version that did not deploy, one whose
+image the registry no longer keeps, one of the app itself, one from another
+project or another team's is refused; the registry sweep already keeps any
+image a recent deployment references, so a promoted image lives as long as
+production's history needs it.
+
+The one refusal worth its own error: an image carries its build-time
+variables, so when the target's build settings or build-time variables would
+give a different fingerprint, the promotion stops (`promote.built_differently`)
+unless asked again with `force` — production running staging's
+`NEXT_PUBLIC_API_URL` is exactly the mistake a promotion must not make quietly.
+
+The Deployments tab offers Promote on every version that deployed, the live one
+included, with the environments it can go to.
+
+Tested: a promotion running the image with nothing built, a differently-built
+image refused and then run when forced; through the API, the request the
+deployer is given and the audit; refusals for a failed version, the app's own,
+another team's and another project's; and where a version can be promoted to.
+
+Not executed: a promoted image pulled by a second namespace in a real cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

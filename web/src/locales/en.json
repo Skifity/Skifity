@@ -307,7 +307,8 @@
       "app.maintenance_ended": "Maintenance ended",
       "server.alerts_changed": "Server warnings changed",
       "stack.created": "Stack created",
-      "app.template_update": "Updated through its template"
+      "app.template_update": "Updated through its template",
+      "app.promoted": "Version promoted"
     }
   },
   "projects": {
@@ -598,7 +599,8 @@
       "template": "Installed from the catalogue",
       "push": "A push to the branch",
       "preview": "A preview of a pull request",
-      "rollback": "A rollback"
+      "rollback": "A rollback",
+      "promote": "Promoted from another environment"
     },
     "rollbackTitle": "Roll back to #{{number}}",
     "rollbackFrom": "Running now",
@@ -619,7 +621,15 @@
       "port": "Port",
       "health_path": "Health check path",
       "start_command": "Start command"
-    }
+    },
+    "promote": "Promote",
+    "promoteTitle": "Promote #{{number}}",
+    "promoteHelp": "The exact image this version runs, deployed to the same app in another environment, without building it again. That app keeps its own variables, domains and scaling.",
+    "promoteWhat": "#{{number}} ({{commit}}) becomes the version {{environment}} runs.",
+    "promoteTo": "Promote to {{environment}}",
+    "promoteAnyway": "Promote anyway",
+    "promoted": "Promoting #{{number}} to {{environment}}",
+    "promoteEnvironment": "The environment to promote to"
   },
   "variables": {
     "title": "Variables",
@@ -2344,6 +2354,18 @@
         "cause": "{{0}} has disks or databases, and an update backs them up before it starts, but backups are not configured.",
         "impact": "Nothing was changed.",
         "fix": "Set up backup storage under Settings, or update without a backup if you have one of your own."
+      },
+      "promote_built_differently": {
+        "title": "This app would build that version differently",
+        "cause": "The image was built with other build settings or build-time variables than {{0}} has, so it would run code built for the other environment.",
+        "impact": "Nothing was deployed.",
+        "fix": "Make the build-time variables match, promote anyway to run the image as it was built, or deploy here to build it with this app's own."
+      },
+      "promote_not_possible": {
+        "title": "That version cannot be promoted here",
+        "cause": "{{0}}",
+        "impact": "Nothing was deployed.",
+        "fix": "Promote between the same app in two environments of one project, from a version that deployed."
       }
     }
   },

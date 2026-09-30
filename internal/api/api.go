@@ -312,6 +312,8 @@ func (s *Server) routes() chi.Router {
 				app.Get("/deployments/{deploymentID}/logs", s.handleDeploymentLogs)
 				app.Post("/deployments/{deploymentID}/cancel", s.handleCancelDeployment)
 				app.Post("/rollback/{deploymentID}", s.handleRollback)
+				app.Get("/promote", s.handlePromoteTargets)
+				app.Post("/promote", s.handlePromote)
 				// What that would change, asked before it is done.
 				app.Get("/rollback/{deploymentID}/plan", s.handleRollbackPlan)
 				app.Get("/logs", s.handleAppLogs)
