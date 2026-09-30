@@ -107,9 +107,9 @@ root. The app's page says so, in those words, rather than the kubelet's
 
 The fix keeps the environment strict. Give the user's number as **Run as
 user** in the app's settings — 65534 for `nobody` — and deploy again. Only the
-user is pinned; the group stays whatever the image says. Root cannot be
-chosen, and an app Skifity builds does not have the setting, because it always
-runs as 1000.
+user is pinned; the group is that user's own group in the image, as it would
+have been. Root cannot be chosen, and an app Skifity builds does not have the
+setting, because it always runs as 1000.
 
 The catalogue's templates carry the number already: every service whose image
 names its user — 109 of them, in 98 templates — has it, read from the image's

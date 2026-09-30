@@ -298,6 +298,22 @@ func TestARunJobIsConfinedLikeTheAppItRunsIn(t *testing.T) {
 	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
 		t.Error("a run must never be given a Kubernetes API token")
 	}
+
+	// A uid given for an image that names its user is pinned in a run as it
+	// is in the app, and the group is left to the image there too: SonarQube
+	// runs as 1000 with the root group its directories belong to.
+	app.ImageBuiltHere, app.RunAsUser = false, 1000
+	job, err = BuildRunJob(RunSpec{App: app, Name: "web-run-abc", Command: "true"})
+	if err != nil {
+		t.Fatalf("BuildRunJob: %v", err)
+	}
+	pod = job.Spec.Template.Spec
+	if pod.SecurityContext.RunAsUser == nil || *pod.SecurityContext.RunAsUser != 1000 {
+		t.Error("a run did not take the uid the app was given")
+	}
+	if pod.SecurityContext.RunAsGroup != nil {
+		t.Errorf("a run pinned the group to %d where the app leaves it to the image", *pod.SecurityContext.RunAsGroup)
+	}
 }
 
 // Traefik refuses a cross-namespace middleware reference unless

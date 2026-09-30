@@ -157,7 +157,7 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 		SecurityContext: &corev1.PodSecurityContext{
 			RunAsNonRoot: confinement.RunAsNonRoot(),
 			RunAsUser:    confinement.RunAsUser(),
-			RunAsGroup:   confinement.RunAsUser(),
+			RunAsGroup:   confinement.RunAsGroup(),
 			// As on the app itself: the group is what makes a mounted volume
 			// writable by a process whose uid nobody here knows.
 			FSGroup: ptr(int64(1000)),
