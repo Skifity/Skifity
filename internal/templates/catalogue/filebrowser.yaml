@@ -5,10 +5,20 @@ category: storage
 website: https://filebrowser.org
 services:
 - name: filebrowser
-  image: filebrowser/filebrowser:v2
+  image: filebrowser/filebrowser:v2.63.23
   port: 80
   public: true
   mem_request_mb: 128
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+  volumes:
+  - name: filebrowser-files
+    mount_path: /srv
+    size_gb: 20
+  - name: filebrowser-database
+    mount_path: /database
+    size_gb: 1
+  - name: filebrowser-config
+    mount_path: /config
+    size_gb: 1

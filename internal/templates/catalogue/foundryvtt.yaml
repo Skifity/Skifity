@@ -14,3 +14,7 @@ services:
   cpu_limit_m: 1000
   variables:
     CONTAINER_CACHE: /data/container_cache
+  volumes:
+  - name: foundryvtt-data
+    mount_path: /data
+    size_gb: 10

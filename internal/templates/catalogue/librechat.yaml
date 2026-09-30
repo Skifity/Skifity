@@ -21,6 +21,9 @@ services:
   - name: librechat-images
     mount_path: /app/client/public/images
     size_gb: 5
+  - name: librechat-uploads
+    mount_path: /app/uploads
+    size_gb: 5
   - name: librechat-logs
     mount_path: /app/api/logs
     size_gb: 5

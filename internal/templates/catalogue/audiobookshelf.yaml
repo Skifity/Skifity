@@ -13,6 +13,12 @@ services:
   cpu_request_m: 50
   cpu_limit_m: 1000
   volumes:
+  - name: audiobookshelf-config
+    mount_path: /config
+    size_gb: 1
+  - name: audiobookshelf-metadata
+    mount_path: /metadata
+    size_gb: 5
   - name: audiobookshelf-audiobooks
     mount_path: /audiobooks
     size_gb: 5

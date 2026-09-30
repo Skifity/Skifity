@@ -21,6 +21,9 @@ services:
   - name: strapi-src
     mount_path: /opt/app/src
     size_gb: 5
+  - name: strapi-uploads
+    mount_path: /opt/app/public/uploads
+    size_gb: 5
 databases:
 - name: strapi-db
   engine: postgres

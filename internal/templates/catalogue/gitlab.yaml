@@ -8,11 +8,14 @@ services:
   image: gitlab/gitlab-ce:19.1.8-ce.0
   port: 80
   public: true
-  mem_request_mb: 128
-  mem_limit_mb: 1024
-  cpu_request_m: 50
-  cpu_limit_m: 1000
+  mem_request_mb: 2048
+  mem_limit_mb: 4096
+  cpu_request_m: 500
+  cpu_limit_m: 2000
   volumes:
+  - name: gitlab-data
+    mount_path: /var/opt/gitlab
+    size_gb: 20
   - name: gitlab-config
     mount_path: /etc/gitlab
     size_gb: 5

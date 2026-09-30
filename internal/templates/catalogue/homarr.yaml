@@ -12,3 +12,13 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+  volumes:
+  - name: homarr-appdata
+    mount_path: /appdata
+    size_gb: 1
+inputs:
+- key: SECRET_ENCRYPTION_KEY
+  label: Encryption key
+  help: 64 hexadecimal characters. Make one with `openssl rand -hex 32` and keep a copy — the integrations Homarr stores cannot be read without it.
+  secret: true
+  required: true

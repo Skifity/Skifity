@@ -26,6 +26,10 @@ services:
   cpu_limit_m: 1000
   variables:
     CLICKHOUSE_SKIP_USER_SETUP: '1'
+  volumes:
+  - name: clickhouse-data
+    mount_path: /var/lib/clickhouse
+    size_gb: 20
 - name: signoz
   image: signoz/signoz:v0.97.1
   port: 8080
@@ -42,6 +46,10 @@ services:
     DEPLOYMENT_TYPE: docker-standalone-amd
     SIGNOZ_ALERTMANAGER_PROVIDER: signoz
     DOT_METRICS_ENABLED: 'true'
+  volumes:
+  - name: signoz-data
+    mount_path: /var/lib/signoz
+    size_gb: 1
 - name: otel-collector
   image: signoz/signoz-otel-collector:v0.129.7
   port: 4318
