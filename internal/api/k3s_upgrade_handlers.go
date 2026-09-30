@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ func (s *Server) handleUpgradeComponent(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, err)
 		return
 	}
-	after, err := s.cluster.ComponentStatus(r.Context(), name)
+	after, err := s.cluster.ComponentStatus(context.WithoutCancel(r.Context()), name)
 	if err != nil {
 		writeError(w, r, err)
 		return

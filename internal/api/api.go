@@ -689,7 +689,10 @@ func (s *Server) audit(r *http.Request, teamID, action, targetType, targetID, ta
 		IP:          clientIPFrom(r.Context()),
 		UserAgent:   truncate(r.UserAgent(), 255),
 	}
-	if err := s.db.RecordAudit(r.Context(), &event); err != nil {
+	// Not cancelled with the request: what it records has happened, and a
+	// client that hung up — or a Cloudflare tunnel upgrade that dropped the
+	// connection it came in on — does not make it not have.
+	if err := s.db.RecordAudit(context.WithoutCancel(r.Context()), &event); err != nil {
 		s.log.Warn("could not record audit event", "action", action, "error", err)
 	}
 	if teamID != "" {
