@@ -397,6 +397,21 @@ type Domain struct {
 	// built rather than stored: it is a property of the cluster, not of the
 	// domain, and a stored copy would be wrong the day a server is replaced.
 	DNSTarget string `json:"dns_target,omitempty"`
+	// Certificate is the team's own certificate this hostname is served with,
+	// when one covers it, filled in when a list is built for the same reason
+	// as DNSTarget: it follows from the team's certificates, and a stored copy
+	// would be wrong the moment one is uploaded or removed.
+	Certificate *DomainCertificate `json:"certificate,omitempty"`
+}
+
+// DomainCertificate is which of the team's certificates a domain uses, and
+// until when.
+type DomainCertificate struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	NotAfter time.Time `json:"not_after"`
+	// State is valid, expiring or expired; see tlscert.State.
+	State string `json:"state"`
 }
 
 // DeploymentStatus is the state of one deploy attempt.

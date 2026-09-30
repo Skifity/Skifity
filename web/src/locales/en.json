@@ -356,7 +356,10 @@
       "app.deploy_vulnerabilities_accepted": "Deployed with critical vulnerabilities accepted",
       "app.drift_repaired": "Put the app back as the panel applies it",
       "app.drift_auto_repair_on": "Set the app to be put back automatically",
-      "app.drift_auto_repair_off": "Stopped putting the app back automatically"
+      "app.drift_auto_repair_off": "Stopped putting the app back automatically",
+      "certificate.saved": "uploaded a certificate",
+      "certificate.replaced": "uploaded a new version of a certificate",
+      "certificate.deleted": "removed a certificate"
     }
   },
   "projects": {
@@ -812,7 +815,14 @@
     "visitors": "Visitors",
     "servesTheApp": "Get the app",
     "redirectTo": "Go to {{hostname}}",
-    "redirectHelp": "Visitors to {{hostname}} are sent to {{target}} permanently, with the same path. Search engines move the page to {{target}} too."
+    "redirectHelp": "Visitors to {{hostname}} are sent to {{target}} permanently, with the same path. Search engines move the page to {{target}} too.",
+    "statusExpiring": "Certificate expiring",
+    "statusExpired": "Certificate expired",
+    "ownCertificate": "Your certificate: {{name}}, expires {{date}}",
+    "ownCertificateExpiring": "Your certificate {{name}} expires on {{date}}",
+    "ownCertificateExpired": "Your certificate {{name}} expired on {{date}}",
+    "ownCertificateRenew": "Nothing renews a certificate you brought. Renew it with the authority that issued it and upload it under the same name: every app using it is updated.",
+    "manageCertificates": "Certificates in Settings"
   },
   "scaling": {
     "title": "Scaling",
@@ -1552,7 +1562,8 @@
     "componentUpgradeTitle": "Upgrade {{name}}?",
     "componentUpgradeConfirm": "The manifest of version {{to}} is applied over {{from}}, which is how the project documents its own upgrade. The component restarts; your apps do not.",
     "componentVersionUnknown": "the version installed before versions were recorded",
-    "scanning": "Image scanning"
+    "scanning": "Image scanning",
+    "certificates": "Certificates"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -2981,6 +2992,66 @@
         "cause": "Listing the events in {{0}} failed: {{1}}",
         "impact": "Nothing was changed, and the app keeps running. Only this list is missing.",
         "fix": "Check that the panel's service account can still list events and pods in that namespace. If the cluster was just upgraded, try again in a minute."
+      },
+      "certificate_unreadable": {
+        "title": "That is not a certificate the panel can read",
+        "cause": "The certificate box holds no PEM certificate that could be read: {{0}}.",
+        "impact": "Nothing was saved.",
+        "fix": "Paste the certificate file's contents, from -----BEGIN CERTIFICATE----- to -----END CERTIFICATE-----, followed by the intermediate certificates your certificate authority gave you. A .crt or .cer file in DER form converts with `openssl x509 -inform der -in cert.cer -out cert.pem`."
+      },
+      "certificate_key_unreadable": {
+        "title": "That is not a private key the panel can read",
+        "cause": "The private key box holds no unencrypted PEM private key.",
+        "impact": "Nothing was saved.",
+        "fix": "Paste the key that begins with -----BEGIN PRIVATE KEY-----, -----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----. A key protected by a passphrase has to be decrypted first: `openssl pkey -in encrypted.key -out plain.key`."
+      },
+      "certificate_key_mismatch": {
+        "title": "The private key does not belong to this certificate",
+        "cause": "The private key is not the one {{0}} was issued for.",
+        "impact": "Nothing was saved. Served together, every visitor's connection would fail.",
+        "fix": "Use the key the certificate request was made with. `openssl x509 -noout -pubkey -in cert.pem` and `openssl pkey -pubout -in key.pem` print the same thing for a key and certificate that belong together."
+      },
+      "certificate_chain_broken": {
+        "title": "These certificates are not one chain",
+        "cause": "{{0}} did not sign {{1}} or any certificate above it, so it is not part of its chain.",
+        "impact": "Nothing was saved. The order does not matter, and was put right when that was all that was wrong.",
+        "fix": "Paste your certificate and the intermediate certificates your certificate authority gave you for it, and nothing else — not another site's certificate, not an old intermediate."
+      },
+      "certificate_expired": {
+        "title": "This certificate has expired",
+        "cause": "The certificate for {{0}} stopped being valid on {{1}}.",
+        "impact": "Nothing was saved. Every browser refuses an expired certificate.",
+        "fix": "Renew it with your certificate authority and upload the new one under the same name."
+      },
+      "certificate_not_yet_valid": {
+        "title": "This certificate is not valid yet",
+        "cause": "The certificate for {{0}} is valid from {{1}}.",
+        "impact": "Nothing was saved. Served now, every browser would refuse it.",
+        "fix": "Upload it once its validity has started. If the date looks wrong, check the clock on the server the panel runs on."
+      },
+      "certificate_weak_key": {
+        "title": "This certificate's key is not strong enough",
+        "cause": "The key is {{0}}. The panel serves RSA keys of 2048 bits or more, ECDSA keys on P-256 or P-384, and Ed25519 keys.",
+        "impact": "Nothing was saved.",
+        "fix": "Make a new key and certificate request, for example `openssl req -new -newkey rsa:3072 -nodes -keyout key.pem -out request.csr`, and have it issued again."
+      },
+      "certificate_no_hostnames": {
+        "title": "This certificate names no hostname",
+        "cause": "The certificate for {{0}} has no DNS names in its Subject Alternative Name, and browsers stopped reading the Common Name years ago.",
+        "impact": "Nothing was saved. It would match none of your domains.",
+        "fix": "Have it issued again with the hostnames as Subject Alternative Names, such as DNS:shop.example.com or DNS:*.example.com."
+      },
+      "certificate_hostname_taken": {
+        "title": "This certificate names a hostname that is not this team's",
+        "cause": "{{0}} is this panel's own address, another team's domain, or named by another team's certificate.",
+        "impact": "Nothing was saved. The ingress serves certificates by name for the whole cluster, so this one would be sent to visitors of that hostname too.",
+        "fix": "Use a certificate that names only this team's hostnames. If the hostname is yours, remove it from where it is used first."
+      },
+      "domain_named_by_certificate": {
+        "title": "Another team's certificate names this hostname",
+        "cause": "{{0}} is named in a certificate another team on this panel uploaded.",
+        "impact": "The domain was not added. Both certificates would be served for it, in whatever order the ingress read them.",
+        "fix": "Ask the panel's administrator which team uses the hostname. A certificate is removed under Settings, Certificates."
       }
     }
   },
@@ -3063,7 +3134,8 @@
       "backup.missed": "A scheduled backup was missed and taken late",
       "backup.succeeded": "A backup succeeded",
       "app.vulnerable": "An app's image has a new critical vulnerability",
-      "app.drifted": "An app was changed outside the panel"
+      "app.drifted": "An app was changed outside the panel",
+      "certificate.expiring": "One of the team's own certificates is about to expire"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {
@@ -3678,5 +3750,40 @@
       "oom": "The app used more memory than its limit and was stopped. Raise the memory limit under Scaling, or find what is using the memory.",
       "evicted": "The server ran short and stopped this instance to protect itself: {{0}} It is started again on a server with room."
     }
+  },
+  "certificates": {
+    "title": "Your own certificates",
+    "help": "Certificates you bring instead of Let's Encrypt's: a company CA's, an EV or OV certificate, a wildcard bought elsewhere, or one for a hostname Let's Encrypt cannot reach. Every HTTPS domain in the team that one covers is served with it.",
+    "empty": "None. Every HTTPS domain gets its certificate from Let's Encrypt.",
+    "add": "Upload a certificate",
+    "save": "Check and save",
+    "name": "Name",
+    "namePlaceholder": "Company wildcard",
+    "nameHelp": "Uploading under a name that exists replaces that certificate, which is how a renewal goes in.",
+    "chain": "Certificate",
+    "chainHelp": "Your certificate and the intermediate certificates that came with it, PEM, in any order.",
+    "key": "Private key",
+    "keyHelp": "PEM, without a passphrase. It is encrypted as it arrives and never shown again, here or anywhere.",
+    "fromFile": "From a file",
+    "saved": "{{name}} is saved.",
+    "replaced": "{{name}} is replaced.",
+    "reordered": "The certificates were put in order, yours first.",
+    "updating_one": "{{count}} app is being updated to use it.",
+    "updating_other": "{{count}} apps are being updated to use it.",
+    "state": {
+      "valid": "Valid",
+      "expiring": "Expiring soon",
+      "expired": "Expired"
+    },
+    "selfSigned": "Self-signed",
+    "replace": "Upload a new version",
+    "remove": "Remove {{name}}",
+    "removeConfirm_one": "It serves {{count}} domain, which goes back to Let's Encrypt.",
+    "removeConfirm_other": "It serves {{count}} domains, which go back to Let's Encrypt.",
+    "removeConsequence": "A hostname Let's Encrypt cannot reach stops working over HTTPS, and the panel keeps no other copy of the private key.",
+    "details": "Issued by {{issuer}} · expires {{date}} ({{relative}}) · {{keyType}}",
+    "noDomains": "No domain in the team uses it yet.",
+    "usedBy": "Used by",
+    "fingerprint": "SHA-256"
   }
 }

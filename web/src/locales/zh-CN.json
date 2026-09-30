@@ -348,7 +348,10 @@
       "app.deploy_vulnerabilities_accepted": "在接受严重漏洞的情况下部署",
       "app.drift_repaired": "将应用恢复为面板所应用的状态",
       "app.drift_auto_repair_on": "设置为自动恢复应用",
-      "app.drift_auto_repair_off": "停止自动恢复应用"
+      "app.drift_auto_repair_off": "停止自动恢复应用",
+      "certificate.saved": "上传了证书",
+      "certificate.replaced": "上传了证书的新版本",
+      "certificate.deleted": "删除了证书"
     }
   },
   "projects": {
@@ -802,7 +805,14 @@
     "visitors": "访问者",
     "servesTheApp": "访问应用",
     "redirectTo": "跳转到 {{hostname}}",
-    "redirectHelp": "访问 {{hostname}} 的用户会被永久重定向到 {{target}}，路径保持不变。搜索引擎也会将页面迁移到 {{target}}。"
+    "redirectHelp": "访问 {{hostname}} 的用户会被永久重定向到 {{target}}，路径保持不变。搜索引擎也会将页面迁移到 {{target}}。",
+    "statusExpiring": "证书即将过期",
+    "statusExpired": "证书已过期",
+    "ownCertificate": "你的证书：{{name}}，{{date}} 过期",
+    "ownCertificateExpiring": "你的证书 {{name}} 将于 {{date}} 过期",
+    "ownCertificateExpired": "你的证书 {{name}} 已于 {{date}} 过期",
+    "ownCertificateRenew": "你自带的证书不会自动续期。请向签发它的机构续期，并以相同名称上传：所有使用它的应用都会随之更新。",
+    "manageCertificates": "在设置中管理证书"
   },
   "scaling": {
     "title": "伸缩",
@@ -1538,7 +1548,8 @@
     "componentUpgradeTitle": "升级 {{name}}？",
     "componentUpgradeConfirm": "版本 {{to}} 的清单会应用在 {{from}} 之上，这正是该项目自己文档里的升级方式。重启的是这个组件，不是你的应用。",
     "componentVersionUnknown": "开始记录版本之前安装的版本",
-    "scanning": "镜像扫描"
+    "scanning": "镜像扫描",
+    "certificates": "证书"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -2967,6 +2978,66 @@
         "cause": "列出 {{0}} 中的事件失败：{{1}}",
         "impact": "没有做任何改动，应用照常运行。只是缺少这份列表。",
         "fix": "检查面板的服务账号是否仍能列出该命名空间中的事件和 Pod。如果集群刚刚升级过，请一分钟后重试。"
+      },
+      "certificate_unreadable": {
+        "title": "这不是面板能读取的证书",
+        "cause": "证书框中没有可读取的 PEM 证书：{{0}}。",
+        "impact": "未保存任何内容。",
+        "fix": "粘贴证书文件的内容，从 -----BEGIN CERTIFICATE----- 到 -----END CERTIFICATE-----，后面跟上证书颁发机构提供的中间证书。DER 格式的 .crt 或 .cer 文件可用 `openssl x509 -inform der -in cert.cer -out cert.pem` 转换。"
+      },
+      "certificate_key_unreadable": {
+        "title": "这不是面板能读取的私钥",
+        "cause": "私钥框中没有未加密的 PEM 私钥。",
+        "impact": "未保存任何内容。",
+        "fix": "粘贴以 -----BEGIN PRIVATE KEY-----、-----BEGIN RSA PRIVATE KEY----- 或 -----BEGIN EC PRIVATE KEY----- 开头的私钥。受密码保护的私钥需要先解密：`openssl pkey -in encrypted.key -out plain.key`。"
+      },
+      "certificate_key_mismatch": {
+        "title": "该私钥不属于此证书",
+        "cause": "该私钥不是签发 {{0}} 时所用的私钥。",
+        "impact": "未保存任何内容。两者一起使用会导致每位访问者的连接失败。",
+        "fix": "请使用生成证书请求时所用的私钥。对于相互匹配的私钥和证书，`openssl x509 -noout -pubkey -in cert.pem` 和 `openssl pkey -pubout -in key.pem` 的输出相同。"
+      },
+      "certificate_chain_broken": {
+        "title": "这些证书不构成一条证书链",
+        "cause": "{{0}} 没有为 {{1}} 或其上方的任何证书签名，因此不属于它的证书链。",
+        "impact": "未保存任何内容。顺序无关紧要；如果只是顺序错误，已经自动理顺。",
+        "fix": "只粘贴你的证书和证书颁发机构为它提供的中间证书，不要粘贴其他内容——既不要其他网站的证书，也不要旧的中间证书。"
+      },
+      "certificate_expired": {
+        "title": "该证书已过期",
+        "cause": "{{0}} 的证书已于 {{1}} 失效。",
+        "impact": "未保存任何内容。所有浏览器都会拒绝已过期的证书。",
+        "fix": "向证书颁发机构续期，并以相同名称上传新证书。"
+      },
+      "certificate_not_yet_valid": {
+        "title": "该证书尚未生效",
+        "cause": "{{0}} 的证书从 {{1}} 起生效。",
+        "impact": "未保存任何内容。如果现在使用，所有浏览器都会拒绝它。",
+        "fix": "请在其有效期开始后再上传。如果日期看起来不对，请检查运行面板的服务器的时钟。"
+      },
+      "certificate_weak_key": {
+        "title": "该证书的密钥强度不够",
+        "cause": "该密钥为 {{0}}。面板支持 2048 位及以上的 RSA 密钥、P-256 或 P-384 上的 ECDSA 密钥以及 Ed25519 密钥。",
+        "impact": "未保存任何内容。",
+        "fix": "生成新的密钥和证书请求，例如 `openssl req -new -newkey rsa:3072 -nodes -keyout key.pem -out request.csr`，然后重新签发。"
+      },
+      "certificate_no_hostnames": {
+        "title": "该证书没有列出任何主机名",
+        "cause": "{{0}} 的证书在 Subject Alternative Name 中没有 DNS 名称，而浏览器多年前就已不再读取 Common Name。",
+        "impact": "未保存任何内容。它不会匹配你的任何域名。",
+        "fix": "请以 Subject Alternative Name 的形式列出主机名后重新签发，例如 DNS:shop.example.com 或 DNS:*.example.com。"
+      },
+      "certificate_hostname_taken": {
+        "title": "该证书列出了不属于本团队的主机名",
+        "cause": "{{0}} 是本面板自己的地址、其他团队的域名，或已列在其他团队的证书中。",
+        "impact": "未保存任何内容。Ingress 按名称为整个集群提供证书，因此该证书也会被发给访问该主机名的用户。",
+        "fix": "请使用只列出本团队主机名的证书。如果该主机名属于你，请先将它从正在使用的地方移除。"
+      },
+      "domain_named_by_certificate": {
+        "title": "其他团队的证书列出了这个主机名",
+        "cause": "{{0}} 已列在本面板上其他团队上传的证书中。",
+        "impact": "未添加该域名。两个证书都会为它提供服务，顺序取决于 Ingress 读取它们的顺序。",
+        "fix": "请询问面板管理员是哪个团队在使用这个主机名。证书可在“设置 → 证书”中删除。"
       }
     }
   },
@@ -3049,7 +3120,8 @@
       "backup.missed": "计划备份被错过，已延后执行",
       "backup.succeeded": "备份成功",
       "app.vulnerable": "应用的镜像中出现新的严重漏洞",
-      "app.drifted": "有应用在面板之外被修改"
+      "app.drifted": "有应用在面板之外被修改",
+      "certificate.expiring": "团队自有的某个证书即将过期"
     },
     "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
     "field": {
@@ -3662,5 +3734,38 @@
       "oom": "应用使用的内存超过了上限，被停止了。请在“伸缩”中提高内存上限，或找出占用内存的原因。",
       "evicted": "服务器资源不足，为了保护自身停止了这个实例：{{0}} 它会在有空余资源的服务器上重新启动。"
     }
+  },
+  "certificates": {
+    "title": "你自己的证书",
+    "help": "代替 Let's Encrypt 证书、由你自带的证书：公司 CA 签发的、EV 或 OV 证书、在别处购买的通配符证书，或 Let's Encrypt 无法访问的主机名所用的证书。团队中被它覆盖的每个 HTTPS 域名都会使用它。",
+    "empty": "暂无。每个 HTTPS 域名都从 Let's Encrypt 获取证书。",
+    "add": "上传证书",
+    "save": "检查并保存",
+    "name": "名称",
+    "namePlaceholder": "公司通配符证书",
+    "nameHelp": "以已存在的名称上传会替换该证书，续期就是这样替换上去的。",
+    "chain": "证书",
+    "chainHelp": "你的证书及随附的中间证书，PEM 格式，顺序不限。",
+    "key": "私钥",
+    "keyHelp": "PEM 格式，不带密码。私钥一到达就会被加密，此后在这里或任何地方都不会再显示。",
+    "fromFile": "从文件读取",
+    "saved": "已保存 {{name}}。",
+    "replaced": "已替换 {{name}}。",
+    "reordered": "证书已排好顺序，你的证书在最前。",
+    "updating_other": "正在更新 {{count}} 个应用以使用它。",
+    "state": {
+      "valid": "有效",
+      "expiring": "即将过期",
+      "expired": "已过期"
+    },
+    "selfSigned": "自签名",
+    "replace": "上传新版本",
+    "remove": "删除 {{name}}",
+    "removeConfirm_other": "它为 {{count}} 个域名提供服务，这些域名将改回使用 Let's Encrypt。",
+    "removeConsequence": "Let's Encrypt 无法访问的主机名将无法再通过 HTTPS 访问，并且面板不保留私钥的其他副本。",
+    "details": "由 {{issuer}} 签发 · {{date}} 过期（{{relative}}）· {{keyType}}",
+    "noDomains": "团队中暂无域名使用它。",
+    "usedBy": "使用者",
+    "fingerprint": "SHA-256"
   }
 }

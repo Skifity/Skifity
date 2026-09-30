@@ -175,6 +175,83 @@ kubectl describe certificate -n <environment-namespace> <name>
 Let's Encrypt rate-limits per domain. If you have been experimenting, you may be
 paused for a week; the certificate's events say so.
 
+A domain served with a certificate of the team's own says so on the Domains
+tab, and cert-manager has nothing to do with it. If browsers refuse it, look at
+the certificate itself: `openssl s_client -connect app.example.com:443
+-servername app.example.com </dev/null | openssl x509 -noout -subject -dates`
+shows which one is being sent and until when.
+
+## Your own certificate is refused
+
+Uploading a certificate under **Settings**, **Certificates** (or with
+`skifity certs add`) checks it before anything is kept, and says which of these
+it is. None of them stores anything.
+
+**That is not a certificate the panel can read.** The certificate box needs PEM:
+text starting `-----BEGIN CERTIFICATE-----`. A `.cer` or `.crt` file that looks
+like binary is DER; convert it:
+
+```sh
+openssl x509 -inform der -in cert.cer -out cert.pem
+```
+
+A `.pfx` or `.p12` bundle holds both halves; take them out with
+`openssl pkcs12 -in bundle.pfx -clcerts -nokeys -out cert.pem` and
+`openssl pkcs12 -in bundle.pfx -nocerts -nodes -out key.pem`, and add the
+intermediates your certificate authority gave you to `cert.pem`.
+
+**That is not a private key the panel can read.** The key box needs an
+unencrypted PEM key — `-----BEGIN PRIVATE KEY-----`, `RSA PRIVATE KEY` or
+`EC PRIVATE KEY`. One protected by a passphrase (`ENCRYPTED PRIVATE KEY`, or a
+`Proc-Type: 4,ENCRYPTED` line) has to be decrypted first:
+
+```sh
+openssl pkey -in encrypted.key -out plain.key
+```
+
+**The private key does not belong to this certificate.** The key has to be the
+one the certificate request was made with. These print the same thing when the
+two belong together:
+
+```sh
+openssl x509 -noout -pubkey -in cert.pem | openssl sha256
+openssl pkey -pubout -in key.pem | openssl sha256
+```
+
+**These certificates are not one chain.** Paste your certificate and the
+intermediates issued for it, in any order: the panel puts them leaf first. What
+it refuses is a certificate that signed nothing in the chain — another site's
+certificate, or an old intermediate from a previous renewal. The refusal names
+it.
+
+**This certificate has expired** or **is not valid yet.** Browsers refuse both.
+Renew it; if a new certificate says it is not valid yet, check the clock on the
+server the panel runs on.
+
+**This certificate's key is not strong enough.** The panel serves RSA of 2048
+bits or more, ECDSA on P-256 or P-384, and Ed25519. Make a new key and have the
+certificate issued again:
+
+```sh
+openssl req -new -newkey rsa:3072 -nodes -keyout key.pem -out request.csr
+```
+
+**This certificate names no hostname.** It has no DNS names in its Subject
+Alternative Name, and browsers stopped reading the Common Name years ago. Have
+it issued again with `DNS:shop.example.com` (or `DNS:*.example.com`) as a
+Subject Alternative Name. `openssl x509 -noout -ext subjectAltName -in cert.pem`
+shows what it has.
+
+**This certificate names a hostname that is not this team's.** The ingress
+controller serves every certificate in the cluster by name, whichever app it
+came from, so a certificate naming another team's hostname, a hostname in
+another team's certificate, or the panel's own address would be sent to those
+visitors too. Use a certificate that names only your team's hostnames. The same
+rule works the other way: a domain named exactly in another team's certificate
+cannot be added (**Another team's certificate names this hostname**). A
+wildcard is refused only when another team has the same wildcard, because an
+exact name always wins over one.
+
 ## The cluster is unreachable
 
 The panel keeps working and says so on every page. Your apps keep running: they

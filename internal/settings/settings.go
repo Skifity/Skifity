@@ -174,10 +174,13 @@ const (
 	// swept, and how long finished records are kept. They are settings because
 	// they have to survive a restart, and the first one has no form field for
 	// the same reason a timestamp never does.
-	KeyRegistrySweptAt   = "maintenance.registry_swept_at"
-	KeyPrunedAt          = "maintenance.pruned_at"
-	KeyDeploymentHistory = "maintenance.deployment_history"
-	KeyAuditHistoryDays  = "maintenance.audit_history_days"
+	KeyRegistrySweptAt = "maintenance.registry_swept_at"
+	KeyPrunedAt        = "maintenance.pruned_at"
+	// KeyCertificatesCheckedAt is when the teams' own certificates were last
+	// checked for their expiry dates.
+	KeyCertificatesCheckedAt = "maintenance.certificates_checked_at"
+	KeyDeploymentHistory     = "maintenance.deployment_history"
+	KeyAuditHistoryDays      = "maintenance.audit_history_days"
 )
 
 // Definitions is the whole catalogue, in display order.

@@ -1104,6 +1104,79 @@ paths:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/certificates:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listCertificates
+      tags: [Teams]
+      summary: The certificates the team brought for its own hostnames
+      description: >-
+        Viewer, not limited to projects. Names, hostnames, issuers, dates and
+        which domains each one serves. Never a private key.
+      responses:
+        '200':
+          description: The certificates, by name.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CertificateList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: saveCertificate
+      tags: [Teams]
+      summary: Upload a certificate, or a new version of one
+      description: >-
+        Admin. The chain and its private key, PEM. Refused unless the key
+        belongs to the certificate, the certificates form one chain (the
+        order is put right), it is valid now, its key is RSA of 2048 bits or
+        more, ECDSA P-256 or P-384, or Ed25519, it names at least one DNS
+        name, and none of its names is another team's or the panel's. The key
+        is sealed and never sent back. A name that exists is replaced, and
+        every app whose hostnames either version covers is re-applied in the
+        background.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SaveCertificateRequest'}
+      responses:
+        '201':
+          description: The certificate was added.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SavedCertificate'}
+        '200':
+          description: A certificate of the same name was replaced.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SavedCertificate'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/certificates/{certificateID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/certificateID'
+    delete:
+      operationId: deleteCertificate
+      tags: [Teams]
+      summary: Remove a certificate
+      description: >-
+        Admin. Its hostnames go back to Let's Encrypt, or to another of the
+        team's certificates that covers them; the apps are re-applied in the
+        background and its Secret leaves their namespaces.
+      responses:
+        '200':
+          description: Removed, and how many apps are being re-applied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, updating]
+                properties:
+                  ok: {type: boolean}
+                  updating: {type: integer}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/git-sources:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -4092,6 +4165,7 @@ components:
     envID: {name: envID, in: path, required: true, description: 'An environment''s id.', schema: {type: string}}
     fileID: {name: fileID, in: path, required: true, description: 'A file''s id.', schema: {type: string}}
     registryID: {name: registryID, in: path, required: true, description: 'A registry credential''s id.', schema: {type: string}}
+    certificateID: {name: certificateID, in: path, required: true, description: 'A team certificate''s id.', schema: {type: string}}
     portID: {name: portID, in: path, required: true, description: 'A public port''s id.', schema: {type: string}}
     appID: {name: appID, in: path, required: true, description: 'An app''s id.', schema: {type: string}}
     deploymentID: {name: deploymentID, in: path, required: true, description: 'A deployment''s id.', schema: {type: string}}
@@ -6210,6 +6284,18 @@ components:
         created_at: {type: string, format: date-time}
         dns_target: {type: string, description: 'Where a domain of your own has to point.'}
         redirect_to: {type: string, description: 'Another of the app''s hostnames this one permanently redirects to. Absent when it serves the app.'}
+        certificate:
+          description: >-
+            The team's own certificate this hostname is served with, when one
+            covers it; absent for Let's Encrypt. Its status is then active,
+            expiring or expired, from the certificate's dates.
+          type: object
+          required: [id, name, not_after, state]
+          properties:
+            id: {type: string}
+            name: {type: string}
+            not_after: {type: string, format: date-time}
+            state: {type: string, enum: [valid, expiring, expired]}
 
     AddedDomain:
       allOf:
@@ -6410,6 +6496,68 @@ components:
           type: array
           items: {$ref: '#/components/schemas/RegistryCredential'}
         total: {type: integer}
+
+    Certificate:
+      type: object
+      required: [id, team_id, name, hostnames, subject, issuer, not_before, not_after, fingerprint, key_type,
+        self_signed, chain_length, created_at, updated_at, state, domains]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        name: {type: string}
+        hostnames:
+          type: array
+          items: {type: string}
+          description: The DNS names it is for, wildcards as written, such as *.example.com.
+        subject: {type: string}
+        issuer: {type: string}
+        not_before: {type: string, format: date-time}
+        not_after: {type: string, format: date-time}
+        fingerprint: {type: string, description: 'SHA-256 of the certificate, as openssl x509 -fingerprint -sha256 prints it.'}
+        key_type: {type: string, description: 'RSA 2048, ECDSA P-256, Ed25519 and so on.'}
+        self_signed: {type: boolean}
+        chain_length: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        state: {type: string, enum: [valid, expiring, expired], description: Expiring is within 21 days.}
+        domains:
+          type: array
+          description: The team's domains served with it.
+          items:
+            type: object
+            required: [id, app_id, app_name, hostname]
+            properties:
+              id: {type: string}
+              app_id: {type: string}
+              app_name: {type: string}
+              hostname: {type: string}
+
+    CertificateList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Certificate'}
+        total: {type: integer}
+
+    SaveCertificateRequest:
+      type: object
+      required: [name, certificate, private_key]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: A name that exists is replaced.}
+        certificate: {type: string, description: 'The certificate and its intermediates, PEM, in any order.'}
+        private_key: {type: string, description: The unencrypted private key, PEM. Sealed at once and never sent back.}
+
+    SavedCertificate:
+      type: object
+      required: [certificate, replaced, reordered, updating]
+      properties:
+        certificate: {$ref: '#/components/schemas/Certificate'}
+        replaced: {type: boolean}
+        reordered: {type: boolean, description: The chain was pasted in another order and was put leaf first.}
+        updating: {type: integer, description: How many apps are being re-applied in the background.}
 
     SetRegistryRequest:
       type: object

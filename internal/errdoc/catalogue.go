@@ -1107,6 +1107,123 @@ func CertificateFailed(hostname, reason string) *Problem {
 		With("hostname", hostname).With("reason", reason)
 }
 
+// --- a certificate of the team's own ---
+//
+// Every one of these is a refusal before anything is stored: a certificate
+// the panel would have to serve and cannot is better found while the person is
+// still holding the files.
+
+// CertificateUnreadable is a chain with no certificate in it that could be
+// read.
+func CertificateUnreadable(detail string) *Problem {
+	return New("certificate.unreadable", "That is not a certificate the panel can read").
+		WithCause("The certificate box holds no PEM certificate that could be read: %s.", detail).
+		WithImpact("Nothing was saved.").
+		WithFix("Paste the certificate file's contents, from -----BEGIN CERTIFICATE----- to -----END CERTIFICATE-----, followed by the intermediate certificates your certificate authority gave you. A .crt or .cer file in DER form converts with `openssl x509 -inform der -in cert.cer -out cert.pem`.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateKeyUnreadable is a private key that is missing, encrypted or in a
+// form nothing reads.
+func CertificateKeyUnreadable() *Problem {
+	return New("certificate.key_unreadable", "That is not a private key the panel can read").
+		WithCause("The private key box holds no unencrypted PEM private key.").
+		WithImpact("Nothing was saved.").
+		WithFix("Paste the key that begins with -----BEGIN PRIVATE KEY-----, -----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----. A key protected by a passphrase has to be decrypted first: `openssl pkey -in encrypted.key -out plain.key`.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateKeyMismatch is a key that belongs to none of the certificates.
+func CertificateKeyMismatch(subject string) *Problem {
+	return New("certificate.key_mismatch", "The private key does not belong to this certificate").
+		WithCause("The private key is not the one %s was issued for.", subject).
+		WithImpact("Nothing was saved. Served together, every visitor's connection would fail.").
+		WithFix("Use the key the certificate request was made with. `openssl x509 -noout -pubkey -in cert.pem` and `openssl pkey -pubout -in key.pem` print the same thing for a key and certificate that belong together.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateChainBroken is a certificate among those pasted that is not part
+// of the leaf's chain.
+func CertificateChainBroken(stray, leaf string) *Problem {
+	return New("certificate.chain_broken", "These certificates are not one chain").
+		WithCause("%s did not sign %s or any certificate above it, so it is not part of its chain.", stray, leaf).
+		WithImpact("Nothing was saved. The order does not matter, and was put right when that was all that was wrong.").
+		WithFix("Paste your certificate and the intermediate certificates your certificate authority gave you for it, and nothing else — not another site's certificate, not an old intermediate.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateExpired is a certificate past its date.
+func CertificateExpired(subject, when string) *Problem {
+	return New("certificate.expired", "This certificate has expired").
+		WithCause("The certificate for %s stopped being valid on %s.", subject, when).
+		WithImpact("Nothing was saved. Every browser refuses an expired certificate.").
+		WithFix("Renew it with your certificate authority and upload the new one under the same name.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateNotYetValid is a certificate whose validity starts later.
+func CertificateNotYetValid(subject, when string) *Problem {
+	return New("certificate.not_yet_valid", "This certificate is not valid yet").
+		WithCause("The certificate for %s is valid from %s.", subject, when).
+		WithImpact("Nothing was saved. Served now, every browser would refuse it.").
+		WithFix("Upload it once its validity has started. If the date looks wrong, check the clock on the server the panel runs on.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateWeakKey is a key browsers or certificate authorities no longer
+// accept.
+func CertificateWeakKey(keyType string) *Problem {
+	return New("certificate.weak_key", "This certificate's key is not strong enough").
+		WithCause("The key is %s. The panel serves RSA keys of 2048 bits or more, ECDSA keys on P-256 or P-384, and Ed25519 keys.", keyType).
+		WithImpact("Nothing was saved.").
+		WithFix("Make a new key and certificate request, for example `openssl req -new -newkey rsa:3072 -nodes -keyout key.pem -out request.csr`, and have it issued again.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateNoHostnames is a certificate with no DNS names, which browsers
+// match against nothing.
+func CertificateNoHostnames(subject string) *Problem {
+	return New("certificate.no_hostnames", "This certificate names no hostname").
+		WithCause("The certificate for %s has no DNS names in its Subject Alternative Name, and browsers stopped reading the Common Name years ago.", subject).
+		WithImpact("Nothing was saved. It would match none of your domains.").
+		WithFix("Have it issued again with the hostnames as Subject Alternative Names, such as DNS:shop.example.com or DNS:*.example.com.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusBadRequest)
+}
+
+// CertificateHostnameTaken is a certificate naming a hostname that belongs to
+// another team on the panel, or to the panel itself.
+//
+// The ingress controller serves every certificate in the cluster by name, and
+// two certificates for the same name are served in whatever order it read
+// them. A certificate naming a hostname that is somebody else's would be served
+// to their visitors some of the time.
+func CertificateHostnameTaken(hostname string) *Problem {
+	return New("certificate.hostname_taken", "This certificate names a hostname that is not this team's").
+		WithCause("%s is this panel's own address, another team's domain, or named by another team's certificate.", hostname).
+		WithImpact("Nothing was saved. The ingress serves certificates by name for the whole cluster, so this one would be sent to visitors of that hostname too.").
+		WithFix("Use a certificate that names only this team's hostnames. If the hostname is yours, remove it from where it is used first.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusConflict)
+}
+
+// DomainNamedByCertificate is a hostname another team's certificate names.
+func DomainNamedByCertificate(hostname string) *Problem {
+	return New("domain.named_by_certificate", "Another team's certificate names this hostname").
+		WithCause("%s is named in a certificate another team on this panel uploaded.", hostname).
+		WithImpact("The domain was not added. Both certificates would be served for it, in whatever order the ingress read them.").
+		WithFix("Ask the panel's administrator which team uses the hostname. A certificate is removed under Settings, Certificates.").
+		WithDocs("/docs/troubleshooting#your-own-certificate-is-refused").
+		WithStatus(http.StatusConflict)
+}
+
 // --- cluster and capacity ---
 
 // InsufficientCapacity reports a workload that cannot be scheduled.

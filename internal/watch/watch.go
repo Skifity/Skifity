@@ -61,6 +61,9 @@ type Store interface {
 
 	ListDomains(ctx context.Context, appID string) ([]store.Domain, error)
 	SetDomainStatus(ctx context.Context, id, status, detail string) error
+	// ListCertificates is the team's own certificates, whose hostnames
+	// cert-manager has nothing to do with.
+	ListCertificates(ctx context.Context, teamID string) ([]store.Certificate, error)
 
 	StalePreviewEnvironments(ctx context.Context, before time.Time) ([]store.Environment, error)
 	DeleteEnvironment(ctx context.Context, id string) error
@@ -427,9 +430,18 @@ func (w *Watcher) checkCertificate(ctx context.Context, app store.DeployedApp) {
 		return
 	}
 
+	// A hostname on one of the team's own certificates is not in the
+	// Certificate cert-manager keeps for the app, and what that says is not
+	// about it: its state follows its own certificate's dates, which the
+	// domain list works out when it is asked.
+	certificates, err := w.db.ListCertificates(ctx, app.TeamID)
+	if err != nil {
+		w.log.Warn("could not list the team's certificates while watching", "app", app.ID, "error", err)
+		return
+	}
 	secured := make([]store.Domain, 0, len(domains))
 	for _, domain := range domains {
-		if domain.TLS {
+		if _, own := store.CertificateFor(certificates, domain.Hostname); domain.TLS && !own {
 			secured = append(secured, domain)
 		}
 	}

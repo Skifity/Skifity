@@ -541,10 +541,20 @@ func (d *Deployer) watchProcesses(ctx context.Context, deployment store.Deployme
 func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app store.App) {
 	applier := d.cluster.Client().Applier()
 
-	if len(spec.Domains) == 0 {
+	// Asking the builder rather than counting domains: an app whose every
+	// hostname is on a certificate of the team's own has domains and no
+	// first Ingress, and one left behind would keep sending those hostnames
+	// to cert-manager.
+	if kube.BuildIngress(spec) == nil {
 		if err := applier.Delete(ctx, "networking.k8s.io/v1", "Ingress", spec.Namespace, spec.Name); err != nil {
 			d.log.Warn("could not remove the ingress", "app", app.ID, "error", err)
 		}
+	}
+	// The second Ingress when no hostname is on a certificate of the team's
+	// own any more, and the Secret of each certificate the app stopped using:
+	// removed from the panel, or no longer covering any of its hostnames.
+	if err := d.cluster.Client().PruneCertificates(ctx, spec); err != nil {
+		d.log.Warn("could not remove a certificate the app no longer uses", "app", app.ID, "error", err)
 	}
 	// Not "autoscaling was switched off": an app that turns scale to zero on
 	// keeps autoscaling on and stops having an HorizontalPodAutoscaler, because
@@ -1013,6 +1023,25 @@ func (d *Deployer) runtimeVariables(ctx context.Context, app store.App, env stor
 			return nil, fmt.Errorf("read the variable %s: %w", row.Key, err)
 		}
 		out[row.Key] = string(plaintext)
+	}
+	return out, nil
+}
+
+// certificatePairs opens the team's own certificates the app's hostnames
+// are served with, keyed by id, for their Secrets.
+func (d *Deployer) certificatePairs(ctx context.Context, spec kube.AppSpec) (map[string]kube.CertificatePair, error) {
+	used := kube.CertificatesUsed(spec)
+	out := make(map[string]kube.CertificatePair, len(used))
+	for _, id := range used {
+		chain, sealed, err := d.db.CertificateMaterial(ctx, spec.TeamID, id)
+		if err != nil {
+			return nil, fmt.Errorf("read the certificate %s: %w", id, err)
+		}
+		key, err := d.keyring.Open(sealed, store.CertificateContext(spec.TeamID, id))
+		if err != nil {
+			return nil, fmt.Errorf("open the certificate %s: %w", id, err)
+		}
+		out[id] = kube.CertificatePair{Chain: []byte(chain), Key: key}
 	}
 	return out, nil
 }

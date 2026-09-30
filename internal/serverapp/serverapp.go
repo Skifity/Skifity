@@ -185,7 +185,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	defer stopBackground()
 	go server.Background(background)
 	sweepUploads(ctx, db, uploads, log)
-	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, log)
+	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, log)
 	go watcher.Run(background)
 
 	httpServer := &http.Server{
@@ -441,7 +441,7 @@ type rescanner interface {
 }
 
 // runScheduler fires scheduled backups once a minute.
-func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store, log *slog.Logger) {
+func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store, notifier notify.Notifier, log *slog.Logger) {
 	// Align to the start of the next minute so a schedule of "0 3 * * *" fires
 	// at 03:00 rather than at whatever second the panel happened to start.
 	timer := time.NewTimer(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
@@ -486,6 +486,7 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 			last = now
 
 			pruneHistory(ctx, db, log)
+			checkCertificates(ctx, db, notifier, log)
 			if now.Minute() == 0 {
 				sweepUploads(ctx, db, uploads, log)
 			}
@@ -582,6 +583,20 @@ func pruneHistory(ctx context.Context, db *store.DB, log *slog.Logger) {
 	if !report.Empty() {
 		log.Info("pruned the panel's history", "removed", report.String())
 	}
+}
+
+// checkCertificates warns teams about their own certificates coming up to
+// their expiry date. See watch.CheckCertificateExpiry.
+//
+// Every hour rather than every day. A daily check could land the one-day
+// warning after the certificate had run out, and what has been sent is
+// recorded on each certificate, so checking more often costs one query and
+// sends nothing twice.
+func checkCertificates(ctx context.Context, db *store.DB, notifier notify.Notifier, log *slog.Logger) {
+	if !db.DueEvery(ctx, settings.KeyCertificatesCheckedAt, time.Hour) {
+		return
+	}
+	watch.CheckCertificateExpiry(ctx, db, notifier, time.Now().UTC(), log)
 }
 
 // retentionFrom reads the configured windows, falling back to the defaults.

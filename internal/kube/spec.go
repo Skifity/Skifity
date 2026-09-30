@@ -161,6 +161,10 @@ type DomainSpec struct {
 	// RedirectTo is another of the app's hostnames this one sends its
 	// visitors to, permanently. See hostredirect.go.
 	RedirectTo string
+	// Certificate is the id of the team's own certificate this hostname is
+	// served with, when one covers it. Empty is Let's Encrypt, through
+	// cert-manager. Only a TLS domain has one. See owncert.go.
+	Certificate string
 }
 
 // Validate reports problems that would make Kubernetes reject the objects, with
@@ -235,6 +239,9 @@ func (s AppSpec) Validate() error {
 		}
 		if seenHosts[d.Hostname] {
 			return fmt.Errorf("the domain %s is listed twice", d.Hostname)
+		}
+		if d.Certificate != "" && !d.TLS {
+			return fmt.Errorf("the domain %s has a certificate and is not served over HTTPS", d.Hostname)
 		}
 		seenHosts[d.Hostname] = true
 	}

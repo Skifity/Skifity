@@ -58,6 +58,7 @@ skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
 skifity apps                      List apps
 skifity servers                   List servers
+skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
 skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
@@ -141,11 +142,14 @@ Tools, in the order they are usually needed:
 | `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
 
-Two things are deliberately not tools. A database's password: an app gets its
+Three things are deliberately not tools. A database's password: an app gets its
 connection string from `link_database`, and a password that has been in an
-assistant's context cannot be taken back out. And restoring a backup: it
+assistant's context cannot be taken back out. Restoring a backup: it
 replaces everything with an older copy and has no undo, so the panel asks a
 person to confirm it in words, and an assistant finds the backup and says which.
+And a team's own TLS certificates: uploading one means handing over its private
+key, so it is done in the panel or with `skifity certs`, which reads the key
+from a file. `list_domains` says which certificate each domain is served with.
 
 Every tool returns errors as a cause, an impact and a suggested fix, not a
 status code.
@@ -220,6 +224,9 @@ POST   /api/databases/{db}/tunnel             an upgraded connection to the data
 GET    /api/events?topics=team:{team}         everything happening, as events
 GET    /api/teams/{team}/registries           private registries the team pulls from
 PUT    /api/teams/{team}/registries           save one; the registry is asked first
+GET    /api/teams/{team}/certificates         the team's own TLS certificates, and which domains use each; never a key
+POST   /api/teams/{team}/certificates         upload one (name, certificate, private_key); a name that exists is replaced
+DELETE /api/teams/{team}/certificates/{certificate}  remove one; its hostnames go back to Let's Encrypt
 GET    /api/plugins                           installed plugins
 POST   /api/plugins/inspect                   read a manifest, and say what it would be allowed to do
 POST   /api/plugins                           install one, with the permissions that were shown
@@ -268,6 +275,11 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
   what would change and `skifity apply` does it through this same API. Nothing
   is ever deleted by it: what the environment has and the file does not is
   reported and left alone. Secrets are named in it, never written in it.
+- **A certificate of your own replaces Let's Encrypt's by name.** Upload one
+  for the team and every HTTPS domain it covers (exactly, or one label under a
+  wildcard) is served with it; the domain says which, and until when. The key is
+  sealed and never returned, and the team is told 21, 7 and 1 days before it
+  expires.
 - **Kubernetes is available when you need it.** `GET /api/apps/{id}/advanced`
   returns the exact objects the panel applies.
 - **An app can have a firewall.** Rules over IP address, country and AS number,

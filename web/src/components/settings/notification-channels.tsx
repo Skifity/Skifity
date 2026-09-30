@@ -53,6 +53,7 @@ const EVENTS = [
   "backup.missed",
   "backup.succeeded",
   "certificate.failed",
+  "certificate.expiring",
   "app.alert",
   "server.alert",
   "app.vulnerable",

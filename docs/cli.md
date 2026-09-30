@@ -201,6 +201,9 @@ skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment
 skifity servers                   # the machines
+skifity certs                     # the team's own TLS certificates, and what uses each
+skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version
+skifity certs remove wildcard     # its hostnames go back to Let's Encrypt
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches
@@ -461,13 +464,17 @@ and not before `list_apps`.
 
 An assistant can take an app the whole way: install it from a template or
 create it, give it a database, set its variables and files, put it on a domain
-or open a port, back it up and lock its deploys. Two things it cannot do, on
+or open a port, back it up and lock its deploys. Three things it cannot do, on
 purpose. It is never shown a database's password: `link_database` gives the app
 its connection string as a secret variable, and a password that has been in an
-assistant's context is in its provider's logs for good. And it cannot restore a
+assistant's context is in its provider's logs for good. It cannot restore a
 backup: a restore replaces everything with an older copy and cannot be undone,
 so it is done in the panel, where it asks for a person's confirmation in words.
-The assistant can list the backups and say which one.
+The assistant can list the backups and say which one. And it cannot upload or
+remove the team's own TLS certificates: uploading one means handing over its
+private key, for the same reason as the password, so it is done in the panel or
+with `skifity certs`. `list_domains` still says which certificate each domain is
+served with.
 
 The tools are listed in [llms.txt](../llms.txt). They are named for what someone
 would ask for — `get_app_logs`, `check_scaling_readiness`, `rollback_app` — and

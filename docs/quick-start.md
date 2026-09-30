@@ -180,6 +180,54 @@ of two. The same works for an old name you are moving away from. Both names are
 on the app's certificate, so the redirecting one still needs its DNS pointed
 here.
 
+### Your own certificate
+
+Let's Encrypt is the default, not the only choice. A certificate from your
+company's CA, an EV or OV certificate, a wildcard bought elsewhere, or one for
+a hostname Let's Encrypt cannot reach — an intranet name, a machine behind a
+firewall — goes in under **Settings**, **Certificates**: give it a name, paste
+the certificate with its intermediates (or choose the file), and paste the
+private key. From the command line it is
+
+```sh
+skifity certs add company-wildcard --cert fullchain.pem --key privkey.pem
+```
+
+and the key can come from standard input with `--key -`; it is never typed on
+the command line.
+
+There is nothing to choose per domain. Every HTTPS domain in the team whose
+hostname the certificate names is served with it: exactly, or one label under a
+wildcard — `*.example.com` covers `shop.example.com`, and neither
+`a.shop.example.com` nor `example.com` itself. When two certificates cover the
+same hostname, the one that expires last is used. The app's **Domains** tab
+says, on each domain, which certificate it uses and until when, and the list in
+Settings says which domains each certificate serves.
+
+The panel checks the certificate before it keeps anything: the key has to
+belong to it, the certificates have to form one chain (the order does not
+matter; it is put right), it has to be valid now, its key has to be RSA of 2048
+bits or more, ECDSA on P-256 or P-384, or Ed25519, and it has to name at least
+one hostname. A certificate naming a hostname another team on the panel uses,
+or the panel's own address, is refused: the ingress serves certificates by name
+for the whole cluster, so it would be sent to their visitors too. What each
+refusal means, and the `openssl` line that fixes it, is in
+[Troubleshooting](troubleshooting.md#your-own-certificate-is-refused).
+
+The certificate is kept as it is — it is public, every visitor is sent it —
+and the private key is encrypted as it arrives, with the same master key as
+your secrets. No page, API answer, CLI command or export shows it again, and
+there is deliberately no MCP tool for certificates: a key that has been in an
+assistant's conversation cannot be taken back out.
+
+Nothing renews a certificate you brought. The team is notified 21, 7 and 1 days
+before it expires, once each (the **One of the team's own certificates is
+about to expire** event on a notification channel), and the domains it serves show
+**Certificate expiring** and then **Certificate expired**. To renew, upload the
+new one under the same name: every app using it is updated in the background,
+within a minute or two. Removing a certificate sends its hostnames back to
+Let's Encrypt, which works for a hostname Let's Encrypt can reach.
+
 ## 5. Add a second server
 
 One server is fine to start — you already have one, the machine you installed

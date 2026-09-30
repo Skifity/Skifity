@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,6 +15,18 @@ import (
 )
 
 // How an app is reached: its domains, and its ports that are not HTTP.
+//
+// A team's own TLS certificates are deliberately not a tool, not even to list
+// them. Uploading one means handing over its private key, and a private key
+// that has been in an assistant's context is in its provider's logs, in a
+// transcript somebody pastes into an issue, and in whatever the next prompt
+// injection asks it to repeat — for as long as the certificate is valid, and
+// nothing about it can be taken back short of revoking it. Removing one sends
+// every hostname it served to Let's Encrypt, which fails for exactly the
+// hostnames somebody brought a certificate for. Both are done in the panel,
+// under Settings, Certificates, or with `skifity certs`, which reads the key
+// from a file. What an assistant can see is which certificate each domain is
+// served with, on list_domains.
 
 type domainSummary struct {
 	ID        string `json:"id"`
@@ -26,6 +39,10 @@ type domainSummary struct {
 	// DNSRecord is the record the person creates at their DNS provider for
 	// a domain of their own, when the panel knows where it has to point.
 	DNSRecord *dnsRecord `json:"dns_record,omitempty"`
+	// Certificate is the team's own certificate the hostname is served
+	// with, when one covers it: its name, until when, and whether it is
+	// valid, expiring or expired. Absent is Let's Encrypt.
+	Certificate string `json:"certificate,omitempty"`
 }
 
 type dnsRecord struct {
@@ -162,11 +179,15 @@ func recordFor(domain store.Domain) *dnsRecord {
 }
 
 func summariseDomain(domain store.Domain) domainSummary {
-	return domainSummary{
+	summary := domainSummary{
 		ID: domain.ID, Hostname: domain.Hostname, Path: domain.Path, HTTPS: domain.TLS,
 		Automatic: domain.Auto, Status: domain.Status, Detail: domain.StatusDetail,
 		DNSRecord: recordFor(domain),
 	}
+	if c := domain.Certificate; c != nil {
+		summary.Certificate = fmt.Sprintf("%s, until %s (%s)", c.Name, c.NotAfter.UTC().Format(time.DateOnly), c.State)
+	}
+	return summary
 }
 
 func (s *Server) domains(ctx context.Context, appID string) ([]store.Domain, error) {

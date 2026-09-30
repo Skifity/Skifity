@@ -43,6 +43,7 @@ export function toneFor(status: string): Tone {
     case "running":
     case "succeeded":
     case "active":
+    case "valid":
       return "success"
     case "provisioning":
     case "creating":
@@ -59,7 +60,9 @@ export function toneFor(status: string): Tone {
     case "queued":
     case "not_ready":
     case "degraded":
+    case "expiring":
       return "warning"
+    case "expired":
     case "failed":
     case "crashing":
     case "unhealthy":

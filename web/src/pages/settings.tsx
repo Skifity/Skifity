@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -22,6 +22,7 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/confirm-dialog"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
+import { CertificatesCard } from "@/components/settings/certificates"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
@@ -125,15 +126,20 @@ function groupsOf(items: Setting[]): { key: string; label: string }[] {
 
 export function SettingsPage() {
   const { t } = useTranslation()
+  // The tab is in the address, so a notification can link to the one it is
+  // about: a certificate running out links to the certificates.
+  const [params, setParams] = useSearchParams()
+  const tab = params.get("tab") ?? "panel"
 
   return (
     <Page>
       <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
 
-      <Tabs defaultValue="panel">
+      <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="panel">{t("settings.general")}</TabsTrigger>
           <TabsTrigger value="git">{t("settings.git")}</TabsTrigger>
+          <TabsTrigger value="certificates">{t("settings.certificates")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
           <TabsTrigger value="components">{t("settings.components")}</TabsTrigger>
           <TabsTrigger value="plugins">{t("settings.plugins")}</TabsTrigger>
@@ -153,6 +159,9 @@ export function SettingsPage() {
           <GitSources />
           <RegistriesCard />
           <SettingGroups only={["git"]} />
+        </TabsContent>
+        <TabsContent value="certificates" className="pt-4">
+          <CertificatesCard />
         </TabsContent>
         <TabsContent value="notifications" className="pt-4">
           <NotificationChannels />

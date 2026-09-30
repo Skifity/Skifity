@@ -833,6 +833,12 @@ func (c *Client) DeleteApp(ctx context.Context, namespace, appSlug string) error
 			return err
 		}
 	}
+	// The Ingress for the hostnames on the team's own certificates, and the
+	// Secrets holding those certificates' private keys: an app with no
+	// domains needs neither.
+	if err := c.PruneCertificates(ctx, AppSpec{Name: appSlug, Namespace: namespace}); err != nil {
+		return err
+	}
 
 	// The scheduled commands, which are the part of an app that keeps going on
 	// its own. Left behind, a deleted app's nightly job fires every night

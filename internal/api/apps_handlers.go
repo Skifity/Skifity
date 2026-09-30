@@ -1488,6 +1488,13 @@ func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Which of the team's own certificates a hostname is served with, when
+	// one covers it. An internal app serves none of its domains.
+	if !app.Internal {
+		if teamID, err := s.db.TeamIDForApp(r.Context(), app.ID); err == nil {
+			s.describeCertificates(r.Context(), teamID, domains)
+		}
+	}
 	writeList(w, domains)
 }
 
@@ -1514,6 +1521,15 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 	hostname := kube.CleanHostname(req.Hostname)
 	if !kube.ValidHostname(hostname) {
 		writeError(w, r, errdoc.BadRequest("That does not look like a domain name. Enter something like app.example.com."))
+		return
+	}
+	teamID, err := s.db.TeamIDForApp(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.checkNotNamedByAnotherTeam(r.Context(), teamID, hostname); err != nil {
+		writeError(w, r, err)
 		return
 	}
 	if s.isPanelHostname(r.Context(), hostname) {
@@ -1565,14 +1581,17 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 			s.log.Warn("could not apply new domain", "app", app.ID, "error", err)
 		}
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "domain.added", "app", app.ID, hostname)
 
 	// What its DNS says now, so the answer to adding a domain is also the
 	// answer to "is it pointing here yet". A lookup that fails says nothing
 	// rather than failing what already succeeded: the domain is added, and
 	// the check can be asked for again.
-	answer := addedDomain{Domain: domain}
+	added := []store.Domain{domain}
+	if !app.Internal {
+		s.describeCertificates(r.Context(), teamID, added)
+	}
+	answer := addedDomain{Domain: added[0]}
 	if check, err := s.checkDomainDNS(r.Context(), app, hostname, dnsCheckOnAddTimeout); err == nil {
 		answer.DNS = &check
 	} else {

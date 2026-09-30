@@ -267,29 +267,65 @@ func servicePorts(port int) []corev1.ServicePort {
 
 // BuildIngress renders the Ingress for an app's domains.
 //
-// Returns nil when the app has no domains, which is normal for a worker.
+// Returns nil when the app has no domains, which is normal for a worker, and
+// when every one of them is served with a certificate of the team's own: those
+// are in the app's other Ingress, BuildOwnCertIngress, and this one must not
+// list them. See owncert.go for why they cannot share it.
 func BuildIngress(s AppSpec) *networkingv1.Ingress {
-	if s.Port <= 0 || len(s.Domains) == 0 {
+	if s.Port <= 0 {
+		return nil
+	}
+	domains := letsEncryptDomains(s)
+	if len(domains) == 0 {
 		return nil
 	}
 
-	annotations := map[string]string{}
+	annotations := ingressAnnotations(s)
 	var tlsHosts []string
-	for _, d := range s.Domains {
+	for _, d := range domains {
 		if d.TLS {
 			tlsHosts = append(tlsHosts, d.Hostname)
 		}
 	}
+	// cert-manager's ingress-shim issues a certificate for every TLS block of
+	// an Ingress carrying this annotation, which is why a hostname with a
+	// certificate of its own is never in this one.
+	if len(tlsHosts) > 0 && s.ClusterIssuer != "" {
+		annotations["cert-manager.io/cluster-issuer"] = s.ClusterIssuer
+	}
 
-	// Middleware names, in the order Traefik runs them.
-	//
-	// Every one of them lives in the app's own namespace. Traefik refuses a
-	// cross-namespace middleware reference unless allowCrossNamespace is turned
-	// on, and it is off by default — k3s's bundled Traefik included — so a
-	// reference to another namespace resolves to nothing and the middleware
-	// silently never runs. A middleware Traefik will not load is not a
-	// middleware Traefik complains about, which is why that was invisible for
-	// as long as it was.
+	ingress := buildIngress(s, s.Name, domains, annotations)
+	if len(tlsHosts) > 0 {
+		ingress.Spec.TLS = []networkingv1.IngressTLS{{
+			Hosts:      tlsHosts,
+			SecretName: ResourceName(s.Name, "tls"),
+		}}
+	}
+	return ingress
+}
+
+// ingressAnnotations are what every Ingress of the app carries: the
+// middlewares a request goes through before it reaches the app. One function
+// for both Ingresses, so a hostname on a certificate of the team's own is
+// behind the same firewall, redirects and password as every other.
+func ingressAnnotations(s AppSpec) map[string]string {
+	annotations := map[string]string{}
+	if middlewares := ingressMiddlewares(s); len(middlewares) > 0 {
+		annotations["traefik.ingress.kubernetes.io/router.middlewares"] = strings.Join(middlewares, ",")
+	}
+	return annotations
+}
+
+// ingressMiddlewares are the middleware names, in the order Traefik runs them.
+//
+// Every one of them lives in the app's own namespace. Traefik refuses a
+// cross-namespace middleware reference unless allowCrossNamespace is turned
+// on, and it is off by default — k3s's bundled Traefik included — so a
+// reference to another namespace resolves to nothing and the middleware
+// silently never runs. A middleware Traefik will not load is not a middleware
+// Traefik complains about, which is why that was invisible for as long as it
+// was.
+func ingressMiddlewares(s AppSpec) []string {
 	var middlewares []string
 
 	// The firewall comes first: a request nobody is allowed to make should not
@@ -303,8 +339,7 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 	for _, d := range hostRedirects(s) {
 		middlewares = append(middlewares, s.Namespace+"-"+HostRedirectMiddlewareName(s.Name, d.Hostname)+"@kubernetescrd")
 	}
-	if len(tlsHosts) > 0 && s.ClusterIssuer != "" {
-		annotations["cert-manager.io/cluster-issuer"] = s.ClusterIssuer
+	if redirectsToHTTPS(s) {
 		middlewares = append(middlewares, s.Namespace+"-"+RedirectMiddleware+"@kubernetescrd")
 	}
 	// The password after the redirect, never before it. A browser answers a
@@ -313,10 +348,37 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 	if s.PasswordUsers != "" {
 		middlewares = append(middlewares, s.Namespace+"-"+PasswordMiddlewareName(s.Name)+"@kubernetescrd")
 	}
-	if len(middlewares) > 0 {
-		annotations["traefik.ingress.kubernetes.io/router.middlewares"] = strings.Join(middlewares, ",")
-	}
+	return middlewares
+}
 
+// redirectsToHTTPS reports whether plain HTTP is sent to HTTPS: when one of
+// the app's hostnames has a certificate coming, from cert-manager or from the
+// team's own. Without either there is nothing on the other side of the
+// redirect.
+func redirectsToHTTPS(s AppSpec) bool {
+	for _, d := range s.Domains {
+		if d.TLS && (d.Certificate != "" || s.ClusterIssuer != "") {
+			return true
+		}
+	}
+	return false
+}
+
+// letsEncryptDomains are the app's domains that are not served with a
+// certificate of the team's own.
+func letsEncryptDomains(s AppSpec) []DomainSpec {
+	var out []DomainSpec
+	for _, d := range s.Domains {
+		if d.Certificate == "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// buildIngress is an Ingress routing these domains to the app, with no TLS
+// block yet: which certificate serves them is the caller's to say.
+func buildIngress(s AppSpec, name string, domains []DomainSpec, annotations map[string]string) *networkingv1.Ingress {
 	// An app that can scale to zero is reached through KEDA's interceptor,
 	// which is what wakes it. Pointing the Ingress straight at the app's own
 	// Service would mean a request to a sleeping app got a 503 and nothing
@@ -332,8 +394,8 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 	}
 
 	pathType := networkingv1.PathTypePrefix
-	rules := make([]networkingv1.IngressRule, 0, len(s.Domains))
-	for _, d := range s.Domains {
+	rules := make([]networkingv1.IngressRule, 0, len(domains))
+	for _, d := range domains {
 		path := d.Path
 		if path == "" {
 			path = "/"
@@ -357,23 +419,16 @@ func BuildIngress(s AppSpec) *networkingv1.Ingress {
 		})
 	}
 
-	ingress := &networkingv1.Ingress{
+	return &networkingv1.Ingress{
 		TypeMeta: metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "Ingress"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        s.Name,
+			Name:        name,
 			Namespace:   s.Namespace,
 			Labels:      s.Labels(),
 			Annotations: annotations,
 		},
 		Spec: networkingv1.IngressSpec{Rules: rules},
 	}
-	if len(tlsHosts) > 0 {
-		ingress.Spec.TLS = []networkingv1.IngressTLS{{
-			Hosts:      tlsHosts,
-			SecretName: ResourceName(s.Name, "tls"),
-		}}
-	}
-	return ingress
 }
 
 // BuildHPA renders the HorizontalPodAutoscaler, or nil when autoscaling is off.

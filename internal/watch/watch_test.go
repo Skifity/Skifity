@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -39,9 +40,10 @@ type fakeStore struct {
 	serverSamples map[string][]store.ServerSample
 	serverAlerts  map[string]store.ServerAlerts
 
-	driftMu sync.Mutex
-	drift   map[string]store.AppDrift
-	audits  []store.AuditEvent
+	driftMu      sync.Mutex
+	drift        map[string]store.AppDrift
+	audits       []store.AuditEvent
+	certificates map[string][]store.Certificate
 }
 
 func newFakeStore() *fakeStore {
@@ -188,6 +190,10 @@ func (f *fakeStore) SetDomainStatus(_ context.Context, id, status, _ string) err
 		}
 	}
 	return nil
+}
+
+func (f *fakeStore) ListCertificates(_ context.Context, teamID string) ([]store.Certificate, error) {
+	return f.certificates[teamID], nil
 }
 
 func (f *fakeStore) StalePreviewEnvironments(_ context.Context, before time.Time) ([]store.Environment, error) {
@@ -520,6 +526,48 @@ func TestIssuedCertificateMarksTheDomainActive(t *testing.T) {
 	}
 	if got := notifier.eventsOf(notify.EventCertificate); got != 0 {
 		t.Fatalf("sent %d notifications about a certificate that worked", got)
+	}
+}
+
+// A hostname on one of the team's own certificates is not cert-manager's, and
+// what cert-manager says about the app's other hostnames — here, that it has
+// given up — is not about it.
+func TestAHostnameOnTheTeamsOwnCertificateIsNotCertManagers(t *testing.T) {
+	db := newFakeStore()
+	db.apps = []store.DeployedApp{{
+		App:    store.App{ID: "app_1", Name: "shop", Slug: "shop", Status: "running"},
+		TeamID: "team_1", Namespace: "acme-shop-production",
+	}}
+	db.domains["app_1"] = []store.Domain{
+		{ID: "dom_own", AppID: "app_1", Hostname: "shop.example.com", TLS: true,
+			Status: "pending", CreatedAt: time.Now().Add(-time.Hour)},
+		{ID: "dom_le", AppID: "app_1", Hostname: "shop.example.org", TLS: true,
+			Status: "pending", CreatedAt: time.Now().Add(-time.Hour)},
+	}
+	db.certificates = map[string][]store.Certificate{"team_1": {{
+		ID: "crt_1", TeamID: "team_1", Name: "wildcard", Hostnames: []string{"*.example.com"},
+		NotAfter: time.Now().Add(90 * 24 * time.Hour),
+	}}}
+	c := &fakeCluster{
+		apps: map[string]api.AppRuntimeStatus{"shop": {DesiredReplicas: 1, ReadyReplicas: 1}},
+		certs: map[string]cluster.CertificateState{
+			"shop-tls": {Found: true, Ready: false, Reason: "the DNS record does not point at this cluster"},
+		},
+	}
+
+	w, notifier := testWatcher(t, db, c)
+	w.Once(t.Context())
+
+	if got, touched := db.domainSet["dom_own"]; touched {
+		t.Errorf("the hostname on the team's certificate was marked %q from cert-manager's state", got)
+	}
+	if got := db.domainSet["dom_le"]; got != "failed" {
+		t.Errorf("the Let's Encrypt hostname is %q, want failed", got)
+	}
+	for _, sent := range notifier.sent {
+		if strings.Contains(sent.msg.Title, "shop.example.com") {
+			t.Errorf("a notification about cert-manager named the hostname it does not serve: %q", sent.msg.Title)
+		}
 	}
 }
 

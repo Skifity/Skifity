@@ -62,6 +62,17 @@ func (d *Deployer) render(ctx context.Context, deployment store.Deployment, app 
 		return rendered{}, errdoc.BadRequest(err.Error())
 	}
 
+	// The team's own certificates the app's hostnames are served with, opened
+	// here and nowhere else: the Secret is written, and the key is not kept.
+	certificates, err := d.certificatePairs(ctx, spec)
+	if err != nil {
+		return rendered{}, err
+	}
+	certificateSecrets, err := kube.BuildCertificateSecrets(spec, certificates)
+	if err != nil {
+		return rendered{}, err
+	}
+
 	objects := []any{
 		kube.BuildEnvSecret(spec, variables),
 		// Before the Deployment that mounts it, for the same reason as the
@@ -75,12 +86,21 @@ func (d *Deployer) render(ctx context.Context, deployment store.Deployment, app 
 	for _, redirect := range kube.BuildHostRedirects(spec) {
 		objects = append(objects, redirect)
 	}
+	// Before the Ingress that names them, too: one whose certificate is not
+	// there yet is served with Traefik's own, which every browser refuses.
+	for _, secret := range certificateSecrets {
+		objects = append(objects, secret)
+	}
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
 	}
 	objects = append(objects,
 		kube.BuildDeployment(spec),
 		kube.BuildService(spec),
+		// The second Ingress before the first: a hostname moving onto a
+		// certificate of the team's own is in both for a moment, both routing
+		// to the same place, rather than in neither.
+		kube.BuildOwnCertIngress(spec),
 		kube.BuildIngress(spec),
 		kube.BuildHPA(spec),
 		kube.BuildPDB(spec),

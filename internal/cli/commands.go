@@ -85,6 +85,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdPreview(ctx, rest, stdout)
 	case "scan":
 		err = cmdScan(ctx, rest, stdout)
+	case "certs":
+		err = cmdCerts(ctx, rest, stdout)
 	case "plan", "apply":
 		err = cmdBlueprint(ctx, command, rest, stdout)
 	case "export":
@@ -261,6 +263,7 @@ Databases:
 
 Cluster:
   servers               List the servers in a team
+  certs                 List, upload or remove the team's own TLS certificates
 
 Leaving:
   export                Write this team out as JSON and Kubernetes objects

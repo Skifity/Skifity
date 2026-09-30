@@ -369,7 +369,58 @@ export type Domain = {
   dns_target?: string
   /** Another of the app's hostnames this one permanently redirects to. */
   redirect_to?: string
+  /**
+   * The team's own certificate this hostname is served with, when one covers
+   * it. Absent means Let's Encrypt. Worked out per request, like dns_target.
+   */
+  certificate?: DomainCertificate
   created_at: string
+}
+
+/** Whether a certificate is still good: expiring is within 21 days. */
+export type CertificateState = "valid" | "expiring" | "expired"
+
+/** Which of the team's own certificates a domain is served with. */
+export type DomainCertificate = {
+  id: string
+  name: string
+  not_after: string
+  state: CertificateState
+}
+
+/**
+ * A certificate the team brought for its own hostnames. Its private key is
+ * never part of anything the panel sends.
+ */
+export type TeamCertificate = {
+  id: string
+  team_id: string
+  name: string
+  /** The names it is for, wildcards as written, such as *.example.com. */
+  hostnames: string[]
+  subject: string
+  issuer: string
+  not_before: string
+  not_after: string
+  /** SHA-256, as `openssl x509 -noout -fingerprint -sha256` prints it. */
+  fingerprint: string
+  key_type: string
+  self_signed: boolean
+  chain_length: number
+  created_at: string
+  updated_at: string
+  state: CertificateState
+  /** The team's domains served with it. */
+  domains: { id: string; app_id: string; app_name: string; hostname: string }[]
+}
+
+/** What uploading a certificate answers. */
+export type SavedCertificate = {
+  certificate: TeamCertificate
+  replaced: boolean
+  reordered: boolean
+  /** How many apps are being re-applied to use it, in the background. */
+  updating: number
 }
 
 export type HealthCheck = "http" | "tcp" | "none"

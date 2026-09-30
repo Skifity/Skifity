@@ -68,6 +68,12 @@ const (
 	// panel was not running. The panel takes it late, and says so.
 	EventBackupMissed = "backup.missed"
 	EventCertificate  = "certificate.failed"
+	// EventCertificateExpiring is one of a team's own certificates coming
+	// up to its expiry date — 21, 7 and 1 days before, once each — or past
+	// it. It is about the whole team: a certificate is the team's, and
+	// covers hostnames in any of its projects, so it carries no ProjectID and
+	// reaches every channel that subscribes to it, limited to projects or not.
+	EventCertificateExpiring = "certificate.expiring"
 	// EventAppAlert is an app crossing one of its thresholds — memory, CPU,
 	// restarts — and coming back under it.
 	EventAppAlert = "app.alert"
@@ -90,7 +96,7 @@ const (
 var AllEvents = []string{
 	EventDeploySucceeded, EventDeployFailed, EventAppUnhealthy,
 	EventServerAdded, EventServerLost, EventBackupFailed, EventBackupSucceeded, EventBackupMissed,
-	EventCertificate, EventAppAlert, EventServerAlert, EventAppVulnerable, EventAppDrifted,
+	EventCertificate, EventCertificateExpiring, EventAppAlert, EventServerAlert, EventAppVulnerable, EventAppDrifted,
 }
 
 // optIn are the events a channel receives only when it names them. A channel

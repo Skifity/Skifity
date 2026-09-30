@@ -348,7 +348,10 @@
       "app.deploy_vulnerabilities_accepted": "Di-deploy dengan kerentanan kritis diterima",
       "app.drift_repaired": "Mengembalikan aplikasi seperti yang diterapkan panel",
       "app.drift_auto_repair_on": "Mengatur aplikasi agar dikembalikan otomatis",
-      "app.drift_auto_repair_off": "Berhenti mengembalikan aplikasi secara otomatis"
+      "app.drift_auto_repair_off": "Berhenti mengembalikan aplikasi secara otomatis",
+      "certificate.saved": "mengunggah sertifikat",
+      "certificate.replaced": "mengunggah versi baru sertifikat",
+      "certificate.deleted": "menghapus sertifikat"
     }
   },
   "projects": {
@@ -802,7 +805,14 @@
     "visitors": "Pengunjung",
     "servesTheApp": "Membuka aplikasi",
     "redirectTo": "Dialihkan ke {{hostname}}",
-    "redirectHelp": "Pengunjung {{hostname}} dialihkan secara permanen ke {{target}}, dengan path yang sama. Mesin pencari juga memindahkan halaman ke {{target}}."
+    "redirectHelp": "Pengunjung {{hostname}} dialihkan secara permanen ke {{target}}, dengan path yang sama. Mesin pencari juga memindahkan halaman ke {{target}}.",
+    "statusExpiring": "Sertifikat segera kedaluwarsa",
+    "statusExpired": "Sertifikat kedaluwarsa",
+    "ownCertificate": "Sertifikat Anda: {{name}}, kedaluwarsa {{date}}",
+    "ownCertificateExpiring": "Sertifikat Anda {{name}} kedaluwarsa pada {{date}}",
+    "ownCertificateExpired": "Sertifikat Anda {{name}} kedaluwarsa pada {{date}}",
+    "ownCertificateRenew": "Tidak ada yang memperbarui sertifikat yang Anda bawa. Perbarui di otoritas yang menerbitkannya lalu unggah dengan nama yang sama: setiap aplikasi yang memakainya ikut diperbarui.",
+    "manageCertificates": "Sertifikat di Pengaturan"
   },
   "scaling": {
     "title": "Penskalaan",
@@ -1538,7 +1548,8 @@
     "componentUpgradeTitle": "Tingkatkan {{name}}?",
     "componentUpgradeConfirm": "Manifest versi {{to}} diterapkan di atas {{from}}, sesuai cara proyek itu mendokumentasikan peningkatannya. Komponennya dimulai ulang; aplikasi Anda tidak.",
     "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat",
-    "scanning": "Pemindaian image"
+    "scanning": "Pemindaian image",
+    "certificates": "Sertifikat"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -2967,6 +2978,66 @@
         "cause": "Mengambil daftar event di {{0}} gagal: {{1}}",
         "impact": "Tidak ada yang diubah, dan aplikasi tetap jalan. Hanya daftar ini yang tidak ada.",
         "fix": "Pastikan service account panel masih bisa membaca event dan pod di namespace itu. Kalau klaster baru saja di-upgrade, coba lagi sebentar lagi."
+      },
+      "certificate_unreadable": {
+        "title": "Itu bukan sertifikat yang dapat dibaca panel",
+        "cause": "Kotak sertifikat tidak berisi sertifikat PEM yang dapat dibaca: {{0}}.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Tempel isi berkas sertifikat, dari -----BEGIN CERTIFICATE----- sampai -----END CERTIFICATE-----, diikuti sertifikat perantara yang diberikan otoritas sertifikat Anda. Berkas .crt atau .cer dalam format DER dikonversi dengan `openssl x509 -inform der -in cert.cer -out cert.pem`."
+      },
+      "certificate_key_unreadable": {
+        "title": "Itu bukan kunci privat yang dapat dibaca panel",
+        "cause": "Kotak kunci privat tidak berisi kunci privat PEM yang tidak terenkripsi.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Tempel kunci yang diawali -----BEGIN PRIVATE KEY-----, -----BEGIN RSA PRIVATE KEY----- atau -----BEGIN EC PRIVATE KEY-----. Kunci yang dilindungi frasa sandi harus didekripsi terlebih dahulu: `openssl pkey -in encrypted.key -out plain.key`."
+      },
+      "certificate_key_mismatch": {
+        "title": "Kunci privat ini bukan milik sertifikat ini",
+        "cause": "Kunci privat ini bukan kunci yang dipakai saat {{0}} diterbitkan.",
+        "impact": "Tidak ada yang disimpan. Jika dilayani bersama, koneksi setiap pengunjung akan gagal.",
+        "fix": "Gunakan kunci yang dipakai untuk membuat permintaan sertifikat. `openssl x509 -noout -pubkey -in cert.pem` dan `openssl pkey -pubout -in key.pem` mencetak hal yang sama untuk kunci dan sertifikat yang saling cocok."
+      },
+      "certificate_chain_broken": {
+        "title": "Sertifikat-sertifikat ini bukan satu rantai",
+        "cause": "{{0}} tidak menandatangani {{1}} atau sertifikat apa pun di atasnya, jadi bukan bagian dari rantainya.",
+        "impact": "Tidak ada yang disimpan. Urutan tidak masalah, dan sudah dibetulkan bila hanya itu yang salah.",
+        "fix": "Tempel sertifikat Anda dan sertifikat perantara yang diberikan otoritas sertifikat untuknya, tanpa yang lain — bukan sertifikat situs lain, bukan perantara lama."
+      },
+      "certificate_expired": {
+        "title": "Sertifikat ini sudah kedaluwarsa",
+        "cause": "Sertifikat untuk {{0}} berhenti berlaku pada {{1}}.",
+        "impact": "Tidak ada yang disimpan. Setiap browser menolak sertifikat yang kedaluwarsa.",
+        "fix": "Perpanjang di otoritas sertifikat Anda dan unggah yang baru dengan nama yang sama."
+      },
+      "certificate_not_yet_valid": {
+        "title": "Sertifikat ini belum berlaku",
+        "cause": "Sertifikat untuk {{0}} berlaku mulai {{1}}.",
+        "impact": "Tidak ada yang disimpan. Jika dilayani sekarang, setiap browser akan menolaknya.",
+        "fix": "Unggah setelah masa berlakunya dimulai. Jika tanggalnya tampak salah, periksa jam di server tempat panel berjalan."
+      },
+      "certificate_weak_key": {
+        "title": "Kunci sertifikat ini kurang kuat",
+        "cause": "Kuncinya adalah {{0}}. Panel melayani kunci RSA 2048 bit atau lebih, kunci ECDSA pada P-256 atau P-384, dan kunci Ed25519.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Buat kunci dan permintaan sertifikat baru, misalnya `openssl req -new -newkey rsa:3072 -nodes -keyout key.pem -out request.csr`, lalu minta diterbitkan ulang."
+      },
+      "certificate_no_hostnames": {
+        "title": "Sertifikat ini tidak menyebut hostname apa pun",
+        "cause": "Sertifikat untuk {{0}} tidak memiliki nama DNS di Subject Alternative Name, dan browser sudah bertahun-tahun tidak membaca Common Name.",
+        "impact": "Tidak ada yang disimpan. Sertifikat ini tidak akan cocok dengan domain Anda mana pun.",
+        "fix": "Minta diterbitkan ulang dengan hostname sebagai Subject Alternative Name, misalnya DNS:shop.example.com atau DNS:*.example.com."
+      },
+      "certificate_hostname_taken": {
+        "title": "Sertifikat ini menyebut hostname yang bukan milik tim ini",
+        "cause": "{{0}} adalah alamat panel ini sendiri, domain tim lain, atau disebut dalam sertifikat tim lain.",
+        "impact": "Tidak ada yang disimpan. Ingress melayani sertifikat berdasarkan nama untuk seluruh klaster, jadi sertifikat ini juga akan dikirim ke pengunjung hostname itu.",
+        "fix": "Gunakan sertifikat yang hanya menyebut hostname milik tim ini. Jika hostname itu milik Anda, lepaskan dulu dari tempat ia dipakai."
+      },
+      "domain_named_by_certificate": {
+        "title": "Sertifikat tim lain menyebut hostname ini",
+        "cause": "{{0}} disebut dalam sertifikat yang diunggah tim lain di panel ini.",
+        "impact": "Domain tidak ditambahkan. Kedua sertifikat akan dilayani untuknya, dalam urutan apa pun yang dibaca ingress.",
+        "fix": "Tanyakan kepada administrator panel tim mana yang memakai hostname ini. Sertifikat dihapus di Pengaturan, Sertifikat."
       }
     }
   },
@@ -3049,7 +3120,8 @@
       "backup.missed": "Pencadangan terjadwal terlewat dan diambil terlambat",
       "backup.succeeded": "Pencadangan berhasil",
       "app.vulnerable": "Image sebuah app punya kerentanan kritis baru",
-      "app.drifted": "Sebuah aplikasi diubah di luar panel"
+      "app.drifted": "Sebuah aplikasi diubah di luar panel",
+      "certificate.expiring": "Salah satu sertifikat milik tim akan segera kedaluwarsa"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {
@@ -3662,5 +3734,38 @@
       "oom": "Aplikasi memakai memori melebihi batasnya dan dihentikan. Naikkan batas memori di Penskalaan, atau cari apa yang memakai memori itu.",
       "evicted": "Server kekurangan sumber daya dan menghentikan instance ini untuk melindungi dirinya: {{0}} Instance dijalankan lagi di server yang punya ruang."
     }
+  },
+  "certificates": {
+    "title": "Sertifikat milik Anda",
+    "help": "Sertifikat yang Anda bawa sebagai pengganti sertifikat Let's Encrypt: dari CA perusahaan, sertifikat EV atau OV, wildcard yang dibeli di tempat lain, atau untuk hostname yang tidak dapat dijangkau Let's Encrypt. Setiap domain HTTPS di tim yang tercakup olehnya dilayani dengan sertifikat itu.",
+    "empty": "Belum ada. Setiap domain HTTPS mendapatkan sertifikatnya dari Let's Encrypt.",
+    "add": "Unggah sertifikat",
+    "save": "Periksa dan simpan",
+    "name": "Nama",
+    "namePlaceholder": "Wildcard perusahaan",
+    "nameHelp": "Mengunggah dengan nama yang sudah ada akan menggantikan sertifikat itu; begitulah perpanjangan dipasang.",
+    "chain": "Sertifikat",
+    "chainHelp": "Sertifikat Anda dan sertifikat perantara yang menyertainya, dalam format PEM, urutan apa pun.",
+    "key": "Kunci privat",
+    "keyHelp": "PEM, tanpa frasa sandi. Kunci dienkripsi begitu tiba dan tidak pernah ditampilkan lagi, di sini maupun di mana pun.",
+    "fromFile": "Dari berkas",
+    "saved": "{{name}} tersimpan.",
+    "replaced": "{{name}} telah diganti.",
+    "reordered": "Sertifikat telah diurutkan, sertifikat Anda di depan.",
+    "updating_other": "{{count}} aplikasi sedang diperbarui untuk memakainya.",
+    "state": {
+      "valid": "Berlaku",
+      "expiring": "Segera kedaluwarsa",
+      "expired": "Kedaluwarsa"
+    },
+    "selfSigned": "Ditandatangani sendiri",
+    "replace": "Unggah versi baru",
+    "remove": "Hapus {{name}}",
+    "removeConfirm_other": "Sertifikat ini melayani {{count}} domain, yang akan kembali ke Let's Encrypt.",
+    "removeConsequence": "Hostname yang tidak dapat dijangkau Let's Encrypt berhenti bekerja lewat HTTPS, dan panel tidak menyimpan salinan lain dari kunci privat.",
+    "details": "Diterbitkan oleh {{issuer}} · kedaluwarsa {{date}} ({{relative}}) · {{keyType}}",
+    "noDomains": "Belum ada domain di tim yang memakainya.",
+    "usedBy": "Dipakai oleh",
+    "fingerprint": "SHA-256"
   }
 }

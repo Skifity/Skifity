@@ -210,6 +210,7 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 		kube.BuildDeployment(spec),
 		kube.BuildService(spec),
 		kube.BuildIngress(spec),
+		kube.BuildOwnCertIngress(spec),
 		kube.BuildPasswordMiddleware(spec),
 		kube.BuildHPA(spec),
 		kube.BuildPDB(spec),
@@ -275,6 +276,11 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 	if spec.PasswordUsers != "" {
 		fmt.Fprintf(&b, "---\n# Secret/%s holds the account the password middleware checks.\n",
 			kube.PasswordSecretName(spec.Name))
+	}
+	// By name only, like the variables: one of these holds a private key.
+	for _, id := range kube.CertificatesUsed(spec) {
+		fmt.Fprintf(&b, "---\n# Secret/%s holds the team's certificate %s and its private key.\n"+
+			"# Its values are not shown here.\n", kube.CertificateSecretName(spec.Name, id), id)
 	}
 	return b.String(), nil
 }
@@ -552,10 +558,22 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	// it was made internal: with none here, the deployer removes the one it
 	// had.
 	if !app.Internal {
+		// A hostname one of the team's own certificates covers is served with
+		// it instead of one from Let's Encrypt. Read here, like the firewall
+		// and the password below, so no caller can render the app's objects
+		// and send a hostname with a certificate of its own to cert-manager.
+		certificates, err := c.db.ListCertificates(ctx, project.TeamID)
+		if err != nil {
+			return spec, err
+		}
 		for _, d := range domains {
-			spec.Domains = append(spec.Domains, kube.DomainSpec{
+			domain := kube.DomainSpec{
 				Hostname: d.Hostname, Path: d.Path, TLS: d.TLS, RedirectTo: d.RedirectTo,
-			})
+			}
+			if certificate, ok := store.CertificateFor(certificates, d.Hostname); ok && d.TLS {
+				domain.Certificate = certificate.ID
+			}
+			spec.Domains = append(spec.Domains, domain)
 		}
 		spec.URL = primaryURL(domains)
 	}

@@ -276,6 +276,11 @@ func (s *Server) routes() chi.Router {
 				team.Get("/registries", s.handleListRegistries)
 				team.Put("/registries", s.handleSetRegistry)
 				team.Delete("/registries/{registryID}", s.handleDeleteRegistry)
+				// Certificates the team brings for its own hostnames. See
+				// certificates_handlers.go.
+				team.Get("/certificates", s.handleListCertificates)
+				team.Post("/certificates", s.handleSaveCertificate)
+				team.Delete("/certificates/{certificateID}", s.handleDeleteCertificate)
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)

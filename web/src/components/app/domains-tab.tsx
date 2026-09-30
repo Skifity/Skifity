@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -12,6 +13,7 @@ import {
   LockIcon,
   PlusIcon,
   RefreshCwIcon,
+  ShieldCheckIcon,
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react"
@@ -44,6 +46,7 @@ import {
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
 import { api, type List } from "@/lib/api"
+import { formatDate } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { AddedDomain, App, DNSCheck, Domain } from "@/lib/types"
 
@@ -255,6 +258,8 @@ export function DomainsTab({ app }: { app: App }) {
                 </p>
               )}
 
+              {domain.certificate && <OwnCertificate domain={domain} />}
+
               {/* A certificate that stopped trying says why, and cert-manager's
                   reason is the only thing that actually explains it. */}
               {domain.status === "failed" && (
@@ -332,8 +337,9 @@ function DNSResult({ check, domain }: { check: DNSCheck; domain: Domain }) {
   const found = check.found.map((record) => record.value).join(", ")
   const expected = check.expected[0] ?? ""
   // Still waiting for its certificate: soon once DNS is right. One that has
-  // stopped trying says so above this, with what to do about it.
-  const certificateToCome = domain.tls && domain.status !== "active"
+  // stopped trying says so above this, with what to do about it. A hostname
+  // on one of the team's own certificates has nothing to wait for.
+  const certificateToCome = domain.tls && !domain.certificate && domain.status !== "active"
   const certificateSoon = domain.tls && domain.status === "pending"
 
   const shown = {
@@ -481,6 +487,56 @@ function DNSInstructions({ domain, action }: { domain: Domain; action: ReactNode
   )
 }
 
+/**
+ * Which of the team's own certificates serves this hostname, and until when.
+ *
+ * Matching is automatic — a hostname a certificate covers uses it — so this is
+ * where somebody finds out that it does, and it says so loudly once the date
+ * is close, because nothing renews a certificate somebody brought.
+ */
+function OwnCertificate({ domain }: { domain: Domain }) {
+  const { t } = useTranslation()
+  const certificate = domain.certificate
+  if (!certificate) return null
+  const name = certificate.name
+  const date = formatDate(certificate.not_after)
+  const settings = (
+    <Link
+      to="/settings?tab=certificates"
+      className="underline underline-offset-2 hover:text-primary"
+    >
+      {t("domains.manageCertificates")}
+    </Link>
+  )
+
+  if (certificate.state === "valid") {
+    return (
+      <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+        <ShieldCheckIcon className="size-3.5 shrink-0" />
+        {t("domains.ownCertificate", { name, date })}
+        <span aria-hidden>·</span>
+        {settings}
+      </p>
+    )
+  }
+  const expired = certificate.state === "expired"
+  return (
+    <Alert variant={expired ? "destructive" : "warning"}>
+      <TriangleAlertIcon />
+      <AlertTitle>
+        {expired
+          ? t("domains.ownCertificateExpired", { name, date })
+          : t("domains.ownCertificateExpiring", { name, date })}
+      </AlertTitle>
+      <AlertDescription>
+        <p>
+          {t("domains.ownCertificateRenew")} {settings}
+        </p>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 /** One cell of the record, with the copy control the registrar's form wants. */
 function DNSCell({ value, label }: { value: string; label: string }) {
   return (
@@ -499,6 +555,10 @@ function statusKey(status: string): string {
       return "Active"
     case "failed":
       return "Failed"
+    case "expiring":
+      return "Expiring"
+    case "expired":
+      return "Expired"
     default:
       return "Pending"
   }
