@@ -165,7 +165,7 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 			names = append(names, a.name)
 		}
 		if !slices.Contains(thresholds.Firing, a.name) {
-			w.notifyTeam(ctx, app.TeamID, notify.EventAppAlert, notify.Message{
+			w.notifyApp(ctx, app, notify.EventAppAlert, notify.Message{
 				Title:  alertTitle(app.Name, a.name),
 				Body:   a.detail,
 				Level:  "warning",
@@ -176,7 +176,7 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 	}
 	for _, was := range thresholds.Firing {
 		if !slices.Contains(names, was) {
-			w.notifyTeam(ctx, app.TeamID, notify.EventAppAlert, notify.Message{
+			w.notifyApp(ctx, app, notify.EventAppAlert, notify.Message{
 				Title:  app.Name + " is back under its " + alertNoun(was) + " threshold",
 				Body:   "Nothing to do; this is the end of the earlier warning.",
 				Level:  "success",

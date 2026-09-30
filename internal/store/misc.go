@@ -249,14 +249,26 @@ func (db *DB) DeleteGitSource(ctx context.Context, id string) error {
 
 // --- notification channels ---
 
-// CreateNotificationChannel stores a delivery target.
+// notificationChannelColumns is every column a channel is read with, in the
+// order scanNotificationChannel reads them.
+const notificationChannelColumns = `id, team_id, kind, name, config_enc, events, enabled, scoped, created_at, updated_at`
+
+// CreateNotificationChannel stores a delivery target, and the projects it is
+// limited to when it is scoped.
 func (db *DB) CreateNotificationChannel(ctx context.Context, c *NotificationChannel) error {
 	if c.ID == "" {
 		c.ID = NewID("ntf")
 	}
 	now := Now()
-	_, err := db.Exec(ctx, `INSERT INTO notification_channels (id, team_id, kind, name, config_enc, events, enabled, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?)`, c.ID, c.TeamID, c.Kind, c.Name, c.ConfigEnc, c.Events, c.Enabled, now, now)
+	err := db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO notification_channels
+			(id, team_id, kind, name, config_enc, events, enabled, scoped, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			c.ID, c.TeamID, c.Kind, c.Name, c.ConfigEnc, c.Events, c.Enabled, c.Scoped, now, now); err != nil {
+			return mapError(err)
+		}
+		return setChannelProjects(ctx, tx, c)
+	})
 	if err != nil {
 		return fmt.Errorf("create notification channel: %w", err)
 	}
@@ -265,9 +277,10 @@ func (db *DB) CreateNotificationChannel(ctx context.Context, c *NotificationChan
 	return nil
 }
 
-// ListNotificationChannels returns a team's channels.
+// ListNotificationChannels returns a team's channels, each with the projects
+// it is limited to.
 func (db *DB) ListNotificationChannels(ctx context.Context, teamID string) ([]NotificationChannel, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, team_id, kind, name, config_enc, events, enabled, created_at, updated_at
+	rows, err := db.QueryContext(ctx, `SELECT `+notificationChannelColumns+`
 		FROM notification_channels WHERE team_id = ? ORDER BY created_at`, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("list notification channels: %w", err)
@@ -275,49 +288,131 @@ func (db *DB) ListNotificationChannels(ctx context.Context, teamID string) ([]No
 	defer rows.Close()
 	out := []NotificationChannel{}
 	for rows.Next() {
-		var c NotificationChannel
-		var created, updated string
-		if err := rows.Scan(&c.ID, &c.TeamID, &c.Kind, &c.Name, &c.ConfigEnc, &c.Events, &c.Enabled, &created, &updated); err != nil {
-			return nil, fmt.Errorf("scan notification channel: %w", err)
+		c, err := scanNotificationChannel(rows)
+		if err != nil {
+			return nil, err
 		}
-		c.CreatedAt, _ = ParseTime(created)
-		c.UpdatedAt, _ = ParseTime(updated)
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	// One query for the whole team rather than one per channel: the
+	// dispatcher reads this for every event.
+	projects, err := db.channelProjects(ctx, `SELECT cp.channel_id, cp.project_id
+		FROM notification_channel_projects cp
+		JOIN notification_channels c ON c.id = cp.channel_id
+		JOIN projects p ON p.id = cp.project_id
+		WHERE c.team_id = ? ORDER BY p.name`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Projects = projects[out[i].ID]
+	}
+	return out, nil
 }
 
 // GetNotificationChannel looks a channel up by id.
 func (db *DB) GetNotificationChannel(ctx context.Context, id string) (NotificationChannel, error) {
+	c, err := scanNotificationChannel(db.QueryRowContext(ctx, `SELECT `+notificationChannelColumns+`
+		FROM notification_channels WHERE id = ?`, id))
+	if err != nil {
+		return c, err
+	}
+	projects, err := db.channelProjects(ctx, `SELECT cp.channel_id, cp.project_id
+		FROM notification_channel_projects cp
+		JOIN projects p ON p.id = cp.project_id
+		WHERE cp.channel_id = ? ORDER BY p.name`, id)
+	if err != nil {
+		return c, err
+	}
+	c.Projects = projects[id]
+	return c, nil
+}
+
+// UpdateNotificationChannel writes a channel's mutable fields: everything but
+// its team and its kind, and the projects it is limited to.
+func (db *DB) UpdateNotificationChannel(ctx context.Context, c *NotificationChannel) error {
+	now := Now()
+	err := db.Tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE notification_channels
+			SET name=?, config_enc=?, events=?, enabled=?, scoped=?, updated_at=? WHERE id=?`,
+			c.Name, c.ConfigEnc, c.Events, c.Enabled, c.Scoped, now, c.ID)
+		if err != nil {
+			return mapError(err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNotFound
+		}
+		return setChannelProjects(ctx, tx, c)
+	})
+	if errors.Is(err, ErrNotFound) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update notification channel: %w", err)
+	}
+	c.UpdatedAt, _ = ParseTime(now)
+	return nil
+}
+
+// setChannelProjects replaces the projects a channel is limited to. An
+// unscoped channel keeps none. A project of another team is skipped rather
+// than stored, so the list can only ever narrow what the team's own events
+// reach.
+func setChannelProjects(ctx context.Context, tx *sql.Tx, c *NotificationChannel) error {
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM notification_channel_projects WHERE channel_id = ?`, c.ID); err != nil {
+		return fmt.Errorf("clear channel projects: %w", err)
+	}
+	if !c.Scoped {
+		return nil
+	}
+	for _, projectID := range c.Projects {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO notification_channel_projects (channel_id, project_id)
+			SELECT ?, id FROM projects WHERE id = ? AND team_id = ?`,
+			c.ID, projectID, c.TeamID); err != nil {
+			return fmt.Errorf("limit channel to a project: %w", err)
+		}
+	}
+	return nil
+}
+
+// channelProjects runs a query that answers (channel id, project id) pairs,
+// and groups them by channel.
+func (db *DB) channelProjects(ctx context.Context, query, arg string) (map[string][]string, error) {
+	rows, err := db.QueryContext(ctx, query, arg)
+	if err != nil {
+		return nil, fmt.Errorf("list channel projects: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var channelID, projectID string
+		if err := rows.Scan(&channelID, &projectID); err != nil {
+			return nil, fmt.Errorf("scan channel project: %w", err)
+		}
+		out[channelID] = append(out[channelID], projectID)
+	}
+	return out, rows.Err()
+}
+
+func scanNotificationChannel(row interface{ Scan(...any) error }) (NotificationChannel, error) {
 	var c NotificationChannel
 	var created, updated string
-	err := db.QueryRowContext(ctx, `SELECT id, team_id, kind, name, config_enc, events, enabled, created_at, updated_at
-		FROM notification_channels WHERE id = ?`, id).
-		Scan(&c.ID, &c.TeamID, &c.Kind, &c.Name, &c.ConfigEnc, &c.Events, &c.Enabled, &created, &updated)
-	if err != nil {
+	if err := row.Scan(&c.ID, &c.TeamID, &c.Kind, &c.Name, &c.ConfigEnc, &c.Events, &c.Enabled, &c.Scoped,
+		&created, &updated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c, ErrNotFound
 		}
-		return c, fmt.Errorf("get notification channel: %w", err)
+		return c, fmt.Errorf("read notification channel: %w", err)
 	}
 	c.CreatedAt, _ = ParseTime(created)
 	c.UpdatedAt, _ = ParseTime(updated)
 	return c, nil
-}
-
-// UpdateNotificationChannel writes a channel's mutable fields.
-func (db *DB) UpdateNotificationChannel(ctx context.Context, c *NotificationChannel) error {
-	now := Now()
-	res, err := db.Exec(ctx, `UPDATE notification_channels SET name=?, config_enc=?, events=?, enabled=?, updated_at=? WHERE id=?`,
-		c.Name, c.ConfigEnc, c.Events, c.Enabled, now, c.ID)
-	if err != nil {
-		return fmt.Errorf("update notification channel: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	c.UpdatedAt, _ = ParseTime(now)
-	return nil
 }
 
 // DeleteNotificationChannel removes a channel.

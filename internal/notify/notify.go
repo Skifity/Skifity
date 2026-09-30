@@ -1,5 +1,5 @@
 // Package notify delivers events to email, Telegram, Discord, Slack,
-// Mattermost, ntfy, Pushover and webhooks.
+// Mattermost, Microsoft Teams, ntfy, Pushover, Gotify and webhooks.
 package notify
 
 import (
@@ -35,6 +35,19 @@ type Message struct {
 	// dispatcher turns it into a URL using the configured panel address, so a
 	// producer does not need to know what that is.
 	Path string `json:"-"`
+	// ProjectID is the project the event belongs to: the app's, the
+	// database's, or the one whose backup it was. The dispatcher uses it to
+	// leave out the channels limited to other projects.
+	//
+	// Empty is an event about the whole team — a server, or the panel itself
+	// — and reaches every channel that subscribes to it, limited or not. A
+	// producer that has a project and does not say so sends its event to
+	// channels that asked not to hear about that project, so every producer
+	// that has one sets it.
+	//
+	// It is not sent: an id means nothing to whoever reads the message, and
+	// the fields already name the app.
+	ProjectID string `json:"-"`
 	// Fields carry structured detail such as the app and the commit.
 	Fields map[string]string `json:"fields,omitempty"`
 }
@@ -118,6 +131,22 @@ func ValidateConfig(ctx context.Context, kind string, config map[string]string, 
 		if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") || !strings.Contains(url, "/hooks/") {
 			return errors.New("enter the incoming webhook's full URL, which ends in /hooks/ and a long id")
 		}
+	case "teams":
+		// A Workflows webhook lives on whichever Power Platform host serves
+		// the tenant's region, and Microsoft has moved it more than once, so
+		// the host is not checked: only that this is the full, secure URL the
+		// workflow shows, which is the mistake somebody actually makes.
+		if u, err := url.Parse(strings.TrimSpace(config["webhook_url"])); err != nil || u.Scheme != "https" || u.Host == "" {
+			return errors.New("enter the full webhook URL the Teams workflow shows, starting with https://")
+		}
+	case "gotify":
+		if server := strings.TrimSpace(config["server"]); !strings.HasPrefix(server, "https://") &&
+			!strings.HasPrefix(server, "http://") {
+			return errors.New("enter the Gotify server's full address, starting with https://")
+		}
+		if strings.TrimSpace(config["app_token"]) == "" {
+			return errors.New("an application token is needed; create an application under Apps in Gotify")
+		}
 	case "ntfy":
 		if strings.TrimSpace(config["topic"]) == "" {
 			return errors.New("enter the topic to publish to")
@@ -165,10 +194,14 @@ func Send(ctx context.Context, kind string, config map[string]string, msg Messag
 		return sendDiscord(ctx, config, msg)
 	case "slack", "mattermost":
 		return sendSlack(ctx, config, msg)
+	case "teams":
+		return sendTeams(ctx, config, msg)
 	case "ntfy":
 		return sendNtfy(ctx, config, msg)
 	case "pushover":
 		return sendPushover(ctx, config, msg)
+	case "gotify":
+		return sendGotify(ctx, config, msg)
 	case "webhook":
 		return sendWebhook(ctx, config, msg)
 	case "email":
@@ -247,6 +280,70 @@ func sendSlack(ctx context.Context, config map[string]string, msg Message) error
 	return postJSON(ctx, config["webhook_url"], body, nil)
 }
 
+// sendTeams posts an Adaptive Card to a Microsoft Teams webhook.
+//
+// An Adaptive Card rather than the MessageCard that Office 365 connectors
+// took: Microsoft is retiring those connectors, and what replaces them — a
+// Workflows flow triggered by a webhook request — posts the Adaptive Card it
+// is handed in a message's attachments. The same message is what a connector
+// that still works accepts, so one shape serves both.
+func sendTeams(ctx context.Context, config map[string]string, msg Message) error {
+	body := []any{
+		map[string]any{
+			"type": "TextBlock", "text": msg.Title, "weight": "Bolder", "size": "Medium",
+			"wrap": true, "color": teamsColour(msg.Level),
+		},
+	}
+	if msg.Body != "" {
+		body = append(body, map[string]any{"type": "TextBlock", "text": msg.Body, "wrap": true})
+	}
+	if len(msg.Fields) > 0 {
+		facts := make([]map[string]string, 0, len(msg.Fields))
+		for _, k := range sortedKeys(msg.Fields) {
+			facts = append(facts, map[string]string{"title": k, "value": msg.Fields[k]})
+		}
+		body = append(body, map[string]any{"type": "FactSet", "facts": facts})
+	}
+	card := map[string]any{
+		"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+		"type":    "AdaptiveCard",
+		"version": "1.4",
+		"body":    body,
+	}
+	if msg.URL != "" {
+		card["actions"] = []any{map[string]any{
+			"type": "Action.OpenUrl", "title": "Open in " + version.Name, "url": msg.URL,
+		}}
+	}
+	payload := map[string]any{
+		"type": "message",
+		"attachments": []any{map[string]any{
+			"contentType": "application/vnd.microsoft.card.adaptive",
+			"contentUrl":  nil,
+			"content":     card,
+		}},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode teams message: %w", err)
+	}
+	return postJSON(ctx, strings.TrimSpace(config["webhook_url"]), encoded, nil)
+}
+
+// teamsColour is the Adaptive Card colour the title is written in.
+func teamsColour(level string) string {
+	switch level {
+	case "success":
+		return "Good"
+	case "warning":
+		return "Warning"
+	case "error":
+		return "Attention"
+	default:
+		return "Accent"
+	}
+}
+
 // ntfyServer is where a topic is published when no server is given.
 const ntfyServer = "https://ntfy.sh"
 
@@ -297,6 +394,54 @@ func sendPushover(ctx context.Context, config map[string]string, msg Message) er
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", version.UserAgent())
 	return do(req)
+}
+
+// sendGotify pushes a message to a Gotify server with an application's token.
+//
+// The token goes in a header rather than the query string, where it would be
+// written into the server's access log. The link is in the text as well as in
+// the click action: the Android app opens the action, and the web interface
+// only shows the text.
+func sendGotify(ctx context.Context, config map[string]string, msg Message) error {
+	text := renderPlain(msg)
+	if msg.URL != "" {
+		text = strings.TrimSpace(text + "\n\n" + msg.URL)
+	}
+	extras := map[string]any{
+		"client::display": map[string]string{"contentType": "text/plain"},
+	}
+	if msg.URL != "" {
+		extras["client::notification"] = map[string]any{
+			"click": map[string]string{"url": msg.URL},
+		}
+	}
+	body, err := json.Marshal(map[string]any{
+		"title":    msg.Title,
+		"message":  text,
+		"priority": gotifyPriority(msg.Level),
+		"extras":   extras,
+	})
+	if err != nil {
+		return fmt.Errorf("encode gotify message: %w", err)
+	}
+	server := strings.TrimSuffix(strings.TrimSpace(config["server"]), "/")
+	return postJSON(ctx, server+"/message", body, map[string]string{
+		"X-Gotify-Key": strings.TrimSpace(config["app_token"]),
+	})
+}
+
+// gotifyPriority maps a level onto Gotify's 0 to 10, where the Android app
+// makes a sound from 4 and interrupts from 8: a failure interrupts, a success
+// arrives quietly.
+func gotifyPriority(level string) int {
+	switch level {
+	case "error":
+		return 8
+	case "warning":
+		return 5
+	default:
+		return 2
+	}
 }
 
 // renderPlain is a message as plain text, for the services that show it as

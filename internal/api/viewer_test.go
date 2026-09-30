@@ -23,6 +23,7 @@ var viewerMayNotRead = map[string]string{
 	"GET /api/teams/{teamID}/audit":                          "the audit log is for administrators, as it is for members",
 	"GET /api/teams/{teamID}/export":                         "the whole team in one file is for administrators",
 	"GET /api/teams/{teamID}/notifications/kinds":            "the form for adding a channel, which only administrators can do",
+	"GET /api/teams/{teamID}/notifications/{channelID}":      "a channel's settings, for the form that changes it, which only administrators can do",
 	"GET /api/apps/{appID}/advanced":                         "the Kubernetes objects are for administrators",
 	"GET /api/databases/{databaseID}/credentials":            "a database's password is for administrators",
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/webhook": "a webhook's secret starts deploys; administrators set webhooks up",

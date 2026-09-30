@@ -91,7 +91,7 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 		return
 	}
 	probe := store.Backup{TargetType: policy.TargetType, TargetID: policy.TargetID}
-	teamID, err := m.teamForBackup(ctx, probe)
+	teamID, projectID, err := m.ownerOfBackup(ctx, probe)
 	if err != nil || teamID == "" {
 		return
 	}
@@ -100,9 +100,10 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 		Title: "The " + due.Format("15:04 MST") + " backup of " + name + " was missed",
 		Body: "The panel was not running when it was due, on " + due.Format("Monday 2 January") +
 			". A backup was started now instead.",
-		Level:  "warning",
-		Path:   m.backupPath(ctx, probe),
-		Fields: map[string]string{"Backup of": name, "Was due": due.Format(time.RFC3339)},
+		Level:     "warning",
+		Path:      m.backupPath(ctx, probe),
+		Fields:    map[string]string{"Backup of": name, "Was due": due.Format(time.RFC3339)},
+		ProjectID: projectID,
 	}
 	if runErr != nil {
 		problem := errdoc.From(runErr)

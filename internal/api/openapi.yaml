@@ -1281,6 +1281,39 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/channelID'
+    get:
+      operationId: getNotificationChannel
+      tags: [Notifications]
+      summary: A notification channel and its settings, for changing it
+      description: >-
+        Admin. The settings that are not secret come back as they are; the
+        secret ones are named in `secrets` and their values are never returned.
+      responses:
+        '200':
+          description: The channel.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannelDetail'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: updateNotificationChannel
+      tags: [Notifications]
+      summary: Change a notification channel
+      description: >-
+        Admin. The whole channel as the form shows it; its kind cannot change.
+        A secret setting sent empty, or left out, keeps what is stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateChannelRequest'}
+      responses:
+        '200':
+          description: The channel as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannel'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteNotificationChannel
       tags: [Notifications]
@@ -4835,8 +4868,24 @@ components:
         name: {type: string}
         events: {type: string, description: 'Comma-separated. Empty is every event.'}
         enabled: {type: boolean}
+        scoped:
+          type: boolean
+          description: >-
+            Limited to `projects`. An event about an app, a database or a
+            backup reaches it only when it belongs to one of them; an event
+            about a server, or the panel itself, reaches every channel.
+        projects: {type: array, items: {type: string}, description: 'The project ids a scoped channel follows.'}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+
+    NotificationChannelDetail:
+      allOf:
+        - $ref: '#/components/schemas/NotificationChannel'
+        - type: object
+          required: [config, secrets]
+          properties:
+            config: {type: object, additionalProperties: {type: string}, description: 'The settings that are not secret.'}
+            secrets: {type: array, items: {type: string}, description: 'The secret settings that are stored. Their values are never returned.'}
 
     NotificationChannelList:
       type: object
@@ -4855,7 +4904,10 @@ components:
         provider: {type: string, description: 'The plugin behind it.'}
         fields:
           type: array
-          description: The form, for a kind a plugin provides. Empty for a built-in kind.
+          description: >-
+            The form. A built-in kind's fields have an empty label and no help:
+            the panel has them translated. A kind a plugin provides carries its
+            own words.
           items:
             type: object
             required: [key, label]
@@ -4880,10 +4932,27 @@ components:
       required: [kind, config]
       additionalProperties: false
       properties:
-        kind: {type: string, description: 'telegram, discord, slack, mattermost, ntfy, pushover, webhook, email, or one a plugin provides.'}
+        kind: {type: string, description: 'telegram, discord, slack, mattermost, teams, ntfy, pushover, gotify, webhook, email, or one a plugin provides.'}
         name: {type: string}
         config: {type: object, additionalProperties: {type: string}, description: 'The kind''s own settings. Sealed when stored.'}
         events: {type: array, items: {type: string}}
+        projects: {type: array, items: {type: string}, description: 'Limits the channel to these projects. Absent is every project; an empty list is refused.'}
+
+    UpdateChannelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string, description: 'Empty keeps the current name.'}
+        events: {type: array, items: {type: string}, description: 'Empty is every event, as when a channel is created.'}
+        enabled: {type: boolean, description: 'Absent keeps it as it is.'}
+        projects: {type: array, items: {type: string}, description: 'Limits the channel to these projects. Absent is every project; an empty list is refused.'}
+        config:
+          type: object
+          additionalProperties: {type: string}
+          description: >-
+            Changes to the kind's settings. A key left out is kept, a secret
+            sent empty is kept, and any other setting sent empty is cleared.
+            Absent keeps every setting.
 
     # --- apps ---
 

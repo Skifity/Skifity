@@ -338,7 +338,8 @@
       "app.job_run": "menjalankan perintah terjadwal sekarang",
       "auth.password_reset_requested": "meminta tautan reset kata sandi",
       "auth.password_reset": "mereset kata sandinya lewat tautan",
-      "environment.cloned": "Lingkungan dikloning"
+      "environment.cloned": "Lingkungan dikloning",
+      "notification.updated": "Saluran notifikasi diubah"
     }
   },
   "projects": {
@@ -2696,7 +2697,9 @@
       "slack": "Slack",
       "mattermost": "Mattermost",
       "ntfy": "ntfy",
-      "pushover": "Pushover"
+      "pushover": "Pushover",
+      "teams": "Microsoft Teams",
+      "gotify": "Gotify"
     },
     "event": {
       "deploy.succeeded": "Deployment berhasil",
@@ -2743,13 +2746,36 @@
         "user_keyHelp": "Ada di bagian atas dasbor pushover.net Anda."
       },
       "webhook": {
-        "url": "URL"
+        "url": "URL",
+        "secret": "Rahasia bersama",
+        "secretHelp": "Opsional. Dikirim di header X-Skifity-Secret agar penerima Anda dapat memastikan permintaan berasal dari sini."
       },
       "email": {
         "to": "Kepada"
+      },
+      "teams": {
+        "webhook_url": "URL webhook",
+        "webhook_urlHelp": "Di Teams, buka Workflows pada kanal, lalu pilih \"Send webhook alerts to a channel\". Tempel tautan yang diberikan workflow tersebut."
+      },
+      "gotify": {
+        "server": "Server",
+        "serverHelp": "Alamat server Gotify Anda, misalnya https://gotify.example.com.",
+        "app_token": "Token aplikasi",
+        "app_tokenHelp": "Buat aplikasi di menu Apps pada Gotify, lalu salin tokennya."
       }
     },
-    "everyEvent": "Semua peristiwa kecuali pencadangan yang berhasil"
+    "everyEvent": "Semua peristiwa kecuali pencadangan yang berhasil",
+    "paused": "Dijeda",
+    "onlyProjects": "Hanya {{projects}}",
+    "noProjectsLeft": "Proyeknya sudah dihapus: hanya peristiwa server yang sampai",
+    "kindFixed": "Jenis saluran tidak dapat diubah. Tambahkan saluran lain sebagai gantinya.",
+    "noEventsChosen": "Tidak ada yang dipilih: saluran ini dikirimi semua peristiwa kecuali pencadangan yang berhasil.",
+    "limitToProjects": "Hanya beberapa proyek",
+    "limitToProjectsHelp": "Peristiwa tentang aplikasi, database, atau pencadangan hanya dikirim dari proyek yang Anda pilih. Peristiwa tentang server dan panel itu sendiri dikirim ke setiap saluran, karena memengaruhi semua proyek.",
+    "chooseProject": "Pilih setidaknya satu proyek.",
+    "enabled": "Kirim ke saluran ini",
+    "enabledHelp": "Matikan untuk menjeda saluran tanpa kehilangan pengaturannya.",
+    "secretStored": "Tersimpan. Biarkan kosong untuk mempertahankannya, atau ketik nilai baru untuk menggantinya."
   },
   "invite": {
     "title": "Gabung ke {{team}}",

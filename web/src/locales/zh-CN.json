@@ -338,7 +338,8 @@
       "app.job_run": "立即运行了一个计划命令",
       "auth.password_reset_requested": "申请了密码重置链接",
       "auth.password_reset": "通过链接重置了密码",
-      "environment.cloned": "环境已克隆"
+      "environment.cloned": "环境已克隆",
+      "notification.updated": "已更改通知渠道"
     }
   },
   "projects": {
@@ -2696,7 +2697,9 @@
       "slack": "Slack",
       "mattermost": "Mattermost",
       "ntfy": "ntfy",
-      "pushover": "Pushover"
+      "pushover": "Pushover",
+      "teams": "Microsoft Teams",
+      "gotify": "Gotify"
     },
     "event": {
       "deploy.succeeded": "部署成功",
@@ -2743,13 +2746,36 @@
         "user_keyHelp": "在你的 pushover.net 控制台顶部。"
       },
       "webhook": {
-        "url": "URL"
+        "url": "URL",
+        "secret": "共享密钥",
+        "secretHelp": "可选。通过 X-Skifity-Secret 请求头发送，接收方可以据此确认请求来自这里。"
       },
       "email": {
         "to": "收件人"
+      },
+      "teams": {
+        "webhook_url": "Webhook 地址",
+        "webhook_urlHelp": "在 Teams 中打开频道的“工作流”，选择“Send webhook alerts to a channel”，然后粘贴工作流给出的链接。"
+      },
+      "gotify": {
+        "server": "服务器",
+        "serverHelp": "你的 Gotify 服务器地址，例如 https://gotify.example.com。",
+        "app_token": "应用令牌",
+        "app_tokenHelp": "在 Gotify 的 Apps 中创建一个应用，然后复制它的令牌。"
       }
     },
-    "everyEvent": "除备份成功外的所有事件"
+    "everyEvent": "除备份成功外的所有事件",
+    "paused": "已暂停",
+    "onlyProjects": "仅 {{projects}}",
+    "noProjectsLeft": "它的项目已被删除：只会收到服务器事件",
+    "kindFixed": "渠道的类型无法更改。请改为添加另一个渠道。",
+    "noEventsChosen": "未选择任何事件：该渠道会收到除备份成功外的所有事件。",
+    "limitToProjects": "仅限部分项目",
+    "limitToProjectsHelp": "关于应用、数据库或备份的事件只会从你选择的项目发送。关于服务器和面板本身的事件会发送到每个渠道，因为它们影响所有项目。",
+    "chooseProject": "请至少选择一个项目。",
+    "enabled": "发送到此渠道",
+    "enabledHelp": "关闭即可暂停该渠道，且不会丢失其设置。",
+    "secretStored": "已保存。留空即保留，输入新值即可替换。"
   },
   "invite": {
     "title": "加入 {{team}}",

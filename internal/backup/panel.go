@@ -219,6 +219,10 @@ func (m *Manager) runScheduledPanel(ctx context.Context) {
 // Notification channels belong to teams and this is not a team's problem: it
 // is the panel's. The people who can fix it are its administrators, and their
 // teams' channels are where they already listen.
+//
+// The message names no project on purpose. It belongs to none, so it reaches
+// a channel limited to some projects as well: the panel's own copy failing
+// matters to every one of them.
 func (m *Manager) notifyAdmins(ctx context.Context, msg notify.Message) {
 	if m.notifier == nil {
 		return

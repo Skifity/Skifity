@@ -555,7 +555,7 @@ func (m *Manager) RunScheduledAt(ctx context.Context, minutes []time.Time) {
 // sites written out, so a fifth kind of backup cannot quietly be added
 // without either.
 func (m *Manager) finished(ctx context.Context, backup store.Backup, name string, failure error) {
-	teamID, err := m.teamForBackup(ctx, backup)
+	teamID, projectID, err := m.ownerOfBackup(ctx, backup)
 	if err != nil || teamID == "" {
 		m.log.Warn("could not work out whose backup this was", "backup", backup.ID, "error", err)
 		return
@@ -574,7 +574,7 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 			fields["Reason"] = problem.Code
 			m.notifier.Notify(ctx, teamID, notify.EventBackupFailed, notify.Message{
 				Title: "Backing up " + name + " failed", Body: problem.Error() + "\n\n" + problem.Fix,
-				Level: "error", Path: path, Fields: fields,
+				Level: "error", Path: path, Fields: fields, ProjectID: projectID,
 			})
 		}
 		return
@@ -583,7 +583,7 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 	if m.notifier != nil {
 		m.notifier.Notify(ctx, teamID, notify.EventBackupSucceeded, notify.Message{
 			Title: name + " was backed up", Body: "The backup finished and is in storage.",
-			Level: "success", Path: path, Fields: fields,
+			Level: "success", Path: path, Fields: fields, ProjectID: projectID,
 		})
 	}
 }
@@ -602,20 +602,21 @@ func (m *Manager) backupPath(ctx context.Context, backup store.Backup) string {
 	return ""
 }
 
-// teamForBackup resolves whose backup this was, through whichever kind of
-// thing it copied.
-func (m *Manager) teamForBackup(ctx context.Context, backup store.Backup) (string, error) {
+// ownerOfBackup resolves whose backup this was, through whichever kind of
+// thing it copied: the team to tell, and the project the database or the app
+// is in, so a channel limited to other projects is not told.
+func (m *Manager) ownerOfBackup(ctx context.Context, backup store.Backup) (teamID, projectID string, err error) {
 	switch backup.TargetType {
 	case "database":
-		return m.db.TeamIDForDatabase(ctx, backup.TargetID)
+		return m.db.ProjectOfDatabase(ctx, backup.TargetID)
 	case "volume":
 		volume, err := m.db.GetVolume(ctx, backup.TargetID)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		return m.db.TeamIDForApp(ctx, volume.AppID)
+		return m.db.ProjectOfApp(ctx, volume.AppID)
 	}
-	return "", nil
+	return "", "", nil
 }
 
 // runVolumeBackup copies an app's volume to storage.

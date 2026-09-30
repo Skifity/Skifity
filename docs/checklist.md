@@ -138,12 +138,15 @@ promise being kept rather than a gap — they are already in your own cluster as
 ordinary Kubernetes Secrets, and the export's README has the one line that reads
 them out.
 
-**17. Notification on failure.** Telegram, Discord, Slack, Mattermost, ntfy,
-Pushover, a webhook or email, on seven
+**17. Notification on failure.** Telegram, Discord, Slack, Mattermost,
+Microsoft Teams, ntfy, Pushover, Gotify, a webhook or email, on seven
 events: a deploy succeeding or failing, an app going unhealthy, a server added
-or lost, a backup failing, a certificate failing. Delivery has never been seen
-end to end, which is the only part that counts. Phase 5 stands up a listener and
-breaks a deployment on purpose.
+or lost, a backup failing, a certificate failing. A channel can be changed
+after it is added, and limited to some projects; what each event belongs to is
+in [Configuration](configuration.md#limiting-a-channel-to-some-projects). The
+payloads are checked against a local listener in Go tests; delivery to the real
+services has never been seen end to end, which is the only part that counts.
+Phase 5 stands up a listener and breaks a deployment on purpose.
 
 **18. Documentation.** Thirteen pages, served from inside the binary so they work on
 a machine with no other browser and no outbound network — which is exactly when

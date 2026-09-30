@@ -346,7 +346,8 @@
       "app.job_run": "एक निर्धारित कमांड अभी चलाया",
       "auth.password_reset_requested": "पासवर्ड रीसेट लिंक माँगा",
       "auth.password_reset": "लिंक से अपना पासवर्ड रीसेट किया",
-      "environment.cloned": "एनवायरनमेंट क्लोन किया गया"
+      "environment.cloned": "एनवायरनमेंट क्लोन किया गया",
+      "notification.updated": "नोटिफ़िकेशन चैनल बदला गया"
     }
   },
   "projects": {
@@ -2712,7 +2713,9 @@
       "slack": "Slack",
       "mattermost": "Mattermost",
       "ntfy": "ntfy",
-      "pushover": "Pushover"
+      "pushover": "Pushover",
+      "teams": "Microsoft Teams",
+      "gotify": "Gotify"
     },
     "event": {
       "deploy.succeeded": "डिप्लॉयमेंट सफल रहा",
@@ -2759,13 +2762,36 @@
         "user_keyHelp": "आपके pushover.net डैशबोर्ड में सबसे ऊपर।"
       },
       "webhook": {
-        "url": "URL"
+        "url": "URL",
+        "secret": "साझा सीक्रेट",
+        "secretHelp": "वैकल्पिक। X-Skifity-Secret हेडर में भेजा जाता है, ताकि आपका रिसीवर जाँच सके कि अनुरोध यहीं से आया है।"
       },
       "email": {
         "to": "प्राप्तकर्ता"
+      },
+      "teams": {
+        "webhook_url": "वेबहुक URL",
+        "webhook_urlHelp": "Teams में चैनल के Workflows खोलें और \"Send webhook alerts to a channel\" चुनें। वर्कफ़्लो जो लिंक देता है, उसे यहाँ चिपकाएँ।"
+      },
+      "gotify": {
+        "server": "सर्वर",
+        "serverHelp": "आपके Gotify सर्वर का पता, जैसे https://gotify.example.com।",
+        "app_token": "ऐप्लिकेशन टोकन",
+        "app_tokenHelp": "Gotify में Apps के अंतर्गत एक ऐप्लिकेशन बनाएँ और उसका टोकन कॉपी करें।"
       }
     },
-    "everyEvent": "सफल बैकअप को छोड़कर हर घटना"
+    "everyEvent": "सफल बैकअप को छोड़कर हर घटना",
+    "paused": "रुका हुआ",
+    "onlyProjects": "केवल {{projects}}",
+    "noProjectsLeft": "इसके प्रोजेक्ट हटा दिए गए: अब केवल सर्वर की घटनाएँ पहुँचती हैं",
+    "kindFixed": "चैनल का प्रकार बदला नहीं जा सकता। इसके बजाय दूसरा चैनल जोड़ें।",
+    "noEventsChosen": "कुछ नहीं चुना गया: इस चैनल को सफल बैकअप को छोड़कर हर घटना भेजी जाती है।",
+    "limitToProjects": "केवल कुछ प्रोजेक्ट",
+    "limitToProjectsHelp": "किसी ऐप, डेटाबेस या बैकअप की घटनाएँ केवल आपके चुने हुए प्रोजेक्ट से भेजी जाती हैं। सर्वर और पैनल से जुड़ी घटनाएँ हर चैनल पर जाती हैं, क्योंकि उनका असर हर प्रोजेक्ट पर पड़ता है।",
+    "chooseProject": "कम से कम एक प्रोजेक्ट चुनें।",
+    "enabled": "इस चैनल पर भेजें",
+    "enabledHelp": "सेटिंग्स खोए बिना चैनल को रोकने के लिए इसे बंद करें।",
+    "secretStored": "सहेजा गया। इसे रखने के लिए खाली छोड़ें, या बदलने के लिए नया मान लिखें।"
   },
   "invite": {
     "title": "{{team}} में शामिल हों",

@@ -256,6 +256,8 @@ func (s *Server) routes() chi.Router {
 				team.Get("/notifications/kinds", s.handleListNotificationKinds)
 				team.Get("/notifications", s.handleListNotificationChannels)
 				team.Post("/notifications", s.handleCreateNotificationChannel)
+				team.Get("/notifications/{channelID}", s.handleGetNotificationChannel)
+				team.Put("/notifications/{channelID}", s.handleUpdateNotificationChannel)
 				team.Delete("/notifications/{channelID}", s.handleDeleteNotificationChannel)
 				team.Post("/notifications/{channelID}/test", s.handleTestNotificationChannel)
 			})

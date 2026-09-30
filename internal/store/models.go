@@ -577,15 +577,21 @@ type AuditEvent struct {
 	At          time.Time `json:"at"`
 }
 
-// NotificationChannel delivers events to email, Telegram, Discord or a webhook.
+// NotificationChannel delivers a team's events somewhere: a chat, a push
+// service, a webhook or email.
 type NotificationChannel struct {
-	ID        string    `json:"id"`
-	TeamID    string    `json:"team_id"`
-	Kind      string    `json:"kind"`
-	Name      string    `json:"name"`
-	ConfigEnc string    `json:"-"`
-	Events    string    `json:"events"`
-	Enabled   bool      `json:"enabled"`
+	ID        string `json:"id"`
+	TeamID    string `json:"team_id"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	ConfigEnc string `json:"-"`
+	Events    string `json:"events"`
+	Enabled   bool   `json:"enabled"`
+	// Scoped limits the channel to Projects. Unscoped is every project. A
+	// scoped channel whose projects have all been deleted hears only what
+	// belongs to no project — it does not go back to hearing everything.
+	Scoped    bool      `json:"scoped"`
+	Projects  []string  `json:"projects,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

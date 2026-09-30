@@ -344,7 +344,7 @@ func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp, status ap
 	w.publish(app.TeamID, "app", map[string]any{"id": app.ID, "status": want})
 
 	if healthy {
-		w.notifyTeam(ctx, app.TeamID, notify.EventAppUnhealthy, notify.Message{
+		w.notifyApp(ctx, app, notify.EventAppUnhealthy, notify.Message{
 			Title:  app.Name + " is serving again",
 			Body:   "Instances are ready and the app is answering.",
 			Level:  "success",
@@ -359,7 +359,7 @@ func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp, status ap
 		detail = "No instance is ready."
 	}
 	w.log.Warn("an app has no ready instances", "app", app.ID, "detail", detail)
-	w.notifyTeam(ctx, app.TeamID, notify.EventAppUnhealthy, notify.Message{
+	w.notifyApp(ctx, app, notify.EventAppUnhealthy, notify.Message{
 		Title: app.Name + " has no running instances",
 		Body:  detail,
 		Level: "error",
@@ -447,7 +447,7 @@ func (w *Watcher) checkCertificate(ctx context.Context, app store.DeployedApp) {
 		reason = "The certificate has not been issued."
 	}
 	w.log.Warn("a certificate is not being issued", "app", app.ID, "detail", reason)
-	w.notifyTeam(ctx, app.TeamID, notify.EventCertificate, notify.Message{
+	w.notifyApp(ctx, app, notify.EventCertificate, notify.Message{
 		Title:  "No certificate for " + secured[0].Hostname,
 		Body:   reason,
 		Level:  "error",
@@ -484,9 +484,19 @@ func (w *Watcher) publish(teamID, kind string, data any) {
 	w.hub.Publish(events.TeamTopic(teamID), kind, data)
 }
 
+// notifyTeam sends what the whole team hears about: a server, which runs every
+// project's apps. See notifyApp for everything that belongs to one app.
 func (w *Watcher) notifyTeam(ctx context.Context, teamID, event string, msg notify.Message) {
 	if w.notifier == nil || teamID == "" {
 		return
 	}
 	w.notifier.Notify(ctx, teamID, event, msg)
+}
+
+// notifyApp sends what is about one app — its health, its certificate, its
+// thresholds — marked with the app's project, so a channel limited to other
+// projects does not hear about it.
+func (w *Watcher) notifyApp(ctx context.Context, app store.DeployedApp, event string, msg notify.Message) {
+	msg.ProjectID = app.ProjectID
+	w.notifyTeam(ctx, app.TeamID, event, msg)
 }

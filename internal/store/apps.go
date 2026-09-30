@@ -755,7 +755,10 @@ func (db *DB) DeleteVolume(ctx context.Context, appID, id string) error {
 // what a watcher needs to compare the panel's picture with the cluster's.
 type DeployedApp struct {
 	App
-	TeamID    string
+	TeamID string
+	// ProjectID is carried so what the watcher says about the app reaches
+	// only the notification channels that follow its project.
+	ProjectID string
 	Namespace string
 }
 
@@ -765,7 +768,7 @@ type DeployedApp struct {
 // An app that was created and never deployed has nothing in the cluster to
 // compare against, so including it would only produce false alarms.
 func (db *DB) ListDeployedApps(ctx context.Context) ([]DeployedApp, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+prefixColumns("a", appColumns)+`, p.team_id, e.namespace
+	rows, err := db.QueryContext(ctx, `SELECT `+prefixColumns("a", appColumns)+`, p.team_id, p.id, e.namespace
 		FROM apps a
 		JOIN environments e ON e.id = a.environment_id
 		JOIN projects p ON p.id = e.project_id
@@ -781,7 +784,7 @@ func (db *DB) ListDeployedApps(ctx context.Context) ([]DeployedApp, error) {
 		var a App
 		var created, updated string
 		var item DeployedApp
-		if err := rows.Scan(append(appDestinations(&a, &created, &updated), &item.TeamID, &item.Namespace)...); err != nil {
+		if err := rows.Scan(append(appDestinations(&a, &created, &updated), &item.TeamID, &item.ProjectID, &item.Namespace)...); err != nil {
 			return nil, fmt.Errorf("scan deployed app: %w", err)
 		}
 		a.CreatedAt, _ = ParseTime(created)

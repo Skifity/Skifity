@@ -101,7 +101,7 @@ func unchunk(body []byte) []byte {
 	return out.Bytes()
 }
 
-type recordedNotice struct{ team, event, title string }
+type recordedNotice struct{ team, event, title, project string }
 
 type recordingNotifier struct {
 	mu      sync.Mutex
@@ -111,7 +111,7 @@ type recordingNotifier struct {
 func (n *recordingNotifier) Notify(_ context.Context, teamID, event string, msg notify.Message) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.notices = append(n.notices, recordedNotice{teamID, event, msg.Title})
+	n.notices = append(n.notices, recordedNotice{teamID, event, msg.Title, msg.ProjectID})
 }
 
 // panelHarness is a panel with a database on disk, an administrator in a team,

@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -59,8 +60,9 @@ type ChannelKind struct {
 	// Provider names the plugin behind it, so somebody can see where a channel
 	// they did not add came from.
 	Provider string `json:"provider,omitempty"`
-	// Fields is the form to show. Empty for a built-in kind, whose form this
-	// panel already has and has translated.
+	// Fields is the form to show. A built-in kind's fields have no label or
+	// help: the panel has those translated, looked up by the kind and the
+	// key. A provided kind's carry the plugin author's English.
 	Fields []Field `json:"fields,omitempty"`
 }
 
@@ -83,7 +85,50 @@ type Field struct {
 // Exported because the panel lists the choices in one place now, and a second
 // copy of this list in a handler is a kind that exists in one and not the
 // other.
-var BuiltIn = []string{"telegram", "discord", "slack", "mattermost", "ntfy", "pushover", "webhook", "email"}
+var BuiltIn = []string{
+	"telegram", "discord", "slack", "mattermost", "teams", "ntfy", "pushover", "gotify", "webhook", "email",
+}
+
+// builtInForms is what each built-in kind asks for, and which of it is a
+// secret.
+//
+// The server holds this rather than the frontend because it is the server
+// that has to know: editing a channel sends its settings back to the form,
+// and only the ones that are not secret may go. It used to be written into
+// the frontend alone, which was harmless while a channel could only be
+// created and deleted.
+//
+// A webhook's URL and an email's recipients are not secrets: an administrator
+// typed them and reads them back to change them. A chat webhook's URL is — for
+// Discord, Slack, Mattermost and Teams, the URL is the credential.
+var builtInForms = map[string][]Field{
+	"telegram": {
+		{Key: "bot_token", Secret: true, Required: true},
+		{Key: "chat_id", Required: true},
+	},
+	"discord":    {{Key: "webhook_url", Secret: true, Required: true}},
+	"slack":      {{Key: "webhook_url", Secret: true, Required: true}},
+	"mattermost": {{Key: "webhook_url", Secret: true, Required: true}},
+	"teams":      {{Key: "webhook_url", Secret: true, Required: true}},
+	"ntfy": {
+		{Key: "topic", Required: true},
+		{Key: "server"},
+		{Key: "token", Secret: true},
+	},
+	"pushover": {
+		{Key: "app_token", Secret: true, Required: true},
+		{Key: "user_key", Secret: true, Required: true},
+	},
+	"gotify": {
+		{Key: "server", Required: true},
+		{Key: "app_token", Secret: true, Required: true},
+	},
+	"webhook": {
+		{Key: "url", Required: true},
+		{Key: "secret", Secret: true},
+	},
+	"email": {{Key: "to", Required: true}},
+}
 
 // IsBuiltIn reports whether this package can send a kind without help.
 func IsBuiltIn(kind string) bool {
@@ -121,7 +166,7 @@ func SplitProvidedKind(kind string) (pluginID, providerID string, ok bool) {
 func BuiltInKinds() []ChannelKind {
 	kinds := make([]ChannelKind, 0, len(BuiltIn))
 	for _, kind := range BuiltIn {
-		kinds = append(kinds, ChannelKind{Kind: kind})
+		kinds = append(kinds, ChannelKind{Kind: kind, Fields: slices.Clone(builtInForms[kind])})
 	}
 	return kinds
 }

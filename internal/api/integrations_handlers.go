@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -215,9 +217,9 @@ func (s *Server) handleListNotificationChannels(w http.ResponseWriter, r *http.R
 // It exists because a plugin that provides a channel and is never offered is a
 // plugin that does nothing: the panel used to have the four kinds written into
 // the frontend, so a provided one could be stored through the API and never
-// picked by a person. The built-in kinds are returned with no fields, because
-// the panel has their forms already and has translated them; a provided kind
-// carries its own form, in the plugin author's English.
+// picked by a person. A built-in kind's fields come without words, because the
+// panel has them translated; a provided kind carries its own form, in the
+// plugin author's English.
 func (s *Server) handleListNotificationKinds(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
@@ -242,6 +244,9 @@ type createChannelRequest struct {
 	Name   string            `json:"name"`
 	Config map[string]string `json:"config"`
 	Events []string          `json:"events"`
+	// Projects limits the channel to some of the team's projects. Absent is
+	// every project.
+	Projects []string `json:"projects,omitempty"`
 }
 
 func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
@@ -259,30 +264,223 @@ func (s *Server) handleCreateNotificationChannel(w http.ResponseWriter, r *http.
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	raw, err := json.Marshal(req.Config)
+	scoped, projects, err := s.channelLimits(r, teamID, req.Projects)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	channel := store.NotificationChannel{
-		TeamID:  teamID,
-		Kind:    req.Kind,
-		Name:    defaultString(req.Name, req.Kind),
-		Events:  strings.Join(req.Events, ","),
-		Enabled: true,
+		TeamID:   teamID,
+		Kind:     req.Kind,
+		Name:     defaultString(strings.TrimSpace(req.Name), req.Kind),
+		Events:   strings.Join(req.Events, ","),
+		Enabled:  true,
+		Scoped:   scoped,
+		Projects: projects,
 	}
-	sealed, err := s.keyring.Seal(raw, "notification_channel:"+teamID+":"+channel.Name)
-	if err != nil {
+	if channel.ConfigEnc, err = s.sealChannelConfig(teamID, channel.Name, req.Config); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	channel.ConfigEnc = sealed
 	if err := s.db.CreateNotificationChannel(r.Context(), &channel); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	s.audit(r, teamID, "notification.created", "channel", channel.ID, channel.Name)
 	writeJSON(w, http.StatusCreated, channel)
+}
+
+// channelView is one channel as the form that edits it reads it.
+type channelView struct {
+	store.NotificationChannel
+	// Config is every setting the form may show again: the ones that are not
+	// secret.
+	Config map[string]string `json:"config"`
+	// Secrets names the secret settings that are stored. The form says they
+	// are there; their values never leave the panel.
+	Secrets []string `json:"secrets"`
+}
+
+// handleGetNotificationChannel is a channel with its settings, for the form
+// that changes it.
+//
+// Administrators only, as adding one is. A viewer sees the list — where the
+// team's alerts go and which events — and not a chat id or a list of
+// recipients, which are the administrator's to manage.
+func (s *Server) handleGetNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	channelID := chi.URLParam(r, "channelID")
+	channel, err := s.db.GetNotificationChannel(r.Context(), channelID)
+	if err != nil || channel.TeamID != teamID {
+		writeError(w, r, errdoc.NotFound("notification channel", channelID))
+		return
+	}
+	config, err := s.openChannelConfig(teamID, channel)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	fields, known := s.channelForm(r, channel.Kind)
+	values, secrets := notify.Revealable(fields, known, config)
+	writeJSON(w, http.StatusOK, channelView{NotificationChannel: channel, Config: values, Secrets: secrets})
+}
+
+// updateChannelRequest is the whole channel as the form shows it. The kind is
+// not in it: a Telegram channel does not become a Discord one, and its stored
+// settings would mean nothing to the other.
+type updateChannelRequest struct {
+	// Name is kept when empty.
+	Name   string   `json:"name"`
+	Events []string `json:"events"`
+	// Enabled is kept when absent, so a request that does not mention it does
+	// not switch a channel off.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Projects limits the channel to some of the team's projects. Absent is
+	// every project, as it is when a channel is created.
+	Projects []string `json:"projects,omitempty"`
+	// Config changes the channel's settings. A key it leaves out is kept, and
+	// so is a secret sent empty — which is what the form sends for a password
+	// box nobody touched. Absent keeps every setting as it is.
+	Config map[string]string `json:"config,omitempty"`
+}
+
+func (s *Server) handleUpdateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	channelID := chi.URLParam(r, "channelID")
+	channel, err := s.db.GetNotificationChannel(r.Context(), channelID)
+	if err != nil || channel.TeamID != teamID {
+		writeError(w, r, errdoc.NotFound("notification channel", channelID))
+		return
+	}
+	var req updateChannelRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	scoped, projects, err := s.channelLimits(r, teamID, req.Projects)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	stored, err := s.openChannelConfig(teamID, channel)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	config := stored
+	if req.Config != nil {
+		fields, known := s.channelForm(r, channel.Kind)
+		config = notify.MergeConfig(fields, known, stored, req.Config)
+		// Only what changed is checked. A channel whose plugin has gone can
+		// still be renamed, paused or removed from a project; its settings
+		// cannot be checked by anything, and nobody asked to change them.
+		if !maps.Equal(config, stored) {
+			if err := notify.ValidateConfig(r.Context(), channel.Kind, config, s.channels); err != nil {
+				writeError(w, r, errdoc.BadRequest(err.Error()))
+				return
+			}
+		}
+	}
+
+	channel.Name = defaultString(strings.TrimSpace(req.Name), channel.Name)
+	channel.Events = strings.Join(req.Events, ",")
+	if req.Enabled != nil {
+		channel.Enabled = *req.Enabled
+	}
+	channel.Scoped, channel.Projects = scoped, projects
+	// Sealed again whatever changed: the name is part of what the settings are
+	// sealed with, so a renamed channel whose settings kept the old seal
+	// would never open again.
+	if channel.ConfigEnc, err = s.sealChannelConfig(teamID, channel.Name, config); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.db.UpdateNotificationChannel(r.Context(), &channel); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	updated, err := s.db.GetNotificationChannel(r.Context(), channel.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.audit(r, teamID, "notification.updated", "channel", channel.ID, channel.Name)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// channelLimits checks the projects a channel is to be limited to: nil for
+// every project, otherwise at least one, and every one a project of this team.
+func (s *Server) channelLimits(r *http.Request, teamID string, projects []string) (scoped bool, out []string, err error) {
+	if projects == nil {
+		return false, nil, nil
+	}
+	if len(projects) == 0 {
+		return false, nil, errdoc.BadRequest("Choose at least one project, or leave the limit off for every project.")
+	}
+	out = make([]string, 0, len(projects))
+	for _, id := range projects {
+		if slices.Contains(out, id) {
+			continue
+		}
+		project, err := s.db.GetProject(r.Context(), id)
+		if err != nil || project.TeamID != teamID {
+			return false, nil, errdoc.NotFound("project", id)
+		}
+		out = append(out, id)
+	}
+	return true, out, nil
+}
+
+// channelForm is the form of a channel's kind, asking the plugins when a
+// plugin provides it. known is false when nothing can say what the form is,
+// and the settings are then all treated as secrets.
+func (s *Server) channelForm(r *http.Request, kind string) (fields []notify.Field, known bool) {
+	var provided []notify.ChannelKind
+	if notify.IsProvided(kind) && s.channels != nil {
+		kinds, err := s.channels.Kinds(r.Context())
+		if err != nil {
+			s.log.Warn("the channels plugins provide could not be listed", "error", err)
+		}
+		provided = kinds
+	}
+	return notify.FormOf(kind, provided)
+}
+
+// channelSealContext is what a channel's settings are sealed with. The name
+// is part of it, so a renamed channel's settings are sealed again.
+func channelSealContext(teamID, name string) string {
+	return "notification_channel:" + teamID + ":" + name
+}
+
+func (s *Server) sealChannelConfig(teamID, name string, config map[string]string) (string, error) {
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	return s.keyring.Seal(raw, channelSealContext(teamID, name))
+}
+
+func (s *Server) openChannelConfig(teamID string, channel store.NotificationChannel) (map[string]string, error) {
+	raw, err := s.keyring.Open(channel.ConfigEnc, channelSealContext(teamID, channel.Name))
+	if err != nil {
+		return nil, err
+	}
+	var config map[string]string
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return nil, err
+	}
+	if config == nil {
+		config = map[string]string{}
+	}
+	return config, nil
 }
 
 func (s *Server) handleDeleteNotificationChannel(w http.ResponseWriter, r *http.Request) {
@@ -317,13 +515,8 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 		writeError(w, r, errdoc.NotFound("notification channel", channelID))
 		return
 	}
-	raw, err := s.keyring.Open(channel.ConfigEnc, "notification_channel:"+teamID+":"+channel.Name)
+	config, err := s.openChannelConfig(teamID, channel)
 	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	var config map[string]string
-	if err := json.Unmarshal(raw, &config); err != nil {
 		writeError(w, r, err)
 		return
 	}

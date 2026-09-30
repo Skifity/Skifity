@@ -584,10 +584,25 @@ export type NotificationChannel = {
   name: string
   events: string
   enabled: boolean
+  /**
+   * Limited to `projects`. Events about an app, a database or a backup reach
+   * it only from those; events about a server reach every channel.
+   */
+  scoped: boolean
+  projects?: string[]
   created_at: string
 }
 
-/** One input in a channel form a plugin declared. */
+/**
+ * A channel as the form that changes it reads it: the settings that are not
+ * secret, and the names of the secrets that are stored — never their values.
+ */
+export type NotificationChannelDetail = NotificationChannel & {
+  config: Record<string, string>
+  secrets: string[]
+}
+
+/** One input in a channel's form. */
 export type NotificationField = {
   key: string
   label: string
@@ -601,9 +616,10 @@ export type NotificationField = {
 /**
  * A way of sending, as the panel offers it.
  *
- * A built-in kind arrives with no fields, because the panel has its form
- * already and has translated it. A kind a plugin provides carries its own
- * form, in the plugin author's English.
+ * A built-in kind's fields arrive without words, because the panel has them
+ * translated; the server says which are secret, because it is the server that
+ * never sends those back. A kind a plugin provides carries its own form, in
+ * the plugin author's English.
  */
 export type NotificationKind = {
   kind: string

@@ -73,19 +73,70 @@ for a GitHub App — an app id, a client id, a client secret, a private key — 
 nothing ever read one of them, so it is gone until the code behind it exists.
 
 **Notifications** is a tab rather than a group of settings: a channel is a row
-you add, and Skifity sends to Telegram, Discord, Slack, Mattermost, ntfy,
-Pushover, a webhook of your own, or email through the SMTP settings above.
+you add, and Skifity sends to Telegram, Discord, Slack, Mattermost, Microsoft
+Teams, ntfy, Pushover, Gotify, a webhook of your own, or email through the SMTP
+settings above.
 
 * **Slack** and **Mattermost** take an incoming webhook's address, and get the
   message as a coloured attachment with a link back to the panel.
+* **Microsoft Teams** takes the address of a Workflows webhook: in the channel,
+  open **Workflows**, choose *Send webhook alerts to a channel*, and paste the
+  link it gives you. The message is an Adaptive Card — the title in the
+  level's colour, the details as a list, and a button back to the panel.
+  Office 365 connectors, which took the older MessageCard, are being retired
+  by Microsoft; a connector that still works takes the same card.
 * **ntfy** takes a topic, and optionally your own server (ntfy.sh otherwise) and
   an access token for a protected topic. A failure is sent at high priority, so
   it buzzes; a success is sent low, so it does not.
 * **Pushover** takes an application token and your user or group key. Nothing
   is sent at emergency priority, which repeats until acknowledged.
+* **Gotify** takes your server's address and an application token (Apps, in
+  Gotify). The token is sent in a header rather than the address, so it is not
+  written to the server's access log. A failure is priority 8, which
+  interrupts; a success is 2, which does not.
+* **A webhook** takes an address, and optionally a shared secret, sent in the
+  `X-Skifity-Secret` header for your receiver to compare.
 
 Every one of them is sent from the panel through the same guarded client as a
 webhook, so none can be pointed at an address inside the cluster.
+
+### Changing a channel
+
+**Edit** on a channel opens the form it was added with. Everything can change
+but its kind: a Telegram channel does not become a Discord one. Settings that
+are not secret — a chat id, a topic, a list of recipients — are shown as they
+are. A secret — a bot token, a webhook address that is itself the credential,
+an access token — is never shown again once it is stored: its box says it is
+there, and left empty it keeps it. Type a new one to replace it.
+
+A channel can also be switched off there, which pauses it without forgetting
+its settings.
+
+### Limiting a channel to some projects
+
+A channel hears about every project unless you limit it. Limited, it hears
+about the projects you choose and no others. What belongs to a project is
+decided by the event:
+
+| Event | Belongs to |
+|---|---|
+| A deployment succeeded or failed | The app's project |
+| An app stopped answering, or came back | The app's project |
+| An app crossed a usage threshold | The app's project |
+| A certificate could not be issued | The project of the app the domain is on |
+| A backup failed, succeeded or was missed | The project of the database, or of the app whose volume it copied |
+| A server joined, stopped responding or crossed a threshold | The whole team |
+| This panel could not back itself up | The whole team |
+
+An event that belongs to the whole team reaches every channel that asked for
+it, limited or not: a server that stops answering takes every project's apps
+with it, and a channel limited to one of them is still a channel somebody
+reads. If you do not want those on a limited channel, leave the server events
+unticked.
+
+A channel limited to projects that have all since been deleted stays limited —
+to none. It hears only the whole team's events, and never goes back to hearing
+every project.
 
 ## Adding somebody to the team
 

@@ -882,7 +882,9 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	})
 }
 
-// notify fills in what every deployment notification carries and sends it.
+// notify fills in what every deployment notification carries and sends it:
+// the team to tell, and the project the app is in, so a channel limited to
+// other projects is left out.
 //
 // A failure to work out the team is not worth failing a deployment over, so it
 // is logged and the notification is dropped.
@@ -890,11 +892,12 @@ func (d *Deployer) notify(ctx context.Context, app store.App, deployment store.D
 	if d.notifier == nil {
 		return
 	}
-	teamID, err := d.db.TeamIDForApp(ctx, app.ID)
+	teamID, projectID, err := d.db.ProjectOfApp(ctx, app.ID)
 	if err != nil {
 		d.log.Warn("could not work out which team to notify", "app", app.ID, "error", err)
 		return
 	}
+	msg.ProjectID = projectID
 	if msg.Fields == nil {
 		msg.Fields = map[string]string{}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,8 @@ func NewDispatcher(db Store, keyring Keyring, log *slog.Logger, panelURL func(co
 	return &Dispatcher{db: db, keyring: keyring, log: log, panelURL: panelURL}
 }
 
-// Notify delivers a message to the team's channels that subscribe to the event.
+// Notify delivers a message to the team's channels that subscribe to the event
+// and follow the project the message is about (see follows).
 //
 // It never blocks the caller and never returns an error: a deployment must not
 // fail because Discord is down, and a caller that has just finished rolling out
@@ -106,7 +108,7 @@ func (d *Dispatcher) Notify(ctx context.Context, teamID, event string, msg Messa
 	}
 
 	for _, channel := range channels {
-		if !channel.Enabled || !subscribes(channel.Events, event) {
+		if !channel.Enabled || !subscribes(channel.Events, event) || !follows(channel, msg.ProjectID) {
 			continue
 		}
 		config, err := d.configFor(teamID, channel)
@@ -234,6 +236,22 @@ func PrepareEmail(ctx context.Context, db SettingsReader, keyring Keyring, log *
 		return ctx
 	}
 	return context.WithValue(ctx, panelServer{}, true)
+}
+
+// follows reports whether a channel hears about an event that belongs to a
+// project.
+//
+// A channel that is not limited follows every project. A limited one follows
+// the projects on its list and no others — and when its projects have all been
+// deleted, none. An event that belongs to no project, which is a server or the
+// panel itself, is the whole team's and reaches every channel: a server that
+// stopped answering takes every project's apps down with it, and a channel
+// limited to one of them is still a channel somebody reads.
+func follows(channel store.NotificationChannel, projectID string) bool {
+	if projectID == "" || !channel.Scoped {
+		return true
+	}
+	return slices.Contains(channel.Projects, projectID)
 }
 
 // subscribes reports whether a channel's stored event list covers an event.

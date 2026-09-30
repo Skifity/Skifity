@@ -346,7 +346,8 @@
       "app.job_run": "ran a scheduled command now",
       "auth.password_reset_requested": "asked for a password reset link",
       "auth.password_reset": "reset their password through a link",
-      "environment.cloned": "Environment cloned"
+      "environment.cloned": "Environment cloned",
+      "notification.updated": "Notification channel changed"
     }
   },
   "projects": {
@@ -2710,7 +2711,9 @@
       "slack": "Slack",
       "mattermost": "Mattermost",
       "ntfy": "ntfy",
-      "pushover": "Pushover"
+      "pushover": "Pushover",
+      "teams": "Microsoft Teams",
+      "gotify": "Gotify"
     },
     "event": {
       "deploy.succeeded": "A deployment succeeded",
@@ -2757,13 +2760,36 @@
         "user_keyHelp": "At the top of your pushover.net dashboard."
       },
       "webhook": {
-        "url": "URL"
+        "url": "URL",
+        "secret": "Shared secret",
+        "secretHelp": "Optional. Sent in the X-Skifity-Secret header, so your receiver can check the request came from here."
       },
       "email": {
         "to": "To"
+      },
+      "teams": {
+        "webhook_url": "Webhook URL",
+        "webhook_urlHelp": "In Teams, open the channel's Workflows and choose \"Send webhook alerts to a channel\". Paste the link the workflow gives you."
+      },
+      "gotify": {
+        "server": "Server",
+        "serverHelp": "Your Gotify server's address, such as https://gotify.example.com.",
+        "app_token": "Application token",
+        "app_tokenHelp": "Create an application under Apps in Gotify, and copy its token."
       }
     },
-    "everyEvent": "Every event except successful backups"
+    "everyEvent": "Every event except successful backups",
+    "paused": "Paused",
+    "onlyProjects": "Only {{projects}}",
+    "noProjectsLeft": "Its projects were deleted: only server events reach it",
+    "kindFixed": "A channel's kind cannot be changed. Add another channel instead.",
+    "noEventsChosen": "None chosen: the channel is sent every event except successful backups.",
+    "limitToProjects": "Only some projects",
+    "limitToProjectsHelp": "Events about an app, a database or a backup are sent only from the projects you choose. Events about servers and the panel itself go to every channel, because they affect every project.",
+    "chooseProject": "Choose at least one project.",
+    "enabled": "Send to this channel",
+    "enabledHelp": "Switch it off to pause the channel without losing its settings.",
+    "secretStored": "Stored. Leave it empty to keep it, or type a new value to replace it."
   },
   "invite": {
     "title": "Join {{team}}",
