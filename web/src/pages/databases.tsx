@@ -270,7 +270,7 @@ export function DatabasesPage() {
                           />
                         </TableCell>
                         <TableCell className="hidden tabular-nums md:table-cell">
-                          {database.storage_gb} GB
+                          {database.storage_gb > 0 ? `${database.storage_gb} GB` : "—"}
                         </TableCell>
                         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                           {formatRelative(database.created_at)}

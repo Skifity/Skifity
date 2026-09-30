@@ -364,6 +364,10 @@ type DatabaseCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	URL      string `json:"url"`
+	// NativeURL is ClickHouse's native-protocol address, for the clients
+	// that speak it rather than the HTTP one URL names. Empty for every
+	// other engine.
+	NativeURL string `json:"native_url,omitempty"`
 }
 
 // BackupManager runs and restores backups.

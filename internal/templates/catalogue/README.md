@@ -38,7 +38,8 @@ services:
         secret: false            # true hides the content once installed
 databases:                       # optional; created before the app starts
   - name: example-db
-    engine: postgres             # postgres, mysql or redis
+    engine: postgres             # postgres, mysql, mariadb, mongodb, redis, valkey,
+                                 # dragonfly, clickhouse or memcached
     storage_gb: 5
     link_to: [example, worker]   # every service that needs it, not just one
     var_name: DATABASE_URL       # how the connection string arrives

@@ -3266,7 +3266,9 @@ paths:
       operationId: createBackup
       tags: [Backups]
       summary: Back a database up now
-      description: Member. Needs backup storage under Settings.
+      description: >-
+        Member. Needs backup storage under Settings. Refused with backup.not_offered for an engine Skifity
+        does not back up (dragonfly, clickhouse and memcached; GET /api/database-engines says which).
       responses:
         '202':
           description: The backup, under way.
@@ -3307,7 +3309,9 @@ paths:
       operationId: setBackupPolicy
       tags: [Backups]
       summary: Change a database's backup schedule
-      description: Admin. Turning it on checks that backup storage works first.
+      description: >-
+        Admin. Turning it on checks that backup storage works first, and is refused with backup.not_offered
+        for an engine Skifity does not back up.
       requestBody:
         required: true
         content:
@@ -3329,7 +3333,11 @@ paths:
       operationId: restoreBackup
       tags: [Backups]
       summary: Put a backup back into the database it came from
-      description: Admin. Only a backup that finished.
+      description: >-
+        Admin. Only a backup that finished, of an engine Skifity backs up. A Redis or Valkey backup is
+        loaded into a temporary server of the same image, which the database then replicates from until it
+        holds all of it; a backup loaded by a server newer than the database is refused before anything
+        changes.
       parameters:
         - $ref: '#/components/parameters/overwrite'
       responses:
@@ -3471,6 +3479,23 @@ paths:
         default: {$ref: '#/components/responses/Error'}
 
   # --- templates ---
+
+  /api/database-engines:
+    get:
+      operationId: listDatabaseEngines
+      tags: [Databases]
+      summary: The engines a database can be
+      description: >-
+        Every engine, the versions offered for each and the default, the port its connection string names,
+        the variable a linked app reads it from, and whether Skifity backs it up. The form to create a
+        database is built from this.
+      responses:
+        '200':
+          description: Every engine, in the order they are offered.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DatabaseEngineList'}
+        default: {$ref: '#/components/responses/Error'}
 
   /api/templates:
     get:
@@ -5244,7 +5269,7 @@ components:
             required: [engine]
             additionalProperties: false
             properties:
-              engine: {type: string, enum: [postgres, redis, mysql]}
+              engine: {type: string, enum: [postgres, mysql, mariadb, mongodb, redis, valkey, dragonfly, clickhouse, memcached]}
               variable: {type: string, description: 'The variable the app reads the connection from. The engine''s default when left out.'}
         processes:
           type: array
@@ -6188,7 +6213,7 @@ components:
         environment_id: {type: string}
         name: {type: string}
         slug: {type: string}
-        engine: {type: string, enum: [postgres, redis, mysql]}
+        engine: {type: string, enum: [postgres, mysql, mariadb, mongodb, redis, valkey, dragonfly, clickhouse, memcached]}
         engine_version: {type: string}
         status: {type: string}
         status_detail: {type: string}
@@ -6212,7 +6237,7 @@ components:
       additionalProperties: false
       properties:
         name: {type: string}
-        engine: {type: string, enum: [postgres, redis, mysql]}
+        engine: {type: string, enum: [postgres, mysql, mariadb, mongodb, redis, valkey, dragonfly, clickhouse, memcached]}
         version: {type: string}
         storage_gb: {type: integer}
         instances: {type: integer}
@@ -6232,7 +6257,7 @@ components:
       additionalProperties: false
       properties:
         app_id: {type: string}
-        var_name: {type: string, description: 'DATABASE_URL, REDIS_URL or MYSQL_URL by engine, when left out.'}
+        var_name: {type: string, description: 'The engine''s own default when left out: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse and MEMCACHED_URL for memcached. GET /api/database-engines lists them.'}
 
     DatabaseCredentials:
       type: object
@@ -6243,8 +6268,34 @@ components:
         port: {type: integer}
         database: {type: string}
         username: {type: string}
-        password: {type: string, format: password}
+        password: {type: string, format: password, description: 'Empty for memcached, which has none.'}
         url: {type: string}
+        native_url:
+          type: string
+          description: ClickHouse only. Its native-protocol address on port 9000, beside the HTTP one url names.
+
+    DatabaseEngine:
+      type: object
+      required: [name, title, port, default_version, versions, backups, replicated, storage, password, variable, storage_gb]
+      properties:
+        name: {type: string, enum: [postgres, mysql, mariadb, mongodb, redis, valkey, dragonfly, clickhouse, memcached]}
+        title: {type: string, description: 'The product''s own name, such as PostgreSQL.'}
+        port: {type: integer, description: 'The port the connection string names and `skifity db connect` listens on.'}
+        default_version: {type: string}
+        versions: {type: array, items: {type: string}, description: 'The versions offered, newest first.'}
+        backups: {type: boolean, description: 'False for an engine Skifity does not back up. docs/backups.md says why for each.'}
+        replicated: {type: boolean, description: 'True when more than one instance can be asked for. Only PostgreSQL.'}
+        storage: {type: boolean, description: 'False for a cache, which keeps nothing on a disk.'}
+        password: {type: boolean, description: 'False for an engine with no authentication, which only its own environment can reach.'}
+        variable: {type: string, description: 'The variable a linked app reads the connection string from, when none is named.'}
+        storage_gb: {type: integer, description: 'The disk a new database gets when none is asked for.'}
+
+    DatabaseEngineList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DatabaseEngine'}}
+        total: {type: integer}
 
     # --- backups ---
 

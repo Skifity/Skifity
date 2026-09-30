@@ -17,7 +17,7 @@ services:
     DB_USERNAME: root
 databases:
 - name: easyappointments-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 5
   link_to:
   - easyappointments

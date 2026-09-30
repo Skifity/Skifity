@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/store"
 	"skifity/internal/templates"
 )
@@ -14,15 +15,20 @@ import (
 // to a default per engine. A missing default links the app to its database
 // through a variable called "", which the app cannot read and nothing reports.
 //
-// The engine names are literals because internal/dbsvc, which defines them,
-// imports this package. That the two lists agree is checked in
-// template_engines_test.go, which is an external test package and can import
-// both.
+// The engines come from the catalogue in internal/dbsvc/engine, which
+// imports nothing of the panel's; internal/dbsvc itself imports this package.
 func TestEveryEngineHasADefaultVariableName(t *testing.T) {
-	for _, engine := range []string{"postgres", "mysql", "redis"} {
-		if defaultVarNameFor(engine) == "" {
-			t.Errorf("a %s database with no var_name would arrive as an empty variable name", engine)
+	for _, name := range engine.Names() {
+		if defaultVarNameFor(name) == "" {
+			t.Errorf("a %s database with no var_name would arrive as an empty variable name", name)
 		}
+	}
+	// Every MariaDB made before it was offered apart was a "mysql" linked as
+	// MYSQL_URL. A blueprint that links one by default must keep finding the
+	// variable its app already reads.
+	if defaultVarNameFor(engine.MariaDB) != defaultVarNameFor(engine.MySQL) {
+		t.Errorf("mariadb is linked as %s by default, and the mysql databases it used to be as %s",
+			defaultVarNameFor(engine.MariaDB), defaultVarNameFor(engine.MySQL))
 	}
 }
 

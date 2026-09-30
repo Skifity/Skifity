@@ -17,7 +17,7 @@ services:
     BEHIND_HTTPS_PROXY: 'True'
 databases:
 - name: bugsink-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 5
   link_to:
   - web

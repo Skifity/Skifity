@@ -687,8 +687,18 @@ func engineName(engine string) string {
 		return "PostgreSQL"
 	case builder.EngineMySQL:
 		return "MySQL"
+	case builder.EngineMariaDB:
+		return "MariaDB"
 	case builder.EngineRedis:
 		return "Redis"
+	case builder.EngineValkey:
+		return "Valkey"
+	case builder.EngineDragonfly:
+		return "Dragonfly"
+	case builder.EngineClickHouse:
+		return "ClickHouse"
+	case builder.EngineMemcached:
+		return "Memcached"
 	case builder.EngineMongoDB:
 		return "MongoDB"
 	case builder.EngineSQLServer:

@@ -56,6 +56,7 @@ var order = []string{
 	"adding-servers",
 	"firewall",
 	"plugins",
+	"databases",
 	"backups",
 	"configuration",
 	"cli",

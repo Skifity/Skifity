@@ -19,7 +19,7 @@ services:
   public: true
 databases:
 - name: wordpress-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 5
   link_to:
   - wordpress

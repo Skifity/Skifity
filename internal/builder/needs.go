@@ -41,14 +41,19 @@ const (
 	NeedVariables NeedKind = "variables"
 )
 
-// Engines a Need may name. The first three are the ones this panel runs; the
-// rest are named so the interface can say honestly that they are not.
+// Engines a Need may name. All but SQL Server are ones this panel runs; SQL
+// Server is named so the interface can say honestly that it is not.
 const (
-	EnginePostgres  = "postgres"
-	EngineMySQL     = "mysql"
-	EngineRedis     = "redis"
-	EngineMongoDB   = "mongodb"
-	EngineSQLServer = "sqlserver"
+	EnginePostgres   = "postgres"
+	EngineMySQL      = "mysql"
+	EngineMariaDB    = "mariadb"
+	EngineMongoDB    = "mongodb"
+	EngineRedis      = "redis"
+	EngineValkey     = "valkey"
+	EngineDragonfly  = "dragonfly"
+	EngineClickHouse = "clickhouse"
+	EngineMemcached  = "memcached"
+	EngineSQLServer  = "sqlserver"
 	// EngineSQLite and EngineFile are kinds of ephemeral storage.
 	EngineSQLite = "sqlite"
 	EngineFile   = "file"
@@ -57,7 +62,14 @@ const (
 // ProvidedEngines are the databases the panel can create and link. A test
 // checks this against internal/dbsvc, so the form never offers to create
 // something the panel cannot make.
-var ProvidedEngines = []string{EnginePostgres, EngineMySQL, EngineRedis}
+//
+// Dragonfly has no client of its own to be detected by — an app talks to it
+// with a Redis client — so nothing below names it; it is listed so the two
+// lists stay the same, and it is offered where a person chooses an engine.
+var ProvidedEngines = []string{
+	EnginePostgres, EngineMySQL, EngineMariaDB, EngineMongoDB,
+	EngineRedis, EngineValkey, EngineDragonfly, EngineClickHouse, EngineMemcached,
+}
 
 // Need is one thing the app needs, and why the panel thinks so.
 type Need struct {
@@ -127,13 +139,27 @@ func DetectNeeds(tree Tree) []Need {
 	}
 	// Laravel says which in .env.example, and since Laravel 11 the answer out
 	// of the box is sqlite.
-	switch strings.ToLower(example["DB_CONNECTION"]) {
+	switch connection := strings.ToLower(example["DB_CONNECTION"]); connection {
 	case "sqlite":
 		add(Need{Kind: NeedEphemeral, Engine: EngineSQLite, Evidence: "DB_CONNECTION=sqlite", Source: exampleSource})
-	case "mysql", "mariadb":
+	case "mysql":
 		add(Need{Kind: NeedDatabase, Engine: EngineMySQL, Evidence: "DB_CONNECTION=mysql", Source: exampleSource})
+	case "mariadb":
+		// Laravel 11 has a driver of its own for MariaDB, and an app that
+		// chose it gets one.
+		add(Need{Kind: NeedDatabase, Engine: EngineMariaDB, Evidence: "DB_CONNECTION=mariadb", Source: exampleSource})
 	case "pgsql":
 		add(Need{Kind: NeedDatabase, Engine: EnginePostgres, Evidence: "DB_CONNECTION=pgsql", Source: exampleSource})
+	case "mongodb":
+		// mongodb/laravel-mongodb's connection name.
+		add(Need{Kind: NeedDatabase, Engine: EngineMongoDB, Evidence: "DB_CONNECTION=mongodb", Source: exampleSource})
+	}
+	// Laravel's cache, which is a server of its own when it says memcached.
+	for _, key := range []string{"CACHE_STORE", "CACHE_DRIVER"} {
+		if strings.EqualFold(example[key], "memcached") {
+			add(Need{Kind: NeedDatabase, Engine: EngineMemcached, Evidence: key + "=memcached", Source: exampleSource})
+			break
+		}
 	}
 	// A database file committed beside the code is the plainest evidence of all.
 	for _, file := range tree.Files {
@@ -146,6 +172,14 @@ func DetectNeeds(tree Tree) []Need {
 		}
 	}
 
+	// One app, one MySQL-compatible server. The mysql package alone asks for
+	// MariaDB (see driverRules); beside anything that asks for MySQL itself —
+	// mysql2, a Prisma schema, Laravel's DB_CONNECTION — it is the same
+	// database spoken to by an older driver, not a second one.
+	if _, both := databases[EngineMySQL]; both && databases[EngineMariaDB].Evidence == "mysql" {
+		delete(databases, EngineMariaDB)
+	}
+
 	// SQLite beside a real database is almost always SQLite for development
 	// and the real one in production — a Rails Gemfile does exactly that. The
 	// warning would be wrong, and a warning that is wrong teaches people to
@@ -153,7 +187,8 @@ func DetectNeeds(tree Tree) []Need {
 	// says sqlite, that is what the app uses.
 	_, postgres := databases[EnginePostgres]
 	_, mysql := databases[EngineMySQL]
-	if (postgres || mysql) && schemaSays != EngineSQLite {
+	_, mariadb := databases[EngineMariaDB]
+	if (postgres || mysql || mariadb) && schemaSays != EngineSQLite {
 		kept := ephemeral[:0]
 		for _, n := range ephemeral {
 			if n.Engine != EngineSQLite {
@@ -210,29 +245,47 @@ type driverRule struct {
 	packages  []string
 }
 
+// The Node package called mysql (mysqljs) is unmaintained and cannot sign in
+// to an account on MySQL 8's default authentication, caching_sha2_password
+// (its issue #2002). An app that uses it is offered MariaDB, which it can
+// sign in to, and which is what every "mysql" database here used to be.
+// mysql2 speaks both, and an app with it is offered MySQL.
 var driverRules = []driverRule{
 	{"node", EnginePostgres, []string{"pg", "postgres", "@neondatabase/serverless", "@vercel/postgres", "pg-promise", "slonik"}},
-	{"node", EngineMySQL, []string{"mysql2", "mysql"}},
+	{"node", EngineMySQL, []string{"mysql2"}},
+	{"node", EngineMariaDB, []string{"mariadb", "mysql"}},
 	{"node", EngineRedis, []string{"redis", "ioredis", "@redis/client", "bullmq", "bull"}},
+	{"node", EngineValkey, []string{"iovalkey", "@valkey/valkey-glide"}},
 	{"node", EngineMongoDB, []string{"mongodb", "mongoose"}},
+	{"node", EngineClickHouse, []string{"@clickhouse/client"}},
+	{"node", EngineMemcached, []string{"memjs", "memcached"}},
 	{"node", EngineSQLite, []string{"better-sqlite3", "sqlite3", "sqlite"}},
 	{"node", EngineFile, []string{"lowdb", "nedb", "@seald-io/nedb", "node-json-db"}},
 
 	{"python", EnginePostgres, []string{"psycopg2", "psycopg2-binary", "psycopg", "psycopg-binary", "asyncpg", "pg8000"}},
 	{"python", EngineMySQL, []string{"mysqlclient", "pymysql", "mysql-connector-python", "aiomysql"}},
+	{"python", EngineMariaDB, []string{"mariadb"}},
 	{"python", EngineRedis, []string{"redis", "rq", "django-redis"}},
+	{"python", EngineValkey, []string{"valkey", "valkey-glide"}},
 	{"python", EngineMongoDB, []string{"pymongo", "motor", "mongoengine", "beanie"}},
+	{"python", EngineClickHouse, []string{"clickhouse-connect", "clickhouse-driver"}},
+	{"python", EngineMemcached, []string{"pymemcache", "python-memcached", "pylibmc"}},
 
 	{"go", EnginePostgres, []string{"github.com/jackc/pgx", "github.com/lib/pq", "gorm.io/driver/postgres"}},
 	{"go", EngineMySQL, []string{"github.com/go-sql-driver/mysql", "gorm.io/driver/mysql"}},
 	{"go", EngineRedis, []string{"github.com/redis/go-redis", "github.com/go-redis/redis"}},
+	{"go", EngineValkey, []string{"github.com/valkey-io/valkey-go"}},
 	{"go", EngineMongoDB, []string{"go.mongodb.org/mongo-driver"}},
+	{"go", EngineClickHouse, []string{"github.com/ClickHouse/clickhouse-go"}},
+	{"go", EngineMemcached, []string{"github.com/bradfitz/gomemcache"}},
 	{"go", EngineSQLite, []string{"github.com/mattn/go-sqlite3", "modernc.org/sqlite", "gorm.io/driver/sqlite", "github.com/glebarez/sqlite"}},
 
 	{"ruby", EnginePostgres, []string{"pg"}},
 	{"ruby", EngineMySQL, []string{"mysql2"}},
 	{"ruby", EngineRedis, []string{"redis"}},
 	{"ruby", EngineMongoDB, []string{"mongoid"}},
+	{"ruby", EngineClickHouse, []string{"click_house"}},
+	{"ruby", EngineMemcached, []string{"dalli"}},
 	{"ruby", EngineSQLite, []string{"sqlite3"}},
 }
 
@@ -422,10 +475,14 @@ var (
 // the package that was found.
 func variableFor(engine, evidence string, example map[string]string) string {
 	candidates := map[string][]string{
-		EnginePostgres: {"DATABASE_URL", "POSTGRES_URL", "POSTGRESQL_URL", "PG_URL", "DB_URL"},
-		EngineMySQL:    {"DATABASE_URL", "MYSQL_URL", "DB_URL"},
-		EngineRedis:    {"REDIS_URL", "REDIS_URI", "KV_URL"},
-		EngineMongoDB:  {"MONGODB_URI", "MONGO_URI", "MONGO_URL", "MONGODB_URL", "DATABASE_URL"},
+		EnginePostgres:   {"DATABASE_URL", "POSTGRES_URL", "POSTGRESQL_URL", "PG_URL", "DB_URL"},
+		EngineMySQL:      {"DATABASE_URL", "MYSQL_URL", "DB_URL"},
+		EngineMariaDB:    {"DATABASE_URL", "MARIADB_URL", "MYSQL_URL", "DB_URL"},
+		EngineRedis:      {"REDIS_URL", "REDIS_URI", "KV_URL"},
+		EngineValkey:     {"VALKEY_URL", "REDIS_URL", "REDIS_URI", "KV_URL"},
+		EngineMongoDB:    {"MONGODB_URI", "MONGO_URI", "MONGO_URL", "MONGODB_URL", "DATABASE_URL"},
+		EngineClickHouse: {"CLICKHOUSE_URL", "CLICKHOUSE_DSN", "CLICKHOUSE_HOST"},
+		EngineMemcached:  {"MEMCACHED_URL", "MEMCACHE_URL", "MEMCACHED_SERVERS", "MEMCACHIER_SERVERS"},
 	}[engine]
 	for _, name := range candidates {
 		if _, ok := example[name]; ok {

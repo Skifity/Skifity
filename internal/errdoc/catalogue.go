@@ -1102,6 +1102,20 @@ func RestoreRefused(target string) *Problem {
 		With("target", target)
 }
 
+// BackupNotOffered is a backup, a schedule or a restore asked of a database
+// whose engine the panel does not back up: a cache, and the engines whose
+// snapshots cannot be taken from outside the server without handing the
+// bucket's credentials to it. docs/backups.md says which, and why.
+func BackupNotOffered(database, engine string) *Problem {
+	return New("backup.not_offered", "Skifity does not back up this kind of database").
+		WithCause("%s runs %s, which Skifity does not back up.", database, engine).
+		WithImpact("Nothing was changed.").
+		WithFix("Keep data you cannot lose in a database that is backed up, such as PostgreSQL, or copy it with the engine's own tools through `%s db connect`.", version.Binary).
+		WithDocs("/docs/backups#what-is-not-backed-up").
+		WithStatus(http.StatusConflict).
+		With("database", database).With("engine", engine)
+}
+
 // --- configuration ---
 
 // NotConfigured reports a feature used before its settings were filled in.

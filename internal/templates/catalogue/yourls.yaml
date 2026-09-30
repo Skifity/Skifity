@@ -15,7 +15,7 @@ services:
   cpu_limit_m: 500
 databases:
 - name: yourls-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 2
   link_to:
   - yourls

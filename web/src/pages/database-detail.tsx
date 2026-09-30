@@ -49,6 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useDatabaseEngines } from "@/hooks/use-database-engines"
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
@@ -125,7 +126,8 @@ export function DatabaseDetailPage() {
               label={t(`databases.status.${record.status}`, { defaultValue: record.status })}
             />
             <Badge variant="secondary" className="font-mono text-[10px]">
-              {record.engine} {record.engine_version} · {record.storage_gb} GB
+              {record.engine} {record.engine_version}
+              {record.storage_gb > 0 && ` · ${record.storage_gb} GB`}
             </Badge>
           </>
         }
@@ -147,7 +149,7 @@ export function DatabaseDetailPage() {
         </TabsContent>
 
         <TabsContent value="backups" className="pt-4">
-          <BackupsPanel databaseId={databaseId} />
+          <BackupsPanel databaseId={databaseId} engine={record.engine} />
         </TabsContent>
       </Tabs>
 
@@ -227,13 +229,39 @@ function ConnectionPanel({ databaseId, slug }: { databaseId: string; slug: strin
         <div className="grid gap-4 sm:grid-cols-2">
           <CredentialRow label={t("databases.host")} value={data.host} />
           <CredentialRow label={t("databases.port")} value={String(data.port)} />
-          <CredentialRow label={t("databases.databaseName")} value={data.database} />
-          <CredentialRow label={t("databases.user")} value={data.username} />
+          {/* Memcached has no databases, users or passwords, and a row that
+              says so with an empty box reads as something missing. */}
+          {data.database && (
+            <CredentialRow label={t("databases.databaseName")} value={data.database} />
+          )}
+          {data.username && <CredentialRow label={t("databases.user")} value={data.username} />}
         </div>
-        <CredentialRow label={t("auth.password")} value={data.password} secret />
+        {data.password ? (
+          <CredentialRow label={t("auth.password")} value={data.password} secret />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("databases.noCredentials")}</p>
+        )}
         {/* The connection string carries the password inside it. */}
-        <CredentialRow label={t("databases.connectionString")} value={data.url} secret />
-        <p className="text-xs text-muted-foreground">{t("databases.credentialsWarning")}</p>
+        <CredentialRow
+          label={t("databases.connectionString")}
+          value={data.url}
+          secret={Boolean(data.password)}
+        />
+        {data.native_url && (
+          <>
+            <CredentialRow
+              label={t("databases.nativeConnectionString")}
+              value={data.native_url}
+              secret
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("databases.nativeConnectionStringHint")}
+            </p>
+          </>
+        )}
+        {data.password && (
+          <p className="text-xs text-muted-foreground">{t("databases.credentialsWarning")}</p>
+        )}
         {/* The host above only answers inside the cluster, which is the first
             thing somebody pasting it into a desktop client finds out. */}
         <CredentialRow
@@ -449,7 +477,39 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
   )
 }
 
-function BackupsPanel({ databaseId }: { databaseId: string }) {
+/**
+ * Backups, or why there are none.
+ *
+ * Whether an engine is backed up is the catalogue's to say, which is where the
+ * API and the backup jobs read it too: a Back up now button for an engine the
+ * panel refuses to back up would be a button that always fails.
+ */
+function BackupsPanel({ databaseId, engine }: { databaseId: string; engine: string }) {
+  const { t } = useTranslation()
+  const engines = useDatabaseEngines()
+
+  if (engines.error) {
+    return <ErrorDisplay error={engines.error} onRetry={() => void engines.refetch()} />
+  }
+  if (!engines.data) return <Skeleton className="h-40" />
+  const kind = engines.data.find((item) => item.name === engine)
+  if (kind && !kind.backups) {
+    return (
+      <Alert variant="info">
+        <DatabaseBackupIcon />
+        <AlertTitle>
+          {t("databases.noBackupsTitle", {
+            engine: t(`databases.${kind.name}`, { defaultValue: kind.title }),
+          })}
+        </AlertTitle>
+        <AlertDescription>{t(`databases.noBackupsReason.${kind.name}`)}</AlertDescription>
+      </Alert>
+    )
+  }
+  return <DatabaseBackups databaseId={databaseId} />
+}
+
+function DatabaseBackups({ databaseId }: { databaseId: string }) {
   const { t } = useTranslation()
   const confirmRestore = useConfirm()
   // A member limited to projects has no live stream to hear of a new backup.

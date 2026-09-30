@@ -1112,7 +1112,7 @@
     "engine": "类型",
     "postgres": "PostgreSQL",
     "redis": "Redis",
-    "mysql": "MySQL / MariaDB",
+    "mysql": "MySQL",
     "version": "版本",
     "storage": "存储",
     "storageHelp": "分配给数据库的磁盘空间。以后可以扩大，但不能缩小。",
@@ -1162,7 +1162,34 @@
     "user": "用户",
     "unlinkConfirm": "{{app}} 会失去 {{variable}} 变量，因此从下一次部署起就连不上这个数据库了。",
     "fromYourComputer": "从你的电脑连接",
-    "fromYourComputerHint": "上面的主机只在集群内部应答。这条命令会在你的电脑上打开一个端口，经由面板连到数据库，可用于 psql、桌面客户端或迁移。"
+    "fromYourComputerHint": "上面的主机只在集群内部应答。这条命令会在你的电脑上打开一个端口，经由面板连到数据库，可用于 psql、桌面客户端或迁移。",
+    "mariadb": "MariaDB",
+    "mongodb": "MongoDB",
+    "valkey": "Valkey",
+    "dragonfly": "Dragonfly",
+    "clickhouse": "ClickHouse",
+    "memcached": "Memcached",
+    "engineHelp": {
+      "postgres": "关系型且可靠：拿不准时就选它。可以运行多个实例以便故障切换。",
+      "mysql": "真正的 MySQL，来自 Oracle 的镜像，适合点名要求 MySQL 的软件。",
+      "mariadb": "与 MySQL 兼容，大多数 PHP 软件都在它上面测试。",
+      "mongodb": "以文档而非表来存储，适合为 MongoDB 编写的应用。",
+      "redis": "内存中的键值，用于缓存、队列和会话。",
+      "valkey": "Redis 的开源延续。应用使用它的方式与 Redis 完全相同。",
+      "dragonfly": "使用 Redis 协议并利用所有 CPU 核心。每五分钟保存一次快照。",
+      "clickhouse": "列式存储，用于大表上的分析。",
+      "memcached": "只是缓存：没有磁盘、没有密码，只有此环境中的应用能访问它。"
+    },
+    "versionDefault": "{{version}}（推荐）",
+    "noBackupsTitle": "{{engine}} 不会被备份",
+    "noBackupsReason": {
+      "dragonfly": "Dragonfly 没有实现从服务器外部获取实时快照所用的命令，它自己的快照只保存在它自己的磁盘上。它每五分钟以及停止时保存一次快照，所以重启不会丢失数据，但磁盘丢失就会丢失全部数据。",
+      "clickhouse": "ClickHouse 自带的 BACKUP 命令在写入存储桶时需要把存储桶的密钥放在数据库里，而 Skifity 从不把这些密钥交给任何环境。请自行用 BACKUP ... TO S3 备份，或让它的表能够从数据源重建。",
+      "memcached": "Memcached 是缓存：所有内容都在内存中，磁盘上什么也没有，所以没有可备份的内容。它重启时里面的内容就没了，这是有意的设计。"
+    },
+    "nativeConnectionString": "原生协议",
+    "nativeConnectionStringHint": "适用于使用 ClickHouse 原生协议的客户端，例如 clickhouse-client 和 clickhouse-go。上面的连接字符串使用 HTTP，大多数客户端库都接受它。",
+    "noCredentials": "Memcached 没有用户也没有密码。只有此环境中的应用能访问它。"
   },
   "templates": {
     "title": "模板",
@@ -2839,6 +2866,12 @@
         "cause": "此请求来自 {{ip}}，不在允许使用 API 令牌的网络列表中。",
         "impact": "请求已被拒绝。令牌本身仍然有效。",
         "fix": "从列表中的地址发起请求，或请面板管理员在“设置 → 登录”中添加此地址。"
+      },
+      "backup_not_offered": {
+        "title": "Skifity 不备份这类数据库",
+        "cause": "{{0}} 运行的是 {{1}}，Skifity 不为它做备份。",
+        "impact": "没有做任何更改。",
+        "fix": "把不能丢失的数据放在有备份的数据库中，例如 PostgreSQL，或者通过 `{{0}} db connect` 用该引擎自带的工具复制数据。"
       }
     }
   },
@@ -3183,7 +3216,12 @@
       "mongodb": "MongoDB",
       "sqlserver": "SQL Server",
       "sqlite": "SQLite",
-      "file": "数据文件"
+      "file": "数据文件",
+      "mariadb": "MariaDB",
+      "valkey": "Valkey",
+      "dragonfly": "Dragonfly",
+      "clickhouse": "ClickHouse",
+      "memcached": "Memcached"
     },
     "pastedReplaced": "粘贴内容中的 {{variable}} 不会保存：随应用创建的 {{engine}} 数据库会设置它，指向该数据库本身，而不是文件来源的那台电脑。"
   },

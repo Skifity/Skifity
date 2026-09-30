@@ -150,9 +150,10 @@ var herokuAddons = map[string]struct{ engine, variable string }{
 	"heroku-redis":      {EngineRedis, "REDIS_URL"},
 	"rediscloud":        {EngineRedis, "REDISCLOUD_URL"},
 	"jawsdb":            {EngineMySQL, "JAWSDB_URL"},
-	"jawsdb-maria":      {EngineMySQL, "JAWSDB_MARIA_URL"},
+	"jawsdb-maria":      {EngineMariaDB, "JAWSDB_MARIA_URL"},
 	"cleardb":           {EngineMySQL, "CLEARDB_DATABASE_URL"},
 	"mongolab":          {EngineMongoDB, "MONGODB_URI"},
+	"memcachier":        {EngineMemcached, "MEMCACHIER_SERVERS"},
 }
 
 // applyAppJSON reads app.json's add-ons into database needs and its settings

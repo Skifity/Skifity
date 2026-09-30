@@ -8,15 +8,21 @@ import (
 	"strings"
 	"testing"
 
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/kube"
 )
 
-// The engines Skifity provisions, spelled out here rather than imported.
-//
-// internal/dbsvc reaches internal/api, which reaches this package, so
-// importing it from here would be a cycle. That the two lists agree is checked
-// where both are already in scope, in internal/api.
-var engines = map[string]bool{"postgres": true, "mysql": true, "redis": true}
+// The engines Skifity provisions come from the catalogue in
+// internal/dbsvc/engine, which imports nothing of the panel's and so can be
+// read from here; internal/dbsvc itself reaches internal/api, which reaches
+// this package, and could not be.
+var engines = func() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range engine.Names() {
+		out[name] = true
+	}
+	return out
+}()
 
 // The catalogue is data, and data goes wrong quietly.
 //

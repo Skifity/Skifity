@@ -124,8 +124,9 @@ type databaseResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
-// maxInitialDatabases bounds one request. Three engines are offered; four is
-// room for none of them twice and a margin.
+// maxInitialDatabases bounds one request. An app that needs more than a
+// database, a cache and a queue at its first deploy is rare enough to be
+// given the rest by hand; none of them can be asked for twice anyway.
 const maxInitialDatabases = 4
 
 // maxRunAsUser is the largest uid a container can be given.

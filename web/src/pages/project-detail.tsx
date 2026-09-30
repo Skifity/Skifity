@@ -26,6 +26,7 @@ import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader, Section } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { VariablesEditor } from "@/components/variables-editor"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -64,6 +65,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useDatabaseEngines } from "@/hooks/use-database-engines"
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
@@ -75,6 +77,7 @@ import type {
   CanvasEdge,
   CanvasNode,
   Database,
+  DatabaseEngineName,
   Environment,
   Project,
 } from "@/lib/types"
@@ -380,7 +383,8 @@ function EnvironmentServices({ environmentId }: { environmentId: string }) {
                   <ItemContent>
                     <ItemTitle>{database.name}</ItemTitle>
                     <ItemDescription className="font-mono">
-                      {database.engine} {database.engine_version} · {database.storage_gb} GB
+                      {database.engine} {database.engine_version}
+                      {database.storage_gb > 0 && ` · ${database.storage_gb} GB`}
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
@@ -648,16 +652,26 @@ export function NewDatabaseDialog({
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const engines = useDatabaseEngines()
   const [name, setName] = useState("")
-  const [engine, setEngine] = useState("postgres")
+  const [engine, setEngine] = useState<DatabaseEngineName>("postgres")
+  // null is "the chosen engine's default", worked out below rather than
+  // copied in when the engine changes.
+  const [version, setVersion] = useState<string | null>(null)
   const [storage, setStorage] = useState("10")
+
+  const chosen = engines.data?.find((item) => item.name === engine)
+  const versionValue = version ?? chosen?.default_version ?? ""
+  // A cache keeps nothing on a disk, so it is asked for none.
+  const keepsData = chosen?.storage ?? true
 
   const create = useMutation({
     mutationFn: () =>
       api.post<Database>(`/api/environments/${environmentId}/databases`, {
         name: name.trim(),
         engine,
-        storage_gb: Number(storage) || 10,
+        version: versionValue || undefined,
+        storage_gb: keepsData ? Number(storage) || 10 : undefined,
       }),
     onSuccess: (database) => {
       void queryClient.invalidateQueries({ queryKey: ["databases", environmentId] })
@@ -690,30 +704,81 @@ export function NewDatabaseDialog({
               required
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="database-engine">{t("databases.engine")}</FieldLabel>
-            <Select value={engine} onValueChange={setEngine}>
-              <SelectTrigger id="database-engine">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="postgres">{t("databases.postgres")}</SelectItem>
-                <SelectItem value="redis">{t("databases.redis")}</SelectItem>
-                <SelectItem value="mysql">{t("databases.mysql")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="database-storage">{t("databases.storage")}</FieldLabel>
-            <Input
-              id="database-storage"
-              type="number"
-              min={1}
-              value={storage}
-              onChange={(event) => setStorage(event.target.value)}
-            />
-            <FieldDescription>{t("databases.storageHelp")}</FieldDescription>
-          </Field>
+          {engines.error ? (
+            <ErrorDisplay error={engines.error} compact />
+          ) : !engines.data ? (
+            <Skeleton className="h-16" />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+              <Field>
+                <FieldLabel htmlFor="database-engine">{t("databases.engine")}</FieldLabel>
+                <Select
+                  value={engine}
+                  onValueChange={(value) => {
+                    setEngine(value as DatabaseEngineName)
+                    setVersion(null)
+                  }}
+                >
+                  <SelectTrigger id="database-engine">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {engines.data.map((item) => (
+                      <SelectItem key={item.name} value={item.name}>
+                        {t(`databases.${item.name}`, { defaultValue: item.title })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="database-version">{t("databases.version")}</FieldLabel>
+                <Select value={versionValue} onValueChange={setVersion}>
+                  <SelectTrigger id="database-version">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(chosen?.versions ?? []).map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item === chosen?.default_version
+                          ? t("databases.versionDefault", { version: item })
+                          : item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {chosen && (
+                <FieldDescription className="sm:col-span-2">
+                  {t(`databases.engineHelp.${chosen.name}`)}
+                </FieldDescription>
+              )}
+            </div>
+          )}
+          {chosen && !chosen.backups && (
+            <Alert variant="info">
+              <DatabaseIcon />
+              <AlertTitle>
+                {t("databases.noBackupsTitle", {
+                  engine: t(`databases.${chosen.name}`, { defaultValue: chosen.title }),
+                })}
+              </AlertTitle>
+              <AlertDescription>{t(`databases.noBackupsReason.${chosen.name}`)}</AlertDescription>
+            </Alert>
+          )}
+          {keepsData && (
+            <Field>
+              <FieldLabel htmlFor="database-storage">{t("databases.storage")}</FieldLabel>
+              <Input
+                id="database-storage"
+                type="number"
+                min={1}
+                value={storage}
+                onChange={(event) => setStorage(event.target.value)}
+              />
+              <FieldDescription>{t("databases.storageHelp")}</FieldDescription>
+            </Field>
+          )}
           {create.error && <ErrorDisplay error={create.error} compact />}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

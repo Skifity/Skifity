@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"skifity/internal/cli"
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/store"
 )
 
@@ -208,8 +209,8 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		field, _ := properties[property].(map[string]any)
 		return schemaStrings(field["enum"])
 	}
-	if got := enum("create_database", "engine"); !slices.Equal(got, []string{"mysql", "postgres", "redis"}) {
-		t.Errorf("create_database's engine is one of %v", got)
+	if got := enum("create_database", "engine"); !slices.Equal(got, slices.Sorted(slices.Values(engine.Names()))) {
+		t.Errorf("create_database's engine is one of %v, and the panel runs %v", got, engine.Names())
 	}
 	if got := enum("open_port", "protocol"); !slices.Equal(got, []string{"tcp", "udp"}) {
 		t.Errorf("open_port's protocol is one of %v", got)

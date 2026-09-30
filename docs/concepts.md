@@ -14,7 +14,7 @@ and what it is underneath, so that nothing is a mystery when you need to look.
 | **Instance** | One running copy of an app | A Pod |
 | **Server** | A machine you own | A Node |
 | **Domain** | An address that reaches an app | An Ingress rule and a Certificate |
-| **Database** | A managed PostgreSQL, Redis or MySQL | A Cluster or a StatefulSet |
+| **Database** | A managed PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached ([more](databases.md)) | A Cluster or a StatefulSet |
 | **Variable** | Something your app reads from the environment | A key in a Secret |
 | **Volume** | Storage that survives a restart | A PersistentVolumeClaim |
 | **Deployment** *(the noun in the history)* | One attempt to run a new version | A build, then a rollout |
@@ -401,8 +401,10 @@ schema, or from your `.env.example`, and otherwise the usual one for that
 database. A new database takes about a minute to start, so the app may restart
 once while it waits.
 
-A database this panel does not run, such as MongoDB, is named rather than left
-out: use a hosted one and set its address under Variables.
+MongoDB, ClickHouse, Valkey and Memcached are found by their clients too, and
+offered like the rest. A database this panel does not run, such as SQL Server,
+is named rather than left out: use a hosted one and set its address under
+Variables.
 
 **Data kept in a file.** SQLite, `lowdb` and a committed `.sqlite` file all keep
 data inside the container, and the next deploy replaces the container. Nothing
@@ -438,7 +440,8 @@ A `Procfile` and an `app.json` already say most of this, and are read:
   deploy. Heroku allows capitals and underscores in those names and a process
   here does not, so `Celery_Beat` becomes `celery-beat`.
 * **`app.json`'s add-ons** are databases: `heroku-postgresql`, `heroku-redis`,
-  `jawsdb`, `cleardb` and the like are offered like any other database, under
+  `jawsdb`, `jawsdb-maria`, `cleardb`, `mongolab`, `memcachier` and the like are
+  offered like any other database, under
   the variable Heroku would set (`DATABASE_URL`, `REDIS_URL`, or the one its
   `as` names).
 * **Its `env`** fills the settings box: values filled in, a fresh random secret

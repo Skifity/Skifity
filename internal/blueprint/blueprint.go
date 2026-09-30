@@ -28,6 +28,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"skifity/internal/dbsvc/engine"
+
 	"skifity/internal/builder"
 	"skifity/internal/cron"
 	"skifity/internal/errdoc"
@@ -204,8 +206,9 @@ var (
 	validVariable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// Engines a database can be.
-var Engines = []string{"postgres", "mysql", "redis"}
+// Engines a database can be: the panel's own catalogue, so a file can name
+// every engine the panel runs and nothing it does not.
+var Engines = engine.Names()
 
 // Parse reads and checks a blueprint. Every problem is reported at once, so
 // a file is fixed in one pass rather than one error at a time.

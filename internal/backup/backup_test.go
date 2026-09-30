@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"skifity/internal/dbsvc"
+	"skifity/internal/dbsvc/engine"
 )
 
 func TestObjectKeyIsSortableAndSafe(t *testing.T) {
@@ -61,6 +62,18 @@ func TestSplitEndpoint(t *testing.T) {
 	}
 }
 
+// backedUp is every engine the panel backs up, from the catalogue, so an
+// engine added there is held to every test below without anybody listing it.
+func backedUp() []string {
+	var out []string
+	for _, e := range engine.All() {
+		if e.Backups {
+			out = append(out, e.Name)
+		}
+	}
+	return out
+}
+
 func backupSpec(engine string, restore bool) JobSpec {
 	return JobSpec{
 		Name: "backup-main-abc", Namespace: "acme-shop-production",
@@ -82,7 +95,7 @@ func scriptsOf(t *testing.T, job *batchv1.Job) (string, string) {
 }
 
 func TestBackupJobKeepsCredentialsOutOfTheSpec(t *testing.T) {
-	for _, engine := range []string{dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis} {
+	for _, engine := range backedUp() {
 		job, err := BuildJob(backupSpec(engine, false))
 		if err != nil {
 			t.Fatalf("%s: BuildJob: %v", engine, err)
@@ -137,7 +150,7 @@ func TestTheDumpNeverGoesThroughAPipeToCurl(t *testing.T) {
 // root, which the namespace's restricted Pod Security profile refuses. The pod
 // was rejected before it ran a line.
 func TestNothingIsInstalledAtRunTime(t *testing.T) {
-	for _, engine := range []string{dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis} {
+	for _, engine := range backedUp() {
 		for _, restore := range []bool{false, true} {
 			job, err := BuildJob(backupSpec(engine, restore))
 			if err != nil {
@@ -159,7 +172,7 @@ func TestNothingIsInstalledAtRunTime(t *testing.T) {
 // enforces the restricted profile, so a pod that does not satisfy it is not
 // scheduled, not merely warned about.
 func TestBackupPodSatisfiesRestrictedPodSecurity(t *testing.T) {
-	for _, engine := range []string{dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis} {
+	for _, engine := range backedUp() {
 		for _, restore := range []bool{false, true} {
 			job, err := BuildJob(backupSpec(engine, restore))
 			if err != nil {
@@ -223,7 +236,7 @@ func TestMySQLDumpIsConsistent(t *testing.T) {
 }
 
 func TestRestoreScriptsInvert(t *testing.T) {
-	for _, engine := range []string{dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis} {
+	for _, engine := range backedUp() {
 		job, err := BuildJob(backupSpec(engine, true))
 		if err != nil {
 			t.Fatalf("%s: BuildJob: %v", engine, err)
@@ -269,6 +282,11 @@ func TestBuildJobValidates(t *testing.T) {
 		"no credentials": func(s *JobSpec) { s.CredentialsSecret = "" },
 		"no url":         func(s *JobSpec) { s.URLSecret = "" },
 		"bad engine":     func(s *JobSpec) { s.Engine = "mongo" },
+		// Engines the panel runs and does not back up: a job for one of
+		// them is refused, not rendered with no dump in it.
+		"dragonfly":  func(s *JobSpec) { s.Engine = dbsvc.EngineDragonfly },
+		"clickhouse": func(s *JobSpec) { s.Engine = dbsvc.EngineClickHouse },
+		"memcached":  func(s *JobSpec) { s.Engine = dbsvc.EngineMemcached },
 	}
 	for name, mutate := range cases {
 		spec := backupSpec(dbsvc.EnginePostgres, false)
@@ -283,7 +301,7 @@ func TestGeneratedBackupScriptsAreValidShell(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("no shell available")
 	}
-	for _, engine := range []string{dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis} {
+	for _, engine := range backedUp() {
 		for _, restore := range []bool{false, true} {
 			job, err := BuildJob(backupSpec(engine, restore))
 			if err != nil {
@@ -317,5 +335,139 @@ func TestJobName(t *testing.T) {
 	// Two backups of the same database must not collide.
 	if name == JobName("backup-main", "bak_differentidhere") {
 		t.Fatal("two backups produced the same job name")
+	}
+}
+
+// The restore of the same engines, which carries one value that is not from a
+// Secret: the pod's own address, which a Redis-family database replicates
+// from. It comes from the pod's status, never from a literal.
+func TestRestoreJobKeepsCredentialsOutOfTheSpec(t *testing.T) {
+	for _, engine := range backedUp() {
+		job, err := BuildJob(backupSpec(engine, true))
+		if err != nil {
+			t.Fatalf("%s: BuildJob: %v", engine, err)
+		}
+		pod := job.Spec.Template.Spec
+		for _, container := range append(append([]corev1.Container{}, pod.InitContainers...), pod.Containers...) {
+			for _, env := range container.Env {
+				switch {
+				case env.Value != "":
+					t.Errorf("%s: %s is a literal value in the restore's spec", engine, env.Name)
+				case env.ValueFrom == nil:
+					t.Errorf("%s: %s comes from nowhere", engine, env.Name)
+				case env.ValueFrom.FieldRef != nil:
+					if env.Name != "POD_IP" || env.ValueFrom.FieldRef.FieldPath != "status.podIP" {
+						t.Errorf("%s: %s is read from the pod's %s", engine, env.Name, env.ValueFrom.FieldRef.FieldPath)
+					}
+				case env.ValueFrom.SecretKeyRef == nil:
+					t.Errorf("%s: %s does not come from a Secret", engine, env.Name)
+				}
+			}
+		}
+	}
+}
+
+// The client is the server's own image, so a dump tool is never older than
+// the server it reads, nor newer than the one its output goes back into.
+func TestTheClientIsTheDatabasesOwnVersion(t *testing.T) {
+	cases := []struct{ engine, version, image string }{
+		// pg_dump from the same major: 17's output does not load into 16.
+		{dbsvc.EnginePostgres, "16", "postgres:16-alpine"},
+		{dbsvc.EnginePostgres, "18", "postgres:18-alpine"},
+		{dbsvc.EnginePostgres, "", "postgres:17-alpine"},
+		{dbsvc.EngineMySQL, "8.4", "mysql:8.4.11"},
+		{dbsvc.EngineMySQL, "9.7", "mysql:9.7.2"},
+		{dbsvc.EngineMariaDB, "11.8", "mariadb:11.8.9"},
+		// A MariaDB made when the panel took any version keeps its own.
+		{dbsvc.EngineMariaDB, "10.6", "mariadb:10.6"},
+		{dbsvc.EngineMongoDB, "7.0", "mongo:7.0.43"},
+		{dbsvc.EngineRedis, "7", "redis:7-alpine"},
+		{dbsvc.EngineValkey, "9.0", "valkey/valkey:9.0.6-alpine"},
+	}
+	for _, tc := range cases {
+		if got := ClientImage(tc.engine, tc.version); got != tc.image {
+			t.Errorf("%s %s backs up with %s, want %s", tc.engine, tc.version, got, tc.image)
+		}
+		job, err := BuildJob(JobSpec{Name: "b", Namespace: "n", Engine: tc.engine, Version: tc.version,
+			CredentialsSecret: "c", URLSecret: "u"})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.engine, err)
+		}
+		if got := job.Spec.Template.Spec.InitContainers[0].Image; got != tc.image {
+			t.Errorf("%s %s: the dump runs %s, want %s", tc.engine, tc.version, got, tc.image)
+		}
+	}
+}
+
+func TestMySQLDumpNeedsNoPrivilegeTheAppLacks(t *testing.T) {
+	job, _ := BuildJob(backupSpec(dbsvc.EngineMySQL, false))
+	dump, _ := scriptsOf(t, job)
+	for _, flag := range []string{"mysqldump ", "--single-transaction", "--no-tablespaces", "--set-gtid-purged=OFF"} {
+		if !strings.Contains(dump, flag) {
+			t.Errorf("the MySQL dump has no %s:\n%s", flag, dump)
+		}
+	}
+	job, _ = BuildJob(backupSpec(dbsvc.EngineMySQL, true))
+	if _, load := scriptsOf(t, job); !strings.Contains(load, `MYSQL_PWD="$DB_PASSWORD" mysql `) {
+		t.Errorf("the MySQL restore does not load with mysql:\n%s", load)
+	}
+}
+
+// mongodump writes an archive of the app's database, and mongorestore puts
+// each collection back in place of the one there, and nothing outside it.
+func TestMongoDBDumpsAnArchiveAndRestoresOverIt(t *testing.T) {
+	job, _ := BuildJob(backupSpec(dbsvc.EngineMongoDB, false))
+	dump, _ := scriptsOf(t, job)
+	for _, want := range []string{"mongodump ", `--db="$DB_NAME"`, "--archive", "--authenticationDatabase=admin", `--config="$mongo_config"`} {
+		if !strings.Contains(dump, want) {
+			t.Errorf("the MongoDB dump has no %s:\n%s", want, dump)
+		}
+	}
+	// Compressed once, by the script, like every other engine's.
+	if strings.Contains(dump, "--gzip") {
+		t.Errorf("the MongoDB dump is compressed twice:\n%s", dump)
+	}
+
+	job, _ = BuildJob(backupSpec(dbsvc.EngineMongoDB, true))
+	_, load := scriptsOf(t, job)
+	for _, want := range []string{"mongorestore ", "--archive <", "--drop", `--nsInclude="$DB_NAME.*"`} {
+		if !strings.Contains(load, want) {
+			t.Errorf("the MongoDB restore has no %s:\n%s", want, load)
+		}
+	}
+}
+
+// A Redis-family restore replicates from a server started on the snapshot,
+// which needs the pod's own address and room for the whole dataset.
+func TestARedisRestoreReplicatesFromItsOwnPod(t *testing.T) {
+	for _, name := range []string{dbsvc.EngineRedis, dbsvc.EngineValkey} {
+		job, err := BuildJob(backupSpec(name, true))
+		if err != nil {
+			t.Fatal(err)
+		}
+		load := job.Spec.Template.Spec.Containers[0]
+		script := load.Args[0]
+		server, _, _ := redisTools(name)
+		for _, want := range []string{server + ` "$config" &`, "REPLICAOF $POD_IP " + redisRestorePort, "REPLICAOF NO ONE", "trap 'release; stop' EXIT"} {
+			if !strings.Contains(script, want) {
+				t.Errorf("%s: the restore has no %q:\n%s", name, want, script)
+			}
+		}
+		// The snapshot is never sent as commands again.
+		if strings.Contains(script, "--pipe") {
+			t.Errorf("%s: the restore pipes the snapshot into the server as commands", name)
+		}
+		found := false
+		for _, env := range load.Env {
+			if env.Name == "POD_IP" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: the restore does not know its own address", name)
+		}
+		if limit := load.Resources.Limits[corev1.ResourceMemory]; limit.Cmp(resourceGi(2)) < 0 {
+			t.Errorf("%s: the restore's server may hold %s, less than a database's whole dataset", name, limit.String())
+		}
 	}
 }

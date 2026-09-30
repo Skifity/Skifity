@@ -1123,7 +1123,7 @@
     "engine": "Type",
     "postgres": "PostgreSQL",
     "redis": "Redis",
-    "mysql": "MySQL / MariaDB",
+    "mysql": "MySQL",
     "version": "Version",
     "storage": "Storage",
     "storageHelp": "How much disk the database gets. This can be increased later, but not reduced.",
@@ -1173,7 +1173,34 @@
     "user": "User",
     "unlinkConfirm": "{{app}} loses the {{variable}} variable, so it cannot reach this database from its next deployment onwards.",
     "fromYourComputer": "From your computer",
-    "fromYourComputerHint": "The host above answers only inside the cluster. This command opens a port on your computer that reaches the database through the panel, for psql, a desktop client or a migration."
+    "fromYourComputerHint": "The host above answers only inside the cluster. This command opens a port on your computer that reaches the database through the panel, for psql, a desktop client or a migration.",
+    "mariadb": "MariaDB",
+    "mongodb": "MongoDB",
+    "valkey": "Valkey",
+    "dragonfly": "Dragonfly",
+    "clickhouse": "ClickHouse",
+    "memcached": "Memcached",
+    "engineHelp": {
+      "postgres": "Relational and dependable: the one to pick when unsure. It can run as several instances for failover.",
+      "mysql": "MySQL itself, from Oracle's image, for software that asks for MySQL by name.",
+      "mariadb": "MySQL-compatible, and what most PHP software is tested with.",
+      "mongodb": "Documents rather than tables, for apps written for MongoDB.",
+      "redis": "In-memory keys and values, for caches, queues and sessions.",
+      "valkey": "Redis's open-source continuation. Apps use it exactly as they use Redis.",
+      "dragonfly": "Speaks the Redis protocol and uses every core. It saves a snapshot every five minutes.",
+      "clickhouse": "Column-oriented, for analytics over large tables.",
+      "memcached": "A cache and nothing more: no disk, no password, and only this environment's apps reach it."
+    },
+    "versionDefault": "{{version}} (recommended)",
+    "noBackupsTitle": "{{engine}} is not backed up",
+    "noBackupsReason": {
+      "dragonfly": "Dragonfly does not implement the command a live snapshot is taken through from outside the server, and its own snapshots stay on its own disk. It saves one every five minutes and as it stops, so a restart loses nothing, but a lost disk loses everything.",
+      "clickhouse": "ClickHouse's own BACKUP command writes to a bucket with the bucket's keys inside the database, and Skifity never hands those to an environment. Back it up yourself with BACKUP ... TO S3, or keep its tables rebuildable from their source.",
+      "memcached": "Memcached is a cache: it keeps everything in memory and nothing on a disk, so there is nothing to back up. Whatever is in it is gone when it restarts, by design."
+    },
+    "nativeConnectionString": "Native protocol",
+    "nativeConnectionStringHint": "For clients that speak ClickHouse's own protocol, such as clickhouse-client and clickhouse-go. The connection string above is HTTP, which most client libraries take.",
+    "noCredentials": "Memcached has no user and no password. Only the apps in this environment can reach it."
   },
   "templates": {
     "title": "Templates",
@@ -2853,6 +2880,12 @@
         "cause": "This request came from {{ip}}, which is not on the list of networks API tokens may be used from.",
         "impact": "The request was refused. The token itself is still valid.",
         "fix": "Make the request from an address on the list, or ask a panel administrator to add this one under Settings, Sign-in."
+      },
+      "backup_not_offered": {
+        "title": "Skifity does not back up this kind of database",
+        "cause": "{{0}} runs {{1}}, which Skifity does not back up.",
+        "impact": "Nothing was changed.",
+        "fix": "Keep data you cannot lose in a database that is backed up, such as PostgreSQL, or copy it with the engine's own tools through `{{0}} db connect`."
       }
     }
   },
@@ -3197,7 +3230,12 @@
       "mongodb": "MongoDB",
       "sqlserver": "SQL Server",
       "sqlite": "SQLite",
-      "file": "a data file"
+      "file": "a data file",
+      "mariadb": "MariaDB",
+      "valkey": "Valkey",
+      "dragonfly": "Dragonfly",
+      "clickhouse": "ClickHouse",
+      "memcached": "Memcached"
     },
     "pastedReplaced": "{{variable}} from what you pasted is left out: the {{engine}} database created with the app sets it, pointing at itself rather than at the computer the file came from."
   },

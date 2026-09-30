@@ -324,12 +324,46 @@ export type Volume = {
   created_at: string
 }
 
+/** The engines a database can be, as internal/dbsvc/engine names them. */
+export type DatabaseEngineName =
+  | "postgres"
+  | "mysql"
+  | "mariadb"
+  | "mongodb"
+  | "redis"
+  | "valkey"
+  | "dragonfly"
+  | "clickhouse"
+  | "memcached"
+
+/** One engine, from GET /api/database-engines. */
+export type DatabaseEngine = {
+  name: DatabaseEngineName
+  /** The product's own name, which is not translated. */
+  title: string
+  port: number
+  default_version: string
+  /** Newest first. */
+  versions: string[]
+  /** False for an engine the panel does not back up. */
+  backups: boolean
+  /** Only PostgreSQL runs more than one instance. */
+  replicated: boolean
+  /** False for a cache, which keeps nothing on a disk. */
+  storage: boolean
+  /** False for an engine with no authentication. */
+  password: boolean
+  /** What a linked app reads the connection string from by default. */
+  variable: string
+  storage_gb: number
+}
+
 export type Database = {
   id: string
   environment_id: string
   name: string
   slug: string
-  engine: "postgres" | "redis" | "mysql"
+  engine: DatabaseEngineName
   engine_version: string
   status: string
   status_detail?: string
@@ -342,10 +376,13 @@ export type DatabaseCredentials = {
   engine: string
   host: string
   port: number
+  /** Empty for memcached, which has no databases, users or passwords. */
   database: string
   username: string
   password: string
   url: string
+  /** ClickHouse only: its native protocol, beside the HTTP one url names. */
+  native_url?: string
 }
 
 export type Backup = {
@@ -740,7 +777,7 @@ export type Advisory = {
 /** One thing an app needs, and the evidence for it. */
 export type AppNeed = {
   kind: "database" | "ephemeral" | "variables"
-  /** postgres, mysql, redis, mongodb, sqlserver — or sqlite and file. */
+  /** A database engine the panel runs, or sqlserver; or sqlite and file. */
   engine?: string
   /** Whether this panel can create it. */
   provided: boolean

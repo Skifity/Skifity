@@ -20,6 +20,7 @@ import (
 // it, so they are not shipped.
 //
 //go:embed quick-start.md concepts.md templates.md tour.md adding-servers.md cli.md backups.md
+//go:embed databases.md
 //go:embed configuration.md troubleshooting.md faq.md performance.md firewall.md
 //go:embed plugins.md
 //go:embed images/*.png images/*.svg

@@ -1,7 +1,9 @@
 # Backups
 
-Skifity backs up managed databases — PostgreSQL, MariaDB and Redis — the
-volumes your apps write files to, and [its own database](#the-panel-itself).
+Skifity backs up managed databases — PostgreSQL, MySQL, MariaDB, MongoDB,
+Redis and Valkey — the volumes your apps write files to, and
+[its own database](#the-panel-itself). Dragonfly, ClickHouse and Memcached are
+not backed up, and [why](#what-is-not-backed-up) is below.
 
 Nothing is backed up until you say where to put it.
 
@@ -96,14 +98,72 @@ missed, and the team is told it was late with `backup.missed`. It looks back a
 week. A backup started at or after the time it was due counts as taken, even
 one that failed: that failure was already reported.
 
+## What is backed up, and how
+
+Each engine is dumped with its own client, from the database's own image, so
+the tool is the server's version: never older than the data it reads, and
+never newer than the server its output goes back into.
+
+| Engine | Backup | Restore |
+|---|---|---|
+| PostgreSQL | `pg_dump --clean --if-exists` | `psql`, stopping at the first error |
+| MySQL | `mysqldump --single-transaction` | `mysql` |
+| MariaDB | `mariadb-dump --single-transaction` | `mariadb` |
+| MongoDB | `mongodump --archive` of the app's database | `mongorestore --archive --drop`, each collection replaced |
+| Redis, Valkey | a snapshot taken the way a replica takes one (`--rdb`) | see below |
+
+Every dump is compressed, [sealed](#encryption) when there is a passphrase, and
+uploaded in the same way whatever made it. No client is given its password as
+an argument: each reads it from its own environment variable, and MongoDB's
+tools, which read one from nowhere else, from a file only the job can open.
+
+A Redis or Valkey snapshot is loaded by a server as it starts, and there is no
+command that loads one into a server that is running. So the restore starts a
+server of the database's own image beside it, on the snapshot, and makes the
+database its replica: a replica's first synchronisation replaces everything it
+holds with the other's data. Once the database has all of it — the number of
+keys is compared — it is made a primary again and carries on with what it was
+given, and its append-only file is rewritten with it. While that runs, the
+database refuses writes. If anything fails part-way, it is made a primary again
+before the restore stops; a restore killed outright cannot do that, and
+restarting the database clears it, since nothing about it is saved.
+
+## What is not backed up
+
+**Dragonfly.** A backup of a live Redis is taken by asking the server for a
+snapshot as a replica would (`SYNC`), and Dragonfly does not implement that
+command. Its own snapshots are written to its own disk, which a backup job
+cannot read while the database runs, and it can write them straight to a bucket
+only with the bucket's keys inside the database. Dragonfly saves a snapshot
+every five minutes and as it stops, so a restart loses nothing and a crash at
+most five minutes; a lost disk loses everything.
+
+**ClickHouse.** A consistent copy of ClickHouse is made by its own `BACKUP`
+command, which writes to a bucket with the bucket's keys inside the database.
+Skifity never hands storage credentials to an environment
+([storage](#storage) says why), and a dump table by table through the client would be neither consistent nor,
+with its materialized views, restorable in order. Run `BACKUP DATABASE app TO
+S3(...)` yourself with a key of your own, or keep the tables rebuildable from
+their source, which is how analytical data usually is.
+
+**Memcached.** A cache keeps nothing on a disk, and whatever is in it is gone
+when it restarts, by design. There is nothing to back up.
+
+The panel says so rather than offering a button that fails: the database's
+Backups tab explains it, and the API refuses a backup, a schedule or a restore
+of one with `backup.not_offered`. For data you cannot lose, use an engine that
+is backed up.
+
 ## Restoring
 
 A restore replaces everything currently in the database with the contents of
 the backup. There is no merge, and there is no undo.
 
-Skifity asks you to confirm in words rather than with a button, and refuses
-outright if the backup is from a different engine or a much newer version — a
-restore that half-works is worse than one that does not start.
+Skifity asks you to confirm in words rather than with a button. A backup is
+restored only into the database it was taken from, so its engine is always the
+database's own; a Redis or Valkey restore is refused before anything is changed
+when the database runs an older version than the one that would send it the
+snapshot — a restore that half-works is worse than one that does not start.
 
 While it runs, the database is unavailable and the apps connected to it will
 report errors. That is expected and it says so before you begin.

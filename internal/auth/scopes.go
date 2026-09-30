@@ -89,6 +89,9 @@ var routeResources = []struct{ prefix, resource string }{
 	{"/api/projects", ResourceProjects},
 	{"/api/apps", ResourceApps},
 	{"/api/databases", ResourceDatabases},
+	// The engines a database can be: what a token that may create a
+	// database needs to know to ask for one.
+	{"/api/database-engines", ResourceDatabases},
 	{"/api/operations", ResourceOperations},
 	{"/api/templates", ResourceTemplates},
 	{"/api/events", ResourceEvents},

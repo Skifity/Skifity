@@ -150,18 +150,92 @@ func TestSQLiteForDevelopmentIsNotAWarning(t *testing.T) {
 	}
 }
 
-// A database this panel does not run is named honestly, not left out.
-func TestMongoDBIsNamedAndNotOffered(t *testing.T) {
+// MongoDB used to be named and then turned away: "this panel does not run
+// MongoDB, use a hosted one". It runs it now, and an app that needs one is
+// offered one, under the name MongoDB's drivers read.
+func TestMongoDBIsOffered(t *testing.T) {
 	needs := DetectNeeds(filesTree(map[string]string{"package.json": `{"dependencies":{"mongoose":"8.0.0"}}`}))
 	mongo, ok := needOf(needs, NeedDatabase, EngineMongoDB)
 	if !ok {
 		t.Fatalf("MongoDB was not mentioned: %+v", needs)
 	}
-	if mongo.Provided {
-		t.Error("MongoDB was offered, and this panel cannot create one")
+	if !mongo.Provided {
+		t.Error("MongoDB was not offered, though this panel runs it now")
 	}
 	if mongo.Variable != "MONGODB_URI" {
 		t.Errorf("the variable is %q", mongo.Variable)
+	}
+}
+
+// A database this panel does not run is still named honestly, not left out.
+func TestSQLServerIsNamedAndNotOffered(t *testing.T) {
+	needs := DetectNeeds(filesTree(map[string]string{
+		"package.json":         `{"dependencies":{"@prisma/client":"6.0.0"}}`,
+		"prisma/schema.prisma": `datasource db { provider = "sqlserver" url = env("DATABASE_URL") }`,
+	}))
+	sqlserver, ok := needOf(needs, NeedDatabase, EngineSQLServer)
+	if !ok {
+		t.Fatalf("SQL Server was not mentioned: %+v", needs)
+	}
+	if sqlserver.Provided {
+		t.Error("SQL Server was offered, and this panel cannot create one")
+	}
+}
+
+// Each engine the panel runs and that has clients of its own is found by
+// them, and offered.
+func TestTheNewerEnginesAreFoundByTheirClients(t *testing.T) {
+	for _, tc := range []struct {
+		files    map[string]string
+		engine   string
+		variable string
+	}{
+		{map[string]string{"package.json": `{"dependencies":{"mariadb":"3.4.0"}}`}, EngineMariaDB, "DATABASE_URL"},
+		{map[string]string{"requirements.txt": "mariadb==1.1.10\n"}, EngineMariaDB, "DATABASE_URL"},
+		{map[string]string{"package.json": `{"dependencies":{"iovalkey":"0.3.0"}}`}, EngineValkey, "VALKEY_URL"},
+		{map[string]string{"go.mod": "module x\n\nrequire github.com/valkey-io/valkey-go v1.0.60\n"}, EngineValkey, "VALKEY_URL"},
+		{map[string]string{"package.json": `{"dependencies":{"@clickhouse/client":"1.12.0"}}`}, EngineClickHouse, "CLICKHOUSE_URL"},
+		{map[string]string{"requirements.txt": "clickhouse-connect\n"}, EngineClickHouse, "CLICKHOUSE_URL"},
+		{map[string]string{"go.mod": "module x\n\nrequire github.com/ClickHouse/clickhouse-go/v2 v2.40.0\n"}, EngineClickHouse, "CLICKHOUSE_URL"},
+		{map[string]string{"Gemfile": "gem 'dalli'\n"}, EngineMemcached, "MEMCACHED_URL"},
+		{map[string]string{"requirements.txt": "pymemcache\n"}, EngineMemcached, "MEMCACHED_URL"},
+		{map[string]string{".env.example": "DB_CONNECTION=mariadb\n"}, EngineMariaDB, "DATABASE_URL"},
+		{map[string]string{".env.example": "DB_CONNECTION=mongodb\n"}, EngineMongoDB, "MONGODB_URI"},
+		{map[string]string{".env.example": "CACHE_STORE=memcached\n"}, EngineMemcached, "MEMCACHED_URL"},
+	} {
+		needs := DetectNeeds(filesTree(tc.files))
+		need, ok := needOf(needs, NeedDatabase, tc.engine)
+		if !ok {
+			t.Errorf("%v: %s was not found: %+v", tc.files, tc.engine, needs)
+			continue
+		}
+		if !need.Provided {
+			t.Errorf("%v: %s was found and not offered", tc.files, tc.engine)
+		}
+		if need.Variable != tc.variable {
+			t.Errorf("%v: %s would be linked as %q, want %q", tc.files, tc.engine, need.Variable, tc.variable)
+		}
+	}
+}
+
+// The Node package called mysql cannot sign in to MySQL 8's default
+// accounts, so on its own it asks for MariaDB; beside a driver that asks for
+// MySQL, it is the same database and not a second one.
+func TestTheOldMySQLPackageIsOfferedMariaDB(t *testing.T) {
+	needs := DetectNeeds(filesTree(map[string]string{"package.json": `{"dependencies":{"mysql":"2.18.1"}}`}))
+	if _, ok := needOf(needs, NeedDatabase, EngineMariaDB); !ok {
+		t.Errorf("an app on the mysql package was not offered MariaDB: %+v", needs)
+	}
+	if _, ok := needOf(needs, NeedDatabase, EngineMySQL); ok {
+		t.Errorf("an app on the mysql package was offered MySQL 8, which that package cannot sign in to: %+v", needs)
+	}
+
+	needs = DetectNeeds(filesTree(map[string]string{"package.json": `{"dependencies":{"mysql":"2.18.1","mysql2":"3.11.0"}}`}))
+	if _, ok := needOf(needs, NeedDatabase, EngineMySQL); !ok {
+		t.Errorf("an app on mysql2 was not offered MySQL: %+v", needs)
+	}
+	if _, ok := needOf(needs, NeedDatabase, EngineMariaDB); ok {
+		t.Errorf("one app was offered two MySQL-compatible databases: %+v", needs)
 	}
 }
 

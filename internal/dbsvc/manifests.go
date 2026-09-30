@@ -12,32 +12,49 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/kube"
 	"skifity/internal/version"
 )
 
-// Engines the panel can provision.
+// Engines the panel can provision. The catalogue in internal/dbsvc/engine is
+// where each is described; these are the same names, kept here because the
+// rest of the panel has always spelled them dbsvc.EngineX.
 const (
-	EnginePostgres = "postgres"
-	EngineRedis    = "redis"
-	EngineMySQL    = "mysql"
+	EnginePostgres   = engine.Postgres
+	EngineMySQL      = engine.MySQL
+	EngineMariaDB    = engine.MariaDB
+	EngineMongoDB    = engine.MongoDB
+	EngineRedis      = engine.Redis
+	EngineValkey     = engine.Valkey
+	EngineDragonfly  = engine.Dragonfly
+	EngineClickHouse = engine.ClickHouse
+	EngineMemcached  = engine.Memcached
 )
 
 // DefaultVersions are used when the user does not pick one. They are the
-// current stable major of each, which is what someone starting a new project
+// current stable release of each, which is what someone starting a new project
 // wants; an existing project can pin whatever it needs.
-var DefaultVersions = map[string]string{
-	EnginePostgres: "17",
-	EngineRedis:    "7",
-	EngineMySQL:    "11.4", // MariaDB, which is the drop-in the images ship
-}
+var DefaultVersions = func() map[string]string {
+	out := map[string]string{}
+	for _, e := range engine.All() {
+		out[e.Name] = e.DefaultVersion
+	}
+	return out
+}()
 
-// DefaultPorts are what each engine listens on.
-var DefaultPorts = map[string]int{
-	EnginePostgres: 5432,
-	EngineRedis:    6379,
-	EngineMySQL:    3306,
-}
+// DefaultPorts are what each engine's connection string names.
+var DefaultPorts = func() map[string]int {
+	out := map[string]int{}
+	for _, e := range engine.All() {
+		out[e.Name] = e.Port
+	}
+	return out
+}()
+
+// clickHouseNativePort is ClickHouse's own protocol, beside the HTTP one the
+// connection string uses.
+const clickHouseNativePort = 9000
 
 // Spec describes a database to create.
 type Spec struct {
@@ -61,25 +78,38 @@ type Spec struct {
 	StorageClass string
 }
 
-// Defaults fills in what a caller left out.
+// Defaults fills in what a caller left out, with each engine's own sizes.
 func (s *Spec) Defaults() {
+	e, known := engine.Lookup(s.Engine)
 	if s.Version == "" {
 		s.Version = DefaultVersions[s.Engine]
 	}
 	if s.Instances < 1 {
 		s.Instances = 1
 	}
-	if s.StorageGB < 1 {
-		s.StorageGB = 5
+	if !known {
+		e = engine.Engine{Storage: true, Password: true, StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024}
+	}
+	if !e.Storage {
+		// A cache keeps nothing on a disk, so it asks for none.
+		s.StorageGB = 0
+	} else if s.StorageGB < 1 {
+		s.StorageGB = max(e.StorageGB, 1)
 	}
 	if s.CPURequestM == 0 {
-		s.CPURequestM = 100
+		s.CPURequestM = e.CPURequestM
 	}
 	if s.MemRequestMB == 0 {
-		s.MemRequestMB = 256
+		s.MemRequestMB = e.MemRequestMB
 	}
 	if s.MemLimitMB == 0 {
-		s.MemLimitMB = 1024
+		s.MemLimitMB = e.MemLimitMB
+	}
+	if !e.Password {
+		// Nothing to sign in as and nothing to sign in to: the URL is the
+		// address and nothing else, and no field pretends otherwise.
+		s.Username, s.Password, s.DatabaseName = "", "", ""
+		return
 	}
 	if s.DatabaseName == "" {
 		s.DatabaseName = "app"
@@ -94,12 +124,14 @@ func (s Spec) Validate() error {
 	if !kube.ValidLabel(s.Name) {
 		return fmt.Errorf("database name %q is not usable as a Kubernetes name", s.Name)
 	}
-	switch s.Engine {
-	case EnginePostgres, EngineRedis, EngineMySQL:
-	default:
+	e, ok := engine.Lookup(s.Engine)
+	if !ok {
 		return fmt.Errorf("%q is not an engine Skifity provisions", s.Engine)
 	}
-	if s.Password == "" {
+	if err := e.CheckVersion(s.Version); err != nil {
+		return err
+	}
+	if e.Password && s.Password == "" {
 		return fmt.Errorf("a database needs a password")
 	}
 	if s.Engine == EnginePostgres && s.Instances > 1 && s.Instances%2 == 0 {
@@ -109,17 +141,17 @@ func (s Spec) Validate() error {
 	}
 	// Replication is CloudNativePG's, not ours.
 	//
-	// BuildRedis and BuildMySQL render one replica and only one, because a
+	// Every other engine renders one replica and only one, because a
 	// StatefulSet with three gives three separate disks and three separate
 	// databases behind one Service — not a replica set, a silent split brain.
 	// Accepting the number and rendering one anyway is worse than refusing it:
 	// the panel's own record would say three while one was running, and nothing
 	// would ever say which was true.
-	if s.Engine != EnginePostgres && s.Instances > 1 {
+	if !e.Replicated && s.Instances > 1 {
 		return fmt.Errorf(
 			"%s runs as a single instance here. Only PostgreSQL is replicated, "+
 				"because CloudNativePG does that replication and there is no operator for the others",
-			s.Engine)
+			e.Title)
 	}
 	return nil
 }
@@ -153,23 +185,70 @@ func (s Spec) serviceName() string {
 	return s.Name
 }
 
-// Port is the port the database listens on.
+// Port is the port the connection string names.
 func (s Spec) Port() int { return DefaultPorts[s.Engine] }
+
+// Image is the image this database runs, pinned for every offered version.
+func (s Spec) Image() string {
+	e, ok := engine.Lookup(s.Engine)
+	if !ok {
+		return ""
+	}
+	image, err := e.Image(s.Version)
+	if err != nil {
+		return ""
+	}
+	return image
+}
 
 // ConnectionURL builds the URL an app uses to connect.
 func (s Spec) ConnectionURL() string {
+	host := s.ServiceHost()
 	switch s.Engine {
 	case EnginePostgres:
 		return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=disable",
-			s.Username, s.Password, s.ServiceHost(), s.Port(), s.DatabaseName)
-	case EngineRedis:
-		return fmt.Sprintf("redis://default:%s@%s:%d", s.Password, s.ServiceHost(), s.Port())
-	case EngineMySQL:
+			s.Username, s.Password, host, s.Port(), s.DatabaseName)
+	case EngineRedis, EngineValkey, EngineDragonfly:
+		// redis:// for Valkey and Dragonfly as well: both speak the Redis
+		// protocol, and redis:// is the scheme every one of their clients
+		// parses. "default" is the user a requirepass password belongs to.
+		return fmt.Sprintf("redis://default:%s@%s:%d", s.Password, host, s.Port())
+	case EngineMySQL, EngineMariaDB:
+		// mysql:// for MariaDB too. MariaDB speaks the MySQL protocol, and the
+		// drivers and ORMs an app reads this with (Prisma, Sequelize,
+		// SQLAlchemy, go-sql-driver, Laravel) know mysql:// and not mariadb://.
 		return fmt.Sprintf("mysql://%s:%s@%s:%d/%s",
-			s.Username, s.Password, s.ServiceHost(), s.Port(), s.DatabaseName)
+			s.Username, s.Password, host, s.Port(), s.DatabaseName)
+	case EngineMongoDB:
+		// The user is the root user, which MongoDB keeps in the admin
+		// database; the path is the database the app's collections go in.
+		return fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			s.Username, s.Password, host, s.Port(), s.DatabaseName)
+	case EngineClickHouse:
+		// HTTP, not ClickHouse's native protocol, because that is what most
+		// of its client libraries take: the official ones for JavaScript,
+		// Python (clickhouse-connect), Java and Rust speak only HTTP, and the
+		// Go one speaks both. The native address is NativeURL, and the
+		// Secret carries it too, for clickhouse-client and clickhouse-go.
+		return fmt.Sprintf("http://%s:%s@%s:%d/%s",
+			s.Username, s.Password, host, s.Port(), s.DatabaseName)
+	case EngineMemcached:
+		// No credentials: memcached has none worth using, and the
+		// environment's network policy is what keeps it private.
+		return fmt.Sprintf("memcached://%s:%d", host, s.Port())
 	default:
 		return ""
 	}
+}
+
+// NativeURL is ClickHouse's native-protocol address, for the clients that
+// speak it rather than HTTP. Empty for every other engine.
+func (s Spec) NativeURL() string {
+	if s.Engine != EngineClickHouse {
+		return ""
+	}
+	return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s",
+		s.Username, s.Password, s.ServiceHost(), clickHouseNativePort, s.DatabaseName)
 }
 
 // BuildSecret renders the Secret holding a database's credentials.
@@ -182,6 +261,9 @@ func BuildSecret(s Spec) *corev1.Secret {
 		"port":     strconv.Itoa(s.Port()),
 		"url":      s.ConnectionURL(),
 	}
+	if native := s.NativeURL(); native != "" {
+		data["native_url"] = native
+	}
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -190,6 +272,31 @@ func BuildSecret(s Spec) *corev1.Secret {
 		Type:       corev1.SecretTypeOpaque,
 		StringData: data,
 	}
+}
+
+// Build renders every object a database is made of, its Secret apart.
+func Build(s Spec) ([]any, error) {
+	switch s.Engine {
+	case EnginePostgres:
+		return []any{BuildPostgres(s)}, nil
+	case EngineMySQL:
+		return BuildMySQL(s), nil
+	case EngineMariaDB:
+		return BuildMariaDB(s), nil
+	case EngineMongoDB:
+		return BuildMongoDB(s), nil
+	case EngineRedis:
+		return BuildRedis(s), nil
+	case EngineValkey:
+		return BuildValkey(s), nil
+	case EngineDragonfly:
+		return BuildDragonfly(s), nil
+	case EngineClickHouse:
+		return BuildClickHouse(s), nil
+	case EngineMemcached:
+		return BuildMemcached(s), nil
+	}
+	return nil, fmt.Errorf("%q is not an engine Skifity provisions", s.Engine)
 }
 
 // BuildPostgres renders a CloudNativePG Cluster.
@@ -207,7 +314,7 @@ func BuildPostgres(s Spec) *unstructured.Unstructured {
 		},
 		"spec": map[string]any{
 			"instances":             int64(s.Instances),
-			"imageName":             fmt.Sprintf("ghcr.io/cloudnative-pg/postgresql:%s", s.Version),
+			"imageName":             s.Image(),
 			"primaryUpdateStrategy": "unsupervised",
 			"bootstrap": map[string]any{
 				"initdb": map[string]any{
@@ -243,87 +350,295 @@ func BuildPostgres(s Spec) *unstructured.Unstructured {
 	}}
 }
 
+// A password in a Redis-family server's arguments is in /proc/1/cmdline for
+// as long as it runs, whatever the shell that started it was given. So the
+// server is started with a configuration file holding it, written by the
+// shell's own printf — a builtin, which is no process of its own — into /tmp
+// with only the owner able to read it, and the password comes from the
+// environment the Secret fills. The umask is the subshell's, so the server
+// itself starts with the image's own.
+func redisFamilyCommand(server, variable string) []string {
+	return []string{"sh", "-c", `(umask 077 && printf 'requirepass "%s"\n' "$` + variable + `" > /tmp/auth.conf) && ` +
+		`exec ` + server + ` /tmp/auth.conf --appendonly yes --dir /data`}
+}
+
+// pingProbe asks a Redis-family server for PONG with the password in the
+// client's own environment variable. The answer is compared, rather than the
+// exit status trusted, because a client can exit 0 having printed an error.
+func pingProbe(client, variable string) *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: []string{
+				"sh", "-c", `test "$(REDISCLI_AUTH="$` + variable + `" ` + client + ` ping)" = PONG`,
+			}},
+		},
+		InitialDelaySeconds: 5,
+		PeriodSeconds:       10,
+	}
+}
+
+// tcpProbe is ready once the port answers. Every image here listens on
+// loopback only while it initialises, so the pod's own address answering is
+// the moment initialisation is over.
+func tcpProbe(port string, delay int32) *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromString(port)},
+		},
+		InitialDelaySeconds: delay,
+		PeriodSeconds:       10,
+	}
+}
+
 // BuildRedis renders a StatefulSet and Service for Redis.
 //
 // A StatefulSet rather than an operator: a single Redis is a single process
 // with a file, and an operator would cost more memory than the database.
 func BuildRedis(s Spec) []any {
-	labels := s.Labels()
-	replicas := int32(1)
-
-	statefulSet := &appsv1.StatefulSet{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "StatefulSet"},
-		ObjectMeta: metav1.ObjectMeta{Name: s.Name, Namespace: s.Namespace, Labels: labels},
-		Spec: appsv1.StatefulSetSpec{
-			ServiceName: s.Name,
-			Replicas:    &replicas,
-			Selector:    &metav1.LabelSelector{MatchLabels: selector(labels)},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: corev1.PodSpec{
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: ptr(true),
-						RunAsUser:    ptr(int64(999)),
-						FSGroup:      ptr(int64(999)),
-						// Every environment namespace enforces the restricted
-						// Pod Security profile, which refuses a pod that does
-						// not name a seccomp profile. Without this the database
-						// is never scheduled at all.
-						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-					},
-					AutomountServiceAccountToken: ptr(false),
-					Containers: []corev1.Container{{
-						Name:  "redis",
-						Image: fmt.Sprintf("redis:%s-alpine", s.Version),
-						// requirepass from an environment variable keeps the
-						// password out of the command line, where it would be
-						// visible in `ps` inside the container.
-						Command: []string{"sh", "-c",
-							`exec redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes --dir /data`},
-						Env: []corev1.EnvVar{{
-							Name: "REDIS_PASSWORD",
-							ValueFrom: &corev1.EnvVarSource{
-								SecretKeyRef: &corev1.SecretKeySelector{
-									LocalObjectReference: corev1.LocalObjectReference{Name: s.SecretName()},
-									Key:                  "password",
-								},
-							},
-						}},
-						Ports:        []corev1.ContainerPort{{Name: "redis", ContainerPort: int32(s.Port())}},
-						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
-						Resources:    resources(s),
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{Command: []string{
-									"sh", "-c", `REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping`,
-								}},
-							},
-							InitialDelaySeconds: 5,
-							PeriodSeconds:       10,
-						},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr(false),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-						},
-					}},
-				},
-			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
-				ObjectMeta: metav1.ObjectMeta{Name: "data", Labels: labels},
-				Spec:       claimSpec(s),
-			}},
-		},
+	container := corev1.Container{
+		Name:           "redis",
+		Image:          s.Image(),
+		Command:        redisFamilyCommand("redis-server", "REDIS_PASSWORD"),
+		Env:            []corev1.EnvVar{secretEnv("REDIS_PASSWORD", s.SecretName(), "password")},
+		Ports:          []corev1.ContainerPort{{Name: "redis", ContainerPort: int32(s.Port())}},
+		ReadinessProbe: pingProbe("redis-cli", "REDIS_PASSWORD"),
 	}
-
-	return []any{statefulSet, buildService(s, "redis")}
+	return []any{statefulSet(s, 999, container, "/data"), buildService(s, servicePort("redis", s.Port()))}
 }
 
-// BuildMySQL renders a StatefulSet and Service for MariaDB.
+// BuildValkey renders Valkey, which is Redis's open-source continuation and
+// runs exactly as Redis does here.
+func BuildValkey(s Spec) []any {
+	container := corev1.Container{
+		Name:    "valkey",
+		Image:   s.Image(),
+		Command: redisFamilyCommand("valkey-server", "VALKEY_PASSWORD"),
+		Env:     []corev1.EnvVar{secretEnv("VALKEY_PASSWORD", s.SecretName(), "password")},
+		Ports:   []corev1.ContainerPort{{Name: "valkey", ContainerPort: int32(s.Port())}},
+		// valkey-cli reads VALKEYCLI_AUTH first and REDISCLI_AUTH after it.
+		ReadinessProbe: pingProbe("valkey-cli", "VALKEY_PASSWORD"),
+	}
+	// uid 999 is the image's valkey user.
+	return []any{statefulSet(s, 999, container, "/data"), buildService(s, servicePort("valkey", s.Port()))}
+}
+
+// BuildDragonfly renders Dragonfly, a multi-threaded server that speaks the
+// Redis protocol.
+//
+// Dragonfly has no append-only file: what is on its disk is its last
+// snapshot. It takes one every five minutes and another as it shuts down, and
+// loads the newest when it starts, so a crash loses at most the five minutes
+// before it. docs/databases.md says so.
+func BuildDragonfly(s Spec) []any {
+	// Dragonfly refuses to start with less than 256 MB for each thread, and
+	// would otherwise take one thread per core of the node and 80% of its
+	// memory. So both are sized to the container: three quarters of its limit
+	// for data, and as many threads as that pays for, one or two.
+	maxMemoryMB := max(s.MemLimitMB*3/4, 256)
+	threads := min(max(maxMemoryMB/256, 1), 2)
+	container := corev1.Container{
+		Name:  "dragonfly",
+		Image: s.Image(),
+		// DFLY_PASSWORD is Dragonfly's own variable for the password
+		// (GetPassword in src/server/server_family.cc), so it never appears
+		// in the arguments.
+		Args: []string{
+			"dragonfly", "--logtostderr",
+			"--dir=/data", "--dbfilename=dump",
+			"--snapshot_cron=*/5 * * * *",
+			"--maxmemory=" + strconv.Itoa(maxMemoryMB*1024*1024),
+			"--proactor_threads=" + strconv.Itoa(threads),
+		},
+		Env:   []corev1.EnvVar{secretEnv("DFLY_PASSWORD", s.SecretName(), "password")},
+		Ports: []corev1.ContainerPort{{Name: "redis", ContainerPort: int32(s.Port())}},
+		// The image ships redis-cli for exactly this.
+		ReadinessProbe: pingProbe("redis-cli", "DFLY_PASSWORD"),
+	}
+	set := statefulSet(s, 999, container, "/data")
+	// Time for the snapshot it takes as it stops.
+	set.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr(int64(60))
+	return []any{set, buildService(s, servicePort("redis", s.Port()))}
+}
+
+// BuildMySQL renders a StatefulSet and Service for MySQL, from Oracle's own
+// image.
 func BuildMySQL(s Spec) []any {
+	container := corev1.Container{
+		Name:  "mysql",
+		Image: s.Image(),
+		// A directory of its own inside the volume. MySQL refuses to
+		// initialise a data directory that has anything in it, and a volume
+		// formatted as ext4 — Longhorn's, when cross-node storage is on —
+		// starts with lost+found. The entrypoint reads the datadir from these
+		// arguments and creates it.
+		Args: []string{"mysqld", "--datadir=/var/lib/mysql/data"},
+		// The image's entrypoint creates the user and the database from these,
+		// handing the passwords to the server on its standard input.
+		Env: []corev1.EnvVar{
+			secretEnv("MYSQL_ROOT_PASSWORD", s.SecretName(), "password"),
+			secretEnv("MYSQL_PASSWORD", s.SecretName(), "password"),
+			secretEnv("MYSQL_USER", s.SecretName(), "username"),
+			secretEnv("MYSQL_DATABASE", s.SecretName(), "database"),
+		},
+		Ports: []corev1.ContainerPort{{Name: "mysql", ContainerPort: int32(s.Port())}},
+		// While it initialises, the entrypoint runs the server with
+		// --skip-networking, so the port answering means it is done.
+		ReadinessProbe: tcpProbe("mysql", 15),
+	}
+	return []any{statefulSet(s, 999, container, "/var/lib/mysql"), buildService(s, servicePort("mysql", s.Port()))}
+}
+
+// BuildMariaDB renders a StatefulSet and Service for MariaDB.
+//
+// Every "mysql" database made before MySQL and MariaDB were offered apart was
+// this, and is recorded as mariadb since migration 0047.
+func BuildMariaDB(s Spec) []any {
+	container := corev1.Container{
+		Name:  "mariadb",
+		Image: s.Image(),
+		Env: []corev1.EnvVar{
+			secretEnv("MARIADB_ROOT_PASSWORD", s.SecretName(), "password"),
+			secretEnv("MARIADB_PASSWORD", s.SecretName(), "password"),
+			secretEnv("MARIADB_USER", s.SecretName(), "username"),
+			secretEnv("MARIADB_DATABASE", s.SecretName(), "database"),
+		},
+		Ports: []corev1.ContainerPort{{Name: "mysql", ContainerPort: int32(s.Port())}},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				Exec: &corev1.ExecAction{Command: []string{"healthcheck.sh", "--connect", "--innodb_initialized"}},
+			},
+			InitialDelaySeconds: 15,
+			PeriodSeconds:       10,
+		},
+	}
+	return []any{statefulSet(s, 999, container, "/var/lib/mysql"), buildService(s, servicePort("mysql", s.Port()))}
+}
+
+// BuildMongoDB renders a StatefulSet and Service for MongoDB, from the
+// official image.
+//
+// The image's entrypoint creates the root user from the two variables, giving
+// the password to mongosh on its standard input, and starts mongod with
+// --auth. The app's database is the path of its connection string; MongoDB
+// makes it on the first write.
+func BuildMongoDB(s Spec) []any {
+	// WiredTiger takes half of (memory - 1 GB) by default, reading the
+	// container's limit; a quarter of the limit leaves room for connections
+	// and aggregations in a small one. 0.25 GB is the least it accepts.
+	cacheGB := max(float64(s.MemLimitMB)/4/1024, 0.25)
+	container := corev1.Container{
+		Name:  "mongodb",
+		Image: s.Image(),
+		Args:  []string{"mongod", "--wiredTigerCacheSizeGB", strconv.FormatFloat(cacheGB, 'f', 2, 64)},
+		Env: []corev1.EnvVar{
+			secretEnv("MONGO_INITDB_ROOT_USERNAME", s.SecretName(), "username"),
+			secretEnv("MONGO_INITDB_ROOT_PASSWORD", s.SecretName(), "password"),
+			secretEnv("MONGO_INITDB_DATABASE", s.SecretName(), "database"),
+		},
+		Ports: []corev1.ContainerPort{{Name: "mongodb", ContainerPort: int32(s.Port())}},
+		// While it creates the user, the entrypoint's mongod listens on
+		// 127.0.0.1 only.
+		ReadinessProbe: tcpProbe("mongodb", 10),
+	}
+	// uid 999 is the image's mongodb user.
+	return []any{statefulSet(s, 999, container, "/data/db"), buildService(s, servicePort("mongodb", s.Port()))}
+}
+
+// BuildClickHouse renders a StatefulSet and Service for ClickHouse, with its
+// HTTP port, which the connection string names, and its native one.
+//
+// CLICKHOUSE_DB is left unset on purpose. With it, the image's entrypoint
+// starts the server once to create the database and runs clickhouse-client
+// with --password "$CLICKHOUSE_PASSWORD" to do it — a password on a command
+// line (docker/server/entrypoint.sh). The database is created by the startup
+// probe instead, by clickhouse-client reading the password from
+// CLICKHOUSE_PASSWORD, which it does since 24.x (programs/client/Client.cpp).
+func BuildClickHouse(s Spec) []any {
+	container := corev1.Container{
+		Name:  "clickhouse",
+		Image: s.Image(),
+		Env: []corev1.EnvVar{
+			secretEnv("CLICKHOUSE_USER", s.SecretName(), "username"),
+			secretEnv("CLICKHOUSE_PASSWORD", s.SecretName(), "password"),
+			// Lets the user create other users and roles, which an app that
+			// manages its own grants needs.
+			{Name: "CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", Value: "1"},
+		},
+		Ports: []corev1.ContainerPort{
+			{Name: "http", ContainerPort: int32(s.Port())},
+			{Name: "native", ContainerPort: clickHouseNativePort},
+		},
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				Exec: &corev1.ExecAction{Command: []string{
+					"clickhouse-client", "--query", "CREATE DATABASE IF NOT EXISTS `" + s.DatabaseName + "`",
+				}},
+			},
+			PeriodSeconds:    5,
+			FailureThreshold: 60,
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{Path: "/ping", Port: intstr.FromString("http")},
+			},
+			PeriodSeconds: 10,
+		},
+	}
+	// uid 101 is the image's clickhouse user, which its entrypoint runs as
+	// when it is not started as root.
+	return []any{
+		statefulSet(s, 101, container, "/var/lib/clickhouse"),
+		buildService(s, servicePort("http", s.Port()), servicePort("native", clickHouseNativePort)),
+	}
+}
+
+// BuildMemcached renders Memcached: a cache, with no disk and no password.
+//
+// Nothing outside the environment reaches it. Every environment's namespace
+// denies all traffic by default and lets in only its own pods, the ingress
+// controller (which routes to nothing that has no domain, and a database has
+// none) and the panel, whose tunnel is an admin's and audited
+// (kube.BuildNetworkPolicies). Its Service is a ClusterIP, and the namespace's
+// quota allows no NodePort.
+func BuildMemcached(s Spec) []any {
+	// Three quarters of the limit for items, the rest for connections and
+	// memcached's own bookkeeping.
+	cacheMB := max(s.MemLimitMB*3/4, 32)
+	container := corev1.Container{
+		Name:  "memcached",
+		Image: s.Image(),
+		// -U 0 turns UDP off: nothing here uses it, and an open UDP port is
+		// what made memcached an amplifier in 2018.
+		Args:           []string{"memcached", "-m", strconv.Itoa(cacheMB), "-U", "0"},
+		Ports:          []corev1.ContainerPort{{Name: "memcached", ContainerPort: int32(s.Port())}},
+		ReadinessProbe: tcpProbe("memcached", 2),
+	}
+	// uid 11211 is the image's memcache user.
+	return []any{statefulSet(s, 11211, container, ""), buildService(s, servicePort("memcached", s.Port()))}
+}
+
+// statefulSet renders the single-instance StatefulSet every engine but
+// PostgreSQL runs as. dataPath is where the volume is mounted, and empty for
+// an engine that keeps nothing on a disk.
+func statefulSet(s Spec, uid int64, container corev1.Container, dataPath string) *appsv1.StatefulSet {
 	labels := s.Labels()
 	replicas := int32(1)
 
-	statefulSet := &appsv1.StatefulSet{
+	container.Resources = resources(s)
+	container.SecurityContext = &corev1.SecurityContext{
+		AllowPrivilegeEscalation: ptr(false),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+	var claims []corev1.PersistentVolumeClaim
+	if dataPath != "" {
+		container.VolumeMounts = []corev1.VolumeMount{{Name: "data", MountPath: dataPath}}
+		claims = []corev1.PersistentVolumeClaim{{
+			ObjectMeta: metav1.ObjectMeta{Name: "data", Labels: labels},
+			Spec:       claimSpec(s),
+		}}
+	}
+
+	return &appsv1.StatefulSet{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "StatefulSet"},
 		ObjectMeta: metav1.ObjectMeta{Name: s.Name, Namespace: s.Namespace, Labels: labels},
 		Spec: appsv1.StatefulSetSpec{
@@ -335,8 +650,8 @@ func BuildMySQL(s Spec) []any {
 				Spec: corev1.PodSpec{
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: ptr(true),
-						RunAsUser:    ptr(int64(999)),
-						FSGroup:      ptr(int64(999)),
+						RunAsUser:    ptr(uid),
+						FSGroup:      ptr(uid),
 						// Every environment namespace enforces the restricted
 						// Pod Security profile, which refuses a pod that does
 						// not name a seccomp profile. Without this the database
@@ -344,51 +659,28 @@ func BuildMySQL(s Spec) []any {
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 					},
 					AutomountServiceAccountToken: ptr(false),
-					Containers: []corev1.Container{{
-						Name:  "mariadb",
-						Image: fmt.Sprintf("mariadb:%s", s.Version),
-						Env: []corev1.EnvVar{
-							secretEnv("MARIADB_ROOT_PASSWORD", s.SecretName(), "password"),
-							secretEnv("MARIADB_PASSWORD", s.SecretName(), "password"),
-							secretEnv("MARIADB_USER", s.SecretName(), "username"),
-							secretEnv("MARIADB_DATABASE", s.SecretName(), "database"),
-						},
-						Ports:        []corev1.ContainerPort{{Name: "mysql", ContainerPort: int32(s.Port())}},
-						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/var/lib/mysql"}},
-						Resources:    resources(s),
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{Command: []string{"healthcheck.sh", "--connect", "--innodb_initialized"}},
-							},
-							InitialDelaySeconds: 15,
-							PeriodSeconds:       10,
-						},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr(false),
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-						},
-					}},
+					Containers:                   []corev1.Container{container},
 				},
 			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
-				ObjectMeta: metav1.ObjectMeta{Name: "data", Labels: labels},
-				Spec:       claimSpec(s),
-			}},
+			VolumeClaimTemplates: claims,
 		},
 	}
-
-	return []any{statefulSet, buildService(s, "mysql")}
 }
 
-func buildService(s Spec, portName string) *corev1.Service {
+func servicePort(name string, port int) corev1.ServicePort {
+	return corev1.ServicePort{Name: name, Port: int32(port), TargetPort: intstr.FromString(name)}
+}
+
+// buildService is a ClusterIP Service: a database is reached from inside its
+// environment, and from nowhere else.
+func buildService(s Spec, ports ...corev1.ServicePort) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
 		ObjectMeta: metav1.ObjectMeta{Name: s.Name, Namespace: s.Namespace, Labels: s.Labels()},
 		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
 			Selector: selector(s.Labels()),
-			Ports: []corev1.ServicePort{{
-				Name: portName, Port: int32(s.Port()), TargetPort: intstr.FromString(portName),
-			}},
+			Ports:    ports,
 		},
 	}
 }

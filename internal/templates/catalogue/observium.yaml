@@ -22,7 +22,7 @@ services:
     size_gb: 5
 databases:
 - name: observium-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 5
   link_to:
   - observium

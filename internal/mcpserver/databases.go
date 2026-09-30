@@ -9,6 +9,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
@@ -61,10 +62,10 @@ type listDatabasesOutput struct {
 type createDatabaseInput struct {
 	EnvironmentID string `json:"environment_id" jsonschema:"where to create it, as returned by list_projects; only apps in the same environment can use it"`
 	Name          string `json:"name" jsonschema:"what to call it, such as db or cache; an app in the same environment cannot have the same name"`
-	Engine        string `json:"engine" jsonschema:"postgres, redis, or mysql (which is MariaDB)"`
-	Version       string `json:"version,omitempty" jsonschema:"the major version, such as 16 for postgres; left out means the current stable one"`
-	StorageGB     int    `json:"storage_gb,omitempty" jsonschema:"the disk, in GB: at least 5, which is also what it gets when left out"`
-	Instances     int    `json:"instances,omitempty" jsonschema:"PostgreSQL only: an odd number, 3 to survive losing a server. Redis and MySQL run one"`
+	Engine        string `json:"engine" jsonschema:"postgres; mysql (MySQL itself) or mariadb; mongodb; redis, or valkey or dragonfly, which speak its protocol; clickhouse for analytics; memcached for a cache with no disk, no password and no backups. dragonfly and clickhouse are not backed up either"`
+	Version       string `json:"version,omitempty" jsonschema:"one of the versions offered, such as 16 for postgres or 8.4 for mysql; left out means the current stable one"`
+	StorageGB     int    `json:"storage_gb,omitempty" jsonschema:"the disk, in GB: at least 5, which is also what it gets when left out. memcached has none"`
+	Instances     int    `json:"instances,omitempty" jsonschema:"PostgreSQL only: an odd number, 3 to survive losing a server. Every other engine runs one"`
 }
 
 type createDatabaseOutput struct {
@@ -75,7 +76,7 @@ type createDatabaseOutput struct {
 type linkDatabaseInput struct {
 	DatabaseID string `json:"database_id" jsonschema:"the database, as returned by list_databases"`
 	AppID      string `json:"app_id" jsonschema:"the app that will use it, in the same environment"`
-	Variable   string `json:"variable,omitempty" jsonschema:"the variable the app reads the connection string from; left out means DATABASE_URL for postgres, REDIS_URL for redis and MYSQL_URL for mysql"`
+	Variable   string `json:"variable,omitempty" jsonschema:"the variable the app reads the connection string from; left out means the engine's own: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse, MEMCACHED_URL for memcached"`
 }
 
 type linkDatabaseOutput struct {
@@ -156,9 +157,9 @@ func (s *Server) registerDatabases() {
 		Name:        "create_database",
 		Annotations: changes("Create a database", false, false),
 		InputSchema: inputSchema[createDatabaseInput](func(p map[string]*jsonschema.Schema) {
-			oneOf(p["engine"], "postgres", "redis", "mysql")
+			oneOf(p["engine"], engine.Names()...)
 		}),
-		Description: "Create a managed PostgreSQL, Redis or MySQL (MariaDB) database in an environment. It answers at once and takes a minute or two to be ready. " +
+		Description: "Create a managed database in an environment: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached. It answers at once and takes a minute or two to be ready. " +
 			"Then give it to an app with link_database: that is how the app gets its connection string, since nobody, you included, is shown the password. " +
 			"deploy_folder and install_template make the databases they need themselves, so check list_databases before adding one.",
 	}, s.createDatabase)

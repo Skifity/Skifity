@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"skifity/internal/dbsvc"
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/kube"
 	"skifity/internal/version"
 )
@@ -21,6 +22,10 @@ type JobSpec struct {
 	Namespace string
 	// Engine decides which dump tool runs.
 	Engine string
+	// Version is the database's own, which picks the client's image: a
+	// dump tool older than its server may not read it, and one newer may
+	// write what the server cannot load back.
+	Version string
 	// CredentialsSecret is the database's own Secret, which the job reads the
 	// host, user and password from.
 	CredentialsSecret string
@@ -51,18 +56,7 @@ type JobSpec struct {
 // Defaults fills in the images and the timeout.
 func (s *JobSpec) Defaults() {
 	if s.Image == "" {
-		switch s.Engine {
-		case dbsvc.EnginePostgres:
-			// The client version must be at least the server's, so a recent
-			// image is used rather than one pinned to the server version.
-			s.Image = "postgres:17-alpine"
-		case dbsvc.EngineMySQL:
-			s.Image = "mariadb:11.4"
-		case dbsvc.EngineRedis:
-			s.Image = "redis:7-alpine"
-		default:
-			s.Image = "alpine:3"
-		}
+		s.Image = ClientImage(s.Engine, s.Version)
 	}
 	if s.TransferImage == "" {
 		s.TransferImage = DefaultTransferImage
@@ -73,6 +67,36 @@ func (s *JobSpec) Defaults() {
 	if s.WorkspaceGB == 0 {
 		s.WorkspaceGB = 20
 	}
+}
+
+// ClientImage is the image a backup of this engine and version runs its
+// client tools from: the database's own image, pinned as the database is, so
+// the dump tool is the server's own version.
+//
+// PostgreSQL is the exception. The operator's images carry no pg_dump, so the
+// client is the official image of the same major: at least the server's, as
+// pg_dump requires, and not newer, because pg_dump 17's output sets
+// transaction_timeout, which a PostgreSQL 16 refuses on the way back in.
+func ClientImage(name, version string) string {
+	e, ok := engine.Lookup(name)
+	if !ok {
+		return "alpine:3"
+	}
+	if version == "" {
+		version = e.DefaultVersion
+	}
+	if name == engine.Postgres {
+		major, _, _ := strings.Cut(version, ".")
+		if _, err := strconv.Atoi(major); err != nil {
+			major = e.DefaultVersion
+		}
+		return "postgres:" + major + "-alpine"
+	}
+	image, err := e.Image(version)
+	if err != nil {
+		image, _ = e.Image(e.DefaultVersion)
+	}
+	return image
 }
 
 // DefaultTransferImage is the image that talks to the storage service.
@@ -87,16 +111,20 @@ const DefaultTransferImage = "curlimages/curl:8.11.1"
 // pod that could run as root. These images all default to root and drop
 // privileges in their entrypoint, which a backup job never reaches, so the uid
 // is named here instead.
-func runAsUserFor(image, engine string) int64 {
+func runAsUserFor(image, name string) int64 {
 	switch {
 	case strings.HasPrefix(image, "curlimages/curl"):
 		return 100 // curl_user
-	case engine == dbsvc.EnginePostgres:
+	case name == dbsvc.EnginePostgres:
 		return 70 // postgres, in the Alpine image
-	case engine == dbsvc.EngineMySQL:
+	case name == dbsvc.EngineMySQL, name == dbsvc.EngineMariaDB:
 		return 999 // mysql
-	case engine == dbsvc.EngineRedis:
+	case name == dbsvc.EngineMongoDB:
+		return 999 // mongodb
+	case name == dbsvc.EngineRedis:
 		return 999 // redis
+	case name == dbsvc.EngineValkey:
+		return 999 // valkey
 	default:
 		return 65532
 	}
@@ -113,12 +141,10 @@ func (s JobSpec) Validate() error {
 	if s.URLSecret == "" {
 		return fmt.Errorf("a backup job needs somewhere to read or write the backup")
 	}
-	switch s.Engine {
-	case dbsvc.EnginePostgres, dbsvc.EngineMySQL, dbsvc.EngineRedis:
-		return nil
-	default:
+	if e, ok := engine.Lookup(s.Engine); !ok || !e.Backups {
 		return fmt.Errorf("%q is not an engine Skifity can back up", s.Engine)
 	}
+	return nil
 }
 
 // workspace is where the dump is staged between the two containers.
@@ -164,6 +190,9 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 			first = append(first, sealContainer("open", s.SealImage, s.URLSecret, "backup-open", dumpFile))
 		}
 		second = s.databaseContainer("load", restoreScript(s))
+		if redisFamily(s.Engine) {
+			second = s.replicationSource(second)
+		}
 	} else {
 		first = []corev1.Container{s.databaseContainer("dump", backupScript(s))}
 		if s.SealImage != "" {
@@ -227,6 +256,20 @@ func (s JobSpec) databaseContainer(name, script string) corev1.Container {
 	return container
 }
 
+// replicationSource is what a Redis-family restore needs beyond a load: the
+// pod's own address, which the database replicates from, and room for the
+// whole dataset in memory, which is where the temporary server holds it.
+func (s JobSpec) replicationSource(container corev1.Container) corev1.Container {
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: "POD_IP",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"},
+		},
+	})
+	container.Resources.Limits[corev1.ResourceMemory] = resource.MustParse("2Gi")
+	return container
+}
+
 // transferContainer moves the staged file to or from the storage service.
 func (s JobSpec) transferContainer(name, script string) corev1.Container {
 	container := s.container(name, s.TransferImage, script)
@@ -266,9 +309,44 @@ func (s JobSpec) container(name, image, script string) corev1.Container {
 	}
 }
 
+// redisFamily is Redis and Valkey: one protocol, one snapshot format, and
+// one way to put a snapshot back.
+func redisFamily(name string) bool {
+	return name == dbsvc.EngineRedis || name == dbsvc.EngineValkey
+}
+
+// redisTools names a Redis-family engine's server and client, and the field
+// of INFO server that carries its version. Valkey reports redis_version as
+// 7.2.4 whatever it is, for clients that check; its own is valkey_version.
+func redisTools(name string) (server, client, versionField string) {
+	if name == dbsvc.EngineValkey {
+		return "valkey-server", "valkey-cli", "valkey_version"
+	}
+	return "redis-server", "redis-cli", "redis_version"
+}
+
+// mongoConfig writes the password where mongodump and mongorestore read it
+// with --config: a YAML file, since the password option is the one thing the
+// tools will not take from the environment, and the command line is where
+// anything that lists processes reads it. printf is the shell's own, so the
+// password is never an argument either, and the file is readable by nobody
+// else and outside the workspace the other containers share.
+//
+// The umask is the subshell's alone. Set for the whole script it made the
+// dump itself unreadable to the containers that seal and upload it, which
+// run as other users.
+const mongoConfig = `mongo_config="${TMPDIR:-/tmp}/.mongodb.yaml"
+(umask 077 && printf 'password: "%s"\n' "$DB_PASSWORD" > "$mongo_config")
+`
+
+// mongoFlags are the connection flags both MongoDB tools take. The user is
+// the root user, which lives in the admin database.
+const mongoFlags = `--host="$DB_HOST" --port="$DB_PORT" --username="$DB_USER" ` +
+	`--authenticationDatabase=admin --config="$mongo_config"`
+
 // backupScript dumps a database to the shared workspace.
 func backupScript(s JobSpec) string {
-	var dump string
+	var prepare, dump string
 	switch s.Engine {
 	case dbsvc.EnginePostgres:
 		// --clean --if-exists makes the dump restorable over an existing
@@ -278,17 +356,34 @@ func backupScript(s JobSpec) string {
 	case dbsvc.EngineMySQL:
 		// The password goes in the client's own variable, not on its command
 		// line, where anything that can list the pod's processes reads it.
+		//
+		// --no-tablespaces because since 8.0.21 listing them needs the
+		// PROCESS privilege, which the app's user does not have and should
+		// not; --set-gtid-purged=OFF so the dump does not try to set the
+		// server's GTID history on the way back in, which needs more still.
+		dump = `MYSQL_PWD="$DB_PASSWORD" mysqldump --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" ` +
+			`--single-transaction --quick --routines --events --no-tablespaces --set-gtid-purged=OFF "$DB_NAME"`
+	case dbsvc.EngineMariaDB:
 		dump = `MYSQL_PWD="$DB_PASSWORD" mariadb-dump --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" ` +
 			`--single-transaction --quick --routines --events "$DB_NAME"`
-	case dbsvc.EngineRedis:
-		// --rdb writes a point-in-time snapshot without stopping the server.
-		dump = `REDISCLI_AUTH="$DB_PASSWORD" redis-cli -h "$DB_HOST" -p "$DB_PORT" --rdb /dev/stdout`
+	case dbsvc.EngineMongoDB:
+		// An archive to standard output, uncompressed: the script gzips
+		// every dump the same way below, and --gzip here would compress it
+		// twice for nothing.
+		prepare = mongoConfig
+		dump = `mongodump ` + mongoFlags + ` --db="$DB_NAME" --archive`
+	case dbsvc.EngineRedis, dbsvc.EngineValkey:
+		// --rdb writes a point-in-time snapshot without stopping the server:
+		// it asks for one the way a replica does. valkey-cli reads
+		// REDISCLI_AUTH when VALKEYCLI_AUTH is not set.
+		_, client, _ := redisTools(s.Engine)
+		dump = `REDISCLI_AUTH="$DB_PASSWORD" ` + client + ` -h "$DB_HOST" -p "$DB_PORT" --rdb /dev/stdout`
 	}
 
 	return fmt.Sprintf(`set -eu
 
 echo "==> Backing up $DB_NAME"
-
+%s
 # A pipeline hides a failing dump behind a successful gzip, and a dump that
 # failed halfway still compresses cleanly. Without one, the dump's own exit
 # status is the command's, and set -e stops here.
@@ -311,7 +406,7 @@ gzip -c %s.raw > %s
 rm -f %s.raw
 
 echo "==> Dumped $(wc -c < %s) compressed bytes"
-`, dump, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile)
+`, prepare, dump, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile)
 }
 
 // uploadScript sends the staged dump to the storage service.
@@ -354,18 +449,23 @@ echo "==> Downloaded $(wc -c < %s) bytes"
 
 // restoreScript loads a downloaded backup.
 func restoreScript(s JobSpec) string {
+	unpacked := dumpFile + ".sql"
 	var load string
 	switch s.Engine {
 	case dbsvc.EnginePostgres:
 		load = `PGPASSWORD="$DB_PASSWORD" psql --host="$DB_HOST" --port="$DB_PORT" ` +
-			`--username="$DB_USER" --dbname="$DB_NAME" --quiet --set ON_ERROR_STOP=on`
+			`--username="$DB_USER" --dbname="$DB_NAME" --quiet --set ON_ERROR_STOP=on < ` + unpacked
 	case dbsvc.EngineMySQL:
-		load = `MYSQL_PWD="$DB_PASSWORD" mariadb --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME"`
-	case dbsvc.EngineRedis:
-		// Redis cannot load an RDB over a running server, so the restore
-		// replays the keys instead. This is slower but does not need the pod
-		// to be stopped and the volume swapped.
-		load = `REDISCLI_AUTH="$DB_PASSWORD" redis-cli -h "$DB_HOST" -p "$DB_PORT" --pipe`
+		load = `MYSQL_PWD="$DB_PASSWORD" mysql --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME" < ` + unpacked
+	case dbsvc.EngineMariaDB:
+		load = `MYSQL_PWD="$DB_PASSWORD" mariadb --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME" < ` + unpacked
+	case dbsvc.EngineMongoDB:
+		// --drop replaces each collection in the backup rather than adding
+		// its documents to what is there, and --nsInclude keeps the restore
+		// to the app's database, whatever else the archive might hold.
+		load = mongoConfig + `mongorestore ` + mongoFlags + ` --nsInclude="$DB_NAME.*" --drop --archive < ` + unpacked
+	case dbsvc.EngineRedis, dbsvc.EngineValkey:
+		load = redisRestore(s.Engine, unpacked)
 	}
 
 	// No pipeline here, for the reason the backup side spells out and this side
@@ -383,19 +483,159 @@ func restoreScript(s JobSpec) string {
 
 echo "==> Restoring $DB_NAME"
 
-gzip -dc %s > %s.sql
+gzip -dc %s > %s
 
-if [ ! -s %s.sql ]; then
+if [ ! -s %s ]; then
   echo "The backup unpacked to nothing, so there is nothing to restore. The archive may be truncated." >&2
   exit 1
 fi
 
-%s < %s.sql
+%s
 
-rm -f %s.sql
+rm -f %s
 
 echo "==> Restore finished"
-`, dumpFile, dumpFile, dumpFile, load, dumpFile, dumpFile)
+`, dumpFile, unpacked, unpacked, load, unpacked)
+}
+
+// redisRestorePort is where the temporary server listens, inside the job's
+// own pod.
+const redisRestorePort = "6380"
+
+// redisRestore puts an RDB snapshot back into a running Redis or Valkey.
+//
+// It used to hand the snapshot to redis-cli --pipe, which sends its input to
+// the server as commands; a snapshot is not commands, and the server answered
+// every line of it with an error. There is no command that loads a snapshot
+// into a running server — the server reads one only as it starts, and the
+// database's own server cannot be restarted onto a file from here.
+//
+// A server can, though, be made the replica of another, and a replica's first
+// synchronisation replaces everything it holds with the other's dataset. So a
+// server of the database's own image starts here, on the snapshot, and the
+// database replicates from it until it has all of it; then it is made a
+// primary again and carries on with what it was given. Its append-only file
+// is rewritten as part of the synchronisation, so the restore survives a
+// restart. While it runs the database is a replica, and refuses writes.
+//
+// The version is checked first. A snapshot is written in the format of the
+// server that sends it, and one newer than the database's cannot be read by
+// it; that is refused before the database is touched.
+//
+// Whatever happens after the database becomes a replica, it is made a
+// primary again before the script ends — on an error, and on the TERM the job
+// is stopped with at its deadline. A job killed outright cannot do that, and a
+// restart of the database's pod clears it, since REPLICAOF is not written to
+// any configuration.
+func redisRestore(name, snapshot string) string {
+	server, client, versionField := redisTools(name)
+	directory, file := snapshot[:strings.LastIndexByte(snapshot, '/')], snapshot[strings.LastIndexByte(snapshot, '/')+1:]
+	return fmt.Sprintf(`# Every client call below reads the password from here, and so does the
+# temporary server's own requirepass, below.
+export REDISCLI_AUTH="$DB_PASSWORD"
+live() { %[2]s -h "$DB_HOST" -p "$DB_PORT" "$@"; }
+here() { %[2]s -p %[3]s "$@"; }
+keys() { tr -d '\r' | sed -n 's/^db[0-9]*:keys=\([0-9]*\).*/\1/p' | awk '{ n += $1 } END { print n + 0 }'; }
+version_of() { tr -d '\r' | sed -n 's/^%[4]s://p' | awk -F. '{ printf "%%d%%03d", $1, $2 }'; }
+
+# A server that has exited and not yet been reaped still answers kill -0.
+running() { kill -0 "$source_pid" 2>/dev/null && ! grep -qs '^State:[[:space:]]*Z' "/proc/$source_pid/status"; }
+
+config="${TMPDIR:-/tmp}/restore.conf"
+(umask 077 && printf 'port %[3]s\ndir %[5]s\ndbfilename %[6]s\nappendonly no\nsave ""\nrequirepass "%%s"\n' "$DB_PASSWORD" > "$config")
+%[1]s "$config" &
+source_pid=$!
+# The server goes when the script does, however it ends; the job's deadline
+# ends it with a TERM, which the shell turns into an ordinary exit.
+stop() { kill "$source_pid" 2>/dev/null || true; }
+trap stop EXIT
+trap 'exit 1' TERM INT
+
+tries=0
+until [ "$(here ping 2>/dev/null)" = PONG ]; do
+  if ! running; then
+    echo "The backup could not be loaded: the snapshot is damaged, or newer than this version of %[7]s reads." >&2
+    exit 1
+  fi
+  tries=$((tries + 1))
+  if [ "$tries" -gt 900 ]; then
+    echo "The backup did not finish loading within fifteen minutes." >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+have="$(live info server | version_of)"
+want="$(here info server | version_of)"
+if [ -z "$have" ]; then
+  echo "The database did not answer, so nothing was changed." >&2
+  exit 1
+fi
+if [ -z "$want" ] || [ "$want" -gt "$have" ]; then
+  echo "The database runs an older %[7]s than the one this restore loads the backup with, and could not read the snapshot it would be sent. Nothing was changed." >&2
+  exit 1
+fi
+
+# From here the database may be a replica, and a replica refuses writes. It
+# is made a primary again before the script ends, whichever way it ends.
+release() {
+  echo 'REPLICAOF NO ONE' | live > /dev/null 2>&1 || true
+  echo 'CONFIG SET masterauth ""' | live > /dev/null 2>&1 || true
+}
+trap 'release; stop' EXIT
+
+if [ "$(printf 'CONFIG SET masterauth "%%s"\n' "$DB_PASSWORD" | live)" != OK ]; then
+  echo "The database refused to take the restore's password for replication." >&2
+  exit 1
+fi
+if [ "$(echo "REPLICAOF $POD_IP %[3]s" | live)" != OK ]; then
+  echo "The database refused to replicate from the restore." >&2
+  exit 1
+fi
+
+echo "==> Copying the backup into the database"
+while :; do
+  state="$(live info replication | tr -d '\r')"
+  case "$state" in
+    *master_link_status:up*)
+      case "$state" in *master_sync_in_progress:0*) break ;; esac ;;
+  esac
+  if ! running; then
+    echo "The restore's own server stopped before the database had copied the backup." >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+expected="$(here info keyspace | keys)"
+tries=0
+until [ "$(live info keyspace | keys)" = "$expected" ]; do
+  tries=$((tries + 1))
+  if [ "$tries" -gt 30 ]; then
+    echo "The database holds $(live info keyspace | keys) keys after the restore, and the backup has $expected." >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+trap stop EXIT
+release
+case "$(live info replication | tr -d '\r')" in
+  *role:master*) ;;
+  *)
+    echo "The database is still replicating from the restore. Restart it to make it a primary again." >&2
+    exit 1
+    ;;
+esac
+echo "==> Restored $expected keys"`, server, client, redisRestorePort, versionField, directory, file, engineTitle(name))
+}
+
+// engineTitle is an engine's own name, for a message.
+func engineTitle(name string) string {
+	if e, ok := engine.Lookup(name); ok {
+		return e.Title
+	}
+	return name
 }
 
 // URLSecret renders the Secret carrying a presigned URL.

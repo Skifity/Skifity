@@ -429,6 +429,8 @@ func (s *Server) routes() chi.Router {
 			authed.Patch("/plugins/{pluginID}", s.handleUpdatePlugin)
 			authed.Delete("/plugins/{pluginID}", s.handleUninstallPlugin)
 
+			authed.Get("/database-engines", s.handleListDatabaseEngines)
+
 			authed.Get("/templates", s.handleListTemplates)
 			authed.Get("/templates/{templateID}/icon", s.handleTemplateIcon)
 			authed.Post("/templates/{templateID}/install", s.handleInstallTemplate)

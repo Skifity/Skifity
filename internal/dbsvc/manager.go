@@ -16,6 +16,7 @@ import (
 	"skifity/internal/api"
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/kube"
@@ -69,6 +70,18 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		return store.Database{}, errdoc.NameTaken(owner, req.Name)
 	}
 
+	kind, known := engine.Lookup(req.Engine)
+	if !known {
+		return store.Database{}, errdoc.BadRequest(fmt.Sprintf(
+			"%q is not an engine Skifity provisions; it provisions %s.",
+			req.Engine, strings.Join(engine.Names(), ", ")))
+	}
+	// Five gigabytes is the least a database is given, as it always was, and
+	// an engine may start higher (ClickHouse does); a cache has no disk.
+	storageGB := 0
+	if kind.Storage {
+		storageGB = max(req.StorageGB, kind.StorageGB, 5)
+	}
 	record := store.Database{
 		EnvironmentID: env.ID,
 		Name:          req.Name,
@@ -77,12 +90,12 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		EngineVersion: req.Version,
 		Status:        "creating",
 		Instances:     max(req.Instances, 1),
-		StorageGB:     max(req.StorageGB, 5),
-		CPURequestM:   100,
-		MemRequestMB:  256,
+		StorageGB:     storageGB,
+		CPURequestM:   kind.CPURequestM,
+		MemRequestMB:  kind.MemRequestMB,
 	}
 	if record.EngineVersion == "" {
-		record.EngineVersion = DefaultVersions[req.Engine]
+		record.EngineVersion = kind.DefaultVersion
 	}
 
 	spec := Spec{
@@ -97,7 +110,7 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		DatabaseName: "app",
 		CPURequestM:  record.CPURequestM,
 		MemRequestMB: record.MemRequestMB,
-		MemLimitMB:   1024,
+		MemLimitMB:   kind.MemLimitMB,
 	}
 	spec.Defaults()
 	if err := spec.Validate(); err != nil {
@@ -109,7 +122,7 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 	credentials := api.DatabaseCredentials{
 		Engine: spec.Engine, Host: spec.ServiceHost(), Port: spec.Port(),
 		Database: spec.DatabaseName, Username: spec.Username, Password: spec.Password,
-		URL: spec.ConnectionURL(),
+		URL: spec.ConnectionURL(), NativeURL: spec.NativeURL(),
 	}
 	encoded, err := json.Marshal(credentials)
 	if err != nil {
@@ -157,15 +170,12 @@ func (m *Manager) provision(ctx context.Context, record store.Database, spec Spe
 		}
 	}
 
-	objects := []any{BuildSecret(spec)}
-	switch record.Engine {
-	case EnginePostgres:
-		objects = append(objects, BuildPostgres(spec))
-	case EngineRedis:
-		objects = append(objects, BuildRedis(spec)...)
-	case EngineMySQL:
-		objects = append(objects, BuildMySQL(spec)...)
+	built, err := Build(spec)
+	if err != nil {
+		fail(err)
+		return
 	}
+	objects := append([]any{BuildSecret(spec)}, built...)
 
 	if err := m.cluster.Client().Applier().ApplyAll(ctx, objects...); err != nil {
 		fail(err)
@@ -337,6 +347,10 @@ func (m *Manager) Credentials(ctx context.Context, databaseID string) (api.Datab
 	if err := json.Unmarshal(plaintext, &credentials); err != nil {
 		return api.DatabaseCredentials{}, fmt.Errorf("read the database credentials: %w", err)
 	}
+	// The record names the engine, not the sealed copy: a MariaDB made when
+	// it was offered as "mysql" was sealed saying so, and migration 0047
+	// renamed the record and could not open this.
+	credentials.Engine = record.Engine
 	return credentials, nil
 }
 

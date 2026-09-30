@@ -30,7 +30,7 @@ services:
     size_gb: 1
 databases:
 - name: espocrm-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 5
   link_to:
   - espocrm

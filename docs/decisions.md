@@ -637,3 +637,53 @@ the scripts on both ends are run against each other in tests, and the pod-state
 logic that decides when to deliver is tested from pod statuses, but the
 WebSocket/SPDY stream itself needs an API server. It is on the list of things
 `make verify` has to exercise before a release.
+
+## ADR-0023 - Nine engines from one catalogue, and "mysql" means MySQL
+
+**Context.** The panel ran three engines — PostgreSQL, Redis and one it called
+`mysql`, which rendered the `mariadb` image. Coolify offers nine, Kubero eight,
+Dokploy six. Six more were added: MariaDB, MongoDB, Valkey, Dragonfly,
+ClickHouse and Memcached. Adding MariaDB beside a `mysql` that was already
+MariaDB would have offered one engine under two names, and left a template
+called `wordpress-with-mysql` running MariaDB.
+
+**Decision.**
+
+* **One catalogue, in `internal/dbsvc/engine`,** which imports nothing of the
+  panel's own: name, title, port, the versions offered and the exact image each
+  pins, the default variable, the default sizes, and whether it is backed up.
+  The API validates against it, `dbsvc` renders from it, the backup jobs pick
+  their client from it, the blueprint parser and the MCP server read their enums
+  from it, and the interface asks for it at `GET /api/database-engines`.
+* **`mysql` is MySQL,** from Oracle's image, and **`mariadb` is MariaDB.**
+  Migration 0047 renames every existing `mysql` row to `mariadb`, which is what
+  each of them runs; nothing in the cluster changes, and MariaDB's default
+  variable stays `MYSQL_URL` so their links and blueprints keep matching.
+  Templates that ran MariaDB say `mariadb`; the ones named `-with-mysql`, and
+  Ghost, which supports only MySQL 8, say `mysql`.
+* **Every offered version is a pinned release,** verified in its registry for
+  amd64 and arm64. PostgreSQL and Redis keep their major tags (CloudNativePG
+  patches its images under them), and a MariaDB made before versions were
+  offered keeps rendering its own version.
+* **Backups where they can be taken without handing the bucket to the
+  database** (ADR-0012): MySQL, MariaDB and MongoDB are dumped like PostgreSQL.
+  Dragonfly implements no `SYNC`, so a live snapshot cannot be taken from
+  outside it; ClickHouse's consistent copy is its own `BACKUP ... TO S3`, which
+  needs the keys inside the server; Memcached is a cache. Those three are not
+  backed up, and the catalogue, the API (`backup.not_offered`), the interface
+  and `docs/backups.md` all say so.
+* **A Redis or Valkey restore replicates.** The old restore piped the RDB file
+  into `redis-cli --pipe`, which sends its input to the server as commands; it
+  could never have worked. There is no command that loads a snapshot into a
+  running server, so the job starts a server of the database's own image on the
+  snapshot and makes the database its replica until it has everything, then a
+  primary again.
+
+**Consequences.** Nine engines, six backed up. A `skifity.yaml` that says
+`engine: mysql` for a database that is now `mariadb` is told so by `skifity
+plan` as a difference it will not act on. The Node package `mysql` cannot sign
+in to MySQL 8's default accounts, so detection offers such an app MariaDB.
+None of the new manifests or backup jobs has run against a cluster (ADR-0010):
+every image was read from its registry and every behaviour relied on — the
+entrypoints' environment variables, the tools' flags, the password variables,
+Dragonfly's missing `SYNC` — from the image's or the tool's own source.

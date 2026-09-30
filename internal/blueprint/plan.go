@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
@@ -602,13 +603,6 @@ func Resolve(call Call, ids map[string]string) (Call, error) {
 // DefaultVariable is the variable a database is linked as when the file does
 // not say: the panel's own default, which a test in internal/api holds this
 // to.
-func DefaultVariable(engine string) string {
-	switch engine {
-	case "redis":
-		return "REDIS_URL"
-	case "mysql":
-		return "MYSQL_URL"
-	default:
-		return "DATABASE_URL"
-	}
+func DefaultVariable(name string) string {
+	return engine.DefaultVariable(name)
 }

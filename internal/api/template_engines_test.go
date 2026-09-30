@@ -15,14 +15,9 @@ import (
 // A template naming an engine nobody provisions fails at install time, after
 // its apps have been created, and leaves half a template behind.
 func TestEveryTemplateAsksForAnEngineSkifityProvisions(t *testing.T) {
-	provisioned := map[string]bool{
-		dbsvc.EnginePostgres: true,
-		dbsvc.EngineMySQL:    true,
-		dbsvc.EngineRedis:    true,
-	}
 	for _, tpl := range templates.All() {
 		for _, db := range tpl.Databases {
-			if !provisioned[db.Engine] {
+			if _, ok := dbsvc.DefaultVersions[db.Engine]; !ok {
 				t.Errorf("the %s template asks for a %q database, which Skifity does not provision",
 					tpl.ID, db.Engine)
 			}

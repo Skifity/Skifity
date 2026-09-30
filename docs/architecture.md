@@ -79,7 +79,7 @@ flowchart TB
         REG["in-cluster registry"]
         BK["BuildKit (rootless)"]
         APPS["User apps"]
-        DBS["CloudNativePG / Redis / MariaDB"]
+        DBS["CloudNativePG / StatefulSets: MySQL, MariaDB, MongoDB, Redis-family, ClickHouse, Memcached"]
     end
 
     VPS["Bare VPS being added"]
@@ -212,7 +212,7 @@ kubeconfigs.
 | `install.sh` | k3s server, the panel, cert-manager, and the panel's own directories on the host: its database and its master key |
 | First build | in-cluster registry + rootless BuildKit |
 | First PostgreSQL | CloudNativePG operator |
-| First Redis / MySQL | the matching chart |
+| First MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached | nothing: each is a StatefulSet from the engine's official image |
 | Scale-to-zero enabled | KEDA + http-add-on |
 | Cross-node volumes enabled | Longhorn (with a RAM warning) |
 | Full monitoring enabled | kube-prometheus-stack (optional; a built-in lightweight view exists without it) |

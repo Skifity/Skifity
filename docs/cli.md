@@ -87,8 +87,8 @@ The first time, that:
 
 1. reads the folder the way the panel reads a repository, and says what it is:
    the framework, whether it is a website that has to be built first, and what
-   it needs — a PostgreSQL, MySQL or Redis database, or data kept in a file
-   that every deploy would erase;
+   it needs — a PostgreSQL, MySQL, MongoDB or Redis database and the like, or
+   data kept in a file that every deploy would erase;
 2. creates the app, named after the folder, with the databases it needs already
    made and connected, so its first start finds them;
 3. offers to set the values in your `.env` on the app. The file itself is never
@@ -274,7 +274,8 @@ it.
 # skifity.yaml
 databases:
   main:
-    engine: postgres        # postgres, mysql or redis
+    engine: postgres        # postgres, mysql, mariadb, mongodb, redis, valkey,
+                            # dragonfly, clickhouse or memcached
     version: "17"
     storage: 10             # GB
 

@@ -14,6 +14,7 @@ import (
 
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/kube"
@@ -84,6 +85,9 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	record, err := m.db.GetDatabase(ctx, targetID)
 	if err != nil {
 		return store.Backup{}, err
+	}
+	if !offersBackups(record.Engine) {
+		return store.Backup{}, errdoc.BackupNotOffered(record.Name, engineTitle(record.Engine))
 	}
 	if record.Status != "running" {
 		return store.Backup{}, errdoc.New("backup.database_not_running", "This database is not running").
@@ -162,6 +166,7 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		Name:              jobName,
 		Namespace:         env.Namespace,
 		Engine:            record.Engine,
+		Version:           record.EngineVersion,
 		CredentialsSecret: kube.ResourceName(record.Slug, "credentials"),
 		URLSecret:         secretName,
 		BackupID:          backup.ID,
@@ -197,6 +202,12 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 	m.log.Info("backup finished", "backup", backup.ID, "database", record.Name, "bytes", size)
 
 	m.applyRetention(ctx, storage, "database", record.ID)
+}
+
+// offersBackups reports whether the panel backs up databases of an engine.
+func offersBackups(name string) bool {
+	e, ok := engine.Lookup(name)
+	return ok && e.Backups
 }
 
 // KeepByHand is how many backups taken by hand, or before an update, are
@@ -263,6 +274,9 @@ func (m *Manager) Restore(ctx context.Context, backupID string, overwrite bool) 
 	record, err := m.db.GetDatabase(ctx, backup.TargetID)
 	if err != nil {
 		return store.Operation{}, err
+	}
+	if !offersBackups(record.Engine) {
+		return store.Operation{}, errdoc.BackupNotOffered(record.Name, engineTitle(record.Engine))
 	}
 
 	// Restoring over live data is destructive and irreversible, so it has to be
@@ -363,6 +377,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 		Name:              jobName,
 		Namespace:         env.Namespace,
 		Engine:            record.Engine,
+		Version:           record.EngineVersion,
 		CredentialsSecret: kube.ResourceName(record.Slug, "credentials"),
 		URLSecret:         secretName,
 		BackupID:          backup.ID,

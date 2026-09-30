@@ -1112,7 +1112,7 @@
     "engine": "Jenis",
     "postgres": "PostgreSQL",
     "redis": "Redis",
-    "mysql": "MySQL / MariaDB",
+    "mysql": "MySQL",
     "version": "Versi",
     "storage": "Penyimpanan",
     "storageHelp": "Berapa besar disk untuk database ini. Bisa diperbesar nanti, tetapi tidak bisa diperkecil.",
@@ -1162,7 +1162,34 @@
     "user": "Pengguna",
     "unlinkConfirm": "{{app}} kehilangan variabel {{variable}}, jadi mulai deployment berikutnya dia tidak bisa menjangkau database ini.",
     "fromYourComputer": "Dari komputer Anda",
-    "fromYourComputerHint": "Host di atas hanya menjawab dari dalam cluster. Perintah ini membuka port di komputer Anda yang menjangkau database melalui panel, untuk psql, aplikasi desktop, atau migrasi."
+    "fromYourComputerHint": "Host di atas hanya menjawab dari dalam cluster. Perintah ini membuka port di komputer Anda yang menjangkau database melalui panel, untuk psql, aplikasi desktop, atau migrasi.",
+    "mariadb": "MariaDB",
+    "mongodb": "MongoDB",
+    "valkey": "Valkey",
+    "dragonfly": "Dragonfly",
+    "clickhouse": "ClickHouse",
+    "memcached": "Memcached",
+    "engineHelp": {
+      "postgres": "Relasional dan andal: pilihan saat ragu. Bisa berjalan sebagai beberapa instance untuk failover.",
+      "mysql": "MySQL asli, dari image Oracle, untuk perangkat lunak yang meminta MySQL secara khusus.",
+      "mariadb": "Kompatibel dengan MySQL, dan yang dipakai untuk menguji sebagian besar perangkat lunak PHP.",
+      "mongodb": "Dokumen, bukan tabel, untuk aplikasi yang ditulis untuk MongoDB.",
+      "redis": "Kunci dan nilai di memori, untuk cache, antrean, dan sesi.",
+      "valkey": "Kelanjutan open source dari Redis. Aplikasi memakainya persis seperti Redis.",
+      "dragonfly": "Memakai protokol Redis dan semua core. Menyimpan snapshot setiap lima menit.",
+      "clickhouse": "Berorientasi kolom, untuk analitik atas tabel besar.",
+      "memcached": "Hanya cache: tanpa disk, tanpa kata sandi, dan hanya aplikasi di environment ini yang bisa menjangkaunya."
+    },
+    "versionDefault": "{{version}} (disarankan)",
+    "noBackupsTitle": "{{engine}} tidak dicadangkan",
+    "noBackupsReason": {
+      "dragonfly": "Dragonfly tidak mengimplementasikan perintah yang dipakai untuk mengambil snapshot langsung dari luar server, dan snapshot miliknya tetap di disknya sendiri. Ia menyimpan satu setiap lima menit dan saat berhenti, jadi restart tidak menghilangkan apa pun, tetapi disk yang hilang menghilangkan semuanya.",
+      "clickhouse": "Perintah BACKUP milik ClickHouse menulis ke bucket dengan kunci bucket berada di dalam database, dan Skifity tidak pernah menyerahkan kunci itu ke environment. Cadangkan sendiri dengan BACKUP ... TO S3, atau pastikan tabelnya bisa dibangun ulang dari sumbernya.",
+      "memcached": "Memcached adalah cache: semuanya disimpan di memori dan tidak ada yang di disk, jadi tidak ada yang bisa dicadangkan. Isinya hilang saat ia dimulai ulang, memang begitu rancangannya."
+    },
+    "nativeConnectionString": "Protokol native",
+    "nativeConnectionStringHint": "Untuk klien yang memakai protokol ClickHouse sendiri, seperti clickhouse-client dan clickhouse-go. String koneksi di atas memakai HTTP, yang diterima sebagian besar pustaka klien.",
+    "noCredentials": "Memcached tidak punya pengguna maupun kata sandi. Hanya aplikasi di environment ini yang bisa menjangkaunya."
   },
   "templates": {
     "title": "Template",
@@ -2839,6 +2866,12 @@
         "cause": "Permintaan ini datang dari {{ip}}, yang tidak ada dalam daftar jaringan tempat token API boleh digunakan.",
         "impact": "Permintaan ditolak. Tokennya sendiri masih berlaku.",
         "fix": "Kirim permintaan dari alamat yang ada di daftar, atau minta administrator panel menambahkan alamat ini di Pengaturan, Masuk."
+      },
+      "backup_not_offered": {
+        "title": "Skifity tidak mencadangkan jenis database ini",
+        "cause": "{{0}} menjalankan {{1}}, yang tidak dicadangkan oleh Skifity.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Simpan data yang tidak boleh hilang di database yang dicadangkan, seperti PostgreSQL, atau salin dengan alat bawaan engine-nya melalui `{{0}} db connect`."
       }
     }
   },
@@ -3183,7 +3216,12 @@
       "mongodb": "MongoDB",
       "sqlserver": "SQL Server",
       "sqlite": "SQLite",
-      "file": "berkas data"
+      "file": "berkas data",
+      "mariadb": "MariaDB",
+      "valkey": "Valkey",
+      "dragonfly": "Dragonfly",
+      "clickhouse": "ClickHouse",
+      "memcached": "Memcached"
     },
     "pastedReplaced": "{{variable}} dari yang Anda tempel tidak disertakan: database {{engine}} yang dibuat bersama aplikasi akan mengisinya, menunjuk ke dirinya sendiri, bukan ke komputer asal berkas itu."
   },

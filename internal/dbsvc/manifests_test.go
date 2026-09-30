@@ -30,13 +30,24 @@ func TestConnectionURLs(t *testing.T) {
 		{EnginePostgres, "postgresql://app:s3cret@main-rw.acme-shop-production.svc.cluster.local:5432/app", "main-rw"},
 		{EngineRedis, "redis://default:s3cret@main.acme-shop-production.svc.cluster.local:6379", "main"},
 		{EngineMySQL, "mysql://app:s3cret@main.acme-shop-production.svc.cluster.local:3306/app", "main"},
+		// MariaDB's drivers and ORMs read mysql://; there is no mariadb://.
+		{EngineMariaDB, "mysql://app:s3cret@main.acme-shop-production.svc.cluster.local:3306/app", "main"},
+		// The root user lives in admin, which the URL has to say.
+		{EngineMongoDB, "mongodb://app:s3cret@main.acme-shop-production.svc.cluster.local:27017/app?authSource=admin", "main"},
+		{EngineValkey, "redis://default:s3cret@main.acme-shop-production.svc.cluster.local:6379", "main"},
+		{EngineDragonfly, "redis://default:s3cret@main.acme-shop-production.svc.cluster.local:6379", "main"},
+		// HTTP, which most of ClickHouse's client libraries take.
+		{EngineClickHouse, "http://app:s3cret@main.acme-shop-production.svc.cluster.local:8123/app", "main"},
+		// A cache with no credentials: the address and nothing else.
+		{EngineMemcached, "memcached://main.acme-shop-production.svc.cluster.local:11211", "main"},
 	}
 	for _, tc := range cases {
 		s := postgresSpec()
 		s.Engine = tc.engine
+		s.Version = ""
 		s.Defaults()
 		url := s.ConnectionURL()
-		if !strings.HasPrefix(url, tc.prefix) {
+		if url != tc.prefix && !strings.HasPrefix(url, tc.prefix+"?") {
 			t.Errorf("%s URL is %q, want it to start with %q", tc.engine, url, tc.prefix)
 		}
 		if !strings.Contains(s.ServiceHost(), tc.host+".") {
@@ -54,6 +65,10 @@ func TestValidate(t *testing.T) {
 		"unknown engine": func(s *Spec) { s.Engine = "mongo" },
 		"no password":    func(s *Spec) { s.Password = "" },
 		"even instances": func(s *Spec) { s.Instances = 2 },
+		"latest":         func(s *Spec) { s.Version = "latest" },
+		"MariaDB's version for MySQL": func(s *Spec) {
+			s.Engine, s.Version = EngineMySQL, "11.4"
+		},
 	}
 	for name, mutate := range cases {
 		s := postgresSpec()
@@ -119,8 +134,10 @@ func TestRedisManifest(t *testing.T) {
 	}
 
 	container := statefulSet.Spec.Template.Spec.Containers[0]
-	// The password must reach Redis through the environment, not the command
-	// line, where it would be visible to anything that can read /proc.
+	// The password must reach Redis through the environment and a file, not
+	// the command line, where it would be visible to anything that can read
+	// /proc. TestRedisFamilyServersAreNotGivenThePasswordAsAnArgument runs
+	// the command to prove the server itself is not handed it either.
 	command := strings.Join(container.Command, " ")
 	if strings.Contains(command, "s3cret") {
 		t.Fatalf("the password is on the command line: %s", command)
@@ -146,11 +163,27 @@ func TestRedisManifest(t *testing.T) {
 func TestMySQLManifest(t *testing.T) {
 	s := postgresSpec()
 	s.Engine = EngineMySQL
+	s.Version = ""
 	s.Defaults()
 
 	objects := BuildMySQL(s)
 	statefulSet := objects[0].(*appsv1.StatefulSet)
 	container := statefulSet.Spec.Template.Spec.Containers[0]
+	// MySQL itself, from Oracle's image, since mysql stopped meaning MariaDB.
+	if container.Image != "mysql:8.4.11" {
+		t.Fatalf("MySQL runs %s", container.Image)
+	}
+	for _, env := range container.Env {
+		if !strings.HasPrefix(env.Name, "MYSQL_") {
+			t.Errorf("MySQL's image reads MYSQL_ variables, and is given %s", env.Name)
+		}
+	}
+	// MySQL will not initialise a directory with lost+found in it, which is
+	// how an ext4 volume starts.
+	if strings.Join(container.Args, " ") != "mysqld --datadir=/var/lib/mysql/data" ||
+		container.VolumeMounts[0].MountPath != "/var/lib/mysql" {
+		t.Errorf("MySQL keeps its data in the volume's root: %q at %s", container.Args, container.VolumeMounts[0].MountPath)
+	}
 
 	// Every credential must come from the Secret.
 	for _, env := range container.Env {
@@ -235,18 +268,16 @@ func TestInterpretCNPGStatus(t *testing.T) {
 // scheduled at all, and the failure looks like a cluster problem rather than a
 // manifest that was never going to work.
 func TestDatabasePodsSatisfyRestrictedPodSecurity(t *testing.T) {
-	for _, engine := range []string{EngineRedis, EngineMySQL} {
+	for _, engine := range statefulEngines() {
 		spec := Spec{
 			Name: "main", Namespace: "acme-shop-production", Engine: engine,
 			DatabaseID: "db_1", TeamID: "team_1", Password: "not-a-real-password",
 		}
 		spec.Defaults()
 
-		var objects []any
-		if engine == EngineRedis {
-			objects = BuildRedis(spec)
-		} else {
-			objects = BuildMySQL(spec)
+		objects, err := Build(spec)
+		if err != nil {
+			t.Fatalf("%s: %v", engine, err)
 		}
 
 		set, ok := objects[0].(*appsv1.StatefulSet)
@@ -285,7 +316,7 @@ func TestDatabasePodsSatisfyRestrictedPodSecurity(t *testing.T) {
 // split brain and not a replica set. The danger is the silence: the panel's own
 // record would say three while one ran.
 func TestOnlyPostgresIsReplicated(t *testing.T) {
-	for _, engine := range []string{EngineRedis, EngineMySQL} {
+	for _, engine := range statefulEngines() {
 		t.Run(engine, func(t *testing.T) {
 			spec := Spec{
 				Name: "cache", Namespace: "acme-shop-production", Engine: engine,

@@ -5733,6 +5733,50 @@ And the interface:
   kind; a switch, a list and a number are offered now, and a value that does not
   fit is refused. Turning a plugin on or off no longer discards unsaved edits.
 
+## Nine database engines
+
+Three engines became nine: MySQL (now Oracle's own image; see ADR-0023),
+MariaDB, MongoDB, Valkey, Dragonfly, ClickHouse and Memcached beside
+PostgreSQL and Redis. `docs/databases.md` is the page about them.
+
+* **One catalogue** (`internal/dbsvc/engine`) says what each engine is, which
+  versions it is offered at and the exact image behind each, its port, its
+  default variable and whether it is backed up. `GET /api/database-engines`
+  serves it to the form, which now offers a version and says under the engine
+  what it is for.
+* **Migration 0047** widens the `engine` CHECK and renames every `mysql` row to
+  `mariadb`, which is what it always ran.
+* **Backups** for MySQL (`mysqldump`, with `--no-tablespaces` since the app's
+  user lacks PROCESS) and MongoDB (`mongodump --archive`, with the password in a
+  `--config` file, the one place the tools read it besides the command line).
+  Dragonfly, ClickHouse and Memcached are not backed up, and the panel says why
+  on the database's Backups tab, in the form, in the API and in
+  `docs/backups.md`.
+* **The Redis restore could never have worked.** It piped the RDB snapshot into
+  `redis-cli --pipe`, which sends its input as commands. It now replicates: a
+  server of the database's own image starts in the job on the snapshot, and the
+  database is its replica until the key counts match, then a primary again —
+  after refusing if the database is older than that server. The same for Valkey.
+* **Passwords off command lines, again.** Redis's `--requirepass "$REDIS_PASSWORD"`
+  kept the password out of the manifest and put it in `redis-server`'s own
+  arguments; Redis and Valkey now read it from a file their shell writes.
+  ClickHouse's image passes it to `clickhouse-client --password` when
+  `CLICKHOUSE_DB` is set, so the database is created by a startup probe instead.
+* **The PostgreSQL client matches the server's major.** pg_dump 17's output sets
+  `transaction_timeout`, which a PostgreSQL 16 refuses on the way back in.
+* **Detection** offers MongoDB now, and finds MariaDB, Valkey, ClickHouse and
+  Memcached by their clients; the old Node `mysql` package is offered MariaDB,
+  since it cannot sign in to MySQL 8. 41 templates that ran MariaDB say so.
+
+What has been checked and what has not: every image tag was read from its
+registry (Docker Hub, and ghcr.io behind docker.dragonflydb.io) with both
+architectures; every image's user, entrypoint behaviour and client variables
+were read from its Dockerfile or source. The manifests are tested for pinned
+images, the restricted profile, and a planted password in any container's
+command, arguments, probes or literal values; the Redis and Valkey server
+commands, and every backup and restore script, are run against stub clients
+that record their arguments. None of it has run against a cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

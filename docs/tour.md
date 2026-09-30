@@ -53,7 +53,7 @@ truth about a panel nothing has been attached to yet, not a placeholder.
 
 | | |
 |---|---|
-| ![The databases list](images/databases.png) | **Databases.** Postgres, MySQL and Redis, provisioned and backed up by the panel. |
+| ![The databases list](images/databases.png) | **Databases.** PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse and Memcached, provisioned by the panel, and the first six backed up by it. |
 | ![The servers list](images/servers.png) | **Servers.** |
 | ![Adding a server: an IP address, a user and a key or password](images/add-server.png) | **Adding one** is an address and a way in. Everything after that is automatic, and every step says what it is doing. |
 | ![The template catalogue, grouped by category](images/templates.png) | **Templates.** 374 applications, every image on a version that was checked to exist. |

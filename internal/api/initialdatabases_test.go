@@ -169,7 +169,7 @@ func TestABadDatabaseRequestCreatesNothing(t *testing.T) {
 		name      string
 		databases []map[string]string
 	}{
-		{"an engine this panel does not run", []map[string]string{{"engine": "mongodb"}}},
+		{"an engine this panel does not run", []map[string]string{{"engine": "sqlserver"}}},
 		{"the same engine twice", []map[string]string{{"engine": "postgres"}, {"engine": "postgres"}}},
 		{"a variable name that is not one", []map[string]string{{"engine": "postgres", "variable": "not a name"}}},
 	} {

@@ -1,12 +1,14 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"skifity/internal/cron"
+	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
 	"skifity/internal/plugins"
@@ -38,10 +40,16 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	switch req.Engine {
-	case "postgres", "redis", "mysql":
-	default:
-		writeError(w, r, errdoc.BadRequest("Engine must be postgres, redis or mysql."))
+	kind, ok := engine.Lookup(req.Engine)
+	if !ok {
+		writeError(w, r, errdoc.BadRequest(fmt.Sprintf("Engine must be one of %s.",
+			strings.Join(engine.Names(), ", "))))
+		return
+	}
+	// The version picks the image, so one that is not offered is refused
+	// here, before a database record exists to be left half-made.
+	if err := kind.CheckVersion(req.Version); err != nil {
+		writeError(w, r, errdoc.BadRequest(err.Error()+"."))
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
@@ -240,15 +248,35 @@ func (s *Server) handleUnlinkDatabase(w http.ResponseWriter, r *http.Request) {
 	writeOK(w)
 }
 
-func defaultVarNameFor(engine string) string {
-	switch engine {
-	case "redis":
-		return "REDIS_URL"
-	case "mysql":
-		return "MYSQL_URL"
-	default:
-		return "DATABASE_URL"
+// defaultVarNameFor is the variable a linked app reads a database's
+// connection string from when nobody names one. The catalogue decides it, so
+// the blueprint's default (blueprint.DefaultVariable) is the same one.
+func defaultVarNameFor(name string) string {
+	return engine.DefaultVariable(name)
+}
+
+// handleListDatabaseEngines lists the engines a database can be, the versions
+// of each, and what the panel does for each: the form to create a database is
+// built from it, and the database's page reads from it whether backups are
+// offered.
+func (s *Server) handleListDatabaseEngines(w http.ResponseWriter, _ *http.Request) {
+	writeList(w, engine.All())
+}
+
+// refuseUnbackedEngine answers for a database whose engine the panel does not
+// back up. It comes before the check that backups are configured: whether a
+// cache can be backed up does not depend on a bucket, and the answer is the
+// same on a panel without one.
+func refuseUnbackedEngine(record store.Database) error {
+	kind, ok := engine.Lookup(record.Engine)
+	if ok && kind.Backups {
+		return nil
 	}
+	title := record.Engine
+	if ok {
+		title = kind.Title
+	}
+	return errdoc.BackupNotOffered(record.Name, title)
 }
 
 // --- backups ---
@@ -270,6 +298,10 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleMember)
 	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := refuseUnbackedEngine(record); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -360,6 +392,14 @@ func (s *Server) handleSetBackupPolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// A schedule that is off asks nothing of the engine; one that is on
+	// would fail every time it came round.
+	if req.Enabled {
+		if err := refuseUnbackedEngine(record); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
 	policy, err := s.backupPolicyFrom(r, req, "database", record.ID)
 	if err != nil {
 		writeError(w, r, err)
@@ -377,6 +417,10 @@ func (s *Server) handleSetBackupPolicy(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 	record, _, err := s.authorizeDatabase(r, chi.URLParam(r, "databaseID"), store.RoleAdmin)
 	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := refuseUnbackedEngine(record); err != nil {
 		writeError(w, r, err)
 		return
 	}

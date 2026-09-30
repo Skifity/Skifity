@@ -10,7 +10,7 @@ import (
 )
 
 // inputSchema is the schema the SDK would infer for In, narrowed where the API
-// is narrower than a Go type can say: an engine is one of three words, a port
+// is narrower than a Go type can say: an engine is one of nine words, a port
 // is between 1 and 65535.
 //
 // Written into the schema, the choices are in front of the assistant before it

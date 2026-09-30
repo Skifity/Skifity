@@ -71,8 +71,9 @@ with one switches to the Recreate strategy, because two instances writing one
 ReadWriteOnce disk corrupts it. The scaling checker refuses to stay quiet about
 a volume and several instances.
 
-**6. One-click databases.** PostgreSQL through CloudNativePG, plus Redis and
-MySQL. The operator is installed on first use. Credentials are generated,
+**6. One-click databases.** PostgreSQL through CloudNativePG, plus MySQL,
+MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse and Memcached as
+single-instance StatefulSets. The operator is installed on first use. Credentials are generated,
 sealed, and injected into a linked app as a connection string.
 
 **7. Backup and restore.** Scheduled or manual, to any S3-compatible bucket,

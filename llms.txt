@@ -22,7 +22,9 @@ than click through a panel. Everything below is true of the current version.
   `SKIFITY_APP`, `SKIFITY_ENVIRONMENT`, `SKIFITY_COMMIT_SHA` and, in a pull
   request's preview, `SKIFITY_PREVIEW` and `SKIFITY_PULL_REQUEST`.
 - An **instance** is one running copy of an app.
-- A **database** is a managed PostgreSQL, Redis or MySQL that apps connect to.
+- A **database** is a managed PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey,
+  Dragonfly, ClickHouse or Memcached that apps connect to. The last three are not
+  backed up.
 - A **deployment** is one attempt to run a new version of an app.
 
 ## Talking to Skifity
@@ -117,7 +119,7 @@ Tools, in the order they are usually needed:
 | `list_files` | The files an app reads at a path, and one file's content. A secret file's content is never returned. |
 | `set_file` | Saves a config file at a path, or replaces it. Rolled out, never rebuilt. |
 | `list_databases` | The managed databases in an environment. |
-| `create_database` | Creates a PostgreSQL, Redis or MySQL database. |
+| `create_database` | Creates a database: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached. |
 | `link_database` | Gives an app a database's connection string as a secret variable. |
 | `get_database_status` | Whether a database is running, and which apps use it. Never the password. |
 | `list_backups` | A database's or an app's volumes' backups, newest first. |
@@ -204,6 +206,7 @@ GET    /api/apps/{app}/advanced               the Kubernetes objects, as YAML
 GET    /api/apps/{app}/firewall               the rules in front of this app
 PUT    /api/apps/{app}/firewall               replace them
 GET    /api/environments/{env}/databases      databases
+GET    /api/database-engines                  the engines, their versions, and which are backed up
 GET    /api/databases/{db}/backups            backups
 POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
 GET    /api/events?topics=team:{team}         everything happening, as events

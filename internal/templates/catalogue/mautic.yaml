@@ -32,7 +32,7 @@ services:
     size_gb: 5
 databases:
 - name: mautic-db
-  engine: mysql
+  engine: mariadb
   storage_gb: 10
   link_to:
   - mautic
