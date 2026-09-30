@@ -147,6 +147,13 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	backups := backup.New(db, keyring, hub, clusterAdapter, dispatcher, log)
 	backups.Plugins = pluginEvents
 	watcher := watch.New(db, watchCluster(clusterAdapter), hub, dispatcher, log)
+	// Every few minutes each app is compared with what the deployer would
+	// apply, which only means something with a cluster to compare with.
+	var drift api.DriftDetector
+	if clusterAdapter != nil {
+		watcher.WithDrift(deployer)
+		drift = deployer
+	}
 
 	setupToken, err := readSetupToken(cfg, db, log)
 	if err != nil {
@@ -157,7 +164,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		Channels: pluginChannels,
 		Config:   cfg, DB: db, Keyring: keyring, Auth: authService, Hub: hub, Logger: log,
 		Cluster: nilIfNil(clusterAdapter), Provisioner: provisioner, Deployer: deployer,
-		Databases: databases, Backups: backups, Scanner: deployer, Plugins: pluginEvents,
+		Databases: databases, Backups: backups, Scanner: deployer, Plugins: pluginEvents, Drift: drift,
 		Frontend: frontend, SetupToken: setupToken, Metrics: registry,
 		Uploads: uploads, Traffic: watcher,
 	})

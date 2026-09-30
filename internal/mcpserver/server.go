@@ -500,6 +500,7 @@ func (s *Server) register() {
 	s.registerDomains()
 	s.registerLocks()
 	s.registerVulnerabilities()
+	s.registerEvents()
 }
 
 // --- handlers ---

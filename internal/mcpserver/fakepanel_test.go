@@ -164,6 +164,14 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"POST /api/apps/{app}/ports":          port,
 		"DELETE /api/apps/{app}/ports/{port}": ok,
 
+		"GET /api/apps/{app}/events": items(map[string]any{
+			"type": "Warning", "reason": "BackOff", "kind": "Pod", "name": "web-7d4f8b9c5-x2x9q", "count": 14,
+			"message":    "Back-off restarting failed container web",
+			"first_seen": "2026-09-30T09:00:00Z", "last_seen": "2026-09-30T09:10:00Z",
+			"explanation":      "The app keeps stopping soon after it starts.",
+			"explanation_code": "crash_backoff",
+		}),
+
 		"PUT /api/apps/{app}/lock":    lock,
 		"DELETE /api/apps/{app}/lock": ok,
 

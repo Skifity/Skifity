@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock"
 import { PreviewBranchButton } from "@/components/app/preview-branch"
+import { DriftNotice } from "@/components/app/drift"
 import { MaintenanceNotice } from "@/components/app/maintenance"
 import { UsageCard } from "@/components/app/usage-card"
 import { Page, PageHeader } from "@/components/page"
@@ -103,6 +104,8 @@ export function AppDetailPage() {
       // A scan of this app's image, or any other's: which one is not worth
       // reading the event for, and a refetch of one report is cheap.
       scan: () => void queryClient.invalidateQueries({ queryKey: vulnerabilitiesKey(appId) }),
+      // The watcher found this app changed outside the panel, or back in step.
+      drift: () => void queryClient.invalidateQueries({ queryKey: ["drift", appId] }),
     },
     Boolean(team),
   )
@@ -218,6 +221,10 @@ export function AppDetailPage() {
       {restart.error != null && <ErrorDisplay error={restart.error} />}
       <DeployLockNotice app={current} />
       <MaintenanceNotice app={current} />
+      {/* Not on the Advanced tab itself, which lists the same thing in full. */}
+      {tab !== "advanced" && (
+        <DriftNotice app={current} onOpen={() => setParams({ tab: "advanced" })} />
+      )}
 
       <Tabs
         value={tab}

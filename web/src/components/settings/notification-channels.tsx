@@ -56,6 +56,7 @@ const EVENTS = [
   "app.alert",
   "server.alert",
   "app.vulnerable",
+  "app.drifted",
 ] as const
 
 /**

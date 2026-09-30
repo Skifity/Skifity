@@ -173,6 +173,10 @@ is not one, it says so and asks for `--app` or `--env` rather than guessing.
 ```sh
 skifity status                    # running? how many instances? what URL?
 skifity logs --follow             # live output
+skifity events --warnings         # what Kubernetes said went wrong, explained
+skifity events --db orders        # the same for a database
+skifity drift                     # what somebody changed with kubectl, and who
+skifity drift --repair            # put it back; no build, no deployment
 skifity env list                  # variables
 skifity env set LOG_LEVEL=debug   # set one; says whether it rebuilds
 skifity env set A=1 B=2 C=3       # several, rolled out once

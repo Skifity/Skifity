@@ -345,7 +345,10 @@
       "preview.started": "Pratinjau sebuah branch dimulai",
       "preview.closed": "Pratinjau sebuah branch ditutup",
       "app.scan_started": "Pemindaian image dimulai",
-      "app.deploy_vulnerabilities_accepted": "Di-deploy dengan kerentanan kritis diterima"
+      "app.deploy_vulnerabilities_accepted": "Di-deploy dengan kerentanan kritis diterima",
+      "app.drift_repaired": "Mengembalikan aplikasi seperti yang diterapkan panel",
+      "app.drift_auto_repair_on": "Mengatur aplikasi agar dikembalikan otomatis",
+      "app.drift_auto_repair_off": "Berhenti mengembalikan aplikasi secara otomatis"
     }
   },
   "projects": {
@@ -2952,6 +2955,18 @@
         "cause": "Pemindaian masih antre atau berjalan setelah {{0}} menit.",
         "impact": "Tidak ada masalah dengan app. Pemindaian terus berjalan di panel.",
         "fix": "Jalankan `{{0}} scan` nanti untuk membaca laporannya."
+      },
+      "drift_check_failed": {
+        "title": "Aplikasi tidak bisa dibandingkan dengan yang diterapkan panel",
+        "cause": "Membaca {{0}} dari klaster gagal: {{1}}",
+        "impact": "Tidak ada yang diubah. Apakah ada yang mengubah aplikasi di luar panel belum bisa diketahui sampai ini berhasil.",
+        "fix": "Pastikan service account panel masih bisa membaca namespace aplikasi; mungkin ada yang mengubah izinnya. Kalau klaster baru saja di-upgrade, coba lagi sebentar lagi."
+      },
+      "events_unreadable": {
+        "title": "Event klaster tidak bisa dibaca",
+        "cause": "Mengambil daftar event di {{0}} gagal: {{1}}",
+        "impact": "Tidak ada yang diubah, dan aplikasi tetap jalan. Hanya daftar ini yang tidak ada.",
+        "fix": "Pastikan service account panel masih bisa membaca event dan pod di namespace itu. Kalau klaster baru saja di-upgrade, coba lagi sebentar lagi."
       }
     }
   },
@@ -3033,7 +3048,8 @@
       "server.alert": "Sebuah server melewati ambang pemakaian",
       "backup.missed": "Pencadangan terjadwal terlewat dan diambil terlambat",
       "backup.succeeded": "Pencadangan berhasil",
-      "app.vulnerable": "Image sebuah app punya kerentanan kritis baru"
+      "app.vulnerable": "Image sebuah app punya kerentanan kritis baru",
+      "app.drifted": "Sebuah aplikasi diubah di luar panel"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {
@@ -3571,6 +3587,80 @@
       "deploy": "setelah deploy",
       "schedule": "sesuai jadwal harian",
       "manual": "atas permintaan"
+    }
+  },
+  "drift": {
+    "noticeTitle": "Diubah di luar {{product}}",
+    "noticeBody": "Sebagian pengaturan aplikasi ini di klaster diubah di luar panel, dengan kubectl atau alat lain. Lanjutan menunjukkan apa yang berubah, dan mengembalikannya.",
+    "noticeOpen": "Lihat yang berubah",
+    "title": "Diubah di luar {{product}}",
+    "help": "Setiap beberapa menit panel membandingkan objek aplikasi ini di klaster dengan yang diterapkannya, pada field yang diaturnya. Perubahan lewat kubectl atau alat lain muncul di sini, beserta siapa yang membuatnya.",
+    "inSync": "Tidak ada yang diubah di luar {{product}}. Diperiksa {{when}}.",
+    "notDeployed": "Belum ada yang di-deploy, jadi belum ada yang bisa dibandingkan.",
+    "since": "Berbeda sejak {{when}}.",
+    "checked": "Diperiksa {{when}}.",
+    "object": "Objek",
+    "field": "Field",
+    "panelValue": "Diterapkan {{product}}",
+    "liveValue": "Di klaster",
+    "changedBy": "Diubah oleh",
+    "unknownWho": "Tidak diketahui",
+    "deleted": "Dihapus",
+    "removed": "Dibuang",
+    "hidden": "Sebuah nilai rahasia berbeda. Kedua nilainya tidak ditampilkan.",
+    "repair": "Kembalikan",
+    "repairConfirmTitle": "Kembalikan aplikasi ini?",
+    "repairConfirm": "Objek aplikasi diterapkan lagi seperti yang diterapkan {{product}}, sehingga perubahan di daftar dibatalkan. Tidak ada build dan tidak ada deployment yang dicatat. Kalau versi yang berjalan diubah, instance-nya diganti satu per satu.",
+    "repaired": "Dikembalikan seperti yang diterapkan panel.",
+    "autoRepair": "Kembalikan otomatis",
+    "autoRepairHelp": "Saat panel menemukan perubahan, aplikasi dikembalikan sendiri dan panel memberi tahu. Mati secara bawaan: perubahan yang sengaja dibuat seseorang, di tengah insiden, bukan sesuatu yang dibatalkan diam-diam.",
+    "applying": "{{product}} sedang mengubah aplikasi ini. Aplikasi dibandingkan lagi setelah deploy atau perubahan itu selesai."
+  },
+  "events": {
+    "title": "Kata Kubernetes",
+    "help": "Event yang ditulis scheduler, server, dan controller tentang objek aplikasi ini, yang terbaru di atas. Kubernetes menyimpannya sekitar satu jam.",
+    "databaseHelp": "Event yang ditulis scheduler, server, dan controller tentang objek database ini, yang terbaru di atas. Kubernetes menyimpannya sekitar satu jam.",
+    "warningsOnly": "Peringatan saja",
+    "empty": "Tidak ada apa-apa dalam satu jam terakhir",
+    "emptyWarnings": "Tidak ada peringatan dalam satu jam terakhir",
+    "emptyHelp": "Kubernetes menyimpan event sekitar satu jam. Daftar ini diperbarui sendiri selama terbuka.",
+    "lastSeen": "Terakhir terlihat",
+    "reason": "Alasan",
+    "object": "Objek",
+    "message": "Yang terjadi",
+    "times": "{{times}} kali",
+    "warning": "Peringatan",
+    "normal": "Normal",
+    "explain": {
+      "scheduling_cpu_memory": "Tidak ada server dengan CPU dan memori bebas yang cukup untuk instance ini. Turunkan yang dicadangkannya di Penskalaan, atau tambah server.",
+      "scheduling_cpu": "Tidak ada server dengan CPU bebas yang cukup untuk instance ini. Turunkan CPU yang dicadangkannya di Penskalaan, atau tambah server.",
+      "scheduling_memory": "Tidak ada server dengan memori bebas yang cukup untuk instance ini. Turunkan memori yang dicadangkannya di Penskalaan, atau tambah server.",
+      "scheduling_volume": "Disk aplikasi ini belum dibuat. Di satu server, biasanya storage class-nya masih bersiap; di beberapa server, artinya tidak ada server yang bisa menyediakan disk itu.",
+      "scheduling_taint": "Server yang masih punya ruang tidak menerima aplikasi. Server control plane tidak menjalankan aplikasi kecuali kamu izinkan, dan server yang sedang dikosongkan tidak menerima apa pun.",
+      "scheduling_node_affinity": "Tidak ada server yang cocok dengan tempat aplikasi ini boleh berjalan.",
+      "scheduling_anti_affinity": "Setiap server sudah menjalankan instance aplikasi ini. Tambah server, atau jalankan lebih sedikit instance.",
+      "scheduling_unexplained": "Tidak ada server yang bisa menerima instance ini: {{0}}",
+      "scheduling_waiting": "Menunggu server yang punya ruang untuk instance ini.",
+      "replicas_quota": "Environment ini sudah mencapai batasnya, jadi tidak ada instance lagi yang bisa dimulai. Naikkan batas environment, atau beri aplikasi ini lebih sedikit. ({{0}})",
+      "replicas_pod_security": "Instance ditolak oleh aturan keamanan klaster: {{0}}",
+      "replicas_failed": "Instance tidak bisa dibuat.",
+      "pull_unauthorized": "Registry menolak memberikan image. Kalau itu registry privat, isi kredensialnya di Pengaturan, lalu Registry.",
+      "pull_missing": "Image itu tidak ada di registry. Kalau ini rollback ke versi lama, image-nya sudah dihapus agar disk tetap lega; deploy commit itu lagi saja.",
+      "pull_unreachable": "Registry tidak bisa dijangkau dari server. Periksa alamatnya, dan pastikan server punya rute ke sana.",
+      "pull_failed": "Image tidak bisa diambil: {{0}}",
+      "pull_failed_empty": "Image tidak bisa diambil.",
+      "runs_as_root": "Image ini mulai sebagai root lalu melepas hak aksesnya sendiri, hal yang biasa untuk container siap pakai dan justru ditolak environment ini. Ubah pembatasan environment menjadi \"baseline\" di proyek, lalu deploy lagi. Baseline tetap menolak container privileged, jaringan host, dan path host, jadi aplikasi tetap tidak bisa menyentuh server tempatnya berjalan.",
+      "named_user": "Image ini menamai penggunanya ({{0}}) alih-alih memberinya nomor, jadi klaster tidak bisa memastikan itu bukan root, dan environment ini menolak yang tidak bisa diperiksanya. Isi \"Jalankan sebagai pengguna\" di pengaturan aplikasi dengan nomor pengguna itu — 65534 untuk nobody — lalu deploy lagi, atau ubah pembatasan environment menjadi \"baseline\" di proyek.",
+      "crash_backoff": "Aplikasi terus berhenti tak lama setelah mulai, jadi Kubernetes menunggu makin lama sebelum setiap mulai ulang. Alasannya ada di log sebelum mulai ulang: buka Log, lalu Sebelum mulai ulang.",
+      "probe_readiness": "Health check gagal, jadi instance ini tidak menerima trafik sampai lolos. Periksa path dan port health check di Pengaturan, dan pastikan aplikasi menjawab di sana tepat waktu.",
+      "probe_liveness": "Health check terus gagal, jadi instance sedang dimulai ulang. Pemeriksaan yang lambat atau mengarah ke path yang salah akan memulai ulang aplikasi yang sebenarnya berjalan: periksa di Pengaturan.",
+      "probe_startup": "Aplikasi tidak lolos health check dalam waktu yang diberikan untuk mulai. Kalau memang lambat mulai, beri waktu lebih lama di Pengaturan; kalau tidak, log-nya menjelaskan kenapa tidak menjawab.",
+      "mount_config_missing": "Instance tidak bisa mulai karena konfigurasi yang dibacanya tidak ada di klaster: {{0}}. Kembalikan aplikasi di Lanjutan, atau deploy lagi, dan konfigurasi itu ditulis ulang.",
+      "mount_failed": "Sebuah disk tidak bisa dipasang. Disk hanya dipakai satu server dalam satu waktu: kalau instance di server lain masih memegangnya, instance ini menunggu sampai yang itu berhenti.",
+      "attach_failed": "Penyimpanan di balik sebuah disk tidak bisa dipasang ke server ini. Biasanya masih terpasang di server lain, dan dilepas begitu server itu melepaskannya.",
+      "sandbox_failed": "Server tidak bisa menyiapkan jaringan atau container untuk instance ini. Itu masalah di server, bukan di aplikasi: kalau terus terjadi, mulai ulang k3s di server itu, atau hapus server lalu tambahkan lagi.",
+      "oom": "Aplikasi memakai memori melebihi batasnya dan dihentikan. Naikkan batas memori di Penskalaan, atau cari apa yang memakai memori itu.",
+      "evicted": "Server kekurangan sumber daya dan menghentikan instance ini untuk melindungi dirinya: {{0}} Instance dijalankan lagi di server yang punya ruang."
     }
   }
 }

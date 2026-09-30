@@ -1076,3 +1076,46 @@ export type AppProcess = {
   ready?: number
   phase?: string
 }
+
+/** How an app's objects in the cluster compare with what the panel applies. */
+export type DriftStatus = "in_sync" | "drifted" | "missing" | "not_deployed" | "applying"
+
+/**
+ * One difference: an object deleted, or one field of one changed. Kinds and
+ * paths are Kubernetes' own, which is why this is only shown under Advanced.
+ */
+export type DriftItem = {
+  kind: string
+  name: string
+  path?: string
+  change: "changed" | "removed" | "deleted"
+  panel?: string
+  live?: string
+  /** A Secret's value differs; neither value is ever sent. */
+  hidden?: boolean
+  changed_by?: string
+  changed_at?: string
+}
+
+export type DriftReport = {
+  status: DriftStatus
+  items: DriftItem[]
+  checked_at: string
+  since?: string
+  auto_repair: boolean
+}
+
+/** One thing Kubernetes said about one object, with its repeats counted. */
+export type ObjectEvent = {
+  type: "Normal" | "Warning"
+  reason: string
+  kind: string
+  name: string
+  message: string
+  count: number
+  first_seen: string
+  last_seen: string
+  explanation?: string
+  explanation_code?: string
+  explanation_args?: string[]
+}

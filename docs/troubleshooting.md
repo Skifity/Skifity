@@ -120,6 +120,34 @@ configuration and changes nothing else. If Traefik is configured by a
 HelmChartConfig of your own, set
 `providers.kubernetesIngress.allowExternalNameServices: true` in it instead.
 
+## What Kubernetes said
+
+When an app will not start and its logs are empty, the reason is usually in
+what Kubernetes itself wrote down: the scheduler that could not place an
+instance, a health check that failed, a volume that would not attach, an
+instance the kernel stopped for using too much memory. The app's **Advanced**
+tab lists these events, newest first, with repeats counted, and refreshes
+itself while it is open. **Warnings only** leaves out the routine ones.
+
+The common warnings come with what they mean and what to do:
+
+| Kubernetes says | What it means |
+|---|---|
+| `FailedScheduling` | No server has room, or none is allowed to run the app. Which one is named. |
+| `BackOff` | The app keeps stopping soon after it starts. Its logs from before the restart say why: **Logs**, then the previous instance. |
+| `Unhealthy` | A health check failed. Check its path, port and start time under **Settings**. |
+| `FailedMount`, `FailedAttachVolume` | A volume is still held by another server, or configuration the app reads is missing. |
+| `FailedCreatePodSandBox` | The server could not set up the instance's network. A problem on the server, not in the app. |
+| `OOMKilling` | The app used more than its memory limit. Raise it under **Scaling**. |
+| `Evicted` | The server ran short of memory or disk and moved the instance. |
+| `ErrImagePull`, `FailedPull` | The image is missing, private, or the registry cannot be reached. |
+
+Kubernetes keeps events for about an hour, so an old crash is not here; the
+instance list and the Logs tab keep more. The same list is `skifity events`
+(with `--warnings`, and `--db` for a database), and `get_events` for an
+assistant. A message that quotes one of the app's secret variables has the
+value taken out.
+
 ## A domain does not work
 
 The panel shows the DNS record to create, and **Check DNS** on the domain asks
@@ -227,4 +255,53 @@ Every app's **Advanced** tab shows the exact Kubernetes objects the panel
 applies, ready to copy. `kubectl` is on the control plane server and works
 normally; Skifity uses server-side apply with its own field manager, so it will
 not fight you over a field you change by hand — but it will change it back on
-the next deployment.
+the next deployment, and it notices in the meantime: see the next section.
+
+## Changed outside Skifity
+
+Every five minutes the panel compares each deployed app's objects in the
+cluster — its Deployment, Service, Ingress, network policy, autoscaler,
+volumes, the Secrets holding its variables and files, and its workers — with
+what it would apply now. When something differs, the app's page says **Changed
+outside Skifity**, a notification goes out once (`app.drifted`), and the
+**Advanced** tab lists each difference: the object, the field, what the panel
+applies, what the cluster holds, and who changed it.
+
+**Put it back** applies the app's objects again, the same apply a change to a
+variable makes: nothing is built and no deployment is recorded. Members can do
+it; viewers can see the list. `skifity drift` prints the list and
+`skifity drift --repair` puts it back. An app can also be set to be put back
+automatically; that is off unless somebody turns it on, because a change made
+on purpose during an incident is not something to undo behind anybody's back.
+An automatic repair is said once, like the drift, and never attempted twice
+for the same difference: if something keeps changing the field again, the
+panel and it would otherwise take turns for ever.
+
+How it tells a change from noise:
+
+* **Only the fields the panel sets are compared.** Whatever the API server
+  fills in, a controller writes, or another tool adds — a default, a status,
+  an annotation of its own — is not the panel's and is not reported.
+* **Who changed it comes from Kubernetes.** Server-side apply records which
+  field manager set each field. A field that now belongs to `kubectl-edit`,
+  `kubectl-patch` or `helm` was changed by that tool, and the list says so.
+* **The panel's own changes are never drift.** A field the panel still owns,
+  and that differs, is a change of its own it has not applied yet — a build
+  variable waiting for the next build, a save that could not reach the
+  cluster — and is not listed. Nothing is compared while an app is deploying,
+  rolling back or being applied, and an autoscaler's instance count, or zero
+  instances for an app that sleeps, belongs to the autoscaler.
+* **Something missing needs proof.** Each object the panel applies carries a
+  fingerprint of itself (`skifity.com/applied-hash`). A field that is missing
+  is only reported when the object is still the one the panel applied, since
+  otherwise it may simply be a field the panel is about to add. In the same
+  way, an object that is not there at all is only called deleted if the panel
+  had written it; the panel keeps the list of what its last apply wrote.
+* **A volume somebody made bigger is left alone.** A volume can grow and never
+  shrink, so there is nothing to put back.
+
+A Secret's values are never shown, only that one differs, and a value that
+repeats one of the app's secret variables is taken out. Objects applied by a
+panel older than this check carry no fingerprint, so until their next deploy
+only changes with a named owner and deleted objects are reported. Scheduled
+commands and a database's objects are not compared yet.

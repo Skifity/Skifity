@@ -51,6 +51,10 @@ type Server struct {
 	// scanner looks for known vulnerabilities in the images apps run. Nil
 	// is a panel with no cluster, where Scan now says so.
 	scanner Scanner
+	// drift compares an app's objects with what the panel applies, and puts
+	// them back. Nil is a panel with no cluster, which answers that it has
+	// none.
+	drift DriftDetector
 
 	// plugins is how installed plugins hear about what happened here. A value
 	// with no Targets sends nothing, so nil is a working configuration.
@@ -94,7 +98,10 @@ type Options struct {
 	Databases   DatabaseManager
 	Backups     BackupManager
 	Scanner     Scanner
-	Plugins     plugins.Dispatcher
+	// Drift compares an app's objects with what the panel applies. Nil is a
+	// panel with no cluster.
+	Drift   DriftDetector
+	Plugins plugins.Dispatcher
 	// Channels is the installed plugins that provide a notification channel.
 	// Nil is a panel with no plugins, and every built-in channel still works.
 	Channels notify.Provider
@@ -129,6 +136,7 @@ func New(opts Options) *Server {
 		databases:   opts.Databases,
 		backups:     opts.Backups,
 		scanner:     opts.Scanner,
+		drift:       opts.Drift,
 		plugins:     opts.Plugins,
 		channels:    opts.Channels,
 		uploads:     opts.Uploads,
@@ -409,6 +417,12 @@ func (s *Server) routes() chi.Router {
 				// scan_handlers.go.
 				app.Get("/vulnerabilities", s.handleGetVulnerabilities)
 				app.Post("/vulnerabilities/scan", s.handleScanApp)
+				// What changed outside the panel, and putting it back; and
+				// what Kubernetes said about the app. See drift_handlers.go.
+				app.Get("/drift", s.handleAppDrift)
+				app.Put("/drift", s.handleSetDriftRepair)
+				app.Post("/drift/repair", s.handleRepairDrift)
+				app.Get("/events", s.handleAppEvents)
 			})
 
 			authed.Route("/databases/{databaseID}", func(dbr chi.Router) {
@@ -424,6 +438,7 @@ func (s *Server) routes() chi.Router {
 				dbr.Get("/backup-policy", s.handleGetBackupPolicy)
 				dbr.Put("/backup-policy", s.handleSetBackupPolicy)
 				dbr.Post("/restore/{backupID}", s.handleRestoreBackup)
+				dbr.Get("/events", s.handleDatabaseEvents)
 			})
 
 			authed.Get("/operations/{operationID}", s.handleGetOperation)

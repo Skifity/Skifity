@@ -239,7 +239,18 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 	if err != nil {
 		return err
 	}
-	return d.cluster.Client().Applier().ApplyAll(ctx, kube.BuildEnvSecret(spec, variables), kube.BuildFilesSecret(spec, files))
+	// Stamped as the deployer stamps them: the same Secrets with the same
+	// contents carry the same fingerprint, so a run between two deploys does
+	// not make the drift check think the app has something new to apply.
+	secrets, err := kube.Prepare(kube.BuildEnvSecret(spec, variables), kube.BuildFilesSecret(spec, files))
+	if err != nil {
+		return err
+	}
+	if err := d.cluster.Client().Applier().ApplyAll(ctx, asAny(secrets)...); err != nil {
+		return err
+	}
+	d.recordApplied(ctx, app.ID, asAny(secrets), false)
+	return nil
 }
 
 // runSeed runs a preview's seed command, once, after its first deploy that

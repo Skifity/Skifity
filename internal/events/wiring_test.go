@@ -71,14 +71,23 @@ func publishedEvents(t *testing.T) []string {
 		t.Fatalf("read the server: %v", err)
 	}
 	// The watcher publishes through a helper whose kind is a parameter, so its
-	// three are named where it calls that helper instead.
+	// kinds are named where it calls that helper instead — in any of its files.
 	helper := regexp.MustCompile(`w\.publish\([^,]+,\s*"([\w.]+)"`)
-	body, err := os.ReadFile(filepath.Join("..", "watch", "watch.go"))
-	if err != nil {
-		t.Fatalf("read the watcher: %v", err)
+	files, err := filepath.Glob(filepath.Join("..", "watch", "*.go"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("find the watcher: %v", err)
 	}
-	for _, match := range helper.FindAllStringSubmatch(string(body), -1) {
-		seen[match[1]] = true
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read the watcher: %v", err)
+		}
+		for _, match := range helper.FindAllStringSubmatch(string(body), -1) {
+			seen[match[1]] = true
+		}
 	}
 	return sorted(seen)
 }

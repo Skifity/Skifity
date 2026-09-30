@@ -353,7 +353,10 @@
       "preview.started": "Preview of a branch started",
       "preview.closed": "Preview of a branch closed",
       "app.scan_started": "Image scan started",
-      "app.deploy_vulnerabilities_accepted": "Deployed with critical vulnerabilities accepted"
+      "app.deploy_vulnerabilities_accepted": "Deployed with critical vulnerabilities accepted",
+      "app.drift_repaired": "Put the app back as the panel applies it",
+      "app.drift_auto_repair_on": "Set the app to be put back automatically",
+      "app.drift_auto_repair_off": "Stopped putting the app back automatically"
     }
   },
   "projects": {
@@ -2966,6 +2969,18 @@
         "cause": "It was still queued or running after {{0}} minutes.",
         "impact": "Nothing is wrong with the app. The scan carries on in the panel.",
         "fix": "Run `{{0}} scan` later to read its report."
+      },
+      "drift_check_failed": {
+        "title": "The app could not be compared with what the panel applies",
+        "cause": "Reading {{0}} from the cluster failed: {{1}}",
+        "impact": "Nothing was changed. Whether anybody changed the app outside the panel is not known until this works.",
+        "fix": "Check that the panel's service account can still read the app's namespace; somebody may have changed its permissions. If the cluster was just upgraded, try again in a minute."
+      },
+      "events_unreadable": {
+        "title": "The cluster's events could not be read",
+        "cause": "Listing the events in {{0}} failed: {{1}}",
+        "impact": "Nothing was changed, and the app keeps running. Only this list is missing.",
+        "fix": "Check that the panel's service account can still list events and pods in that namespace. If the cluster was just upgraded, try again in a minute."
       }
     }
   },
@@ -3047,7 +3062,8 @@
       "server.alert": "A server crossed a usage threshold",
       "backup.missed": "A scheduled backup was missed and taken late",
       "backup.succeeded": "A backup succeeded",
-      "app.vulnerable": "An app's image has a new critical vulnerability"
+      "app.vulnerable": "An app's image has a new critical vulnerability",
+      "app.drifted": "An app was changed outside the panel"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {
@@ -3587,6 +3603,80 @@
       "deploy": "after a deploy",
       "schedule": "on the daily schedule",
       "manual": "on request"
+    }
+  },
+  "drift": {
+    "noticeTitle": "Changed outside {{product}}",
+    "noticeBody": "Some of this app's settings in the cluster were changed outside the panel, with kubectl or another tool. Advanced shows what changed, and puts it back.",
+    "noticeOpen": "See what changed",
+    "title": "Changed outside {{product}}",
+    "help": "Every few minutes the panel compares this app's objects in the cluster with what it applies, on the fields it sets. A change made with kubectl or another tool is listed here, with who made it.",
+    "inSync": "Nothing was changed outside {{product}}. Checked {{when}}.",
+    "notDeployed": "Nothing is deployed yet, so there is nothing to compare.",
+    "since": "Different since {{when}}.",
+    "checked": "Checked {{when}}.",
+    "object": "Object",
+    "field": "Field",
+    "panelValue": "{{product}} applies",
+    "liveValue": "In the cluster",
+    "changedBy": "Changed by",
+    "unknownWho": "Unknown",
+    "deleted": "Deleted",
+    "removed": "Removed",
+    "hidden": "A secret value differs. Neither value is shown.",
+    "repair": "Put it back",
+    "repairConfirmTitle": "Put this app back?",
+    "repairConfirm": "The app's objects are applied again as {{product}} applies them, which undoes the changes listed. Nothing is built and no deployment is recorded. If the running version was changed, its instances are replaced one at a time.",
+    "repaired": "Put back as the panel applies it.",
+    "autoRepair": "Put back automatically",
+    "autoRepairHelp": "When the panel finds a change, it puts the app back by itself and says so. Off by default: a change somebody made on purpose, during an incident, is not something to undo behind their back.",
+    "applying": "{{product}} is changing this app right now. It is compared again once the deploy or the change has finished."
+  },
+  "events": {
+    "title": "What Kubernetes said",
+    "help": "Events the scheduler, the servers and the controllers wrote about this app's objects, newest first. Kubernetes keeps them for about an hour.",
+    "databaseHelp": "Events the scheduler, the servers and the controllers wrote about this database's objects, newest first. Kubernetes keeps them for about an hour.",
+    "warningsOnly": "Warnings only",
+    "empty": "Nothing in the last hour",
+    "emptyWarnings": "No warnings in the last hour",
+    "emptyHelp": "Kubernetes keeps events for about an hour. The list refreshes itself while it is open.",
+    "lastSeen": "Last seen",
+    "reason": "Reason",
+    "object": "Object",
+    "message": "What happened",
+    "times": "{{times}} times",
+    "warning": "Warning",
+    "normal": "Normal",
+    "explain": {
+      "scheduling_cpu_memory": "No server has enough free CPU and memory for this instance. Lower what it reserves under Scaling, or add a server.",
+      "scheduling_cpu": "No server has enough free CPU for this instance. Lower the CPU it reserves under Scaling, or add a server.",
+      "scheduling_memory": "No server has enough free memory for this instance. Lower the memory it reserves under Scaling, or add a server.",
+      "scheduling_volume": "This app's volume has not been created yet. On a single server that is usually a storage class that is still starting; across servers it means no server can provide the volume.",
+      "scheduling_taint": "The only servers with room are not accepting apps. A control-plane server does not run apps unless you allow it, and a server being drained accepts nothing.",
+      "scheduling_node_affinity": "No server matches where this app is allowed to run.",
+      "scheduling_anti_affinity": "Every server already runs an instance of this app. Add a server, or run fewer instances.",
+      "scheduling_unexplained": "No server can take this instance: {{0}}",
+      "scheduling_waiting": "Waiting for a server with room for this instance.",
+      "replicas_quota": "This environment has reached its limit, so no more instances can start. Raise the environment's limits, or give this app less. ({{0}})",
+      "replicas_pod_security": "The instance was refused by the cluster's security rules: {{0}}",
+      "replicas_failed": "The instances could not be created.",
+      "pull_unauthorized": "The registry refused to hand over the image. If it is a private registry, set its credentials under Settings, then Registry.",
+      "pull_missing": "That image is not in the registry. If this is a rollback to an old version, its image has been removed to keep the disk free; deploy the commit again instead.",
+      "pull_unreachable": "The registry could not be reached from the server. Check the address, and that the server has a route to it.",
+      "pull_failed": "The image could not be pulled: {{0}}",
+      "pull_failed_empty": "The image could not be pulled.",
+      "runs_as_root": "This image starts as root and drops privileges itself, which is ordinary for an off-the-shelf container and is what this environment refuses. Change the environment's confinement to \"baseline\" under the project, then deploy again. Baseline still refuses a privileged container, host networking and host paths, so the app still cannot reach the server it runs on.",
+      "named_user": "This image names its user ({{0}}) instead of numbering it, so the cluster cannot check that it is not root, and this environment refuses what it cannot check. Set \"Run as user\" in the app's settings to that user's number — 65534 for nobody — and deploy again, or change the environment's confinement to \"baseline\" under the project.",
+      "crash_backoff": "The app keeps stopping soon after it starts, so Kubernetes waits longer before each restart. Why it stopped is in its log from before the restart: open Logs, then Before the restart.",
+      "probe_readiness": "The health check failed, so this instance is sent no traffic until it passes. Check the health check's path and port under Settings, and that the app answers there in time.",
+      "probe_liveness": "The health check kept failing, so the instance is being restarted. A check that is slow or points at the wrong path restarts an app that is working: check it under Settings.",
+      "probe_startup": "The app did not pass its health check in the time it is given to start. If it starts slowly, give it longer under Settings; otherwise its logs say why it is not answering.",
+      "mount_config_missing": "The instance cannot start because configuration it reads is missing from the cluster: {{0}}. Put the app back under Advanced, or deploy again, and it is written again.",
+      "mount_failed": "A volume could not be mounted. A volume is used by one server at a time: if an instance on another server still holds it, this one waits until that instance stops.",
+      "attach_failed": "The storage behind a volume could not be attached to this server. It is usually still attached to another server, and is released once that server lets it go.",
+      "sandbox_failed": "The server could not set up this instance's network or container. That is a problem on the server rather than in the app: if it goes on, restart k3s on that server, or remove the server and add it again.",
+      "oom": "The app used more memory than its limit and was stopped. Raise the memory limit under Scaling, or find what is using the memory.",
+      "evicted": "The server ran short and stopped this instance to protect itself: {{0}} It is started again on a server with room."
     }
   }
 }

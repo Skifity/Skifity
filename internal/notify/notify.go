@@ -81,13 +81,16 @@ const (
 	// the image is scanned, and a channel that hears about every other
 	// problem with an app would be wrong to stay quiet about this one.
 	EventAppVulnerable = "app.vulnerable"
+	// EventAppDrifted is an app whose objects somebody changed or deleted
+	// outside the panel, said once per change, and whether it was put back.
+	EventAppDrifted = "app.drifted"
 )
 
 // AllEvents is what the UI offers when configuring a channel.
 var AllEvents = []string{
 	EventDeploySucceeded, EventDeployFailed, EventAppUnhealthy,
 	EventServerAdded, EventServerLost, EventBackupFailed, EventBackupSucceeded, EventBackupMissed,
-	EventCertificate, EventAppAlert, EventServerAlert, EventAppVulnerable,
+	EventCertificate, EventAppAlert, EventServerAlert, EventAppVulnerable, EventAppDrifted,
 }
 
 // optIn are the events a channel receives only when it names them. A channel

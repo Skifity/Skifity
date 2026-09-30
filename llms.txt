@@ -111,6 +111,7 @@ Tools, in the order they are usually needed:
 | `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
 | `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed. |
+| `get_events` | What Kubernetes said about an app's or a database's instances, newest first: a pod that could not be placed, a failed health check, an instance killed for its memory. The common warnings come with what they mean. Where the answer is when the logs are empty. |
 | `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, and `process` for a worker's. |
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
 | `list_variables` | An app's variables. Secret values are never returned. |
@@ -207,6 +208,9 @@ GET    /api/apps/{app}/scaling/readiness      what would break with more instanc
 GET    /api/apps/{app}/processes              its workers and other processes
 PUT    /api/apps/{app}/processes/{name}       add one, or change its command or instances
 GET    /api/apps/{app}/advanced               the Kubernetes objects, as YAML
+GET    /api/apps/{app}/events?type=Warning    what Kubernetes said about its objects, newest first
+GET    /api/apps/{app}/drift                  what was changed in the cluster outside the panel, and by whom
+POST   /api/apps/{app}/drift/repair           put it back, as the panel applies it (no build, no deployment)
 GET    /api/apps/{app}/firewall               the rules in front of this app
 PUT    /api/apps/{app}/firewall               replace them
 GET    /api/environments/{env}/databases      databases

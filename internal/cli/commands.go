@@ -63,6 +63,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdRun(ctx, rest, stdout)
 	case "status":
 		err = cmdStatus(ctx, rest, stdout)
+	case "events":
+		err = cmdEvents(ctx, rest, stdout)
+	case "drift":
+		err = cmdDrift(ctx, rest, stdout)
 	case "apps":
 		err = cmdApps(ctx, rest, stdout)
 	case "servers":
@@ -230,6 +234,8 @@ Working with apps:
   deploy                Deploy the current directory's app
   status                Show an app's live state
   logs                  Show or follow an app's logs
+  events                What Kubernetes said about an app's instances, newest first
+  drift                 What was changed outside the panel, with kubectl; --repair puts it back
   env                   List, set, import or remove environment variables
   scale                 Change the number of instances or turn on autoscaling
   processes             List, add or stop the app's workers and other processes

@@ -111,6 +111,15 @@ func NewClient(opts Options) (*Client, error) {
 	}, nil
 }
 
+// NewClientWith builds a Client over clients that already exist: fakes, in a
+// test of another package. The panel itself connects with NewClient.
+func NewClientWith(clientset kubernetes.Interface, dyn dynamic.Interface, systemNamespace string) *Client {
+	if systemNamespace == "" {
+		systemNamespace = "skifity-system"
+	}
+	return &Client{clientset: clientset, dynamic: dyn, applier: NewApplier(dyn), systemNamespace: systemNamespace}
+}
+
 func buildConfig(kubeconfigPath string) (*rest.Config, error) {
 	if kubeconfigPath != "" {
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)

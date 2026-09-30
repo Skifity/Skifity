@@ -134,6 +134,11 @@ type Cluster interface {
 	DeleteNamespace(ctx context.Context, namespace string) error
 	// Manifests renders the Kubernetes objects for an app, for the Advanced tab.
 	Manifests(ctx context.Context, app store.App, env store.Environment) (string, error)
+	// AppEvents lists what Kubernetes said about an app's objects, newest
+	// first, with the app's secrets kept out of every message.
+	AppEvents(ctx context.Context, app store.App, env store.Environment) ([]ObjectEvent, error)
+	// DatabaseEvents does the same for a managed database's objects.
+	DatabaseEvents(ctx context.Context, database store.Database, env store.Environment) ([]ObjectEvent, error)
 	// InstallComponent installs an optional add-on on first use.
 	InstallComponent(ctx context.Context, name string) error
 	// InstallPlugin issues a plugin's credentials and starts its container.

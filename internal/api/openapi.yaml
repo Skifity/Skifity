@@ -3182,6 +3182,92 @@ paths:
               schema: {$ref: '#/components/schemas/ImageScan'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/apps/{appID}/drift:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    get:
+      operationId: appDrift
+      tags: [Apps]
+      summary: What was changed in the cluster outside the panel
+      description: >-
+        Viewer. Reads the cluster now and compares the app's objects with what
+        the panel applies, on the fields the panel sets. A field somebody else
+        changed says who changed it, from the object's managed fields. A
+        Secret's values are never sent.
+      responses:
+        '200':
+          description: The comparison.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriftReport'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: setDriftRepair
+      tags: [Apps]
+      summary: Put the app back by itself when it is changed outside the panel
+      description: Member. Off unless turned on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auto_repair]
+              properties:
+                auto_repair: {type: boolean}
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [auto_repair]
+                properties:
+                  auto_repair: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/drift/repair:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: repairDrift
+      tags: [Apps]
+      summary: Put the app's objects back as the panel applies them
+      description: >-
+        Member. The apply a change to a variable makes: nothing is built and no
+        deployment is recorded. It waits for a rollout when the change was to
+        the running version, and answers the comparison afterwards.
+      responses:
+        '200':
+          description: The comparison, after putting it back.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriftReport'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/events:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    get:
+      operationId: appEvents
+      tags: [Apps]
+      summary: What Kubernetes said about the app's objects
+      description: >-
+        Viewer. The events of the app's pods, ReplicaSets, Deployments,
+        volumes, Ingress and autoscaler, newest first, with repeats folded into
+        a count and the common warnings explained. Kubernetes keeps them for
+        about an hour.
+      parameters:
+        - $ref: '#/components/parameters/eventType'
+      responses:
+        '200':
+          description: The events.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ObjectEventList'}
+        default: {$ref: '#/components/responses/Error'}
+
   # --- databases ---
 
   /api/databases/{databaseID}:
@@ -3381,6 +3467,24 @@ paths:
         - $ref: '#/components/parameters/overwrite'
       responses:
         '202': {$ref: '#/components/responses/OperationStarted'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/events:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    get:
+      operationId: databaseEvents
+      tags: [Databases]
+      summary: What Kubernetes said about the database's objects
+      description: Viewer. Its StatefulSet or cluster, their pods and their volumes, as for an app.
+      parameters:
+        - $ref: '#/components/parameters/eventType'
+      responses:
+        '200':
+          description: The events.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ObjectEventList'}
         default: {$ref: '#/components/responses/Error'}
 
   # --- operations ---
@@ -4016,6 +4120,11 @@ components:
       in: query
       description: How far back to look.
       schema: {type: string, enum: [1h, 6h, 24h, 72h], default: 6h}
+    eventType:
+      name: type
+      in: query
+      description: Keep only the events of this type, in any case. Left out, both.
+      schema: {type: string, enum: [Normal, Warning]}
     overwrite:
       name: overwrite
       in: query
@@ -5432,6 +5541,62 @@ components:
         reason: {type: string}
         locked_by: {type: string, description: 'Who locked it, by email address.'}
         locked_at: {type: string, format: date-time}
+
+    DriftReport:
+      type: object
+      required: [status, items, checked_at, auto_repair]
+      properties:
+        status:
+          type: string
+          enum: [in_sync, drifted, missing, not_deployed, applying]
+          description: 'drifted is an object changed, missing an object deleted, not_deployed nothing to compare yet, applying a deploy or a sync in progress, compared once it has finished.'
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DriftItem'}
+        checked_at: {type: string, format: date-time}
+        since: {type: string, format: date-time, description: 'When the watcher first found it not matching, while it still does not.'}
+        auto_repair: {type: boolean, description: 'Whether the watcher puts it back by itself.'}
+
+    DriftItem:
+      type: object
+      required: [kind, name, change]
+      properties:
+        kind: {type: string, description: 'The Kubernetes kind, such as Deployment.'}
+        name: {type: string}
+        path: {type: string, description: 'The field, such as spec.template.spec.containers[name=web].image. Empty for a deleted object.'}
+        change: {type: string, enum: [changed, removed, deleted]}
+        panel: {type: string, description: 'What the panel applies, as text.'}
+        live: {type: string, description: 'What the cluster holds, as text.'}
+        hidden: {type: boolean, description: 'A Secret''s value differs, and neither value is sent.'}
+        changed_by: {type: string, description: 'The tool that changed it, as the managed fields record it: kubectl-edit, kubectl-patch.'}
+        changed_at: {type: string, format: date-time}
+
+    ObjectEventList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ObjectEvent'}
+
+    ObjectEvent:
+      type: object
+      required: [type, reason, kind, name, message, count, first_seen, last_seen]
+      properties:
+        type: {type: string, enum: [Normal, Warning]}
+        reason: {type: string, description: 'Kubernetes'' own, such as FailedScheduling or BackOff.'}
+        kind: {type: string}
+        name: {type: string}
+        message: {type: string, description: 'The cluster''s words, with the app''s secrets taken out.'}
+        count: {type: integer, description: 'How many times, repeats folded together.'}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        explanation: {type: string, description: 'What it means and what to do, when the panel knows.'}
+        explanation_code: {type: string, description: 'The key the panel finds its own words under, events.explain.<code>.'}
+        explanation_args:
+          type: array
+          items: {type: string}
+          description: 'The values in the explanation, in order.'
 
     InstanceInfo:
       type: object

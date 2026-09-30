@@ -1133,6 +1133,32 @@ func ClusterUnreachable(err error) *Problem {
 		Wrap(err)
 }
 
+// DriftCheckFailed is the cluster answering, and refusing to show one of an
+// app's objects to the check that compares them with what the panel applies.
+func DriftCheckFailed(object, reason string, err error) *Problem {
+	return New("drift.check_failed", "The app could not be compared with what the panel applies").
+		WithCause("Reading %s from the cluster failed: %s", object, reason).
+		WithImpact("Nothing was changed. Whether anybody changed the app outside the panel is not known until this works.").
+		WithFix("Check that the panel's service account can still read the app's namespace; somebody may have changed its permissions. If the cluster was just upgraded, try again in a minute.").
+		WithDocs("/docs/troubleshooting#changed-outside-skifity").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err)
+}
+
+// EventsUnreadable is the cluster answering, and refusing to list the events
+// in a namespace.
+func EventsUnreadable(namespace, reason string, err error) *Problem {
+	return New("events.unreadable", "The cluster's events could not be read").
+		WithCause("Listing the events in %s failed: %s", namespace, reason).
+		WithImpact("Nothing was changed, and the app keeps running. Only this list is missing.").
+		WithFix("Check that the panel's service account can still list events and pods in that namespace. If the cluster was just upgraded, try again in a minute.").
+		WithDocs("/docs/troubleshooting#what-kubernetes-said").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err)
+}
+
 // QuorumRisk reports a removal that would break etcd quorum.
 func QuorumRisk(remaining int) *Problem {
 	return New("cluster.quorum_risk", "Removing this server would break the cluster").

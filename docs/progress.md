@@ -5777,6 +5777,82 @@ command, arguments, probes or literal values; the Redis and Valkey server
 commands, and every backup and restore script, are run against stub clients
 that record their arguments. None of it has run against a cluster.
 
+## Phase 112 — what was changed outside the panel, and what Kubernetes said
+
+The README invites people to use kubectl, and nothing noticed when they did:
+an edited Deployment ran as edited until the next deploy put it back, and the
+app's page described something that was no longer there. Kubero reconciles;
+this does not, on purpose, but it now says so and puts things back on request.
+
+**Drift.** `deploy.render` is the one rendering of an app's objects — the apply
+and the check both call it, so the check compares the cluster with exactly what
+the last apply wrote. Every object it renders carries a fingerprint of itself
+(`skifity.com/applied-hash`, on the object's metadata, never the pod template,
+so writing it restarts nothing), and the last apply's list of objects is kept in
+`app_drift.applied` (migration 0049). `kube.CompareObject` walks only the fields
+the panel sets — the ones server-side apply files under the `skifity` manager —
+so nothing the API server defaults or a controller writes is compared, and
+reads `managedFields` for the rest: a field another manager now holds is drift,
+attributed to it (`kubectl-edit`, `kubectl-patch`, `helm`); a field the panel
+still holds is the panel's own change not applied yet (a build variable waiting
+for a build, a save the cluster missed) and never drift; a field nobody holds is
+drift only when the object's fingerprint says it is the one the panel applied;
+and an object that is not there is deleted only if the panel had written it.
+Lists are compared as Kubernetes merges them (containers, env, ports and mounts
+by key, everything else whole, with what the server adds inside an element
+ignored), numbers by value, resource quantities as quantities. A Secret's values
+are never sent, only that one differs; values that repeat one of the app's
+secret variables are taken out of the rest. A volume somebody grew is left
+alone, since it cannot shrink.
+
+Nothing is compared while a deployment is unfinished or a sync is running
+(`Deployer.Busy`; the API answers `applying`), so a rollout's new image and a
+half-applied change are never drift, and an autoscaler's or scale-to-zero's
+replica count is never rendered, and so never compared. The watcher compares
+every deployed app every five minutes rather than every minute — a check is a
+render and seven or eight GETs, thirteen requests a second at a hundred apps if
+it ran every pass — records what it found, and sends `app.drifted` once per
+drift, by where it is rather than by the values, again only after the app has
+matched once in between. `GET /api/apps/{id}/drift` (viewer) reads the cluster
+now; `POST /drift/repair` (member, audited) is `Sync`: no build, no deployment
+recorded. `PUT /drift {auto_repair}` has the watcher put it back by itself, off
+by default, in the background, never during a rollout, and never twice for the
+same drift. The app page says "Changed outside Skifity" and sends people to
+Advanced, which lists each difference with the button and the switch.
+`skifity drift [--repair]` does the same.
+
+**Events.** `GET /api/apps/{id}/events` and `/api/databases/{id}/events` (viewer)
+list the namespace's events for the app's objects: its Deployments and their
+ReplicaSets and pods — by the names Kubernetes gives them, so an evicted or
+OOM-killed pod that is already gone is still found, and web's are never
+web-api's — its Service, Ingress, autoscaler, volumes and one-off runs. Repeats
+are folded into a count, newest first, and the common warnings are explained:
+FailedScheduling, BackOff, Unhealthy (pointing at the health check),
+FailedMount, FailedAttachVolume, FailedCreatePodSandBox, OOMKilling, Evicted,
+ErrImagePull and FailedPull. `explain.go`'s sentences now carry codes, looked up
+as `events.explain.<code>` in all five languages, with a test that holds the
+table and the locales together. The Advanced tab shows them with a Warning
+filter and refreshes every ten seconds while open; a database has an Advanced
+tab for its own. `skifity events [--warnings] [--db]` and the MCP tool
+`get_events` read the same, scrubbed.
+
+Tested, against Kubernetes' fake clients: an untouched object with the server's
+defaults is in sync; a field another manager changed is reported with who and
+when; the panel's own pending change, its own update, an autoscaler's and a
+sleeping app's replica count are not; a removed field only on the object the
+panel applied; a deleted object, and one the panel never wrote; a Secret hidden
+and a secret variable redacted; repair applies exactly the rendered objects and
+records no deployment; nothing compared during a rollout or a sync; one
+notification per drift and again after it cleared; auto-repair once, audited,
+never during a rollout; the events' ownership, folding, order, explanations and
+redaction; viewer reads, viewer cannot repair, another team's are 404; the CLI
+and the MCP tool against a fake panel.
+
+Not executed: any of it against a real cluster — in particular which managers
+real controllers (KEDA, cert-manager, Traefik) show up as on the fields the
+panel sets, and the event reasons a real kubelet writes. Scheduled commands and
+databases are not compared for drift.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,10 @@ type fakeStore struct {
 
 	serverSamples map[string][]store.ServerSample
 	serverAlerts  map[string]store.ServerAlerts
+
+	driftMu sync.Mutex
+	drift   map[string]store.AppDrift
+	audits  []store.AuditEvent
 }
 
 func newFakeStore() *fakeStore {
@@ -197,6 +202,46 @@ func (f *fakeStore) DeleteEnvironment(_ context.Context, id string) error {
 
 func (f *fakeStore) GetSetting(_ context.Context, key string) (string, bool, error) {
 	return f.settingValues[key], false, nil
+}
+
+func (f *fakeStore) GetAppDrift(_ context.Context, appID string) (store.AppDrift, error) {
+	f.driftMu.Lock()
+	defer f.driftMu.Unlock()
+	if d, ok := f.drift[appID]; ok {
+		return d, nil
+	}
+	return store.AppDrift{AppID: appID, Status: store.DriftInSync, Items: "[]"}, nil
+}
+
+func (f *fakeStore) RecordAppDrift(ctx context.Context, appID, status, items, fingerprint string, at time.Time) error {
+	d, _ := f.GetAppDrift(ctx, appID)
+	f.driftMu.Lock()
+	defer f.driftMu.Unlock()
+	d.Status, d.Items, d.Fingerprint, d.CheckedAt = status, items, fingerprint, at
+	if f.drift == nil {
+		f.drift = map[string]store.AppDrift{}
+	}
+	f.drift[appID] = d
+	return nil
+}
+
+func (f *fakeStore) SetDriftNotified(ctx context.Context, appID, fingerprint string) error {
+	d, _ := f.GetAppDrift(ctx, appID)
+	f.driftMu.Lock()
+	defer f.driftMu.Unlock()
+	d.Notified = fingerprint
+	if f.drift == nil {
+		f.drift = map[string]store.AppDrift{}
+	}
+	f.drift[appID] = d
+	return nil
+}
+
+func (f *fakeStore) RecordAudit(_ context.Context, e *store.AuditEvent) error {
+	f.driftMu.Lock()
+	defer f.driftMu.Unlock()
+	f.audits = append(f.audits, *e)
+	return nil
 }
 
 // fakeCluster answers with whatever the test set up.

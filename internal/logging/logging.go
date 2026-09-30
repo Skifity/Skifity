@@ -178,6 +178,28 @@ var addressSecrets = []struct {
 	{regexp.MustCompile(`(?i)([?&][^=&\s"']*(?:token|key|secret|signature|password|credential|sig)[^=&\s"']*=)[^&\s"']+`), "${1}" + Redacted},
 }
 
+// minimumSecretLength is how long a known secret has to be before it is
+// looked for in text. Replacing every "1" or "true" in a sentence because a
+// variable happens to hold it would redact the sentence, not the secret.
+const minimumSecretLength = 6
+
+// RedactValues scrubs text and then replaces every occurrence of a value known
+// to be secret — an app's secret variables — with the placeholder.
+//
+// Scrub finds what looks like a secret; this finds what is one. Text written by
+// the cluster, such as an event's message or a field somebody edited with
+// kubectl, can repeat a secret the panel holds under a name that gives nothing
+// away, and the shape of the value is no help: a password is just a word.
+func RedactValues(text string, secrets []string) string {
+	text = Scrub(text)
+	for _, secret := range secrets {
+		if len(secret) >= minimumSecretLength {
+			text = strings.ReplaceAll(text, secret, Redacted)
+		}
+	}
+	return text
+}
+
 // Scrub removes secret-shaped substrings from free text. It is exported because
 // command output and build logs pass through it before reaching the UI.
 func Scrub(s string) string {

@@ -44,7 +44,8 @@ cache and a websocket server to be a panel. Skifity is one process.
 What it does not do is make you learn Kubernetes. The panel talks about **Apps**,
 **Instances**, **Servers**, **Domains** and **Databases**. The Kubernetes objects
 are one click away under **Advanced**, and `kubectl` works normally — they are
-simply not in the way.
+simply not in the way. Change one by hand and the panel notices, says who
+changed what, and puts it back when you ask.
 
 ## Adding a server is an IP address and a password
 

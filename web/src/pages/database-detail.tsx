@@ -21,6 +21,7 @@ import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
 import { BackupVerification } from "@/components/backup-verification"
 import { ErrorDisplay } from "@/components/error-display"
+import { EventsCard } from "@/components/events-card"
 import { ScheduleField } from "@/components/schedule-field"
 import { Page, PageHeader } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
@@ -138,6 +139,7 @@ export function DatabaseDetailPage() {
           <TabsTrigger value="connection">{t("databases.connectionDetails")}</TabsTrigger>
           <TabsTrigger value="apps">{t("databases.linkedApps")}</TabsTrigger>
           <TabsTrigger value="backups">{t("databases.backups")}</TabsTrigger>
+          <TabsTrigger value="advanced">{t("apps.advanced")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="connection" className="pt-4">
@@ -150,6 +152,16 @@ export function DatabaseDetailPage() {
 
         <TabsContent value="backups" className="pt-4">
           <BackupsPanel databaseId={databaseId} engine={record.engine} />
+        </TabsContent>
+
+        {/* Kubernetes' own words about the database's objects, which is why
+            they are under Advanced, as an app's are. */}
+        <TabsContent value="advanced" className="pt-4">
+          <EventsCard
+            path={`/api/databases/${databaseId}/events`}
+            queryKey={["events", "database", databaseId]}
+            description={t("events.databaseHelp")}
+          />
         </TabsContent>
       </Tabs>
 

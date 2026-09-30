@@ -24,7 +24,10 @@ objects and apply them, and its own record of what it has been asked for.
 **It is not an operator.** It defines no CustomResourceDefinitions and runs no
 reconcile loop. It renders Deployments, Services, Ingresses and the rest, and
 applies them with server-side apply. `internal/watch` polls once a minute to
-notice what has changed for the worse and say so — it does not reconcile.
+notice what has changed for the worse and say so, and every five minutes
+compares each app's objects with what the panel would apply, to say what
+somebody changed outside it. It does not reconcile: putting an app back is a
+button, or a per-app setting that is off unless somebody turns it on.
 
 **It is not in the request path.** Traffic to your apps goes ingress → Service →
 pod. The panel is not on that path and never has been, which is why the apps

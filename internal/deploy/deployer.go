@@ -54,6 +54,9 @@ type Deployer struct {
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
+	// syncing counts the applies in flight per app that are not a
+	// deployment's; see Busy.
+	syncing map[string]int
 
 	// slots queues builds past the panel's limit. See buildslots.go.
 	slots *buildSlots
@@ -69,6 +72,7 @@ func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Clus
 	return &Deployer{
 		db: db, keyring: keyring, hub: hub, cluster: c, notifier: notifier, log: log,
 		running: map[string]context.CancelFunc{},
+		syncing: map[string]int{},
 		slots:   newBuildSlots(),
 		scans:   newBuildSlots(),
 	}
@@ -394,39 +398,12 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		}
 	}
 
-	spec, err := d.cluster.SpecFor(ctx, app, env, deployment.Image)
+	out, err := d.render(ctx, deployment, app, env)
 	if err != nil {
 		return nil, err
 	}
-	// Only a commit: an uploaded folder's deployment carries the upload's hash
-	// in the same field, and calling that a commit would be a lie an app might
-	// act on.
-	if app.SourceType == "git" {
-		spec.CommitSHA = deployment.CommitSHA
-	}
-	spec.DeploymentID = deployment.ID
-
-	variables, err := d.runtimeVariables(ctx, app, env)
-	if err != nil {
-		return nil, err
-	}
-	files, err := d.fileContents(ctx, app)
-	if err != nil {
-		return nil, err
-	}
-	// The pod template carries a hash of the configuration, so a variable
-	// change actually restarts the pods. Kubernetes does not watch a Secret's
-	// contents, so without this the new value would only appear at the next
-	// unrelated restart. The files' hash only when there are files, so an
-	// app without any is not restarted by the upgrade that added them.
-	spec.Revision = kube.EnvHash(variables) + ":" + deployment.ID
-	if len(spec.Files) > 0 {
-		spec.Revision += ":" + kube.FilesHash(spec.Files, files)
-	}
-
-	if err := spec.Validate(); err != nil {
-		return nil, errdoc.BadRequest(err.Error())
-	}
+	spec, processes := out.spec, out.processes
+	objects, processObjects := asAny(out.objects), asAny(out.processObjects)
 
 	// Make sure the namespace and its guards exist: an app can be created
 	// before the cluster was reachable.
@@ -438,44 +415,6 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		return nil, err
 	}
 
-	objects := []any{
-		kube.BuildEnvSecret(spec, variables),
-		// Before the Deployment that mounts it, for the same reason as the
-		// variables: a pod naming a Secret that is not there does not start.
-		kube.BuildFilesSecret(spec, files),
-		// Before the Ingress that names them: a middleware that is missing
-		// when Traefik reads the Ingress is a route Traefik refuses to serve.
-		kube.BuildPasswordSecret(spec),
-		kube.BuildPasswordMiddleware(spec),
-	}
-	for _, redirect := range kube.BuildHostRedirects(spec) {
-		objects = append(objects, redirect)
-	}
-	for _, claim := range kube.BuildPVCs(spec) {
-		objects = append(objects, claim)
-	}
-	objects = append(objects,
-		kube.BuildDeployment(spec),
-		kube.BuildService(spec),
-		kube.BuildIngress(spec),
-		kube.BuildHPA(spec),
-		kube.BuildPDB(spec),
-		kube.BuildInterceptorService(spec),
-		kube.BuildHTTPScaledObject(spec),
-		// The policy first: a port opened before connections may reach it
-		// is one that refuses everybody for a moment.
-		kube.BuildPortsPolicy(spec),
-		kube.BuildPortsService(spec),
-	)
-	// The app's other processes go out with it, on the same image.
-	processes, err := d.db.ListProcesses(ctx, app.ID)
-	if err != nil {
-		return nil, err
-	}
-	processObjects := make([]any, 0, len(processes))
-	for _, process := range processes {
-		processObjects = append(processObjects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
-	}
 	if !newVersion {
 		objects = append(objects, processObjects...)
 	}
@@ -484,6 +423,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	if err := d.cluster.Client().Applier().ApplyAll(ctx, objects...); err != nil {
 		return nil, err
 	}
+	// A sync applies everything the app has; a new version, everything but
+	// its processes, which keep their place in the list until they follow.
+	d.recordApplied(ctx, app.ID, objects, !newVersion)
 
 	// Scheduled commands run the version that is deployed, so they are applied
 	// with it rather than when somebody writes the schedule — and a new
@@ -544,6 +486,7 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 				errdoc.From(err).Cause)
 			return nil, nil
 		}
+		d.recordApplied(ctx, app.ID, processObjects, false)
 	}
 	return processes, nil
 }
@@ -685,24 +628,21 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 // This is what a change to a variable, a domain or a replica count does, and it
 // is why those changes never trigger a build.
 func (d *Deployer) Sync(ctx context.Context, appID string) error {
+	// Said while it runs, so the drift check does not read the app halfway
+	// through being applied and take the panel's own apply for somebody
+	// else's change.
+	d.beginSync(appID)
+	defer d.endSync(appID)
+
 	app, err := d.db.GetApp(ctx, appID)
 	if err != nil {
 		return err
 	}
-	last, err := d.db.LatestSuccessfulDeployment(ctx, appID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	last, deployed, err := d.syncTarget(ctx, appID)
+	if err != nil {
 		return err
 	}
-	// A version being rolled out is the one to apply the change to. The last
-	// that succeeded is the one before it, and re-applying that in the middle
-	// of a rollout — somebody adding the variable the new version crashes
-	// without, which is when it happens — put the app back on the old image,
-	// and the rollout then reported success for pods running it.
-	if rolling, rollingErr := d.db.DeploymentRollingOut(ctx, appID); rollingErr == nil &&
-		(errors.Is(err, store.ErrNotFound) || rolling.Number > last.Number) {
-		last, err = rolling, nil
-	}
-	if errors.Is(err, store.ErrNotFound) {
+	if !deployed {
 		// Nothing has been deployed yet, so there is nothing to update.
 		return nil
 	}
@@ -715,6 +655,53 @@ func (d *Deployer) Sync(ctx context.Context, appID string) error {
 	}
 	_, err = d.apply(ctx, last, app, env, false)
 	return err
+}
+
+// syncTarget is the deployment an apply of the app's configuration applies:
+// the last that succeeded, or a newer one being rolled out.
+//
+// A version being rolled out is the one to apply the change to. The last that
+// succeeded is the one before it, and re-applying that in the middle of a
+// rollout — somebody adding the variable the new version crashes without,
+// which is when it happens — put the app back on the old image, and the
+// rollout then reported success for pods running it.
+func (d *Deployer) syncTarget(ctx context.Context, appID string) (store.Deployment, bool, error) {
+	last, err := d.db.LatestSuccessfulDeployment(ctx, appID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return store.Deployment{}, false, err
+	}
+	if rolling, rollingErr := d.db.DeploymentRollingOut(ctx, appID); rollingErr == nil &&
+		(errors.Is(err, store.ErrNotFound) || rolling.Number > last.Number) {
+		return rolling, true, nil
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Deployment{}, false, nil
+	}
+	return last, true, nil
+}
+
+func (d *Deployer) beginSync(appID string) {
+	d.mu.Lock()
+	if d.syncing == nil {
+		d.syncing = map[string]int{}
+	}
+	d.syncing[appID]++
+	d.mu.Unlock()
+}
+
+func (d *Deployer) endSync(appID string) {
+	d.mu.Lock()
+	if d.syncing[appID]--; d.syncing[appID] <= 0 {
+		delete(d.syncing, appID)
+	}
+	d.mu.Unlock()
+}
+
+// Busy reports whether the panel is applying an app's objects right now.
+func (d *Deployer) Busy(appID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.syncing[appID] > 0
 }
 
 // Rollback re-applies a previous deployment's image and runtime configuration.

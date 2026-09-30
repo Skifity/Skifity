@@ -192,3 +192,17 @@ func TestAnAddressKeepsItsHostAndLosesItsSecret(t *testing.T) {
 		}
 	}
 }
+
+// A secret the panel holds is found wherever it is repeated, whatever it looks
+// like; a short value is left alone, or every sentence with a "1" in it would
+// lose its numbers.
+func TestKnownSecretsAreRedactedFromText(t *testing.T) {
+	got := RedactValues(`env "API_KEY" is "fake-token-value", retried 1 time, via https://u:p4ss@host/x`,
+		[]string{"fake-token-value", "1"})
+	if strings.Contains(got, "fake-token-value") || strings.Contains(got, "p4ss") {
+		t.Fatalf("a secret survived: %s", got)
+	}
+	if !strings.Contains(got, "retried 1 time") {
+		t.Fatalf("a short value was redacted as though it were a secret: %s", got)
+	}
+}

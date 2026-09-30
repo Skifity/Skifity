@@ -65,6 +65,11 @@ type Store interface {
 	StalePreviewEnvironments(ctx context.Context, before time.Time) ([]store.Environment, error)
 	DeleteEnvironment(ctx context.Context, id string) error
 	GetSetting(ctx context.Context, key string) (value string, encrypted bool, err error)
+
+	GetAppDrift(ctx context.Context, appID string) (store.AppDrift, error)
+	RecordAppDrift(ctx context.Context, appID, status, items, fingerprint string, at time.Time) error
+	SetDriftNotified(ctx context.Context, appID, fingerprint string) error
+	RecordAudit(ctx context.Context, e *store.AuditEvent) error
 }
 
 // Cluster is the part of the cluster a watcher reads, plus the one thing it
@@ -102,6 +107,16 @@ type Watcher struct {
 	// read while a pass writes it.
 	trafficMu    sync.Mutex
 	trafficState string
+	// drift compares each app with what the panel applies, every driftEvery;
+	// nil does not. See drift.go.
+	drift      Drift
+	driftEvery time.Duration
+	lastDrift  time.Time
+	// repairs are the apps being put back by themselves right now, and
+	// repairWG waits for them, which is what a test does.
+	repairMu sync.Mutex
+	repairs  map[string]bool
+	repairWG sync.WaitGroup
 }
 
 // New builds a Watcher. cluster, hub and notifier may all be nil, and the
@@ -165,6 +180,8 @@ func (w *Watcher) Once(ctx context.Context) {
 	w.checkServers(ctx)
 	w.checkApps(ctx)
 	w.reclaimPreviews(ctx)
+	// Last, and at a slower pace than the rest: see DriftInterval.
+	w.checkDrift(ctx)
 }
 
 // DefaultPreviewTTLDays is how long a preview environment survives with no
