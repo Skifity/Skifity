@@ -103,7 +103,7 @@
     "signInTitle": "Masuk ke {{product}}",
     "signInSubtitle": "Aplikasi Anda, di server milik Anda sendiri.",
     "forgotPassword": "Lupa kata sandi?",
-    "forgotPasswordHelp": "Panel yang di-hosting sendiri tidak mengirim email reset. Pulihkan akses langsung dari server: lihat panduan pemecahan masalah.",
+    "forgotPasswordHelp": "Pulihkan akses dari server: lihat panduan pemecahan masalah. Panel ini tidak punya server email untuk mengirim tautan reset.",
     "setupTitle": "Selamat datang di {{product}}",
     "setupSubtitle": "Buat akun pertama. Hanya butuh satu menit.",
     "setupToken": "Token setup",
@@ -186,7 +186,18 @@
     "tokenExpiry30": "Dalam 30 hari",
     "tokenExpiry90": "Dalam 90 hari",
     "tokenExpiry365": "Dalam setahun",
-    "tokenExpiresOn": "kedaluwarsa {{date}}"
+    "tokenExpiresOn": "kedaluwarsa {{date}}",
+    "resetLinkHelp": "Masukkan alamat email Anda di atas, dan tautan untuk memilih kata sandi baru akan dikirim ke sana.",
+    "sendResetLink": "Kirimi saya tautan reset",
+    "resetLinkSent": "Jika ada akun yang memakai {{email}}, tautan sedang dikirim. Tautan hanya berlaku sekali, selama 30 menit.",
+    "resetTitle": "Pilih kata sandi baru",
+    "resetDescription": "Semua yang masuk dengan kata sandi lama akan dikeluarkan. Dua faktor tetap diminta saat Anda masuk.",
+    "newPasswordAgain": "Kata sandi baru, sekali lagi",
+    "passwordsDiffer": "Kedua kata sandi tidak sama.",
+    "setNewPassword": "Setel kata sandi baru",
+    "resetDone": "Kata sandi Anda telah diubah. Masuk dengan yang baru.",
+    "backToSignIn": "Kembali ke halaman masuk",
+    "resetMissingToken": "Halaman ini memerlukan tautan dari email. Buka dari sana, atau minta tautan baru."
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -324,7 +335,9 @@
       "registry.deleted": "menghapus kredensial registry",
       "port.opened": "membuka sebuah port",
       "port.closed": "menutup sebuah port",
-      "app.job_run": "menjalankan perintah terjadwal sekarang"
+      "app.job_run": "menjalankan perintah terjadwal sekarang",
+      "auth.password_reset_requested": "meminta tautan reset kata sandi",
+      "auth.password_reset": "mereset kata sandinya lewat tautan"
     }
   },
   "projects": {
@@ -2605,6 +2618,18 @@
         "cause": "Ditanya lewat {{0}}, {{1}}.",
         "impact": "Tidak ada yang ditampilkan. Kamu tetap bisa mengetik alamat repositori dan branch-nya sendiri.",
         "fix": "Pastikan token koneksi bisa membaca repositori — scope repo atau akses baca Contents di GitHub, read_api di GitLab, read:repository di Gitea — dan panel bisa menjangkau host Git."
+      },
+      "auth_reset_unavailable": {
+        "title": "Panel ini tidak dapat mengirim tautan reset",
+        "cause": "Panel tidak memiliki server email, atau tidak ada Panel URL untuk ditautkan.",
+        "impact": "Tidak ada tautan yang dikirim.",
+        "fix": "Minta administrator panel ini untuk mereset kata sandi Anda, atau mengisi Pengaturan → Email dan Panel URL. Pengelola server juga dapat memakai skifity admin reset-password."
+      },
+      "auth_reset_invalid": {
+        "title": "Tautan reset ini tidak dapat dipakai",
+        "cause": "Tautan sudah dipakai, berumur lebih dari 30 menit, atau bukan tautan yang dikirim panel ini.",
+        "impact": "Kata sandi Anda tidak berubah.",
+        "fix": "Minta tautan baru dari halaman masuk. Hanya tautan terbaru yang berlaku."
       }
     }
   },

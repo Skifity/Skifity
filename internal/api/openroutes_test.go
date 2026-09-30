@@ -26,6 +26,13 @@ var openOnPurpose = map[string]string{
 	"POST /api/auth/login":  "signing in is how credentials are obtained",
 	"POST /api/auth/logout": "clearing a cookie nobody has is a no-op, not a secret",
 
+	// A forgotten password is asked for by somebody who cannot sign in. The
+	// first answers the same for every address and is limited per address and
+	// per account; the second needs a link only the account's mailbox has.
+	// reset_test.go covers both.
+	"POST /api/auth/password-reset":         "asked for by somebody who cannot sign in, and says nothing about accounts",
+	"POST /api/auth/password-reset/confirm": "authenticated by the single-use link sent to the account's address",
+
 	// The CLI is the same binary as the panel. There is nothing in it that is
 	// not in the source, the installer fetches it before any account exists,
 	// and requiring a token to download the thing you obtain tokens with is a

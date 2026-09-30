@@ -103,7 +103,7 @@
     "signInTitle": "登录 {{product}}",
     "signInSubtitle": "你的应用，跑在你自己的服务器上。",
     "forgotPassword": "忘记密码？",
-    "forgotPasswordHelp": "自托管面板不提供邮件重置。请在服务器上恢复访问：参见故障排查指南。",
+    "forgotPasswordHelp": "请从服务器恢复访问：参见故障排除指南。此面板没有可发送重置链接的邮件服务器。",
     "setupTitle": "欢迎使用 {{product}}",
     "setupSubtitle": "创建第一个账户，只需一分钟。",
     "setupToken": "安装令牌",
@@ -186,7 +186,18 @@
     "tokenExpiry30": "30 天后",
     "tokenExpiry90": "90 天后",
     "tokenExpiry365": "一年后",
-    "tokenExpiresOn": "{{date}} 过期"
+    "tokenExpiresOn": "{{date}} 过期",
+    "resetLinkHelp": "在上方输入你的邮箱地址，我们会把选择新密码的链接发送到该地址。",
+    "sendResetLink": "给我发送重置链接",
+    "resetLinkSent": "如果有账户使用 {{email}}，链接正在发送。链接只能使用一次，有效期 30 分钟。",
+    "resetTitle": "选择新密码",
+    "resetDescription": "使用旧密码登录的所有会话都会被退出。登录时仍会要求两步验证。",
+    "newPasswordAgain": "再次输入新密码",
+    "passwordsDiffer": "两次输入的密码不一致。",
+    "setNewPassword": "设置新密码",
+    "resetDone": "你的密码已更改。请使用新密码登录。",
+    "backToSignIn": "返回登录",
+    "resetMissingToken": "此页面需要邮件中的链接。请从邮件中打开，或申请新的链接。"
   },
   "dashboard": {
     "title": "总览",
@@ -324,7 +335,9 @@
       "registry.deleted": "删除了仓库凭据",
       "port.opened": "打开了一个端口",
       "port.closed": "关闭了一个端口",
-      "app.job_run": "立即运行了一个计划命令"
+      "app.job_run": "立即运行了一个计划命令",
+      "auth.password_reset_requested": "申请了密码重置链接",
+      "auth.password_reset": "通过链接重置了密码"
     }
   },
   "projects": {
@@ -2605,6 +2618,18 @@
         "cause": "通过 {{0}} 询问时，{{1}}。",
         "impact": "没有列出任何内容。你仍然可以自己输入仓库地址和分支。",
         "fix": "检查连接的令牌能否读取仓库——GitHub 上需要 repo 范围或 Contents 读取权限，GitLab 上需要 read_api，Gitea 上需要 read:repository——并确认面板能访问该 Git 主机。"
+      },
+      "auth_reset_unavailable": {
+        "title": "此面板无法发送重置链接",
+        "cause": "它没有设置邮件服务器，或没有可链接的面板 URL。",
+        "impact": "未发送任何链接。",
+        "fix": "请此面板的管理员重置你的密码，或填写 设置 → 邮件 和面板 URL。运行服务器的人也可以使用 skifity admin reset-password。"
+      },
+      "auth_reset_invalid": {
+        "title": "此重置链接无法使用",
+        "cause": "它已被使用、超过 30 分钟，或不是此面板发送的链接。",
+        "impact": "你的密码未更改。",
+        "fix": "从登录页面申请新的链接。只有最新的链接有效。"
       }
     }
   },

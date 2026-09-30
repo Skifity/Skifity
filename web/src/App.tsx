@@ -14,6 +14,7 @@ import { DatabaseDetailPage } from "@/pages/database-detail"
 import { DatabasesPage } from "@/pages/databases"
 import { InvitePage } from "@/pages/invite"
 import { LoginPage } from "@/pages/login"
+import { ResetPasswordPage } from "@/pages/reset-password"
 import { NewAppPage } from "@/pages/new-app"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProjectDetailPage } from "@/pages/project-detail"
@@ -68,6 +69,10 @@ export function App() {
       </Routes>
     )
   }
+
+  // A reset link is followed by somebody who is not signed in, and it works
+  // the same whether a session happens to be open in this browser or not.
+  if (window.location.pathname === "/reset-password") return <ResetPasswordPage />
 
   if (needsSetup) return <SetupPage onComplete={() => void refresh()} />
   if (!user) return <LoginPage onSignedIn={() => void refresh()} />

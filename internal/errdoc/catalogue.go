@@ -406,6 +406,28 @@ func PortTaken(port int, protocol string) *Problem {
 		WithDocs("/docs/concepts#ports-that-are-not-http")
 }
 
+// PasswordResetUnavailable is a panel with nothing to send a reset link
+// through, or no address to link to.
+func PasswordResetUnavailable() *Problem {
+	return New("auth.reset_unavailable", "This panel cannot send a reset link").
+		WithCause("It has no mail server set, or no Panel URL to link to.").
+		WithImpact("No link was sent.").
+		WithFix("Ask an administrator of this panel to reset your password, or to fill in Settings → Email and the Panel URL. Whoever runs the server can also use skifity admin reset-password.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/troubleshooting#i-have-forgotten-my-password")
+}
+
+// PasswordResetInvalid is a reset link that was used, has expired or never
+// existed — one answer for all three.
+func PasswordResetInvalid() *Problem {
+	return New("auth.reset_invalid", "This reset link cannot be used").
+		WithCause("It has been used already, it is more than 30 minutes old, or it was never a link this panel sent.").
+		WithImpact("Your password has not changed.").
+		WithFix("Ask for a new link from the sign-in page. Only the newest one works.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/troubleshooting#i-have-forgotten-my-password")
+}
+
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.
 func TunnelUnreachable(database string) *Problem {
 	return New("database.tunnel_unreachable", "The panel could not reach this database").

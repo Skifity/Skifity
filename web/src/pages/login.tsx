@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { ArrowLeftIcon, KeyRoundIcon } from "lucide-react"
 
 import { ErrorDisplay } from "@/components/error-display"
@@ -17,6 +17,39 @@ import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api"
 import type { Meta } from "@/lib/types"
 import { CenteredLayout } from "@/pages/setup"
+
+/**
+ * Asking for a reset link, in place under "Lost your password?". The answer
+ * is the same whether or not the address has an account, so it says what
+ * happens if it does.
+ */
+function ResetLinkRequest({ email }: { email: string }) {
+  const { t } = useTranslation()
+  const request = useMutation({
+    mutationFn: () =>
+      api.anonymous("/api/auth/password-reset", { method: "POST", body: { email: email.trim() } }),
+  })
+  if (request.isSuccess) {
+    return <p className="pt-2 text-left">{t("auth.resetLinkSent", { email: email.trim() })}</p>
+  }
+  return (
+    <div className="space-y-2 pt-2 text-left">
+      <p>{t("auth.resetLinkHelp")}</p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        disabled={!email.trim() || request.isPending}
+        onClick={() => request.mutate()}
+      >
+        {request.isPending && <Spinner />}
+        {t("auth.sendResetLink")}
+      </Button>
+      {request.error != null && <ErrorDisplay error={request.error} compact />}
+    </div>
+  )
+}
 
 /**
  * Sign-in.
@@ -212,7 +245,11 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                           {t("auth.forgotPassword")}
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <p className="pt-2 text-left">{t("auth.forgotPasswordHelp")}</p>
+                          {meta.data?.password_reset ? (
+                            <ResetLinkRequest email={email} />
+                          ) : (
+                            <p className="pt-2 text-left">{t("auth.forgotPasswordHelp")}</p>
+                          )}
                         </CollapsibleContent>
                       </Collapsible>
                     </FieldDescription>

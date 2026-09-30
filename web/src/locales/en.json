@@ -110,7 +110,7 @@
     "signInTitle": "Sign in to {{product}}",
     "signInSubtitle": "Your apps, on servers you own.",
     "forgotPassword": "Lost your password?",
-    "forgotPasswordHelp": "There is no email reset on a self-hosted panel. Recover access from the server: see the troubleshooting guide.",
+    "forgotPasswordHelp": "Recover access from the server: see the troubleshooting guide. This panel has no mail server to send a reset link through.",
     "setupTitle": "Welcome to {{product}}",
     "setupSubtitle": "Create the first account. This takes a minute.",
     "setupToken": "Setup token",
@@ -194,7 +194,18 @@
     "tokenExpiry30": "In 30 days",
     "tokenExpiry90": "In 90 days",
     "tokenExpiry365": "In a year",
-    "tokenExpiresOn": "expires {{date}}"
+    "tokenExpiresOn": "expires {{date}}",
+    "resetLinkHelp": "Enter your email address above, and a link to choose a new password is sent to it.",
+    "sendResetLink": "Send me a reset link",
+    "resetLinkSent": "If an account uses {{email}}, a link is on its way. It works once, for 30 minutes.",
+    "resetTitle": "Choose a new password",
+    "resetDescription": "Everything signed in with your old password is signed out. Two-factor is still asked for when you sign in.",
+    "newPasswordAgain": "New password, again",
+    "passwordsDiffer": "The two passwords are not the same.",
+    "setNewPassword": "Set the new password",
+    "resetDone": "Your password has changed. Sign in with the new one.",
+    "backToSignIn": "Back to sign-in",
+    "resetMissingToken": "This page needs the link from the email. Open it from there, or ask for a new one."
   },
   "dashboard": {
     "title": "Overview",
@@ -332,7 +343,9 @@
       "registry.deleted": "removed registry credentials",
       "port.opened": "opened a port",
       "port.closed": "closed a port",
-      "app.job_run": "ran a scheduled command now"
+      "app.job_run": "ran a scheduled command now",
+      "auth.password_reset_requested": "asked for a password reset link",
+      "auth.password_reset": "reset their password through a link"
     }
   },
   "projects": {
@@ -2619,6 +2632,18 @@
         "cause": "Asked through {{0}}, {{1}}.",
         "impact": "Nothing was listed. You can still type the repository's address and branch yourself.",
         "fix": "Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, read_api on GitLab, read:repository on Gitea — and that the panel can reach the Git host."
+      },
+      "auth_reset_unavailable": {
+        "title": "This panel cannot send a reset link",
+        "cause": "It has no mail server set, or no Panel URL to link to.",
+        "impact": "No link was sent.",
+        "fix": "Ask an administrator of this panel to reset your password, or to fill in Settings → Email and the Panel URL. Whoever runs the server can also use skifity admin reset-password."
+      },
+      "auth_reset_invalid": {
+        "title": "This reset link cannot be used",
+        "cause": "It has been used already, it is more than 30 minutes old, or it was never a link this panel sent.",
+        "impact": "Your password has not changed.",
+        "fix": "Ask for a new link from the sign-in page. Only the newest one works."
       }
     }
   },

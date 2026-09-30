@@ -520,6 +520,8 @@ export type Meta = {
   cli_platform: string
   /** Every platform the download serves, this panel's own first. */
   cli_platforms: string[]
+  /** Whether "Lost your password?" can send a reset link by email. */
+  password_reset: boolean
 }
 
 export type CanvasNode = {

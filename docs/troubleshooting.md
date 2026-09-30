@@ -47,8 +47,17 @@ kubectl -n skifity-system logs -l app.kubernetes.io/component=panel | grep setup
 
 ## I have forgotten my password
 
-There is no email reset: a self-hosted panel has no mail server it can trust.
-Reset it from the server instead:
+**Forgot your password?** on the sign-in page sends a link to your address,
+when the panel has a mail server (Settings → Email) and a Panel URL to link to.
+The link works once, for half an hour; only the newest one works; and using it
+signs out everything that was signed in with the old password. It does not
+skip two-factor: an account that has it still needs its code afterwards.
+
+The page answers the same whether or not the address has an account, so it
+cannot be used to find out who does.
+
+Without a mail server, or when the mail does not arrive, reset it from the
+server instead:
 
 ```sh
 sudo skifity admin reset-password you@example.com

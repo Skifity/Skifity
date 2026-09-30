@@ -159,6 +159,10 @@ func (s *Server) routes() chi.Router {
 		api.Post("/setup", s.handleSetupComplete)
 
 		api.Post("/auth/login", s.handleLogin)
+		// Open, because the person asking cannot sign in: that is the point.
+		// See reset_handlers.go for what keeps them from being a hole.
+		api.Post("/auth/password-reset", s.handleRequestPasswordReset)
+		api.Post("/auth/password-reset/confirm", s.handleConfirmPasswordReset)
 		api.Post("/auth/logout", s.handleLogout)
 		// Both halves of single sign-on are open, like signing in with a
 		// password: somebody with no account has no credentials to present.

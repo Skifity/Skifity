@@ -262,21 +262,25 @@ type metaResponse struct {
 	// CLIPlatforms is every platform /api/cli/download can serve, this one
 	// first, so a page can offer the right file for the computer it is on.
 	CLIPlatforms []string `json:"cli_platforms"`
+	// PasswordReset is whether the sign-in page offers a reset by email:
+	// only when the panel has a mail server and an address to link to.
+	PasswordReset bool `json:"password_reset"`
 }
 
 // handleMeta gives the frontend everything it needs before a user signs in.
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metaResponse{
-		Product:      version.Name,
-		Version:      version.Version,
-		Commit:       version.Commit,
-		Tagline:      version.Tagline,
-		Locales:      []string{"en", "id", "hi", "ru", "zh-CN"},
-		DevMode:      s.cfg.DevMode,
-		SSO:          s.ssoStatus(r),
-		CLIPlatform:  cliPlatform(),
-		CLIPlatforms: s.cliPlatforms(),
-		ServerNow:    time.Now().UTC().Format(time.RFC3339),
+		Product:       version.Name,
+		Version:       version.Version,
+		Commit:        version.Commit,
+		Tagline:       version.Tagline,
+		Locales:       []string{"en", "id", "hi", "ru", "zh-CN"},
+		DevMode:       s.cfg.DevMode,
+		SSO:           s.ssoStatus(r),
+		CLIPlatform:   cliPlatform(),
+		CLIPlatforms:  s.cliPlatforms(),
+		ServerNow:     time.Now().UTC().Format(time.RFC3339),
+		PasswordReset: s.passwordResetAvailable(r.Context()),
 	})
 }
 
