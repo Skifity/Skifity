@@ -103,7 +103,9 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                       browser things about accounts it does not have. Everything
                       else is one sentence and a line in the panel's log.
                     */}
-                    {t(`auth.ssoError.${["no_account", "state", "expired", "disabled"].includes(ssoError) ? ssoError : "refused"}`)}
+                    {t(
+                      `auth.ssoError.${["no_account", "state", "expired", "disabled", "link_required"].includes(ssoError) ? ssoError : "refused"}`,
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

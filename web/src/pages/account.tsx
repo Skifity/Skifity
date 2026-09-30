@@ -62,6 +62,7 @@ export function AccountPage() {
       <ProfileCard />
       <PasswordCard />
       <TwoFactorCard />
+      <SingleSignOnCard />
       <SessionsCard />
       <TokensCard />
     </Page>
@@ -377,6 +378,115 @@ function TwoFactorCard() {
  * will ever exist. That is why there is a download button and not just a
  * paragraph telling somebody to write them down.
  */
+/** What /api/me/sso answers with. */
+type SingleSignOnLink = {
+  available: boolean
+  label?: string
+  linked: Array<{ issuer: string; email: string; created_at: string }>
+  can_unlink: boolean
+}
+
+/**
+ * Linking this account to the identity provider.
+ *
+ * Single sign-on finds a returning person by who the provider says they are,
+ * not by their address, so an account that already has a password is only
+ * joined to a provider account by somebody signed into it — here, after typing
+ * the password again. The panel sends the browser to the provider and back.
+ */
+function SingleSignOnCard() {
+  const { t } = useTranslation()
+  const [params] = useSearchParams()
+  const confirmUnlink = useConfirm()
+  const outcome = params.get("sso")
+
+  const sso = useQuery({
+    queryKey: ["me-sso"],
+    queryFn: () => api.get<SingleSignOnLink>("/api/me/sso"),
+  })
+
+  const link = useMutation({
+    mutationFn: () => api.post<{ url: string }>("/api/me/sso/link"),
+    onSuccess: (data) => window.location.assign(data.url),
+  })
+
+  const unlink = useMutation({
+    mutationFn: () => api.delete("/api/me/sso"),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["me-sso"] }),
+  })
+
+  if (sso.isLoading) return <Skeleton className="h-24" />
+  if (sso.error) return <ErrorDisplay error={sso.error} onRetry={() => void sso.refetch()} />
+  const current = sso.data
+  if (!current || (!current.available && current.linked.length === 0)) return null
+
+  const provider = current.label ?? t("auth.ssoProviderFallback")
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("auth.ssoCardTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {outcome === "linked" && (
+          <Alert>
+            <AlertDescription>{t("auth.ssoLinkedNotice")}</AlertDescription>
+          </Alert>
+        )}
+        {(outcome === "taken" || outcome === "failed") && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {t(outcome === "taken" ? "auth.ssoTakenNotice" : "auth.ssoFailedNotice")}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {current.linked.length > 0 ? (
+          <>
+            {current.linked.map((identity) => (
+              <p key={identity.issuer + identity.email} className="text-sm">
+                {t("auth.ssoLinked", { email: identity.email })}
+              </p>
+            ))}
+            {current.can_unlink ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={unlink.isPending}
+                onClick={async () => {
+                  const confirmed = await confirmUnlink({
+                    title: t("auth.ssoUnlinkTitle"),
+                    description: t("auth.ssoUnlinkDescription"),
+                    confirmLabel: t("auth.ssoUnlink"),
+                    destructive: true,
+                  })
+                  if (confirmed) unlink.mutate()
+                }}
+              >
+                {unlink.isPending && <Spinner />}
+                {t("auth.ssoUnlink")}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("auth.ssoOnlyWayIn")}</p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">{t("auth.ssoCardHelp", { provider })}</p>
+            <Button size="sm" disabled={link.isPending} onClick={() => link.mutate()}>
+              {link.isPending && <Spinner />}
+              {t("auth.ssoLink", { provider })}
+            </Button>
+          </>
+        )}
+
+        {link.error && <ErrorDisplay error={link.error} />}
+        {unlink.error && <ErrorDisplay error={unlink.error} />}
+      </CardContent>
+    </Card>
+  )
+}
+
 function RecoveryCodes({ codes }: { codes: string[] }) {
   const { t } = useTranslation()
 

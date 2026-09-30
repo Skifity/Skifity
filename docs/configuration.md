@@ -196,6 +196,29 @@ one, and the refusal is indistinguishable from a wrong password — so the sign-
 form does not become a way to find out which addresses use single sign-on. A new
 account joins no team: an administrator adds it to one, the same as any other.
 
+### How a returning person is recognised
+
+By who the provider says they are — its issuer and its permanent id for them —
+and not by their email address. An address is not an identity: some providers
+let a user type their own, and Entra ID does not say whether it verified one.
+Matching on the address alone would let whoever can make an account at the
+provider with the owner's address sign in as the owner.
+
+So an address only finds an **existing** account here the first time, and only
+when that cannot hand somebody else's account over:
+
+* the account has **no password**, so it only ever existed through single
+  sign-on; or
+* the provider says, in its `email_verified` claim, that it **verified** the
+  address.
+
+Otherwise the sign-in is refused with a message saying what to do: sign in with
+the password, open **Account → Single sign-on**, and link the provider there.
+Linking asks for the password again, and the browser that comes back from the
+provider has to still be signed in as the same account. After that, the account
+is found by the provider's id even if the address changes, and it can be
+unlinked from the same card as long as it still has a password.
+
 Nothing is lost if the provider goes away. The first administrator account still
 has a password, and API tokens keep working.
 

@@ -4192,6 +4192,45 @@ for a stranger to fill a server.
 The test that checks production's address never reaches a preview was confirmed
 to fail with the old copy put back.
 
+## Phase 77 — single sign-on found accounts by their address
+
+Found by the Coolify research pass, which was reading CVE-2026-86117 — Coolify's
+OAuth sign-in matched existing accounts by email alone — and checked whether
+Skifity did the same. It did. Every single sign-on looked the account up by the
+address in the ID token, and a token with no `email_verified` claim at all was
+accepted as if the provider had vouched for it. Entra ID sends no such claim and
+lets a user's address be set, which is the 2023 "nOAuth" class; Grafana's
+CVE-2023-3128 is the same bug. Whoever could make an identity at the provider
+carrying the owner's address could sign in as the owner — password, two-factor
+and all bypassed.
+
+Now:
+
+* **A returning person is matched on the provider's issuer and subject**,
+  recorded in `user_identities` the first time. An address change at the
+  provider no longer matters, and a different identity claiming a linked
+  account's address gets its own account or nothing.
+* **An address finds an existing account only when that is safe**: the account
+  has no password (it only ever existed through single sign-on, and this keeps
+  everybody who signed in before identities were recorded working), or the
+  provider explicitly said `email_verified: true`. Silence is not true any more.
+* **Everything else is refused** with a message, and the person links the
+  provider from **Account → Single sign-on** after signing in with their
+  password. Linking is behind the same re-authentication as two-factor and API
+  tokens, and the browser that comes back from the provider has to be signed in
+  as the account that asked.
+* **Unlinking** is refused for an account with no password, which would have no
+  way in left.
+
+The test that plays the attack — an identity with the owner's address and no
+verification claim — was confirmed to fail with the old rule put back.
+
+### Not executed
+
+No real provider has been signed in through. The claim handling, the account
+decision, the linking flow and the endpoints are tested; the round trip to Okta,
+Entra or Keycloak is not.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

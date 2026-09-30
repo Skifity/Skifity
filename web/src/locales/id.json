@@ -151,7 +151,8 @@
       "no_account": "Anda belum punya akun di panel ini. Minta administrator mengundang Anda.",
       "state": "Proses masuk itu tidak kembali seperti saat berangkat. Mulai lagi.",
       "expired": "Proses masuk itu terlalu lama. Mulai lagi.",
-      "disabled": "Akun itu telah dinonaktifkan di panel ini."
+      "disabled": "Akun itu telah dinonaktifkan di panel ini.",
+      "link_required": "Sudah ada akun dengan alamat ini dan akun itu punya password. Masuk dengan password, lalu tautkan single sign-on dari halaman akun Anda."
     },
     "teamNameExample": "Nusantara",
     "revokeSessionConfirm": "{{device}} akan keluar dan harus masuk lagi.",
@@ -164,7 +165,19 @@
     },
     "signOutEverywhere": "Keluar dari perangkat lain",
     "signOutEverywhereConfirm": "Semua perangkat lain yang masuk ke akun ini akan dikeluarkan. Perangkat ini tetap masuk.",
-    "signedOutEverywhereDone": "Semua perangkat lain sudah dikeluarkan."
+    "signedOutEverywhereDone": "Semua perangkat lain sudah dikeluarkan.",
+    "ssoCardTitle": "Single sign-on",
+    "ssoCardHelp": "Tautkan akun {{provider}} Anda agar bisa masuk dengannya, tanpa password.",
+    "ssoProviderFallback": "penyedia identitas",
+    "ssoLink": "Tautkan {{provider}}",
+    "ssoLinked": "Tertaut ke {{email}}.",
+    "ssoUnlink": "Lepas tautan",
+    "ssoUnlinkTitle": "Lepas tautan single sign-on?",
+    "ssoUnlinkDescription": "Anda akan masuk dengan password sampai menautkannya lagi.",
+    "ssoOnlyWayIn": "Akun ini tidak punya password, jadi single sign-on adalah satu-satunya jalan masuk. Buat password dulu sebelum melepas tautannya.",
+    "ssoLinkedNotice": "Single sign-on sudah tertaut. Mulai sekarang Anda bisa masuk dengannya.",
+    "ssoTakenNotice": "Akun penyedia itu sudah tertaut ke akun lain di panel ini.",
+    "ssoFailedNotice": "Akun penyedia tidak bisa ditautkan. Coba lagi."
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -269,7 +282,9 @@
       "git_source.webhook_registered": "Webhook didaftarkan di repositori",
       "app.source_uploaded": "Mengunggah kode aplikasi",
       "app.password_set": "Password app dipasang",
-      "app.password_removed": "Password app dihapus"
+      "app.password_removed": "Password app dihapus",
+      "auth.sso_linked": "Single sign-on ditautkan",
+      "auth.sso_unlinked": "Tautan single sign-on dilepas"
     }
   },
   "projects": {
@@ -1983,6 +1998,12 @@
         "cause": "Tidak ada build untuk {{0}} di samping panel ini. Yang ada: {{1}}.",
         "impact": "Tidak ada yang diunduh. Men-deploy folder dari halaman Aplikasi baru di panel tetap bisa tanpanya.",
         "fix": "Buat dengan `make release` lalu salin ke direktori CLI panel, atau pakai image panel, yang membawa semua platform."
+      },
+      "sso_last_way_in": {
+        "title": "Single sign-on adalah satu-satunya jalan masuk akun ini",
+        "cause": "Akun ini tidak punya kata sandi, jadi melepas tautan penyedia akan membuatnya tidak bisa dimasuki sama sekali.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Buat kata sandi di halaman ini dulu, lalu lepas tautannya."
       }
     }
   },

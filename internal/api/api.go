@@ -185,6 +185,7 @@ func (s *Server) routes() chi.Router {
 			// Proving who you are again. Not behind requireRecentAuth, for the
 			// obvious reason.
 			authed.Post("/me/reauth", s.handleReauth)
+			authed.Get("/me/sso", s.handleGetSSOLink)
 
 			// The three actions that turn a session somebody borrowed into
 			// access they keep: switching the second factor off, reading the
@@ -196,6 +197,11 @@ func (s *Server) routes() chi.Router {
 				sensitive.Post("/me/totp/confirm", s.handleConfirmTOTP)
 				sensitive.Delete("/me/totp", s.handleDisableTOTP)
 				sensitive.Post("/me/tokens", s.handleCreateToken)
+				// Linking a provider adds a way into the account, and
+				// unlinking one removes it: both are the account's own
+				// front door, so both ask for the password again.
+				sensitive.Post("/me/sso/link", s.handleStartSSOLink)
+				sensitive.Delete("/me/sso", s.handleUnlinkSSO)
 			})
 
 			authed.Get("/teams", s.handleListTeams)

@@ -151,7 +151,8 @@
       "no_account": "你在此面板上还没有账户。请让管理员邀请你。",
       "state": "此次登录返回的内容与发出时不符。请重新开始。",
       "expired": "此次登录用时过长。请重新开始。",
-      "disabled": "该账户已在此面板上停用。"
+      "disabled": "该账户已在此面板上停用。",
+      "link_required": "已存在使用此地址且设有密码的账号。请先用密码登录，然后在账号页面关联单点登录。"
     },
     "teamNameExample": "示例公司",
     "revokeSessionConfirm": "{{device}} 会被登出，需要重新登录。",
@@ -164,7 +165,19 @@
     },
     "signOutEverywhere": "退出其他所有设备",
     "signOutEverywhereConfirm": "已登录此账户的其他所有设备都会被退出，当前设备保持登录。",
-    "signedOutEverywhereDone": "其他所有设备都已退出。"
+    "signedOutEverywhereDone": "其他所有设备都已退出。",
+    "ssoCardTitle": "单点登录",
+    "ssoCardHelp": "关联你的 {{provider}} 账号，即可用它代替密码登录。",
+    "ssoProviderFallback": "身份提供商",
+    "ssoLink": "关联 {{provider}}",
+    "ssoLinked": "已关联到 {{email}}。",
+    "ssoUnlink": "取消关联",
+    "ssoUnlinkTitle": "取消关联单点登录？",
+    "ssoUnlinkDescription": "在重新关联之前，你将使用密码登录。",
+    "ssoOnlyWayIn": "此账号没有密码，单点登录是唯一的登录方式。请先设置密码再取消关联。",
+    "ssoLinkedNotice": "单点登录已关联。从现在起你可以用它登录。",
+    "ssoTakenNotice": "该提供商账号已关联到此面板上的另一个账号。",
+    "ssoFailedNotice": "无法关联提供商账号。请重试。"
   },
   "dashboard": {
     "title": "总览",
@@ -269,7 +282,9 @@
       "git_source.webhook_registered": "已在仓库上注册 webhook",
       "app.source_uploaded": "上传了应用代码",
       "app.password_set": "已设置应用密码",
-      "app.password_removed": "已移除应用密码"
+      "app.password_removed": "已移除应用密码",
+      "auth.sso_linked": "已关联单点登录",
+      "auth.sso_unlinked": "已取消关联单点登录"
     }
   },
   "projects": {
@@ -1983,6 +1998,12 @@
         "cause": "此面板旁没有 {{0}} 的构建。现有：{{1}}。",
         "impact": "没有下载任何内容。在面板自己的“新建应用”页面部署文件夹不需要它。",
         "fix": "用 `make release` 构建并复制到面板的 CLI 目录，或使用包含所有平台的面板镜像。"
+      },
+      "sso_last_way_in": {
+        "title": "单点登录是此账号唯一的登录方式",
+        "cause": "此账号没有密码，取消关联提供商后将无法登录。",
+        "impact": "未做任何更改。",
+        "fix": "请先在此页面设置密码，然后再取消关联。"
       }
     }
   },

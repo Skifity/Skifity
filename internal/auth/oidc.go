@@ -92,9 +92,18 @@ var ErrSSONotConfigured = errors.New("single sign-on is not configured")
 
 // Identity is what the provider said about the person signing in.
 type Identity struct {
+	// Issuer and Subject are who this person is, as far as the provider is
+	// concerned: the pair never changes and is never reused. An email address
+	// is neither — some providers let a user type their own.
+	Issuer  string
 	Subject string
 	Email   string
-	Name    string
+	// EmailVerified is true only when the provider said so. A provider that
+	// sends no email_verified claim at all has not vouched for the address,
+	// which matters the moment the address is used to find an account that
+	// already exists.
+	EmailVerified bool
+	Name          string
 }
 
 // OIDC talks to one provider. It is built per request from the settings, with
@@ -203,15 +212,25 @@ func (o *OIDC) Exchange(ctx context.Context, redirectURL, code, verifier, nonce 
 		return Identity{}, errors.New("the ID token is for a different sign-in attempt")
 	}
 
-	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified *bool  `json:"email_verified"`
-		Name          string `json:"name"`
-		PreferredName string `json:"preferred_username"`
-	}
+	var claims idClaims
 	if err := idToken.Claims(&claims); err != nil {
 		return Identity{}, fmt.Errorf("read the ID token's claims: %w", err)
 	}
+	return o.identityFrom(idToken.Issuer, idToken.Subject, claims)
+}
+
+// idClaims are the parts of an ID token this panel reads.
+type idClaims struct {
+	Email string `json:"email"`
+	// A pointer, because absent and false mean different things: false is the
+	// provider saying no, absent is the provider saying nothing.
+	EmailVerified *bool  `json:"email_verified"`
+	Name          string `json:"name"`
+	PreferredName string `json:"preferred_username"`
+}
+
+// identityFrom turns a verified token's claims into who is signing in.
+func (o *OIDC) identityFrom(issuer, subject string, claims idClaims) (Identity, error) {
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
 	if email == "" {
 		return Identity{}, errors.New("the provider did not send an email address, which is how an account is matched here")
@@ -232,7 +251,10 @@ func (o *OIDC) Exchange(ctx context.Context, redirectURL, code, verifier, nonce 
 	if name == "" {
 		name, _, _ = strings.Cut(email, "@")
 	}
-	return Identity{Subject: idToken.Subject, Email: email, Name: name}, nil
+	return Identity{
+		Issuer: issuer, Subject: subject, Email: email,
+		EmailVerified: claims.EmailVerified != nil && *claims.EmailVerified, Name: name,
+	}, nil
 }
 
 // RandomState is a value that has to come back unchanged.

@@ -159,7 +159,8 @@
       "no_account": "You do not have an account on this panel. Ask an administrator to invite you.",
       "state": "That sign-in did not come back the way it left. Start again.",
       "expired": "That sign-in took too long. Start again.",
-      "disabled": "That account has been disabled on this panel."
+      "disabled": "That account has been disabled on this panel.",
+      "link_required": "An account with this address already exists and has a password. Sign in with the password, then link single sign-on from your account page."
     },
     "teamNameExample": "Acme",
     "revokeSessionConfirm": "{{device}} is signed out and has to sign in again.",
@@ -172,7 +173,19 @@
     },
     "signOutEverywhere": "Sign out everywhere else",
     "signOutEverywhereConfirm": "Every other device signed in to this account will be signed out. This one stays signed in.",
-    "signedOutEverywhereDone": "Every other device has been signed out."
+    "signedOutEverywhereDone": "Every other device has been signed out.",
+    "ssoCardTitle": "Single sign-on",
+    "ssoCardHelp": "Link your {{provider}} account to sign in with it instead of a password.",
+    "ssoProviderFallback": "identity provider",
+    "ssoLink": "Link {{provider}}",
+    "ssoLinked": "Linked to {{email}}.",
+    "ssoUnlink": "Unlink",
+    "ssoUnlinkTitle": "Unlink single sign-on?",
+    "ssoUnlinkDescription": "You will sign in with your password until you link it again.",
+    "ssoOnlyWayIn": "This account has no password, so single sign-on is its only way in. Set a password before unlinking it.",
+    "ssoLinkedNotice": "Single sign-on is linked. You can sign in with it from now on.",
+    "ssoTakenNotice": "That provider account is already linked to another account on this panel.",
+    "ssoFailedNotice": "The provider account could not be linked. Try again."
   },
   "dashboard": {
     "title": "Overview",
@@ -277,7 +290,9 @@
       "git_source.webhook_registered": "Webhook registered on the repository",
       "app.source_uploaded": "Uploaded the app's code",
       "app.password_set": "App password set",
-      "app.password_removed": "App password removed"
+      "app.password_removed": "App password removed",
+      "auth.sso_linked": "Linked single sign-on",
+      "auth.sso_unlinked": "Unlinked single sign-on"
     }
   },
   "projects": {
@@ -1995,6 +2010,12 @@
         "cause": "There is no build for {{0}} beside this panel. It has: {{1}}.",
         "impact": "Nothing was downloaded. Deploying a folder from the panel's own New app page works without it.",
         "fix": "Build it with `make release` and copy it into the panel's CLI directory, or use the panel's image, which carries every platform."
+      },
+      "sso_last_way_in": {
+        "title": "Single sign-on is this account's only way in",
+        "cause": "This account has no password, so unlinking the provider would leave it with no way to sign in.",
+        "impact": "Nothing was changed.",
+        "fix": "Set a password on this page first, then unlink."
       }
     }
   },
