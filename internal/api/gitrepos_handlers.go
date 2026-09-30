@@ -88,10 +88,13 @@ func (s *Server) gitListRequest(r *http.Request, source store.GitSource) gitsrc.
 	if len(query) > maxListQuery {
 		query = query[:maxListQuery]
 	}
+	token, email := s.gitCredentials(r, source)
 	return gitsrc.ListRequest{
 		Kind:    source.Kind,
 		BaseURL: source.BaseURL,
-		Token:   s.gitToken(r, source),
+		Token:   token,
+		Email:   email,
+		Account: source.Account,
 		Query:   query,
 	}
 }

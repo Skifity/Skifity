@@ -35,12 +35,15 @@ import (
 type HookRequest struct {
 	// RepoURL is the repository to hook.
 	RepoURL string
-	// Kind is github, gitlab or gitea. Empty is worked out from the host.
+	// Kind is github, gitlab, gitea or bitbucket. Empty is worked out from the
+	// host.
 	Kind string
 	// BaseURL is the provider's own address, for a self-hosted instance.
 	BaseURL string
 	// Token must be able to manage the repository's hooks.
 	Token string
+	// Email goes with a Bitbucket API token; see ListRequest.Email.
+	Email string
 	// DeliverTo is the panel's own webhook address for this Git connection.
 	DeliverTo string
 	// Secret signs the deliveries, and is the same one the panel verifies with.
@@ -88,6 +91,8 @@ func EnsureWebhook(ctx context.Context, req HookRequest) HookResult {
 		return ensureGitLabHook(ctx, req, owner, repo)
 	case "gitea":
 		return ensureGiteaHook(ctx, req, owner, repo)
+	case "bitbucket":
+		return ensureBitbucketHook(ctx, req, owner, repo)
 	}
 	return HookResult{Reason: "Skifity does not know how to register a webhook on this host"}
 }
@@ -231,12 +236,7 @@ func sendHook(ctx context.Context, method, endpoint, token, scheme string, body 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", version.UserAgent())
-	switch scheme {
-	case "bearer":
-		request.Header.Set("Authorization", "Bearer "+token)
-	default:
-		request.Header.Set("Authorization", "token "+token)
-	}
+	authorize(request, token, scheme)
 
 	resp, err := client.Do(request)
 	if err != nil {

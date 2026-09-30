@@ -44,10 +44,24 @@ type createGitSourceRequest struct {
 	Kind    string `json:"kind"`
 	Name    string `json:"name"`
 	BaseURL string `json:"base_url,omitempty"`
+	// Account is the user or organisation; for Bitbucket, the workspace.
 	Account string `json:"account,omitempty"`
-	// Token is a personal access token for the GitLab, Gitea and GitHub PAT kinds.
+	// Token is a personal access token for the GitLab, Gitea and GitHub PAT
+	// kinds, and an API token or an access token for Bitbucket.
 	Token string `json:"token,omitempty"`
+	// Email is the Atlassian account a Bitbucket API token belongs to, and is
+	// read for no other kind. It is sealed with the token, never shown again.
+	Email string `json:"email,omitempty"`
 }
+
+// checkBitbucketToken asks Bitbucket whether a new connection's token works. A
+// variable, so a test can answer for a Bitbucket it does not run; the real one
+// goes through internal/netguard like every other request gitsrc makes.
+var checkBitbucketToken = gitsrc.CheckBitbucket
+
+// maxEmailLength is the longest address SMTP allows, which is longer than
+// any Atlassian account's.
+const maxEmailLength = 254
 
 func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
@@ -66,12 +80,13 @@ func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 	// clone a private repository, and had five settings behind it that nothing
 	// read. A personal access token is the path that works.
 	switch req.Kind {
-	case "github_pat", "gitlab", "gitea", "generic":
+	case "github_pat", "gitlab", "gitea", "bitbucket", "generic":
 	default:
-		writeError(w, r, errdoc.BadRequest("Kind must be github_pat, gitlab, gitea or generic."))
+		writeError(w, r, errdoc.BadRequest("Kind must be github_pat, gitlab, gitea, bitbucket or generic."))
 		return
 	}
-	if req.Kind != "generic" && strings.TrimSpace(req.Token) == "" {
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Kind != "generic" && req.Token == "" {
 		writeError(w, r, errdoc.BadRequest("A token is needed so Skifity can read the repository and register a webhook."))
 		return
 	}
@@ -91,6 +106,13 @@ func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 		BaseURL: baseURL,
 		Account: strings.TrimSpace(req.Account),
 	}
+	email := ""
+	if req.Kind == "bitbucket" {
+		if email, err = s.checkBitbucketSource(r, &source, req.Token, req.Email); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
 	// The webhook secret is the connection's own, made here. It was the token:
 	// registered as the secret on every repository the panel hooked, and sent
 	// verbatim by GitLab on every delivery, so the account's token went with
@@ -103,6 +125,9 @@ func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 	stored := map[string]string{"webhook_secret": secret}
 	if req.Token != "" {
 		stored["token"] = req.Token
+	}
+	if email != "" {
+		stored["email"] = email
 	}
 	config, err := json.Marshal(stored)
 	if err != nil {

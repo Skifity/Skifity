@@ -131,9 +131,46 @@ func GitListingFailed(connection, reason string) *Problem {
 		WithCause("Asked through %s, %s.", connection, reason).
 		WithImpact("Nothing was listed. You can still type the repository's address and branch yourself.").
 		WithFix("Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, " +
-			"read_api on GitLab, read:repository on Gitea — and that the panel can reach the Git host.").
+			"read_api on GitLab, read:repository on Gitea, read:repository:bitbucket on Bitbucket — and that the panel can reach the Git host.").
 		WithStatus(http.StatusBadGateway).
 		WithDocs("/docs/concepts#choosing-the-repository")
+}
+
+// BitbucketTokenRefused is a Bitbucket connection whose token Bitbucket turned
+// down when the panel checked it, before saving it.
+func BitbucketTokenRefused(answer string) *Problem {
+	return New("git.bitbucket_token_refused", "Bitbucket did not accept this token").
+		WithCause("Bitbucket answered %s when the panel asked what the token can read.", answer).
+		WithImpact("The connection was not saved.").
+		WithFix("Use an API token with read:repository:bitbucket and read:workspace:bitbucket, " +
+			"with the Atlassian account's email or with none; or an access token with Repositories read, " +
+			"with its workspace named. App passwords no longer work.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/troubleshooting#bitbucket-refuses-the-token-or-a-webhook")
+}
+
+// BitbucketWorkspaceUnknown is a Bitbucket connection naming a workspace its
+// token cannot see.
+func BitbucketWorkspaceUnknown(workspace string) *Problem {
+	return New("git.bitbucket_workspace_unknown", "Bitbucket has no such workspace for this token").
+		WithCause("Bitbucket answered that there is no workspace %s this token can read.", workspace).
+		WithImpact("The connection was not saved.").
+		WithFix("Give the workspace's id, the part of a repository's address after bitbucket.org/, " +
+			"or leave it empty to use every workspace an API token can see.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#connecting-bitbucket")
+}
+
+// BitbucketCheckFailed is Bitbucket not answering the panel's check of a new
+// connection's token.
+func BitbucketCheckFailed(reason string) *Problem {
+	return New("git.bitbucket_check_failed", "Bitbucket could not be asked about this token").
+		WithCause("Checking the token, %s.", reason).
+		WithImpact("The connection was not saved.").
+		WithFix("Check that this server can reach api.bitbucket.org over HTTPS, then try again.").
+		WithStatus(http.StatusBadGateway).
+		WithDocs("/docs/troubleshooting#bitbucket-refuses-the-token-or-a-webhook").
+		Retry()
 }
 
 // MaintenanceMessage is a maintenance page with nothing to say, or too much.

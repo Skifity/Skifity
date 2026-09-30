@@ -39,7 +39,7 @@ func (d *Deployer) warnAboutAdvisories(ctx context.Context, deployment *store.De
 	if app.GitSourceID != "" {
 		if source, err := d.db.GetGitSource(ctx, app.GitSourceID); err == nil && gitsrc.SameHost(app.RepoURL, source.BaseURL) {
 			req.Kind, req.BaseURL = source.Kind, source.BaseURL
-			req.Token, _ = d.gitToken(source)
+			req.Token, req.Email, _ = d.gitCredentials(source)
 		}
 	}
 

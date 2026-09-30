@@ -433,11 +433,14 @@ paths:
       tags: [Git]
       summary: Receive a push from a Git host
       description: >-
-        Called by GitHub, GitLab or Gitea, not by a person. It is authenticated
-        by the connection's webhook secret instead of a token:
-        X-Hub-Signature-256 from GitHub and Gitea, X-Gitea-Signature from older
-        Gitea, X-Gitlab-Token from GitLab. A push deploys the apps that build
-        from the branch; a pull request makes, updates or removes a preview.
+        Called by GitHub, GitLab, Gitea or Bitbucket, not by a person. It is
+        authenticated by the connection's webhook secret instead of a token,
+        checked the way the connection's kind signs: X-Hub-Signature-256 from
+        GitHub and Gitea, X-Gitea-Signature from older Gitea, X-Gitlab-Token
+        from GitLab, X-Hub-Signature (sha256=) from Bitbucket. A push deploys
+        the apps that build from the branch; a pull request makes, updates or
+        removes a preview. A Bitbucket push that moved several refs is answered
+        for all of them at once.
       security: []
       requestBody:
         required: true
@@ -1196,7 +1199,9 @@ paths:
       operationId: createGitSource
       tags: [Git]
       summary: Connect a Git host
-      description: Admin. The answer carries the webhook secret, which is not shown again here.
+      description: >-
+        Admin. The answer carries the webhook secret, which is not shown again
+        here. A Bitbucket token is checked with Bitbucket before it is saved.
       requestBody:
         required: true
         content:
@@ -5119,10 +5124,10 @@ components:
       properties:
         id: {type: string}
         team_id: {type: string}
-        kind: {type: string, enum: [github_pat, gitlab, gitea, generic]}
+        kind: {type: string, enum: [github_pat, gitlab, gitea, bitbucket, generic]}
         name: {type: string}
-        base_url: {type: string}
-        account: {type: string}
+        base_url: {type: string, description: 'https://bitbucket.org for every Bitbucket connection.'}
+        account: {type: string, description: 'The user or organisation; for Bitbucket, the workspace.'}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
 
@@ -5138,11 +5143,19 @@ components:
       required: [kind]
       additionalProperties: false
       properties:
-        kind: {type: string, enum: [github_pat, gitlab, gitea, generic]}
+        kind: {type: string, enum: [github_pat, gitlab, gitea, bitbucket, generic]}
         name: {type: string, description: 'The kind when left empty.'}
-        base_url: {type: string, description: 'For a host of your own, such as https://git.example.com.'}
-        account: {type: string}
-        token: {type: string, format: password, description: 'A personal access token. Needed for every kind but generic.'}
+        base_url: {type: string, description: 'For a host of your own, such as https://git.example.com. Bitbucket takes none: it is bitbucket.org.'}
+        account: {type: string, description: 'For Bitbucket, the workspace: needed with an access token, and it narrows an API token to one workspace.'}
+        token: {type: string, format: password, description: 'A personal access token; for Bitbucket, an API token or an access token. Needed for every kind but generic. Never shown again.'}
+        email:
+          type: string
+          format: password
+          description: >-
+            Bitbucket only: the Atlassian account email an API token belongs
+            to, to send the token with Basic auth. Left empty, the token is sent
+            as a bearer token, which is how an access token is sent. Sealed
+            with the token and never shown again.
 
     CreatedGitSource:
       type: object

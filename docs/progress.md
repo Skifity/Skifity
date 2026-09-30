@@ -5853,6 +5853,48 @@ real controllers (KEDA, cert-manager, Traefik) show up as on the fields the
 panel sets, and the event reasons a real kubelet writes. Scheduled commands and
 databases are not compared for drift.
 
+## Bitbucket Cloud as a Git source
+
+A connection can be to Bitbucket Cloud, with everything the other kinds do:
+cloning a private repository, the repository and branch pickers, the webhook
+registered by itself, pushes, tags and pull requests deploying, and a status and
+one comment reported back. Coolify and Dokploy have Bitbucket; Kubero's parser
+read GitHub's field names out of Bitbucket's payloads and marked every delivery
+verified. Here a delivery is checked against `X-Hub-Signature` with the
+connection's own secret before it is read, and refused unsigned.
+
+* **Tokens.** An API token — with the Atlassian account's email, sent as Basic,
+  or without, sent as Bearer — or a repository, project or workspace access
+  token, which names its workspace. App passwords are not taken: Atlassian
+  switched them off on 28 July 2026. The token is checked with Bitbucket before
+  the connection is saved, and sealed with the email beside it.
+* **Clone.** `x-token-auth` with the token, the name Bitbucket documents for
+  both kinds. The name reaches the build from the clone Secret, beside the
+  token, so the Job is the same for every host.
+* **Listing** is workspace by workspace: Atlassian removed the cross-workspace
+  `GET /2.0/repositories?role=member` in 2026. Pages follow Bitbucket's `next`
+  link and only while it stays on the host that was asked.
+* **Webhooks.** A push is every ref it moved, so `git push --follow-tags` deploys
+  the tag. It lists no files, so watch paths never skip a Bitbucket push. A pull
+  request names its head by twelve characters; the whole commit is asked of
+  Bitbucket before the preview is built, and when that fails the preview builds
+  its branch. A pull request from a fork gets no preview, and says why: Bitbucket
+  Cloud keeps no ref for it in the repository it targets. A fork is decided by
+  the repositories' ids, then their names, and anything missing is a fork.
+* **Reporting.** Build statuses under a key made from the check's name, since
+  Bitbucket refuses keys over forty characters; a preview's status names its
+  branch so it shows on the pull request. The comment's marker is a Markdown
+  reference, because Bitbucket prints an HTML comment as text.
+* **Migration 0054** rebuilds `git_sources` for the new kind, with foreign keys
+  off, so no app loses its connection.
+
+Tested against a fake Bitbucket speaking API 2.0's shapes, and payloads built
+from Atlassian's documented events. Nothing has talked to the real bitbucket.org:
+not the token check, the lists, a clone, a webhook delivery, a status or a
+comment. The BBQL search (`name ~ "…"`), a branch name with a slash in a
+directory listing, and whether a status's `url` may be left out are read from
+the documentation and not seen working.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

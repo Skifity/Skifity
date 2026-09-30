@@ -40,13 +40,21 @@ var ErrListingUnsupported = errors.New("this kind of Git connection cannot list 
 
 // ListRequest is a connection to ask, and what to ask it for.
 type ListRequest struct {
-	// Kind is github_pat, gitlab or gitea.
+	// Kind is github_pat, gitlab, gitea or bitbucket.
 	Kind string
 	// BaseURL is the provider's own address, for a self-hosted instance.
 	BaseURL string
 	// Token authenticates. It is only ever sent to BaseURL's host, which is
 	// the host it was issued by.
 	Token string
+	// Email is the Atlassian account a Bitbucket API token belongs to. With
+	// it the token is sent as Basic auth, the way Atlassian documents first;
+	// without it, as a bearer token. Nothing else reads it.
+	Email string
+	// Account is the connection's user or organisation. On Bitbucket it is
+	// the workspace to list, which an access token needs: it belongs to a
+	// workspace or a repository, not to somebody who can be asked for theirs.
+	Account string
 	// Query narrows the answer to names containing it, ignoring case.
 	Query string
 }
@@ -76,14 +84,15 @@ type Listing[T any] struct {
 // repositories.
 func CanList(kind string) bool {
 	switch kind {
-	case "github", "github_pat", "gitlab", "gitea":
+	case "github", "github_pat", "gitlab", "gitea", "bitbucket":
 		return true
 	}
 	return false
 }
 
 // validFullName is a repository's path on its host: segments of the
-// characters GitHub, GitLab and Gitea allow in a name, separated by slashes.
+// characters GitHub, GitLab, Gitea and Bitbucket allow in a name, separated by
+// slashes. A Bitbucket repository is workspace/slug, which fits.
 var validFullName = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$`)
 
 // ValidRepoName checks a repository's full name before it becomes part of a
@@ -162,6 +171,9 @@ func ListRepositories(ctx context.Context, req ListRequest) (Listing[Repository]
 	case "gitea":
 		base := apiBase(req.BaseURL, "https://codeberg.org", "") + "/api/v1"
 		return collect(ctx, base+"/user/repos?", giteaPages, req, fromHub, repoName, false)
+
+	case "bitbucket":
+		return listBitbucketRepositories(ctx, req)
 	}
 	return Listing[Repository]{}, ErrListingUnsupported
 }
@@ -193,6 +205,8 @@ func ListBranches(ctx context.Context, req ListRequest, fullName string) (Listin
 		base := apiBase(req.BaseURL, "https://codeberg.org", "") + "/api/v1"
 		endpoint := fmt.Sprintf("%s/repos/%s/%s/branches?", base, url.PathEscape(owner), url.PathEscape(name))
 		return collect(ctx, endpoint, giteaPages, req, identity[Branch], branchName, false)
+	case "bitbucket":
+		return listBitbucketBranches(ctx, req, owner, name)
 	default:
 		base := apiBase(req.BaseURL, "https://api.github.com", "/api/v3")
 		endpoint := fmt.Sprintf("%s/repos/%s/%s/branches?", base, url.PathEscape(owner), url.PathEscape(name))
@@ -256,6 +270,16 @@ func collect[P any, T any](ctx context.Context, endpoint string, pages pager, re
 	return out, nil
 }
 
+// HostError is a Git host that answered, and not with what was asked for. The
+// status is what a caller decides by — a token refused is a different thing
+// to fix from a host that is down — and the message is what a person reads.
+type HostError struct {
+	Status int
+	msg    string
+}
+
+func (e *HostError) Error() string { return e.msg }
+
 // getList fetches one page. Its errors say what a listing needs, which is not
 // what a single repository's lookup says: a 404 here is an address that is
 // not a Git host's API, not a repository that is missing.
@@ -266,14 +290,7 @@ func getList(ctx context.Context, endpoint, token, scheme string, into any) erro
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
-	if token != "" {
-		switch scheme {
-		case "bearer":
-			req.Header.Set("Authorization", "Bearer "+token)
-		default:
-			req.Header.Set("Authorization", "token "+token)
-		}
-	}
+	authorize(req, token, scheme)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("could not reach the Git host: %w", err)
@@ -281,11 +298,13 @@ func getList(ctx context.Context, endpoint, token, scheme string, into any) erro
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("the Git host refused the connection's token (%s)", resp.Status)
+		return &HostError{Status: resp.StatusCode,
+			msg: fmt.Sprintf("the Git host refused the connection's token (%s)", resp.Status)}
 	case resp.StatusCode == http.StatusNotFound:
-		return fmt.Errorf("the Git host answered 404: the repository is not there, or the connection's address is not the host's")
+		return &HostError{Status: resp.StatusCode,
+			msg: "the Git host answered 404: the repository is not there, or the connection's address is not the host's"}
 	case resp.StatusCode >= 300:
-		return fmt.Errorf("the Git host answered %s", resp.Status)
+		return &HostError{Status: resp.StatusCode, msg: fmt.Sprintf("the Git host answered %s", resp.Status)}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxListBytes))
 	if err != nil {

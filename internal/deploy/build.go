@@ -507,8 +507,11 @@ func (d *Deployer) ensureCloneSecret(ctx context.Context, gitSourceID, namespace
 			Namespace: namespace,
 			Labels:    map[string]string{"app.kubernetes.io/managed-by": "skifity"},
 		},
-		Type:       corev1.SecretTypeOpaque,
-		StringData: map[string]string{"token": token},
+		Type: corev1.SecretTypeOpaque,
+		// The user name goes with the token rather than into the Job, so a
+		// build's spec is the same whichever host it clones from. Bitbucket
+		// wants a name of its own; the others ignore it.
+		StringData: map[string]string{"token": token, "username": gitsrc.CloneUsername(source.Kind)},
 	}
 	return d.cluster.Client().Applier().Apply(ctx, secret)
 }

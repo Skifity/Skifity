@@ -22,8 +22,16 @@ import type { GitListing, GitRepository, GitSource } from "@/lib/types"
 export function canListRepositories(source: GitSource | undefined): boolean {
   return (
     source !== undefined &&
-    (source.kind === "github_pat" || source.kind === "gitlab" || source.kind === "gitea")
+    (source.kind === "github_pat" ||
+      source.kind === "gitlab" ||
+      source.kind === "gitea" ||
+      source.kind === "bitbucket")
   )
+}
+
+/** The kinds whose host searches its own list, past what the panel was given. */
+function searchesOnTheHost(source: GitSource): boolean {
+  return source.kind === "gitlab" || source.kind === "bitbucket"
 }
 
 /**
@@ -32,9 +40,9 @@ export function canListRepositories(source: GitSource | undefined): boolean {
  *
  * Nothing is asked until the list is opened, and what came back is kept for a
  * few minutes: a provider's rate limit is shared by the whole panel. The list
- * is filtered here as somebody types. Only GitLab searches more than the
- * panel was given, so only GitLab is offered a search of the host — and only
- * when somebody asks for one, not on every keystroke.
+ * is filtered here as somebody types. Only GitLab and Bitbucket search more
+ * than the panel was given, so only they are offered a search of the host —
+ * and only when somebody asks for one, not on every keystroke.
  */
 export function RepositoryPicker({
   teamId,
@@ -65,7 +73,7 @@ export function RepositoryPicker({
   const listing = repositories.data
   const query = typed.trim()
   const canSearchHost =
-    source.kind === "gitlab" && listing?.truncated === true && query !== "" && query !== asked
+    searchesOnTheHost(source) && listing?.truncated === true && query !== "" && query !== asked
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

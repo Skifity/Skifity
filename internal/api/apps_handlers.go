@@ -498,11 +498,13 @@ func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus 
 		return webhookStatus{URL: deliverTo, Reason: "this Git connection has no webhook secret"}
 	}
 
+	token, email := s.gitCredentials(r, source)
 	result := gitsrc.EnsureWebhook(r.Context(), gitsrc.HookRequest{
 		RepoURL:   app.RepoURL,
 		Kind:      source.Kind,
 		BaseURL:   source.BaseURL,
-		Token:     s.gitToken(r, source),
+		Token:     token,
+		Email:     email,
 		DeliverTo: deliverTo,
 		Secret:    secret,
 	})

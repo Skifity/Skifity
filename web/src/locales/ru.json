@@ -2887,7 +2887,7 @@
         "title": "Git-хост не показал, что у него есть",
         "cause": "Запрос через {{0}}: {{1}}.",
         "impact": "Ничего не показано. Адрес репозитория и ветку можно ввести вручную.",
-        "fix": "Проверьте, что токен подключения может читать репозитории — область repo или доступ на чтение Contents в GitHub, read_api в GitLab, read:repository в Gitea, — и что панель может достучаться до Git-хоста."
+        "fix": "Проверьте, что токен подключения может читать репозитории — область repo или доступ на чтение Contents в GitHub, read_api в GitLab, read:repository в Gitea, read:repository:bitbucket в Bitbucket, — и что панель может достучаться до Git-хоста."
       },
       "auth_reset_unavailable": {
         "title": "Эта панель не может отправить ссылку для сброса",
@@ -3086,6 +3086,24 @@
         "cause": "{{0}} указан в сертификате, который загрузила другая команда этой панели.",
         "impact": "Домен не добавлен. Для него выдавались бы оба сертификата, в том порядке, в каком их прочитал ingress.",
         "fix": "Спросите администратора панели, какая команда использует это имя хоста. Сертификат удаляется в разделе «Настройки», «Сертификаты»."
+      },
+      "git_bitbucket_token_refused": {
+        "title": "Bitbucket не принял этот токен",
+        "cause": "На вопрос панели, что может читать токен, Bitbucket ответил {{0}}.",
+        "impact": "Подключение не сохранено.",
+        "fix": "Используйте API-токен с read:repository:bitbucket и read:workspace:bitbucket — с email аккаунта Atlassian или без него — либо токен доступа с правом чтения Repositories и указанным рабочим пространством. Пароли приложений больше не работают."
+      },
+      "git_bitbucket_workspace_unknown": {
+        "title": "Для этого токена в Bitbucket нет такого рабочего пространства",
+        "cause": "Bitbucket ответил, что рабочего пространства {{0}}, доступного этому токену, нет.",
+        "impact": "Подключение не сохранено.",
+        "fix": "Укажите id рабочего пространства — часть адреса репозитория после bitbucket.org/ — или оставьте поле пустым, чтобы использовать все рабочие пространства, которые видит API-токен."
+      },
+      "git_bitbucket_check_failed": {
+        "title": "Не удалось спросить Bitbucket об этом токене",
+        "cause": "При проверке токена: {{0}}.",
+        "impact": "Подключение не сохранено.",
+        "fix": "Проверьте, что этот сервер может достучаться до api.bitbucket.org по HTTPS, и попробуйте снова."
       }
     }
   },
@@ -3128,7 +3146,24 @@
     "repositoriesTruncated": "Показаны только {{limit}} самых недавно активных. Введите часть имени, чтобы сузить список, или вставьте адрес любого другого.",
     "chooseBranch": "Выберите ветку",
     "defaultBranch": "{{branch}} (по умолчанию)",
-    "readingBranches": "Читаем ветки…"
+    "readingBranches": "Читаем ветки…",
+    "bitbucket": {
+      "workspace": "Рабочее пространство",
+      "workspaceHelp": "Часть адреса репозитория после bitbucket.org/. Для токена доступа обязательна. С API-токеном оставьте пустым, чтобы показать все рабочие пространства, которые видит токен.",
+      "email": "Email аккаунта Atlassian",
+      "emailHelp": "Для API-токена: email аккаунта Atlassian, который его создал. Для токена доступа оставьте пустым — он отправляется сам по себе.",
+      "token": "API-токен или токен доступа",
+      "tokenHelp": "Создайте API-токен в настройках аккаунта Atlassian (Security, затем Create API token with scopes, для Bitbucket) или токен доступа в настройках репозитория или рабочего пространства (Access tokens). Пароли приложений (app passwords) больше не работают. Нужны права:",
+      "scopeRepositories": "Репозитории: чтение (read:repository:bitbucket) — чтобы клонировать, показывать список и отмечать каждый деплой на его коммите; API-токену, который показывает ваши рабочие пространства, нужен ещё read:workspace:bitbucket.",
+      "scopePullRequests": "Pull request: запись (read:pullrequest:bitbucket и write:pullrequest:bitbucket) — чтобы оставить адрес preview в комментарии к pull request.",
+      "scopeWebhooks": "Webhook: чтение и запись (read:webhook:bitbucket и write:webhook:bitbucket) — чтобы Skifity добавил webhook сам.",
+      "tokenStored": "Перед сохранением Skifity спрашивает Bitbucket, работает ли токен. Хранится в зашифрованном виде и больше не показывается.",
+      "webhookTitle": "Как добавить его в Bitbucket",
+      "webhookStepOpen": "В репозитории откройте Repository settings, затем Webhooks, затем Add webhook.",
+      "webhookStepFill": "Дайте ему название, вставьте адрес выше как URL, а секрет выше — как Secret.",
+      "webhookStepTriggers": "В разделе Triggers выберите Choose from a full list: Repository Push, а также Pull Request Created, Updated, Merged и Declined.",
+      "webhookStepSave": "Сохраните. Bitbucket подписывает каждую доставку секретом, а Skifity отклоняет доставку без подписи."
+    }
   },
   "notifications": {
     "title": "Уведомления",

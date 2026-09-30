@@ -374,12 +374,26 @@ func cloneContainer(s JobSpec, mounts []corev1.VolumeMount) corev1.Container {
 		corev1.EnvVar{Name: "GIT_REF", Value: s.cloneRef()},
 	)
 	if s.CloneSecret != "" {
+		optional := true
 		container.Env = append(container.Env, corev1.EnvVar{
 			Name: "GIT_TOKEN",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: s.CloneSecret},
 					Key:                  "token",
+				},
+			},
+		}, corev1.EnvVar{
+			// The user name the host wants with the token: Bitbucket's
+			// x-token-auth, or x-access-token, which the others ignore.
+			// Optional, and the script falls back to x-access-token, so a
+			// Secret written before it had one still clones.
+			Name: "GIT_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: s.CloneSecret},
+					Key:                  "username",
+					Optional:             &optional,
 				},
 			},
 		})
@@ -429,7 +443,7 @@ func cloneScript(s JobSpec) string {
 		// sent to wherever a submodule points, which is somebody else's
 		// server being handed your token.
 		b.WriteString(`ORIGIN=$(printf '%s' "$REPO_URL" | sed -n 's#^\(https\{0,1\}://[^/]*\).*#\1#p')` + "\n")
-		b.WriteString(`AUTH=$(printf 'x-access-token:%s' "$GIT_TOKEN" | base64 | tr -d '\n')` + "\n")
+		b.WriteString(`AUTH=$(printf '%s:%s' "${GIT_USERNAME:-x-access-token}" "$GIT_TOKEN" | base64 | tr -d '\n')` + "\n")
 		b.WriteString(`authed_git() { git -c "http.${ORIGIN}/.extraHeader=Authorization: Basic ${AUTH}" "$@"; }` + "\n")
 	} else {
 		b.WriteString(`authed_git() { git "$@"; }` + "\n")

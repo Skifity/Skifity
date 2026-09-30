@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
+  BookOpenIcon,
   CheckIcon,
   ClipboardIcon,
   GitBranchIcon,
@@ -40,13 +41,21 @@ import type { GitSource } from "@/lib/types"
  * connection made before each had a secret of its own signs with its token,
  * which is never shown here.
  */
-type Webhook = { url: string; secret: string; secret_is_token?: boolean }
+type Webhook = {
+  url: string
+  secret: string
+  secret_is_token?: boolean
+  /** The connection's kind, for the steps its host's settings take. */
+  kind?: string
+}
 
 /** What each provider calls itself, and whether it can be self-hosted. */
 const PROVIDERS = [
   { kind: "github_pat", label: "GitHub", selfHosted: false },
   { kind: "gitlab", label: "GitLab", selfHosted: true },
   { kind: "gitea", label: "Gitea / Forgejo", selfHosted: true },
+  // Bitbucket Cloud only: Data Center speaks another API.
+  { kind: "bitbucket", label: "Bitbucket", selfHosted: false },
 ] as const
 
 export function GitSources() {
@@ -73,7 +82,11 @@ export function GitSources() {
   const reveal = useMutation({
     mutationFn: (sourceID: string) =>
       api.get<Webhook>(`/api/teams/${team!.id}/git-sources/${sourceID}/webhook`),
-    onSuccess: setWebhook,
+    onSuccess: (hook, sourceID) =>
+      setWebhook({
+        ...hook,
+        kind: sources.data?.items.find((source) => source.id === sourceID)?.kind,
+      }),
   })
 
   if (sources.isLoading) return <Skeleton className="h-48" />
@@ -190,6 +203,17 @@ function WebhookNotice({ webhook, onDismiss }: { webhook: Webhook; onDismiss: ()
         ) : (
           webhook.secret_is_token && <p>{t("git.webhookSecretIsToken")}</p>
         )}
+        {webhook.kind === "bitbucket" && (
+          <>
+            <p className="font-medium text-foreground">{t("git.bitbucket.webhookTitle")}</p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>{t("git.bitbucket.webhookStepOpen")}</li>
+              <li>{t("git.bitbucket.webhookStepFill")}</li>
+              <li>{t("git.bitbucket.webhookStepTriggers")}</li>
+              <li>{t("git.bitbucket.webhookStepSave")}</li>
+            </ol>
+          </>
+        )}
         <Button variant="ghost" size="sm" onClick={onDismiss}>
           {t("common.done")}
         </Button>
@@ -234,8 +258,11 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
   const [token, setToken] = useState("")
   const [baseURL, setBaseURL] = useState("")
   const [account, setAccount] = useState("")
+  // A Bitbucket API token's account email. Only sent for Bitbucket.
+  const [email, setEmail] = useState("")
 
   const provider = PROVIDERS.find((candidate) => candidate.kind === kind)
+  const bitbucket = kind === "bitbucket"
 
   const create = useMutation({
     mutationFn: () =>
@@ -245,15 +272,16 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
           kind,
           name: name.trim() || provider?.label,
           token: token.trim(),
-          base_url: baseURL.trim(),
+          base_url: provider?.selfHosted ? baseURL.trim() : "",
           account: account.trim(),
+          ...(bitbucket && email.trim() ? { email: email.trim() } : {}),
         },
       ),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["git-sources", team?.id] })
       // The token only ever existed in this form.
       setToken("")
-      onDone({ url: result.webhook_url, secret: result.webhook_secret })
+      onDone({ url: result.webhook_url, secret: result.webhook_secret, kind })
     },
   })
 
@@ -309,19 +337,39 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
 
           <Field>
             <FieldLabel htmlFor="git-account">
-              {t("git.account")}{" "}
+              {bitbucket ? t("git.bitbucket.workspace") : t("git.account")}{" "}
               <span className="text-muted-foreground">({t("common.optional")})</span>
             </FieldLabel>
             <Input
               id="git-account"
               value={account}
               onChange={(event) => setAccount(event.target.value)}
-              placeholder="your-org"
+              placeholder={bitbucket ? "acme" : "your-org"}
             />
+            {bitbucket && <FieldDescription>{t("git.bitbucket.workspaceHelp")}</FieldDescription>}
           </Field>
 
+          {bitbucket && (
+            <Field>
+              <FieldLabel htmlFor="git-email">
+                {t("git.bitbucket.email")}{" "}
+                <span className="text-muted-foreground">({t("common.optional")})</span>
+              </FieldLabel>
+              <Input
+                id="git-email"
+                type="email"
+                autoComplete="off"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <FieldDescription>{t("git.bitbucket.emailHelp")}</FieldDescription>
+            </Field>
+          )}
+
           <Field>
-            <FieldLabel htmlFor="git-token">{t("git.token")}</FieldLabel>
+            <FieldLabel htmlFor="git-token">
+              {bitbucket ? t("git.bitbucket.token") : t("git.token")}
+            </FieldLabel>
             <Input
               id="git-token"
               type="password"
@@ -330,7 +378,11 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
               onChange={(event) => setToken(event.target.value)}
               required
             />
-            <FieldDescription>{t("git.tokenHelp")}</FieldDescription>
+            {bitbucket ? (
+              <BitbucketTokenHelp />
+            ) : (
+              <FieldDescription>{t("git.tokenHelp")}</FieldDescription>
+            )}
           </Field>
 
           {create.error != null && <ErrorDisplay error={create.error} compact />}
@@ -347,5 +399,32 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
         </form>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Where a Bitbucket token comes from and what it has to be allowed to do. Two
+ * kinds are taken: an API token, which a person makes for their own account,
+ * and an access token, which an administrator makes for a repository or a
+ * workspace. App passwords stopped working in 2026 and are not offered.
+ */
+function BitbucketTokenHelp() {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-2 text-sm text-muted-foreground">
+      <p>{t("git.bitbucket.tokenHelp")}</p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>{t("git.bitbucket.scopeRepositories")}</li>
+        <li>{t("git.bitbucket.scopePullRequests")}</li>
+        <li>{t("git.bitbucket.scopeWebhooks")}</li>
+      </ul>
+      <p>{t("git.bitbucket.tokenStored")}</p>
+      <Button variant="ghost" size="sm" className="-ml-2" asChild>
+        <a href="/docs/concepts#connecting-bitbucket" target="_blank" rel="noreferrer">
+          <BookOpenIcon className="size-3.5" />
+          {t("nav.documentation")}
+        </a>
+      </Button>
+    </div>
   )
 }

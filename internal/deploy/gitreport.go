@@ -87,7 +87,7 @@ func (d *Deployer) reportToGit(ctx context.Context, deployment store.Deployment,
 	if !gitsrc.SameHost(app.RepoURL, source.BaseURL) {
 		return
 	}
-	token, err := d.gitToken(source)
+	token, email, err := d.gitCredentials(source)
 	if err != nil || token == "" {
 		return
 	}
@@ -109,15 +109,19 @@ func (d *Deployer) reportToGit(ctx context.Context, deployment store.Deployment,
 	}
 
 	checkName := "skifity/" + env.Slug + "/" + app.Slug
+	ref := ""
 	if env.Kind == store.EnvPreview {
 		// One name for every pull request, so a branch protection rule can
 		// require it without naming each preview.
 		checkName = "skifity/preview/" + app.Slug
+		// A preview's copy is built from the pull request's branch, which is
+		// what Bitbucket needs a status to name before it shows it there.
+		ref = app.Branch
 	}
 
 	err = d.git().ReportStatus(ctx, gitsrc.StatusRequest{
-		RepoURL: app.RepoURL, Kind: source.Kind, BaseURL: source.BaseURL, Token: token,
-		CommitSHA: deployment.CommitSHA, State: state, Context: checkName,
+		RepoURL: app.RepoURL, Kind: source.Kind, BaseURL: source.BaseURL, Token: token, Email: email,
+		CommitSHA: deployment.CommitSHA, Ref: ref, State: state, Context: checkName,
 		Description: statusDescription(state, env, reason), TargetURL: target,
 	})
 	// Only the final answer is worth a line in the log: a token that cannot
@@ -131,7 +135,7 @@ func (d *Deployer) reportToGit(ctx context.Context, deployment store.Deployment,
 		return
 	}
 	err = d.git().UpsertComment(ctx, gitsrc.CommentRequest{
-		RepoURL: app.RepoURL, Kind: source.Kind, BaseURL: source.BaseURL, Token: token,
+		RepoURL: app.RepoURL, Kind: source.Kind, BaseURL: source.BaseURL, Token: token, Email: email,
 		PullRequest: number,
 		// Keyed by the preview app, which is one per pull request per app:
 		// two apps built from one repository get a comment each.
@@ -139,7 +143,7 @@ func (d *Deployer) reportToGit(ctx context.Context, deployment store.Deployment,
 		Body: gitsrc.PreviewComment{
 			App: app.Name, State: state, URL: live, LogsURL: logs,
 			Commit: deployment.CommitSHA, Reason: reason,
-		}.Markdown(),
+		}.MarkdownFor(source.Kind),
 	})
 	if err != nil && state != gitsrc.StatePending {
 		d.appendLog(ctx, deployment.ID, "Could not comment on the pull request: "+err.Error()+".")
@@ -204,16 +208,24 @@ func (d *Deployer) panelURL(ctx context.Context) string {
 // gitToken reads a Git connection's token out of its sealed configuration.
 // Empty, with no error, for a connection that has none.
 func (d *Deployer) gitToken(source store.GitSource) (string, error) {
+	token, _, err := d.gitCredentials(source)
+	return token, err
+}
+
+// gitCredentials reads a connection's token and, for a Bitbucket API token,
+// the account email its API requests are sent with. The build never needs the
+// email: Git takes a Bitbucket token with a user name of Bitbucket's own.
+func (d *Deployer) gitCredentials(source store.GitSource) (token, email string, err error) {
 	if source.ConfigEnc == "" {
-		return "", nil
+		return "", "", nil
 	}
 	raw, err := d.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
 	if err != nil {
-		return "", fmt.Errorf("read the Git credentials: %w", err)
+		return "", "", fmt.Errorf("read the Git credentials: %w", err)
 	}
 	var config map[string]string
 	if err := json.Unmarshal(raw, &config); err != nil {
-		return "", fmt.Errorf("read the Git credentials: %w", err)
+		return "", "", fmt.Errorf("read the Git credentials: %w", err)
 	}
-	return config["token"], nil
+	return config["token"], config["email"], nil
 }

@@ -752,7 +752,7 @@ export type DatabaseLink = {
 export type GitSource = {
   id: string
   team_id: string
-  kind: "github_app" | "github_pat" | "gitlab" | "gitea" | "generic"
+  kind: "github_app" | "github_pat" | "gitlab" | "gitea" | "bitbucket" | "generic"
   name: string
   base_url: string
   account: string

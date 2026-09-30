@@ -83,6 +83,43 @@ the app's settings: the path, and **Time to start**, which is two minutes unless
 you raise it. A JVM or an image that migrates its database before it listens
 often needs five to ten. See [Health checks](concepts.md#health-checks).
 
+## Bitbucket refuses the token or a webhook
+
+**Connecting answers that Bitbucket did not accept the token (401).** The token
+is wrong, expired — an API token lasts a year at most — or sent the wrong way.
+An API token goes with the email of the Atlassian account that made it, or with
+no email at all; an access token goes with no email. An app password does not
+work any more: Atlassian switched them off on 28 July 2026. Make a new token
+and connect again.
+
+**Connecting answers 403.** The token works and lacks a scope. Without a
+workspace named, an API token needs `read:workspace:bitbucket` to list your
+workspaces; with one named, it needs `read:repository:bitbucket`. An access
+token cannot list workspaces at all, so name its workspace. The full list is in
+[Connecting Bitbucket](concepts.md#connecting-bitbucket).
+
+**The repository list or the branches do not load.** The same scopes, and the
+panel has to reach `api.bitbucket.org` over HTTPS.
+
+**Deploy on push never happens.** Look at the webhook in Bitbucket, under
+**Repository settings → Webhooks → View requests**:
+
+* No request at all: the webhook is not there or does not have the triggers.
+  The panel adds it only when the token has the webhook scopes; otherwise add it
+  by hand, with the address and secret from **Settings → Git → Webhook**.
+* **401 "This webhook could not be verified"**: the delivery was not signed with
+  this connection's secret. The webhook has no secret, or another one — Bitbucket
+  never shows a secret again, so edit the webhook, paste the secret from the
+  panel into **Secret**, and save. An unsigned delivery is always refused.
+* **202** and nothing deployed: the answer names each app and why it was
+  skipped — another branch, deploy on push off, a `[skip ci]`, or a pull
+  request from a fork, which Bitbucket gives no preview.
+
+**A status or a comment does not appear on the pull request.** The deployment's
+log says once why. The token needs `read:repository:bitbucket` for statuses, and
+the pull request scopes (an access token: **Pull requests: Write**) for the
+comment.
+
 ## An app says it is waiting for a server
 
 The panel reads the scheduler's own answer, so the sentence on the page is the

@@ -71,13 +71,16 @@ type TreeRequest struct {
 	Ref string
 	// RootDir narrows the answer to a subdirectory, for a monorepo.
 	RootDir string
-	// Kind is github, gitlab or gitea. Empty is worked out from the host.
+	// Kind is github, gitlab, gitea or bitbucket. Empty is worked out from the
+	// host.
 	Kind string
 	// BaseURL is the provider's own address, for a self-hosted instance.
 	BaseURL string
 	// Token authenticates, and is only sent to the host BaseURL names. A public
 	// repository needs none.
 	Token string
+	// Email goes with a Bitbucket API token; see ListRequest.Email.
+	Email string
 	// Read, when set, is the files to fetch in place of the ones detection
 	// reads: a check that needs two files does not make fifteen requests.
 	Read []string
@@ -128,6 +131,10 @@ func ReadTree(ctx context.Context, req TreeRequest) (FileTree, error) {
 		tree, err = readGitLabTree(ctx, req, owner, repo, token)
 	case "gitea":
 		tree, err = readGiteaTree(ctx, req, owner, repo, token)
+	case "bitbucket":
+		// Bitbucket names a directory by a commit or a branch and has no
+		// "HEAD", so the files are read at the ref the tree was.
+		tree, req.Ref, err = readBitbucketTree(ctx, req, owner, repo, token)
 	default:
 		tree, err = readGitHubTree(ctx, req, owner, repo, token)
 	}
@@ -161,6 +168,10 @@ func ReadTree(ctx context.Context, req TreeRequest) (FileTree, error) {
 func KindFor(repoURL string) string {
 	host := strings.ToLower(hostOf(repoURL))
 	switch {
+	// Only Bitbucket Cloud. A Bitbucket Data Center on a host of its own
+	// speaks another API altogether, which nothing here knows.
+	case host == "bitbucket.org":
+		return "bitbucket"
 	case strings.Contains(host, "gitlab"):
 		return "gitlab"
 	case strings.Contains(host, "gitea"), strings.Contains(host, "codeberg"):
@@ -297,6 +308,9 @@ func readFile(ctx context.Context, kind string, req TreeRequest, owner, repo, to
 		}
 		return getText(ctx, endpoint, token, "token")
 
+	case "bitbucket":
+		return readBitbucketFile(ctx, req, owner, repo, token, file)
+
 	default:
 		base := apiBase(req.BaseURL, "https://api.github.com", "/api/v3")
 		endpoint := fmt.Sprintf("%s/repos/%s/%s/contents/%s",
@@ -352,14 +366,7 @@ func get(ctx context.Context, endpoint, token, scheme string) ([]byte, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
-	if token != "" {
-		switch scheme {
-		case "bearer":
-			req.Header.Set("Authorization", "Bearer "+token)
-		default:
-			req.Header.Set("Authorization", "token "+token)
-		}
-	}
+	authorize(req, token, scheme)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -376,6 +383,24 @@ func get(ctx context.Context, endpoint, token, scheme string) ([]byte, error) {
 		return nil, fmt.Errorf("the Git provider answered %s", resp.Status)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, maxFileBytes))
+}
+
+// authorize puts a credential on a request the way its host takes it: "token"
+// for GitHub and Gitea, "bearer" for GitLab and a Bitbucket access token, and
+// "basic" for a Bitbucket API token sent with its account's email, where token
+// is "email:token". No credential, no header: a public repository needs none.
+func authorize(req *http.Request, token, scheme string) {
+	if token == "" {
+		return
+	}
+	switch scheme {
+	case "bearer":
+		req.Header.Set("Authorization", "Bearer "+token)
+	case "basic":
+		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(token)))
+	default:
+		req.Header.Set("Authorization", "token "+token)
+	}
 }
 
 // apiBase turns a provider's browser address into its API address.

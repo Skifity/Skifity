@@ -2839,7 +2839,7 @@
         "title": "Git 主机没有列出它有什么",
         "cause": "通过 {{0}} 询问时，{{1}}。",
         "impact": "没有列出任何内容。你仍然可以自己输入仓库地址和分支。",
-        "fix": "检查连接的令牌能否读取仓库——GitHub 上需要 repo 范围或 Contents 读取权限，GitLab 上需要 read_api，Gitea 上需要 read:repository——并确认面板能访问该 Git 主机。"
+        "fix": "检查连接的令牌能否读取仓库——GitHub 上需要 repo 范围或 Contents 读取权限，GitLab 上需要 read_api，Gitea 上需要 read:repository，Bitbucket 上需要 read:repository:bitbucket——并确认面板能访问该 Git 主机。"
       },
       "auth_reset_unavailable": {
         "title": "此面板无法发送重置链接",
@@ -3038,6 +3038,24 @@
         "cause": "{{0}} 已列在本面板上其他团队上传的证书中。",
         "impact": "未添加该域名。两个证书都会为它提供服务，顺序取决于 Ingress 读取它们的顺序。",
         "fix": "请询问面板管理员是哪个团队在使用这个主机名。证书可在“设置 → 证书”中删除。"
+      },
+      "git_bitbucket_token_refused": {
+        "title": "Bitbucket 未接受此令牌",
+        "cause": "面板询问该令牌能读取什么时，Bitbucket 回复了 {{0}}。",
+        "impact": "连接未保存。",
+        "fix": "使用带有 read:repository:bitbucket 和 read:workspace:bitbucket 的 API 令牌（可附带或不附带 Atlassian 账户邮箱），或使用具有 Repositories 读取权限并填写其工作区的访问令牌。应用密码已不再可用。"
+      },
+      "git_bitbucket_workspace_unknown": {
+        "title": "对此令牌而言，Bitbucket 中没有这个工作区",
+        "cause": "Bitbucket 回复说，没有此令牌能读取的工作区 {{0}}。",
+        "impact": "连接未保存。",
+        "fix": "填写工作区 id，即仓库地址中 bitbucket.org/ 之后的部分；或留空，以使用 API 令牌能看到的所有工作区。"
+      },
+      "git_bitbucket_check_failed": {
+        "title": "无法向 Bitbucket 查询此令牌",
+        "cause": "检查令牌时，{{0}}。",
+        "impact": "连接未保存。",
+        "fix": "检查此服务器能否通过 HTTPS 访问 api.bitbucket.org，然后重试。"
       }
     }
   },
@@ -3080,7 +3098,24 @@
     "repositoriesTruncated": "只列出了最近活跃的 {{limit}} 个。输入名称的一部分来缩小范围，或粘贴其他仓库的地址。",
     "chooseBranch": "选择分支",
     "defaultBranch": "{{branch}}（默认）",
-    "readingBranches": "正在读取分支…"
+    "readingBranches": "正在读取分支…",
+    "bitbucket": {
+      "workspace": "工作区",
+      "workspaceHelp": "仓库地址中 bitbucket.org/ 之后的部分。使用访问令牌时必填。使用 API 令牌时留空，将列出该令牌能看到的所有工作区。",
+      "email": "Atlassian 账户邮箱",
+      "emailHelp": "用于 API 令牌：创建该令牌的 Atlassian 账户邮箱。使用访问令牌时留空，它会单独发送。",
+      "token": "API 令牌或访问令牌",
+      "tokenHelp": "在你的 Atlassian 账户设置中创建 API 令牌（Security，然后 Create API token with scopes，选择 Bitbucket），或在仓库或工作区设置中创建访问令牌（Access tokens）。应用密码（app password）已不再可用。它需要：",
+      "scopeRepositories": "仓库：读取（read:repository:bitbucket），用于克隆、列出仓库，并在提交上标记每次部署；需要列出你的工作区的 API 令牌还需要 read:workspace:bitbucket。",
+      "scopePullRequests": "拉取请求：写入（read:pullrequest:bitbucket 和 write:pullrequest:bitbucket），用于在拉取请求上评论预览地址。",
+      "scopeWebhooks": "Webhook：读取和写入（read:webhook:bitbucket 和 write:webhook:bitbucket），这样 Skifity 可以自行添加 webhook。",
+      "tokenStored": "保存前，Skifity 会向 Bitbucket 确认令牌是否可用。令牌加密保存，且不会再次显示。",
+      "webhookTitle": "在 Bitbucket 中添加",
+      "webhookStepOpen": "在仓库中打开 Repository settings，然后 Webhooks，然后 Add webhook。",
+      "webhookStepFill": "填写标题，将上面的地址粘贴为 URL，将上面的密钥粘贴为 Secret。",
+      "webhookStepTriggers": "在 Triggers 下选择 Choose from a full list：Repository Push，以及 Pull Request Created、Updated、Merged 和 Declined。",
+      "webhookStepSave": "保存。Bitbucket 会用密钥为每次投递签名，Skifity 会拒绝任何未签名的投递。"
+    }
   },
   "notifications": {
     "title": "通知",

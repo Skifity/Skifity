@@ -2855,7 +2855,7 @@
         "title": "Git होस्ट ने अपनी सूची नहीं दी",
         "cause": "{{0}} के ज़रिए पूछने पर, {{1}}।",
         "impact": "कुछ भी सूचीबद्ध नहीं हुआ। आप रिपॉज़िटरी का पता और ब्रांच खुद भी लिख सकते हैं।",
-        "fix": "जाँचें कि कनेक्शन का टोकन रिपॉज़िटरी पढ़ सकता है — GitHub पर repo स्कोप या Contents पढ़ने की अनुमति, GitLab पर read_api, Gitea पर read:repository — और पैनल Git होस्ट तक पहुँच सकता है।"
+        "fix": "जाँचें कि कनेक्शन का टोकन रिपॉज़िटरी पढ़ सकता है — GitHub पर repo स्कोप या Contents पढ़ने की अनुमति, GitLab पर read_api, Gitea पर read:repository, Bitbucket पर read:repository:bitbucket — और पैनल Git होस्ट तक पहुँच सकता है।"
       },
       "auth_reset_unavailable": {
         "title": "यह पैनल रीसेट लिंक नहीं भेज सकता",
@@ -3054,6 +3054,24 @@
         "cause": "{{0}} इस पैनल पर किसी दूसरी टीम द्वारा अपलोड किए गए प्रमाणपत्र में दर्ज है।",
         "impact": "डोमेन नहीं जोड़ा गया। इसके लिए दोनों प्रमाणपत्र परोसे जाते, उस क्रम में जिसमें इंग्रेस ने उन्हें पढ़ा।",
         "fix": "पैनल के व्यवस्थापक से पूछें कि कौन-सी टीम इस होस्टनेम का उपयोग करती है। प्रमाणपत्र सेटिंग्स, प्रमाणपत्र में हटाया जाता है।"
+      },
+      "git_bitbucket_token_refused": {
+        "title": "Bitbucket ने यह टोकन स्वीकार नहीं किया",
+        "cause": "पैनल ने जब पूछा कि टोकन क्या पढ़ सकता है, तो Bitbucket ने {{0}} उत्तर दिया।",
+        "impact": "कनेक्शन सहेजा नहीं गया।",
+        "fix": "read:repository:bitbucket और read:workspace:bitbucket वाला API टोकन इस्तेमाल करें, Atlassian खाते के ईमेल के साथ या उसके बिना; या Repositories पढ़ने की अनुमति वाला एक्सेस टोकन, उसके वर्कस्पेस के नाम के साथ। App password अब काम नहीं करते।"
+      },
+      "git_bitbucket_workspace_unknown": {
+        "title": "इस टोकन के लिए Bitbucket में ऐसा कोई वर्कस्पेस नहीं है",
+        "cause": "Bitbucket ने उत्तर दिया कि {{0}} नाम का कोई वर्कस्पेस नहीं है जिसे यह टोकन पढ़ सके।",
+        "impact": "कनेक्शन सहेजा नहीं गया।",
+        "fix": "वर्कस्पेस का id दें — रिपॉज़िटरी के पते में bitbucket.org/ के बाद वाला हिस्सा — या API टोकन जिन वर्कस्पेस को देख सकता है उन सबको इस्तेमाल करने के लिए इसे खाली छोड़ें।"
+      },
+      "git_bitbucket_check_failed": {
+        "title": "इस टोकन के बारे में Bitbucket से पूछा नहीं जा सका",
+        "cause": "टोकन जाँचते समय, {{0}}।",
+        "impact": "कनेक्शन सहेजा नहीं गया।",
+        "fix": "जाँचें कि यह सर्वर HTTPS पर api.bitbucket.org तक पहुँच सकता है, फिर दोबारा कोशिश करें।"
       }
     }
   },
@@ -3096,7 +3114,24 @@
     "repositoriesTruncated": "सिर्फ़ हाल में सबसे सक्रिय {{limit}} दिखाई गई हैं। उन्हें छाँटने के लिए नाम का कुछ हिस्सा लिखें, या किसी और का पता पेस्ट करें।",
     "chooseBranch": "ब्रांच चुनें",
     "defaultBranch": "{{branch}} (डिफ़ॉल्ट)",
-    "readingBranches": "ब्रांच पढ़ी जा रही हैं…"
+    "readingBranches": "ब्रांच पढ़ी जा रही हैं…",
+    "bitbucket": {
+      "workspace": "वर्कस्पेस",
+      "workspaceHelp": "रिपॉज़िटरी के पते में bitbucket.org/ के बाद वाला हिस्सा। एक्सेस टोकन के लिए यह ज़रूरी है। API टोकन के साथ इसे खाली छोड़ें, तो टोकन जिन वर्कस्पेस को देख सकता है वे सब सूचीबद्ध होंगे।",
+      "email": "Atlassian खाते का ईमेल",
+      "emailHelp": "API टोकन के लिए: उस Atlassian खाते का ईमेल जिसने इसे बनाया। एक्सेस टोकन के लिए खाली छोड़ें, वह अकेले भेजा जाता है।",
+      "token": "API टोकन या एक्सेस टोकन",
+      "tokenHelp": "अपने Atlassian खाते की सेटिंग में API टोकन बनाएँ (Security, फिर Create API token with scopes, Bitbucket के लिए), या रिपॉज़िटरी या वर्कस्पेस की सेटिंग में एक्सेस टोकन (Access tokens)। App password अब काम नहीं करते। इसे चाहिए:",
+      "scopeRepositories": "रिपॉज़िटरी: पढ़ना (read:repository:bitbucket), clone करने, सूची बनाने और हर deploy को उसके commit पर दिखाने के लिए; आपके वर्कस्पेस सूचीबद्ध करने वाले API टोकन को read:workspace:bitbucket भी चाहिए।",
+      "scopePullRequests": "Pull request: लिखना (read:pullrequest:bitbucket और write:pullrequest:bitbucket), preview का पता उसके pull request पर टिप्पणी में लिखने के लिए।",
+      "scopeWebhooks": "Webhook: पढ़ना और लिखना (read:webhook:bitbucket और write:webhook:bitbucket), ताकि Skifity webhook खुद जोड़ सके।",
+      "tokenStored": "सहेजने से पहले Skifity Bitbucket से पूछता है कि टोकन काम करता है या नहीं। इसे एन्क्रिप्ट करके रखा जाता है और दोबारा कभी नहीं दिखाया जाता।",
+      "webhookTitle": "इसे Bitbucket में जोड़ना",
+      "webhookStepOpen": "रिपॉज़िटरी में Repository settings खोलें, फिर Webhooks, फिर Add webhook।",
+      "webhookStepFill": "एक शीर्षक दें, और ऊपर दिया पता URL के रूप में तथा ऊपर दिया सीक्रेट Secret के रूप में पेस्ट करें।",
+      "webhookStepTriggers": "Triggers में Choose from a full list चुनें: Repository Push, और Pull Request Created, Updated, Merged तथा Declined।",
+      "webhookStepSave": "सहेजें। Bitbucket हर डिलीवरी पर सीक्रेट से हस्ताक्षर करता है, और Skifity बिना हस्ताक्षर वाली डिलीवरी अस्वीकार करता है।"
+    }
   },
   "notifications": {
     "title": "सूचनाएँ",

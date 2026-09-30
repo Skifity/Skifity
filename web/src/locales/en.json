@@ -2853,7 +2853,7 @@
         "title": "The Git host did not list what it has",
         "cause": "Asked through {{0}}, {{1}}.",
         "impact": "Nothing was listed. You can still type the repository's address and branch yourself.",
-        "fix": "Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, read_api on GitLab, read:repository on Gitea — and that the panel can reach the Git host."
+        "fix": "Check that the connection's token can read repositories — the repo scope or Contents read access on GitHub, read_api on GitLab, read:repository on Gitea, read:repository:bitbucket on Bitbucket — and that the panel can reach the Git host."
       },
       "auth_reset_unavailable": {
         "title": "This panel cannot send a reset link",
@@ -3052,6 +3052,24 @@
         "cause": "{{0}} is named in a certificate another team on this panel uploaded.",
         "impact": "The domain was not added. Both certificates would be served for it, in whatever order the ingress read them.",
         "fix": "Ask the panel's administrator which team uses the hostname. A certificate is removed under Settings, Certificates."
+      },
+      "git_bitbucket_token_refused": {
+        "title": "Bitbucket did not accept this token",
+        "cause": "Bitbucket answered {{0}} when the panel asked what the token can read.",
+        "impact": "The connection was not saved.",
+        "fix": "Use an API token with read:repository:bitbucket and read:workspace:bitbucket, with the Atlassian account's email or with none; or an access token with Repositories read, with its workspace named. App passwords no longer work."
+      },
+      "git_bitbucket_workspace_unknown": {
+        "title": "Bitbucket has no such workspace for this token",
+        "cause": "Bitbucket answered that there is no workspace {{0}} this token can read.",
+        "impact": "The connection was not saved.",
+        "fix": "Give the workspace's id, the part of a repository's address after bitbucket.org/, or leave it empty to use every workspace an API token can see."
+      },
+      "git_bitbucket_check_failed": {
+        "title": "Bitbucket could not be asked about this token",
+        "cause": "Checking the token, {{0}}.",
+        "impact": "The connection was not saved.",
+        "fix": "Check that this server can reach api.bitbucket.org over HTTPS, then try again."
       }
     }
   },
@@ -3094,7 +3112,24 @@
     "repositoriesTruncated": "Only the {{limit}} most recently active are listed. Type part of a name to narrow them, or paste the address of any other.",
     "chooseBranch": "Choose a branch",
     "defaultBranch": "{{branch}} (default)",
-    "readingBranches": "Reading the branches…"
+    "readingBranches": "Reading the branches…",
+    "bitbucket": {
+      "workspace": "Workspace",
+      "workspaceHelp": "The part of a repository's address after bitbucket.org/. An access token needs it. With an API token, leave it empty to list every workspace the token can see.",
+      "email": "Atlassian account email",
+      "emailHelp": "For an API token: the email of the Atlassian account that made it. Leave it empty for an access token, which is sent on its own.",
+      "token": "API token or access token",
+      "tokenHelp": "Make an API token in your Atlassian account settings (Security, then Create API token with scopes, for Bitbucket), or an access token in the repository's or workspace's settings (Access tokens). App passwords no longer work. It needs:",
+      "scopeRepositories": "Repositories: read (read:repository:bitbucket), to clone, list and mark each deploy on its commit; an API token that lists your workspaces also needs read:workspace:bitbucket.",
+      "scopePullRequests": "Pull requests: write (read:pullrequest:bitbucket and write:pullrequest:bitbucket), to comment the preview's address on its pull request.",
+      "scopeWebhooks": "Webhooks: read and write (read:webhook:bitbucket and write:webhook:bitbucket), so Skifity adds the webhook itself.",
+      "tokenStored": "Skifity asks Bitbucket whether the token works before saving it. It is stored encrypted and never shown again.",
+      "webhookTitle": "Adding it in Bitbucket",
+      "webhookStepOpen": "In the repository, open Repository settings, then Webhooks, then Add webhook.",
+      "webhookStepFill": "Give it a title, and paste the address above as its URL and the secret above as its Secret.",
+      "webhookStepTriggers": "Under Triggers, choose from a full list: Repository Push, and Pull Request Created, Updated, Merged and Declined.",
+      "webhookStepSave": "Save. Bitbucket signs every delivery with the secret, and Skifity refuses any delivery that is not signed."
+    }
   },
   "notifications": {
     "title": "Notifications",

@@ -68,8 +68,10 @@ to get started.
 | **Sign-in** | An OpenID Connect provider, so people sign in with the account they already have. See below. |
 | **Plugins** | The store the Plugins page reads, and the public key its index has to be signed by. See [Writing a Skifity plugin](plugins.md). |
 
-**Git** is a tab rather than a group of settings: a connection to GitHub, GitLab
-or Gitea is a row you add, with a personal access token. There was a group here
+**Git** is a tab rather than a group of settings: a connection to GitHub, GitLab,
+Gitea or Bitbucket is a row you add, with a personal access token — for
+Bitbucket an API token or an access token, see
+[Connecting Bitbucket](concepts.md#connecting-bitbucket). There was a group here
 for a GitHub App — an app id, a client id, a client secret, a private key — and
 nothing ever read one of them, so it is gone until the code behind it exists.
 

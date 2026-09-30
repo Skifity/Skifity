@@ -2839,7 +2839,7 @@
         "title": "Host Git tidak menampilkan daftar isinya",
         "cause": "Ditanya lewat {{0}}, {{1}}.",
         "impact": "Tidak ada yang ditampilkan. Kamu tetap bisa mengetik alamat repositori dan branch-nya sendiri.",
-        "fix": "Pastikan token koneksi bisa membaca repositori — scope repo atau akses baca Contents di GitHub, read_api di GitLab, read:repository di Gitea — dan panel bisa menjangkau host Git."
+        "fix": "Pastikan token koneksi bisa membaca repositori — scope repo atau akses baca Contents di GitHub, read_api di GitLab, read:repository di Gitea, read:repository:bitbucket di Bitbucket — dan panel bisa menjangkau host Git."
       },
       "auth_reset_unavailable": {
         "title": "Panel ini tidak dapat mengirim tautan reset",
@@ -3038,6 +3038,24 @@
         "cause": "{{0}} disebut dalam sertifikat yang diunggah tim lain di panel ini.",
         "impact": "Domain tidak ditambahkan. Kedua sertifikat akan dilayani untuknya, dalam urutan apa pun yang dibaca ingress.",
         "fix": "Tanyakan kepada administrator panel tim mana yang memakai hostname ini. Sertifikat dihapus di Pengaturan, Sertifikat."
+      },
+      "git_bitbucket_token_refused": {
+        "title": "Bitbucket tidak menerima token ini",
+        "cause": "Bitbucket menjawab {{0}} ketika panel menanyakan apa yang bisa dibaca token itu.",
+        "impact": "Koneksi tidak disimpan.",
+        "fix": "Gunakan API token dengan read:repository:bitbucket dan read:workspace:bitbucket, dengan email akun Atlassian atau tanpa email; atau token akses dengan izin baca Repositories, dengan workspace-nya disebutkan. App password sudah tidak berfungsi."
+      },
+      "git_bitbucket_workspace_unknown": {
+        "title": "Bitbucket tidak punya workspace itu untuk token ini",
+        "cause": "Bitbucket menjawab bahwa tidak ada workspace {{0}} yang bisa dibaca token ini.",
+        "impact": "Koneksi tidak disimpan.",
+        "fix": "Masukkan id workspace, yaitu bagian alamat repositori setelah bitbucket.org/, atau kosongkan untuk memakai semua workspace yang bisa dilihat API token."
+      },
+      "git_bitbucket_check_failed": {
+        "title": "Bitbucket tidak bisa ditanyai tentang token ini",
+        "cause": "Saat memeriksa token, {{0}}.",
+        "impact": "Koneksi tidak disimpan.",
+        "fix": "Pastikan server ini bisa menjangkau api.bitbucket.org lewat HTTPS, lalu coba lagi."
       }
     }
   },
@@ -3080,7 +3098,24 @@
     "repositoriesTruncated": "Hanya {{limit}} yang paling baru aktif yang ditampilkan. Ketik sebagian nama untuk mempersempitnya, atau tempel alamat repositori lain.",
     "chooseBranch": "Pilih branch",
     "defaultBranch": "{{branch}} (default)",
-    "readingBranches": "Membaca branch…"
+    "readingBranches": "Membaca branch…",
+    "bitbucket": {
+      "workspace": "Workspace",
+      "workspaceHelp": "Bagian alamat repositori setelah bitbucket.org/. Wajib untuk token akses. Dengan API token, kosongkan untuk menampilkan semua workspace yang bisa dilihat token itu.",
+      "email": "Email akun Atlassian",
+      "emailHelp": "Untuk API token: email akun Atlassian yang membuatnya. Kosongkan untuk token akses, yang dikirim tanpa email.",
+      "token": "API token atau token akses",
+      "tokenHelp": "Buat API token di pengaturan akun Atlassian Anda (Security, lalu Create API token with scopes, untuk Bitbucket), atau token akses di pengaturan repositori atau workspace (Access tokens). App password sudah tidak berfungsi. Token ini perlu:",
+      "scopeRepositories": "Repositori: baca (read:repository:bitbucket), untuk clone, menampilkan daftar, dan menandai setiap deploy di commit-nya; API token yang menampilkan daftar workspace Anda juga perlu read:workspace:bitbucket.",
+      "scopePullRequests": "Pull request: tulis (read:pullrequest:bitbucket dan write:pullrequest:bitbucket), untuk mengomentari alamat preview di pull request-nya.",
+      "scopeWebhooks": "Webhook: baca dan tulis (read:webhook:bitbucket dan write:webhook:bitbucket), agar Skifity menambahkan webhook sendiri.",
+      "tokenStored": "Skifity menanyakan ke Bitbucket apakah token berfungsi sebelum menyimpannya. Disimpan terenkripsi dan tidak pernah ditampilkan lagi.",
+      "webhookTitle": "Menambahkannya di Bitbucket",
+      "webhookStepOpen": "Di repositori, buka Repository settings, lalu Webhooks, lalu Add webhook.",
+      "webhookStepFill": "Beri judul, lalu tempel alamat di atas sebagai URL dan secret di atas sebagai Secret.",
+      "webhookStepTriggers": "Di Triggers, pilih Choose from a full list: Repository Push, serta Pull Request Created, Updated, Merged, dan Declined.",
+      "webhookStepSave": "Simpan. Bitbucket menandatangani setiap pengiriman dengan secret, dan Skifity menolak pengiriman yang tidak ditandatangani."
+    }
   },
   "notifications": {
     "title": "Notifikasi",

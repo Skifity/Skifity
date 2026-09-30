@@ -74,7 +74,7 @@ func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lookup.Kind, lookup.BaseURL = source.Kind, source.BaseURL
-		lookup.Token = s.gitToken(r, source)
+		lookup.Token, lookup.Email = s.gitCredentials(r, source)
 	}
 
 	tree, err := gitsrc.ReadTree(r.Context(), lookup)
@@ -98,22 +98,23 @@ func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
 	}{Detection: detection, Truncated: tree.Truncated})
 }
 
-// gitToken opens a connection's stored token, or returns an empty string.
+// gitCredentials opens a connection's stored token, and the account email a
+// Bitbucket API token is sent with, or returns empty strings.
 //
 // A failure is not reported: a public repository needs no token, and the lookup
 // that follows will say plainly whether it could be read.
-func (s *Server) gitToken(r *http.Request, source store.GitSource) string {
+func (s *Server) gitCredentials(r *http.Request, source store.GitSource) (token, email string) {
 	if source.ConfigEnc == "" {
-		return ""
+		return "", ""
 	}
 	raw, err := s.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
 	if err != nil {
 		s.log.Warn("could not read a Git connection's token", "git_source", source.ID, "error", err)
-		return ""
+		return "", ""
 	}
 	var config map[string]string
 	if err := json.Unmarshal(raw, &config); err != nil {
-		return ""
+		return "", ""
 	}
-	return config["token"]
+	return config["token"], config["email"]
 }

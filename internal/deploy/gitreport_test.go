@@ -279,3 +279,55 @@ func TestAPullRequestNumberIsOnlyReadFromAPreview(t *testing.T) {
 		}
 	}
 }
+
+// A Bitbucket API token is sent with its account's email, which is sealed
+// beside it; a preview's status names the pull request's branch, which is how
+// Bitbucket puts it on the pull request; and the comment has no HTML, which
+// Bitbucket would print as text.
+func TestABitbucketPreviewIsReportedTheWayBitbucketShowsIt(t *testing.T) {
+	d, db, app, env := testDeployer(t)
+	host := &recordingHost{}
+	d.gitHost = host
+	teamID, err := db.TeamIDForApp(t.Context(), app.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := store.GitSource{TeamID: teamID, Kind: "bitbucket", Name: "bitbucket", BaseURL: gitsrc.BitbucketURL}
+	config, _ := json.Marshal(map[string]string{"token": "ATATT-fake", "email": "ada@example.test", "webhook_secret": "s"})
+	if source.ConfigEnc, err = d.keyring.Seal(config, "git_source:"+teamID+":"+source.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateGitSource(t.Context(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(t.Context(), `UPDATE apps SET git_source_id = ?, repo_url = ? WHERE id = ?`,
+		source.ID, "https://bitbucket.org/acme/shop", app.ID); err != nil {
+		t.Fatal(err)
+	}
+	app.GitSourceID, app.RepoURL = source.ID, "https://bitbucket.org/acme/shop"
+
+	preview := previewOf(t, db, app, env, "42")
+	if _, err := db.Exec(t.Context(), `UPDATE apps SET branch = ? WHERE id = ?`, "feature/checkout", preview.ID); err != nil {
+		t.Fatal(err)
+	}
+	d.reportToGit(t.Context(), deploymentFor(t, db, preview.ID, "preview"), gitsrc.StateSuccess, "")
+	d.reportToGit(t.Context(), deploymentFor(t, db, app.ID, "push"), gitsrc.StateSuccess, "")
+
+	if len(host.statuses) != 2 || len(host.comments) != 1 {
+		t.Fatalf("expected two statuses and one comment, got %d and %d", len(host.statuses), len(host.comments))
+	}
+	status := host.statuses[0]
+	if status.Kind != "bitbucket" || status.Token != "ATATT-fake" || status.Email != "ada@example.test" || status.Ref != "feature/checkout" {
+		t.Errorf("the preview's status was sent as %+v", status)
+	}
+	if host.statuses[1].Ref != "" {
+		t.Errorf("a deploy of the app's own branch named %q as a pull request's", host.statuses[1].Ref)
+	}
+	comment := host.comments[0]
+	if comment.Email != "ada@example.test" || comment.PullRequest != 42 {
+		t.Errorf("the comment was sent as %+v", comment)
+	}
+	if strings.Contains(comment.Body, "<sub>") {
+		t.Errorf("the comment has HTML Bitbucket would print as text:\n%s", comment.Body)
+	}
+}

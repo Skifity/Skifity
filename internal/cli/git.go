@@ -171,6 +171,8 @@ func gitHost(source store.GitSource) string {
 		return "github.com"
 	case "gitlab":
 		return "gitlab.com"
+	case "bitbucket":
+		return "bitbucket.org"
 	}
 	return "-"
 }

@@ -42,15 +42,23 @@ const (
 type StatusRequest struct {
 	// RepoURL is the repository the commit is in.
 	RepoURL string
-	// Kind is github, gitlab or gitea. Empty is worked out from the host.
+	// Kind is github, gitlab, gitea or bitbucket. Empty is worked out from the
+	// host.
 	Kind string
 	// BaseURL is the provider's own address, for a self-hosted instance.
 	BaseURL string
 	// Token must be able to write commit statuses.
 	Token string
+	// Email goes with a Bitbucket API token; see ListRequest.Email.
+	Email string
 	// CommitSHA is the full commit the status is for.
 	CommitSHA string
-	State     State
+	// Ref is the branch the commit was deployed from, when that is a pull
+	// request's: Bitbucket shows a status on a pull request only when it
+	// names the pull request's source branch. The other hosts go by the
+	// commit alone and do not read it.
+	Ref   string
+	State State
 	// Context names the check, so several apps built from one repository show
 	// as several lines rather than overwriting each other.
 	Context string
@@ -110,6 +118,8 @@ func ReportStatus(ctx context.Context, req StatusRequest) error {
 			"description": description,
 			"target_url":  req.TargetURL,
 		}))
+	case "bitbucket":
+		return reportBitbucketStatus(ctx, req, owner, repo, description)
 	}
 	return errUnknownHost
 }
@@ -121,6 +131,8 @@ type CommentRequest struct {
 	BaseURL string
 	// Token must be able to comment on pull requests.
 	Token string
+	// Email goes with a Bitbucket API token; see ListRequest.Email.
+	Email string
 	// PullRequest is the pull request's number (a merge request's iid on
 	// GitLab), as the host shows it in its own URLs.
 	PullRequest int
@@ -171,6 +183,10 @@ func UpsertComment(ctx context.Context, req CommentRequest) error {
 		issue := fmt.Sprintf("%s/repos/%s/%s/issues/%s/comments", base, owner, repo, number)
 		edit := fmt.Sprintf("%s/repos/%s/%s/issues/comments/", base, owner, repo)
 		return upsert(ctx, req, body, issue, issue, edit, http.MethodPatch, "token")
+	case "bitbucket":
+		// Its own marker: Bitbucket escapes HTML in Markdown, so the HTML
+		// comment above would be shown to everybody as text.
+		return upsertBitbucketComment(ctx, req, owner, repo, number)
 	}
 	return errUnknownHost
 }
@@ -221,6 +237,13 @@ type PreviewComment struct {
 // It is written for the reviewer, who may never have heard of Skifity: the
 // address first, whether it works, and where to look when it does not.
 func (c PreviewComment) Markdown() string {
+	return c.MarkdownFor("")
+}
+
+// MarkdownFor renders the comment for one kind of host. Bitbucket escapes
+// every HTML tag in Markdown and shows it as text, so its footer is in italics
+// rather than in <sub>; the rest is the same everywhere.
+func (c PreviewComment) MarkdownFor(kind string) string {
 	var b strings.Builder
 	b.WriteString("**Preview of " + escapeMarkdown(c.App) + "**\n\n")
 	b.WriteString("| Status | Preview | Commit |\n|---|---|---|\n")
@@ -248,7 +271,12 @@ func (c PreviewComment) Markdown() string {
 	if c.State == StateFailure && strings.TrimSpace(c.Reason) != "" {
 		b.WriteString("\n" + escapeMarkdown(shorten(c.Reason, 300)) + "\n")
 	}
-	b.WriteString("\n<sub>Updated on every push by Skifity. The preview is removed when this pull request is closed.</sub>\n")
+	const footer = "Updated on every push by Skifity. The preview is removed when this pull request is closed."
+	if kind == "bitbucket" {
+		b.WriteString("\n_" + footer + "_\n")
+	} else {
+		b.WriteString("\n<sub>" + footer + "</sub>\n")
+	}
 	return b.String()
 }
 
@@ -300,12 +328,7 @@ func send(ctx context.Context, method, endpoint, token, scheme string, body map[
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", version.UserAgent())
-	switch scheme {
-	case "bearer":
-		request.Header.Set("Authorization", "Bearer "+token)
-	default:
-		request.Header.Set("Authorization", "token "+token)
-	}
+	authorize(request, token, scheme)
 
 	resp, err := client.Do(request)
 	if err != nil {

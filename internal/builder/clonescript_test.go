@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,6 +123,55 @@ func TestCloningAPublicRepositoryPassesNoCredentialAtAll(t *testing.T) {
 	if !strings.HasPrefix(fetch, "<fetch>") {
 		t.Errorf("fetch is not the first word: %s", fetch)
 	}
+}
+
+// Bitbucket takes a token only with a user name of its own, x-token-auth,
+// where GitHub reads the token and ignores the name. The name comes from the
+// clone Secret beside the token, and a Secret written before it had one still
+// clones the way it always did.
+func TestTheCloneUsesTheUserNameItsHostWants(t *testing.T) {
+	fetchWith := func(env map[string]string) string {
+		t.Helper()
+		env["REPO_URL"] = "https://bitbucket.org/acme/private.git"
+		env["GIT_REF"] = "main"
+		env["GIT_TOKEN"] = "not-a-real-token"
+		fetch := findCall(runCloneScript(t, JobSpec{CloneSecret: "app-git", RepoURL: env["REPO_URL"]}, env), "fetch")
+		if fetch == "" {
+			t.Fatal("git was never asked to fetch")
+		}
+		return fetch
+	}
+	basic := func(credential string) string {
+		return "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(credential)) + ">"
+	}
+
+	if fetch := fetchWith(map[string]string{"GIT_USERNAME": "x-token-auth"}); !strings.Contains(fetch, basic("x-token-auth:not-a-real-token")) {
+		t.Errorf("a Bitbucket clone did not present x-token-auth: %s", fetch)
+	}
+	if fetch := fetchWith(map[string]string{}); !strings.Contains(fetch, basic("x-access-token:not-a-real-token")) {
+		t.Errorf("a clone Secret with no user name did not fall back to x-access-token: %s", fetch)
+	}
+}
+
+func TestTheCloneUserNameComesFromTheSecretAndMayBeMissing(t *testing.T) {
+	spec := baseJob()
+	spec.CloneSecret = "bitbucket-token"
+	job, err := BuildJob(spec)
+	if err != nil {
+		t.Fatalf("BuildJob: %v", err)
+	}
+	for _, env := range job.Spec.Template.Spec.InitContainers[0].Env {
+		if env.Name != "GIT_USERNAME" {
+			continue
+		}
+		ref := env.ValueFrom.SecretKeyRef
+		if env.Value != "" || ref == nil || ref.Name != "bitbucket-token" || ref.Key != "username" ||
+			ref.Optional == nil || !*ref.Optional {
+			t.Fatalf("GIT_USERNAME is %+v; it is read from the clone Secret, and a Secret without it still starts the pod", env)
+		}
+		return
+	}
+	t.Fatal("the clone is not given a user name")
 }
 
 // The submodule pass has to carry the credential the same way, or a private

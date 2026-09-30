@@ -683,9 +683,71 @@ you the URL to add yourself. It never fails creating the app over it.
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.
 
+### Connecting Bitbucket
+
+Bitbucket Cloud — bitbucket.org — is connected under **Settings → Git** with
+**Bitbucket** as where the code is. Bitbucket Data Center, on a server of your
+own, speaks a different API and is not supported.
+
+The connection takes one of two tokens:
+
+* **An API token**, which you make for your own account: in your Atlassian
+  account settings, **Security → Create and manage API tokens → Create API token
+  with scopes**, with **Bitbucket** as the app. Give the connection the email of
+  that Atlassian account too, and the token is sent the way Atlassian documents
+  it, with the email as the user name; leave the email out and it is sent as a
+  bearer token, which Bitbucket also takes. Leave the workspace empty to list
+  every workspace the token can see, or name one to keep to it.
+* **An access token**, which an administrator makes for one repository, project
+  or workspace, in its settings under **Access tokens**. It belongs to no person,
+  so there is nobody to ask for their workspaces: name the **workspace** — the
+  part of a repository's address after `bitbucket.org/` — and leave the email
+  empty.
+
+App passwords are not taken. Atlassian stopped new ones in September 2025 and
+switched the last of them off on 28 July 2026.
+
+What the token needs:
+
+| For | API token scopes | Access token permissions |
+|---|---|---|
+| Cloning, listing repositories and branches, reading files, commit statuses | `read:repository:bitbucket` | Repositories: Read |
+| Listing your workspaces, when no workspace is named | `read:workspace:bitbucket` | — |
+| The comment with a preview's address | `read:pullrequest:bitbucket`, `write:pullrequest:bitbucket` | Pull requests: Write |
+| Adding the webhook by itself | `read:webhook:bitbucket`, `write:webhook:bitbucket` | Webhooks: Read and write |
+
+Before the connection is saved the panel asks Bitbucket what the token can
+read, so a token Bitbucket refuses, or a workspace it cannot see, is said then
+rather than at the first deploy. The token and the email are stored encrypted
+and never shown again.
+
+A build clones with the token and Bitbucket's own user name for one,
+`x-token-auth`; the email never goes into the build.
+
+When an app is created from a Bitbucket repository, the panel adds the webhook
+if the token may. If it may not, **Settings → Git → Webhook** shows the address,
+the secret and the steps: in the repository, **Repository settings → Webhooks →
+Add webhook**; paste the address as the URL and the secret as the **Secret**;
+under **Triggers**, choose from a full list **Repository → Push** and **Pull
+Request → Created, Updated, Merged, Declined**. Bitbucket signs each delivery
+with the secret in `X-Hub-Signature`, and a delivery that is not signed, or not
+signed with this connection's secret, deploys nothing.
+
+What is different about Bitbucket:
+
+* **Every push deploys every app built from its branch.** A Bitbucket push says
+  which commits it brought and not which files they changed, so watch paths
+  cannot skip anything for it.
+* **A pull request from a fork gets no preview.** Bitbucket Cloud keeps no copy
+  of a pull request's commits in the repository it targets, so a fork's commits
+  cannot be fetched from there. The webhook's answer says so in the repository's
+  webhook log.
+* **A push of a branch and a tag together** — `git push --follow-tags` — is one
+  delivery, and both are acted on.
+
 ### Choosing the repository
 
-With a GitHub, GitLab or Gitea account connected, the form that creates an app
+With a GitHub, GitLab, Gitea or Bitbucket account connected, the form that creates an app
 offers what that account can read. Pick the connection first; **Choose from**
 under the repository's address then lists its repositories, most recently
 active first, with a search box, and picking one fills in the address and
@@ -693,10 +755,12 @@ offers its branches, the default one chosen. Typing an address and a branch by
 hand works exactly as before — the list is an offer, and a repository it does
 not show is one address away.
 
-The list stops at 300. Past that, type part of the name: for GitLab the list
-then offers to search all of its projects; GitHub and Gitea are searched among
-the 300 most recently active, and for anything older, type the address. A
-plain Git connection has no host API to ask, so it offers no list.
+The list stops at 300. Past that, type part of the name: for GitLab and
+Bitbucket the list then offers to search all of their repositories; GitHub and
+Gitea are searched among the 300 most recently active, and for anything older,
+type the address. Bitbucket is listed workspace by workspace, since it no longer
+lists every repository a person can read in one place. A plain Git connection
+has no host API to ask, so it offers no list.
 
 The CLI reads the same lists:
 
@@ -710,7 +774,8 @@ Both are read with the connection's token, from its own host and nowhere
 else, so the list is only shown to the team's members; a viewer creates no
 apps and is not shown it. If the token cannot list repositories — on GitHub it
 needs the `repo` scope or Contents read access, on GitLab `read_api`, on Gitea
-`read:repository` — the form says so and the address field still works.
+`read:repository`, on Bitbucket `read:repository:bitbucket` — the form says so
+and the address field still works.
 
 ### Skipping a push
 
@@ -769,8 +834,8 @@ A few things follow from a tag being somebody releasing on purpose:
 * Watch paths do not apply: a tag lists no files.
 * **Deploy** by hand still deploys the tip of the app's branch.
 
-GitHub and Gitea send a pushed tag to the webhook Skifity registered as they
-send any push. GitLab sends tags only to a hook that asked for them; the hooks
+GitHub, Gitea and Bitbucket send a pushed tag to the webhook Skifity registered
+as they send any push. GitLab sends tags only to a hook that asked for them; the hooks
 Skifity registers do, and one registered before this is given tags when an app
 is switched to deploying them. A hook you added yourself needs **Tag push
 events** ticked.
@@ -809,7 +874,8 @@ files are not everything the app is missing.
 Watch paths skip deploys only for pushes from **GitHub**. GitLab and Gitea list
 what a force push added and not what it took away, and do not say that it was
 one, so an app a removed commit had changed would be skipped and go on running
-code that is no longer on the branch. From them, every push deploys every app.
+code that is no longer on the branch. Bitbucket lists no changed files at all.
+From them, every push deploys every app.
 
 Pull requests are not filtered: their webhooks do not list files, and every one
 gets its preview.
@@ -833,8 +899,16 @@ protection rule can require a working preview before anything is merged.
 This needs a token that can write commit statuses and comments: on GitHub a
 fine-grained token with *Commit statuses* and *Pull requests* set to read and
 write, on GitLab the `api` scope, on Gitea one that can write to the
-repository. A token that cannot is not an error. The deploy goes ahead, and its
-log says once why nothing appeared on the pull request.
+repository, on Bitbucket `read:repository:bitbucket` and the pull request
+scopes (see [Connecting Bitbucket](#connecting-bitbucket)). A token that cannot
+is not an error. The deploy goes ahead, and its log says once why nothing
+appeared on the pull request.
+
+On Bitbucket a preview's status names the pull request's branch, which is what
+puts it on the pull request, and it is stored under a key made from its name,
+since Bitbucket takes at most forty characters there and shows the name anyway.
+The comment carries its marker as a Markdown reference nobody sees, because
+Bitbucket prints HTML comments as text.
 
 Two things are deliberately not reported. A rollback goes back to a commit that
 was already reported when it first went out, and saying "live" on it again

@@ -51,17 +51,24 @@ type PushEvent struct {
 	// story: a new branch, a force push, a list the host cut short, a commit
 	// that names no files. Not knowing is treated as "everything changed".
 	//
-	// Only GitHub says whether a push was forced. GitLab and Gitea list what
-	// a force push added and not what it took away, and do not say it was
-	// one, so for them a push's files are never known and every push deploys.
+	// Only GitHub says whether a push was forced and lists every file. GitLab
+	// and Gitea list what a force push added and not what it took away, and
+	// do not say it was one; Bitbucket says it was one and lists no files at
+	// all. For all three a push's files are never known and every push
+	// deploys.
 	FilesKnown bool
 	// Before is the commit the branch pointed at before the push. The files
 	// are the difference from it, so they only describe what changed since
 	// an app's running version when that version was built from it.
 	Before string
-	// Forced is a push that rewrote the branch, which only GitHub says. Going
-	// back to an older commit that way is somebody meaning to.
+	// Forced is a push that rewrote the branch, which GitHub and Bitbucket
+	// say. Going back to an older commit that way is somebody meaning to.
 	Forced bool
+	// NoPreview says why a pull request cannot have a preview however the app
+	// is set up, in words for the delivery log. Bitbucket Cloud keeps no ref
+	// for a pull request in the repository it targets, so a fork's commits
+	// cannot be fetched from there and a build of one could only fail.
+	NoPreview string
 	// SkipMarker is the "[skip ci]", or another of the markers SkipMarker
 	// knows, in the whole message of the commit a push left at the tip of its
 	// branch: somebody asking for that push not to be deployed. Empty when
@@ -200,8 +207,37 @@ func VerifyGitLabToken(secret, header string) error {
 	return nil
 }
 
-// ParseWebhook turns a request body into a PushEvent.
+// ParseWebhook turns a request body into a PushEvent. A Bitbucket push can
+// carry several refs; this is the first of them Skifity acts on, and
+// ParseWebhookEvents is all of them.
 func ParseWebhook(header http.Header, body []byte) (PushEvent, error) {
+	events, err := ParseWebhookEvents(header, body)
+	if err != nil {
+		return PushEvent{}, err
+	}
+	return events[0], nil
+}
+
+// ParseWebhookEvents turns a request body into the events in it: always one,
+// except for a Bitbucket push, which lists every ref one `git push` moved —
+// a branch and the tag `git push --follow-tags` sent with it arrive together,
+// and reading only the first would lose the release.
+//
+// ErrUnsupportedEvent when there is nothing in it Skifity acts on; otherwise
+// at least one event.
+func ParseWebhookEvents(header http.Header, body []byte) ([]PushEvent, error) {
+	if key := header.Get("X-Event-Key"); key != "" {
+		return parseBitbucket(key, body)
+	}
+	event, err := parseSingle(header, body)
+	if err != nil {
+		return nil, err
+	}
+	return []PushEvent{event}, nil
+}
+
+// parseSingle reads the hosts that send one event per delivery.
+func parseSingle(header http.Header, body []byte) (PushEvent, error) {
 	switch {
 	case header.Get("X-GitHub-Event") != "":
 		return parseGitHub(header.Get("X-GitHub-Event"), body)

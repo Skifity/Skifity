@@ -54,7 +54,7 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := gitsrc.ParseWebhook(r.Header, body)
+	events, err := gitsrc.ParseWebhookEvents(r.Header, body)
 	if err != nil {
 		if errors.Is(err, gitsrc.ErrUnsupportedEvent) {
 			// Answer 200 so the host does not mark the webhook as failing.
@@ -64,15 +64,35 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	if event.Kind == "ping" {
+	if events[0].Kind == "ping" {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
 		return
 	}
 
 	// The response goes out before the deploys start: a Git host times a
 	// webhook out in ten seconds, and a build takes minutes.
-	result := s.dispatchGitEvent(r, source, event)
+	//
+	// One delivery is one event everywhere but Bitbucket, whose push lists
+	// every ref it moved: a branch and its tag are answered together.
+	var result webhookResult
+	for _, event := range events {
+		one := s.dispatchGitEvent(r, source, s.completeBitbucketCommit(r, source, event))
+		result.Status = strongerStatus(result.Status, one.Status)
+		result.Deployments = append(result.Deployments, one.Deployments...)
+		result.Skipped = append(result.Skipped, one.Skipped...)
+	}
 	writeJSON(w, http.StatusAccepted, result)
+}
+
+// strongerStatus is what a delivery of several events says overall: that it
+// started something if any of them did, that something went wrong if any did,
+// and that nothing matched only when nothing did.
+func strongerStatus(a, b string) string {
+	rank := map[string]int{"no matching apps": 1, "error": 2, "accepted": 3}
+	if rank[b] > rank[a] {
+		return b
+	}
+	return a
 }
 
 func (s *Server) verifyWebhook(r *http.Request, source store.GitSource, body []byte) error {
@@ -95,6 +115,10 @@ func (s *Server) verifyWebhook(r *http.Request, source store.GitSource, body []b
 			return gitsrc.VerifyGitHubSignature(secret, body, sig)
 		}
 		return gitsrc.VerifyGiteaSignature(secret, body, r.Header.Get("X-Gitea-Signature"))
+	case "bitbucket":
+		// Bitbucket's header has GitHub's old name and "sha256=" in front of
+		// the same HMAC GitHub's new one carries.
+		return gitsrc.VerifyBitbucketSignature(secret, body, r.Header.Get("X-Hub-Signature"))
 	default:
 		return gitsrc.VerifyGitHubSignature(secret, body, r.Header.Get("X-Hub-Signature-256"))
 	}
@@ -272,6 +296,12 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 		case "pull_request_opened":
 			if !app.PreviewDeploys {
 				result.Skipped = append(result.Skipped, app.Name+" (preview environments are off)")
+				continue
+			}
+			// Said rather than started: a build that could only fail to
+			// fetch its commit is a failed deployment nobody caused.
+			if event.NoPreview != "" {
+				result.Skipped = append(result.Skipped, app.Name+" ("+event.NoPreview+")")
 				continue
 			}
 			deploymentID, err := s.deployPreview(r, app, event)
