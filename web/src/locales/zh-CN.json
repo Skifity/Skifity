@@ -301,7 +301,9 @@
       "stack.created": "已创建堆栈",
       "app.template_update": "已通过模板更新",
       "app.promoted": "已提升版本",
-      "database.tunnel_opened": "已打开数据库隧道"
+      "database.tunnel_opened": "已打开数据库隧道",
+      "app.process_set": "进程已修改",
+      "app.process_removed": "进程已删除"
     }
   },
   "projects": {
@@ -2413,6 +2415,18 @@
         "cause": "它对隧道请求的回答是 {{0}}。",
         "impact": "这个连接已关闭。",
         "fix": "这台电脑和面板之间的某个环节可能不转发升级后的连接；直接访问的面板会转发。"
+      },
+      "process_name_invalid": {
+        "title": "这不能作为进程名称",
+        "cause": "{{0}} 不是由最多 20 个小写字母、数字和连字符组成的名称，或者它是应用已经有的 web 或 release。",
+        "impact": "进程没有保存。",
+        "fix": "使用 Procfile 里的名称，例如 worker 或 clock。"
+      },
+      "process_too_many": {
+        "title": "这个应用的进程数已达上限",
+        "cause": "一个应用除了 web 之外最多运行 {{0}} 个进程。",
+        "impact": "进程没有添加。",
+        "fix": "删除不再需要的进程，或者把其余的做成同一仓库的另一个应用。"
       }
     }
   },
@@ -2742,5 +2756,21 @@
     "verifying": "正在验证…",
     "verified": "已于 {{when}} 打开并完整读取",
     "verifyFailed": "无法完整读取：{{reason}}"
+  },
+  "processes": {
+    "title": "进程",
+    "help": "worker、定时任务，以及其他在应用旁边运行的东西：同一次构建和同样的变量，各自的命令，没有端口，所以不会有流量发给它们。每次部署都会和应用一起更新它们。",
+    "name": "名称",
+    "command": "命令",
+    "instances": "实例",
+    "instancesOf": "{{name}} 的实例数",
+    "running": "运行中",
+    "stopped": "已停止",
+    "add": "添加",
+    "remove": "删除 {{name}}",
+    "removeConfirm": "{{name}} 会停止，它的命令也会被丢弃。想停止它又保留命令，就把实例数设为 0。",
+    "formHelp": "名称用小写，和 Procfile 里一样：worker、clock。再次使用同一个名称会修改它的命令。实例数为 0 会停止进程但保留它。",
+    "detected": "Procfile 里的进程",
+    "detectedHelp": "勾选的进程从第一次部署起就在应用旁边运行，使用同一次构建。取消勾选可以跳过；之后也可以在“伸缩”里添加。"
   }
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/runsafe"
 	"skifity/internal/store"
@@ -184,7 +185,18 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		tailLines = 200
 	}
 
-	stream, err := s.cluster.AppLogs(r.Context(), env.Namespace, app.Slug, LogOptions{
+	// One of the app's other processes, by name: a worker's output is not
+	// in the web's.
+	target := app.Slug
+	if process := r.URL.Query().Get("process"); process != "" && process != "web" {
+		if !s.hasProcess(r, app.ID, process) {
+			writeError(w, r, errdoc.NotFound("process", process))
+			return
+		}
+		target = kube.ProcessDeploymentName(app.Slug, process)
+	}
+
+	stream, err := s.cluster.AppLogs(r.Context(), env.Namespace, target, LogOptions{
 		TailLines: tailLines, Follow: follow, Previous: previous,
 	})
 	if err != nil {

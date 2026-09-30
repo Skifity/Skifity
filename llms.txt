@@ -97,11 +97,12 @@ Tools, in the order they are usually needed:
 | `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
 | `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed. |
-| `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why. |
+| `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, and `process` for a worker's. |
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
 | `list_variables` | An app's variables. Secret values are never returned. |
 | `set_variable` | Sets one. Says whether it causes a rebuild. |
 | `scale_app` | Changes the instance count or turns on autoscaling. |
+| `set_process` | Runs a worker or other process beside an app, on its image, or changes one. |
 | `check_scaling_readiness` | What would break if this app ran more than one instance. |
 | `rollback_app` | Restores a previous version's image and settings. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
@@ -152,6 +153,8 @@ POST   /api/apps/{app}/domains                add one
 GET    /api/apps/{app}/scaling                scaling
 PUT    /api/apps/{app}/scaling                change it
 GET    /api/apps/{app}/scaling/readiness      what would break with more instances
+GET    /api/apps/{app}/processes              its workers and other processes
+PUT    /api/apps/{app}/processes/{name}       add one, or change its command or instances
 GET    /api/apps/{app}/advanced               the Kubernetes objects, as YAML
 GET    /api/apps/{app}/firewall               the rules in front of this app
 PUT    /api/apps/{app}/firewall               replace them

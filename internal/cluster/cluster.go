@@ -197,6 +197,13 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
 	}
+	processes, err := c.db.ListProcesses(ctx, app.ID)
+	if err != nil {
+		return "", err
+	}
+	for _, process := range processes {
+		objects = append(objects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
+	}
 
 	// The scheduled commands too: this view says it shows what is running, and
 	// a nightly job is as much a part of an app as its Deployment.

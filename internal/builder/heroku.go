@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -63,6 +64,14 @@ func applyProcfile(d *Detection, tree Tree) {
 			d.ReleaseCommand = process.Command
 			d.Notes = append(d.Notes, "The Procfile's release line runs after each build and before the new version takes traffic.")
 		default:
+			name, ok := ProcessName(process.Name)
+			if !ok {
+				d.Notes = append(d.Notes, fmt.Sprintf(
+					"The Procfile's %s line cannot be a process under that name: add it on the app's page "+
+						"under a lowercase name of up to 20 letters, digits and hyphens.", process.Name))
+				continue
+			}
+			process.Name = name
 			d.Processes = append(d.Processes, process)
 		}
 	}
@@ -72,9 +81,24 @@ func applyProcfile(d *Detection, tree Tree) {
 			names = append(names, process.Name)
 		}
 		d.Notes = append(d.Notes, fmt.Sprintf(
-			"The Procfile also names %s. An app runs one process: create another app from this repository "+
-				"with that line as its start command and no port.", strings.Join(names, ", ")))
+			"The Procfile also names %s, which run beside the app as its processes: the same build and "+
+				"variables, a command of their own, no port.", strings.Join(names, ", ")))
 	}
+}
+
+// processName is the rule kube.ValidProcessName enforces, which this package
+// cannot import; a test in internal/api checks the two agree.
+var processName = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,18}[a-z0-9])?$`)
+
+// ProcessName turns a Procfile's name for a process into one a process can
+// have here — Heroku allows capitals and underscores, a Kubernetes name does
+// not — or reports that it cannot be one.
+func ProcessName(procfile string) (string, bool) {
+	name := strings.ToLower(strings.ReplaceAll(procfile, "_", "-"))
+	if !processName.MatchString(name) || name == "web" || name == "release" {
+		return "", false
+	}
+	return name, true
 }
 
 // appJSON is the part of Heroku's app.json that says what the app needs.

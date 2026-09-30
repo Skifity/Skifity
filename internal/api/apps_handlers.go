@@ -77,6 +77,17 @@ type createAppRequest struct {
 	// crashes. Somebody who has never deployed anything does not know the
 	// order, so it is done for them, here, in one request.
 	Databases []initialDatabase `json:"databases,omitempty"`
+	// Processes run beside the app on its image: the worker and clock lines
+	// of a Procfile that detection found, so they start with the first deploy
+	// rather than after somebody finds the page to add them.
+	Processes []initialProcess `json:"processes,omitempty"`
+}
+
+// initialProcess is one process to create with a new app.
+type initialProcess struct {
+	Name      string `json:"name"`
+	Command   string `json:"command"`
+	Instances *int   `json:"instances,omitempty"`
 }
 
 // initialDatabase is one database to create and link with a new app.
@@ -279,6 +290,11 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	processes, err := initialProcesses(req.Processes)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	// An app and a database in one environment share a namespace, and both
 	// render a Service under their slug. Two of them under one name is not two
@@ -342,6 +358,13 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	if err := s.setInitialVariables(r, app, req.Variables); err != nil {
 		writeError(w, r, err)
 		return
+	}
+	for i := range processes {
+		processes[i].AppID = app.ID
+		if err := s.db.SetProcess(r.Context(), &processes[i]); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 
 	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)

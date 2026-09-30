@@ -391,7 +391,7 @@ func describeDetection(d builder.Detection, say func(string, ...any)) {
 		say("  Its Procfile runs `%s` after each build, before the new version takes traffic.\n", d.ReleaseCommand)
 	}
 	for _, process := range d.Processes {
-		say("  Its Procfile also names %s (`%s`). An app runs one process: make another app for it with that as its start command.\n",
+		say("  Its Procfile also names %s (`%s`), which runs beside it on the same build.\n",
 			process.Name, process.Command)
 	}
 	// Said on every `up`, which is every deploy of a folder: the version that
@@ -468,6 +468,11 @@ func createUploadApp(ctx context.Context, client *Client, cfg Config, req create
 	}
 	if len(req.databases) > 0 {
 		body["databases"] = req.databases
+	}
+	// The Procfile's worker and clock lines start with the first deploy, as
+	// they do on Heroku.
+	if len(d.Processes) > 0 {
+		body["processes"] = d.Processes
 	}
 	// app.json's defaults and generated secrets, once, when the app is made,
 	// the way Heroku sets them when an app is created from one. The folder's

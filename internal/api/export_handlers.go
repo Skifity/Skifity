@@ -51,10 +51,11 @@ type exportEnvironment struct {
 
 type exportApp struct {
 	store.App
-	Domains   []store.Domain   `json:"domains"`
-	Variables []store.Variable `json:"variables"`
-	Volumes   []store.Volume   `json:"volumes"`
-	Schedules []store.AppJob   `json:"schedules"`
+	Domains   []store.Domain     `json:"domains"`
+	Variables []store.Variable   `json:"variables"`
+	Volumes   []store.Volume     `json:"volumes"`
+	Schedules []store.AppJob     `json:"schedules"`
+	Processes []store.AppProcess `json:"processes"`
 	// Manifests is the app as Kubernetes YAML: apply it anywhere.
 	Manifests string `json:"manifests,omitempty"`
 	// ManifestError says why the objects could not be rendered, rather than
@@ -194,6 +195,12 @@ func (s *Server) exportApp(r *http.Request, app store.App, env store.Environment
 		return exportApp{}, err
 	}
 	out.Schedules = jobs
+
+	processes, err := s.db.ListProcesses(ctx, app.ID)
+	if err != nil {
+		return exportApp{}, err
+	}
+	out.Processes = processes
 
 	out.Manifests, out.ManifestError = s.renderManifests(ctx, app, env)
 	return out, nil

@@ -802,6 +802,11 @@ func (c *Client) DeleteApp(ctx context.Context, namespace, appSlug string) error
 	if err := c.deleteRuns(ctx, namespace, appSlug); err != nil {
 		return err
 	}
+	// And its other processes, the workers that would otherwise go on
+	// taking jobs off a queue for an app that no longer exists.
+	if err := c.PruneProcesses(ctx, namespace, appSlug, nil); err != nil {
+		return err
+	}
 
 	// PersistentVolumeClaims are deliberately left behind: deleting an app
 	// should not silently destroy its data. They are removed with the

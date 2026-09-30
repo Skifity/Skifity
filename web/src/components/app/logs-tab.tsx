@@ -9,9 +9,16 @@ import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import { api } from "@/lib/api"
-import type { App } from "@/lib/types"
+import { api, type List } from "@/lib/api"
+import type { App, AppProcess } from "@/lib/types"
 
 /** How many lines are kept in memory. A chatty app must not grow the tab forever. */
 const MAX_LINES = 2000
@@ -36,11 +43,21 @@ export function LogsTab({ app }: { app: App }) {
    * the one thing worth reading is the one thing that cannot be read.
    */
   const [source, setSource] = useState<"live" | "previous">("live")
+  /** Which process: "web" is the app itself, anything else one beside it. */
+  const [process, setProcess] = useState("web")
   const bottom = useRef<HTMLDivElement>(null)
 
+  const processes = useQuery({
+    queryKey: ["processes", app.id],
+    queryFn: () => api.get<List<AppProcess>>(`/api/apps/${app.id}/processes`),
+  })
+  const others = processes.data?.items ?? []
+  const which = process === "web" ? "" : `&process=${encodeURIComponent(process)}`
+
   const earlier = useQuery({
-    queryKey: ["app-logs-previous", app.id],
-    queryFn: () => api.get<{ lines: string[] }>(`/api/apps/${app.id}/logs?previous=true&tail=500`),
+    queryKey: ["app-logs-previous", app.id, process],
+    queryFn: () =>
+      api.get<{ lines: string[] }>(`/api/apps/${app.id}/logs?previous=true&tail=500${which}`),
     enabled: source === "previous",
     retry: false,
   })
@@ -48,7 +65,7 @@ export function LogsTab({ app }: { app: App }) {
   useEffect(() => {
     if (!following || source !== "live") return
 
-    const stream = new EventSource(`/api/apps/${app.id}/logs?follow=true&tail=200`)
+    const stream = new EventSource(`/api/apps/${app.id}/logs?follow=true&tail=200${which}`)
     stream.addEventListener("log", (message) => {
       try {
         const line = JSON.parse((message as MessageEvent).data) as string
@@ -61,7 +78,7 @@ export function LogsTab({ app }: { app: App }) {
       }
     })
     return () => stream.close()
-  }, [app.id, following, source])
+  }, [app.id, following, source, which])
 
   // Derived, not copied: which set of lines is on screen follows the tab, and
   // the filter is applied in the same pass so nothing has to be kept in step.
@@ -90,6 +107,28 @@ export function LogsTab({ app }: { app: App }) {
           placeholder={t("common.search")}
           className="h-9 max-w-xs"
         />
+        {others.length > 0 && (
+          <Select
+            value={process}
+            onValueChange={(next) => {
+              // Another process is another stream; its lines start fresh.
+              setLines([])
+              setProcess(next)
+            }}
+          >
+            <SelectTrigger size="sm" className="w-40" aria-label={t("processes.title")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="web">web</SelectItem>
+              {others.map((other) => (
+                <SelectItem key={other.name} value={other.name}>
+                  {other.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <ButtonGroup>
           <Button
             variant={source === "live" ? "default" : "outline"}
@@ -124,7 +163,9 @@ export function LogsTab({ app }: { app: App }) {
         </span>
       </div>
 
-      {source === "previous" && <p className="text-xs text-muted-foreground">{t("apps.logsPreviousHelp")}</p>}
+      {source === "previous" && (
+        <p className="text-xs text-muted-foreground">{t("apps.logsPreviousHelp")}</p>
+      )}
       {source === "previous" && earlier.error != null && (
         <ErrorDisplay error={earlier.error} compact />
       )}

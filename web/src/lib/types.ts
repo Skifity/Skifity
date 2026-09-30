@@ -613,7 +613,7 @@ export type Detection = {
   advisories?: Advisory[]
   /** The Procfile's release line. */
   release_command?: string
-  /** The Procfile's other lines, which an app does not run by itself. */
+  /** The Procfile's other lines, which run beside the app as its processes. */
   processes?: { name: string; command: string }[]
   /** app.json's settings as a .env, defaults filled in and secrets generated. */
   env_template?: string
@@ -775,4 +775,17 @@ export type StackNote = {
   service: string
   code: "renamed" | "bind_mount" | "interpolation"
   value?: string
+}
+
+/** One of an app's other processes: its image, its own command, no port. */
+export type AppProcess = {
+  app_id: string
+  name: string
+  command: string
+  instances: number
+  created_at: string
+  updated_at: string
+  /** How many are running, when the cluster could say. */
+  ready?: number
+  phase?: string
 }

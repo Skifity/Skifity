@@ -5200,6 +5200,51 @@ that is taken, the rewritten connection string.
 Not executed: a tunnel through the ingress in front of a real panel. Traefik
 proxies upgrades of any protocol, but that is its documentation, not a run.
 
+## Phase 106 — processes: a worker beside the app, from the same build
+
+Gap 10. An app ran one process, so a Rails app with Sidekiq, a Django app with
+Celery or anything with a clock was two apps, built twice, deployed apart and
+able to run different versions of the same code against one schema. The
+Procfile's worker line was detected and then answered with "make another app".
+Heroku, Fly, Render and Dokku run process types from one build.
+
+A process is a row in `app_processes` (migration 0032): a name, a command and a
+number of instances. Each deploy, rollback and settings change applies it as a
+Deployment of the app's own image, `<app>--<process>` — two hyphens, which
+`Slugify` never writes, so it cannot be another app's Deployment — under
+`/bin/sh -c` with the app's variables and `SKIFITY_PROCESS`, and with no port,
+Service, probe, volume, password or autoscaler. Its selector is derived from its
+own name, so the app's Service never sends a worker a request and neither
+Deployment claims the other's pods; its labels find it again, and a deploy
+removes the ones no longer wanted, one by one by name. A deploy waits for every
+process, and a worker that cannot start fails the deploy with its reason.
+Deleting the app removes them; the Advanced view and the team export show them;
+a preview gets them at one instance each.
+
+`GET/PUT/DELETE /api/apps/{id}/processes[/{name}]`, a viewer's to read and a
+member's to change, audited. A new app can be created with them: the new-app
+form offers the Procfile's lines ticked, and `skifity up` sends them. Heroku's
+names allow capitals and underscores, so `Celery_Beat` becomes `celery-beat`,
+and one that cannot become a name is said rather than dropped; a test holds the
+builder's copy of the rule to the panel's. The Scaling tab lists them with how
+many are running, `skifity processes set worker -- <command>` and
+`--instances` change them, the logs tab and `skifity logs --process` read one,
+and the MCP server has `set_process` and a `process` option on `get_app_logs`.
+
+"Service types in the new-app form" is this and Phase 101 together: a public
+app, an internal one reached by name, and a worker, which is a process of the
+app that feeds it rather than an app of its own.
+
+Tested: the process Deployment — the app's image and variables, its own command
+and count, no port, probe or volume, and selectors that match neither way;
+names that cannot collide, long ones included; pruning only the unwanted, and
+all of them with the app; the API's rules, the limit of ten, a viewer refused,
+the audit; status and logs asked for by the process's own name; an app created
+with its processes, and refused whole when one is wrong; a preview's copy; the
+Procfile's names; the CLI's `--` and count-only changes.
+
+Not executed: a worker in a real cluster.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

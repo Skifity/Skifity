@@ -309,7 +309,9 @@
       "stack.created": "Stack created",
       "app.template_update": "Updated through its template",
       "app.promoted": "Version promoted",
-      "database.tunnel_opened": "Database tunnel opened"
+      "database.tunnel_opened": "Database tunnel opened",
+      "app.process_set": "Process changed",
+      "app.process_removed": "Process removed"
     }
   },
   "projects": {
@@ -2427,6 +2429,18 @@
         "cause": "It answered {{0}} to a request for one.",
         "impact": "This connection was closed.",
         "fix": "Something between here and the panel may not pass upgraded connections through; a panel reached directly does."
+      },
+      "process_name_invalid": {
+        "title": "That cannot be a process's name",
+        "cause": "{{0}} is not a lowercase name of up to 20 letters, digits and hyphens, or it is web or release, which an app already has.",
+        "impact": "The process was not saved.",
+        "fix": "Use the name from the Procfile, such as worker or clock."
+      },
+      "process_too_many": {
+        "title": "This app has as many processes as it can",
+        "cause": "An app runs at most {{0}} processes beside web.",
+        "impact": "The process was not added.",
+        "fix": "Remove one it no longer needs, or make the rest a separate app from the same repository."
       }
     }
   },
@@ -2758,5 +2772,21 @@
     "verifying": "Verifying…",
     "verified": "Opened and read through {{when}}",
     "verifyFailed": "Did not read through: {{reason}}"
+  },
+  "processes": {
+    "title": "Processes",
+    "help": "Workers, clocks and anything else that runs beside the app: the same build and variables, a command of their own, and no port, so nothing sends them traffic. Each deploy updates them with the app.",
+    "name": "Name",
+    "command": "Command",
+    "instances": "Instances",
+    "instancesOf": "Instances of {{name}}",
+    "running": "Running",
+    "stopped": "Stopped",
+    "add": "Add",
+    "remove": "Remove {{name}}",
+    "removeConfirm": "{{name}} stops, and its command is forgotten. Set its instances to 0 instead to stop it and keep the command.",
+    "formHelp": "The name is lowercase, as in a Procfile: worker, clock. The same name again changes its command. 0 instances stops a process and keeps it.",
+    "detected": "Processes from the Procfile",
+    "detectedHelp": "Ticked ones run beside the app from its first deploy, on the same build. Untick one to leave it out; it can be added later under Scaling."
   }
 }

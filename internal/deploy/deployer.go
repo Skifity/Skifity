@@ -389,6 +389,16 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		kube.BuildInterceptorService(spec),
 		kube.BuildHTTPScaledObject(spec),
 	)
+	// The app's other processes go out with it, on the same image: a worker
+	// running last week's code against this week's schema is the bug that
+	// having them in one build is meant to rule out.
+	processes, err := d.db.ListProcesses(ctx, app.ID)
+	if err != nil {
+		return err
+	}
+	for _, process := range processes {
+		objects = append(objects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
+	}
 
 	d.appendLog(ctx, deployment.ID, "Applying the configuration to the cluster.")
 	if err := d.cluster.Client().Applier().ApplyAll(ctx, objects...); err != nil {
@@ -404,6 +414,13 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	// Objects that are no longer wanted have to be removed explicitly: server-
 	// side apply removes fields, not whole objects.
 	d.removeUnwanted(ctx, spec, app)
+	keep := make(map[string]bool, len(processes))
+	for _, process := range processes {
+		keep[process.Name] = true
+	}
+	if err := d.cluster.Client().PruneProcesses(ctx, env.Namespace, app.Slug, keep); err != nil {
+		d.log.Warn("could not remove a process that is no longer wanted", "app", app.ID, "error", err)
+	}
 
 	d.appendLog(ctx, deployment.ID, "Waiting for the new instances to become ready.")
 	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, 10*time.Minute); err != nil {
@@ -423,6 +440,19 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 			}
 		}
 		return errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
+	}
+	for _, process := range processes {
+		name := kube.ProcessDeploymentName(app.Slug, process.Name)
+		if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, name, 10*time.Minute); err != nil {
+			ready, reason := 0, err.Error()
+			if status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, name); statusErr == nil {
+				ready = status.ReadyReplicas
+				if status.Detail != "" {
+					reason = status.Detail
+				}
+			}
+			return errdoc.RolloutTimedOut(app.Name+" ("+process.Name+")", ready, process.Instances, reason)
+		}
 	}
 	return nil
 }

@@ -12,6 +12,7 @@ import { AppPasswordProtection } from "@/components/app/password-protection"
 import { ConsoleTab } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
+import { ProcessesCard } from "@/components/app/processes"
 import { SettingsTab } from "@/components/app/settings-tab"
 import { StorageTab } from "@/components/app/storage-tab"
 import { useConfirm } from "@/components/confirm-dialog"
@@ -253,8 +254,9 @@ export function AppDetailPage() {
           <AppPasswordProtection appId={appId} />
           <AppFirewall appId={appId} />
         </TabsContent>
-        <TabsContent value="scaling" className="pt-4">
+        <TabsContent value="scaling" className="space-y-6 pt-4">
           <ScalingTab app={current} />
+          <ProcessesCard app={current} />
         </TabsContent>
         <TabsContent value="storage" className="pt-4">
           <StorageTab app={current} />

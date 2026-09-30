@@ -121,6 +121,7 @@ and one-off commands:
 | `SKIFITY_COMMIT_SHA` | The commit the running version was built from, for an app from a repository. |
 | `SKIFITY_PREVIEW` | `true` in a preview, and unset otherwise. |
 | `SKIFITY_PULL_REQUEST` | The pull request's number, in a preview of one. |
+| `SKIFITY_PROCESS` | In one of the app's [processes](#processes), its name, such as `worker`; unset in the app itself. |
 
 The `SKIFITY_` prefix is the panel's: a variable of your own with one of these
 names is replaced by the panel's value. A value that is not known is left unset
@@ -292,9 +293,10 @@ A `Procfile` and an `app.json` already say most of this, and are read:
   after each build and before the new version takes traffic, which is what
   Heroku's release phase does, so a migration that ran on every Heroku deploy
   runs on every deploy here.
-* Any other line — a `worker`, a `clock` — is named. An app runs one process,
-  so make another app from the same repository with that line as its start
-  command and no port.
+* Any other line — a `worker`, a `clock` — becomes one of the app's
+  [processes](#processes), ticked in the form and started with the first
+  deploy. Heroku allows capitals and underscores in those names and a process
+  here does not, so `Celery_Beat` becomes `celery-beat`.
 * **`app.json`'s add-ons** are databases: `heroku-postgresql`, `heroku-redis`,
   `jawsdb`, `cleardb` and the like are offered like any other database, under
   the variable Heroku would set (`DATABASE_URL`, `REDIS_URL`, or the one its
@@ -654,6 +656,44 @@ minimum every time you changed a variable.
 
 Instances are spread across servers where possible, so losing a server does not
 take an app down.
+
+## Processes
+
+An app is usually more than its web server: a worker taking jobs off a queue, a
+clock enqueueing them, a consumer reading a stream. Each of those is a
+**process** of the app, listed under Scaling:
+
+* It runs the app's own image — the same build — with the app's variables, under
+  a command of its own. A worker cannot run last week's code against this week's
+  schema, because it is deployed with the app, and rolled back with it.
+* It has no port, no address and no health check. Nothing sends it traffic; it
+  is running when its container is.
+* It has its own number of instances. `0` stops it and keeps its command, for a
+  queue you want drained later. It is not autoscaled: the web's CPU says nothing
+  about how long a queue is.
+* It does not mount the app's volumes. A volume can be attached to one server at
+  a time, and two writers on one file are how data is corrupted; keep what a
+  worker shares with the web in the database, or in object storage.
+* It reads `SKIFITY_PROCESS`, its own name, beside everything else the app is
+  given.
+
+Its logs are the app's logs tab with the process picked, or
+`skifity logs --process worker`. A deploy waits for every process as it waits
+for the app, so a worker that cannot start fails the deploy with the reason
+rather than crash-looping unnoticed.
+
+```sh
+skifity processes                                # what runs beside the app
+skifity processes set worker -- bundle exec sidekiq
+skifity processes set worker --instances 3
+skifity processes set worker --instances 0       # stopped, command kept
+skifity processes rm worker
+```
+
+A name is lowercase letters, digits and hyphens, up to 20, starting with a
+letter: `worker`, `clock`, `celery-beat`. `web` and `release` are taken — they
+are the app itself and its [release command](#release-command). An app can have
+ten; more than that is usually several apps sharing a repository.
 
 ## Servers
 

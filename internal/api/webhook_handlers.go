@@ -313,6 +313,19 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 				return "", err
 			}
 		}
+		// Its processes too, one instance each: a pull request that changes
+		// a job is tried out by a preview whose worker runs that job. One the
+		// app has stopped stays stopped.
+		processes, err := s.db.ListProcesses(r.Context(), app.ID)
+		if err != nil {
+			return "", err
+		}
+		for _, process := range processes {
+			process.AppID, process.Instances = previewApp.ID, min(process.Instances, 1)
+			if err := s.db.SetProcess(r.Context(), &process); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{

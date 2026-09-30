@@ -171,6 +171,8 @@ skifity env import .env           # every KEY=value line in a file, rolled out o
 skifity env rm LOG_LEVEL          # remove one
 skifity scale --instances 3       # a fixed number
 skifity scale --auto --max 5      # or automatically
+skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, same build
+skifity logs --process worker     # and its output
 skifity rollback                  # back to the previous version
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this

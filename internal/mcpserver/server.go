@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -231,6 +232,14 @@ type logsInput struct {
 	AppID    string `json:"app_id" jsonschema:"the app's id"`
 	Lines    int    `json:"lines,omitempty" jsonschema:"how many lines to return, up to 500"`
 	Previous bool   `json:"previous,omitempty" jsonschema:"read the container that ran before the current one; this is where a crash-looping app printed why it crashed"`
+	Process  string `json:"process,omitempty" jsonschema:"one of the app's other processes, such as worker; leave empty for the app itself"`
+}
+
+type setProcessInput struct {
+	AppID     string `json:"app_id" jsonschema:"the app's id"`
+	Name      string `json:"name" jsonschema:"the process's name, lowercase, as in a Procfile: worker, clock"`
+	Command   string `json:"command" jsonschema:"the command it runs, one shell line"`
+	Instances int    `json:"instances" jsonschema:"how many to run; 0 stops it and keeps the command"`
 }
 
 type logsOutput struct {
@@ -448,6 +457,12 @@ func (s *Server) register() {
 		Annotations: changes("Scale an app", true, true),
 		Description: "Change how many instances an app runs, or turn on autoscaling. Returns any reason the app may not behave correctly with several instances.",
 	}, s.scaleApp)
+
+	addTool(s, &mcp.Tool{
+		Name:        "set_process",
+		Annotations: changes("Run a process beside an app", true, true),
+		Description: "Run a worker, a clock or any other process beside an app, on the app's image and variables, with a command of its own and no port; or change one's command or instances. A queue worker is a process of the app that fills the queue, not a second app.",
+	}, s.setProcess)
 
 	addTool(s, &mcp.Tool{
 		Name:        "rollback_app",
@@ -736,11 +751,23 @@ func (s *Server) getAppLogs(ctx context.Context, _ *mcp.CallToolRequest, in logs
 		Lines []string `json:"lines"`
 	}
 	path := fmt.Sprintf("/api/apps/%s/logs?tail=%d&previous=%t", in.AppID, lines, in.Previous)
+	if in.Process != "" {
+		path += "&process=" + url.QueryEscape(in.Process)
+	}
 	if err := s.client.Do(ctx, "GET", path, nil, &response); err != nil {
 		return errorResult(err), logsOutput{}, nil
 	}
 	out := logsOutput{Lines: response.Lines}
 	return textResult(strings.Join(response.Lines, "\n")), out, nil
+}
+
+func (s *Server) setProcess(ctx context.Context, _ *mcp.CallToolRequest, in setProcessInput) (*mcp.CallToolResult, store.AppProcess, error) {
+	var saved store.AppProcess
+	body := map[string]any{"command": in.Command, "instances": in.Instances}
+	if err := s.client.Do(ctx, "PUT", "/api/apps/"+in.AppID+"/processes/"+url.PathEscape(in.Name), body, &saved); err != nil {
+		return errorResult(err), store.AppProcess{}, nil
+	}
+	return textResult(fmt.Sprintf("%s runs %q with %d instances.", saved.Name, saved.Command, saved.Instances)), saved, nil
 }
 
 func (s *Server) listVariables(ctx context.Context, _ *mcp.CallToolRequest, in appIDInput) (*mcp.CallToolResult, listVariablesOutput, error) {

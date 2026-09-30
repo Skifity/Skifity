@@ -269,6 +269,26 @@ func BackupDamaged(detail string) *Problem {
 		WithDocs("/docs/backups#verifying")
 }
 
+// ProcessNameInvalid is a process name that cannot be one.
+func ProcessNameInvalid(name string) *Problem {
+	return New("process.name_invalid", "That cannot be a process's name").
+		WithCause("%q is not a lowercase name of up to 20 letters, digits and hyphens, or it is web or release, which an app already has.", name).
+		WithImpact("The process was not saved.").
+		WithFix("Use the name from the Procfile, such as worker or clock.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#processes")
+}
+
+// TooManyProcesses is an app with as many processes as one may have.
+func TooManyProcesses(limit int) *Problem {
+	return New("process.too_many", "This app has as many processes as it can").
+		WithCause("An app runs at most %d processes beside web.", limit).
+		WithImpact("The process was not added.").
+		WithFix("Remove one it no longer needs, or make the rest a separate app from the same repository.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/concepts#processes")
+}
+
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.
 func TunnelUnreachable(database string) *Problem {
 	return New("database.tunnel_unreachable", "The panel could not reach this database").

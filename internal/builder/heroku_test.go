@@ -31,19 +31,23 @@ func TestAProcfileSaysHowTheAppStartsAndWhatRunsBeforeIt(t *testing.T) {
 	tree := Tree{
 		Files: []string{"Gemfile", "Procfile"},
 		Contents: map[string]string{
-			"Gemfile":  "gem 'rails'\ngem 'pg'\n",
-			"Procfile": "web: bundle exec puma\nrelease: bin/rails db:migrate\nworker: bundle exec sidekiq\n",
+			"Gemfile": "gem 'rails'\ngem 'pg'\n",
+			"Procfile": "web: bundle exec puma\nrelease: bin/rails db:migrate\nworker: bundle exec sidekiq\n" +
+				"Celery_Beat: celery beat\n2fast: run fast\n",
 		},
 	}
 	d := Detect(tree)
 	if d.StartCommand != "bundle exec puma" || d.ReleaseCommand != "bin/rails db:migrate" {
 		t.Fatalf("start %q, release %q", d.StartCommand, d.ReleaseCommand)
 	}
-	if len(d.Processes) != 1 || d.Processes[0].Name != "worker" {
+	// Heroku's names are allowed capitals and underscores, and a Kubernetes
+	// name is not; one that cannot be made into a name is said, not dropped.
+	if len(d.Processes) != 2 || d.Processes[0].Name != "worker" || d.Processes[1].Name != "celery-beat" {
 		t.Fatalf("processes %+v", d.Processes)
 	}
-	if !strings.Contains(strings.Join(d.Notes, " "), "also names worker") {
-		t.Fatalf("the worker was not mentioned: %v", d.Notes)
+	notes := strings.Join(d.Notes, " ")
+	if !strings.Contains(notes, "also names worker, celery-beat") || !strings.Contains(notes, "Procfile's 2fast line") {
+		t.Fatalf("the processes were not mentioned: %v", d.Notes)
 	}
 
 	// A Dockerfile's CMD is not overruled by a Procfile left beside it; its

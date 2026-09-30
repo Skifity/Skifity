@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import { cn } from "cn"
 
 import { AppNeeds } from "@/components/app-needs"
+import { DetectedProcesses } from "@/components/app/processes"
 import { ErrorDisplay } from "@/components/error-display"
 import {
   FolderPicker,
@@ -93,6 +94,8 @@ export function NewAppPage() {
   // What detection found this app needs is offered, not imposed: this holds
   // only the databases somebody unticked, and the rest is worked out below.
   const [declined, setDeclined] = useState<string[]>([])
+  // The Procfile's processes somebody unticked; the rest start with the app.
+  const [skippedProcesses, setSkippedProcesses] = useState<string[]>([])
   // A pasted .env, as typed. Parsed on every render rather than into state, so
   // what is sent is always exactly what is in the box.
   const [pastedEnv, setPastedEnv] = useState("")
@@ -150,6 +153,7 @@ export function NewAppPage() {
     // A different repository is a different set of needs; what was unticked
     // for the last one says nothing about this one.
     setDeclined([])
+    setSkippedProcesses([])
     // Only fields nobody has filled in, and only when the guess is a
     // statement rather than a question. Overwriting what somebody typed
     // because a heuristic disagreed is the behaviour that makes people stop
@@ -184,6 +188,8 @@ export function NewAppPage() {
   const databases = needs
     .filter((n) => n.kind === "database" && n.provided && n.engine && !declined.includes(n.engine))
     .map((n) => ({ engine: n.engine!, variable: n.variable ?? "" }))
+  const detectedProcesses = sourceType === "image" ? [] : (found?.processes ?? [])
+  const processes = detectedProcesses.filter((p) => !skippedProcesses.includes(p.name))
 
   // "github.com/you/blog" becomes "blog", which is almost always the name the
   // user would have typed anyway.
@@ -232,6 +238,8 @@ export function NewAppPage() {
         // Created and linked before the first deploy, so its first start
         // finds the connection string there.
         databases,
+        // The Procfile's worker and clock lines, on the same build.
+        processes,
       })
       if (sourceType !== "upload" || !folder) return result
 
@@ -413,6 +421,19 @@ export function NewAppPage() {
                     otherKeys={Object.keys(variables)}
                   />
                 )}
+                {found && (
+                  <DetectedProcesses
+                    processes={detectedProcesses}
+                    declined={skippedProcesses}
+                    onToggle={(process, run) =>
+                      setSkippedProcesses(
+                        run
+                          ? skippedProcesses.filter((p) => p !== process)
+                          : [...skippedProcesses, process],
+                      )
+                    }
+                  />
+                )}
                 <TerminalInstructions />
               </>
             ) : sourceType === "git" ? (
@@ -457,6 +478,19 @@ export function NewAppPage() {
                     onPaste={setPastedEnv}
                     pastedKeys={Object.keys(pasted)}
                     otherKeys={Object.keys(variables)}
+                  />
+                )}
+                {found && (
+                  <DetectedProcesses
+                    processes={detectedProcesses}
+                    declined={skippedProcesses}
+                    onToggle={(process, run) =>
+                      setSkippedProcesses(
+                        run
+                          ? skippedProcesses.filter((p) => p !== process)
+                          : [...skippedProcesses, process],
+                      )
+                    }
                   />
                 )}
                 {found?.compose && found.compose.length > 0 && (

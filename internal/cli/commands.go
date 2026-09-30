@@ -67,6 +67,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdServers(ctx, rest, stdout)
 	case "db":
 		err = cmdDB(ctx, rest, stdout)
+	case "processes", "ps":
+		err = cmdProcesses(ctx, rest, stdout)
 	case "export":
 		err = cmdExport(ctx, rest, stdout)
 	case "open":
@@ -122,6 +124,7 @@ Working with apps:
   logs                  Show or follow an app's logs
   env                   List, set, import or remove environment variables
   scale                 Change the number of instances or turn on autoscaling
+  processes             List, add or stop the app's workers and other processes
   rollback              Go back to a previous deployment
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop
@@ -598,6 +601,7 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	appID := flags.String("app", "", "the app id")
 	follow := flags.Bool("follow", false, "keep the stream open")
 	tail := flags.Int("tail", 200, "how many lines to show first")
+	process := flags.String("process", "", "one of the app's other processes, such as worker")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -615,7 +619,7 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 
 	if *follow {
 		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(
-			"follow", "true", "tail", strconv.Itoa(*tail)),
+			"follow", "true", "tail", strconv.Itoa(*tail), "process", *process),
 			func(event, data string) bool {
 				var line string
 				if err := json.Unmarshal([]byte(data), &line); err == nil {
@@ -629,7 +633,7 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 		Lines []string `json:"lines"`
 	}
 	if err := client.Do(ctx, "GET",
-		"/api/apps/"+app+"/logs"+Query("tail", strconv.Itoa(*tail)), nil, &response); err != nil {
+		"/api/apps/"+app+"/logs"+Query("tail", strconv.Itoa(*tail), "process", *process), nil, &response); err != nil {
 		return err
 	}
 	if *asJSON {
