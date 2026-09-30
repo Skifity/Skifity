@@ -5168,6 +5168,38 @@ to its list.
 Not executed: the seal step in a real cluster, where the pod's group is what
 lets three containers running as three users share the workspace.
 
+## Phase 105 — `skifity db connect`
+
+Gap 11. A managed database has no address outside the cluster, on purpose, so
+the SQL client on somebody's laptop could not reach it: the database page
+showed a host that only answers inside. Coolify, Fly, Sealos and Epinio all
+offer a way in.
+
+`POST /api/databases/{id}/tunnel` with `Upgrade: skifity-db-tunnel` dials the
+database from the panel, answers 101 and then carries bytes both ways until
+either side closes. It is an admin's, like the password it is used with, and a
+POST, so a read-only token cannot open one; each is in the activity log as
+*Database tunnel opened*. A database that does not answer is a
+`database.tunnel_unreachable` problem rather than a dead connection.
+
+`skifity db` lists an environment's databases; `skifity db connect [name]`
+listens on 127.0.0.1 — the database's own port when it is free, any otherwise,
+or `--port` — prints the connection string pointed there, and opens a tunnel
+per connection a client makes. The client is HTTP/1.1 on purpose: HTTP/2 has
+no upgrades, and a TLS client that offered h2 to an ingress that speaks it
+would get no tunnel. Ctrl-C closes the connections still open too. The
+database's connection tab shows the command.
+
+Tested: the CLI's request against the panel's handler — a round trip twice
+over one tunnel, the audit entry, a member refused, a POST without the upgrade
+refused, an unreachable database explained; and the CLI's side against a fake
+panel — relaying, a refusal reported while the next connection still works,
+Ctrl-C with a client still connected, the local address only, a port asked for
+that is taken, the rewritten connection string.
+
+Not executed: a tunnel through the ingress in front of a real panel. Traefik
+proxies upgrades of any protocol, but that is its documentation, not a run.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -300,7 +300,8 @@
       "server.alerts_changed": "已更改服务器警告",
       "stack.created": "已创建堆栈",
       "app.template_update": "已通过模板更新",
-      "app.promoted": "已提升版本"
+      "app.promoted": "已提升版本",
+      "database.tunnel_opened": "已打开数据库隧道"
     }
   },
   "projects": {
@@ -949,7 +950,9 @@
     "host": "主机",
     "port": "端口",
     "user": "用户",
-    "unlinkConfirm": "{{app}} 会失去 {{variable}} 变量，因此从下一次部署起就连不上这个数据库了。"
+    "unlinkConfirm": "{{app}} 会失去 {{variable}} 变量，因此从下一次部署起就连不上这个数据库了。",
+    "fromYourComputer": "从你的电脑连接",
+    "fromYourComputerHint": "上面的主机只在集群内部应答。这条命令会在你的电脑上打开一个端口，经由面板连到数据库，可用于 psql、桌面客户端或迁移。"
   },
   "templates": {
     "title": "模板",
@@ -2374,6 +2377,42 @@
         "cause": "{{0}}",
         "impact": "没有恢复或更改任何内容。",
         "fix": "请恢复较早的备份，并检查存放损坏备份的存储。"
+      },
+      "database_tunnel_unreachable": {
+        "title": "面板无法连接到这个数据库",
+        "cause": "{{0}} 没有回应面板，所以隧道没有可以连接的目标。",
+        "impact": "没有打开任何连接。",
+        "fix": "在数据库页面上确认它正在运行；正在启动的数据库会在一分钟内回应。"
+      },
+      "cli_no_database": {
+        "title": "这里没有数据库",
+        "cause": "这个环境没有托管数据库。",
+        "impact": "没有建立任何连接。",
+        "fix": "在面板的「数据库」中添加一个，或用 --env 指定另一个环境。"
+      },
+      "cli_ambiguous_database": {
+        "title": "你指的是哪个数据库？",
+        "cause": "这个环境里有好几个数据库。",
+        "impact": "没有建立任何连接。",
+        "fix": "指定其中一个：{{0}}"
+      },
+      "cli_unknown_database": {
+        "title": "没有这个名字的数据库",
+        "cause": "这个环境里没有叫 {{0}} 的东西。",
+        "impact": "没有建立任何连接。",
+        "fix": "指定其中之一：{{0}}"
+      },
+      "cli_port_in_use": {
+        "title": "这个端口已被占用",
+        "cause": "无法在这台电脑的端口 {{0}} 上监听：{{1}}。",
+        "impact": "没有建立任何连接。",
+        "fix": "换一个 --port，或者不指定，让它使用任意空闲端口。"
+      },
+      "cli_tunnel_refused": {
+        "title": "面板没有打开隧道",
+        "cause": "它对隧道请求的回答是 {{0}}。",
+        "impact": "这个连接已关闭。",
+        "fix": "这台电脑和面板之间的某个环节可能不转发升级后的连接；直接访问的面板会转发。"
       }
     }
   },

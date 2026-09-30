@@ -138,7 +138,7 @@ export function DatabaseDetailPage() {
         </TabsList>
 
         <TabsContent value="connection" className="pt-4">
-          <ConnectionPanel databaseId={databaseId} />
+          <ConnectionPanel databaseId={databaseId} slug={record.slug} />
         </TabsContent>
 
         <TabsContent value="apps" className="pt-4">
@@ -185,7 +185,7 @@ export function DatabaseDetailPage() {
  * The panel audits every read of a database password, so showing them on page
  * load would fill the audit log with entries nobody meant to create.
  */
-function ConnectionPanel({ databaseId }: { databaseId: string }) {
+function ConnectionPanel({ databaseId, slug }: { databaseId: string; slug: string }) {
   const { t } = useTranslation()
   const [revealed, setRevealed] = useState(false)
 
@@ -233,6 +233,13 @@ function ConnectionPanel({ databaseId }: { databaseId: string }) {
         {/* The connection string carries the password inside it. */}
         <CredentialRow label={t("databases.connectionString")} value={data.url} secret />
         <p className="text-xs text-muted-foreground">{t("databases.credentialsWarning")}</p>
+        {/* The host above only answers inside the cluster, which is the first
+            thing somebody pasting it into a desktop client finds out. */}
+        <CredentialRow
+          label={t("databases.fromYourComputer")}
+          value={`skifity db connect ${slug}`}
+        />
+        <p className="text-xs text-muted-foreground">{t("databases.fromYourComputerHint")}</p>
       </CardContent>
     </Card>
   )

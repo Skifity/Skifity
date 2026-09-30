@@ -354,6 +354,7 @@ func (s *Server) routes() chi.Router {
 				dbr.Get("/", s.handleGetDatabase)
 				dbr.Delete("/", s.handleDeleteDatabase)
 				dbr.Get("/credentials", s.handleDatabaseCredentials)
+				dbr.Post("/tunnel", s.handleDatabaseTunnel)
 				dbr.Post("/link", s.handleLinkDatabase)
 				dbr.Delete("/link/{appID}", s.handleUnlinkDatabase)
 				dbr.Get("/backups", s.handleListBackups)

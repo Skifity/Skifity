@@ -269,6 +269,16 @@ func BackupDamaged(detail string) *Problem {
 		WithDocs("/docs/backups#verifying")
 }
 
+// TunnelUnreachable is a tunnel to a database the panel cannot reach.
+func TunnelUnreachable(database string) *Problem {
+	return New("database.tunnel_unreachable", "The panel could not reach this database").
+		WithCause("%s did not answer the panel, so there is nothing to tunnel to.", database).
+		WithImpact("No connection was opened.").
+		WithFix("Check the database is running on its page; one that is starting answers within a minute.").
+		WithStatus(http.StatusBadGateway).
+		WithDocs("/docs/cli#reaching-a-database")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

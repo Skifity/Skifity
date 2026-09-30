@@ -180,6 +180,8 @@ skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment
 skifity servers                   # the machines
+skifity db                        # the managed databases
+skifity db connect orders         # reach one from this computer; see below
 skifity export --out ./leaving    # the whole team, as JSON and Kubernetes YAML
 ```
 
@@ -194,6 +196,39 @@ Service, Ingress, autoscaler, disruption budget, volume claims and scheduled
 commands as plain Kubernetes objects. `kubectl apply -f` them on any cluster and
 the apps run there without this panel. Secret values are not included, and the
 README it writes says where they already are.
+
+## Reaching a database
+
+A managed database has no address outside the cluster, and that is on purpose:
+nothing on the internet can try its password. It also means the SQL client on
+your laptop cannot reach it either. `skifity db connect` lends it the panel's
+reach, one connection at a time:
+
+```sh
+$ skifity db connect orders
+orders (postgres) is reachable on 127.0.0.1:5432.
+Connect with: postgres://orders:...@127.0.0.1:5432/orders
+Every connection goes through the panel and is in the team's activity log. Ctrl-C closes the tunnel.
+```
+
+Point `psql`, TablePlus, DBeaver or a migration tool at that address. Each
+connection the client makes is carried through the panel over HTTPS to the
+database and back; nothing else about the database changes, and when you stop the
+command the port is gone.
+
+* With one database in the environment, `skifity db connect` needs no name. With
+  several it lists them; `skifity db` shows them too.
+* The port is the database's own when that is free on your computer, so a
+  client's defaults work, and any free one otherwise. `--port 6543` asks for one.
+* It listens on `127.0.0.1` only. Somebody else on your network cannot use your
+  tunnel.
+* It needs an admin's token, the same as reading the password does, because a
+  connection with that password can read and change everything in the database.
+  A read-only token cannot open one. Each connection is recorded in the activity
+  log as *Database tunnel opened*.
+* A tunnel is an upgraded HTTP/1.1 connection. A panel reached directly, or
+  through the ingress it installs, carries it; a proxy in between that does not
+  pass upgrades through is the one thing that stops it, and the command says so.
 
 ## Recovering access
 

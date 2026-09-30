@@ -300,7 +300,8 @@
       "server.alerts_changed": "Peringatan server diubah",
       "stack.created": "Stack dibuat",
       "app.template_update": "Diperbarui lewat templatnya",
-      "app.promoted": "Versi dipromosikan"
+      "app.promoted": "Versi dipromosikan",
+      "database.tunnel_opened": "Terowongan database dibuka"
     }
   },
   "projects": {
@@ -949,7 +950,9 @@
     "host": "Host",
     "port": "Port",
     "user": "Pengguna",
-    "unlinkConfirm": "{{app}} kehilangan variabel {{variable}}, jadi mulai deployment berikutnya dia tidak bisa menjangkau database ini."
+    "unlinkConfirm": "{{app}} kehilangan variabel {{variable}}, jadi mulai deployment berikutnya dia tidak bisa menjangkau database ini.",
+    "fromYourComputer": "Dari komputer Anda",
+    "fromYourComputerHint": "Host di atas hanya menjawab dari dalam cluster. Perintah ini membuka port di komputer Anda yang menjangkau database melalui panel, untuk psql, aplikasi desktop, atau migrasi."
   },
   "templates": {
     "title": "Template",
@@ -2374,6 +2377,42 @@
         "cause": "{{0}}",
         "impact": "Tidak ada yang dipulihkan atau diubah.",
         "fix": "Pulihkan cadangan yang lebih lama, dan periksa penyimpanan tempat cadangan yang rusak berada."
+      },
+      "database_tunnel_unreachable": {
+        "title": "Panel tidak dapat menjangkau database ini",
+        "cause": "{{0}} tidak menjawab panel, jadi tidak ada yang bisa ditembus terowongan.",
+        "impact": "Tidak ada koneksi yang dibuka.",
+        "fix": "Pastikan database berjalan di halamannya; database yang sedang dinyalakan menjawab dalam satu menit."
+      },
+      "cli_no_database": {
+        "title": "Tidak ada database di sini",
+        "cause": "Environment ini tidak punya database terkelola.",
+        "impact": "Tidak ada yang dihubungkan.",
+        "fix": "Tambahkan satu di panel pada bagian Database, atau gunakan --env untuk environment lain."
+      },
+      "cli_ambiguous_database": {
+        "title": "Database yang mana?",
+        "cause": "Environment ini berisi beberapa database.",
+        "impact": "Tidak ada yang dihubungkan.",
+        "fix": "Sebutkan salah satu: {{0}}"
+      },
+      "cli_unknown_database": {
+        "title": "Tidak ada database dengan nama itu",
+        "cause": "Tidak ada apa pun di environment ini yang bernama {{0}}.",
+        "impact": "Tidak ada yang dihubungkan.",
+        "fix": "Sebutkan salah satu dari: {{0}}"
+      },
+      "cli_port_in_use": {
+        "title": "Port itu sudah dipakai",
+        "cause": "Port {{0}} di komputer ini tidak bisa dipakai untuk mendengarkan: {{1}}.",
+        "impact": "Tidak ada yang dihubungkan.",
+        "fix": "Gunakan --port lain, atau hilangkan agar port kosong mana pun dipakai."
+      },
+      "cli_tunnel_refused": {
+        "title": "Panel tidak membuka terowongan",
+        "cause": "Panel menjawab {{0}} atas permintaan terowongan.",
+        "impact": "Koneksi ini ditutup.",
+        "fix": "Sesuatu di antara komputer ini dan panel mungkin tidak meneruskan koneksi yang di-upgrade; panel yang dijangkau langsung meneruskannya."
       }
     }
   },

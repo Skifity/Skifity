@@ -157,6 +157,7 @@ GET    /api/apps/{app}/firewall               the rules in front of this app
 PUT    /api/apps/{app}/firewall               replace them
 GET    /api/environments/{env}/databases      databases
 GET    /api/databases/{db}/backups            backups
+POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
 GET    /api/events?topics=team:{team}         everything happening, as events
 GET    /api/plugins                           installed plugins
 POST   /api/plugins/inspect                   read a manifest, and say what it would be allowed to do

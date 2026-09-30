@@ -308,7 +308,8 @@
       "server.alerts_changed": "Server warnings changed",
       "stack.created": "Stack created",
       "app.template_update": "Updated through its template",
-      "app.promoted": "Version promoted"
+      "app.promoted": "Version promoted",
+      "database.tunnel_opened": "Database tunnel opened"
     }
   },
   "projects": {
@@ -960,7 +961,9 @@
     "host": "Host",
     "port": "Port",
     "user": "User",
-    "unlinkConfirm": "{{app}} loses the {{variable}} variable, so it cannot reach this database from its next deployment onwards."
+    "unlinkConfirm": "{{app}} loses the {{variable}} variable, so it cannot reach this database from its next deployment onwards.",
+    "fromYourComputer": "From your computer",
+    "fromYourComputerHint": "The host above answers only inside the cluster. This command opens a port on your computer that reaches the database through the panel, for psql, a desktop client or a migration."
   },
   "templates": {
     "title": "Templates",
@@ -2388,6 +2391,42 @@
         "cause": "{{0}}",
         "impact": "Nothing was restored or changed.",
         "fix": "Restore an earlier backup, and check the storage the damaged one is in."
+      },
+      "database_tunnel_unreachable": {
+        "title": "The panel could not reach this database",
+        "cause": "{{0}} did not answer the panel, so there is nothing to tunnel to.",
+        "impact": "No connection was opened.",
+        "fix": "Check the database is running on its page; one that is starting answers within a minute."
+      },
+      "cli_no_database": {
+        "title": "There is no database here",
+        "cause": "This environment has no managed databases.",
+        "impact": "Nothing was connected.",
+        "fix": "Add one in the panel under Databases, or pass --env for another environment."
+      },
+      "cli_ambiguous_database": {
+        "title": "Which database did you mean?",
+        "cause": "This environment has several databases.",
+        "impact": "Nothing was connected.",
+        "fix": "Name one: {{0}}"
+      },
+      "cli_unknown_database": {
+        "title": "There is no database by that name",
+        "cause": "Nothing in this environment is called {{0}}.",
+        "impact": "Nothing was connected.",
+        "fix": "Name one of: {{0}}"
+      },
+      "cli_port_in_use": {
+        "title": "That port is taken",
+        "cause": "Port {{0}} on this computer could not be listened on: {{1}}.",
+        "impact": "Nothing was connected.",
+        "fix": "Pass another --port, or leave it out to take any free one."
+      },
+      "cli_tunnel_refused": {
+        "title": "The panel did not open a tunnel",
+        "cause": "It answered {{0}} to a request for one.",
+        "impact": "This connection was closed.",
+        "fix": "Something between here and the panel may not pass upgraded connections through; a panel reached directly does."
       }
     }
   },

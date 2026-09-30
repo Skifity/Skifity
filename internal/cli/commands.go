@@ -65,6 +65,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdApps(ctx, rest, stdout)
 	case "servers":
 		err = cmdServers(ctx, rest, stdout)
+	case "db":
+		err = cmdDB(ctx, rest, stdout)
 	case "export":
 		err = cmdExport(ctx, rest, stdout)
 	case "open":
@@ -126,6 +128,10 @@ Working with apps:
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
   open                  Print an app's URLs
+
+Databases:
+  db                    List the managed databases in an environment
+  db connect            Reach one from this computer, on a local port
 
 Cluster:
   servers               List the servers in a team
