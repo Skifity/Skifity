@@ -1,0 +1,35 @@
+id: affine
+name: Affine
+description: Affine is an open-source, all-in-one workspace and OS for knowledge management, a Notion/Miro
+  alternative.
+category: productivity
+website: https://docs.affine.pro/docs/self-host-affine
+services:
+- name: affine
+  image: ghcr.io/toeverything/affine:0.27.4
+  port: 3010
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    AFFINE_CONFIG_PATH: /root/.affine/config
+    NODE_ENV: production
+  volumes:
+  - name: affine-config
+    mount_path: /root/.affine/config
+    size_gb: 5
+  - name: affine-storage
+    mount_path: /root/.affine/storage
+    size_gb: 5
+databases:
+- name: affine-db
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - affine
+  var_name: DATABASE_URL
+notes: 'This stack has a set-up step that runs once and exits — affine_migration. Skifity runs apps, not
+  one-shot containers, so that step is not installed: do it yourself from the app''s Commands tab, or
+  follow the project''s own instructions, before expecting everything to work.'

@@ -1,0 +1,18 @@
+id: pi-hole
+name: Pi Hole
+description: Network-wide Ad Blocking.
+category: networking
+website: https://pi-hole.net/
+services:
+- name: pihole
+  image: pihole/pihole:2026.07.2
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: pihole-data
+    mount_path: /etc/pihole
+    size_gb: 5

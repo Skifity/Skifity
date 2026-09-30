@@ -1,0 +1,14 @@
+id: proxyscotch
+name: Proxyscotch
+description: A simple proxy server created for https://hoppscotch.io - CORS proxy.
+category: networking
+website: https://github.com/hoppscotch/proxyscotch
+services:
+- name: proxyscotch
+  image: hoppscotch/proxyscotch:v0.1.4
+  port: 9159
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

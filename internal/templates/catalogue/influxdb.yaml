@@ -1,0 +1,25 @@
+id: influxdb
+name: Influxdb
+description: Open source time series database for metrics, events, and analytics.
+category: storage
+website: https://docs.influxdata.com/influxdb/
+services:
+- name: influxdb
+  image: influxdb:2.7-alpine
+  port: 8086
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    INFLUXDB_HTTP_BIND_ADDRESS: :8086
+    INFLUXDB_INIT_MODE: setup
+    INFLUXDB_INIT_RETENTION: '0'
+  volumes:
+  - name: influxdb-data
+    mount_path: /var/lib/influxdb2
+    size_gb: 5
+  - name: influxdb-config
+    mount_path: /etc/influxdb2
+    size_gb: 5

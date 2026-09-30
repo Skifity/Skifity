@@ -1,0 +1,23 @@
+# How certificates are obtained.
+#
+# HTTP-01 through the bundled Traefik ingress: no DNS credentials needed, and
+# it works the moment a domain points at the server. The panel can switch to
+# DNS-01 later, which is what wildcard certificates need.
+#
+# Placeholders: __EMAIL__, __ACME_SERVER__, __ISSUER__
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: __ISSUER__
+  labels:
+    app.kubernetes.io/name: skifity
+spec:
+  acme:
+    server: __ACME_SERVER__
+    email: __EMAIL__
+    privateKeySecretRef:
+      name: __ISSUER__-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

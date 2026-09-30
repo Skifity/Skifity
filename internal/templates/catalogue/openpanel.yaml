@@ -1,0 +1,67 @@
+id: openpanel
+name: Openpanel
+description: Open source alternative to Mixpanel and Plausible for product analytics.
+category: analytics
+website: https://openpanel.dev/docs
+services:
+- name: openpanel-dashboard
+  image: lindesvard/openpanel-dashboard:2
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+    SELF_HOSTED: 'true'
+- name: openpanel-api
+  image: lindesvard/openpanel-api:2
+  port: 3000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+    SELF_HOSTED: 'true'
+- name: openpanel-worker
+  image: lindesvard/openpanel-worker:2
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+    SELF_HOSTED: 'true'
+- name: clickhouse
+  image: clickhouse/clickhouse-server:25.10.2.65
+  port: 8123
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CLICKHOUSE_SKIP_USER_SETUP: '1'
+  volumes:
+  - name: openpanel-clickhouse-data
+    mount_path: /var/lib/clickhouse
+    size_gb: 5
+  - name: openpanel-clickhouse-logs
+    mount_path: /var/log/clickhouse-server
+    size_gb: 5
+databases:
+- name: openpanel-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - openpanel-dashboard
+  - openpanel-api
+  - openpanel-worker
+  var_name: DATABASE_URL
+notes: This template installs 4 apps. They reach each other by name inside the environment, so keep them
+  together.

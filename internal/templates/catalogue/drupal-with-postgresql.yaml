@@ -1,0 +1,22 @@
+id: drupal-with-postgresql
+name: Drupal With Postgresql
+description: Drupal is a free and open-source web content management system written in PHP and distributed
+  under the GNU General Public License.
+category: cms
+website: https://www.drupal.org/about
+services:
+- name: drupal
+  image: drupal:10-apache
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: drupal-with-postgresql-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - drupal
+  var_name: DATABASE_URL

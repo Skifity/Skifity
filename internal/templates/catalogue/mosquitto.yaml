@@ -1,0 +1,15 @@
+id: mosquitto
+name: Mosquitto
+description: Mosquitto is lightweight and suitable for use on all devices, from low-power single-board
+  computers to full servers.
+category: communication
+website: https://mosquitto.org/documentation/
+services:
+- name: mosquitto
+  image: eclipse-mosquitto:2.0
+  port: 1883
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

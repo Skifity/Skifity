@@ -1,0 +1,18 @@
+id: appsmith
+name: Appsmith
+description: A low-code application platform for building internal tools.
+category: productivity
+website: https://appsmith.com
+services:
+- name: appsmith
+  image: appsmith/appsmith-ce:v2.4
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: stacks-data
+    mount_path: /appsmith-stacks
+    size_gb: 5

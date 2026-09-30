@@ -1,0 +1,18 @@
+id: unleash-without-database
+name: Unleash Without Database
+description: Open source feature flag management for enterprises.
+category: developer
+website: https://docs.getunleash.io
+services:
+- name: unleash
+  image: unleashorg/unleash-server:8.2
+  port: 4242
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    LOG_LEVEL: warn
+    INIT_FRONTEND_API_TOKENS: default:default:development.unleash-insecure-frontend-api-token
+    INIT_CLIENT_API_TOKENS: default:development.unleash-insecure-api-token

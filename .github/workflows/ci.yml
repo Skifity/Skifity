@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  backend:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # The same script `make lint-go` runs, so what CI checks and what a
+      # contributor can check are the same thing. LINT_STRICT=1 means it may
+      # not skip here: locally it explains itself and lets the rest of
+      # `make check` run, but a linter that quietly does not run is not one.
+      - name: Lint
+        env:
+          LINT_STRICT: "1"
+        run: ./scripts/lint-go.sh
+
+      # The panel writes shell programs and runs them in other people's
+      # clusters. Nothing checked any of them until a quoting mistake broke
+      # every build from a private repository — one shellcheck would have named
+      # it. LINT_STRICT=1 for the same reason as above: a linter that quietly
+      # does not run is not one.
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint shell
+        env:
+          LINT_STRICT: "1"
+        run: ./scripts/lint-shell.sh
+
+      - name: Test
+        run: go test ./...
+
+      - name: Known vulnerabilities
+        # govulncheck reports what the code actually reaches, so an unused
+        # package in a dependency does not fail the build for everybody.
+        #
+        # It also reports the standard library, which is why go.mod names a
+        # patch release rather than go 1.26.0: setup-go installs exactly what
+        # go.mod asks for, and 1.26.0 shipped with 21 known vulnerabilities
+        # that 1.26.1 fixed. Bumping the language version is the fix; pinning
+        # an older toolchain here would only hide it.
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Test with the race detector
+        # The race detector needs cgo, so this job turns it back on for this
+        # step only. Release binaries stay static.
+        run: CGO_ENABLED=1 go test -race ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Translations are complete in every language
+        run: npm run check:i18n
+
+      - name: The browser and the CLI send the same files from a folder
+        run: npm run check:ignore
+
+      - name: Known vulnerabilities
+        # Dev dependencies do not ship, so only what reaches a browser counts.
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build
+        # build:only, not vite build: it also clears stale assets and copies
+        # llms.txt in, which the panel serves.
+        run: npm run build:only
+
+  interface:
+    name: Interface
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the panel
+        run: make build
+
+      - name: Install the browser
+        run: npm --prefix web exec -- playwright install --with-deps chromium
+
+      - name: Interface test
+        # Runs against the binary built above, serving the frontend embedded in
+        # it: what is tested is what ships.
+        run: npm --prefix web run test:e2e
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7
+
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the panel
+        run: make build
+
+      - name: Smoke test the panel
+        run: ./test/smoke/panel.sh
+
+      - name: Smoke test the installer
+        # Checks the scripts and the manifests. It never installs anything:
+        # the uninstaller is only ever run with --dry-run.
+        run: ./test/smoke/installer.sh
+
+      - name: Build the container image
+        run: |
+          docker build \
+            --build-arg VERSION=ci \
+            --build-arg COMMIT="${GITHUB_SHA::7}" \
+            -t skifity:ci .

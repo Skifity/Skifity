@@ -1,0 +1,13 @@
+-- A server the panel found rather than installed.
+--
+-- The machine Skifity is installed on is already a node of the cluster, and
+-- nothing recorded it. A brand new install therefore opened on "No servers yet.
+-- Add your first server", pointing at a form that asks for an IP address and
+-- root SSH credentials — for the machine the person was already looking at.
+-- Typing it in was refused, correctly, with a message about port 6443.
+--
+-- Adopted servers are listed like any other and are not managed like one: the
+-- panel has no key to them, never installed anything on them, and refuses the
+-- operations that would need to reach them over SSH rather than failing at the
+-- connection.
+ALTER TABLE servers ADD COLUMN adopted INTEGER NOT NULL DEFAULT 0;

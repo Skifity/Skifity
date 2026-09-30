@@ -1,0 +1,26 @@
+id: uptime-kuma-with-mariadb
+name: Uptime Kuma With Mariadb
+description: Uptime Kuma is a monitoring tool for tracking the status and performance of your applications
+  in real-time.
+category: monitoring
+website: https://github.com/louislam/uptime-kuma
+services:
+- name: uptime-kuma
+  image: louislam/uptime-kuma:2
+  port: 3001
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: uptime-kuma-data
+    mount_path: /app/data
+    size_gb: 5
+databases:
+- name: uptime-kuma-with-mariadb-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - uptime-kuma
+  var_name: DATABASE_URL

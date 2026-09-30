@@ -1,0 +1,40 @@
+id: qbittorrent
+name: Qbittorrent
+description: The qBittorrent project aims to provide an open-source software alternative to μTorrent.
+category: media
+website: https://docs.linuxserver.io/images/docker-qbittorrent/
+services:
+- name: qbit
+  image: linuxserver/qbittorrent:5.2.3
+  port: 8080
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: qbittorrent-config
+    mount_path: /config
+    size_gb: 5
+  - name: qbittorrent-downloads
+    mount_path: /downloads
+    size_gb: 5
+- name: vuetorrent-backend
+  image: ghcr.io/vuetorrent/vuetorrent-backend:2.7.3
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: vuetorrent-config
+    mount_path: /config
+    size_gb: 5
+notes: In the original this stack shares /config between qbit and vuetorrent-backend. Skifity gives each
+  app storage of its own, so those are separate directories here. If the apps need to see the same files,
+  point them at object storage — MinIO is in this catalogue — rather than a path. This template installs
+  2 apps. They reach each other by name inside the environment, so keep them together.

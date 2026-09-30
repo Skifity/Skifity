@@ -1,0 +1,14 @@
+id: imgcompress
+name: Imgcompress
+description: Offline image compression, conversion, and AI background removal for Docker homelabs.
+category: media
+website: https://imgcompress.karimzouine.com
+services:
+- name: imgcompress
+  image: karimz1/imgcompress:0.6.0
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

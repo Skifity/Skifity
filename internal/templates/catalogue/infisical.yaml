@@ -1,0 +1,22 @@
+id: infisical
+name: Infisical
+description: Infisical is the open source secret management platform that developers use to centralize
+  their application configuration and secrets like API keys and database credentials.
+category: security
+website: https://infisical.com/docs/documentation/getting-started/introduction
+services:
+- name: backend
+  image: infisical/infisical:v0.154.6
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: infisical-db
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - backend
+  var_name: DATABASE_URL

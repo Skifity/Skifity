@@ -1,0 +1,18 @@
+id: linkding
+name: Linkding
+description: A self-hosted bookmark manager designed to be minimal, fast, and easy to set up.
+category: media
+website: https://linkding.link/
+services:
+- name: linkding
+  image: sissbruecker/linkding:1.47.0
+  port: 9090
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: linkding-data
+    mount_path: /etc/linkding/data
+    size_gb: 5

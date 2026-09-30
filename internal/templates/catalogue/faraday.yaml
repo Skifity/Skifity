@@ -1,0 +1,25 @@
+id: faraday
+name: Faraday
+description: Faraday is a powerful, open-source, web-based vulnerability management tool.
+category: security
+website: https://faradaysec.com/
+services:
+- name: faraday
+  image: faradaysec/faraday:5.24.0
+  port: 5985
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: faraday
+    mount_path: /home/faraday/.faraday
+    size_gb: 5
+databases:
+- name: faraday-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - faraday
+  var_name: DATABASE_URL

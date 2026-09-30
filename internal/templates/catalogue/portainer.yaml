@@ -1,0 +1,18 @@
+id: portainer
+name: Portainer
+description: Portainer is a lightweight management UI for Docker.
+category: developer
+website: https://docs.portainer.io
+services:
+- name: portainer
+  image: portainer/portainer-ce:2.45.1-alpine
+  port: 9000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: portainer-data
+    mount_path: /data
+    size_gb: 5

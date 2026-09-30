@@ -1,0 +1,28 @@
+id: pydio-cells
+name: Pydio Cells
+description: High-performance large file sharing, native no-code automation, and a collaboration-centric
+  architecture that simplifies access control without compromising security or compliance.
+category: storage
+website: https://docs.pydio.com/
+services:
+- name: cells
+  image: pydio/cells:4.4
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CELLS_SITE_NO_TLS: '1'
+  volumes:
+  - name: cells-data
+    mount_path: /var/cells
+    size_gb: 5
+databases:
+- name: pydio-cells-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - cells
+  var_name: DATABASE_URL

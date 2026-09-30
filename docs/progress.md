@@ -1,0 +1,4101 @@
+# Progress
+
+Read this file, `CLAUDE.md` and `docs/decisions.md` first if you are picking this
+project up cold.
+
+## Sandbox constraints (important)
+
+The environment this was built in has Docker but **refuses privileged containers
+and host-network relays**, so k3d/kind clusters and VMs could never be started.
+See ADR-0010. Nothing below is called verified unless it was actually executed.
+Where a cluster is required, the code is written and unit-tested against a fake
+clientset and golden manifests, and that is said plainly rather than glossed over.
+
+## Phase status
+
+| Phase | Title | Status |
+|---|---|---|
+| 0 | Research and key decisions | done |
+| 1 | Repository foundation | done |
+| 2 | One-command installer | done, not run on a real server |
+| 3 | Panel core: accounts, security, encryption | code complete, tested |
+| 4 | Server and cluster management | code complete, cluster not exercised |
+| 5 | App deployment | code complete, builds not exercised |
+| 6 | Scaling | code complete, cluster not exercised |
+| 7 | Databases, storage, backups | code complete, cluster not exercised |
+| 8 | Developer experience and vibe coding | done |
+| 9 | Differentiating features | done |
+| 10 | Hardening and release | done, except a run on real hardware |
+
+## What is done
+
+### Phase 0 — done
+
+* `docs/research/competitors.md` — 13 products compared, weaknesses we design against.
+* `docs/research/stack.md` — component versions verified 2026-09-16, reconciled
+  with the code 2026-09-17.
+* `docs/architecture.md` — layers, deploy path, add-server state machine, data model, isolation.
+* `docs/decisions.md` — ADR-0001 onwards; there are twenty-one.
+
+### Phase 1 — done
+
+* Go module, package layout, `Makefile` with build/dev/test/lint/smoke/release.
+* `golangci-lint` configured and clean; `go vet` and `gofmt` clean.
+* ESLint and Prettier configured; `npm run lint` clean with zero warnings.
+* Frontend: Vite 6, React 19, Tailwind v4, shadcn/ui only, app shell with
+  sidebar, header, command palette, dark/light theme applied before first paint.
+* Five languages complete (446 keys each), with a checker that fails the build on
+  a missing key, an extra key, an empty string, a dropped placeholder, or a
+  plural form the language does not have. Deliberately broken translations were
+  used to confirm it actually fails.
+* The built frontend is embedded in the binary; a deep link reloads correctly and
+  fingerprinted assets are cached for a year while `index.html` is not.
+* GitHub Actions CI: Go vet, format check, golangci-lint, tests, race tests;
+  frontend i18n check, lint, type-check and build; then the smoke test.
+
+**Verified by running it:** `make build` produces one 55 MB binary that serves
+the localized UI and the health API; `/apps/app_x` falls back to `index.html`;
+`test/smoke/panel.sh` passes all 26 checks against that binary.
+
+### Phase 2 — done, not run on a real server
+
+* `installer/install.sh` — POSIX shell, no bashisms, checks the server before it
+  changes anything, installs k3s with embedded etcd and WireGuard between nodes,
+  prepares the panel's directories, generates the setup token, works out a
+  hostname, applies the panel and prints a URL and a token. Safe to run again:
+  every step checks what is already there.
+* `installer/uninstall.sh` — removes the panel by default, k3s with `--all`, and
+  the data only with `--purge` and a typed confirmation. `--dry-run` prints what
+  it would do and changes nothing.
+* `deploy/` — the panel's own objects, also usable with `kubectl apply -f`.
+* `Dockerfile` — three stages down to a distroless image holding one static
+  binary, running as a non-root user.
+
+**Verified:** `test/smoke/installer.sh` runs 26 checks — both scripts parse under
+`sh` and `dash`, failures carry a cause and a fix, every manifest renders with
+nothing left to substitute, the plain-HTTP route does not claim a certificate it
+does not have, and nothing is installed on the machine running the test. A Go
+test parses the rendered Deployment and asserts it runs as non-root with a
+read-only root filesystem, no capabilities, no CPU limit, the Recreate strategy
+and the node pinning. Both were confirmed to fail when the manifests were
+deliberately broken.
+
+**Not verified:** the installer has never been run on a real server. It needs
+root, systemd and a kernel k3s can use, none of which this sandbox allows.
+
+### Phase 3 — code complete, tested
+
+Accounts, Argon2id passwords, sessions, TOTP implemented in-house, API tokens,
+CSRF double-submit, security headers, an audit log, and envelope encryption with
+per-secret DEKs, context binding, master-key rotation and a printable recovery
+key. Unit tests cover the envelope format against bit-flips and non-canonical
+encodings, and rotation across every encrypted column.
+
+### Phases 4–7 — code complete, cluster not exercised
+
+Adding a server over SSH (seven idempotent steps), preflight checks, firewall
+rules written per source address, k3s install and join, promotion and removal
+with drain; manifest generation with probes, limits, spread and network policies;
+builds through Railpack and BuildKit; deployments, rollback, autoscaling and the
+scaling readiness checker; managed PostgreSQL, Redis and MariaDB; backups to S3
+through presigned URLs so storage credentials never enter a tenant namespace.
+
+Exercised against a fake clientset, golden manifests, a real in-process SSH
+server that records the commands it receives, and `sh -n` on every generated
+script. Not exercised against a real cluster.
+
+### Phases 8–9 — done
+
+The CLI and the MCP server are built on the same API as the panel, and both
+render errors with their cause, impact and fix. The panel has the project canvas,
+one-step templates, the error catalogue, and the build fingerprint that keeps a
+configuration change from rebuilding an image.
+
+Added since:
+
+* `llms.txt`, describing the whole product on one page, served by the panel at
+  `/llms.txt`.
+* `SKIFITY_URL` and `SKIFITY_TOKEN`, so the CLI and the MCP server work with no
+  interactive sign-in and no stored configuration — which is how CI, a
+  container and an assistant's sandbox actually use them. The team is worked
+  out from the token's account when there is only one.
+* `skifity admin reset-password` and `skifity admin list-users`, which read the
+  panel's database directly on the server. Nobody being able to sign in is the
+  one thing the API cannot fix, and a self-hosted panel has no mail server it
+  can trust to send a reset link.
+* Connecting a Git account and choosing where to be notified, both of which had
+  a complete API and no way to reach it from the panel. Connecting a Git account
+  shows the webhook address once, with a copy button, because a self-hosted
+  Gitea whose token cannot register a webhook needs it pasted in by hand.
+* `docs/configuration.md` and `docs/backups.md`.
+* The documentation is served by the panel itself, from inside the binary, so
+  the roughly twenty links in the error catalogue resolve on a server with no
+  outbound network — which is when they matter. A test walks every `WithDocs`
+  link and every link between pages, and fails on a missing page or a missing
+  anchor. Both failure modes were confirmed by breaking a link on purpose.
+
+### Phase 10 — done, except a run on real hardware
+
+* `govulncheck` and `npm audit` are clean and run in CI. The one advisory left
+  is `golang.org/x/crypto/openpgp` being unmaintained, in a package this code
+  never imports; govulncheck reports zero reachable vulnerabilities.
+* A Playwright interface test covering first-run setup, the recovery-key gate,
+  the shell, the theme, and all five languages. It runs against the real binary
+  serving the embedded frontend, so what is tested is what ships.
+* GoReleaser: static binaries for Linux and macOS on both architectures, and a
+  multi-architecture distroless image, on a tag.
+* The documentation set: quick start, concepts, adding servers, the CLI and AI
+  assistants, troubleshooting, questions — plus a README with real screenshots
+  taken by the test suite, so an image can never show a screen that no longer
+  exists.
+* Apache 2.0.
+
+**The interface test found a real bug the completeness checker could not:**
+Simplified Chinese resolved to English at runtime. `nonExplicitSupportedLngs`
+makes i18next check the *language part* of a code against `supportedLngs`, so
+asking for `zh-CN` looked up `zh`, did not find it, and fell back. The locale
+file was complete the whole time. Fixed by registering the bundle under `zh` as
+well, which also gets `zh-TW` and `zh-HK` a Simplified page rather than an
+English one.
+
+### After an adversarial audit
+
+The whole product was read back against what it claims, one dimension at a time,
+looking for the class of defect a sandbox with no cluster cannot catch: code that
+compiles, tests that pass, and a feature that was never once executed. What came
+out of it:
+
+* **Notifications were configured and never sent.** `notify.Send` was called from
+  exactly one place in the codebase — the "send a test message" button. No
+  deployment failure, backup failure, lost server or certificate failure ever
+  produced one, although the panel let an operator subscribe to all of them.
+  There is a dispatcher now, and the producers call it.
+* **Nothing watched the cluster between user actions.** A node that stopped
+  answering at three in the morning, an app whose last instance crashed, a
+  certificate cert-manager had given up on: all three were visible only to
+  somebody already looking at the right page. `internal/watch` compares the
+  cluster with the database once a minute. It also fills in two columns the
+  panel had written a query for and never called: a server's last seen time, and
+  a domain's certificate status, which said "waiting for DNS" forever.
+* **No app ever got a URL.** `kube.AutoHostname` was written, tested and called
+  by nothing, so the free address the product promises on every page existed
+  only as a function. A deploy now gives an app its automatic domain.
+* **An app created from the panel had no port**, because the form does not ask,
+  and a port of zero renders no Service, no Ingress and no URL.
+* **A build could send a team's Git token to any host**, because the clone
+  rewrote the URL to include the token whatever host was typed into the form.
+* **An API token's team and scopes were stored and never read**, so a token
+  issued for one team worked on every team, and a read-only token could do
+  anything its owner could.
+* **Two-factor recovery codes were generated, returned by the API, and dropped**
+  by both sides; the account page never even rendered them.
+* **Deleting a volume** authorized the app in the URL and then deleted whatever
+  volume id came after it.
+* **A backup job could not have run**: rejected by Pod Security for naming no
+  seccomp profile and no user, then killed by its own package-install line, then
+  refused by S3 for uploading from a pipe with no Content-Length.
+* **The builder could never start**: rootless BuildKit needs a seccomp profile
+  the panel's namespace refuses, and its readiness probe looked for a socket
+  that is not there. Builds moved to their own namespace (ADR-0016).
+* **Built images could never be pulled**, because they are tagged with a Service
+  name the host's containerd cannot resolve (ADR-0017).
+* **Every build was a cold build**: the cache was exported inline and imported
+  from a tag nothing ever wrote.
+* **Adding a server built a second cluster.** The panel decided a server was
+  the first one by looking for a control-plane row in its own database, and a
+  panel installed by `install.sh` has none. The first server anyone added was
+  given `--cluster-init`, and its token could never have matched the real one
+  anyway.
+* **A second control-plane node joined with a different network backend** than
+  the first, so the two never exchanged a packet.
+* **A fork's pull request was handed the project's secrets**, because a preview
+  environment copied every variable into a container built from the pull
+  request's own code.
+* **Scale to zero installed KEDA and changed nothing**: the flag was carried
+  into the app spec and read by no manifest.
+* **The MCP server's every tool answered "this token is not tied to a team"**
+  for a token set up the documented way, and it had no way to create anything.
+* **The logs tab could not show why a crash-looping app crashed**, because the
+  container that printed it had already been replaced.
+* **A superseded deployment kept building** and could roll out an older version
+  after the newer one.
+* **The event hub never forgot a topic**, so a panel up for a month held the
+  build output of every deploy since it started.
+* **Half the audit log was invisible**: every panel-wide event — password
+  changes, settings, key rotation — was recorded with no team and the list
+  filtered on the team alone.
+* **Preview environments were never reclaimed** except by a webhook that had to
+  arrive.
+* **An instance's CPU and memory were always an em-dash**, and the panel's own
+  database had no way to be copied that did not silently lose data.
+
+### What was missing rather than broken
+
+Three things the audit named repeatedly as gaps rather than defects, now built:
+
+* **A release command and a one-off command.** There was no way to run anything
+  in an app's environment, so a migration had nowhere to go. An app's release
+  command runs on every deployment between the build and the rollout; a one-off
+  command runs once on request. Both run in the app's own image with its own
+  variables, as a Job rather than an exec, because the moment you need this
+  most is when the app will not start.
+* **Scheduled commands.** Cron existed and ran the panel's own backups; an app
+  could not have one. Kubernetes does the scheduling now, so a panel restarting
+  at three in the morning is not a reason for a job to be skipped.
+* **Honest components.** "Full monitoring" had an Install button that always
+  failed. It says how to install it instead.
+
+### A second pass over the cluster, the backend and the frontend
+
+The first audit asked "what does this claim that it never does". This one asked
+a narrower question of the same three layers: what do the pieces do to each
+other. Everything below was found by reading the rendered objects and the
+selectors against one another, and each fix carries a test that was confirmed to
+fail against the old behaviour.
+
+* **Every followed log ended after thirty seconds.** `rest.Config`'s Timeout is
+  the HTTP client's, so it bounds the response body as well as the request. A
+  log stream is a request that succeeds at once and is then read for as long as
+  somebody watches it, so one deadline for both kinds of call cut it off. The
+  browser reconnected and replayed its tail, so live logs repeated themselves
+  every half minute and a build log stopped part way through a build that was
+  still running. There are two clients from one connection now.
+* **A quiet log stream was dropped by whatever sat in front of it**, because it
+  had no heartbeat and could not have written one while the handler was waiting
+  on the pod.
+* **An autoscaling app that could also sleep had two controllers.** It got an
+  HorizontalPodAutoscaler and an HTTPScaledObject, and KEDA creates an
+  HorizontalPodAutoscaler of its own for the second. Two of them pointed at one
+  Deployment do not divide the work: each overwrites the other's replica count
+  on every reconcile. KEDA owns the scaling when scale to zero is on, and the
+  scaling tab says so rather than leaving two fields on screen that no longer
+  decide anything.
+* **The disruption budget deadlocked a node drain.** `minAvailable: 1` permits
+  two of three instances to go at once and none at all when an autoscaled app is
+  sitting at its minimum of one — so `kubectl drain` waited forever for an
+  eviction that could never be allowed. `maxUnavailable: 1` is the promise that
+  was meant: one at a time, at every instance count.
+* **A migration's pod counted as an instance of the app.** It carried the app's
+  own selector labels, so it appeared on the instances tab as though it were
+  serving traffic, its CPU was averaged into the autoscaler's decision, and it
+  could be picked as the pod to read the app's logs from — which is how somebody
+  opens the logs tab during a nightly job and reads the job instead.
+* **A deleted app kept running.** Deleting it removed the Deployment, the
+  Service, the Ingress and the Secret, and left the scheduled commands: the
+  nightly job went on firing every night forever against an image nothing would
+  pull. The wake Service and the HTTPScaledObject were left too.
+* **A scheduled command's history was empty by morning**, because it inherited
+  the one-off's hour-long TTL, and the morning is exactly when somebody looks for
+  the run that failed.
+* **The nixpacks builder could never have built anything.** Its buildctl line
+  read `.nixpacks/Dockerfile` and no step ever wrote one. It is reachable from
+  the API and the CLI; the panel's own form only offers auto and Dockerfile,
+  which is why nobody had hit it.
+* **An app and a database could take each other's address.** They are unique
+  among themselves, share a namespace, and both render a Service under their
+  slug — so a Redis called "web" next to an app called "web" took the app's
+  Service over while its Ingress went on pointing at the name. Both creation
+  paths now refuse the collision and say what holds it.
+* **A render that threw blanked the whole panel.** React unmounts the tree when
+  nothing catches it, and what is left is a white page and a console message. On
+  a self-hosted panel that is the worst failure there is: the cluster is fine,
+  the apps are serving, and the operator cannot tell. There are two error
+  boundaries now, and the one inside the shell leaves the navigation working so
+  the person can simply go somewhere else.
+
+**What this pass did not find:** the store, the authorization layer and the
+event hub came out clean. Every team-scoped handler goes through `authorizeTeam`
+or `authorizeApp`, every write is serialised behind one mutex and every raw
+statement runs inside `db.Tx`, and the SSE handler already had its heartbeat,
+its replay and `X-Accel-Buffering`.
+
+### The roadmap, worked through
+
+`docs/roadmap.md` set out what was left, largest first: the things that decide
+whether a panel survives its second month, then the questions people actually
+ask it, then two features that were gaps rather than defects. All of it is
+built.
+
+* **The registry collects its garbage.** Every build pushed an image and nothing
+  ever removed one — the first open issue on this page since the day it was
+  written, and the one that ends with a full disk and every pod on the node
+  stopping at once. The panel untags what nothing can reach and a Job runs the
+  registry's own collector beside the files. Builds are held while it runs,
+  because a push concurrent with a collection is the one case the registry's
+  documentation says corrupts an image, and the panel is the only thing that
+  starts builds.
+* **The panel's own database stops growing.** Deployment records, audit entries
+  and finished operations were written and never removed. A daily pass, with the
+  window in settings; the activity log keeps a year by default, because a log
+  that forgets is most of the way to not having one.
+* **A pending instance says why.** It used to say "waiting for a server with
+  enough free CPU and memory" whatever the reason, which is right about a third
+  of the time and otherwise sends somebody to add a server for a quota, a
+  volume, or a control-plane node that does not take apps. Kubernetes writes the
+  answer onto the pod; the panel now reads it. A quota refusal never reaches a
+  pod at all, so that one is read off the Deployment.
+* **An environment's limits are visible before they are hit**, once something is
+  above sixty per cent.
+* **The panel can be monitored.** `GET /api/metrics`, in the Prometheus format,
+  behind the same authentication as everything else, written by hand rather than
+  pulled in.
+* **A repository is read before it is built.** `builder.Detect` had been written,
+  tested and called by nothing. The panel reads the tree through the provider's
+  API — two requests, no clone — and says what it found while the form is still
+  open, as a guess presented as a guess.
+* **A volume can be backed up**, mounted read-only, as the app's own user, on
+  the node that holds it.
+* **The frontend is split by what changes**, and the labels only a screen reader
+  hears are translated — "Close", "Loading", "Toggle Sidebar" were all hardcoded
+  English in a panel shipping five languages, and the i18n check now fails the
+  build on the next one.
+
+### A second pass over tenant isolation
+
+The roadmap put this next because it is the one class of bug where being wrong
+is not recoverable. Every route was traced to its authorization helper, every
+second id in a URL checked against the first, and the CLI, the MCP server and
+the Git webhook followed back to the same checks — the first two go through the
+HTTP API with the caller's own token, so there is no second surface to get
+wrong, and the webhook skips any app whose team is not the connection's.
+
+Three things came out of it.
+
+* **The panel could be pointed at the cloud metadata service.** A Git
+  connection's base URL and a notification channel's webhook are both settings
+  holding an address the panel's own process requests. The webhook path echoed
+  part of the response back in its error, which turns a test message into a
+  read. `internal/netguard` refuses link-local, loopback, the unspecified
+  address and multicast at connection time, on the resolved address rather than
+  the hostname. Private ranges stay allowed: a self-hosted Gitea on 10.0.0.5 is
+  the ordinary case here, not the attack.
+* **Unlinking a database authorized the database and not the app.** Linking
+  checks both and says so in a comment; unlinking checked one. It removed no
+  variable it did not own, and did re-apply that app's configuration to the
+  cluster.
+* **The api package had no tests.** "Authorization lives in one place" was true
+  and unenforced. Six now run against the real router with a real database and
+  keyring: every shape of id one team can ask another for, the token's team
+  binding, read-only scopes, what is open without credentials, what is
+  administrator-only.
+
+What did not turn anything up: the authorize helpers themselves, the SSE topic
+authorization, the encryption contexts, secret disclosure through the variables
+and credentials endpoints, and the webhook's team scoping.
+
+### A pass over the code that runs as root on somebody's server
+
+The provisioning path had never been read this session and is where a defect
+does the most damage: it runs shell as root on a machine the user owns, and it
+can delete the cluster. Two things came out of it, and the second explains why
+the first had survived.
+
+* **`%q` is not shell quoting, and every generated script used it.** Go's `%q`
+  produces a Go double-quoted literal; a shell reading a double-quoted string
+  still expands `$` and a backtick, and `%q` escapes neither. So
+  `fmt.Sprintf("TARGET=%q", "1.2.3.4$(id)")` produces `TARGET="1.2.3.4$(id)"`
+  and the shell runs `id`. The code reads as though it is defended and is not.
+  Every script this panel generates used it — the ones that provision a server
+  over SSH and the ones that build an image. `internal/shellsafe` quotes with
+  single quotes, the only quoting a POSIX shell does not look inside, and a test
+  puts both forms through a real `sh` and shows the difference rather than
+  asserting it. The one reachable path was the SSH account name, which was never
+  validated; it is now checked against the shape a distribution produces.
+* **The guard against destroying the cluster counted the wrong thing.** Removing
+  a control plane node is refused when too few would be left, and it counted
+  rows in one team's table rather than the nodes that actually run the cluster.
+  A panel installed by `install.sh` has no row for the node it runs on, and a
+  panel with more than one team splits the rest between them, so the number was
+  low by at least one and scoped to the wrong thing. It refused removals from a
+  healthy four-node control plane, and at zero it permitted the one removal that
+  deletes Kubernetes, every app, and the panel answering the request.
+
+**And the pattern underneath both.** Three handlers checked "is this feature
+configured" before the check that mattered — before validating the request,
+before authorizing the second resource, before the quorum guard. Beyond the
+small leak of telling somebody who may not touch an app whether databases are
+configured, it means a safety check only runs on a configured panel, so nothing
+can test it without a cluster. That is why this class kept surviving review. The
+checks run first now, and the tests for them run against a panel with no cluster
+at all.
+
+## Phase 19 — the research, read back against the code
+
+The three research pages were written before the code and never checked against
+it afterwards. Reading them back found two promises the product did not keep and
+a page that had drifted.
+
+* **The WireGuard fallback did not exist.** The preflight told an operator that
+  a kernel without the module was fine and that "traffic between your servers
+  will use vxlan". Nothing did that: the backend was hardcoded to
+  `wireguard-native` in the panel's install scripts and in `install.sh`, so the
+  server joined a cluster it could not exchange a packet with, and neither k3s
+  nor the panel reported anything wrong. The pod network is now one choice for
+  the whole cluster, stored in `cluster.flannel_backend`. The installer picks it
+  on the first node — where the fallback is real, because there is nothing yet
+  to disagree with — and hands its choice to the panel, which records it and
+  installs every later server the same way. A server whose kernel cannot run the
+  cluster's backend is refused, with the two fixes that work.
+* **Compose was announced, not implemented.** Detection reported "Docker
+  Compose" and said services become separate apps and their links become
+  variables. `ConvertCompose` was written, tested, and called by nothing; the
+  Compose file's contents were never fetched; and `compose` was a source an app
+  could be created with, which the API accepted, stored, and then deployed as a
+  Git app with no repository. The reader is wired up now: the file is fetched
+  and parsed, the services are listed with what did not carry over named against
+  the service it came from, and picking one fills the form in — name, root
+  directory, port, image or build, and the service's variables, which the create
+  endpoint now seals before the first deploy. Skifity still runs one service per
+  app, and the panel says so rather than implying an import.
+* **A Dockerfile's `EXPOSE` line was never read.** Same cause: the file was
+  found in the tree and then read back as an empty string, because it was not in
+  the list of files fetched. The port detection it fed had never once produced
+  an answer.
+* **`docs/research/stack.md` had drifted** — `--write-kubeconfig-mode=0644`
+  against 0600 in the code, a node label the code never sets, `--secrets-encryption`
+  missing, self-hosted fonts the frontend deliberately does not use, and a link
+  to a page that does not exist. It is reconciled, and a test now reads the
+  flags out of the page and fails when no generated script passes one.
+
+## Phase 20 — the tooling, and the catalogue
+
+* **`make check` could not be run.** The README calls it "what CI runs" and it
+  failed twice on tooling rather than code: golangci-lint refuses a module whose
+  `go` directive is newer than the Go it was built with, and took the whole
+  suite down with it, so nothing here had ever been linted; and
+  `npm --prefix web exec -- tsc -b` keeps the directory it was called from, so
+  tsc looked for a tsconfig.json at the repository root. `scripts/lint-go.sh`
+  now builds the linter with this module's own toolchain, which cannot be out of
+  step with it, and CI runs the same script with `LINT_STRICT=1` so it can never
+  skip there. With the linter finally running it found eight things, all fixed,
+  including two doc comments left behind by a rename.
+* **The template catalogue had no tests, and a wrong template is silent.** A
+  database whose `link_to` names no service was created and then never linked,
+  so the app came up without the one variable it cannot run without and
+  crash-looped with nothing on screen saying why. That now fails the install.
+  The catalogue is checked for it, and for engines Skifity does not provision,
+  variable names a container could not carry, services that ask for more memory
+  than they are allowed, and templates nothing can open.
+* **Four templates ran `latest`.** n8n, Vaultwarden, Umami and MinIO. A floating
+  tag is not a version: two deploys of the same app run different software, a
+  rollback restores a tag rather than the thing that worked, and an upstream
+  release arrives on a restart nobody asked for — in a product whose whole point
+  is that a rollback works. All four are pinned, the card shows the version, and
+  a test refuses anything ending in `latest`.
+* **`Icon` was a field the UI never read.** It is gone, and the card shows what
+  the template installs instead.
+* **Templates had no documentation page.** `docs/templates.md`, served by the
+  panel like the rest.
+* **The configuration file had three ways to be wrong quietly.** The struct's
+  toml tag said `kubeconfig_path` and the parser looked for `kubeconfig`, so a
+  file written from the struct was read, accepted and ignored. A `#` anywhere in
+  a value cut the value short, whether or not it was inside quotes, so a path
+  with a hash in it became a shorter path and what failed was whatever used it.
+  A quote that was never closed was accepted, taking the comment somebody
+  thought they were writing along with it. `internal/config` had no tests at
+  all; it has them now, and one of them derives the list of settings from the
+  struct and fails when any of them is missing from `docs/configuration.md` —
+  which two of them already were.
+
+### The claims, read back one by one
+
+Every checkable claim in `README.md`, `llms.txt` and the documentation was put
+against the code. Most held — the seven provisioning steps, the password that is
+never stored and the test that scans every column for it, all fourteen MCP
+tools, all thirty-two documented API routes, the three scaling risks named by
+name, the copy-for-AI button, the placeholder check in the i18n script. These
+did not:
+
+* **"It does not contact any server but yours"**, and in the FAQ, "it does not
+  contact any server at all". Skifity reaches Let's Encrypt, GitHub for the
+  component manifests, the user's Git provider and S3 bucket — and the preflight
+  asks a public-IP service for the address of a server being added, which is the
+  one call a privacy-minded reader would actually want named. "It never phones
+  home" is true and stays; the absolute around it is gone.
+* **"Every command takes `--json`."** `open`, `logout`, `admin reset-password`
+  and `admin backup-db` did not. That claim is aimed at assistants, who read it
+  literally and get "flag provided but not defined". All four have it now, and a
+  test reads the package and fails when a command is added without it.
+* **The measured figures had drifted.** Idle memory is 35 MiB, not 34. The
+  frontend is 314 KiB gzipped across nine files, not 278 across five — the chunk
+  split in Phase 15 changed both numbers and neither was re-measured.
+* **"Any server can be promoted."** True of the code, and that was the bug — see
+  below.
+* **Every published install path points at nothing.** See the open issues.
+
+The API route table is now checked against the router itself: llms.txt is what
+an assistant reads before calling anything, and a route that moved does not read
+as a documentation mistake, it reads as the product being broken.
+
+### Promotion wiped the node before checking it
+
+The panel refuses to add a control plane server below 2 GB and 20 GB. It would
+promote one without looking. Promotion drains the node, removes it from the
+cluster and uninstalls Kubernetes before reinstalling it as a control plane
+member, so the first thing to notice a machine too small for etcd was the
+install at the very end — with the apps already moved off and a working worker
+turned into a machine with nothing on it. The check runs first now, before
+anything is touched.
+
+### One panic used to end the panel
+
+The HTTP handlers have recovered from a panic since the beginning. Nothing else
+did. Every deployment, every server being added, every database, backup,
+restore, health pass, scheduler tick and notification runs in a goroutine of its
+own, and a panic in any of them took the process down — on a self-hosted install
+that is the panel you would use to find out why, so the deployment that crashed
+it also removed the way to diagnose it.
+
+`internal/runsafe` recovers, logs the stack, and hands the failure to whatever
+was running so it is marked failed rather than left at "running" forever. It is
+wired into the two choke points every deployment and every provisioning
+operation already pass through, into the backup, restore, volume-backup and
+database goroutines beside the `fail` each of them already had, and into the
+dispatcher. The three long-running loops recover per iteration rather than
+around the loop: a panel that is alive with no scheduler is worse than one that
+restarted, because nothing says so and the backups simply stop.
+
+The test for it does not report a failure when it regresses. It takes the test
+binary down, which is the point.
+
+### The guards that stopped guarding
+
+Four safety checks were written as `if err == nil && <the dangerous
+condition>`, which reads as caution and means the opposite: the moment the query
+behind the check fails, the check disappears and the destructive path runs. This
+is the same shape as the capability-before-check pattern from Phase 18 — a
+safety check that only runs when everything else is already well — and one of
+these four was that pattern as well.
+
+* **Deleting a database** skipped the "apps still use this" check when the links
+  could not be read, and ran that check after the cluster capability check, so
+  nothing could test it without a cluster. Both fixed; a test drops the
+  `database_links` table and asks for the delete.
+* **Restoring a backup** over a live database did the same thing with the same
+  query. A failure to read the links is not an empty list of them.
+* **Demoting the last owner** skipped the last-owner check when the membership
+  or the owner count could not be read, leaving a team nobody can administer.
+  Not being a member yet is the ordinary case and still passes; anything else
+  now refuses. A test drops the `memberships` table.
+* **Removing an owner** allowed it when the actor's own role could not be read.
+  Nothing can reach that branch — `authorizeTeam` refuses a caller with no
+  readable membership first — so there is no test for it, only the change. The
+  ordinary guard, that an admin may not remove an owner, had no test either and
+  has one now.
+
+Two more in the same handler. Deleting a database asked which team it belonged
+to *after* the row was gone, so the deletion was recorded with no team — filed
+with the panel-wide events, which belong to no team by design, and shown in the
+audit log of every team that person is in rather than in the one whose database
+it was. And `dbsvc.Delete` removed the apps' database variables inside an
+`if err == nil`, so a query failure left apps holding a connection string to
+something that no longer exists, silently; it now says so.
+
+`internal/errdoc` also had no tests. The catalogue is the product's central
+promise — cause, impact and fix on every failure — and an entry missing one of
+those still compiles and still renders. A test now reads the file as source and
+checks every entry for all three, for a code shaped like a code, and for codes
+that do not collide, since the UI picks a translation by code.
+
+## Phase 21 — the competitors, researched properly
+
+`docs/research/competitors.md` was written before the code and never checked
+against the market again. Re-researched against live 2026 sources, it changed
+the conclusions rather than confirming them.
+
+* **Coolify disclosed eleven critical CVEs on 8 January 2026, five at CVSS
+  10.0**, all authenticated command injection ending in root, plus a readable
+  root SSH key and later a cross-team authorization bypass. Censys counted
+  52,890 publicly reachable dashboards. The published cause is a class, not a
+  mistake: user input reaching a shell in many independent code paths — which is
+  exactly what `internal/shellsafe` exists for and exactly the bug found in this
+  repository in September. ADR-0002a now records why there is one place for it.
+* **Railpack is no longer a differentiator.** Dokploy ships it already, along
+  with SSO/SAML that Skifity does not have.
+* **aaPanel is not a competitor.** It replaces cPanel — websites, PHP, mail, a
+  WordPress toolkit — and is sold to agencies running hundreds of client
+  servers. It was researched and removed from the comparison rather than left in
+  as a name.
+* **Kubernetes is a category mismatch as much as an advantage.** Comparison
+  sites exclude k3s from "self-hosted PaaS" as a different abstraction layer
+  entirely, and one of the most-read 2026 guides is titled "Best Self-Hosted
+  PaaS to Replace Heroku (No Kubernetes)". The audience is selecting away from
+  what this is built on, which makes hiding it well the whole bet rather than a
+  nice touch.
+* **The footprint gap is the clearest measurable win.** 35 MiB against Coolify's
+  500 MB–1.2 GB and Dokploy's ~350 MB.
+* **Eight templates against Coolify's 280+** is the single most-cited reason
+  people choose Coolify, and it is a content problem rather than an engineering
+  one.
+
+## Phase 22 — the catalogue, closed
+
+Eight templates against Coolify's 342 was the largest gap we had, and the
+research said it was a content problem rather than an engineering one. It was
+both: a Go literal is fine for eight and impossible for three hundred, which is
+why Coolify's catalogue is files and grew by contribution.
+
+* **The catalogue is data now.** `internal/templates/catalogue`, one YAML file
+  per template, embedded at build time. Adding one touches no Go, and the
+  directory's README has the format and the two rules that are not obvious.
+* **212 templates**, up from eight. 204 were converted from Coolify's catalogue
+  by `hack/import_templates.py`, which is kept so the next batch is a re-run.
+* **Every image was resolved to a version and verified.** `hack/resolve_tags.py`
+  asks each registry for the tags, prefers a series tag that takes patches over
+  an exact pin, and then fetches the manifest to prove the tag exists. 225 of
+  269 single-service templates resolved; the 44 that did not were dropped rather
+  than shipped on `latest`. More than half of Coolify's own entries ship
+  `latest`.
+* **The database wiring was taken out, and that was a real bug.** A Compose file
+  points an app at a sibling container — `DB_HOST=mariadb` — and here the
+  database is a managed one that arrives as a connection string. The first
+  import carried those over, which would have produced apps that start, fail to
+  resolve a hostname nobody recognises, and crash-loop. Bookstack, GLPI,
+  Metabase, Redmine and Keycloak were all affected. A test now refuses any
+  variable that names a datastore and ends in an address.
+* **Nothing was shipped half-filled.** Templates with several application
+  services (72), no port (15), or no verifiable image (46) were dropped.
+* **The panel did not get heavier**: 34 MiB idle and 39.4 MiB of binary, against
+  35 MiB and 39.3 MiB before.
+
+What this does not mean: none of these has been deployed, because nothing in
+this product has. What is checked is that each template is structurally sound
+and that its image exists.
+
+## Phase 23 — CI had been red on every commit
+
+Twenty-three runs, all of them red, back to the first. Nobody looked, including
+whoever wrote `make check`.
+
+The failure was one step: `govulncheck`. `go.mod` said `go 1.26.0`, CI's
+setup-go installs exactly what `go.mod` asks for, and Go 1.26.0 shipped with 21
+known standard-library vulnerabilities that 1.26.1 fixed — one of them reachable
+from `internal/notify`, which dials TLS to send mail. Locally the same command
+passed, because `go run …@latest` quietly switches to a newer toolchain and the
+scan then reports the newer standard library. The local answer and the CI answer
+were about two different Go versions.
+
+Two things were wrong, and the second is worse:
+
+* **The `go` directive named a version with known holes.** It now names a patch
+  release, so anyone building this gets a fixed standard library rather than
+  whichever one they happen to have.
+* **`make check` did not run the step that was failing.** It is documented as
+  "what CI runs" and it was not: no `audit`. A gate with a hole in it looks
+  exactly like a gate. `check` now includes it.
+
+And the consequence nobody would have guessed from the summary line: because
+`govulncheck` runs before them, **the race-detector run, both smoke tests and
+the Playwright interface test had never executed on CI**. With the scan fixed
+they ran, and all of them passed — except one step that had never run anywhere,
+on any machine, and was broken in two ways.
+
+### `make image` had never worked
+
+Building the image needs a Docker daemon, and nothing here has one, so the whole
+target was unverified for as long as it existed. The first CI run that ever
+reached it failed twice over:
+
+* The frontend stage builds from `web/` alone, and the frontend build copies
+  `llms.txt` in from the repository root so the panel can serve it. The
+  Dockerfile never copied that file, so the build stopped on a missing file that
+  is right there in the repository.
+* `.dockerignore` excluded `docs`, which is a Go package — `docs/embed.go`
+  embeds the pages into the binary — so even past the first failure the backend
+  stage would have failed on a missing import.
+
+Both are the same shape as everything else in this log: a path nothing executes,
+so nothing contradicts it. `internal/buildctx` now holds two tests that read the
+Dockerfile and the ignore file rather than running Docker: every `//go:embed`
+path must survive the build context, and anything the frontend build reads from
+outside `web/` must be copied in.
+
+This is also the path the quick start tells somebody to use, since nothing is
+published — clone, `make image`, run the installer from inside the clone. It
+would not have worked for them either.
+
+## Phase 24 — the multi-service templates, and what they were worth
+
+Seventy-two templates in Coolify's catalogue install more than one application
+service. Installing several apps from one template was never the problem —
+`installTemplate` already creates an app per service — so this was a converter
+problem, and the converter kept being confidently wrong.
+
+The first attempt produced 21 templates. They looked fine and were not: a
+Sidekiq worker marked public on the web app's port, Elasticsearch given Kibana's
+port, n8n given Postgres's, HeyForm given Redis's. Every heuristic fix revealed
+another wrong guess, because a Compose file encodes a topology and the converter
+was inferring one.
+
+So it stopped inferring. A service's port now comes from the source saying so —
+its own `SERVICE_FQDN` marker, or `expose`, or `ports` — or from a short table of
+ports that are documented facts about an image, and that table only answers when
+the image appears once in the stack (seaweedfs runs a master and an admin from
+one image, and 8333 was wrong for both). Anything else is dropped as ambiguous.
+
+That leaves **seven**, and all seven are right. It also produced three real
+changes to the product rather than the converter:
+
+* **`link_to` is a list.** A web app and its worker share one database, and
+  linking only the first left the worker starting without the variable it cannot
+  run without — the same crash loop as a link that names nothing.
+* **A worker is `port: 0`**, which the manifest builder already handled: no
+  Service, no probes, no ingress. The catalogue tests now allow it, and refuse a
+  service that is public or has a health path with no port to check it on.
+* **A shared volume does not carry over**, and that is said rather than
+  discovered. A Compose volume is shared between services; a Skifity volume
+  belongs to one app and is read-write-once, so Chatwoot's web app and its
+  Sidekiq get two different `/app/storage` directories. The template says so and
+  points at object storage.
+
+Of the 65 that did not convert: 8 need the Docker socket, which cannot run under
+a restricted pod security policy at all; 8 are stacks of five to twenty-three
+services where getting startup order and shared state right without ever running
+them is not a bet worth making; the rest have an image whose version could not be
+verified or a service nothing says the port of.
+
+## Phase 25 — the rest of the catalogue, and five resolver bugs
+
+Seven multi-service stacks out of seventy-two, and 44 single-service templates
+dropped for an unverifiable image, both looked like the source being awkward.
+Most of it was this code being wrong, and each bug read in the log as somebody
+else's fault.
+
+**A tag can contain a colon.** `${IMMICH_VERSION:-release}` does, so splitting
+the reference on the last colon produced the repository name
+`ghcr.io/immich-app/immich-server:${IMMICH_VERSION`, and every registry answered
+403. In the log that is the registry refusing us. It was eleven images, Immich,
+Outline, Ente and Campfire among them.
+
+**A registry's token comes from its own challenge.** ghcr.io and codeberg.org
+were hardcoded and everything else — flipt, rocket.chat, weaviate, gcr.io,
+outline, the Docker Hub mirrors — read as "unauthorized", which is what a
+registry says when nobody asked it for a token. Reading `WWW-Authenticate` and
+asking the realm it names works everywhere.
+
+**A 429 is not "no".** Several vanity registries are pull-through caches in front
+of Docker Hub and share its anonymous rate limit. Treating the rate limit as "the
+image does not exist" dropped templates whose images were fine. It now backs off
+and retries, and a question the registry never answered is recorded as
+unverified rather than as absent.
+
+**A tags listing is paginated.** Reading the first page picked
+immich-machine-learning v1.132.3's server beside a v1.106.4 model runner — both
+tags exist, the stack does not work, and upstream requires the two to match.
+`Link` is followed now, and where a Compose file uses one version variable for
+several images, the resolved tags are aligned and re-verified before any of them
+is used.
+
+**Not every project ships semver.** GitLab ships `19.1.8-ce.0`, SearXNG and
+Excalidraw ship dates, DokuWiki ships `version-2026-07-14c`. Each names a build
+exactly; insisting on semver threw all of them away. The fallback only applies
+where the listing is newest-first, which the Hub API promises and a v2
+`tags/list` does not, and it refuses an architecture (`linux-arm-v7`), a runtime
+(`php8.3-apache`), a branch build (`…-chore-dependabot-security-36cd703`), a
+toolchain variant (`3.8-python3.14-conda`) and anything longer than four parts.
+Cockpit publishes `core-` and `pro-` from one repository, so the original tag's
+prefix is kept as well.
+
+And the converter stopped needing a port to be in `ports:` to count as written
+down:
+
+* **A `SERVICE_FQDN` marker does not have to match the service name.** Coolify
+  writes `SERVICE_FQDN_CWA_8083` on a service called `calibre-web-automated`.
+  Requiring the names to match was really defending against a shared environment
+  block — a web app and its Sidekiq declared with one YAML anchor carry the same
+  marker — and that case is visible in the data, so it is counted instead.
+* **A healthcheck against localhost states a port.** `curl -fs
+  http://localhost:8083` only makes sense if 8083 is open.
+* **A peer states a port.** `PLAYWRIGHT_DRIVER_URL=ws://browser-sockpuppet-chrome:3000`
+  and `ELASTICSEARCH_HOSTS=http://elasticsearch:9200` each name a service and the
+  port it answers on. Matching the host against the service's own name is what
+  keeps this from being the environment-scanning that once gave n8n Postgres's
+  port: a bare `DB_PORT=5432` names nothing and is ignored.
+
+A peer beats a healthcheck, because the peer's port is the one other apps have to
+reach: ZooKeeper's healthcheck talks to its admin server on 8080, which answers
+`ruok` and nothing ClickHouse wants.
+
+**282 templates**, up from 230 — 38 of them multi-service, up from seven. Three
+more fixes to the output rather than the converter:
+
+* **A worker keeps no port it did not declare.** A healthcheck that shells out,
+  or a peer reference naming the web app, is not a worker declaring a port, and
+  `openpanel-worker` was public on 3000 before this. A test now refuses any
+  service named for a worker that is public.
+* **A datastore is not linked to the database.** ClickHouse, MinIO, Meilisearch
+  and a headless Chrome do not read a `DATABASE_URL`, and handing one to
+  ClickHouse says the analytics store depends on the Postgres, which is not true.
+* **A UDP port is not an ingress, and 80000 is not a port.** Palworld publishes
+  `8211/udp` and Coolify's metadata says healthchecks listens on 80000. Both
+  would have produced a domain that never answers.
+
+## Phase 26 — the unverified images, and what the catalogue says about itself
+
+Forty-three images could not be verified, which sounded like forty-three
+upstreams being careless. Four more bugs, one of them shipping:
+
+* **A reference with no tag has no tag.** `busybox` rpartitions to `("", "",
+  "busybox")`, and taking that as the tag made the resolver answer "already
+  pinned" for the most floating reference there is. Nothing reached the
+  catalogue — the writer's own gate refuses an image with no tag — but the
+  resolver was telling itself the opposite of the truth.
+* **A pinned tag still has to exist.** Coolify's Mealie template names
+  `3.17.0`; Mealie publishes `v3.17.0`. Trusting "already pinned" dropped a
+  template whose current release was one lookup away.
+* **The registry and the Hub API have different limits.** A manifest fetch
+  counts against Docker Hub's anonymous pull limit and an API call does not, so
+  a vanity host in front of Hub — docker.flipt.io, registry.rocket.chat,
+  cr.weaviate.io — could answer 429 forever while the tag was plainly there.
+  Asking the Hub API instead recovered Rocket.Chat, Weaviate and Flipt without
+  pulling anything.
+* **Nothing ever asked whether the catalogue was still true.** A tag that
+  existed at import can be deleted afterwards, and MinIO did exactly that to its
+  old RELEASE tags on Docker Hub. `hack/verify_catalogue.py` now asks every
+  registry about every image in the directory: 290 of 291 present, 0 gone, 1
+  rate-limited. It is not in `make check` — CI has no business depending on
+  Docker Hub being up, and the anonymous limit would make it flaky — so it is a
+  thing somebody runs before a release.
+
+**282 templates**, 38 of them multi-service.
+
+What stays dropped: 8 stacks need the Docker socket, which cannot run under a
+restricted pod security policy; 4 are five to twenty-three services; 36 images
+have no tag this could verify — `tiredofit/freescout` and `ghcr.io/ente-io/web`
+are gone or private, Prefect publishes only toolchain variants, and Excalidraw,
+Fizzy and label-studio publish nothing but branch builds. Shipping any of them
+means guessing, and the whole point of the previous phase was that guessing is
+worse than dropping.
+
+### The number in the prose was wrong, and nothing failed
+
+The README said 219 while the directory held 279. It had been wrong for two
+phases. Every count this repository states about the catalogue — in the README
+and in `docs/templates.md` — is now read back from the catalogue by a test, and
+it caught the next drift on the same afternoon.
+
+### Three things the panel did not say
+
+Thirty-eight multi-service templates made three gaps visible that seven had hidden:
+
+* **A card said `3210 · 6791 · 26.2.4.23 · postgres`.** Joining every service's
+  tag with a dot says nothing and looks like a fault. One app still shows its
+  version; a stack shows how many apps it is.
+* **Installing four apps ended on `/projects`**, with no sign of where they
+  went. It now lands on the app when there is one and on its project when there
+  are several, and says how many were made.
+* **A template's notes were shown before installing and never again.** They are
+  the steps Skifity cannot do for you — a bucket to create, a migration to run,
+  a shared directory that is two directories here — and the moment they matter
+  is after the install, not before it. The comment on the field said they
+  "appear after installation"; they did not. They do now, on the page the
+  install lands on, until dismissed.
+
+## Phase 27 — reliability and security, looked at properly
+
+Three real defects, one of them a panic with a trigger anybody could hit by
+accident, and two spot checks turned into complete ones.
+
+### A closed browser tab could end a deployment
+
+`Hub.Publish` collected its subscribers under the lock, released it, and then
+sent. Between those two steps a client whose request context had just ended had
+its channel closed by the goroutine watching that context — and a send on a
+closed channel is a panic, in whatever happened to be publishing. A build emits
+thousands of log events; closing the tab during one is all it takes. The panic
+is contained by `internal/runsafe`, so the panel survives, but the deployment
+that was publishing does not.
+
+Reproduced in about three hundred iterations of subscribe-and-cancel, and it is
+now a test that does exactly that. The sends happen under the lock, which is
+safe because every one of them is non-blocking: the default arm drops the event
+rather than waiting, so the section never sleeps.
+
+### The third setting that becomes a request, and did not go through netguard
+
+`internal/netguard`'s own comment said "two settings hold an address the panel
+then makes a request to". There are three. The URL a cluster component's
+manifest is downloaded from is a setting, `ApplyManifestURL` fetched it with
+`http.DefaultClient`, and **what comes back is applied to the cluster as
+Kubernetes objects** — which makes it the worst of the three to have been able
+to point at `169.254.169.254`. It goes through the guarded client now, a scheme
+that is not http or https is refused before anything is dialled, and a test asks
+for the metadata service and for loopback and requires a `netguard.Blocked`.
+
+### Two things a restart left in progress forever
+
+A deployment interrupted by a panel restart is marked failed at startup, and so
+is a provisioning operation. A **backup** written as `running` and a **database**
+written as `creating` were not, and they are the same shape: a row only the
+goroutine holding it ever finishes. The panel is a Deployment with a self-upgrade
+endpoint, so a restart is routine rather than exotic.
+
+The database is the worse of the two. One stuck at `creating` cannot be backed
+up either — the backup manager refuses a target that is not running — so it is
+not merely wrong on screen, it is unusable, and the only way out was to delete it
+and start again.
+
+### A key id longer than the header could hold
+
+The envelope header carries the key id's length in one byte, and the id comes out
+of the master key file, which an operator edits by hand. Nothing checked it: a
+longer id would have been written truncated, every secret sealed afterwards would
+have been unopenable, and the first sign of it would have been a decryption
+failure on rows that were written correctly weeks earlier. The keyring refuses
+one now, at both boundaries, and `encode` refuses to truncate rather than doing
+it quietly.
+
+### Two spot checks became complete ones
+
+`TestNothingIsReachableWithoutCredentials` named seven paths out of a hundred and
+twenty-three. `TestOneTeamCannotReachAnother` named thirty-three. The route that
+matters is always the one nobody thought to add, so both now walk the router:
+
+* **112 routes** refuse an anonymous request; 8 are open on purpose, each with a
+  reason written next to it, and a second test fails if one of those 8 stops
+  being a route this panel serves.
+* **84 team-scoped routes** answer 404 for another team's team, project,
+  environment, app, database or server — not 403, which would confirm the thing
+  exists.
+
+Neither found a hole. That is the point of running them: "authorization lives in
+one place" was a claim about a hundred and twenty-three routes checked at seven.
+
+### What was looked at and was already right
+
+Argon2id at the OWASP parameters, sign-in lockout per account *and* per address
+with the correct password refused while locked, constant-time comparisons,
+unknown accounts indistinguishable from wrong passwords, CSRF double-submit with
+bearer tokens exempt, `HttpOnly`/`Secure`/`SameSite` on the session cookie, a
+strict CSP, request body limits, HMAC-verified webhooks, SQLite on WAL with a
+busy timeout and every write serialised through one mutex, and `runsafe` on every
+background goroutine including the four launched as method calls that a grep for
+`go func` misses.
+
+Three things gosec reports here are not findings: SHA-1 in `internal/auth/totp.go`
+is what RFC 6238 specifies, the CSRF cookie is readable by the frontend because
+that is how double-submit works, and `skifity.toml` is 0644 because it is meant
+to be committed.
+
+## Phase 28 — the one thing autoscaling needed and did not check
+
+Scaling on a CPU or memory target reads the metrics API. Without it the
+HorizontalPodAutoscaler sits at `<unknown>/70%`: the app never scales up under
+load, never scales back down, and neither Kubernetes nor the panel says why.
+k3s ships metrics-server by default and this install does not disable it, so
+the common case is fine — but an operator who brought their own cluster,
+disabled it, or is watching it crash-loop on a small node would have had
+autoscaling that looked configured and did nothing.
+
+That is the exact failure the scaling readiness checker exists for, and it was
+the one thing the checker did not look at. It checks the eight ways an app
+breaks when it is scaled — a read-write-once volume, SQLite, in-memory
+sessions, a local-disk cache, local uploads, in-app cron, no health path, a
+single instance — and not whether the cluster can supply the number it is meant
+to scale on. It does now, as an error rather than a warning, with what to do
+about it. Scale-to-zero is exempt: KEDA counts requests, not CPU.
+
+## Phase 29 — single sign-on, and what building it found
+
+**Dokploy has SSO and this did not.** It was the only feature on the competitor
+list that was a straight absence rather than a trade-off, so it is built:
+OpenID Connect, authorization code with PKCE, against whatever an operator
+points it at — Okta, Entra, Authentik, Keycloak, Zitadel, Google.
+
+SAML is deliberately not here. It is a second protocol, a second XML parser and
+a second class of signature bug, and every provider a self-hosted panel is
+likely to meet speaks OIDC.
+
+Three things about it are load-bearing, because each is an auth bypass when it
+is wrong, and none of them is code written here:
+
+* The ID token's signature, issuer, audience and expiry are verified by
+  `oidc.IDTokenVerifier`. A hand-rolled JWT check is the usual way to end up
+  accepting `alg: none` or a token minted for somebody else's client.
+* The nonce is generated per sign-in and has to come back inside the ID token,
+  which is what makes a replay of an old one fail.
+* The state is generated per sign-in, kept in a short-lived HttpOnly cookie, and
+  **spent before the code is exchanged** — so resending the same callback cannot
+  replay it.
+
+The issuer is a setting, which makes it the **fourth** address an administrator
+types that the panel's own process then connects to. It dials through
+`internal/netguard` like the other three. The redirect URI comes from the Panel
+URL setting rather than from the request's Host, which a caller controls: that
+is the difference between a fixed redirect target and one somebody can register
+under their own hostname.
+
+### What building it found in the code that was already there
+
+An account created by single sign-on has no password hash. Signing in with a
+password was correctly refused — and refused with *"stored password hash is not
+in the expected argon2id format"*, which tells an anonymous caller which
+addresses are provider-only accounts. That is the exact enumeration
+`TestUnknownAccountLooksLikeAWrongPassword` exists to prevent, arriving through
+a new door. An empty hash now costs the same Argon2 hash, the same lockout
+entry and the same `ErrInvalidCredentials` as any other wrong password.
+
+`TestEveryRouteRefusesAnAnonymousRequest` caught the two new routes on the first
+run, which is what a complete check is for: they are open on purpose, and now
+say so with a reason next to each.
+
+### And the sandbox claim that was never checked
+
+ADR-0010 has said for months that this environment "refuses privileged
+containers", so no cluster could ever run here. Checked today for the first
+time: the container is root with nearly every capability, `docker` and `k3d` are
+both installed, `/dev/kmsg` and `/dev/net/tun` are there. What actually blocks
+it is the session's permission layer refusing to start a Docker daemon — a fact
+with a remedy, rather than a wall. The ADR now says so. No cluster has been run
+either way, so nothing else changes; what changes is that the reason written
+down was not the real one.
+
+## Phase 30 — the release pointed somewhere nobody owns
+
+"Tag a release" was on the roadmap as *the image does not exist until the first
+tag*. It was worse than that.
+
+The release published to **`ghcr.io/skifity/skifity`**, and the README two pages
+away says plainly that there is no such repository — this one lives at
+`TegarTheGreat/Skifity`. So a tag would either fail, or succeed into a namespace
+nobody here owns and tell every installer to pull from a name **somebody else
+could register**. That is not a missing artefact; it is a supply-chain hazard
+written into the release configuration, sitting next to a document that already
+knew.
+
+The release now publishes to the repository it is cut from: the workflow derives
+`IMAGE_REPO` from `GITHUB_REPOSITORY`, lowercased for ghcr.io, and GoReleaser
+uses that for the image, the upgrade command in the release notes, and the
+`image.source` label. Right wherever it is released from, and no decision taken
+here.
+
+One thing is still a decision rather than a fix, and it is flagged rather than
+guessed: `installer/install.sh` carries a literal default, and a shell script a
+stranger downloads cannot derive one. That line has to name wherever the project
+actually publishes, which is choosing the project's public home.
+
+### And the half of "a second pair of eyes" that can be arranged
+
+The roadmap has asked since Phase 17 for somebody who did not write any of this
+to look at the security model. **CodeQL** now runs on every push and weekly with
+`security-extended` — a different analyser with a different model of the code,
+reading taint from source to sink across packages, reporting into the Security
+tab where a finding cannot be quietly forgotten. **Dependabot** opens the update
+before `make audit` has to report it, grouped so a Kubernetes bump is one pull
+request rather than twelve.
+
+Neither is a person. A tool that agrees with the author is not evidence that the
+author was right, and the roadmap still says so.
+
+**And it was switched off.** The workflow said `branches: ["main"]`, and this
+repository has no `main` — the work is on a branch, and Dependabot opens its
+pull requests against that branch. So the scan never ran once. The first green
+pull request is what made it visible: eight checks passed and CodeQL was not one
+of them. It runs on every branch now, like CI does.
+
+That is the same shape as `make check` not running `audit`, as the four cluster
+smoke tests that were named and never written, as `make image` never having
+worked: **a gate with a hole in it looks exactly like a gate**, and this one was
+added in the same session that wrote that sentence down again.
+
+## Phase 31 — the check that settles it, written
+
+The largest open item in this repository is that nothing has ever run against a
+real cluster. It cannot be closed from here — the environment refuses to start a
+Docker daemon, and the server offered for it is not reachable from this
+container, which serves HTTPS through a proxy and has no SSH client at all.
+
+What can be written is the check itself, so that closing it is one command
+somebody runs rather than an afternoon of improvisation. `test/cluster/verify.sh`
+installs Skifity on a real server, deploys a real application, and then settles
+the three things only a cluster can:
+
+1. **An app comes up and answers.** Not that the manifest renders — that the pod
+   starts, the Service routes, and an HTTP request gets a reply.
+2. **Autoscaling has numbers to scale on.** It waits a minute for the HPA's
+   first sample and fails if it is still `<unknown>`. That is the silent failure
+   Phase 28 added a warning for; this is what proves the warning is right.
+3. **Scale to zero is wired the way it is drawn.** KEDA running, an
+   HTTPScaledObject for the app, and the app's own HPA *gone* — two autoscalers
+   on one Deployment fight, and this is where that stops being a claim.
+
+It also measures what the thing costs. `docs/performance.md` says 35 MiB idle,
+measured on a laptop; this prints the first number measured on a cluster, and if
+they disagree the document is what changes.
+
+It is not in `make check` and never will be: it needs a machine to destroy,
+several minutes and the internet, and it asks for a typed `yes` before touching
+anything. `make verify` runs it. The release is not tagged until it passes.
+
+## Phase 32 — the screenshots, and the page that had never been opened
+
+A request for pictures of every screen. Taking them found that one of the
+screens did not work.
+
+### The Templates page threw on every install
+
+`"databases": null`. A nil slice in Go marshals as `null`, and **157 of the 282
+templates have no database**. The panel iterated it, threw
+`TypeError: t.databases is not iterable`, and the error boundary rendered "This
+page stopped working" where the catalogue should be.
+
+It had been that way since the catalogue grew past the eight hand-written
+entries — all eight of which happened to have a database. So the single
+most-cited reason people choose a panel in this category, the thing three phases
+of work went into, **has been a crash the whole time.**
+
+Nothing caught it, and the reasons are worth writing down because they are all
+the same reason:
+
+* The structural tests in `internal/templates` read the Go value. The difference
+  was in the JSON.
+* The interface test checked the shell and the empty states. It had never opened
+  the page.
+* The screenshot capture is skipped by default, so the only thing that would
+  have looked was switched off.
+
+Fixed at both ends: the loader normalises nil slices to empty ones, because the
+API's own type says these are arrays, and the page defaults them anyway — a
+client that falls over on a shape it did not expect is the other half of the
+same bug. A test now marshals every template and fails on a `null` list.
+
+**And the guard that should have existed from the start:** the interface test
+opens every page in the navigation and fails on an uncaught error or on the
+error boundary being on screen. It deliberately asserts nothing about what each
+page contains — that would be a second copy of the panel, out of date within a
+week. It asserts only that the page renders, which is the thing that was not
+true.
+
+### The theme flash, in production only
+
+The same run showed `Refused to execute inline script` in the console. `index.html`
+carries one inline script: it reads the stored theme and adds the dark class
+before the first paint, so a dark-mode user never sees a white flash. The policy
+is `script-src 'self'` with no `'unsafe-inline'`, so **it never ran** — and the
+white flash it exists to prevent happened on every load.
+
+In production only. The policy is not set in dev mode, which is why it was
+invisible to everybody who was looking.
+
+The hash is now computed from the embedded `index.html` at startup and put in
+the policy, so the two cannot drift: a hash written down beside a script goes
+stale the first time somebody edits the script and does not think about the
+policy. A test fetches the page and checks that the policy names every inline
+script that ships, and that `script-src` still has no `'unsafe-inline'`.
+
+### Two smaller things the pictures made obvious
+
+* The template categories were shown as their slugs — `ai`, `cms`, `other`.
+  Translated now, in all five languages, and sorted by the name somebody reads
+  rather than by the slug underneath it.
+* The autoscaling switch's description repeated its own label: "Scale
+  automatically / Scale automatically".
+
+**32 screenshots**, in `docs/tour.md`, captured by a test against the real
+binary — so a picture can never show a screen that no longer exists.
+
+## Phase 33 — the panel at 375px, and a team that could not be joined
+
+A layout test at 375, 768 and 1440 (`web/tests/responsive.spec.ts`), and four
+faults, none of them in hard code: the inset had no `min-w-0`, so the command
+palette button's own width made every page on a tablet scroll 7px sideways; a
+`Card` had none either, so a repository URL made the app page scroll 372px on a
+phone with a `truncate` that could never apply; shadcn fixes a tab strip at one
+row, so Settings' seven tabs wrapped out of the pill and onto the panel below;
+and the switch, the checkbox and the breadcrumb links were all under the 24px
+WCAG 2.2 (AA, 2.5.8) minimum. The test seeds a project, an app and a long secret
+variable first, because an empty install has none of the shapes that break.
+
+Separately, and larger: **there was no way to add anybody to a team.** Members
+could be listed and their role changed; an account could only be made by
+first-run setup, which happens once. An invitation is now a one-time link —
+stored as a SHA-256, spent on use, expiring in seven days, carrying the address
+it was issued for so an accept cannot be pointed at somebody else's account.
+
+Also: a missing file was served `index.html` with a 200, which is how a browser
+holding a cached page ends up parsing `<!doctype html>` as JavaScript; and
+`Cross-Origin-Resource-Policy` was missing from an otherwise complete set of
+headers.
+
+## Phase 34 — what autoscaling did after it worked
+
+Three faults on the scaling path, found by reading it against KEDA's own
+manifests rather than against itself. All three are the same shape: an object
+that renders correctly and a system that then behaves differently.
+
+### Every apply undid the autoscaler
+
+Objects are applied with server-side apply and `Force`, and the Deployment
+carried `spec.replicas`. An apply happens on a deploy, a rollback, a variable
+change, a domain change and a scaling change — so each of those reasserted the
+panel's number over the autoscaler's. An app the HPA had taken to six under load
+dropped to its minimum because somebody edited a variable, then climbed back
+over the next few minutes. With scale to zero it was the mirror image: a
+sleeping app forced awake and billed for it.
+
+The field is now omitted whenever an autoscaler owns it, which is what
+Kubernetes documents for this case. The test that existed asserted the old
+behaviour — "the Deployment must start at the minimum" — which is why nothing
+ever failed.
+
+### A sleeping app could not be woken
+
+An app that scales to zero is reached through an ExternalName Service aliasing
+KEDA's interceptor. That alias said `port: 80` with `targetPort: 8080`, and the
+Ingress asked for port 80.
+
+`targetPort` is not applied to an ExternalName Service: no kube-proxy rule is
+made for one, so the ingress controller dials whatever number it settles on —
+Traefik the Service's `port`, nginx the number in the Ingress backend. Both
+would have dialled port 80 of a proxy that listens on 8080 and nothing else.
+Every request to an app that could sleep would have been a 502, and the app
+would never have started. KEDA's own example points an Ingress at 8080 and gives
+the alias no ports at all; this now says 8080 in all three places, which is the
+only value that is right under every reading.
+
+### A percentage target of a number nobody chose
+
+A CPU or memory target is a percentage of what the app *reserves*. A new app
+reserves 50m and 128Mi, so a 70% target fires at 35m and 90Mi — under what most
+frameworks use while idle. Autoscaling would therefore "work" by going straight
+to the ceiling and staying there. The readiness checker now does that arithmetic
+and says the numbers out loud, and `docs/concepts.md` explains it.
+
+`test/cluster/verify.sh` gained the two checks that would have caught the first
+two: it scales an app to three, changes a variable and fails if the count moves;
+and it puts an app to sleep, sends one request through the real ingress and
+fails unless the app answers and comes back. The second used to be a sentence
+telling the operator to try it by hand.
+
+### The other half of a zero-downtime deploy
+
+`maxUnavailable: 0` keeps the capacity, and the test that checks it said that is
+"what makes a deploy zero-downtime". It is half of it. A pod is removed from its
+Service and told to stop at the same moment, and the ingress controller learns
+about the removal through a watch — so for a fraction of a second it is still
+sending requests to a process that has begun shutting down. Every rolling update
+therefore dropped a handful of requests, which is the kind of thing nobody can
+reproduce afterwards.
+
+There is now a five-second `preStop` pause before SIGTERM, out of the same
+thirty-second grace period. A sleep action rather than a shell command, because
+a distroless image has no shell; and only for an app that serves HTTP, because a
+worker has no endpoint for anybody to notice disappearing.
+
+### The front door, said out loud
+
+Every server runs the ingress, so an app answers on every server's address. DNS
+names one. If an app has three instances across three servers and the server the
+domain points at goes down, the app is running and the name is dead — Kubernetes
+moved the work, it cannot move a DNS record.
+
+Nothing in the documentation said this, and `docs/research/competitors.md`
+criticised Coolify for the same thing without admitting it. Both now say it, and
+`docs/adding-servers.md` gives the three ways out: round-robin DNS, a floating
+IP, or a provider's load balancer, with the address going in
+**Settings → Domains → Cluster public IP**.
+
+## Phase 35 — the checklist, crosschecked
+
+Eighteen things a self-hosted platform is judged on, put against the code one at
+a time. `docs/checklist.md` is the result and the record: three statuses, and
+only three — **Works** means a test that runs on every push, **Written** means
+the code and its unit tests exist and it has never touched a cluster, **Missing**
+means missing. Nothing is Works because it looks right.
+
+Two of the eighteen are Works end to end. Most are Written. That ratio is the
+honest state of this product and it does not change until `verify.sh` has run.
+
+### The one that was Missing
+
+Taking the data out. "Can I take my data with me" was answered by "copy
+`panel.db` and `master.key`", which is a Skifity-shaped blob and a promise
+rather than an export. `skifity export` now writes a directory that needs none
+of this product to read: the whole team as JSON, and each app as the Kubernetes
+objects it would be applied as. Secret values are deliberately not in it — the
+promise that a stored secret is never shown again is worth more than the
+convenience, and it costs nothing, because those values are already in the
+reader's own cluster as ordinary Kubernetes Secrets.
+
+### And the crosscheck itself, made runnable
+
+`test/cluster/verify.sh` was a script that had never been run, and reading it
+against the code showed why that matters: it asked for an API token with the
+wrong CSRF header name, without the team id the endpoint requires, and then read
+the secret out of a field that does not exist. It would have died four checks
+in, and everything after it would never have run.
+
+It is now organised as the five phases a person can actually work through, and
+covers what it claimed to and more: a build from Git rather than a prebuilt
+image, a build log read while it is still building, an address that answers, a
+variable change that restarts without rebuilding, a rollback, two hundred
+requests held across a rolling restart, a volume that survives one, a database,
+a backup restored, the export, a token refused on another team, a member refused
+the settings, one namespace refused another's app, sixty-four cores refused by
+the quota, the panel scaled to zero while the app keeps serving, a node drained,
+the panel replaced under a running app, and a deployment that cannot pull its
+image sending a real notification to a real listener.
+
+`test/cluster/sample-app` is what phase 1 builds: one Go file and a two-stage
+Dockerfile with nothing to download, so a build failure is the builder's and not
+the network's.
+
+The parts of that script that only talk to the panel are now also covered by
+`make smoke` against the real binary — the invitation flow end to end over HTTP,
+what a member is refused, and the export. A field renamed in the API would
+otherwise leave the crosscheck quietly checking nothing, on the one machine
+nobody can run from CI.
+
+## Phase 36 — the first five minutes
+
+Three things a person who has never seen this would hit, found by walking the
+path rather than by reading the code that implements it.
+
+### The first screen told you to do what you had just done
+
+`CreateServer` was called from exactly one place — the SSH provisioner — so the
+machine Skifity installs itself onto was never recorded anywhere. A brand new
+install opened on
+
+> No servers yet — Add your first server
+
+while looking at a panel served by a cluster that was already running on that
+very machine. The only sensible thing to do next was to type its own address
+into the form, which the preflight refused with a message about something
+listening on port 6443. Correct, and no use at all as an answer.
+
+The cluster's nodes are now adopted into the team when it is created: listed
+like any other server and not managed like one. The row carries `adopted`,
+because the panel has no key to that machine and put nothing on it — so Remove,
+Retry and Promote refuse with a reason (`server.not_ours`) rather than failing
+at the SSH connection with what reads like a network problem, and the panel does
+not offer the buttons at all.
+
+### "New app" was a button on a page nobody was standing on
+
+Creating an app only existed inside a project's page, two lists deep. The quick
+start said *"Press New app"* in step 3, describing a button that is not on the
+screen it had just walked the reader to. It is now on the overview and in the
+command palette, pointing at the first project's first environment — the one
+setup creates.
+
+### Five settings that nothing read
+
+Settings → Git offered a GitHub App ID, a slug, a client id, a client secret and
+a private key. Nothing in the repository read any of them: there is no JWT
+signed with that key and no installation token exchanged for it. An operator
+could paste a private key and have nothing happen, and the client id's help text
+promised signing in with GitHub and a list of repositories to choose from,
+neither of which exists.
+
+They are gone, along with `github_app` as a connection kind and the webhook
+branch that verified pushes for a kind of connection the panel could not create.
+A personal access token is the path that works, for GitHub, GitLab and Gitea,
+and it is the one the panel offers. Same shape as Compose in phase 19 and the
+WireGuard fallback before it: the feature was the settings page.
+
+`verify.sh` now checks the first of these where it means something — a fresh
+install must list the machine it is running on, and must mark it adopted.
+
+## Phase 37 — the first command, and the first click
+
+### The link the installer prints now does the copying
+
+Every self-hosted install ends the same way: a URL, a forty-character token, and
+a minute of moving one into the other. The installer prints a link with the
+token in it instead. In the `#fragment`, deliberately — a fragment is never sent
+to a server, so opening it cannot put the token into an access log, a proxy or a
+`Referer` header on the way somewhere else. The page reads it during render and
+clears the address bar, so a bookmark or a screen share does not keep it. The
+plain URL and the token are still printed underneath.
+
+**Writing the test for that found an older bug.** The installer has always
+printed `<url>/setup`, and `/setup` is not a route: the setup screen is a gate
+in front of the router, so once an account exists the gate is gone and the path
+has nothing behind it. Everybody who followed the printed link finished first-run
+setup and landed on "Not found". `/setup` and `/login` now redirect to the
+overview.
+
+### The panel hands out its own binary
+
+One file is the panel, the CLI and the MCP server, so the file answering a
+request is the file somebody wants on their PATH. `GET /api/cli/download`
+streams it.
+
+The installer used to fetch the CLI from `github.com/skifity/skifity/releases`,
+which does not exist, so every install ended with "could not download the
+command line tool" and a link to nothing. It now asks the panel it has just
+started: always present, always the matching version — a CLI one release behind
+its panel is a confusing afternoon — and no internet needed at all.
+`SKIFITY_CLI_URL` remains for an air-gapped mirror. `make smoke` downloads it,
+runs it, and fails if the version differs from the panel's.
+
+### The domain nobody pointed yet
+
+`SKIFITY_DOMAIN` used to be taken at its word. A record that does not point at
+this server means Let's Encrypt cannot answer the challenge, and the operator
+learns that ten minutes later from a cert-manager log, as a browser warning on
+a page they cannot open. One `getent` lookup at install time says it now, with
+the address the record should have. A warning rather than a stop: installing
+first and pointing DNS afterwards is entirely reasonable.
+
+### One click meant one click and a decision
+
+The template install dialog opened with the environment picker empty and the
+button greyed out. Almost every panel has exactly one environment — setup makes
+it — so the one-click catalogue began with a choice that had a single possible
+answer. It is preselected when there is exactly one, derived during render
+rather than copied into state, and left empty when there are several, because
+installing into the wrong environment is not a mistake anybody notices
+straight away. The label said "Environments"; it now says where it is going.
+
+## Phase 38 — which systems, asked properly
+
+"Does it work on every operating system" turns out to be four questions, and
+three of them had an honest answer already. The fourth did not.
+
+### Alpine was on the list of distributions that work, and could never work
+
+`knownWorkingDistros` said AlmaLinux, Rocky, RHEL, CentOS, Fedora, openSUSE,
+SLES, Alpine, Arch. Four lines below it, a missing systemd is a **fatal**
+problem — and Alpine runs OpenRC. So the file promised a distribution and
+refused it in the same breath. k3s itself supports OpenRC; Skifity does not,
+because it manages the unit with `systemctl`.
+
+Alpine is off the list, the refusal now names it and OpenRC by name, and a test
+walks every remaining entry and fails if one of them is refused on an otherwise
+healthy server. The same shape as the Compose claim and the WireGuard fallback:
+a list is a promise.
+
+### There was no CLI for Windows, for no reason
+
+`goos: [linux, darwin]`. The binary is pure Go with cgo off, `os.UserConfigDir`
+finds `%AppData%` by itself, and `GOOS=windows go build ./...` compiles clean on
+the first try — it had simply never been asked for. Somebody deploying from a
+Windows laptop needs the CLI as much as anybody, and the CLI, the MCP server and
+the panel are one file. Six binaries now: linux, darwin and windows, amd64 and
+arm64, with `.exe` spelled out in the release's name template rather than left
+to a default.
+
+The panel half is still Linux only, which is not a gap: what it installs is
+Linux.
+
+### `make image` built for whatever machine ran it
+
+The release builds `linux/amd64` and `linux/arm64` through buildx. `make image`
+— the path everybody uses, since no release exists — passed no platform at all,
+so an image built on an amd64 laptop for an arm64 VPS starts with "exec format
+error". `PLATFORM=linux/arm64 make image` now does the obvious thing.
+
+### And the answer, written down
+
+`docs/quick-start.md` has the table: tested, expected-to-work, will-not-work,
+and which architectures, for servers and for the CLI separately. `docs/faq.md`
+has the short version. It was knowledge somebody had to read three Go files to
+assemble.
+
+## Phase 39 — what the research said, against what the code did
+
+"Is every Linux distribution covered" was answered from memory in phase 38 and
+checked against k3s's own documentation afterwards. Two of the answers were
+wrong, and one of them was wrong in a way that would have taken a whole tier of
+supported distributions down.
+
+### firewalld did not exist anywhere in this repository
+
+The firewall step knew two firewalls: ufw, and iptables as a fallback. firewalld
+is the default on **AlmaLinux, Rocky, RHEL, CentOS and Fedora** — every one of
+which this product lists as expected-to-work — and it is active out of the box
+on their cloud images.
+
+What happened on such a server: no ufw, so the fallback put rules in with
+`iptables -I INPUT`. firewalld discards those on its next reload, and there is no
+`netfilter-persistent` on those systems to survive a reboot either. The cluster's
+ports were open until something touched the firewall, and then were not — which
+is the worst shape a bug can have, because it works when you test it.
+
+There are now three branches, each using its own tool the way its own users
+would, decided once: ufw, firewalld with `--permanent` rich rules and a
+`--reload`, iptables otherwise. And all three trust the pod and service networks
+by CIDR, which is what k3s's documentation asks for and what the ufw branch only
+half did with interface rules.
+
+### The memory cgroup, which the kubelet cannot start without
+
+k3s's requirements name it for Raspberry Pi OS, which ships with it off. Skifity
+builds for arm64, so that is a path people take — and what k3s says on the way
+out is about cgroups rather than about the one line in `cmdline.txt` to change.
+Both preflights check it now, on cgroup v1 and v2, and the refusal carries the
+line to add. Unknown is not treated as no: a server whose cgroups cannot be read
+is not refused on a guess.
+
+### And what the research confirmed rather than changed
+
+* **k3s's install script does support OpenRC**, so k3s on Alpine works. Skifity
+  does not, because it manages the service with `systemctl` — phase 38's
+  reasoning was right and the wording now says whose limitation it is.
+* The ports Skifity opens are exactly k3s's documented inbound list: 6443,
+  10250, 8472, 51820, 51821, and 2379–2380 on control plane servers.
+* `nm-cloud-setup` on RHEL was a real problem and its last affected release
+  reached end of life in May 2023; not worth a check.
+* armhf is supported by k3s and not by Skifity, which builds only 64-bit — and
+  the preflight already refuses it.
+
+## Phase 40 — the catalogue had no pictures
+
+Three hundred cards, each with a grey square and one letter in it. Every product
+in this category shows logos, and the catalogue is the single most-cited reason
+people choose one.
+
+**211 of the 282 templates now have one**, from
+[homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) —
+the collection Homarr, Homepage and Dashy all draw on, and CC0-1.0, which is
+what makes vendoring it possible at all. The remaining 71 show the letter, which
+is what the fallback was always for.
+
+**They are committed, not fetched.** The panel's own policy says
+`img-src 'self'`, and pointing at a CDN would mean widening it, telling that CDN
+which self-hosted apps each user is browsing, leaving an offline install without
+pictures, and making somebody else's uptime a thing that makes this product look
+broken. 2.5 MB inside a 40 MB binary buys all four back. SVG where the
+collection has one and WebP where it does not: a 260 KB PNG drawn at 40 pixels
+is a waste nobody sees and everybody carries.
+
+Nothing in the YAML changed. An icon is a file named after the template it
+belongs to, so adding one is adding a file; the loader looks and fills in
+`Icon`, and `hack/fetch_icons.py --report` names the ones still missing.
+
+### And a measurement that lied, again
+
+The first check counted images that were `complete && naturalWidth > 0` and
+reported **200 of 211 broken**. They were not: `loading="lazy"` means an image
+below the fold has not been fetched, and counting that as failure is the same
+mistake as guessing at a layout instead of measuring it. Asking the endpoint for
+all 211 directly gives 0 failures, and that is what the interface test does now —
+it also checks that a template *without* a logo answers 404 rather than putting
+a broken image on every card.
+
+## Phase 41 — the front door, answered properly
+
+`docs/adding-servers.md` listed three ways to keep one address alive when a
+server goes down: round-robin DNS, a floating IP, a provider's load balancer.
+Researched against how each actually behaves, that list was wrong in two ways.
+
+**It was missing the best answer for this audience.** Cloudflare Tunnel:
+`cloudflared` in the cluster with two or three replicas, each making outbound
+connections to Cloudflare. Kubernetes already spreads those across servers, so
+failover needs no configuration and no health check — and it needs **no public
+IP and no inbound ports at all**, which makes a server behind NAT or on a home
+connection work. Free to 25 replicas. The trades are written down too: traffic
+goes through Cloudflare, replicas are steered by geography rather than round
+robin, and the free plan caps an upload at 100 MB.
+
+**And it did not warn about the thing people try first.** kube-vip and MetalLB
+in layer-2 mode hold a virtual IP by answering ARP, and ARP does not cross a
+router. Every node has to be on one segment *and* the provider has to route that
+extra address to you — which on cloud VPS is exactly what a floating IP is, sold
+as a product. Their BGP modes work, and need a provider that speaks BGP to you.
+On bare metal in one rack they are the right answer; between providers they are
+not, and somebody was going to spend an evening finding that out.
+
+Round-robin DNS is also described for what it is now: a failover for a server
+that is **off**, not one that is **sick**. A machine that accepts a connection
+and then answers nothing is one DNS keeps handing out.
+
+## Phase 42 — the front door, built
+
+Phase 41 wrote down that Cloudflare Tunnel was the right answer for this
+audience and left the reader to install it. That is the shape every dead
+integration in this repository started as: a paragraph of documentation and five
+settings nothing read.
+
+So it is a component now. **Settings → Components → Cloudflare tunnel** renders
+a Secret and a Deployment into the panel's own namespace: two replicas, spread
+across hosts with `ScheduleAnyway` so a one-server cluster still gets both,
+`maxUnavailable: 0` so a rollout never takes a connector away before its
+replacement is connected, `/ready` as the readiness and liveness probe because
+"connected to Cloudflare" is not the same as "the process is running", no
+service account token, and the token itself only ever in a Secret.
+
+Three things make it a component rather than a page:
+
+* **It refuses without a token.** `cloudflared` with no token starts, fails to
+  authenticate, and restarts for ever while the panel says installed. Installing
+  with nothing in the box returns `tunnel.no_token` with the four clicks that
+  produce one.
+* **The setting is validated where it is typed.** The dashboard shows the token
+  inside a `cloudflared service install <token>` command line, and the tunnel's
+  UUID is in the address bar above it. Both get pasted. Both are refused in the
+  text box, each with the sentence that says which one this is.
+* **Saving a new token changes what is running.** The token reaches the
+  container as an environment variable, and an environment variable is read once
+  at startup — so applying a new Secret under a running pod changes nothing at
+  all. A fingerprint of the token is an annotation on the pod template, which
+  makes a new token a new template and rolls the connectors the ordinary way.
+  Clearing the token stops them and puts the component back to not installed,
+  which is how every other integration in Settings is disconnected.
+
+Nothing is needed per app. `cloudflared` forwards the Host header untouched and
+the ingress routes on exactly that, so one wildcard public hostname pointed at
+`traefik.kube-system.svc.cluster.local:80` covers every app that exists and
+every app that ever will. That address is a constant in `internal/settings`
+rather than a string in two places, because the operator has to type it into
+Cloudflare and the help text must not drift from the code.
+
+What is still manual, and is written down where somebody looking for it will
+find it: creating the tunnel and adding that hostname. Doing those from the
+panel needs a Cloudflare API token with Zero Trust permissions, which is a
+second credential and a second integration — and this one has never been pointed
+at a real Cloudflare account, so it is not the moment to add a third thing that
+cannot be run here either.
+
+## Phase 70 — thirteen settings nobody read
+
+A form field is a promise: somebody types an answer and the panel keeps it.
+Thirteen of forty-five settings were answers nothing ever read.
+
+### An external registry broke a deploy at both ends
+
+The worst of them. `registry.url`, `registry.username` and `registry.password`
+are on the settings page, sealed and stored. The build Job mounted a Secret
+called `skifity-registry-auth` — and **nothing created it**, so the build pod
+could not start at all. Even if it had, the app's own pod had no
+`imagePullSecret`, so it could not pull what was pushed.
+
+Configuring your own registry did not quietly do nothing. It broke every
+deploy, twice, with a Kubernetes error about a missing Secret and no way to
+connect that to the settings page.
+
+Both ends now get the same `dockerconfigjson` Secret, applied on every deploy
+rather than when the setting is saved — namespaces are created later, and
+credentials change. Docker Hub's short name is rewritten to the URL a docker
+config is actually filed under, because a credential filed under `docker.io` is
+one the kubelet never finds.
+
+### An Email page that configured no email
+
+Six SMTP fields — server, port, user, password, from, TLS — under a heading
+that says Email, read by nothing. Every email channel carried its own copy
+instead, so three recipients meant typing the same SMTP password three times.
+
+A channel falls back to the panel's settings for anything it does not say
+itself, and still wins where it does: somebody who pointed one alert at a
+different server meant it.
+
+### Three fields for a feature that does not exist
+
+`dns.provider`, `dns.zone` and `dns.api_token`: "Lets Skifity create DNS
+records for you when you add a domain." Nothing anywhere creates a DNS record.
+The third one asked for an API token — a real credential, pasted in, sealed,
+stored, and used for nothing, which is worse than a field that does nothing.
+
+Removed, along with the settings tab that held only them. The same answer this
+repository gave to the GitHub App kind and to Compose support: a feature that
+does not exist should not have a form.
+
+### And a default nobody defaulted to
+
+`general.default_builder` — "which builder to use when a repository has no
+Dockerfile" — was ignored by `chooseBuilder`, which always answered Railpack.
+An operator who chose Nixpacks had to set it on every app. It is read now, and
+a Dockerfile in the repository still wins over it, because that is the
+repository author's decision rather than the panel's.
+
+### The gate
+
+`TestEverySettingIsReadBySomething` walks every `Key` constant with go/ast and
+fails when nothing outside the settings package names it. Forty-one settings,
+one exemption: the telemetry switch, which exists so the absence of telemetry
+is visible and says exactly that in its own help text.
+
+Proven by deleting one mapping. The other two of this shape — the seven
+notification events and the ten plugin events — were checked at the same time
+and the notification ones were already complete.
+
+`make check` exits 0, `make smoke` exits 0.
+
+## Phase 69 — the webhook the form promised to register
+
+Two questions: does a push to GitHub deploy on its own, and does anything go
+down. The first was half true and the second was true with one exception
+nobody was told about.
+
+### Half automatic
+
+Once a webhook exists, everything after it works: the delivery is verified
+against the connection's secret, matched to apps by repository, checked
+against the app's own team, skipped unless deploy on push is on, matched
+against the app's branch, and a pull request gets a preview of its own. That
+part is good.
+
+Nothing created the webhook. The panel printed a URL and a secret and left
+somebody to paste them into the Git host, once per repository. Miss it and
+deploy on push silently never happens: nothing is broken, the panel is simply
+never told.
+
+The connect form even says so — "a token is needed so Skifity can read the
+repository **and register a webhook**" — and only the first half of that
+sentence was ever true.
+
+`gitsrc.EnsureWebhook` registers it, on GitHub, GitLab and Gitea, at the moment
+an app is created, because a hook belongs to a repository and a token covers
+many. Idempotent by the address it delivers to, so a second app from the same
+repository does not mean two hooks and two deploys per push. Never fatal: a
+read-only token is the right token for somebody who deploys by hand, so a
+refusal comes back as "here is the URL, add it yourself" in the panel and on
+the CLI.
+
+### And a response shape that would have broken the CLI quietly
+
+Adding the webhook's status to the reply exposed something older. Creating an
+app answered two different shapes — the app on its own, or an object holding
+it when a deploy started — and three things decode that reply. The panel and
+the MCP server handled both. The CLI decoded straight into an `App`, so it
+would have written a project file naming no app at all, with no error, and
+`skifity deploy` in that directory would have had nothing to deploy.
+
+One shape now, always, with a test that says so. The interface test's own
+fixture broke on the change, loudly, which is the difference between a
+consumer that is tested and one that is not.
+
+### The one thing that does go down
+
+A deploy starts the new instance, waits for its readiness check, moves traffic,
+and only then stops the old one — which also pauses five seconds first, so
+every proxy has seen it leave.
+
+**Unless the app has a disk.** One disk, one writer, so Kubernetes is told to
+stop the old instance before starting the new one: `Recreate`. That is correct
+and deliberate, and the first place it was written down was `docs/checklist.md`
+— an internal document. Somebody who adds a disk for uploads gets a gap in
+every deploy from then on and finds out in production.
+
+The Storage tab says it now, as soon as there is a disk, and `docs/concepts.md`
+has a section on deploys and downtime that names all three cases: a disk,
+restoring a volume backup, and scale to zero.
+
+`make check` exits 0, `make smoke` exits 0, 15 interface tests pass.
+
+## Phase 68 — eight promises to somebody else's code
+
+The plugin standard declares ten events. Two of them were ever sent.
+
+A plugin subscribes in its manifest. The manifest is validated against the
+list, so `backup.failed` is accepted. The install screen shows what the plugin
+will be told about. The documentation has a table of them. And then
+`app.created`, `app.deleted`, `deploy.failed`, `backup.completed`,
+`backup.failed`, `server.added`, `server.removed` and `database.created` never
+happened, because only the deployer held a dispatcher and only the deployer's
+two calls existed.
+
+This is worse than the same shape of bug found twice before — seven hub events
+nobody listened for, a build setting dropped before the build — because it is a
+promise to code somebody else wrote. Their plugin is not broken. It is waiting.
+There is no error, no log line, nothing to debug: a backup fails, and the
+plugin that exists to open a ticket about it sits there. The only way to find
+out is to make a backup fail and watch nothing happen.
+
+The documentation even said so, in a sentence that was half true: "Subscribing
+to an event the panel does not send is refused at install time, not discovered
+six months later when you notice your plugin has never run." The check was
+against the list. The list was right. What the list described did not happen.
+
+### What it took
+
+One dispatcher, built once and handed to everything that has news, rather than
+one the deployer happened to own. The API server, the backup manager and the
+provisioner each hold one now; a zero value sends nothing, so nothing has to be
+configured for a panel with no plugins.
+
+Then the eight calls, at the four places a backup finishes — a database and a
+volume, each succeeding and failing — the two places a server joins or leaves,
+the two an app is created or deleted, the one a database is created, and the
+deploy failure path that had a notification and a hub event and no plugin
+event.
+
+`tellPlugins` names its event at the call rather than picking it into a
+variable, which reads better and is also what the gate below can see. A rule
+that forces a call site to be readable is worth keeping.
+
+### The gate
+
+`TestEveryDeclaredEventIsActuallySent` reads the standard's `Events` and every
+`Notify`/`Ask` call across eight packages with go/ast, and fails when the panel
+declares an event it never sends. It named all eight on the first run, which is
+how they were found. Proven again afterwards by deleting one call.
+
+### Also
+
+The documentation now says what each event carries — nine rows of payload
+fields. An event standard with no payload documentation is one a plugin author
+reverse-engineers from a log, if they are lucky enough to have made the event
+fire.
+
+And `docs/progress.md` claimed plugins had "no store and no interface". The
+interface has been there for a while: installed plugins, a store catalogue,
+inspect before install, settings, uninstall. It is the store that does not
+exist, because nothing is published at `plugins.skifity.com`.
+
+`make check` exits 0, `make smoke` exits 0.
+
+## Phase 67 — a backup nobody could restore
+
+Maturity rather than coverage: the parts that are built up to the last step and
+then stop. Volumes had two.
+
+### The restore that existed and was never called
+
+`VolumeJobSpec.Restore` inverts the direction, downloads the archive and
+unpacks it into the claim. It has been there since volume backups were added.
+Nothing ever called it: no manager method, no route, no button. So a volume
+backup could be taken, listed, shown with its size and its age, and never put
+back. A backup you cannot restore is a file somebody is paying to store, and
+the checklist row it belongs to is called "Backup and restore, **proven**".
+
+`RestoreVolume` does it properly, which mostly means handling the part the job
+cannot. The volume is ReadWriteOnce and the app is holding it: unpacking a tar
+underneath a process with files open on the same disk turns one bad day into
+two. So the app is scaled to zero, the pods are waited for — scaling returns as
+soon as the API server has the number, not when the pod is gone — the archive
+is unpacked, and the app goes back to exactly the size it was. That last part
+is a `defer`, because the case that matters is the restore that fails: leaving
+the app at zero would be an outage caused by the thing that was meant to end
+one.
+
+It refuses without an explicit confirmation, and says what it will do: replace
+everything on the disk, and stop the app while it does.
+
+### The schedule the scheduler could already run
+
+`RunScheduledAt` reads every enabled policy and calls `Run(policy.TargetType,
+…)`, and `Run` has handled `"volume"` since volume backups existed. There was
+no route to create such a policy, so the answer to "back up my uploads every
+night" was to press a button every night. Three routes, and the validation
+those routes share with the database side rather than a second copy that can
+drift.
+
+### Two things the gates caught on the way
+
+**A bad schedule answered 500.** Typing "every night please" into a database's
+backup schedule produced a correct, well-written problem — cause, impact, fix —
+with no status on it, and an `errdoc.Problem` with no status is a 500. The
+interface renders that as "something went wrong" rather than as the thing the
+person just typed, the access log files it at ERROR where it drowns the real
+ones, and a client deciding whether to retry gets the wrong answer.
+`TestEveryProblemThisPackageAnswersWithSaysItsStatus` walks every `errdoc.New`
+in `internal/api` with go/ast and fails on one that does not say. 48 problems,
+one exemption: the panic handler, which by definition is nobody's input.
+
+**An event nobody was listening for.** The new restore published `"succeeded"`
+on the operation topic; every other finished operation publishes `"operation"`
+with the operation itself, which is what the interface hears. Phase 61's wiring
+gate caught it before it shipped, which is the first time one of these gates
+has caught a defect on the way in rather than on the way out.
+
+`make check` exits 0, `make smoke` exits 0, 15 interface tests pass.
+
+## Phase 66 — the builder, and the front end it never built
+
+The question was whether the builder is mature and whether it handles every
+stack. The answer to the second is yes in principle — Railpack does its own
+detection inside the build and a Dockerfile takes anything it cannot — and the
+answer to the first was no, because the most common front end in the world
+deployed a blank page.
+
+### A Vite project was detected, and then not built
+
+`detectNode` maps a repository with Vite and a build script to the static
+builder with `StaticDir: "dist"`. The static builder generates a Dockerfile
+that copies a directory into Caddy. `dist` does not exist in a Vite
+repository — producing it is the entire point of the build step — and nothing
+ran `npm run build`. So the image held `index.html` and `src/main.tsx`, the
+page was blank, and the deploy reported success.
+
+It is worse than a missing directory, because of the second half: the detected
+`StaticDir` **never reached the build at all**. `Detection` had the field,
+`JobSpec` had the field, and `internal/deploy/build.go` never assigned it, so
+the directory was always the default. Every static build was `COPY . /srv` —
+the whole checkout, served.
+
+A front end is now built before it is served: a Node stage installs with
+whichever package manager the repository locks to, runs the build command, and
+only what that produced is copied into Caddy. Create React App and Angular are
+detected too, with the directories they actually write to. Both fields are on
+the app, in the form and in Settings, so a framework the detection does not
+know is two boxes rather than a Dockerfile.
+
+### And `.git` was being published
+
+`COPY . /srv` included the repository's own `.git`: every commit of a private
+repository, served at a path anybody can guess.
+
+With, underneath it, the reason that is worse than a source leak. The clone
+step built the URL as `https://x-access-token:${TOKEN}@host/...` and ran `git
+remote add origin` with it — and git writes the remote to `.git/config`. So a
+private repository deployed as a static site published **its own access token**
+on the internet. The token reaches git through a scoped `http.<origin>.extraHeader`
+now, so it is never written to disk, and the remote is the address as given.
+The header is scoped to the repository's own host on purpose: an unscoped one
+is sent wherever a submodule points.
+
+### The gate
+
+The shape of this bug is the one this repository keeps finding: a value worked
+out, stored, shown in the interface, and dropped one layer before it is used.
+`TestEveryBuildSettingOnTheAppReachesTheBuild` reads `store.App` and
+`builder.JobSpec` with go/ast and fails when a field on both is never assigned
+where the build is put together. Three fields are exempt and each says why —
+the app's CPU and memory are its runtime limits, not the build pod's, and a
+128 MB app can need 3 GB to build.
+
+Proven by removing each thing: the assignment, the build stage, the `.git`
+removal.
+
+### What is still true about all of this
+
+None of it has been run. A generated Dockerfile is a string this repository
+asserts on, and whether `pnpm install --frozen-lockfile` works in
+`node:22-alpine` against a real repository is a question only a cluster
+answers. That is ADR-0010 again and it is the same answer as everywhere else:
+`make verify-remote` is one command, and nobody has run it.
+
+`make check` exits 0, `make smoke` exits 0.
+
+## Phase 65 — signing in, taken apart
+
+The panel's own front door, read line by line against what it would take to get
+through it. Most of it held: Argon2id at the OWASP parameters, a single error
+for every kind of failure so an unknown address cannot be told from a wrong
+password, an unknown account hashed anyway so the timing does not say either, a
+TOTP code spent when it is used, two separate lockouts, and an OIDC flow whose
+ID token is verified by the library with a per-sign-in nonce and a single-use
+state. Five things did not.
+
+### A cookie is not isolated by origin, and this panel hosts other people's apps
+
+The largest one, and it is specific to what this product is. Any page on a
+sibling name can write a cookie scoped to the parent domain, and the server
+cannot tell it from its own. The common configuration here — a wildcard app
+domain with the panel on the same domain — gives **every application deployed on
+this panel** a way to write the panel's session cookie. That is session
+fixation: the victim silently signed in as the attacker, typing their own
+secrets into an account somebody else can read. The same trick rewrites the SSO
+state cookie, which carries the state, the nonce and the PKCE verifier.
+
+Every cookie the panel sets now carries the `__Host-` prefix, which a browser
+refuses to store if the cookie names a Domain at all, and only that name is
+read. Accepting the bare name as a fallback would hand it all back — the
+attacker would write that one instead — so it is not accepted. ADR-0019.
+
+### CSRF compared two things the caller supplied
+
+Double-submit is a cookie checked against a header, and it rests entirely on the
+assumption above. The session now carries the hash of its own CSRF token and the
+header is checked against that; the cookie is how the token reaches the
+frontend and nothing else. The test that proves it forges both halves the way
+an app on a sibling subdomain would, and a smoke check does the same against the
+real binary.
+
+### A cookie that was Secure on a panel that is not
+
+Found while writing those tests, and it predates them: `secureCookies` was
+`!DevMode`, and the default install is **plain HTTP** on an sslip.io address
+(ADR-0015). A Secure cookie is never stored over http, so the default install
+would have set a session cookie no browser would keep, and nothing in the panel
+could have said why. It follows `SKIFITY_PUBLIC_URL` now — the address people
+actually open — and an unset one gets the safe answer plus a warning at startup.
+Nobody had ever signed into this panel over http from a browser, which is how it
+survived.
+
+### A session that renewed forever
+
+The sliding expiry answers "has this person been away", and never "how long has
+this cookie been valid". A session used once a day renewed indefinitely, so a
+token stolen in January was still good in December. Thirty days from when it was
+created, whatever the activity.
+
+### A borrowed session could keep itself
+
+Turning two-factor off needed nothing but a session. Neither did reading the
+recovery codes or minting an API token that outlives the session it came from.
+Each turns a minute at an unlocked laptop into access somebody keeps. All three
+now require that the password — and the second factor, when there is one — was
+given in the last five minutes. Signing in counts, so in practice it is one
+dialog. ADR-0020.
+
+An API token is refused outright rather than waved through: it has nobody to
+ask, and a token that could disable two-factor would be a way around the thing
+two-factor protects. The step-up is rate limited exactly like signing in,
+because otherwise it is an unmetered password oracle for an account whose
+session has already been taken — which is the case it exists for.
+
+The frontend never learns any of this happened. The API client sees the panel's
+refusal, opens the dialog, and repeats the request, so an action added later
+cannot forget to ask.
+
+### And a memory amplifier
+
+Argon2 costs 19 MiB by design, every sign-in attempt starts one, and attempts
+for accounts that do not exist have to hash anyway so that timing says nothing.
+Nothing capped how many ran at once. On the 1 GB server this product is sold on,
+fifty in flight is the machine. Four at a time now, with the rest waiting rather
+than refused, so a real sign-in still works while a flood is in progress.
+
+### What was also added
+
+**Sign out everywhere else**, because the moment somebody wants it — a laptop
+left on a train — is not the moment to work through a list deciding which row is
+which device.
+
+Six properties, six tests, each proven by removing the thing it checks and
+watching it fail: the prefix, the name that is not accepted, the CSRF check, the
+ceiling, the step-up, and its rate limit. Three more run against the real binary
+in `make smoke`. `make check` exits 0, `make smoke` 119 checks, 15 interface
+tests pass.
+
+## Phase 64 — the three things between here and an MVP
+
+`docs/checklist.md` named three. Two of them turned out to be work; the third
+cannot be done by anything that types.
+
+### Where this project publishes
+
+It publishes where it lives: `TegarTheGreat/Skifity`, so
+`ghcr.io/tegarthegreat/skifity` for the image and that repository's raw URL for
+the installer and the manifests. That was never a hard decision — it was an
+undecided one, and undecided meant the installer carried a name nobody owned.
+
+It is now one `PROJECT_REPO` line in `installer/install.sh` and one in the
+`Makefile`. The image tag, the manifest URL, the clone command in every error
+message and the tag `make image` builds all derive from those two. Moving to an
+organisation of its own later is those two lines.
+`scripts/check-home.sh` — `make check` runs it — fails the build if a name this
+project does not own reappears anywhere, and four test fixtures that had been
+using the old one now say `example/`.
+
+### The manifests follow the release, not a branch
+
+`fetch_manifest` read from `.../main/deploy`. Two things were wrong with that.
+The small one: **this repository has no `main`.** There is no default branch at
+all — the only branch is the one being worked on — so that URL was a 404 waiting
+for somebody to install from `curl | sh`.
+
+The large one is that a branch is the wrong thing to read from. An install that
+pulled v1's image and `main`'s objects would apply a Deployment that image had
+never seen. The manifests now come from
+`raw.githubusercontent.com/<repo>/<version>/deploy`, the same ref the installer
+itself was fetched from, so the objects always match the image — and no default
+branch has to exist for an install to work.
+
+### The installer knows which release it is
+
+It has to, because it runs as one file with no repository around it.
+`RELEASED_VERSION` is a line in its own source, empty until a release sets it,
+and `check_release` refuses before k3s is installed while it is empty. A second
+refusal covers the other half: an image named with no version and no manifests
+on disk, which would have been a 404 twenty minutes into an install.
+
+The release workflow reads that line out of the script and **fails the release
+when it disagrees with the tag**. Getting it wrong would publish an installer
+that pulls the wrong image or refuses to install at all, and it would be found
+by a stranger rather than by CI. `docs/releasing.md` is the procedure.
+
+No tag was cut. Everything a tag needs is in place; what it waits on is the
+cluster run, because a release is an invitation to install and the first person
+to accept it should not be the first person to find out whether any of this
+works on a cluster.
+
+### The cluster run, from a laptop
+
+`test/cluster/verify.sh` has existed and never been run, and part of the reason
+is that running it meant a server, an image on that server, and the repository
+beside it. `make verify-remote HOST=root@…` does those three: it builds the
+image for the server's architecture — asked, not assumed, because the wrong one
+dies with "exec format error" — streams it into
+`/var/lib/rancher/k3s/agent/images` **before k3s exists**, so the panel's first
+pod finds it locally with no registry and no credentials, sends the committed
+tree with `git archive`, runs the phases, and brings the report back.
+`DRY_RUN=1` prints every command instead of running it, which is how it is
+checked here, where there is no server and no Docker.
+
+One thing it found before it ever ran: `verify.sh` defaulted
+`VERIFY_GIT_BRANCH` to `main`, which does not exist. An hour of installing,
+then a clone that fails. It reads the branch from the checkout now.
+
+`test/smoke/verify.sh` is thirteen checks on the two crosscheck scripts —
+including that the image lands in the directory k3s imports from, that the tag
+sent is the tag the Makefile builds, and that a dry run never claims the checks
+passed. Proven by pointing the image somewhere else.
+
+### The person
+
+Nothing here can be that person, and `docs/walkthrough.md` does not pretend
+otherwise: it is the sheet somebody fills in while watching one. The rule it
+puts first is not to help, and the thing it says to watch hardest for is the
+stop nobody reports — where the reader worked it out and carried on, which feels
+like success from the inside and is a bug for every reader after them.
+
+Walking `docs/quick-start.md` as literally as possible did find one real defect.
+Step 3 said the first app "has a working address with HTTPS", and the README
+said the same in its opening paragraph. It does not: an sslip.io address
+deliberately gets no certificate, for the rate-limit reason in ADR-0015, and
+two tests assert that it does not. The pages say what actually happens now, and
+say why. `llms.txt` had it right all along, which is its own small lesson about
+which page gets re-read.
+
+The interface's own deep link caught the fix: renaming that heading broke
+`/docs/quick-start#4-add-your-own-domain`, and `TestEveryDocsLinkInTheInterface
+Resolves` failed the build. The heading stayed; the sentence moved into the
+body.
+
+`make check` exits 0, `make smoke` exits 0 across 116 checks.
+
+## Phase 63 — the default that would have installed a stranger's image
+
+### What the readiness check found
+
+The rubric is `docs/checklist.md`: eighteen things a self-hosted platform is
+judged on. Re-measured against the code rather than against the last time
+somebody wrote a number down, four of its numbers had drifted — 126 routes
+refuse an anonymous request rather than 113, 91 team-scoped routes refuse
+another team rather than 85, thirteen pages are served rather than ten,
+thirty-eight screenshots rather than thirty-two. All four were understatements,
+which is the harmless direction and still wrong.
+
+The blocker was in the installer. `IMAGE` defaulted to
+`ghcr.io/skifity/skifity:latest` — a namespace this project does not own and has
+never pushed to — and nothing checked it. A run with no `SKIFITY_IMAGE` would
+install k3s, change the firewall and write to `/etc`, and only then fail pulling
+an image that does not exist, leaving a half-built cluster on somebody's server.
+The worse half is the day somebody registers that name: the install would
+succeed, as root, with an image nobody here published.
+
+### The refusal
+
+`check_image` is its own function so it can be tested, and `preflight` calls it
+immediately after the log line and before anything on the machine changes. It
+names the image it will not use, gives the two commands that build a local one
+and pass it, and says the server has not been touched — which at that point is
+true.
+
+`test/smoke/installer.sh` asks for all four: that the default is refused, that
+the refusal names the image, that it says how to build one, and that an image
+the operator names is accepted. Two more check the ordering — `check_image` is
+called from inside `preflight`, and `preflight` runs before `install_k3s`.
+Proven by deleting the call: one check fails and the rest pass, which is the
+right shape.
+
+The installer's own header and its root-check message pointed at
+`curl -fsSL https://get.skifity.com | sudo sh`, a command that cannot work. The
+header now says so and gives the clone-and-build path; the root message names
+`sudo sh installer/install.sh`, which is the command somebody running it from a
+clone actually needs.
+
+### Where that leaves the MVP
+
+`docs/checklist.md` has the answer in a section of its own. Three things stand
+between here and something a stranger can use: somewhere to publish and a tag,
+one run of `test/cluster/verify.sh` on real hardware, and Phase 6 with a person
+who has not seen this before. Thirteen of the eighteen rows are Written, which
+means the code and its unit tests exist and no cluster has ever seen them.
+Nothing on the roadmap is larger than any of those three.
+
+`make check` exits 0, `make smoke` exits 0.
+
+## Phase 62 — six bins that asked nothing, and two checks that checked nothing
+
+### The inconsistency was the bug
+
+The panel asks before it deletes an app, a project, a database, a server, a
+disk, a domain and a variable. Six other things went straight from a bin icon —
+the same size, the same colour, in the same kind of table row:
+
+| | What it costs |
+|---|---|
+| Revoke an API token | Cannot be got back. Whatever used it — a script, a pipeline, an assistant — fails until it is given a new one |
+| Remove a team member | Their access to the team and everything in it |
+| Unlink a database from an app | The app loses the variable and cannot reach the database from its next deployment |
+| Delete a notification channel | The webhook address and token, typed in by hand |
+| Revoke a session | That device is signed out |
+| Cancel an invitation | The link already sent to somebody stops working |
+
+Somebody who has learned that this panel asks is exactly the person who clicks
+without reading. Each of them asks now, and says what it costs — the token one
+spells out the consequence, because that is the one that cannot be undone.
+
+The current session was already safe: its row has no bin at all, so signing
+yourself out by mis-click was never possible.
+
+### The gate
+
+`web/scripts/check-destructive.mjs` finds every mutation whose request is a
+`DELETE` and every place it is fired from, and fails unless something asked
+first. An exception has to be named in the script with a reason; there is one,
+and the reason is that it already asks through a dialog of its own. `make check`
+runs it. Proven by reverting one of the six.
+
+### Two checks that were not checking
+
+Both were mine, and both were found by using them properly rather than by
+reading them:
+
+* **`npx tsc --noEmit` in `web/` passes on any input.** `tsconfig.json` has
+  `"files": []` and only project references, so plain `tsc` compiles an empty
+  program. `tsc -b` is the real one, and is what `npm run typecheck` and
+  `make check` have always run. I had been using the hand-run form all session;
+  the first time I ran `tsc -b` it found four genuine errors in Phase 61's own
+  work.
+* **Grepping `make check`'s output hides failures.** A `nilerr` finding in
+  Phase 59's own test — `internal/errdoc/i18n_test.go` returning nil after a
+  parse error — sat there through several "green" runs because the filter I was
+  using to read the output did not match the line golangci-lint printed. The
+  answer is the exit code, not a grep. The finding is fixed and the intent is
+  now explicit: a file the walk cannot parse is deliberately skipped.
+
+1556 keys, five languages. `make check` exits 0, 15 interface tests pass.
+
+## Phase 61 — the detail nobody saw, and seven events nobody heard
+
+The bug Phase 60 recorded rather than fixed, and what an audit of the realtime
+path found around it.
+
+### The step detail
+
+`{step.status === "failed" && step.detail && ...}`. Three things are written
+against steps that *succeed* — the preflight warnings, the server's SSH host
+key, the fingerprint of the key the panel installed — and all three were
+collected, stored, and rendered to nobody.
+
+Showing them was four lines. Showing them *without putting English back on the
+screen* was the rest: the sentences were a single joined blob in a free-text
+column, so they are structured now, the way everything else was in Phase 60.
+Migration 0013 adds `notes`, a JSON array of `{text, key, args}`; `detail` stays
+for the one thing that genuinely is not structured, the rendered problem of a
+failed step. A preflight warning reuses the catalogue entry its fatal twin
+already has, so the sentence is written once and read from both places.
+
+A failure opens on its own, because that is what somebody is looking at.
+Anything else waits behind a line they can click.
+
+### Seven events published, nobody listening
+
+The hub is good: it never blocks a publisher, keeps per-topic history with a TTL
+and LRU eviction, replays under the same lock that registers a subscriber, and
+the stream handler authorizes topics once, resumes from `Last-Event-ID`, sets
+`retry: 3000`, heartbeats every 25 seconds and clears the write deadline. None
+of that was the problem.
+
+The problem was the wiring at the other end. The server publishes fourteen kinds
+of event; the interface handled seven of them.
+
+| Published | Who should have cared |
+|---|---|
+| `audit` | **Activity** — the audit timeline, listening to operations and deployments as a proxy |
+| `server` | Servers list, server detail — the watcher noticing a server stop answering |
+| `app` | App detail — an app that fell over between deployments |
+| `domain` | The Domains tab, which is exactly where somebody sits waiting for a certificate |
+| `database`, `backups` | The databases list, which had **neither a subscription nor a poll** |
+| `project.created`, `project.deleted`, `app.created`, `app.deleted` | The projects list and the project page |
+
+And one in the other direction: the add-server page handled `step`, which
+nothing has ever published. The steps arrive on `operation`, which carries the
+whole operation.
+
+### The desync signal that was computed and never sent
+
+`Subscription.Dropped()` counts what a slow client missed, and its own doc
+comment says "The UI uses it to decide it must reload rather than trust its
+state." Nothing called it. A browser asleep with a build log open came back to a
+page that had quietly stopped being true.
+
+The stream handler now checks it on every turn of the loop and emits
+`event: desync`; `useEvents` adds that handler to every subscriber and
+invalidates everything, because a page that missed an event cannot know what it
+missed.
+
+### The typecheck that checked nothing
+
+`npx tsc --noEmit` in `web/` passes on any input: `tsconfig.json` has
+`"files": []` and only project references, so plain `tsc` compiles an empty
+program. The real check is `tsc -b`, which is what `npm run typecheck` and
+`make check` have always run — so CI was never fooled, only the hand-run
+command was. It caught four genuine errors in this phase's own work the moment
+it was used properly.
+
+### The gate
+
+`internal/events` reads every `hub.Publish` call's event name out of the server
+and every handler key out of every `useEvents` block in the interface, and
+requires the two sets to match — in both directions. Proven by renaming one
+handler, which failed it twice: once for the event nobody listens to, once for
+the handler nothing publishes.
+
+1549 keys, five languages. `make check` green, 15 interface tests pass.
+
+## Phase 60 — the scaling findings, the preflight report, and the line under every step
+
+The two pieces named at the end of Phase 59, and a third that turned up while
+counting them.
+
+### Three surfaces, one mechanism
+
+`errdoc.Sprintf` is the whole of it: format the sentence, and hand back the
+values that went into it, each rendered by the verb that was going to print it.
+The English stays as it was — the fallback, what the CLI prints, what an
+assistant reads — and the locale writes `{{0}}` where the Go wrote `%s`. The
+same trade as Phase 59, applied three more times:
+
+* **Twelve scaling findings.** The readiness checker is the panel's best
+  advice — the volume only one instance can use, sessions in memory, SQLite, a
+  CPU target that fires while the app is idle — three sentences each, under
+  `scaling.finding.<code>`.
+* **Seventeen preflight problems.** A fatal one becomes an `errdoc` Problem, so
+  these live in the error catalogue as `preflight.<code>` and needed no new
+  frontend code at all. `PreflightFailed` sets `Cause` and `Fix` on the fields
+  rather than through `WithCause`: running an already-rendered sentence back
+  through `"%s"` would make the whole English string the one argument, and the
+  locale entry could then only be `{{0}}` — the English again, in every
+  language.
+* **Twenty-five step messages**, under `servers.stepMessage.<key>`.
+
+### The step names were translated. The line under them was not.
+
+`servers.steps.*` has had all fifteen step names in five languages since the
+panel shipped — "Checking the server", "Installing Kubernetes". The sentence
+underneath each one was whatever Go wrote: *Connected to 203.0.113.10*,
+*Ubuntu 24.04, 4 cores, 8192 MB memory, 40 GB free*, *Moved 3 instance(s) to the
+other servers*. Somebody adding a server in Indonesian read a translated heading
+over an English line, fifteen times in a row.
+
+A step is stored, so this needed migration 0012: `message_key` and
+`message_args` beside the `message` that was already there. The English column
+stays — it is the fallback, and a step recorded before the migration has only
+that. `store.StepNote` carries the three together, which is what the call sites
+now pass; a note with no key is shown as its English, which is exactly what the
+old rows do.
+
+A failed step shows its problem's title, and that is already in the error
+catalogue, so the note's key is `problem:<code>` and the panel looks there
+instead. One prefix, one branch, no second copy of ninety-odd sentences.
+
+### Two codes that were not codes
+
+`provision.Problem` had a `Check`, and it is a grouping, not an identity: three
+problems say `os`, three say `conflict`, three say `udp_port`. Each has a
+`Code` now.
+
+The memory check spliced `"a worker"` or `"a control plane server"` into the
+middle of its sentence. No locale can reassemble that — a noun phrase from
+another language cannot be dropped where its own grammar needs one — so it is
+two codes with two whole sentences.
+
+### Three gates, and one bug found on the way
+
+`internal/deploy` reads every `api.ScalingFinding`'s `Code` out of `scaling.go`;
+`internal/provision` reads every preflight `Code` and every `store.StepNote`'s
+`Key` out of its own package **and out of `internal/backup`**, which writes step
+notes too — the restore flow fills the same list on the same screen. Both refuse
+a locale key nothing can produce. The error catalogue's gate hands the
+`preflight_*` keys to the provision one, because `"preflight." + code` is the
+one code built at run time and cannot be read out of the source where it is
+used.
+
+While counting: **a step's `detail` is only rendered when the step failed.**
+`{step.status === "failed" && step.detail && ...}`. So the preflight warnings,
+the host key and the key fingerprint — all written against steps that
+*succeeded* — are collected, stored, and shown to nobody. That is not fixed
+here and is not a translation problem; it is recorded in Open issues.
+
+1547 keys, five languages. `make check` green, 15 interface tests pass.
+
+## Phase 59 — the error catalogue, in five languages
+
+The last part of the interface that was English in every language. Ninety-odd
+`errdoc` problems — a title, a cause, an impact and a fix each, the best writing
+in this repository — reached a Russian or Indonesian operator exactly as a Go
+file wrote them.
+
+### Why it was not just another locale file
+
+The settings page, in Phase 55, was a table of static strings: label and help,
+looked up by the setting's key. An error is not static. Two thirds of them
+interpolate a value — the hostname, the exit code, how many instances were
+ready — through `fmt.Sprintf`, and a translated sentence needs the same values
+in the same places.
+
+Naming every argument would have been a hundred and seventeen call-site edits
+for no gain, so they stay positional. `WithCause`, `WithImpact` and `WithFix`
+now record each argument alongside the sentence they built, **rendered by the
+verb that was going to print it** — `%q` keeps its quotes, `%d` stays a number —
+and the locale writes `{{0}}` and `{{1}}` where the English writes `%s` and `%d`,
+in the same order. The server's English is unchanged: it is still the fallback,
+still what the CLI prints, and still what the "copy for AI" button copies.
+
+A literal `%%` consumes no argument and must not shift the rest along; a verb
+with a width or a flag is read whole. Both have a test.
+
+### Four errors that were invisible to everything
+
+`New("resource.not_found", "That "+kind+" does not exist")` builds its title
+from a variable. The catalogue's own test skipped those calls, the extractor
+written for this phase skipped them, and so the list of what was missing did not
+contain them either — they were missing from the translation *and* from the
+report of what was missing. Four of them: `resource.not_found`,
+`config.missing`, `component.external` and `firewall.no_geo_database`.
+
+There is a `Newf` now, which takes the title as a format string and records its
+values like the three sentences do, and both tests read it. That is 116 codes,
+not the 112 the first pass found.
+
+### The gate
+
+The codes are not in a list anywhere — they are the first argument to a hundred
+and seventeen `errdoc.New` calls across thirty files. So the test parses the
+source with `go/ast`, collects every code with the format strings chained onto
+it, and requires each to have `errors.catalogue.<code>` in all five locales,
+with a `title`, and a `cause`, `impact` and `fix` wherever the Go has one. It
+refuses a locale key no Go file can raise, which is what a code renamed in Go
+leaves behind. Proven by deleting one field and renaming one key.
+
+A second proof, in the browser, because a complete locale file does not mean the
+running panel resolves it: the interface test switches to Russian, opens an app
+id that cannot exist, and checks that the 404 comes out as the Russian sentence
+with the server's own value in it — and that the English it replaced is nowhere
+on the page. Proven by putting `problem.title` back and watching it fail.
+
+### What is left in English, said plainly
+
+* **The CLI**, on purpose. It has one language, and `CLAUDE.md` says so.
+* **The catalogue's `Context` map** — the host, the exit code, the command —
+  which is data, not prose.
+* **The template catalogue's names and descriptions**, which are mostly
+  upstream product copy; the categories are translated.
+* **A plugin's own manifest**, which belongs to whoever wrote it.
+* **Scaling findings and provisioning step names**, which are the next two of
+  these and are much smaller: 14 and 40 strings against this one's 463.
+
+1418 keys, five languages. `make check` green, 15 interface tests pass.
+
+## Phase 58 — what the reference screens actually show, read at full size
+
+Phase 56 and 57 were written from Mobbin's inline previews, which are low
+resolution and meant for reading titles. Downloading the full-size images and
+reading them changed two decisions and added three details, one of which
+reverses something shipped hours earlier.
+
+### The DNS instruction was a sentence. Nobody types a sentence.
+
+"Create an A record for blog.example.com pointing to 203.0.113.10" is how
+somebody who already knows DNS would say it out loud. It is not the shape of
+what they are copying into: every registrar's form has three boxes — type,
+name, value.
+
+[Okta](https://mobbin.com/screens/4330008e-3784-48d2-b750-dd5109549b80),
+[Tally](https://mobbin.com/screens/8d7bf746-7f7b-4ac8-a3ee-4ee4cbb3fcfe),
+[Klaviyo](https://mobbin.com/screens/f6dcd542-ad3a-4101-abff-404742f1d19b),
+[AutoSend](https://mobbin.com/screens/bb3e5124-d099-46c2-881a-2e0037cef8ac) and
+[Loops](https://mobbin.com/screens/455556f9-d2d3-4058-8b2d-3cc2315bdd1d) all lay
+it out as those three columns with a copy control on **each cell**, not only on
+the value. So does this now.
+
+Read at full size, Okta's page carries three sentences the preview could not
+resolve, and each of them is a thing this panel was not saying:
+
+* **"The host format may vary by registrar."** That is the mistake people
+  actually make. Half the registrars want the whole hostname in the Name box
+  and half want only the label in front of the domain. The panel cannot work
+  out which part is the zone without the public suffix list — `.co.uk` breaks
+  the naive split — so it says so instead of guessing.
+* **"It may take a few minutes for the DNS changes to be available globally."**
+  Waiting is the normal case and reads as a failure without a line saying so.
+* **"After the DNS records are updated, return here to verify them."** There is
+  a **Check again** button now, next to a link to the panel's own quick start.
+
+### Masking the database password: the reversal
+
+Phase 57 deleted a `secret` prop from the credentials row on the grounds that
+it chose between `type="text"` and `type="text"` and had never masked anything,
+and that the card is already behind a **Show credentials** gate — so why hide
+twice?
+
+Because that is not what the gate is for. Every product in the reference set
+keeps the mask *after* the gate:
+[Cloudflare](https://mobbin.com/screens/31f33e60-deaa-4d06-9a91-b70ab9ceb153)
+and [Retool](https://mobbin.com/screens/fac20c45-0981-40f5-b6f6-a6ed3c589146)
+put an eye toggle on the field,
+[Laravel Cloud](https://mobbin.com/screens/35bdc533-361d-45c3-b23c-d8feb58ccac7)
+masks the whole block behind one, and
+[PlanetScale](https://mobbin.com/screens/cfddc224-b1bd-498d-a548-ad145a60c20f)
+does not show the password again **at all** — "Cannot be displayed after
+creation", with an offer to make a new one.
+
+The gate is consent to fetch the secret. The mask is so that fetching the
+*host* does not leave the password on a screen somebody is sharing. The prop is
+real now: `type="password"` with a per-field eye, on the password and on the
+connection string that carries it inside. The copy button hands over the value
+without putting it on screen.
+
+PlanetScale's version is stronger still and is not available here: this panel
+can decrypt the password, so "cannot be displayed" would be a lie.
+
+### A delete dialog says what the safety net is
+
+[Adobe](https://mobbin.com/screens/0e4a6af0-e652-41bf-8602-ffdf96e0bec4) lists
+the items that will be "gone for good",
+[Render](https://mobbin.com/screens/e62178b2-645c-4dc2-befe-196618fa3dee) says
+to move the services out first if you want to keep them, and
+[Laravel Cloud](https://mobbin.com/screens/7a7a42b5-04a3-4a56-9410-7a8c9484c5a5)
+says it will take a final backup before archiving. The dialog is where somebody
+finds out whether they can afford to press the button.
+
+The volume row already knew when the disk was last copied — it is a column on
+that table. The backup query moved up into the row so the dialog can use it
+too, and it now reads either "The last working backup of this disk was three
+days ago. Anything written since then goes with it." or, in the case that
+matters, **"This disk has never been backed up. Everything on it is gone for
+good."** A failed backup does not count as one.
+
+### The gate for the link
+
+Three `/docs/` links are written straight into `.tsx` files — the sidebar, the
+dashboard and now the Domains tab. The catalogue's `WithDocs` links have been
+checked page-and-anchor since Phase 16; these were checked by nothing, and a
+page renamed in `docs/` would have broken all three in silence. A test in
+`internal/docsite` now reads every `href="/docs/…"` in the frontend and serves
+it, anchor included. Proven by breaking the anchor.
+
+954 keys, five languages. `make check` green, 14 interface tests pass.
+
+## Phase 57 — the DNS record that said "Unknown", and the disk one click could destroy
+
+A walk of every journey, start to finish, asking one question at each screen:
+can somebody who has never seen this finish what they came to do? Three screens
+said no.
+
+### "Create an A record for blog.example.com pointing to Unknown."
+
+That is what the Domains tab said. Literally: it interpolated
+`t("common.unknown")` where the address goes, on the one screen in the panel
+whose entire job is to answer where to point a domain. `docs/quick-start.md`
+step 4 says "The panel shows the DNS record to create."
+
+The address was never missing. `domains.cluster_ip` has been a setting since
+there were settings, its own help reads "The address your domains should point
+at", and `Cluster.clusterAddress` resolves it — setting first, then a
+control-plane server's external address — every time it hands an app its
+automatic subdomain. The Domains tab simply never asked.
+
+It asks now. `PublicAddress` is on the Cluster port, `handleListDomains` fills
+a `dns_target` per domain, and the instruction carries the real value with a
+copy button beside it. An address that is a name rather than a number is a
+CNAME, so the sentence follows the value; an install where nobody has set it
+and the panel cannot see one says so, and says where an administrator sets it,
+rather than printing a word where an address belongs.
+
+### Storage was the roughest tab in the panel
+
+Four things on one screen:
+
+* The column showing `/data` was headed **Storage**, and so was the form field
+  where you type it. Both now say **Mount path**.
+* The empty state's description was `scaling.spreadHelp` — the sentence from
+  the scaling tab about spreading instances across servers, on a screen about
+  disks. It now describes what a disk is for.
+* The size field said **Size**, in a number box with no unit, over the help
+  text for a *database's* disk. It says **Size (GB)** over a sentence about a
+  disk that outlives a deployment.
+* **The bin icon deleted the disk immediately.** The panel makes you type the
+  name before it deletes an app, a project, a database or a server — and none
+  of those destroy anything a redeploy cannot bring back. This one does. It
+  asks now, with the name typed out and the consequence spelled out.
+
+Two more actions that took effect on one click and should not have: removing a
+domain, which takes a live address off the internet, and deleting a variable,
+whose value is sealed and cannot be read back.
+
+### The gate caught one more of its own
+
+`placeholder={host || "Frankfurt 1"}` — the example server name, in English for
+everybody, written as a fallback rather than a value, which is how it slipped
+past the literal check added in Phase 56. The check now reads the brace form
+too, for prose only: a code sample, a product name and an interpolation
+argument are written the same way and are not translatable.
+
+946 keys, five languages. `make check` green, 14 interface tests pass.
+
+### The conclusion, and what it rests on
+
+The interface is done. What is left is the half of the panel that is written in
+Go: **90 `errdoc` problems, 14 scaling findings, 40 provisioning steps** and a
+scattering of status details reach the screen as English sentences the locale
+never sees. They are the panel's best writing and none of it is translated. It
+is one mechanism — the one `internal/settings` already uses — applied to more
+places, and it is the largest piece of work left in the interface.
+
+## Phase 56 — a live version nobody could point at, and an app asleep that read as down
+
+Four screens from Mobbin — Vercel, Render, Railway, Laravel Cloud, Cloudflare —
+against the same four screens here. Most of what they do, this panel already
+does. Four things it did not, and three of them were wrong rather than missing.
+
+### The deployments list never said which version was serving
+
+Every row looked the same. A rollback here is a new deployment carrying an old
+image, so the list is a straight line and the newest succeeded row is always the
+one in production — but nothing said so, and the row a reader assumes is live
+(the highest number) is a superseded build the moment anybody rolls back.
+Cloudflare puts "Active deployment" at the top of the list; this puts a **Live**
+badge on the row itself, derived during render from the list already on screen.
+
+The live row also stopped offering **Rollback**. Rolling back to the version
+already running is a deployment that changes nothing, and a button offering it
+invites the question of what it would do.
+
+### A rollback said "a person" deployed it, in English
+
+`Trigger` was written as the sentence `rollback to #3`. The panel ships in five
+languages, so that sentence went to the user untranslated; and the list matched
+the trigger against `"rollback"`, missed, and fell through to the default, which
+says a person deployed it by hand. The same default swallowed `create`,
+`template` and `preview`: four of the six triggers the panel stores rendered as
+the wrong one.
+
+The number is data, so it is stored as data — `rollback_of`, migration 0011 —
+and the sentence is built in the interface, where it has five translations.
+`deploy.trigger.*` now has a key per trigger and the list uses all of them.
+
+### An app asleep read as an app somebody stopped
+
+Laravel Cloud puts "Hibernating 2h" in an app's header. Scale to zero has been
+in this panel since Phase 7, and when it took the last instance away the app
+page said **Stopped**, with the grey badge and the pause icon — the same thing
+it says about an app a person deliberately took down. The cluster is not wrong:
+it can only see that the instances are gone. The panel knows the user asked for
+exactly that and that the next request brings the app back.
+
+So the status handler rewrites that one case to `sleeping`, with a sentence
+saying the next request starts it again, and the badge has a word for it in all
+five languages. A test covers both readings of zero instances: with the setting
+on it says asleep, with it off it says stopped.
+
+The status sentence under an app's name came from the cluster in English. Three
+phases have a sentence that never varies — sleeping, stopped, not deployed — and
+those are translated now; the rest carry a number or a message from Kubernetes
+and still fall back to what the panel was told.
+
+### Copying anything was three implementations and a dead prop
+
+Render puts a copy control beside every id and address. This had three
+hand-written ones that did not agree — one toasted, one did not, one put the
+word "Copy" in a button wide enough to push the value off the row — and the
+app's own address, the thing people came to the page for, had none: it could be
+clicked and not copied. One `CopyButton` now, with a tick where the icon was,
+used on the address and on every database credential.
+
+The credentials rows carried a `secret` prop that chose between `type="text"`
+and `type="text"`. The whole card is behind "Show credentials", so nothing there
+needs hiding twice; the prop that pretended otherwise is gone.
+
+### Three English words on a translated page, and the gate that missed them
+
+`label="Host"`, `label="Port"`, `label="User"` — beside a database name that was
+translated — plus `label="Architecture"` on the server page. No check saw them:
+they are not in an `sr-only` block, they carry no `aria-label`, and they are not
+keys that could go missing. `check:i18n` now refuses a capitalised literal in
+`label`, `title`, `description`, `confirmLabel` or `placeholder` anywhere
+outside the vendored `components/ui`, with an allowlist for names that are the
+same word everywhere (Kubelet, PostgreSQL, Docker) and an exemption for a
+placeholder that is code rather than prose — `DATABASE_URL` is an instruction to
+type that exact string.
+
+It found two more on the way in: the example server location was `Frankfurt` and
+the example team name was `Acme` for everybody. They are examples, so they are
+translated like everything else — an Indonesian operator is offered Jakarta.
+
+A second gate, in Go: every phase either `summarisePhase` or the status handler
+can return must have `apps.phase.*` in all five locales. Proven by deleting
+`sleeping` from `ru.json`, which failed it.
+
+931 keys, five languages. `make check` green, 14 interface tests pass.
+
+## Phase 55 — the half of the panel that was never translated
+
+"There is still a lot of i18n missing." There was, and not where the checker was
+looking: every key existed in all five languages — 825 of them — and the largest
+page in the panel was still entirely English, because its words do not come from
+the locale at all. They come from the server.
+
+### Settings, in English, in every language
+
+`internal/settings` carries a label and a help paragraph for each of the
+forty-three settings, and the panel showed them as they are. With the interface
+in Indonesian the chrome read Pengaturan, Umum, Klaster — and every field under
+it read "Panel URL", "Which builder to use when a repository has no
+Dockerfile…". Six and a half thousand characters of English on the page an
+operator spends the most time on. The screenshot of it is in `docs/images`,
+before and after.
+
+The server keeps its English: it has one language, and the API, the CLI and an
+assistant all read those strings. The panel looks them up by the setting's own
+key — `settings.field.<key>.label` — with the server's text as the fallback for
+a setting added before anybody has translated it. Eighty-six strings, five
+languages.
+
+`TestEverySettingHasItsWordsInTheInterface` checks that every definition has
+words in the interface **and that the English matches character for character**.
+Two copies of the same sentence drift, and the one that drifts is the one nobody
+reads.
+
+### Two screen readers' worth of English, and a button nobody has pressed
+
+The mobile sidebar's drawer announced itself as "Sidebar. Displays the mobile
+sidebar." in all five languages: text inside an `sr-only` block rather than on
+the tag carrying the class, which is the shape the checker did not look for. It
+looks for it now, and the pattern found the other one — a `Close` button in the
+dialog footer, hardcoded, behind a flag nothing passes today. A hardcoded
+English button waiting for the first person to turn it on.
+
+### Two deploy buttons, and the answer changing on a second look
+
+Asked about, answered "that is the pattern", asked again, and looked again —
+this time the answer is different, because the second look was at the screen
+rather than at the other pages.
+
+The pattern is real: Databases, Servers and Projects all repeat their primary
+action in the empty state. On those pages the empty state **is** the page, so
+the two buttons are obviously the same thing, because there is nothing else they
+could be. The app page is not that: the empty state sits in a card titled
+"Instances", among other cards, with "Deploy now" already in the header. A
+second "Deploy now" inside a card about instances invites the reading that it
+starts an instance without deploying — which is not a thing this panel does.
+
+So the app page is the one place that does not repeat the action. The sentence
+does the work instead, and names the button by its own label rather than in
+English: it reads "Deploy sekarang" in Indonesian and "立即部署" in Chinese,
+which is what the button at the top of that page actually says. The empty state
+also has a title now rather than the logs tab's full sentence with a full stop
+in it.
+
+### What is still English, said plainly
+
+* **Every error.** Ninety `errdoc.New` sites, each with a title, a cause, an
+  impact and a fix — the panel's best writing, and none of it translated. It is
+  the next piece, and it is larger than this one was.
+* **The template catalogue.** Two hundred and eighty-two names and descriptions,
+  which are mostly upstream product copy; the categories are translated.
+* **A plugin's own manifest**, which belongs to whoever wrote it.
+
+## Phase 54 — a page of snake_case, an app with no address, and a trail to nowhere
+
+The project page, the app page and Activity, read the way somebody meets them.
+
+### Activity was a column of machine codes
+
+The page that answers "what happened" printed `app.scaling_changed`,
+`variable.set`, `setup.completed` — the strings the database stores. On a panel
+whose whole premise is that Kubernetes stays out of sight, the human page was
+showing identifiers.
+
+All seventy-two audit actions have words now, in five languages: "Scaling
+changed", "Variable set", "Panel set up". The code stays on the hover, because
+this is also the page somebody reads with a log open beside them, and a code
+with no phrase falls back to itself — which is what every row used to be. The
+audit tab in Settings shows the same phrases, so one thing is not called two
+names in one product.
+
+`TestEveryAuditActionHasWordsForIt` reads the actions out of this package's own
+source and checks each one against the locale. Adding an action without a phrase
+fails with the file it is in and the key to add.
+
+The page also borrowed the audit tab's sentence — "Who did what, when, and from
+where" — while deliberately not showing the address, and then repeated that same
+sentence in its empty state.
+
+### An app page that could not say where it was
+
+The breadcrumb read "Overview › Apps", the title was the app's name, and nothing
+anywhere named the project or the environment it belongs to. The only way back
+to its project was the browser's back button.
+
+It says "Storefront · Production" under the name now, with the project as a
+link. Both queries are keyed so they come from the cache when anything else has
+already asked.
+
+Two more on the same page: the stat card was labelled "Instances" above a card
+titled "Instances", and read "0 / 0" without saying which number was which — it
+is "Instances ready" now. And "The panel is not connected to a cluster" was a
+grey sentence floating between cards, while the same condition is an Alert on
+the Overview page; it is an Alert here too, with a tone that follows the phase,
+so a cluster that cannot be reached reads as a problem and "waiting for the new
+instances" does not.
+
+### A trail that pointed at the not-found page
+
+The breadcrumb drops the ids — `/apps/app_06gb…` is noise — and rebuilds the
+path from what is left. On the new-app page, `/environments/env_x/apps/new`,
+that produced links to `/environments` and `/environments/apps`. Neither is a
+page. Both were links.
+
+A crumb is a link only when the path it would point at is one of the panel's
+pages now, and a Playwright test walks every breadcrumb on every seeded page and
+follows it, failing if it lands on the not-found page.
+
+### The test that was testing an older build
+
+`make e2e` depended on `backend`, which builds the binary against whatever is in
+`web/dist`. Change a page, run the interface test, and it tests the build from
+an hour ago — which is exactly what happened here: a tap target that was too
+small kept failing after it had been fixed. There is a `ui` target now, and both
+`e2e` and `screenshots` depend on it.
+
+**Verified by looking:** the screenshots are recaptured, and the one that made
+this pass worth doing is Activity — eight rows that used to be code.
+
+## Phase 53 — the braces on the page, cron in a text box, and four sentences said twice
+
+An interface pass, looking for what a person meets rather than what a test
+covers: placeholders, flows, repeated words, and the controls that ask somebody
+to know a syntax.
+
+### `{{product}}`, on the page, in five languages
+
+The app's Settings tab read "Most frameworks read it from the PORT variable,
+which **{{product}}** sets for you". The same string on the New app page reads
+correctly, because that call passes the value and this one did not. i18next has
+nothing to say about a missing interpolation: it renders the braces and carries
+on.
+
+So `check:i18n` reads the call sites now. Every `t("…")` for a string with a
+placeholder has to name each one, and the check is deliberately one-sided —
+passing a value a string does not use is harmless; leaving one out is what
+shipped.
+
+### A schedule that asked you to know cron
+
+A backup schedule and a scheduled command were both a text box containing
+`0 3 * * *`. That asks every user to know five fields in the right order, and to
+find out they were wrong at three in the morning when the backup they thought
+they had did not happen.
+
+Four presets cover what people pick — hourly, daily, weekly, monthly — and cron
+stays behind "Custom" for the times they do not. The times say UTC, because a
+schedule that quietly meant the server's idea of local time is a different
+failure in every timezone. The list of scheduled commands shows the words rather
+than the expression: a row reading `0 3 * * *` asks whoever is looking at it to
+parse cron in their head.
+
+One piece of local state survives the "derive, do not synchronise" rule, and it
+is written down: which mode the control is in is derived from the value, except
+for the moment somebody picks "Custom" while the box still holds a preset, which
+is an intent no value can carry.
+
+### The same sentence, twice on one screen
+
+Four screens introduced themselves and then said it again:
+
+* **Databases** used the apps' empty-state help as the page's own description,
+  so the subtitle and the empty state were the same sentence.
+* **Projects** and **Servers** did the same. Servers went further: its page
+  description was the list of what a server needs — Ubuntu, a gigabyte, SSH as
+  root — which belongs on the page where you add one, and already is there.
+* The **Console** tab showed "Run a command" as a field label and again as a
+  panel title, with its help text repeated word for word sixty pixels below.
+  What that panel is for is output, so it says so now.
+* The backup card labelled three different controls "Automatic backups": the
+  card, the switch and the schedule. And "Keep the last" was a number with no
+  unit.
+
+### Two controls for one action
+
+On Databases with more than one environment, the header button asks which one
+and the empty state picked the first — and with no environments at all it called
+`setCreating(null)`, which is a button that does nothing. Both are the same
+control now.
+
+### Advanced, two ways
+
+Add a server opens its advanced section with a bordered row and a chevron. New
+app had a bare ghost button that said "Show advanced" and then "Hide advanced" —
+a different affordance for the same idea, two pages apart in one flow. It is the
+same control now, and the dead `advanced` state is gone with it.
+
+### The rest of what the pass found
+
+New app described itself with the apps' empty-state text, which ends "or start
+from a template" — a third path the form does not offer. The sentence says what
+the page does, and the template path is a button beside it. The Dockerfile path
+field was labelled "Dockerfile", which is the name of the builder option above
+it. The sidebar had one group, headed "Overview", above an item called
+"Overview". Documentation is the one link that leaves the panel and now says so.
+
+**Verified by looking:** the screenshots are recaptured from the real binary,
+and the console tab is in them now — the scheduled commands card had never been
+photographed.
+
+## Phase 52 — a command nobody waited for, an error cached forever, and a path the panel chose
+
+An audit of `internal/mcpserver`, `internal/cli` and `internal/templates`.
+
+### "It waits for the command to finish" — it did not
+
+`skifity run -- npm run migrate` starts a Job and then reads its log. The read
+did not pass `follow`, so the panel returned whatever the container had printed
+by the time the pod was first seen running — which, for anything slower than the
+two-second poll, is nothing. The CLI printed "Running: npm run migrate", a blank
+line, and exited zero. Both it and the MCP tool said otherwise: the tool's
+description reads "It waits for the command to finish and returns its output",
+and the CLI's own comment said "the output comes back when the command is done".
+
+An assistant reading an empty output as a successful migration is the worst
+answer available, so this is the one that mattered most.
+
+Both follow now. That needs a client without the ordinary one-minute deadline,
+so `DoLong` exists beside `Do`: the wait belongs to the migration, not to the
+network. The CLI has no cap and says that Ctrl-C stops the waiting rather than
+the command; the MCP tool caps at ten minutes, because what is on the other end
+is an assistant waiting on a tool call, and past the cap it says the command is
+still running and where its output will be.
+
+### An error that outlived its cause
+
+The MCP server resolved the team once, with a `sync.Once` — which caches the
+failure as happily as the success. An assistant that opened its editor while the
+panel was restarting got the same error from every tool for the rest of the
+session, and the only cure was restarting something nobody would think to
+restart. Only success is kept now.
+
+### The panel chose where the CLI wrote
+
+`skifity export` writes `manifests/<namespace>/<app>.yaml` under the directory
+the user named, and both the namespace and the slug come from the panel's own
+JSON. `filepath.Join` cleans as it goes, so a namespace of `../../.ssh` becomes
+a path beside the export rather than inside it, and the result looks perfectly
+ordinary. It is the panel the user signed in to, so this is unlikely — and the
+check is one line, while what it prevents is a file written over somewhere
+nobody looked. `underneath` refuses anything that climbs out, with a test for
+the cases that actually climb (one `..` is absorbed by the `manifests` element
+and lands back inside; two are not).
+
+### The tool table nobody checked
+
+`llms.txt` prints the MCP tools, and that page is what an assistant is pointed
+at. The API routes in the same document have been checked against the router
+since Phase 22; the tool table was checked against nothing. It is now, in both
+directions — a documented tool that does not exist, and an existing tool nobody
+documented, both fail. Adding a row for a tool that is not there fails with its
+name in the message.
+
+`ReadIcon` sliced a file name at its last dot without checking there was one, in
+the function whose comment says it checks the name anyway "because the one that
+is not checked is the one that changes later". Now it does.
+
+### What was checked and found sound
+
+The catalogue is the best-gated part of this codebase: thirteen tests, including
+that every image names a version rather than `latest`, that every database
+reaches the service it is for, that every list is an array in JSON rather than
+`null`, that every icon belongs to a template and can actually be served, and
+that what the README says ships is what ships. The CLI's config file is written
+0600 and a test reads the mode back; `SKIFITY_URL` and `SKIFITY_TOKEN` override
+it for a CI job or an assistant; every command takes `--json` and a test walks
+the package to prove it. The MCP tools go through the same API with the same
+scoped token as the CLI, so an assistant can do what the token's owner can do
+and nothing more.
+
+## Phase 51 — the keyring under load, a code used twice, and the secrets rotation stepped over
+
+An audit of `internal/api`, `internal/auth`, `internal/store` and
+`internal/crypto`. Four real defects, three of them in the parts that are only
+exercised on the day they matter.
+
+### One keyring, no lock
+
+The `Keyring` is shared by everything in the panel — the API, the deployer, the
+backup manager, the cluster adapter — and rotation writes to its map while all
+of them read it. There was no mutex. A Go map read during a map write is not a
+race the program survives: the runtime **throws**, and a throw is not a panic,
+so `runsafe.Recover` never sees it. Rotating the master key on a busy panel
+could take the panel down, which is also the one thing that makes the cluster
+unreachable.
+
+The lock is held for every read of the map as well as every write, because
+`DropKey` zeroes a key's bytes and a slice read after that is a key of zeros.
+`BeginRotation` now picks the id, adds the key and promotes it under one lock:
+two rotations started together would otherwise choose the same id, and the
+second would fail after the first had already moved the active key.
+
+The test runs four goroutines sealing and opening while five rotations run
+through them. Under `-race` it fails on the old code and passes on the new, and
+`make check` runs the race detector.
+
+### The rotation stepped over the plugin secrets
+
+`ListSealedSecrets` is the list master key rotation walks. It named eight
+columns. The database has ten: `plugins.hmac_sealed` and the sealed rows in
+`plugin_settings` were both missing — added by the plugin work three commits
+earlier, and not added here.
+
+The consequence is silent and permanent. Rotation drops the retired keys once
+every secret it knows about has been rewrapped, so the two it did not know about
+stay wrapped in a key that no longer exists. Nothing reports it. The first sign
+would be plugins that quietly stop receiving events, because the panel can no
+longer read the secret it signs them with.
+
+Both are listed now, `SealedRef` carries a second key column for a row
+identified by two, and `TestEverySealedColumnIsRotated` walks the schema the
+panel actually creates: a column named `*_enc` or `*_sealed`, or a `value`
+beside an `encrypted` flag, has to be in the list. Removing one line from the
+list fails the test with the column's name in it.
+
+### A two-factor code that worked twice
+
+RFC 6238 says a one-time password is used once. The panel accepted a code for
+the current thirty-second step and one either side, and recorded nothing, so a
+code read over a shoulder, off a screen share or out of a proxy log stayed valid
+for up to ninety seconds.
+
+`VerifyTOTP` now returns the step it matched, and the step is spent in a single
+statement — `UPDATE … WHERE totp_last_counter < ?` — so two sign-ins arriving
+with the same code in the same instant cannot both win. The code that switches
+two-factor on is spent as well, so it cannot be the code that gets past it a
+moment later.
+
+### A plugin heard about every team
+
+A plugin is installed panel-wide by an owner, and the dispatcher sent every
+subscribed plugin every event. On a panel with more than one team that means an
+owner of one team could install a plugin and have it watch another team's
+deploys — and, with a blocking hook, refuse them.
+
+A plugin's token already belongs to whoever installed it, so it can read what
+that person can read. The events draw the same line now: a plugin hears about a
+team only when its installer is a member. An event that carries no team reaches
+nobody, which is the safe direction, and both refusals are logged rather than
+silent, because a plugin that receives nothing looks exactly like a plugin that
+is broken.
+
+### Two smaller things
+
+Rotation ran on the request's context, so closing the tab halfway through
+cancelled it: the secrets already rewrapped were fine, the rest kept the old key,
+and nobody was told which was which. It runs on its own context now.
+`SaveKeyring` wrote and renamed without syncing the directory, so a crash
+seconds later could lose the rename — on the one file whose loss cannot be
+undone.
+
+### What was checked and found sound
+
+Envelope encryption: per-secret data keys, AES-256-GCM both levels, the wrapped
+key bound to its key id and the ciphertext bound to where it is stored, a strict
+base64 decoder so an envelope has exactly one textual form, and bounds checked
+before every slice. Passwords: Argon2id at the OWASP parameters, parameters read
+back from the hash so old ones keep working, an unknown account costing the same
+hash as a known one, and a lockout per account and per address. Sessions and API
+tokens: SHA-256 at rest, expiry checked after the read, a disabled account cut
+off immediately rather than at expiry. CSRF: double-submit, enforced only where a
+cookie could carry the request, exempt for bearer tokens. The store: one
+interpolated statement, and its table and column names come from a fixed list.
+The API's authorization is gated by tests that walk the router rather than a
+list somebody maintains — every route refuses an anonymous request, every route
+that takes an id refuses another team's.
+
+## Phase 50 — the schedules, the sweep, and six documents that were wrong
+
+An audit of the builder, the deploy path, the cluster adapter and cron, and a
+read of every document against the code.
+
+### The settings that had nowhere to be set
+
+Single sign-on is built — OIDC, PKCE, a verified ID token, a nonce, a spent
+state. Six settings, a section of the documentation, and **no way to set them in
+the panel**: the frontend kept its own list of setting groups, and `signin` was
+not in it, so the group rendered as nothing at all. Plugins had been the same
+thing a commit earlier.
+
+The list is now an *ordering*, not the list. The groups come from the settings
+the server sends; anything this build has not heard of is shown at the end under
+its own key. Untranslated is worse than translated and a great deal better than
+invisible, and a hand-kept copy of somebody else's list is a list that is wrong
+the day it changes.
+
+### A backup schedule nothing could parse
+
+`PUT /api/databases/{id}/backup-policy` verified that backup storage worked —
+"rather than at three in the morning", as the comment says — and did not verify
+the schedule. Anything at all was accepted, stored, and then never matched, so
+the backups simply did not happen. Nothing could report it: by then it is a row
+that is never due. It is parsed now, and refused with the same message the
+scheduled-command path uses.
+
+### "5/15" meant five
+
+In cron, a step after a plain number means "from here to the end of the field,
+every n". The parser cut the step off, parsed the number, and dropped the step on
+the floor — so `0 5/6 * * *`, four times a day, ran once. The schedule parsed.
+Nothing was logged. It is the exact failure the package comment says it exists to
+prevent, written in the package itself.
+
+`Describe` is gone rather than fixed. It rendered a schedule in words and would
+say "every day at 03:00 UTC" for `0 3 * 1 *`, which runs in January — and it had
+no callers, because a sentence built in Go cannot be shown in an interface where
+every string is a translation key.
+
+### The minute tick that could stop for half an hour
+
+Scheduled backups run on the panel's own minute tick. The registry sweep ran
+inside that tick: it takes the build lock, which waits for every build in flight
+— a build is allowed forty minutes — and then waits up to thirty more for its
+Job. For that whole window no backup was evaluated, and a nightly backup due
+inside it never ran. Maintenance now runs beside the tick rather than in it.
+
+Ticks are dropped by Go when the receiver is late, so the tick also catches up:
+it evaluates every minute since the last one it looked at, capped at five —
+Kubernetes' own starting deadline for a CronJob that could not start on time.
+Long enough for a slow minute or a restart, short enough that a panel switched on
+after a week off does not fire a week of backups at once. A policy that matches
+several caught-up minutes still runs once.
+
+### Applying onto a corpse
+
+`Delete` returns when the API server accepts the request. With foreground
+propagation the object stays — deletion timestamp, finalizer — until its
+dependents are collected. Two places deleted a Job and applied the same name
+immediately: the build, and the registry sweep, whose Job has the same name every
+single time. The apply is accepted, the object is collected a moment later, and
+the wait that follows waits for something that is not coming: a build that never
+starts, or a sweep that reports it did not finish while the disk fills. There is
+a `DeleteAndWait` now, with a test that an object held by a finalizer produces a
+refusal rather than an apply.
+
+### What the documents claimed
+
+* `CLAUDE.md`'s package layout was missing fourteen packages — plugins, the
+  firewall, cron, the registry client, the three guard packages — and listed a
+  doc-site directory under the frontend that does not exist. The doc site is
+  `internal/docsite`, and the check in it caught this paragraph naming the path
+  that is gone, which is the check working.
+* `docs/configuration.md` described a **Git** settings group that is empty: the
+  GitHub App settings were removed when it turned out nothing read them, and the
+  table still offered them. It was missing **Cluster**, **Sign-in** (six
+  settings, already documented in the same file) and **Plugins**, and described
+  Domains without the tunnel token, the trusted proxies or the geo databases.
+* `docs/backups.md` said a volume backup could be put on a schedule "the same way
+  as for a database". There is no volume policy: no route, no handler, no
+  control. Databases have schedules; volumes are taken when somebody asks.
+* `llms.txt` — the page the product hands an AI assistant — had no firewall and
+  no plugins in it at all, in either the endpoint list or the notes.
+* `docs/progress.md` said `docs/decisions.md` holds ADR-0001 to ADR-0017. It
+  holds nineteen.
+
+### What was checked and found sound
+
+The deploy path handles the things that usually go wrong: a deployment
+interrupted by a restart is marked failed at startup rather than left "building"
+forever, a superseded build is stopped rather than left to roll out an older
+version behind a newer one, a panic in one deployment is caught without taking
+the panel with it, the fingerprint match only ever reuses an image from a
+deployment that succeeded, and a rollback outside the registry's keep window is
+refused with a reason instead of sitting in ImagePullBackOff. Scheduled commands
+are Kubernetes CronJobs and not the panel's business: "a panel that is restarting
+at 03:00 should not be the reason a nightly job did not run."
+
+## Phase 49 — the settings nobody could open, and a domain nobody owned
+
+Two settings and a rename.
+
+**The plugin settings had nowhere to be set.** The panel defined them, the
+documentation told people to open Settings, then Plugins — and the frontend's
+group list did not carry `plugins`, so the group rendered as nothing at all. A
+setting that exists on the server and not on the page is a setting that only
+looks configurable.
+
+They have a tab now, with a button that reads the catalogue and says which of
+the three answers came back: signed by the key set here, readable and vouched
+for by nobody, or a failure that names itself. An address and a key are a pair
+you otherwise discover is wrong on the day you wanted a plugin. It reads on
+request rather than on mount, because an address somebody is halfway through
+typing should not be fetched and a store that is down should not make the
+settings page look broken.
+
+**`skifity.io` was never ours.** `skifity.com` is. It was the vendor domain on
+every Kubernetes label and annotation the panel writes — `skifity.io/app-id`,
+`skifity.io/managed` — the plugin standard's `apiVersion`, and the install
+command in the README, the installer, the release notes and every page of the
+documentation. Using a domain somebody else may register is the one thing the
+Kubernetes convention for those keys exists to prevent, and doing it before
+anything is published costs nothing where doing it after costs everybody a
+migration.
+
+The rename found a latent bug. `internal/provision/scripts.go` wrote
+`--node-label=skifity.io/managed=true` by hand while everything else went
+through `version.LabelKey`, so changing the domain in the one file that is
+documented as the place to change it would have left every node carrying a key
+nothing else looked for. It goes through the same function now.
+
+## Phase 48 — the store, and the page that admits what it cannot reach
+
+The runtime could install a plugin. Nothing could find one.
+
+**A store is two static files.** `index.json` lists what is available;
+`index.json.sig` is a detached Ed25519 signature over its exact bytes. Two files
+rather than one envelope, because a catalogue somebody can open in a browser and
+check by eye is worth more than one that is only machine-readable. No database,
+no API, no accounts — a store is a directory on a web server.
+
+**The signature is checked before the index is parsed.** Parsing first would
+mean the panel had already acted on bytes nobody vouched for. An index entry
+pins its manifest by SHA-256, so the operator vouches for the list and the hash
+stops a manifest being swapped after the list was signed. That is an apt release
+file, and it is chosen because it needs no key registry: a publisher does not
+need a key, because the store is what vouches for them.
+
+Three answers, not two, for the key:
+
+* **No key configured** — the index is read and every entry is marked as
+  unverified, on the page, in those words. Refusing outright would mean a store
+  cannot be used until somebody pastes a key.
+* **A key, and a signature that checks out** — verified.
+* **A key, and no signature or a wrong one** — an error, not a catalogue. The
+  quiet middle answer is what turns a signature into decoration.
+
+**One bad row must not empty the page.** An entry with no id, no manifest
+address or an unparseable hash is dropped, because it is not a thing the panel
+could install even if it wanted to; the rest of the catalogue still shows. An
+index of another version is refused whole, because that is not a bad row, it is
+a file this build cannot read.
+
+`skifity admin plugin-key` prints a pair and writes neither. A command that
+saved the private key for you is a command that leaves a signing key in `/root`,
+and the one thing an operator has to do with it is put it somewhere they already
+trust. `skifity admin plugin-sign` signs a file's exact bytes — reformat the
+JSON afterwards and the signature stops matching, which is the point. Signing
+and verifying live in the same package, because two implementations of "the
+exact bytes" is one implementation and one bug waiting.
+
+**The Plugins page is three tabs**: what is installed, the store, and an
+address. The third is not a fallback for when the store is down — a cluster
+behind a proxy that never reaches `plugins.skifity.com` has to be able to run
+plugins too, and so does an operator who wants their own index and their own
+key. Both are settings.
+
+Installing from the store is still the runtime's two requests: the manifest is
+fetched, its permissions are shown, and the install is refused if they changed
+between the screen and the button. The store adds a hash check in front of that
+and nothing else — being in a signed index is not a reason to skip the part that
+actually protects anybody.
+
+**Verified by running it:** a key generated by the real binary signs a real file,
+`pluginstore.VerifySignature` accepts it, and rejects it after one byte changes.
+Nine unit tests cover the rest: another key's signature, a tampered index, a
+missing signature where a key is configured, the unsigned path, a manifest that
+does not match its hash, a wrong index version, and the bad rows that get
+dropped.
+
+**Not run:** nothing is published at `plugins.skifity.com`. The panel can read a
+store, verify one and install from one; there is no store. The Store tab will
+say it could not reach anything, which is the truth.
+
+## Phase 47 — the plugin runtime
+
+The standard said what a plugin is. This runs one.
+
+Installing is four things in an order that matters: a token narrowed to exactly
+the permissions the manifest declared, a secret the plugin will verify events
+with, a Secret object holding both plus its settings, then the pod. The token
+first, because a pod that starts without one is a plugin whose first request
+fails for a reason nobody can see. Removing is the same list backwards, and the
+token goes even when the cluster cannot be reached — a credential nobody can
+trace to anything is worse than a namespace left behind.
+
+**One namespace per plugin**, not one shared namespace with all of them in it.
+Two plugins from two publishers have no more reason to reach each other than two
+tenants do. What a plugin can reach is the panel, DNS and the internet; what it
+cannot is every other namespace, the node network and the cloud metadata
+address. It holds no Kubernetes token, runs non-root on a read-only root
+filesystem, and its namespace enforces the strict profile — a requirement a
+plugin author can meet, because unlike an off-the-shelf application image they
+control the Dockerfile.
+
+**Installing is two requests, deliberately.** The first reads a manifest and
+answers what it would do; the second installs it, and is refused when the
+permissions no longer match what was shown. One request would mean the
+permissions were displayed by the same call that granted them, which is a
+confirmation nobody reads because it is already too late. Owner-only: an admin
+who manages servers is not the same person as the one who decides what code runs
+in the cluster.
+
+**Every event carries an HMAC** over its exact bytes, keyed per plugin. The
+endpoint is only reachable from the panel's namespace, which is the first line
+and not the only one — anything that ever runs beside the panel could otherwise
+post "deploy.before, allow it" and be believed.
+
+The four rules about blocking each have a test, because each is a way for the
+hook to be decoration:
+
+* **Silence is not consent.** An empty body is a refusal; a plugin that answered
+  200 and nothing else has said nothing.
+* **Not answering is not a refusal.** A plugin that stops every deploy the
+  moment it is upgraded is a plugin nobody installs twice.
+* **Every blocking plugin has to agree.** One plugin's yes does not overrule
+  another's no.
+* **It is capped at ten seconds**, whatever the manifest asked for, because the
+  thing on the other end is a person watching a page.
+
+Delivery is not guaranteed and does not pretend to be: an event is posted once,
+with a short timeout, and a plugin that must not miss anything reads the state
+back through the API. A retry loop that looked like a guarantee and was not one
+would be worse.
+
+Still missing: the store, and the interface. A plugin is installed over the API
+by pasting a manifest or giving its address.
+
+## Phase 46 — the plugin standard, and the permission model it needed first
+
+The ask was an ecosystem: other people writing features for Skifity, including
+commercial ones, published to a store and installed from the panel. What that
+needs before it needs a store is a **standard**, because the standard is the one
+thing everybody else builds against and the one thing that cannot be changed
+casually afterwards.
+
+**The permission model had to come first, and it was not one.** API token scopes
+were `read` and `write`, decided by the HTTP method — so a plugin that copies
+backups and a plugin that provisions servers would carry the same token, and
+installing the first would grant the second's powers. "This plugin may only read
+your apps" would have been a sentence on a screen that nothing enforced. Scopes
+now name a resource as well as a direction, `apps:read`, `backups:write`, over
+twelve resources, checked in the one middleware rather than per handler — a scope
+enforced per handler stops being enforced the day somebody adds a route and does
+not think about it. A path no scope covers is refused to a scoped token rather
+than falling into whichever scope was nearest, and the older unscoped forms keep
+meaning exactly what they meant.
+
+**The standard is `internal/plugins`, not prose.** A manifest that parses and
+validates there is a valid plugin, and the example in `docs/plugins.md` is a
+test: if it stops being valid, the standard changed and it was not on purpose.
+See ADR-0018 for why a container rather than a library, with `plugin.Open`'s own
+documentation quoted for why that door is closed.
+
+Three rules in it are the ones somebody will try to relax:
+
+* **The image is a digest, never a tag.** A tag can be moved by whoever controls
+  the registry, and this image is about to be handed an API token.
+* **`read` and `write` alone are refused for a plugin.** They mean every
+  resource, which nobody can meaningfully agree to on a screen.
+* **Only an event that happens before something may block**, capped at ten
+  seconds, because the thing on the other end is a person watching a page.
+
+And one trap avoided by writing the test: the subscription field is `event:` and
+not `on:`. `on` is a boolean in YAML 1.1, so `on: backup.completed` parses in
+some readers as the key `true` — the scar GitHub Actions carries in every
+workflow file ever written. A standard being defined today should not step on
+it, and the only reason this was caught is that the example manifest is
+exercised rather than admired.
+
+Nothing installs a plugin yet, and `docs/plugins.md` says so in the same words:
+the runtime, the event delivery and the store are not written. What exists is
+what a plugin *is*, so that one can be written against it.
+
+## Phase 45 — an allowlist, and everything it took to make one real
+
+Asked whether there was an allowlist by address, by network or by country.
+There was none of any kind: `netguard` is outbound SSRF protection and
+unrelated. So this is one, in the shape people already know from Cloudflare —
+an ordered list of rules over the request, combined with and and or.
+
+The expression is a tree rather than a string. Cloudflare writes theirs as a
+small language and then has to parse it; the panel does not need one, because
+the interface builds the tree directly and "match all of these" and "match any
+of these" are groups on a form, not syntax anybody has to learn.
+
+**Unknown is a third answer.** A rule about a country is worthless if nothing
+knows the country, and both ways of pretending otherwise are wrong: as false a
+Block rule silently stops blocking, as true an Allow rule silently blocks
+everybody. So it is neither, and it propagates the way it does in SQL. A rule
+that comes out unknown is skipped by name rather than deciding.
+
+**The geo data needs no account.** DB-IP publish country and network databases
+monthly under CC BY 4.0 with no sign-up, where GeoLite2 wants a registered
+account before a single byte — a registration in the middle of turning on a
+firewall rule. The decode tags were checked against the real files rather than
+the documentation: 1.1.1.1 is AU and AS13335, 8.8.8.8 is US and AS15169.
+Attribution is on the page and in `docs/firewall.md`.
+
+**The guard is its own process, not the panel.** Traefik can ask an external
+service whether to let a request through, and the panel is the obvious place and
+the wrong one: its Deployment uses Recreate, because its database is a file on
+one node's disk, so every panel upgrade would take every protected site down. It
+is the same binary in another mode, with no database, no Kubernetes API access
+and no credentials — its whole state is a ConfigMap the kubelet drops into its
+filesystem.
+
+**Three knobs were removed for being lies**, each caught by writing the test:
+
+* a per-rule-set *fail open*, whose value lived inside the file the guard had
+  failed to read, and which Traefik decides before this process is reached;
+* `authRequestHeaders` on the middleware, a list of headers to forward, which
+  would have made a rule on any header not in the list match nothing — the rule
+  saved, the request allowed, the header never sent to the process judging it;
+* "is a geo database available", inferred from whether a URL setting was empty
+  — and empty means the default, so it was always available and the check meant
+  nothing. It is an explicit switch now, on by default.
+
+**And the file the whole feature is worth exactly as much as** is the one that
+decides who is asking. `X-Forwarded-For` is walked from the right and stops at
+the first entry that did not come from a proxy we trust, because only the
+rightmost entry was added by somebody we know. Trust is a list of ranges rather
+than a hop count, since a hop count is wrong the moment somebody adds a load
+balancer and the failure is silent. Junk in the chain stops the walk rather than
+being skipped. Cloudflare's headers are believed only when the peer handing them
+over is one of ours — which also makes the country free behind the tunnel, with
+no database consulted at all.
+
+## Phase 44 — two things wanting the same name
+
+Asked whether collisions, SSH and the shell were sound. SSH and the shell were.
+Naming was not, in two places, and one of them was a way in.
+
+**Two apps called "web" and only one address.** Every app is given an automatic
+address worked out from its slug and its environment — and from nothing else. So
+two projects each with an app called "web" in Production both wanted
+`web.apps.example.com`. The hostname column is unique, so the second insert was
+refused, and the deployer swallowed that as a log warning: the second app had no
+address at all, and the page showed nothing explaining why. "web", "api" and
+"app" are what people call things, so this was not a corner case but the second
+project. Proved with a test before it was fixed.
+
+The address is now chosen by asking who holds the readable name. Free, or this
+app's own, and it keeps it; somebody else's, and it gets the same name with a
+short suffix derived from the app's id. Derived, not random, because it must be
+the same on every deploy. And an app that took the longer name keeps it when the
+sibling holding the short one is deleted — otherwise a URL would move under the
+user on an unrelated deploy. When there is genuinely no address to be had, the
+deployment log says so, because a person looking at an app with no URL has no
+reason to read the panel's own log and no way to reach it.
+
+**An app could claim the panel's own hostname.** Nothing checked. Two Ingresses
+with the same host in different namespaces is not an error Kubernetes reports:
+the ingress controller picks one, and which one survives a restart is not
+something anybody decided. A member of any team could point an app at the
+panel's address and start receiving the requests a browser sends it, sign-in
+cookie included. It is refused now, against both places the panel learns its own
+address — the installer's environment variable and the Settings value — in every
+shape somebody might type it. A subdomain of it is still somebody's own business
+and still works.
+
+**The confinement fix had not reached the run Job.** Phase 43 changed the
+Deployment and not `BuildRunJob`, which `BuildCronJob` also renders from. So on
+an environment lowered to run an image that starts as root, the app ran and a
+migration in that same image was refused: a panel saying "your app runs, and you
+cannot run anything in it". It uses the app's own confinement now.
+
+**The port scan could not see a UDP socket.** The preflight checked 80, 443,
+6443, 10250, 2379 and 2380 with `ss -lnt`, which lists TCP — and every port the
+pod network uses is UDP. A VPS running a WireGuard VPN of its own holds exactly
+the port flannel's wireguard-native backend wants, and the failure is a cluster
+that comes up with every node Ready and no traffic between pods, which looks
+like anything except a port conflict. 8472, 51820 and 51821 are checked now:
+fatal for the backend this cluster actually uses, with the fix naming the other
+one, and a note rather than a refusal for the backend it does not.
+
+What was read and found sound: the SSH client (modern host key algorithms only,
+trust on first use with the fingerprint stored and a later change refused rather
+than warned about, a handshake deadline of its own, files written through a
+quoted heredoc with a delimiter collision check), `shellsafe` and its use at
+every interpolation in the generated scripts, `runsafe`, and the run Job's own
+isolation — no service account token, no retries, its own labels so a migration
+pod is never counted as an app instance.
+
+## Phase 43 — the catalogue that could not start
+
+The question was whether autoscaling, deploying and database replicas were
+sound. Two of the three had defects, and one of them was the largest thing found
+in this repository.
+
+**Every app's pod was pinned to uid 1000.** `BuildDeployment` wrote
+`runAsUser: 1000`, `runAsNonRoot: true` and `drop: ALL` into every pod spec,
+including every one-click template, in namespaces enforcing the `restricted`
+Pod Security profile. That is exactly right for an app Skifity builds — Railpack
+and Nixpacks both produce a process running as 1000 — and it is a guess for
+anybody else's image.
+
+It was measured rather than assumed. Of the catalogue's 295 unique images, 124
+had their config blob read straight from their registries before Docker Hub's
+rate limit ended the run: **120 of the 124 do not run as uid 1000**, and 87 of
+those declare no non-root user at all, which `restricted` refuses outright.
+Separately, **51 of the catalogue's 334 services listen on a port below 1024** —
+WordPress, Nextcloud, Vaultwarden, GitLab, MediaWiki, phpMyAdmin — and with
+every capability dropped, no `CAP_NET_BIND_SERVICE`, and containerd leaving
+`net.ipv4.ip_unprivileged_port_start` at the kernel default of 1024 where Docker
+sets it to 0, not one of them could bind its port. The product's front page was
+a catalogue that mostly could not start, and nothing anywhere said so.
+
+The fix is three parts.
+
+**The uid is pinned only for an image Skifity built.** For anybody else's, the
+`USER` the image declares is the right answer, and leaving the field unset is
+how you say that.
+
+**A low port gets one safe sysctl.** `net.ipv4.ip_unprivileged_port_start: "0"`
+is narrower than handing back `CAP_NET_BIND_SERVICE`: it lets this pod's
+processes bind a low port in this pod's own network namespace and grants no
+capability to anything. Kubernetes has called it safe since 1.22 — namespaced,
+unable to affect another pod or the node — so no kubelet configuration is needed,
+and it is on the list both the baseline and the restricted profile allow.
+
+**The confinement level belongs to the environment**, defaulting to the strict
+one, changed by an admin under the project. At the lower level a third-party
+image may start as root and keeps the runtime's default capability set, because
+an image that drops to its own user calls setuid and needs `CAP_SETUID` and
+`CAP_SETGID` — dropping ALL from a root container breaks the very images the
+level exists to run. Everything else stays refused at both levels: privileged
+containers, host namespaces, host paths, capabilities beyond the runtime's set,
+and gaining privileges the process did not start with. An app Skifity built is
+held to the strict rules at either level. And a lowered namespace still carries
+`audit` and `warn` at `restricted`, so lowering the bar does not also turn off
+the measurement.
+
+The kubelet's own words for the failure are `container has runAsNonRoot and
+image will run as root`, which reads like a fault in the image. It is not, and
+the panel now replaces it with the sentence that names the switch.
+
+## Phase 42 — the front door, built
+
+## The repository itself
+
+`CONTRIBUTING.md` and a pull request template, which a repository this size
+should have had from the start, and the README's documentation table now lists
+all ten pages the panel serves rather than eight.
+
+## Next tasks
+
+1. `make verify-remote HOST=root@…` on a server somebody is willing to rebuild.
+   It installs, deploys an application from Git, and works through the phases in
+   `docs/checklist.md`. Measure idle memory while it is up. Everything below is
+   worth less than this.
+2. Tag a release. `docs/releasing.md`; everything it needs is in place, and what
+   it waits on is the run above rather than a decision.
+3. Phase 6: give somebody `docs/quick-start.md` and nothing else, and fill in
+   `docs/walkthrough.md` while they use it.
+4. Publish a plugin store at `plugins.skifity.com`: an `index.json`, its
+   signature, and the public key in the documentation. The panel reads one
+   already; nothing is there to read.
+
+## Open issues
+
+* **Nothing has ever run against a real cluster.** `test/smoke` holds exactly
+  two scripts — the panel and the installer — and neither touches Kubernetes.
+  This entry used to say the cluster smoke tests "exist and are reviewed, not
+  executed", and `panel.sh` used to name four of them in its header. They were
+  never written. Everything that talks to a cluster — `internal/cluster`,
+  `internal/deploy`, `internal/dbsvc`, `internal/backup`, the parts of
+  `internal/kube` beyond manifest generation — is checked against the objects it
+  renders and against a fake clientset, never against an API server. That is the
+  largest single gap in this repository, it is a consequence of ADR-0010, and
+  writing scripts that could not be run here would have widened it rather than
+  closed it.
+* **Nothing has been released.** No tag, so nothing at
+  `ghcr.io/skifity/skifity` and no version to put in the one-line install.
+  Where it publishes is settled and derived from one line (Phase 64); what is
+  missing is the tag, and `docs/releasing.md` is the procedure. The installer
+  knows it is unreleased and refuses before k3s is installed rather than after.
+  The working path is still to clone, `make image`, and run
+  `installer/install.sh` from inside the clone with `SKIFITY_IMAGE` set, which
+  makes it read `deploy/*.yaml` from disk; the README, `llms.txt` and the quick
+  start say so where the one-line command is.
+* **The default branch is the working branch.** The project lives at
+  `github.com/Skifity/Skifity` (moved from `TegarTheGreat/Skifity`, which
+  redirects), and its default branch is `claude/eloquent-shannon-12qxje`, the
+  one it was built on. Nothing depends on the name — the installer reads its
+  manifests from the release's own ref — but renaming it to `main` before the
+  first release is the owner's call and costs nothing now.
+* **No plugin has ever actually run.** The manifest standard, the permission
+  model, the rendered Kubernetes objects, the event delivery and the blocking
+  verdicts are unit-tested. Whether a real plugin image starts in the namespace
+  this renders, and whether an event reaches it over a real cluster network, has
+  not been tried — ADR-0010 again. There is a page for it — installed plugins,
+  a store catalogue, inspect before install, settings, uninstall — and no store
+  for that page to read: nothing is published at `plugins.skifity.com`. All ten
+  events the standard declares are sent as of Phase 68; before that, eight of
+  them never were.
+* **The firewall has never been through a live Traefik.** The rules engine, the
+  address handling, the geo lookup, the guard's decisions and the rendered
+  Kubernetes objects are unit-tested, and the country and network lookups were
+  checked against the real DB-IP databases. Whether Traefik loads the middleware
+  and forwards what the guard reads needs a cluster, which is ADR-0010 again.
+* **The confinement levels have never been enforced by a real API server.**
+  The rendered pod specs, the namespace labels and the rules that choose between
+  them are unit-tested; whether the kubelet accepts the sysctl and whether a
+  root image then starts needs a cluster, which is the same gap as everything
+  else in ADR-0010.
+* **The Cloudflare tunnel has never reached Cloudflare.** The manifests, the
+  refusal without a token, the validator and the rollover on a changed token are
+  unit-tested; connecting requires a real Cloudflare account, which this sandbox
+  does not have. It is the same gap as everything else in ADR-0010, and it is
+  named in `docs/adding-servers.md` where the instructions are.
+* The interface test needs a Chromium. It uses one already on the machine when
+  `CHROMIUM_PATH` is set, and CI installs its own.
+* k3s's memory footprint is not measured; the panel's is, in
+  `docs/performance.md`.
+* There is no shell into a running instance, and this is a decision rather than
+  a gap. A one-off command runs in the app's own image with the app's own
+  variables, can be watched, leaves a log, and works when the app will not
+  start — which is when people reach for a shell. See `docs/roadmap.md`.
+* A volume backup is a tar taken while the app runs, not a snapshot, so a file
+  being written at that moment can be caught half-written. `docs/backups.md`
+  says so and says what to do instead.
+* The nixpacks builder is written and unit-tested and has never been run: like
+  everything else that needs a cluster, it is checked against the rendered Job
+  and not against a build. Railpack is the default and the one the product is
+  designed around.
+* The frontend is 509 kB of the panel's own code, 145 kB compressed, beside
+  vendor chunks a browser keeps across upgrades. Served from the binary on the
+  same host, so it is not the problem it would be over a CDN.
+
+## Phase 71 — the plugin system did not have a job
+
+Ten events and nothing else. A plugin could be told a deploy succeeded and, in
+one case, refuse one. That was the whole standard.
+
+It was tested the only way a plugin system can be, by trying to name a plugin
+worth writing. Preview environments per pull request, uptime monitoring with a
+status page, a mail service for every app, error tracking from the logs: every
+one of them is a **core feature** of a platform-as-a-service, and not one of
+them is a plugin. What the standard could express were small operational
+conveniences — a deploy freeze, an automatic rollback, mirroring a backup. A
+plugin system whose best ideas all belong in the panel does not have a job.
+
+The cause is structural, and ADR-0021 records it: a plugin could add nothing to
+the system and change nothing in it. It could only react, and a system that can
+only react produces only small things.
+
+### The other direction
+
+A manifest now has `provides`. The panel owns the feature and the plugin owns
+the vendor: Skifity knows what a notification is, when to send one and what goes
+in it, and does not know what Slack is. The panel calls `/provide` on the
+plugin's container, signed with the same key as an event, and **uses the
+answer**.
+
+Three judgements are the opposite of the event half's, because somebody is
+waiting rather than nobody:
+
+* A failure is returned rather than logged, so an alert that did not go out is
+  a person who is told so.
+* A plugin refusing is a different error from a plugin being unreachable, and
+  they get different words.
+* `200` with an empty body is a failure. Reading silence as success is how a
+  channel quietly delivers nothing for a month.
+
+The panel keeps each configured instance's settings, sealed with its own
+keyring, and sends them with every call. A provider plugin has no database and
+no credential of its own.
+
+### Notification channels, all the way to the form
+
+`internal/notify` was a closed switch of four: Telegram, Discord, a webhook,
+email. Adding Slack meant editing the binary and cutting a release.
+
+A kind a plugin provides is now validated, listed, chosen, filled in and
+delivered. The list of kinds is read from the panel instead of being written
+into the frontend, and the plugin's own form is drawn from its manifest — all
+five field kinds, not just the two the built-ins use. Stopping at the API would
+have been the same defect this repository has now found eight times: a channel
+that can be stored and never picked.
+
+A stored kind is `plugin:<plugin id>/<provider id>`, both halves, because two
+plugins may each provide a `slack`. A channel whose plugin has been removed
+stops working and says which plugin to look for; it does not go somewhere else.
+
+### The gate, and why there is only one kind
+
+A test reads the vocabulary of kinds and actions and the panel's own source, and
+fails the build when one lists something the other never asks for. It was proved
+by adding a `storage.bucket` kind wired to nothing: both halves of the gate
+caught it.
+
+So the list has one kind. The ones that are obviously missing — a DNS provider,
+a backup destination, a git source, an identity provider — are each a real place
+where the panel is hardcoded to one vendor or to none, and each is blocked on
+the panel asking for it first. That order is the point. A kind that can be
+declared and is never called is a plugin that installs, is approved, and waits
+for a request nobody makes, with no way for its author to find out.
+
+### Still true
+
+No plugin has ever been run. What is proved is the manifest, the validation, the
+signature, the call, the resolution and the seam — by tests, against a fake
+plugin server, not against a container in a cluster. See ADR-0010.
+
+## Phase 72 — an audit of the parts nothing had swept
+
+Eleven faults, in the packages no earlier phase had read end to end, and a
+note on what was read and found sound.
+
+### A scheduled command could break the app it belongs to
+
+Three faults in one path, and the worst of them was structural. The panel
+validated a schedule with its own parser and handed the raw string to
+Kubernetes, which parses it with a different one. Cron has two spellings for
+Sunday and this parser accepts both, so `0 3 * * 7` — an ordinary way to write
+it — was accepted, stored, shown with a next-run time the panel worked out, and
+refused by the API server.
+
+That refusal then failed the whole deployment, *after* the app's own objects had
+been applied: the panel recorded as failed a deployment the cluster was busy
+completing, and one schedule the API server would not take blocked every future
+deploy of that app for ever. A refused command is now a line in the deployment
+log and the app still goes out.
+
+`NextRun` scanned one year, so `0 0 29 2 *` was reported as a schedule that
+never fires.
+
+### A half-finished firewall rule blocked everybody
+
+Deleting the last condition out of an "all of" group sends `{"all":[]}`. The
+engine read that as "no conditions", which means match everything — so a block
+rule somebody was halfway through writing matched every request, locking them
+out of the app or out of this panel, which the same engine protects. Nothing on
+the screen said so.
+
+The package comment claimed "an empty Any is false". It was not, and it could
+not be: after a round trip through the stored JSON an empty Any and an empty All
+are the same value.
+
+### One header chose which firewall rules applied
+
+`internal/edgerules/clientip.go` opens by naming the two ways to get the
+client's address wrong, and then the address was the only thing guarded.
+`X-Forwarded-Host` selects the rule set, and a hostname with no rules is allowed
+through — so one header naming a hostname nobody protects, from any client,
+left no rules to fail. `X-Forwarded-Uri` and `X-Forwarded-Method` were the same
+shape.
+
+A header can also arrive twice, and `Get` answers with the first — the client's,
+with the proxy's line behind it unread.
+
+### Six goroutines could end the whole panel
+
+`internal/runsafe` exists because a panic in any goroutine ends the process, and
+its package comment listed the goroutines that had been fixed. The list was
+written by hand and six were missing: an app's own log output being scrubbed on
+its way to a browser, the fan-out to every open tab, an event posted to somebody
+else's plugin container, the two SSH readers, the guard, and the panel's own
+listener.
+
+Three of them could not simply recover — a goroutine whose job is to send on a
+channel turns a crash into a wait that never ends — so those send the failure
+instead. The list is now computed by a test rather than remembered, and it found
+the last two by itself.
+
+### Upgrading a password hash wrote eleven columns
+
+Signing in upgrades a hash made with older parameters, and did it with
+`UpdateUser`, which writes the whole row from whatever the caller last read —
+a copy read before the password had even been checked. Anything changed in
+between was put back, including whether the account is disabled. The write's
+error was discarded too, so a rehash that never landed looked exactly like one
+that did.
+
+### The image sweep half-read a reference it could not read
+
+`RepoAndTag` split on the last colon, and a digest reference has a colon of its
+own: `ns/app@sha256:abc` read as the repository `ns/app@sha256`. Latent rather
+than live — what it invents speaks for a repository the registry does not have —
+but it is a violated contract in the one place that decides which images are
+deleted, and the failure it sets up is an image removed while an app is still
+running it.
+
+### Building from a private repository was broken outright
+
+The clone script built the credential into a variable and expanded it unquoted,
+under a comment saying it held "the two -c words this script built itself". It
+held four: the header's value is `Authorization: Basic <token>`, which has two
+spaces in it, so git was handed a word of the header where it expects a
+subcommand. Every build from a private repository failed, with an error that
+says nothing about credentials.
+
+The test covering that line asserted the broken text verbatim, which is how it
+survived. Reading a shell script can only confirm its text.
+
+### A dump that produced nothing was uploaded as a backup
+
+The check that a backup was worth keeping happened after gzip, and compressing
+an empty file gives about twenty bytes — which every "is this file non-empty"
+test accepts. A dump tool that produced nothing while reporting success left a
+backup that was uploaded, recorded, listed as available, and found to be
+worthless on the day somebody needed it.
+
+### A corrupt backup half-restored and reported success
+
+The restore was `gzip -dc backup.gz | psql`. `set -e` reads only the last
+command in a pipeline, so psql succeeded on whatever little reached it. With a
+dump taken `--clean --if-exists`, part of a restore is tables dropped and not
+put back: data lost, reported as success, by the one operation somebody runs
+precisely because they cannot afford to lose any.
+
+The backup side spells this exact rule out in a comment and avoids the
+pipeline. The restore side did not follow it.
+
+### Nothing was checking any of the shell
+
+That is the thread through the last three. The panel writes shell programs and
+runs them in other people's clusters, and no linter had ever read one — while
+the clone script carried `# shellcheck disable=SC2086`, silencing precisely the
+warning that names its bug, for a tool that was not installed anywhere in the
+repository or in CI.
+
+`make lint-shell` now checks the scripts that are files, and CI installs
+shellcheck and may not skip it. `internal/shellgen` checks the twenty-five
+scripts that are not files, by rendering every job through its exported builder
+and reading the scripts back out of the containers.
+
+Its threshold is `style`, which is everything, and that is not fussiness: SC2086
+is reported at `info`, so a threshold of `warning` — which sounds like the
+sensible middle, and was the first thing written here — lets through the one
+finding the check exists for. That was not reasoned out; it was found by putting
+the broken script back and watching the check pass.
+
+### Gitea's signature was checked against the secret itself
+
+`X-Gitea-Signature` is an HMAC-SHA256 of the body in hex. It was checked with
+the function that compares a header against the webhook secret — a secret
+against a digest, two values that can never be equal — so a push from a Gitea
+that sends only that header was always rejected, and the message sent the
+operator to check a secret that was correct.
+
+Which rule verified a push was also chosen by a header on the request, and the
+sender chooses the headers. No bypass followed, because every path still needs
+the secret, but the rule that applies to a connection should not be selectable
+by the person being checked. It comes from the connection's own kind now.
+
+### What was read and found sound
+
+An audit that only lists faults reads as if everything else was skipped. These
+were read as closely as the rest and are right:
+
+* **The plugin store.** The index is verified before it is parsed, an empty key
+  means the catalogue comes back marked unsigned rather than silently trusted,
+  and the interface says which it was in two places. The promise is kept end to
+  end.
+* **Fork detection.** Whether a preview environment is handed the project's
+  secrets turns on it, and both parsers fail safe: anything missing counts as a
+  fork. The GitLab side had no test for that case, which is the shape somebody
+  probing would send, so it has one now.
+* **The MCP server.** It goes through the API rather than the store, so
+  authorization is where it should be, and it exposes nothing destructive — no
+  delete, no server removal. A deliberate line, and the right one.
+* **Scale to zero.** The HPA stands down when KEDA is in charge, the interceptor
+  Service names the port the interceptor actually listens on, and the target
+  port matches the app's own Service.
+* **The geo databases.** Bounded download, atomic rename, no archive extraction,
+  and the only names it writes are this panel's own.
+* **The template catalogue.** 283 templates behind ten gates, including one that
+  checks the catalogue is what the README says ships. Phase 20.2's claim holds.
+* **The export.** Secret values are left out and the rendered Kubernetes objects
+  do not include the environment Secret, so the note at the top of the file is
+  true.
+
+### Left alone on purpose
+
+An app that flaps — a readiness probe on the edge — gets a notification each
+time it crosses, both ways, once a minute. The state in the database stops a
+repeated *same* state being sent twice, which is what it was built for, but
+there is no hysteresis. The result is a channel somebody mutes, and a muted
+channel is the failure notifications exist to prevent.
+
+It is not changed here because how many minutes of quiet make a recovery real
+is a product decision, not a bug fix, and guessing at it would replace a known
+gap with an unknown one. Written down rather than silently patched.
+
+### How they were found
+
+Three habits, no cleverness.
+
+Reading each unswept package against its own comments, which is where five of
+the ten announced themselves: the code did not do what the paragraph above it
+said. The restore pipeline is the clearest — the rule it breaks is written out,
+in full, forty lines higher up.
+
+Running things instead of reading them. A shell script's behaviour is not in its
+text: the clone and the restore both read correctly and both were wrong. They
+are tested now by running them against a stub `git` and a stub `psql` and
+reading what those were actually given.
+
+And source-scanning tests, which found two faults nobody was looking for.
+
+Every fix was proved by breaking it again and watching the test name the
+failure. That is also how the shellcheck threshold was found to be wrong.
+
+## Phase 73 — somebody who has never deployed anything
+
+The question this phase started from: somebody built an app with an assistant,
+and has never deployed anything. What happens when they try? Two answers, and
+neither was good.
+
+### The first deploy crashed on a setting nothing had set
+
+Detection said "Next.js" and nothing about what the app would reach for. An app
+that uses PostgreSQL started, read an empty `DATABASE_URL` and crashed, and
+making a database, linking it and deploying again were three screens in an
+order nobody new would guess. Data kept in SQLite or a JSON file worked — for an
+hour, until the next deploy replaced the container and the file with it,
+silently.
+
+Detection now reads what the app needs as well as how to build it
+(`internal/builder/needs.go`): database drivers per ecosystem, a Prisma schema's
+provider and the variable it reads, Django's default SQLite, Laravel's
+`DB_CONNECTION`, a committed `.sqlite` file, and the names in `.env.example`.
+Each finding carries the package and the file it came from, so the form can say
+*why*. The form ticks the databases the panel can make, and creating the app
+creates and links them **before** the first deploy, so the first start finds
+them. A database it cannot make (MongoDB) is named rather than dropped, and data
+in a file is a warning in amber. A test checks the panel's list of engines it
+can make against `internal/dbsvc`, so the form never offers one it cannot.
+
+The real `.env` is never read from a repository — a test holds that line — and a
+pasted one goes through the same rule as every variable. That rule changed too:
+saying nothing about whether a value is secret used to mean "not a secret", so
+a pasted `STRIPE_SECRET_KEY` was stored in the clear. Silence now means "decide
+from the key and the value", with the same `logging.LooksSecret` the log
+redaction uses.
+
+### There was no way in without a repository
+
+Every way into the panel started with a repository URL, and the app is a folder.
+`skifity up` deploys the folder: it reads it with the same detector, creates
+the app the first time with its databases made and linked, offers to set the
+`.env`'s values as variables (never sending the file), sends the folder, deploys
+and prints the address. `skifity.toml` links the folder to the app, and running
+it again only sends and deploys. The MCP server has the same thing as
+`deploy_folder`, which tells an assistant to ask before sending somebody's
+`.env`.
+
+What is sent follows `.gitignore`, read the way git reads it, per directory,
+with negation; `.skifityignore` adds to it. `.git`, `node_modules`, every real
+`.env` and the project file are left out whatever an ignore file says. The
+archive is deterministic — sorted, fixed times — because its hash is the
+deployment's "commit" and part of the build fingerprint (ADR-0007): a file that
+was only touched must not rebuild. Run from a subfolder, it sends the whole app
+rather than replacing the app with the corner the terminal was in.
+
+On the panel, `internal/upload` refuses everything unsafe to unpack before a
+byte is stored: absolute paths, `..`, links, device files, a `.env`, and bounds
+on entries and on unpacked size. A refusal says which rule, in the reader's own
+language, rather than one English sentence passed through. Uploads live beside
+the panel's database, ten per app, removed with the app, and swept hourly for
+apps that went with a deleted project in one cascade.
+
+The build cannot fetch the code — the build namespace may not reach the panel,
+on purpose — so the panel brings it (ADR-0022): an upload build's first
+container waits, and the panel execs into it and streams the archive to `tar`.
+Its readiness is read from the init container's own state, because a pod stays
+`Pending` while an init container runs, and waiting for `Running` would be two
+things waiting for each other.
+
+`apps.source_type` had a `CHECK` naming three sources, and SQLite cannot change
+one in place. The migrator learned SQLite's documented table rebuild, with
+foreign keys off on one connection around the transaction — without which
+dropping the old table cascades into every deployment, variable and domain,
+inside a migration that reports success. A test puts rows into the old schema,
+migrates, and checks they are all there and that the cascades work again after.
+It was proved by running the rebuild with foreign keys on and watching the
+deployments disappear.
+
+### Without a terminal either
+
+A CLI still assumes a terminal, and the panel only serves a Linux binary. So the
+new-app form has a third source, **A folder on my computer**: the browser packs
+the folder itself — a tar written in TypeScript, gzipped with the browser's own
+`CompressionStream` — and the panel detects from the archive
+(`POST /api/teams/{team}/detect-upload`, nothing stored) and shows the same
+detection, databases and settings a repository gets. The folder's `.env` is read
+into the settings box, where it can be seen and changed before anything is sent,
+and goes as variables. The app page of an uploaded app has **Send a new
+version**.
+
+What is sent is decided twice — Go for the CLI, TypeScript for the browser — so
+both are held to one fixture, `internal/cli/testdata/ignore-cases.json`: the Go
+test and `npm run check:ignore` read it, `make check` and CI run both. The
+third case's expected answer was checked against `git add --dry-run` rather
+than written from memory. The browser's archive was checked by feeding it to
+the panel's own Go reader: long names, non-ASCII names and the executable bit
+come through. A browser cannot see an executable bit, so `gradlew`, `mvnw`,
+`*.sh` and `bin/` are given one.
+
+The one browser test gained a step: a real folder picked in Chromium, the counts
+shown, the `.env` offered and not uploaded, the app created, its variable stored
+secret, and its deploy naming the upload's hash. Writing it found the one bug a
+reading would not have: the picker cleared its input straight after handing
+over the `FileList`, which is live, so every folder arrived empty.
+
+### A CLI for the computer people actually have
+
+The panel handed out the binary it was running, which is Linux. The Mac or
+Windows laptop most people deploy from got a file that would not run. The image
+now builds the other five platforms beside the panel's own (from the same
+commit, gzipped, about 90 MB together), `/api/cli/download?os=&arch=` serves
+them — the two values checked against a closed list before either touches a
+path — and `/api/meta` says which it has. The new-app page shows the commands
+for the visitor's own platform, with a selector. The Dockerfile's build loop was
+run as written, with `sh`, since there is no Docker here: the host's platform is
+skipped and the macOS build comes out a Mach-O binary.
+
+Not done: `Dockerfile.release`, the image GoReleaser packages, still carries
+only its own binary. Wiring GoReleaser's cross-builds into that context has
+never been run, and the file says so rather than copying a path nobody checked.
+A panel from that image answers `cli.platform_unavailable`, which names what it
+has and says the browser path needs no CLI at all.
+
+A database created with an app now owns the variable it is linked as: a pasted
+`DATABASE_URL` pointing at somebody's `localhost` is left out, by the API
+rather than by each client, and the form says so.
+
+### Found on the way
+
+`test/cluster/verify.sh` read the created app's id with `pick id`, and the
+answer is `{"app": {...}}`. `make verify` would have died at its first step,
+and the check that a failing app sends a notification silently skipped itself.
+It has never been run, which is why nobody knew; it now also deploys a folder,
+so the exec delivery is exercised there the next time it is.
+
+A CLI error said "run `skifity link`", a command that does not exist.
+
+### CI had been red since the day the frontend tests changed
+
+The Go job in CI runs `go test ./...` without building the frontend, and two
+tests in `web/` served the embedded build — which, in that job, is an empty
+directory. They failed there on 28 of the last 40 pushes. `make check` passed
+the whole time, because on a machine where the frontend had ever been built
+the directory was full: the gate and CI disagreed about what they were testing,
+which CLAUDE.md names as a gate with a hole in it. The handler now takes the
+file system it serves, and the tests hand it a small built frontend of their
+own, so they check the same thing with or without `npm run build`.
+
+It was found because every Dependabot pull request showed a red cross, the
+two-line prettier bump included — the one thing all of them had in common was
+the branch underneath.
+
+### A home of its own
+
+The repository moved to the Skifity organisation, which the project did not own
+when `scripts/check-home.sh` was written to forbid `skifity/skifity` for that
+reason. It does now, so the rule is turned round: `Skifity/Skifity` and
+`ghcr.io/skifity/skifity` are the home, `PROJECT_REPO` in the installer and the
+Makefile say so, and the old owner's name is what the check refuses — a
+redirect is a courtesy that ends the day anything is created at the old name,
+and an install that went through it would end with it. The move happened before
+the first release, so nothing published under the old name has to be chased.
+
+### Not executed
+
+The exec stream into a build pod needs an API server. Both scripts at either
+end are run against each other in tests (delivery, a stream cut halfway, a
+build nobody delivers to), the pod-state logic is tested from pod statuses, and
+the smoke test drives `skifity up` against the real binary up to the build.
+The build itself from an upload is phase 1 of `make verify`, and has not run.
+
+## Idle resource usage
+
+`docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
+400 requests, 39 MiB of binary. k3s's own footprint is not measured here, for
+the same reason as everything else that needs a cluster.

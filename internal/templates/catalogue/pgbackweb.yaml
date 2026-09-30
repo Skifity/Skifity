@@ -1,0 +1,25 @@
+id: pgbackweb
+name: Pgbackweb
+description: Effortless PostgreSQL backups with a user-friendly web interface!.
+category: developer
+website: https://github.com/eduardolat/pgbackweb
+services:
+- name: pgbackweb
+  image: eduardolat/pgbackweb:0.5.2
+  port: 8085
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: pgbackweb-backups
+    mount_path: /backups
+    size_gb: 5
+databases:
+- name: pgbackweb-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - pgbackweb
+  var_name: DATABASE_URL

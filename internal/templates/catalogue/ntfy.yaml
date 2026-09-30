@@ -1,0 +1,26 @@
+id: ntfy
+name: Ntfy
+description: ntfy is a simple HTTP-based pub-sub notification service. It allows you to send notifications
+  to your phone or desktop via scripts from any computer, and/or using a REST API.
+category: communication
+website: https://docs.ntfy.sh/
+services:
+- name: ntfy
+  image: binwiederhier/ntfy:v2.28
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+    NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+    NTFY_WEB_PUSH_FILE: /var/cache/ntfy/webpush.db
+  volumes:
+  - name: ntfy-cache
+    mount_path: /var/cache/ntfy
+    size_gb: 5
+  - name: ntfy-db
+    mount_path: /var/lib/ntfy/
+    size_gb: 5

@@ -1,0 +1,28 @@
+id: changedetection
+name: Changedetection
+description: Website change detection monitor and notifications.
+category: monitoring
+website: https://github.com/dgtlmoon/changedetection.io/
+services:
+- name: changedetection
+  image: ghcr.io/dgtlmoon/changedetection.io:0.60
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: changedetection-data
+    mount_path: /datastore
+    size_gb: 5
+- name: browser-sockpuppet-chrome
+  image: dgtlmoon/sockpuppetbrowser:0.0.3
+  port: 3000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

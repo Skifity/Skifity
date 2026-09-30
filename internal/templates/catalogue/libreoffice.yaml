@@ -1,0 +1,18 @@
+id: libreoffice
+name: Libreoffice
+description: LibreOffice is a free and powerful office suite.
+category: productivity
+website: https://docs.linuxserver.io/images/docker-libreoffice/
+services:
+- name: libreoffice
+  image: linuxserver/libreoffice:25.8.7
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: libreoffice-config
+    mount_path: /config
+    size_gb: 5

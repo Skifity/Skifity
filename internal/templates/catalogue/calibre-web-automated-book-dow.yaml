@@ -1,0 +1,41 @@
+id: calibre-web-automated-book-dow
+name: Calibre Web Automated Book Downloader
+description: An intuitive web interface for searching and requesting book downloads, designed to work
+  seamlessly with Calibre-Web-Automated.
+category: media
+website: https://github.com/calibrain/calibre-web-automated-book-downloader
+services:
+- name: calibre-web-automated
+  image: crocodilestick/calibre-web-automated:v4.0.6
+  port: 8083
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: cwa-config
+    mount_path: /config
+    size_gb: 5
+  - name: cwa-book-ingest
+    mount_path: /cwa-book-ingest
+    size_gb: 5
+- name: calibre-web-downloader
+  image: ghcr.io/calibrain/calibre-web-automated-book-downloader:1.0
+  port: 8084
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: cwa-book-ingest
+    mount_path: /cwa-book-ingest
+    size_gb: 5
+  - name: cwa-config
+    mount_path: /cwa-config
+    size_gb: 5
+notes: In the original this stack shares /cwa-book-ingest between calibre-web-automated and calibre-web-downloader.
+  Skifity gives each app storage of its own, so those are separate directories here. If the apps need
+  to see the same files, point them at object storage — MinIO is in this catalogue — rather than a path.
+  This template installs 2 apps. They reach each other by name inside the environment, so keep them together.

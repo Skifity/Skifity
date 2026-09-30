@@ -1,0 +1,18 @@
+id: glance
+name: Glance
+description: A self-hosted dashboard that puts all your feeds in one place.
+category: productivity
+website: https://github.com/glanceapp/glance
+services:
+- name: glance
+  image: glanceapp/glance:v0.8.6
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: glance-assets
+    mount_path: /user/assets
+    size_gb: 5

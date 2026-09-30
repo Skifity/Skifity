@@ -1,0 +1,72 @@
+name: CodeQL
+
+# A second pair of eyes that is not the ones that wrote this.
+#
+# docs/roadmap.md has asked for an independent look at the security model since
+# Phase 17, and "somebody who did not write any of this" is hard to arrange for
+# a project with one author. CodeQL is not a person, but it is a different
+# analyser with a different model of the code, it reads taint from source to
+# sink across packages, and it reports into the repository's Security tab where
+# a finding cannot be quietly forgotten.
+#
+# It is its own workflow rather than a step in CI: it takes minutes rather than
+# seconds, and a scheduled run finds a query that was added after the commit.
+
+on:
+  # Every branch, like ci.yml, not just main.
+  #
+  # This said `branches: ["main"]` on the day it was added, and this repository
+  # has no main: the work is on a branch, and Dependabot opens its pull requests
+  # against that branch. So the scan never ran once — a second pair of eyes that
+  # was switched off, which looks exactly like a second pair of eyes. The first
+  # green pull request is what made it visible: eight checks passed and CodeQL
+  # was not one of them.
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly, so a new query reaches old code. Wednesday, away from the hour
+    # everybody else schedules.
+    - cron: "17 5 * * 3"
+
+permissions:
+  contents: read
+
+jobs:
+  analyse:
+    name: Analyse ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: autobuild
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        if: matrix.language == 'go'
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended adds the queries that are right more often than
+          # not but noisier than the default set. On a codebase this size the
+          # noise is a morning; a missed taint path is a CVE.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

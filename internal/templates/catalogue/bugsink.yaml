@@ -1,0 +1,23 @@
+id: bugsink
+name: Bugsink
+description: Self-hosted Error Tracking.
+category: monitoring
+website: https://www.bugsink.com/docs/
+services:
+- name: web
+  image: bugsink/bugsink:2.6
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    BEHIND_HTTPS_PROXY: 'True'
+databases:
+- name: bugsink-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - web
+  var_name: DATABASE_URL

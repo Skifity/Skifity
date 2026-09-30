@@ -1,0 +1,29 @@
+id: tolgee
+name: Tolgee
+description: Tolgee is a localization management platform for developers and translators.
+category: productivity
+website: https://tolgee.io/
+services:
+- name: tolgee
+  image: tolgee/tolgee:v3.224.0
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TOLGEE_AUTHENTICATION_ENABLED: 'true'
+    TOLGEE_AUTHENTICATION_INITIAL_USERNAME: admin
+    TOLGEE_POSTGRES_AUTOSTART_ENABLED: 'false'
+  volumes:
+  - name: tolgee-data
+    mount_path: /data
+    size_gb: 5
+databases:
+- name: tolgee-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - tolgee
+  var_name: DATABASE_URL

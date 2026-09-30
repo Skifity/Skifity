@@ -1,0 +1,18 @@
+id: home-assistant
+name: Home Assistant
+description: Open source home automation that puts local control and privacy first.
+category: automation
+website: https://www.home-assistant.io/installation/linux#docker-compose
+services:
+- name: homeassistant
+  image: ghcr.io/home-assistant/home-assistant:2025.10.2
+  port: 8123
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: homeassistant-config
+    mount_path: /config
+    size_gb: 5

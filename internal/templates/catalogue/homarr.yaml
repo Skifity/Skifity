@@ -1,0 +1,14 @@
+id: homarr
+name: Homarr
+description: Homarr is a self-hosted homepage for your services.
+category: productivity
+website: https://homarr.dev
+services:
+- name: homarr
+  image: ghcr.io/homarr-labs/homarr:v1.40.0
+  port: 7575
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

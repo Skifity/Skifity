@@ -1,0 +1,21 @@
+id: inngest
+name: Inngest
+description: Durable workflow engine for background jobs, queues and scheduled tasks.
+category: automation
+website: https://www.inngest.com/docs/self-hosting
+services:
+- name: inngest
+  image: inngest/inngest:v1.27.0
+  port: 8288
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: inngest-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - inngest
+  var_name: DATABASE_URL

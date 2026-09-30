@@ -1,0 +1,16 @@
+id: foundryvtt
+name: Foundryvtt
+description: Foundry Virtual Tabletop is a self-hosted & modern roleplaying platform.
+category: productivity
+website: https://foundryvtt.com/kb/
+services:
+- name: foundryvtt
+  image: felddy/foundryvtt:14.367
+  port: 30000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CONTAINER_CACHE: /data/container_cache

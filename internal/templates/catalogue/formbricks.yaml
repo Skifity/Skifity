@@ -1,0 +1,45 @@
+id: formbricks
+name: Formbricks
+description: Open Source Survey Platform.
+category: productivity
+website: https://formbricks.com/docs/self-hosting/setup/docker
+services:
+- name: formbricks
+  image: ghcr.io/formbricks/formbricks:4.5.0
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    S3_REGION: us-east-1
+    S3_BUCKET_NAME: formbricks
+    S3_FORCE_PATH_STYLE: '1'
+  volumes:
+  - name: formbricks-uploads
+    mount_path: /apps/web/uploads/
+    size_gb: 5
+- name: minio
+  image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+  port: 9000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: formbricks-minio-data
+    mount_path: /data
+    size_gb: 5
+databases:
+- name: formbricks-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - formbricks
+  var_name: DATABASE_URL
+notes: 'This stack has a set-up step that runs once and exits — minio-init. Skifity runs apps, not one-shot
+  containers, so that step is not installed: do it yourself from the app''s Commands tab, or follow the
+  project''s own instructions, before expecting everything to work. This template installs 2 apps. They
+  reach each other by name inside the environment, so keep them together.'

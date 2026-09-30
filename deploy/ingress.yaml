@@ -1,0 +1,27 @@
+# The panel's route in, over plain HTTP.
+#
+# Used when the panel has no real domain yet and is reached at an sslip.io
+# hostname. Let's Encrypt will issue for sslip.io, but the whole internet
+# shares that domain's rate limit, so a certificate is requested only once a
+# domain of your own is configured: see ingress-tls.yaml.
+#
+# Placeholders: __NAMESPACE__, __HOST__
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: skifity-panel
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+spec:
+  rules:
+    - host: __HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: skifity-panel
+                port:
+                  name: http

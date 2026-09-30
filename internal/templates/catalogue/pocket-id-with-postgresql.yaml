@@ -1,0 +1,27 @@
+id: pocket-id-with-postgresql
+name: Pocket Id With Postgresql
+description: A simple and secure OIDC provider with passkey authentication.
+category: security
+website: https://pocket-id.org/docs/setup/installation
+services:
+- name: pocket-id
+  image: ghcr.io/pocket-id/pocket-id:v1.13
+  port: 1411
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_PROVIDER: postgres
+  volumes:
+  - name: pocket-id-data
+    mount_path: /app/data
+    size_gb: 5
+databases:
+- name: pocket-id-with-postgresql-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - pocket-id
+  var_name: DATABASE_URL

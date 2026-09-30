@@ -1,0 +1,30 @@
+id: checkmate
+name: Checkmate
+description: An open source server and websites monitoring application.
+category: monitoring
+website: https://docs.checkmate.so/
+services:
+- name: checkmate
+  image: ghcr.io/bluewave-labs/checkmate-backend-mono-multiarch:v3.2.0
+  port: 52345
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_CONNECTION_STRING: mongodb://mongodb:27017/uptime_db
+- name: mongodb
+  image: ghcr.io/bluewave-labs/checkmate-mongo:v3.2.0
+  port: 27017
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: checkmate-mongo
+    mount_path: /data/db
+    size_gb: 5
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

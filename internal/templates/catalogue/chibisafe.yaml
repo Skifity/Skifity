@@ -1,0 +1,47 @@
+id: chibisafe
+name: Chibisafe
+description: A beautiful and performant vault to save all your files in the cloud.
+category: storage
+website: https://chibisafe.app/docs/intro
+services:
+- name: chibisafe
+  image: chibisafe/chibisafe:v6.5.5
+  port: 8001
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    BASE_API_URL: http://chibisafe-server:8000
+- name: chibisafe-server
+  image: chibisafe/chibisafe-server:v6.5.5
+  port: 8000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: chibisafe-database
+    mount_path: /app/database
+    size_gb: 5
+  - name: chibisafe-uploads
+    mount_path: /app/uploads
+    size_gb: 5
+- name: caddy
+  image: caddy:2-alpine
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: uploads
+    mount_path: /app/uploads
+    size_gb: 5
+notes: In the original this stack shares /app/uploads between caddy and chibisafe-server. Skifity gives
+  each app storage of its own, so those are separate directories here. If the apps need to see the same
+  files, point them at object storage — MinIO is in this catalogue — rather than a path. This template
+  installs 3 apps. They reach each other by name inside the environment, so keep them together.

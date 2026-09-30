@@ -1,0 +1,21 @@
+id: vault
+name: Vault
+description: HashiCorp Vault securely stores and controls access to secrets.
+category: security
+website: https://developer.hashicorp.com/vault/docs/deploy/run-container
+services:
+- name: vault
+  image: hashicorp/vault:2.1
+  port: 8200
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    VAULT_ADDR: http://127.0.0.1:8200
+    VAULT_LOCAL_CONFIG: '{"ui":true,"disable_mlock":true,"storage":{"file":{"path":"/vault/file"}},"listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":true}}}'
+  volumes:
+  - name: vault-data
+    mount_path: /vault/file
+    size_gb: 5

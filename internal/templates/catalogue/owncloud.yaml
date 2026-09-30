@@ -1,0 +1,27 @@
+id: owncloud
+name: Owncloud
+description: OwnCloud with Open Web UI integrates file management with a powerful, user-friendly interface.
+category: storage
+website: https://owncloud.com/docs-guides/
+services:
+- name: owncloud
+  image: owncloud/server:11.0.0
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    OWNCLOUD_DB_TYPE: mysql
+  volumes:
+  - name: owncloud-data
+    mount_path: /mnt/data
+    size_gb: 5
+databases:
+- name: owncloud-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - owncloud
+  var_name: DATABASE_URL

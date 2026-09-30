@@ -1,0 +1,18 @@
+id: trailbase
+name: Trailbase
+description: A blazingly fast Rust/SQLite/Wasmtime app server with type-safe APIs.
+category: developer
+website: https://trailbase.io/
+services:
+- name: trailbase
+  image: trailbase/trailbase:0.22.6
+  port: 4000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: trailbase-data
+    mount_path: /app/traildepot
+    size_gb: 5

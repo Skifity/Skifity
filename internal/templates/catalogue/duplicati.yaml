@@ -1,0 +1,24 @@
+id: duplicati
+name: Duplicati
+description: Duplicati is a backup solution, allowing you to make scheduled backups with encryption.
+category: storage
+website: https://duplicati.readthedocs.io
+services:
+- name: duplicati
+  image: linuxserver/duplicati:2.4.0
+  port: 8200
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: duplicati-config
+    mount_path: /config
+    size_gb: 5
+  - name: duplicati-backups
+    mount_path: /backups
+    size_gb: 5

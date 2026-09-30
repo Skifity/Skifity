@@ -1,0 +1,18 @@
+id: cyberchef
+name: Cyberchef
+description: The Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
+category: security
+website: https://github.com/gchq/CyberChef
+services:
+- name: cyberchef
+  image: ghcr.io/gchq/cyberchef:11.4
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: cyberchef-data
+    mount_path: /app/data
+    size_gb: 5

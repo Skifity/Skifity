@@ -1,0 +1,37 @@
+id: n8n
+name: n8n
+description: Workflow automation you host yourself, with hundreds of integrations.
+category: automation
+website: https://n8n.io
+services:
+- name: n8n
+  image: n8nio/n8n:1
+  port: 5678
+  health_path: /healthz
+  variables:
+    DB_TYPE: postgresdb
+    GENERIC_TIMEZONE: UTC
+    N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: 'true'
+    N8N_PROTOCOL: https
+  volumes:
+  - name: data
+    mount_path: /home/node/.n8n
+    size_gb: 2
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  public: true
+databases:
+- name: n8n-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - n8n
+  var_name: DB_POSTGRESDB_URL
+inputs:
+- key: N8N_ENCRYPTION_KEY
+  label: Encryption key
+  help: n8n encrypts stored credentials with this. Losing it means losing them.
+  secret: true
+  generate: true

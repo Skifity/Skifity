@@ -1,0 +1,192 @@
+# The panel's own Kubernetes objects.
+#
+# The installer fills in the values below and applies this file. It is also a
+# perfectly good `kubectl apply -f` target for anyone who prefers to install by
+# hand: replace each value and apply.
+#
+# Values:
+#   __NAMESPACE__   the namespace the panel runs in
+#   __IMAGE__       the panel image, including its tag
+#   __NODE__        the node the panel is pinned to
+#   __PUBLIC_URL__  how people reach the panel, used for webhook URLs
+#   __POD_NETWORK__ the flannel backend this cluster was installed with
+#   __CONFIG_DIR__  the host directory holding the master key
+#   __DATA_DIR__    the host directory holding the database
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+    app.kubernetes.io/part-of: skifity
+    # The panel needs host paths, so it cannot run under the restricted
+    # profile that every tenant namespace is held to.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: skifity-panel
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+automountServiceAccountToken: true
+---
+# The panel is granted cluster-admin, and it is worth being explicit about why
+# rather than shipping a narrower role that quietly breaks.
+#
+# It creates and deletes namespaces for every environment, and it installs
+# cluster components on demand: cert-manager, CloudNativePG, KEDA and Longhorn
+# each define CustomResourceDefinitions and their own ClusterRoles. Granting
+# the right to create a ClusterRole is equivalent to cluster-admin anyway,
+# because a subject that can create roles can grant itself anything.
+#
+# The isolation that matters is between tenants, and that is enforced on the
+# namespaces the panel creates: restricted Pod Security, a ResourceQuota that
+# refuses LoadBalancer and NodePort Services, and default-deny NetworkPolicies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: skifity-panel
+  labels:
+    app.kubernetes.io/name: skifity
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: skifity-panel
+    namespace: __NAMESPACE__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skifity-panel
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+    app.kubernetes.io/component: panel
+spec:
+  replicas: 1
+  # SQLite and the master key live on one node's disk, so a second copy of the
+  # panel would be reading a file it does not own. Recreate rather than
+  # RollingUpdate: two panels must never run at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skifity
+      app.kubernetes.io/component: panel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: skifity
+        app.kubernetes.io/component: panel
+    spec:
+      serviceAccountName: skifity-panel
+      # Pinned to the node whose disk holds the database and the master key.
+      nodeSelector:
+        kubernetes.io/hostname: __NODE__
+      # The panel has to keep running while the cluster is being repaired, which
+      # is exactly when a control plane node is tainted.
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: panel
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SKIFITY_LISTEN
+              value: ":8080"
+            - name: SKIFITY_NAMESPACE
+              value: __NAMESPACE__
+            - name: SKIFITY_PUBLIC_URL
+              value: "__PUBLIC_URL__"
+            - name: SKIFITY_LOG_FORMAT
+              value: json
+            # The pod network the installer started this cluster with. The panel
+            # records it once and installs every server it adds later with the
+            # same one, because nodes that disagree never reach each other.
+            - name: SKIFITY_POD_NETWORK
+              value: "__POD_NETWORK__"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              # No CPU limit: throttling the panel makes a cluster that is
+              # already struggling impossible to fix from the browser.
+              memory: 512Mi
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /api/ready, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/skifity
+            - name: data
+              mountPath: /var/lib/skifity
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Host paths rather than a PVC: the panel must come up before any
+        # storage provisioner does, because a broken provisioner is something
+        # you fix from the panel.
+        - name: config
+          hostPath:
+            path: __CONFIG_DIR__
+            type: Directory
+        - name: data
+          hostPath:
+            path: __DATA_DIR__
+            type: Directory
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skifity-panel
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: skifity
+    app.kubernetes.io/component: panel
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

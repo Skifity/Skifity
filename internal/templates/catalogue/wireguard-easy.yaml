@@ -1,0 +1,20 @@
+id: wireguard-easy
+name: Wireguard Easy
+description: The easiest way to run WireGuard VPN + Web-based Admin UI.
+category: security
+website: https://github.com/wg-easy/wg-easy
+services:
+- name: wg-easy
+  image: ghcr.io/wg-easy/wg-easy:15.4
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    WG_PORT: '51820'
+  volumes:
+  - name: wg-easy
+    mount_path: /etc/wireguard
+    size_gb: 5

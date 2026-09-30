@@ -1,0 +1,21 @@
+id: superset-with-postgresql
+name: Superset With Postgresql
+description: Modern data exploration and visualization platform (unofficial community docker image).
+category: analytics
+website: https://github.com/amancevice/docker-superset
+services:
+- name: superset
+  image: amancevice/superset:6.0.0
+  port: 8088
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: superset-with-postgresql-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - superset
+  var_name: DATABASE_URL

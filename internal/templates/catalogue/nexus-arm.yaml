@@ -1,0 +1,22 @@
+id: nexus-arm
+name: Nexus Arm
+description: 'Open source Universal Repository Manager (ARM version, community edition), default credentials:
+  admin/admin123.'
+category: developer
+website: https://help.sonatype.com/en/sonatype-nexus-repository.html
+services:
+- name: nexus
+  image: sonatypecommunity/nexus3:3.77.2
+  port: 8081
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NEXUS_SECURITY_RANDOMPASSWORD: 'false'
+    INSTALL4J_ADD_VM_PARAMS: -Xms2703m -Xmx2703m -XX:MaxDirectMemorySize=2703m -Djava.util.prefs.userRoot=/nexus-data/javaprefs
+  volumes:
+  - name: nexus-data
+    mount_path: /nexus-data
+    size_gb: 5

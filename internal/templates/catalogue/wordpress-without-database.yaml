@@ -1,0 +1,18 @@
+id: wordpress-without-database
+name: Wordpress Without Database
+description: WordPress is open source software you can use to create a beautiful website, blog, or app.
+category: cms
+website: https://wordpress.org
+services:
+- name: wordpress
+  image: wordpress:7.1
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: wordpress-files
+    mount_path: /var/www/html
+    size_gb: 5

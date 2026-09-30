@@ -1,0 +1,61 @@
+id: argilla
+name: Argilla
+description: Argilla is a collaboration tool for AI engineers and domain experts who need to build high-quality
+  datasets for their projects.
+category: ai
+website: https://docs.argilla.io/latest/
+services:
+- name: argilla
+  image: argilla/argilla-server:v2.2.0
+  port: 6900
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ARGILLA_HOME_PATH: /var/lib/argilla
+    ARGILLA_ELASTICSEARCH: http://elasticsearch:9200
+  volumes:
+  - name: argilla-data
+    mount_path: /var/lib/argilla
+    size_gb: 5
+- name: worker
+  image: argilla/argilla-server:v2.2.0
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ARGILLA_HOME_PATH: /var/lib/argilla
+    ARGILLA_ELASTICSEARCH: http://elasticsearch:9200
+  volumes:
+  - name: argilla-data
+    mount_path: /var/lib/argilla
+    size_gb: 5
+- name: elasticsearch
+  image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+  port: 9200
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: elasticsearch-data
+    mount_path: /usr/share/elasticsearch/data/
+    size_gb: 5
+databases:
+- name: argilla-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - argilla
+  - worker
+  var_name: DATABASE_URL
+notes: In the original this stack shares /var/lib/argilla between argilla and worker. Skifity gives each
+  app storage of its own, so those are separate directories here. If the apps need to see the same files,
+  point them at object storage — MinIO is in this catalogue — rather than a path. This template installs
+  3 apps. They reach each other by name inside the environment, so keep them together.

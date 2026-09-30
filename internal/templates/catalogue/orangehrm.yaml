@@ -1,0 +1,25 @@
+id: orangehrm
+name: Orangehrm
+description: OrangeHRM open source HR management software.
+category: productivity
+website: https://starterhelp.orangehrm.com/hc/en-us
+services:
+- name: orangehrm
+  image: orangehrm/orangehrm:5.9
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: orangehrm-data
+    mount_path: /orangehrm
+    size_gb: 5
+databases:
+- name: orangehrm-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - orangehrm
+  var_name: DATABASE_URL

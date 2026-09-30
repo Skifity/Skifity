@@ -1,0 +1,26 @@
+id: directus
+name: Directus
+description: Directus wraps databases with a dynamic API, and provides an intuitive app for managing its
+  content.
+category: cms
+website: https://directus.io
+services:
+- name: directus
+  image: directus/directus:11
+  port: 8055
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_CLIENT: sqlite3
+    DB_FILENAME: /directus/database/data.db
+    WEBSOCKETS_ENABLED: 'true'
+  volumes:
+  - name: directus-database
+    mount_path: /directus/database
+    size_gb: 5
+  - name: directus-uploads
+    mount_path: /directus/uploads
+    size_gb: 5

@@ -1,0 +1,18 @@
+id: dashy
+name: Dashy
+description: A self-hostable personal dashboard built for you. Includes status-checking, widgets, themes,
+  icon packs, a UI editor and tons more!.
+category: productivity
+website: https://dashy.to/docs
+services:
+- name: dashy
+  image: lissy93/dashy:4.6
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'

@@ -1,0 +1,29 @@
+id: mindsdb
+name: Mindsdb
+description: MindsDB is the platform for building AI from enterprise data, enabling smarter organizations.
+category: ai
+website: https://docs.mindsdb.com/what-is-mindsdb
+services:
+- name: mindsdb
+  image: mindsdb/mindsdb:v26.1.0
+  port: 47334
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SERVICE_FQDN_API_47335: /api
+    MINDSDB_DOCKER_ENV: 'true'
+    MINDSDB_STORAGE_DIR: /mindsdb/var
+  volumes:
+  - name: mindsdb-data
+    mount_path: /mindsdb/var
+    size_gb: 5
+databases:
+- name: mindsdb-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - mindsdb
+  var_name: DATABASE_URL

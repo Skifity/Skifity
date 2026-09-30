@@ -1,0 +1,30 @@
+id: invoice-ninja
+name: Invoice Ninja
+description: The leading open-source invoicing platform.
+category: finance
+website: https://invoiceninja.github.io/selfhost.html
+services:
+- name: invoice-ninja
+  image: invoiceninja/invoiceninja:5
+  port: 9000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    IS_DOCKER: 'true'
+  volumes:
+  - name: invoice-ninja-public
+    mount_path: /var/www/app/public
+    size_gb: 5
+  - name: invoice-ninja-storage
+    mount_path: /var/www/app/storage
+    size_gb: 5
+databases:
+- name: invoice-ninja-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - invoice-ninja
+  var_name: DATABASE_URL

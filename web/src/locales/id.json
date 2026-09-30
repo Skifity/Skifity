@@ -1,0 +1,2247 @@
+{
+  "common": {
+    "save": "Simpan",
+    "saving": "Menyimpan...",
+    "cancel": "Batal",
+    "clear": "Hapus",
+    "delete": "Hapus",
+    "remove": "Keluarkan",
+    "close": "Tutup",
+    "navigation": "Navigasi",
+    "navigationHelp": "Navigasi panel, sebagai laci pada layar kecil.",
+    "create": "Buat",
+    "edit": "Ubah",
+    "add": "Tambah",
+    "retry": "Coba lagi",
+    "back": "Kembali",
+    "next": "Lanjut",
+    "done": "Selesai",
+    "confirm": "Konfirmasi",
+    "search": "Cari",
+    "loading": "Memuat...",
+    "copy": "Salin",
+    "copied": "Tersalin",
+    "copyForAI": "Salin error untuk AI",
+    "showAdvanced": "Lanjutan",
+    "hideAdvanced": "Sembunyikan lanjutan",
+    "optional": "opsional",
+    "required": "wajib",
+    "beta": "Beta",
+    "yes": "Ya",
+    "no": "Tidak",
+    "on": "Aktif",
+    "off": "Nonaktif",
+    "none": "Tidak ada",
+    "unknown": "Tidak diketahui",
+    "never": "Belum pernah",
+    "learnMore": "Pelajari lebih lanjut",
+    "openDocs": "Buka dokumentasi",
+    "refresh": "Muat ulang",
+    "viewAll": "Lihat semua",
+    "actions": "Tindakan",
+    "name": "Nama",
+    "status": "Status",
+    "created": "Dibuat",
+    "updated": "Diperbarui",
+    "type": "Jenis",
+    "size": "Ukuran",
+    "of": "dari",
+    "and": "dan",
+    "instance_other": "{{count}} instance",
+    "server_other": "{{count}} server",
+    "app_other": "{{count}} aplikasi",
+    "day_other": "{{count}} hari",
+    "justNow": "baru saja",
+    "minutesAgo_other": "{{count}} menit lalu",
+    "hoursAgo_other": "{{count}} jam lalu",
+    "daysAgo_other": "{{count}} hari lalu",
+    "typeToConfirm": "Ketik {{phrase}} untuk mengonfirmasi",
+    "deleteNamed": "Hapus {{name}}?",
+    "cannotBeUndone": "Tindakan ini tidak bisa dibatalkan.",
+    "keepGoing": "Lanjutkan",
+    "noMatches": "Tidak ada yang cocok",
+    "noMatchesHelp": "Coba kata kunci yang lebih pendek, atau hapus filternya.",
+    "more": "Lainnya",
+    "toggleSidebar": "Tampilkan atau sembunyikan bilah sisi",
+    "skipToContent": "Lewati ke konten",
+    "breadcrumb": "Jejak navigasi",
+    "dismiss": "Tutup",
+    "copyFailed": "Papan klip tidak tersedia di sini.",
+    "copyValue": "Salin {{name}}",
+    "show": "Tampilkan",
+    "hide": "Sembunyikan"
+  },
+  "nav": {
+    "overview": "Ringkasan",
+    "projects": "Proyek",
+    "apps": "Aplikasi",
+    "databases": "Database",
+    "servers": "Server",
+    "templates": "Template",
+    "activity": "Aktivitas",
+    "settings": "Pengaturan",
+    "account": "Akun",
+    "signOut": "Keluar",
+    "commandPalette": "Cari atau langsung ke...",
+    "theme": "Tema",
+    "themeLight": "Terang",
+    "themeDark": "Gelap",
+    "themeSystem": "Ikuti sistem",
+    "language": "Bahasa",
+    "documentation": "Dokumentasi",
+    "plugins": "Plugin"
+  },
+  "auth": {
+    "signIn": "Masuk",
+    "signingIn": "Sedang masuk...",
+    "email": "Email",
+    "password": "Kata sandi",
+    "currentPassword": "Kata sandi saat ini",
+    "newPassword": "Kata sandi baru",
+    "twoFactorCode": "Kode dua faktor",
+    "twoFactorPrompt": "Masukkan kode enam digit dari aplikasi autentikator Anda.",
+    "signInTitle": "Masuk ke {{product}}",
+    "signInSubtitle": "Aplikasi Anda, di server milik Anda sendiri.",
+    "forgotPassword": "Lupa kata sandi?",
+    "forgotPasswordHelp": "Panel yang di-hosting sendiri tidak mengirim email reset. Pulihkan akses langsung dari server: lihat panduan pemecahan masalah.",
+    "setupTitle": "Selamat datang di {{product}}",
+    "setupSubtitle": "Buat akun pertama. Hanya butuh satu menit.",
+    "setupToken": "Token setup",
+    "setupTokenHelp": "Installer menampilkannya. Token ini juga tersimpan di /etc/skifity/setup-token pada server.",
+    "yourName": "Nama Anda",
+    "teamName": "Nama tim",
+    "teamNameHelp": "Bisa diubah nanti. Proyek dan server dimiliki oleh sebuah tim.",
+    "createAccount": "Buat akun",
+    "creatingAccount": "Membuat akun Anda...",
+    "recoveryKeyTitle": "Simpan kunci pemulihan Anda",
+    "recoveryKeyIntro": "Kunci ini bisa mendekripsi semua rahasia yang disimpan {{product}}. Tanpa kunci ini, cadangan yang dipulihkan tidak bisa dibaca.",
+    "recoveryKeyWarning": "Kunci ini hanya ditampilkan sekali. Simpan di tempat aman dan offline, bukan di panel ini.",
+    "recoveryKeyConfirm": "Saya sudah menyimpannya di tempat aman",
+    "recoveryKeyReminder": "Anda belum menyimpan kunci pemulihan.",
+    "download": "Unduh",
+    "enableTwoFactor": "Aktifkan autentikasi dua faktor",
+    "twoFactorIntro": "Pindai kode ini dengan aplikasi autentikator, lalu masukkan kode yang muncul.",
+    "twoFactorSecret": "Atau masukkan kode ini secara manual",
+    "twoFactorConfirm": "Aktifkan",
+    "twoFactorSkip": "Lewati dulu",
+    "twoFactorEnabled": "Autentikasi dua faktor aktif",
+    "twoFactorDisable": "Nonaktifkan",
+    "recoveryCodesTitle": "Simpan kode pemulihan Anda",
+    "recoveryCodesIntro": "Setiap kode dapat dipakai sekali untuk masuk jika ponsel Anda hilang. Kode hanya ditampilkan sekarang.",
+    "recoveryCodesLeft_other": "Sisa {{count}} kode pemulihan",
+    "recoveryCodesNone": "Kode pemulihan habis. Matikan lalu nyalakan lagi autentikasi dua faktor untuk mendapat kode baru.",
+    "recoveryCodesRegenerate": "Buat kode baru",
+    "recoveryCodesReplaced": "Kode lama Anda akan berhenti berlaku.",
+    "sessions": "Perangkat yang masuk",
+    "currentSession": "Perangkat ini",
+    "revokeSession": "Keluarkan",
+    "apiTokens": "Token API",
+    "apiTokensHelp": "Token memungkinkan CLI dan asisten AI bertindak atas nama Anda. Beri nama agar mudah dibedakan.",
+    "newToken": "Token baru",
+    "tokenName": "Untuk apa token ini?",
+    "tokenShownOnce": "Token hanya ditampilkan sekali. Salin sekarang.",
+    "revokeToken": "Cabut",
+    "subtitle": "Cara Anda masuk, perangkat tempat Anda masuk, dan token yang bertindak atas nama Anda.",
+    "twoFactorTitle": "Autentikasi dua faktor",
+    "twoFactorOff": "Nonaktif. Hanya kata sandi yang memisahkan siapa pun dari klaster ini.",
+    "or": "atau",
+    "signInWithSSO": "Masuk dengan single sign-on",
+    "ssoError": {
+      "refused": "Proses masuk itu ditolak. Coba lagi, atau masuk dengan kata sandi.",
+      "no_account": "Anda belum punya akun di panel ini. Minta administrator mengundang Anda.",
+      "state": "Proses masuk itu tidak kembali seperti saat berangkat. Mulai lagi.",
+      "expired": "Proses masuk itu terlalu lama. Mulai lagi.",
+      "disabled": "Akun itu telah dinonaktifkan di panel ini."
+    },
+    "teamNameExample": "Nusantara",
+    "revokeSessionConfirm": "{{device}} akan keluar dan harus masuk lagi.",
+    "revokeTokenConfirm": "Token {{name}} langsung berhenti berfungsi.",
+    "revokeTokenConsequence": "Token tidak bisa dikembalikan. Apa pun yang memakainya — skrip, pipeline deploy, asisten — akan gagal sampai diberi token baru.",
+    "reauth": {
+      "title": "Pastikan ini memang Anda",
+      "description": "Tindakan ini memerlukan kata sandi Anda lagi. Sudah masuk tidak sama dengan sedang berada di depan papan ketik.",
+      "confirm": "Konfirmasi"
+    },
+    "signOutEverywhere": "Keluar dari perangkat lain",
+    "signOutEverywhereConfirm": "Semua perangkat lain yang masuk ke akun ini akan dikeluarkan. Perangkat ini tetap masuk.",
+    "signedOutEverywhereDone": "Semua perangkat lain sudah dikeluarkan."
+  },
+  "dashboard": {
+    "title": "Ringkasan",
+    "welcome": "Selamat datang kembali",
+    "noServers": "Belum ada server",
+    "noServersHelp": "Tambahkan server pertama Anda dan {{product}} akan mengubahnya menjadi cluster. Anda hanya perlu alamat IP dan kata sandi.",
+    "addFirstServer": "Tambah server",
+    "noApps": "Belum ada yang di-deploy",
+    "noAppsHelp": "Deploy dari repositori Git, dari image container, atau mulai dari template.",
+    "deployFirstApp": "Deploy aplikasi",
+    "clusterHealth": "Cluster",
+    "clusterUnreachable": "Cluster tidak merespons",
+    "clusterUnreachableHelp": "Aplikasi Anda tetap berjalan. {{product}} belum bisa melakukan perubahan sampai cluster bisa dihubungi lagi.",
+    "highAvailability": "Tahan terhadap kegagalan satu server",
+    "notHighlyAvailable": "Satu server control plane",
+    "notHighlyAvailableHelp": "Dengan tiga server control plane, cluster tetap bekerja meski salah satunya mati.",
+    "cpuUsed": "CPU terpakai",
+    "memoryUsed": "Memori terpakai",
+    "recentActivity": "Aktivitas terbaru",
+    "nothingYet": "Belum ada aktivitas.",
+    "welcomeBack": "Selamat datang kembali, {{name}}."
+  },
+  "activity": {
+    "subtitle": "Apa yang berubah di tim ini, terbaru dulu.",
+    "empty": "Belum ada apa-apa",
+    "emptyHelp": "Semua yang dilakukan orang di tim ini muncul di sini saat terjadi.",
+    "action": {
+      "app.command_run": "Perintah dijalankan",
+      "app.created": "Aplikasi dibuat",
+      "app.deleted": "Aplikasi dihapus",
+      "app.deploy_started": "Deployment dimulai",
+      "app.job_created": "Perintah terjadwal ditambahkan",
+      "app.job_deleted": "Perintah terjadwal dihapus",
+      "app.job_updated": "Perintah terjadwal diubah",
+      "app.restarted": "Aplikasi dimulai ulang",
+      "app.rolled_back": "Dikembalikan ke versi sebelumnya",
+      "app.scaling_changed": "Penskalaan diubah",
+      "app.updated": "Pengaturan aplikasi diubah",
+      "auth.login": "Masuk",
+      "auth.login_sso": "Masuk dengan single sign-on",
+      "auth.logout": "Keluar",
+      "auth.password_changed": "Kata sandi diubah",
+      "auth.session_revoked": "Sesi dicabut",
+      "auth.totp_disabled": "Dua faktor dimatikan",
+      "auth.totp_enabled": "Dua faktor diaktifkan",
+      "backup.policy_changed": "Jadwal pencadangan diubah",
+      "backup.restore_started": "Pemulihan dimulai",
+      "backup.started": "Pencadangan dimulai",
+      "component.installed": "Komponen dipasang",
+      "database.created": "Database dibuat",
+      "database.credentials_viewed": "Kredensial database dilihat",
+      "database.deleted": "Database dihapus",
+      "database.linked": "Database dihubungkan",
+      "database.unlinked": "Database dilepas",
+      "deployment.cancelled": "Deployment dibatalkan",
+      "domain.added": "Domain ditambahkan",
+      "domain.removed": "Domain dihapus",
+      "environment.created": "Environment dibuat",
+      "environment.deleted": "Environment dihapus",
+      "environment.pod_security_changed": "Pembatasan diubah",
+      "firewall.updated": "Firewall diubah",
+      "git_source.created": "Akun Git dihubungkan",
+      "git_source.deleted": "Akun Git dihapus",
+      "notification.created": "Saluran notifikasi ditambahkan",
+      "notification.deleted": "Saluran notifikasi dihapus",
+      "operation.cancelled": "Operasi dibatalkan",
+      "panel.upgrade_started": "Pembaruan panel dimulai",
+      "plugin.configured": "Pengaturan plugin diubah",
+      "plugin.installed": "Plugin dipasang",
+      "plugin.switched": "Plugin dinyalakan atau dimatikan",
+      "plugin.uninstalled": "Plugin dihapus",
+      "project.created": "Proyek dibuat",
+      "project.deleted": "Proyek dihapus",
+      "project.updated": "Proyek diubah",
+      "security.key_rotated": "Kunci utama dirotasi",
+      "security.recovery_key_viewed": "Kunci pemulihan dilihat",
+      "server.add_started": "Menambahkan server",
+      "server.promote_started": "Mempromosikan server",
+      "server.remove_started": "Menghapus server",
+      "server.retry": "Server dicoba lagi",
+      "server.updated": "Server diubah",
+      "settings.updated": "Pengaturan diubah",
+      "setup.completed": "Panel disiapkan",
+      "shared_variable.deleted": "Variabel bersama dihapus",
+      "shared_variable.set": "Variabel bersama diatur",
+      "team.created": "Tim dibuat",
+      "team.exported": "Tim diekspor",
+      "team.invitation_revoked": "Undangan dicabut",
+      "team.invited": "Undangan dikirim",
+      "team.member_added": "Anggota ditambahkan",
+      "team.member_removed": "Anggota dihapus",
+      "team.updated": "Tim diubah",
+      "template.installed": "Template dipasang",
+      "token.created": "Token API dibuat",
+      "token.revoked": "Token API dicabut",
+      "variable.deleted": "Variabel dihapus",
+      "variable.set": "Variabel diatur",
+      "volume.created": "Volume dibuat",
+      "volume.deleted": "Volume dihapus",
+      "auth.reauthenticated": "Membuktikan identitasnya kembali",
+      "auth.sessions_revoked": "Mengeluarkan semua perangkat lain",
+      "git_source.webhook_registered": "Webhook didaftarkan di repositori",
+      "app.source_uploaded": "Mengunggah kode aplikasi"
+    }
+  },
+  "projects": {
+    "title": "Proyek",
+    "subtitle": "Setiap aplikasi dan database berada di dalam sebuah proyek, pada salah satu environment-nya.",
+    "newProject": "Proyek baru",
+    "projectName": "Nama proyek",
+    "description": "Deskripsi",
+    "environments": "Environment",
+    "newEnvironment": "Environment baru",
+    "environmentName": "Nama environment",
+    "production": "Produksi",
+    "preview": "Pratinjau",
+    "previewFor": "Pratinjau untuk {{ref}}",
+    "empty": "Belum ada proyek",
+    "emptyHelp": "Proyek mengelompokkan aplikasi dan database yang saling berkaitan.",
+    "sharedVariables": "Variabel bersama",
+    "sharedVariablesHelp": "Semua aplikasi di proyek ini menerimanya. Sebuah aplikasi bisa menimpanya dengan variabel miliknya sendiri.",
+    "canvas": "Kanvas",
+    "canvasHelp": "Bagaimana aplikasi dan database di proyek ini saling terhubung.",
+    "deleteProject": "Hapus proyek",
+    "deleteProjectWarning": "Ini menghapus semua aplikasi, database, dan volume di dalamnya. Tindakan ini tidak bisa dibatalkan.",
+    "quota": "Batas lingkungan ini",
+    "quotaHelp": "Berapa banyak dari jatah lingkungan ini yang sudah terpakai. Deploy yang melebihi batas akan ditolak.",
+    "quotaFull": "Lingkungan ini sudah mencapai batas. Instance baru tidak akan jalan sampai ada yang dibebaskan atau batasnya dinaikkan.",
+    "quotaResource": {
+      "requests.cpu": "CPU dipesan",
+      "requests.memory": "Memori dipesan",
+      "pods": "Instance",
+      "requests.storage": "Penyimpanan"
+    }
+  },
+  "schedule": {
+    "label": "Jadwal",
+    "everyHour": "Setiap jam",
+    "everyDay": "Setiap hari pukul 03:00 UTC",
+    "everyWeek": "Setiap Senin pukul 03:00 UTC",
+    "everyMonth": "Setiap tanggal 1 pukul 03:00 UTC",
+    "custom": "Khusus…",
+    "customLabel": "Ekspresi cron",
+    "customHelp": "Lima kolom cron dalam UTC: menit, jam, tanggal, bulan, hari."
+  },
+  "apps": {
+    "title": "Aplikasi",
+    "newApp": "Aplikasi baru",
+    "newAppSubtitle": "Deploy dari repositori Git atau folder di komputer Anda, atau jalankan image kontainer yang sudah Anda punya.",
+    "startFromTemplate": "Mulai dari template",
+    "appName": "Nama aplikasi",
+    "source": "Sumber",
+    "sourceGit": "Repositori Git",
+    "sourceImage": "Image container",
+    "sourceTemplate": "Template",
+    "repository": "Repositori",
+    "repositoryPlaceholder": "https://github.com/anda/aplikasi-anda",
+    "branch": "Branch",
+    "rootDirectory": "Direktori utama",
+    "rootDirectoryHelp": "Untuk monorepo: folder tempat aplikasi ini berada.",
+    "image": "Image",
+    "imagePlaceholder": "nginx:1.27-alpine",
+    "port": "Port",
+    "portHelp": "Port yang didengarkan aplikasi Anda. Sebagian besar framework membacanya dari variabel PORT, yang sudah diatur oleh {{product}}.",
+    "healthPath": "Path health check",
+    "healthPathHelp": "Path yang mengembalikan 200 saat aplikasi siap melayani, misalnya /healthz.",
+    "startCommand": "Perintah start",
+    "dockerfilePath": "Lokasi Dockerfile",
+    "startCommandHelp": "Kosongkan untuk memakai perintah start bawaan image.",
+    "builder": "Builder",
+    "builderAuto": "Deteksi otomatis",
+    "builderDockerfile": "Dockerfile",
+    "deployOnPush": "Deploy saat saya push",
+    "previewEnvironments": "Environment pratinjau per pull request",
+    "previewEnvironmentsHelp": "Setiap pull request mendapat salinannya sendiri dengan URL sendiri, dan dihapus saat pull request ditutup.",
+    "empty": "Belum ada aplikasi di environment ini",
+    "emptyHelp": "Deploy dari Git, jalankan image container, atau mulai dari template.",
+    "overview": "Ringkasan",
+    "deployments": "Deployment",
+    "logs": "Log",
+    "logsLive": "Langsung",
+    "logsPrevious": "Sebelum mulai ulang",
+    "logsPreviousHelp": "Kontainer yang berjalan sebelum yang sekarang. Saat aplikasi terus mulai ulang, di sinilah alasannya tercatat.",
+    "logsPreviousNone": "Aplikasi ini belum pernah mulai ulang, jadi tidak ada log sebelumnya.",
+    "variables": "Variabel",
+    "domains": "Domain",
+    "scaling": "Penskalaan",
+    "storage": "Penyimpanan",
+    "advanced": "Lanjutan",
+    "settings": "Pengaturan",
+    "deploy": "Deploy",
+    "deploying": "Men-deploy...",
+    "restart": "Mulai ulang",
+    "restartConfirm": "Mulai ulang semua instance? Trafik tetap jalan: instance diganti satu per satu.",
+    "deleteApp": "Hapus aplikasi",
+    "deleteAppWarning": "Ini menghentikan dan menghapus aplikasi. Volume tetap disimpan, sehingga datanya tidak hilang.",
+    "instances": "Instance",
+    "instancesReady": "Instance siap",
+    "instanceName": "Instance",
+    "restarts": "Mulai ulang",
+    "node": "Server",
+    "noInstances": "Tidak ada instance yang berjalan.",
+    "noInstancesTitle": "Belum ada yang berjalan",
+    "noInstancesHelp": "{{action}}, di bagian atas halaman ini, membangun aplikasi dan menjalankan instance pertamanya.",
+    "phase": {
+      "running": "Berjalan",
+      "starting": "Menyala",
+      "updating": "Memperbarui",
+      "pending": "Menunggu kapasitas",
+      "crashing": "Sering berhenti",
+      "unhealthy": "Tidak ada instance yang berjalan",
+      "failed": "Gagal",
+      "stopped": "Berhenti",
+      "not_deployed": "Belum di-deploy",
+      "unknown": "Tidak diketahui",
+      "created": "Belum di-deploy",
+      "sleeping": "Tidur"
+    },
+    "runCommand": "Jalankan perintah",
+    "noOutputYet": "Belum ada keluaran",
+    "noOutputYetHelp": "Hasil cetak sebuah perintah akan muncul di sini.",
+    "nothingScheduled": "Belum ada jadwal",
+    "runCommandHelp": "Dijalankan sekali, di image aplikasi ini, dengan variabel aplikasi ini. Migrasi, pengisian data, atau sekadar melihat data.",
+    "run": "Jalankan",
+    "running": "Menjalankan...",
+    "runningHelp": "Perintah sedang berjalan. Keluarannya muncul di sini setelah selesai.",
+    "runNoOutput": "Perintah selesai tanpa menampilkan apa pun.",
+    "console": "Konsol",
+    "releaseCommand": "Perintah rilis",
+    "releaseCommandHelp": "Dijalankan pada setiap penerapan, setelah build dan sebelum ada lalu lintas mencapai versi baru. Di sinilah migrasi seharusnya: jika gagal, penerapan berhenti dan versi yang sedang melayani tetap melayani.",
+    "scheduledCommands": "Perintah terjadwal",
+    "scheduledCommandsHelp": "Laporan harian, pembersihan tiap jam. Masing-masing berjalan sendiri, di image aplikasi ini, sesuai jadwal yang Anda beri.",
+    "scheduledNamePlaceholder": "laporan harian",
+    "scheduleHelp": "Lima kolom cron, dalam UTC. \"0 3 * * *\" berarti setiap hari pukul 03.00.",
+    "schedule": "Jadwal",
+    "detect": "Periksa repositori ini",
+    "detected": "Ini sepertinya {{what}}.",
+    "detectedMaybe": "Ini mungkin {{what}}. Tidak ada yang diisi otomatis — periksa kolom di bawah.",
+    "detectedPartly": "Repositorinya besar, jadi hanya bagian atasnya yang dibaca.",
+    "composeFound": "Berkas Compose ini punya {{count}} layanan. Pilih layanan untuk aplikasi ini:",
+    "composeFound_other": "Berkas Compose ini punya {{count}} layanan. Pilih layanan untuk aplikasi ini:",
+    "composeBuilt": "dibangun dari repositori",
+    "composePort": "mendengarkan di {{port}}",
+    "composeVariables": "{{count}} variabel",
+    "composeVariables_other": "{{count}} variabel",
+    "composeRest": "Buat layanan lainnya dengan cara yang sama, di lingkungan ini. Mereka saling terhubung lewat nama, dan itulah yang menggantikan tautan di berkas Compose.",
+    "builderStatic": "Berkas statis",
+    "lastBackup": "Cadangan terakhir",
+    "firewall": "Firewall",
+    "address": "alamat",
+    "detail": {
+      "sleeping": "Aplikasi ini tidur karena tidak ada yang memakainya. Permintaan berikutnya menyalakannya lagi.",
+      "stopped": "Aplikasi ini diskalakan ke nol instance.",
+      "not_deployed": "Aplikasi ini belum pernah di-deploy."
+    },
+    "mountPath": "Lokasi mount",
+    "sizeGB": "Ukuran (GB)",
+    "volumeHelp": "Disk yang bertahan melewati deployment. File yang ditulis aplikasi di luar disk ini hilang saat instance dimulai ulang. Ukurannya bisa diperbesar nanti, tapi tidak bisa diperkecil.",
+    "noVolumes": "Belum ada disk",
+    "noVolumesHelp": "Aplikasi memakai disk kalau filenya harus bertahan melewati deployment — unggahan, database yang dijalankan sendiri, cache yang sayang dibuang.",
+    "addVolume": "Tambah disk",
+    "deleteVolumeConfirm": "Ini menghapus disk yang di-mount di {{path}} beserta seluruh isinya.",
+    "deleteVolumeConsequence": "Filenya tidak bisa dikembalikan setelah ini. Ambil cadangan dulu kalau masih mungkin dibutuhkan.",
+    "deleteVolumeLastBackup": "Cadangan terakhir disk ini yang berhasil adalah {{when}}. Semua yang ditulis setelah itu ikut hilang.",
+    "deleteVolumeNeverBackedUp": "Disk ini belum pernah dicadangkan. Seluruh isinya hilang selamanya.",
+    "buildCommand": "Perintah build",
+    "buildCommandHelp": "Yang menghasilkan berkas untuk disajikan, untuk sebuah front end. Kosongkan bila repositori sudah memuatnya.",
+    "outputDirectory": "Direktori keluaran",
+    "outputDirectoryHelp": "Tempat perintah itu menulisnya: dist untuk Vite, build untuk Create React App.",
+    "volumeBackups": "Cadangan untuk {{name}}",
+    "volumeBackupsHelp": "Jadwal, salinan yang sudah diambil, dan cara mengembalikannya.",
+    "noVolumeBackups": "Belum ada cadangan untuk disk ini.",
+    "volumeRestoreStarted": "Pemulihan dimulai. Aplikasi berhenti selama proses berjalan dan dijalankan lagi setelahnya.",
+    "volumeRestoreWarning": "Semua isi {{app}} diganti dengan isi cadangan ini, dan aplikasi dihentikan selama proses itu.",
+    "volumeStopsRollingDeploys": "Dengan disk, deploy tidak lagi mulus",
+    "volumeStopsRollingDeploysHelp": "Satu disk hanya boleh ditulis satu instance dalam satu waktu, jadi Skifity menghentikan instance lama sebelum menjalankan yang baru. Setiap deploy punya jeda beberapa detik tanpa yang menjawab, dan aplikasi tidak bisa berjalan lebih dari satu instance.",
+    "sourceUpload": "Folder yang diunggah",
+    "sourceFolder": "Folder di komputer saya"
+  },
+  "deploy": {
+    "title": "Deployment",
+    "deployNow": "Deploy sekarang",
+    "rebuild": "Build ulang dari awal",
+    "rebuildHelp": "Mengabaikan cache dan membangun ulang meski tidak ada perubahan.",
+    "rollback": "Kembalikan",
+    "imageCollected": "Image sudah dihapus",
+    "imageCollectedHelp": "Hanya beberapa versi terakhir yang menyimpan image-nya, agar disk tidak penuh. Deploy ulang commit ini untuk mendapatkannya kembali.",
+    "rollbackTo": "Kembalikan ke #{{number}}",
+    "rollbackHelp": "Mengembalikan image versi ini beserta pengaturan yang dipakainya saat itu.",
+    "cancel": "Batalkan deployment",
+    "buildLog": "Log build",
+    "noDeployments": "Belum ada yang di-deploy",
+    "noDeploymentsHelp": "Deployment pertama akan membangun aplikasi Anda dan memberinya URL.",
+    "commit": "Commit",
+    "duration": "Butuh waktu",
+    "status": {
+      "queued": "Dalam antrean",
+      "building": "Membangun",
+      "deploying": "Men-deploy",
+      "succeeded": "Berhasil",
+      "failed": "Gagal",
+      "cancelled": "Dibatalkan",
+      "superseded": "Digantikan deployment yang lebih baru"
+    },
+    "reusedImage": "Tidak ada yang perlu dibangun: versi ini sudah pernah dibangun, jadi image yang ada dipakai kembali.",
+    "noRebuildNeeded": "Tersimpan dan diterapkan. Tidak perlu build ulang.",
+    "live": "Aktif",
+    "triggerRollbackTo": "Dikembalikan ke #{{number}}",
+    "trigger": {
+      "manual": "Di-deploy manual",
+      "create": "Deployment pertama aplikasi ini",
+      "template": "Dipasang dari katalog",
+      "push": "Push ke branch",
+      "preview": "Pratinjau sebuah pull request",
+      "rollback": "Sebuah rollback"
+    }
+  },
+  "variables": {
+    "title": "Variabel",
+    "help": "Nilai ini menjadi variabel environment di dalam aplikasi Anda.",
+    "key": "Nama",
+    "value": "Nilai",
+    "secret": "Rahasia",
+    "secretHelp": "Disimpan terenkripsi dan tidak pernah ditampilkan lagi. Gunakan untuk kata sandi, token, dan kunci.",
+    "buildTime": "Diperlukan saat build",
+    "buildTimeHelp": "Nilai yang ikut tertanam di image, misalnya URL API publik untuk build front-end. Mengubahnya akan membangun ulang aplikasi.",
+    "hidden": "Disembunyikan",
+    "empty": "Belum ada variabel",
+    "addVariable": "Tambah variabel",
+    "bulkEdit": "Ubah sebagai teks",
+    "bulkEditHelp": "Satu KEY=value per baris. Anda bisa menempelkan isi file .env di sini.",
+    "invalidKey": "Nama hanya boleh berisi huruf, angka, dan garis bawah, serta tidak boleh diawali angka.",
+    "rebuildQueued": "Disimpan. Nilai ini ikut tertanam di image, jadi aplikasi sedang dibangun ulang.",
+    "deleteConfirm": "Aplikasi akan di-rollout ulang tanpa variabel ini.",
+    "deleteSecretConsequence": "Nilai ini tersegel dan tidak bisa dibaca lagi, jadi kamu harus memasukkannya ulang dari sumber aslinya."
+  },
+  "domains": {
+    "title": "Domain",
+    "automatic": "Otomatis",
+    "automaticHelp": "{{product}} langsung memberi setiap aplikasi URL yang berfungsi, lengkap dengan HTTPS.",
+    "custom": "Domain Anda sendiri",
+    "addDomain": "Tambah domain",
+    "hostname": "Domain",
+    "hostnamePlaceholder": "app.example.com",
+    "https": "HTTPS",
+    "dnsInstructions": "Arahkan domain ini ke sini",
+    "checking": "Memeriksa DNS...",
+    "statusPending": "Menunggu DNS",
+    "statusActive": "Aktif",
+    "statusFailed": "Tidak berfungsi",
+    "certificateFailed": "Sertifikat tidak dapat diterbitkan",
+    "certificateFailedHelp": "Pastikan data DNS domain mengarah ke klaster ini, lalu hapus domain dan tambahkan lagi.",
+    "certificateIssuing": "Menerbitkan sertifikat...",
+    "removeDomain": "Hapus domain",
+    "cannotRemoveAutomatic": "Domain otomatis tidak bisa dihapus. Domain ini menjaga aplikasi tetap bisa diakses selama Anda menyiapkan domain sendiri.",
+    "dnsUnknown": "Belum ada yang memberi tahu panel ini alamat publik tempat aplikasinya menjawab. Administrator bisa mengaturnya di Pengaturan, Domain.",
+    "removeDomainConfirm": "{{hostname}} berhenti mengarah ke aplikasi ini. Pengunjung akan melihat error sampai kamu menambahkannya lagi atau mengarahkannya ke tempat lain.",
+    "dnsIntro": "Tambahkan record ini di tempat DNS domainmu dikelola — registrar tempat kamu membeli domain, atau Cloudflare kalau kamu memakainya.",
+    "recordType": "Tipe",
+    "recordName": "Nama",
+    "recordValue": "Nilai",
+    "dnsPropagation": "Record baru biasanya berfungsi dalam beberapa menit, dan bisa memakan waktu beberapa jam.",
+    "checkAgain": "Periksa lagi",
+    "dnsNameVaries": "Sebagian registrar meminta nama lengkapnya di sini; sebagian lagi hanya bagian di depan domainmu."
+  },
+  "scaling": {
+    "title": "Penskalaan",
+    "fixed": "Jumlah instance tetap",
+    "automatic": "Skalakan otomatis",
+    "automaticHelp": "Skifity menambah dan mengurangi instance di antara angka di bawah, sesuai kesibukan aplikasi.",
+    "instances": "Instance",
+    "minInstances": "Instance paling sedikit",
+    "maxInstances": "Instance paling banyak",
+    "cpuTarget": "Skalakan saat CPU di atas",
+    "memoryTarget": "Skalakan saat memori di atas",
+    "scaleToZero": "Berhenti saat tidak dipakai",
+    "scaleToZeroHelp": "Aplikasi berhenti setelah beberapa menit menganggur dan menyala lagi pada permintaan pertama. Permintaan pertama itu butuh beberapa detik.",
+    "scaleToZeroUsesRequests": "Selama ini aktif, aplikasi diskalakan berdasarkan jumlah permintaan yang menunggu, bukan CPU atau memori. Batas jumlah instance tetap berlaku.",
+    "readiness": "Sebelum Anda menskalakan",
+    "readinessOk": "Aplikasi ini tampak siap dijalankan dengan beberapa instance.",
+    "readinessChecking": "Memeriksa...",
+    "resources": "Sumber daya per instance",
+    "cpuReserved": "CPU dicadangkan",
+    "cpuLimit": "Batas CPU",
+    "memoryReserved": "Memori dicadangkan",
+    "memoryLimit": "Batas memori",
+    "resourcesHelp": "Yang dicadangkan dijamin tersedia untuk setiap instance. Batas adalah pemakaian maksimum sebelum instance dimulai ulang.",
+    "spread": "Sebar antar server",
+    "spreadHelp": "Instance ditempatkan di server berbeda bila memungkinkan, sehingga kehilangan satu server tidak mematikan aplikasi.",
+    "finding": {
+      "file_cache": {
+        "title": "Cache disimpan di disk lokal",
+        "detail": "{{0}} disetel ke {{1}}, jadi tiap instance akan punya cache-nya sendiri dan isinya tidak akan sama.",
+        "fix": "Pakai Redis untuk cache-nya, atau terima saja kalau nilai yang di-cache berbeda antar instance."
+      },
+      "in_memory_sessions": {
+        "title": "Sesi disimpan di memori atau di disk",
+        "detail": "{{0}} disetel ke {{1}}. Tiap instance akan menyimpan sesinya sendiri, jadi pengguna akan keluar sendiri secara acak saat permintaannya jatuh ke instance yang berbeda.",
+        "fix": "Buat database Redis di environment ini lalu arahkan penyimpanan sesi ke sana. Skifity yang menautkannya sebagai variabel untukmu."
+      },
+      "in_process_cron": {
+        "title": "Tugas terjadwal berjalan di dalam aplikasi",
+        "detail": "{{0}} menyala. Dengan beberapa instance, tiap instance menjalankan jadwalnya, jadi tiap tugas berjalan beberapa kali.",
+        "fix": "Jalankan penjadwalnya sebagai aplikasi terpisah dengan satu instance, atau pakai lock supaya hanya satu instance yang menjalankan tiap tugas."
+      },
+      "local_uploads": {
+        "title": "File yang diunggah ditulis ke disk lokal",
+        "detail": "{{0}} menunjuk ke direktori di dalam kontainer. File yang ditulis satu instance tidak akan terlihat oleh yang lain, dan akan hilang pada deploy berikutnya.",
+        "fix": "Simpan unggahan di object storage yang kompatibel dengan S3. MinIO tersedia sebagai template sekali klik kalau kamu tidak mau memakai penyedia cloud."
+      },
+      "memory_target_below_idle": {
+        "title": "Target memori tercapai sebelum aplikasinya melakukan apa pun",
+        "detail": "Targetnya adalah persentase dari yang dipesan aplikasi ini. Dia memesan {{0}}Mi dan targetnya {{1}}%, jadi instance baru ditambahkan di atas {{2}}Mi — yang dilewati proses Node atau JVM saat baru menyala.",
+        "fix": "Naikkan memori yang dipesan di pengaturan aplikasi ke angka yang dipakai saat menganggur, ditambah ruang untuk bekerja. Memori tidak turun lagi setelah diklaim, jadi target di bawah angka menganggur tidak akan pernah turun kembali."
+      },
+      "no_health_check": {
+        "title": "Belum ada jalur health check",
+        "detail": "Tanpa itu, Skifity hanya bisa memeriksa bahwa portnya terbuka — dan itu terjadi sebelum kebanyakan framework siap melayani.",
+        "fix": "Tambahkan jalur seperti /healthz yang mengembalikan 200 begitu aplikasinya siap, lalu isikan di pengaturan aplikasi."
+      },
+      "no_metrics": {
+        "title": "Cluster tidak melaporkan CPU dan memori",
+        "detail": "Autoscaling berdasarkan target CPU atau memori membaca angka-angka itu dari metrics-server, dan tidak ada yang menjawab. Aplikasinya akan bertahan di jumlah instance minimumnya sesibuk apa pun, dan tidak ada yang memberi tahu.",
+        "fix": "k3s memasang metrics-server secara bawaan. Pastikan dia berjalan di kube-system, atau tetapkan jumlah instance yang tetap sampai itu beres."
+      },
+      "single_instance": {
+        "title": "Aplikasi ini berjalan sebagai satu instance",
+        "detail": "Kalau server tempatnya berjalan restart, aplikasinya tidak bisa diakses sampai Kubernetes menyalakannya di tempat lain.",
+        "fix": "Naikkan jumlah instance jadi dua, atau nyalakan autoscaling, setelah poin-poin di atas dibereskan."
+      },
+      "sqlite": {
+        "title": "Aplikasi ini memakai SQLite",
+        "detail": "{{0}} menunjuk ke sebuah file SQLite. SQLite itu satu file di satu disk, jadi instance di server berbeda tidak bisa berbagi.",
+        "fix": "Buat database PostgreSQL di environment ini lalu arahkan aplikasinya ke sana. Skifity yang menyuntikkan connection string-nya untukmu."
+      },
+      "target_below_idle": {
+        "title": "Target CPU tercapai sebelum aplikasinya melakukan apa pun",
+        "detail": "Targetnya adalah persentase dari yang dipesan aplikasi ini, bukan dari servernya. Dia memesan {{0}}m CPU dan targetnya {{1}}%, jadi instance baru ditambahkan di atas {{2}}m — sekitar sepersepuluh inti, yang dilewati kebanyakan framework saat menganggur.",
+        "fix": "Naikkan CPU yang dipesan di pengaturan aplikasi ke angka yang benar-benar dipakai saat sibuk, supaya persentasenya berarti sesuatu. Pesanan itu jaminan untuk aplikasinya, bukan batas atasnya."
+      },
+      "volume": {
+        "title": "Aplikasi ini menulis ke disk yang hanya bisa dipakai satu instance",
+        "detail": "Ada volume yang di-mount di {{0}}. Penyimpanan itu hanya bisa menempel ke satu server pada satu waktu, jadi instance kedua akan gagal start atau berakhir di server yang sama.",
+        "fix": "Pindahkan unggahan ke object storage seperti S3 atau MinIO, atau nyalakan penyimpanan lintas-node di Pengaturan supaya volumenya bisa dibagi. Sampai itu, biarkan aplikasi ini di satu instance."
+      },
+      "volume_with_replicas": {
+        "title": "Instance-nya disetel lebih dari satu, dan aplikasi ini punya volume",
+        "detail": "Instance tambahannya akan menggantung, atau dijadwalkan ke server yang sama dan menulis ke file yang sama bersamaan.",
+        "fix": "Kembalikan jumlah instance ke satu, atau nyalakan penyimpanan lintas-node, atau pindahkan datanya keluar dari volume."
+      }
+    }
+  },
+  "servers": {
+    "title": "Server",
+    "subtitle": "Mesin tempat aplikasi Anda berjalan. Skifity menyatukannya menjadi satu cluster.",
+    "addServer": "Tambah server",
+    "addServerIntro": "Masukkan alamat dan cara masuknya. Sisanya dikerjakan {{product}}.",
+    "host": "Alamat IP atau hostname",
+    "hostPlaceholder": "203.0.113.10",
+    "sshPort": "Port SSH",
+    "sshUser": "Nama pengguna",
+    "authPassword": "Kata sandi",
+    "authKey": "Kunci privat",
+    "authKeyPlaceholder": "Tempelkan isi file kunci privat Anda",
+    "passphrase": "Frasa sandi kunci",
+    "passwordNotStored": "Kata sandi Anda dipakai satu kali, untuk memasang kunci milik {{product}}, dan tidak pernah disimpan.",
+    "serverName": "Nama",
+    "serverNameHelp": "Sesuatu yang mudah Anda kenali, misalnya \"Frankfurt 1\".",
+    "location": "Lokasi",
+    "locationHelp": "Sebuah label, agar Anda bisa menempatkan aplikasi dekat dengan pengguna.",
+    "size": "Ukuran",
+    "controlPlane": "Server control plane",
+    "controlPlaneHelp": "Server control plane menjalankan cluster itu sendiri. Tiga di antaranya menjaga cluster tetap hidup saat satu mati.",
+    "empty": "Belum ada server",
+    "emptyHelp": "VPS apa pun dengan Ubuntu atau Debian bisa dipakai. Satu server sudah cukup untuk memulai.",
+    "requirements": "Syarat sebuah server",
+    "requirementsList": "Ubuntu 24.04 atau Debian 12, memori minimal 1 GB, disk kosong 8 GB, dan akses SSH sebagai root.",
+    "progress": "Menambahkan {{name}}",
+    "steps": {
+      "connect": "Menghubungkan lewat SSH",
+      "preflight": "Memeriksa server",
+      "install-key": "Memasang kunci",
+      "firewall": "Mengatur firewall",
+      "connectivity": "Memeriksa jaringan",
+      "install-k3s": "Memasang Kubernetes",
+      "wait-ready": "Bergabung ke cluster",
+      "cordon": "Menghentikan pekerjaan baru",
+      "drain": "Memindahkan instance",
+      "delete-node": "Keluar dari cluster",
+      "uninstall": "Membersihkan mesin",
+      "leave": "Keluar dari cluster",
+      "prepare": "Menyiapkan",
+      "restore": "Memulihkan",
+      "verify": "Memeriksa"
+    },
+    "status": {
+      "pending": "Menunggu",
+      "provisioning": "Sedang ditambahkan",
+      "ready": "Siap",
+      "not_ready": "Tidak merespons",
+      "failed": "Gagal",
+      "removing": "Sedang dikeluarkan"
+    },
+    "role": {
+      "control-plane": "Control plane",
+      "worker": "Worker"
+    },
+    "promote": "Jadikan server control plane",
+    "promoteHelp": "Dengan tiga server control plane, cluster tetap hidup saat kehilangan satu. Aplikasi di server ini dipindahkan terlebih dahulu.",
+    "removeServer": "Keluarkan server",
+    "removeServerWarning": "Instance yang berjalan di sini dipindahkan ke server lain terlebih dahulu. Tidak ada yang hilang.",
+    "wipeServer": "Hapus juga Kubernetes dari mesinnya",
+    "cancelAndClean": "Batalkan dan bersihkan",
+    "cpu": "CPU",
+    "memory": "Memori",
+    "disk": "Disk",
+    "operatingSystem": "Sistem operasi",
+    "lastSeen": "Terakhir terlihat",
+    "filter": {
+      "all": "Semua",
+      "ready": "Siap",
+      "attention": "Perlu perhatian"
+    },
+    "needAttention_other": "{{count}} server perlu perhatian",
+    "adopted": "Skifity tidak memasang server ini",
+    "adoptedHelp": "Server ini sudah menjadi node cluster saat Skifity dipasang — biasanya mesin tempat panel ini sendiri berjalan. Ditampilkan di sini supaya Anda melihat isi cluster, dan tidak bisa dihapus atau dipromosikan dari panel karena tidak ada kunci ke sana. Jalankan uninstaller di mesin itu untuk mengeluarkannya.",
+    "architecture": "Arsitektur",
+    "locationExample": "Jakarta",
+    "serverNameExample": "Jakarta 1",
+    "stepMessage": {
+      "appsRestarted": "Memulai ulang {{0}} aplikasi supaya tersambung kembali",
+      "cancelled": "Dibatalkan",
+      "connected": "Tersambung ke {{0}}",
+      "connectivityFirstServer": "Ini server pertama, jadi belum ada yang bisa dihubungi",
+      "cordoned": "Tidak akan ada instance baru yang ditaruh di sini",
+      "drained": "Memindahkan {{0}} instance ke server lain",
+      "drainedFirst": "Memindahkan {{0}} instance keluar dari server ini lebih dulu",
+      "firewallFirstServer": "Belum ada server lain, jadi hanya port 80 dan 443 yang dibuka",
+      "firewallIptables": "Membuka port cluster hanya untuk server lain, memakai iptables",
+      "firewallUfw": "Membuka port cluster hanya untuk server lain, memakai ufw",
+      "interrupted": "Terputus karena panel dimulai ulang",
+      "joined": "{{0}} bergabung ke cluster dan sudah siap",
+      "k3sRunning": "Kubernetes terpasang dan berjalan",
+      "k3sUnconfirmed": "Terpasang, tapi panelnya tidak terhubung ke cluster untuk memastikan",
+      "keyAlreadyThere": "Server ini sudah punya kunci dari Skifity",
+      "keyInstalled": "Memasang kunci khusus untuk server ini; kata sandinya tidak disimpan",
+      "leftAsWorker": "Keluar dari cluster sebagai worker",
+      "nodeDeleted": "Dikeluarkan dari cluster",
+      "preflightOk": "{{0}}, {{1}} inti, memori {{2}} MB, sisa {{3}} GB",
+      "reached": "Berhasil menjangkau {{0}} di port 6443",
+      "readyToRestore": "Siap dipulihkan",
+      "restored": "Dipulihkan dari cadangan yang diambil pada {{0}}",
+      "uninstallFailed": "Kubernetes tidak bisa dihapus dari mesinnya",
+      "uninstallSkipped": "Kubernetes dibiarkan tetap terpasang di mesinnya",
+      "uninstalled": "Kubernetes dihapus dari mesinnya",
+      "appStopped": "Aplikasi dihentikan",
+      "archiveUnpacked": "Arsip sudah diekstrak",
+      "appRunningAgain": "{{0}} berjalan kembali"
+    },
+    "stepNote": {
+      "fingerprint": "Sidik jari {{0}}",
+      "hostKey": "Host key {{0}}"
+    }
+  },
+  "databases": {
+    "title": "Database",
+    "subtitle": "Database terkelola, dicadangkan dan tersambung ke aplikasi Anda.",
+    "newDatabase": "Database baru",
+    "engine": "Jenis",
+    "postgres": "PostgreSQL",
+    "redis": "Redis",
+    "mysql": "MySQL / MariaDB",
+    "version": "Versi",
+    "storage": "Penyimpanan",
+    "storageHelp": "Berapa besar disk untuk database ini. Bisa diperbesar nanti, tetapi tidak bisa diperkecil.",
+    "databaseName": "Nama",
+    "empty": "Belum ada database",
+    "emptyHelp": "Database terkelola dicadangkan, dipulihkan, dan dihubungkan ke aplikasi Anda secara otomatis.",
+    "connectionDetails": "Detail koneksi",
+    "showCredentials": "Tampilkan kredensial",
+    "credentialsWarning": "Siapa pun yang memilikinya bisa membaca dan mengubah seluruh isi database.",
+    "connectionString": "String koneksi",
+    "linkedApps": "Aplikasi terhubung",
+    "linkApp": "Hubungkan aplikasi",
+    "linkAppHelp": "String koneksi ditambahkan ke aplikasi sebagai variabel, dan aplikasi dimulai ulang agar membacanya.",
+    "variableName": "Nama variabel",
+    "unlink": "Putuskan",
+    "backups": "Cadangan",
+    "backupNow": "Cadangkan sekarang",
+    "backupSchedule": "Cadangan otomatis",
+    "backupsOn": "Ambil cadangan otomatis",
+    "backupScheduleFieldHelp": "Kapan pencadangan berjalan. Waktu dalam UTC.",
+    "retentionHelp": "Cadangan lama dihapus setelah yang baru berhasil.",
+    "backupScheduleHelp": "Cadangan ditulis ke penyimpanan yang Anda atur di Pengaturan.",
+    "retention": "Simpan yang terakhir",
+    "restore": "Pulihkan",
+    "restoreWarning": "Ini mengganti seluruh isi database saat ini dengan isi cadangan ini. Tindakan ini tidak bisa dibatalkan.",
+    "restoreConfirm": "Ya, ganti data saat ini",
+    "noBackups": "Belum ada cadangan",
+    "backupStatus": {
+      "running": "Berjalan",
+      "succeeded": "Berhasil",
+      "failed": "Gagal"
+    },
+    "status": {
+      "creating": "Membuat",
+      "starting": "Menyala",
+      "running": "Berjalan",
+      "degraded": "Berkurang",
+      "failed": "Gagal",
+      "missing": "Hilang",
+      "unknown": "Tidak diketahui"
+    },
+    "restoreStarted": "Pemulihan dimulai. Basis data tidak tersedia sampai proses selesai.",
+    "deleteWarning": "Semua tabel, baris, dan jadwal pencadangan ikut terhapus. Cadangan yang sudah ada di penyimpanan tetap tersimpan, tetapi panel tidak akan mengenalinya lagi.",
+    "backupStarted": "Pencadangan dimulai. Akan muncul di daftar setelah selesai.",
+    "host": "Host",
+    "port": "Port",
+    "user": "Pengguna",
+    "unlinkConfirm": "{{app}} kehilangan variabel {{variable}}, jadi mulai deployment berikutnya dia tidak bisa menjangkau database ini."
+  },
+  "templates": {
+    "title": "Template",
+    "subtitle": "Aplikasi yang bisa dipasang sekali langkah, lengkap dengan database dan pengaturannya.",
+    "install": "Pasang",
+    "installing": "Memasang...",
+    "category": "Kategori",
+    "website": "Situs web",
+    "installedNote": "Terpasang. Mungkin butuh semenit untuk menyala.",
+    "installedApps_other": "{{count}} aplikasi terpasang. Mungkin butuh semenit untuk menyala.",
+    "search": "Cari template",
+    "notesTitle": "Sebelum ini berjalan",
+    "categories": {
+      "ai": "AI",
+      "analytics": "Analitik",
+      "automation": "Otomatisasi",
+      "business": "Bisnis",
+      "cms": "Situs dan penerbitan",
+      "communication": "Komunikasi",
+      "developer": "Alat pengembang",
+      "ecommerce": "Toko",
+      "finance": "Keuangan",
+      "media": "Media",
+      "monitoring": "Pemantauan",
+      "networking": "Jaringan",
+      "other": "Lainnya",
+      "productivity": "Produktivitas",
+      "security": "Keamanan",
+      "storage": "Penyimpanan dan berkas"
+    },
+    "installWhere": "Dipasang di mana"
+  },
+  "settings": {
+    "title": "Pengaturan",
+    "general": "Umum",
+    "cluster": "Klaster",
+    "domains": "Domain dan HTTPS",
+    "git": "Git",
+    "storage": "Penyimpanan cadangan",
+    "email": "Email",
+    "notifications": "Notifikasi",
+    "registry": "Registry image",
+    "signin": "Single sign-on",
+    "security": "Keamanan",
+    "components": "Komponen",
+    "team": "Tim",
+    "members": "Anggota",
+    "inviteMember": "Tambah anggota",
+    "memberEmail": "Alamat email mereka",
+    "memberRole": "Peran",
+    "roleOwner": "Pemilik",
+    "roleAdmin": "Admin",
+    "roleMember": "Anggota",
+    "roleHelp": "Pemilik bisa melakukan apa saja, termasuk menghapus tim. Admin mengelola server dan pengaturan. Anggota men-deploy aplikasi.",
+    "removeMember": "Keluarkan",
+    "configured": "Sudah diatur",
+    "notConfigured": "Belum diatur",
+    "secretStored": "Tersimpan. Masukkan nilai baru untuk menggantinya.",
+    "componentsHelp": "Fitur berat baru dipasang saat pertama kali Anda memakainya, sehingga instalasi baru tetap ringan.",
+    "componentInstall": "Pasang",
+    "componentInstalled": "Terpasang",
+    "componentMemory": "Sekitar {{mb}} MB memori",
+    "rotateKey": "Rotasi kunci master",
+    "rotateKeyHelp": "Membuat kunci master baru dan mengenkripsi ulang semua rahasia dengan kunci itu. Rahasia Anda tidak didekripsi dalam prosesnya.",
+    "rotateKeyConfirm": "Rotasi sekarang",
+    "recoveryKey": "Kunci pemulihan",
+    "auditLog": "Log audit",
+    "auditLogHelp": "Siapa melakukan apa, kapan, dan dari mana.",
+    "upgrade": "Perbarui",
+    "currentVersion": "Versi saat ini",
+    "noUpdateCheck": "{{product}} tidak menghubungi server mana pun untuk memeriksa pembaruan.",
+    "saved": "Pengaturan disimpan.",
+    "rotateKeyDone": "Kunci utama telah dirotasi dan semua rahasia tersimpan dienkripsi ulang dengan kunci baru.",
+    "rotateKeyPartial": "Kunci utama baru sudah aktif, tetapi sebagian rahasia gagal dienkripsi ulang. Kunci lama tetap disimpan agar rahasia itu masih bisa dibaca.",
+    "edited": "Diubah",
+    "unsaved_other": "{{count}} perubahan belum disimpan",
+    "subtitle": "Semua yang diatur operator, dalam satu tempat. Tidak ada di sini yang memerlukan berkas di server.",
+    "componentExternal": "Cara memasangnya",
+    "inviteLinkTitle": "Kirimkan tautan ini kepada mereka",
+    "inviteLink": "Tautan undangan",
+    "inviteLinkHelp": "Ditampilkan sekali, berlaku tujuh hari, dan hanya bisa dipakai sekali. Skifity tidak mengirim email kecuali Anda sudah menyiapkan SMTP.",
+    "pendingInvitations": "Menunggu diterima",
+    "revokeInvitation": "Tarik undangan ini",
+    "invitationExpires": "Kedaluwarsa {{when}}",
+    "inviteMemberHelp": "Undang seseorang lewat email. Skifity memberi Anda tautan untuk dikirimkan; mereka memilih kata sandinya sendiri. Yang sudah punya akun di sini langsung ditambahkan.",
+    "export": "Bawa data Anda",
+    "exportHelp": "Semua milik tim ini — proyek, aplikasi, domain, basis data, variabel dan jadwal — dalam satu berkas JSON, lengkap dengan objek Kubernetes setiap aplikasi.",
+    "exportSecrets": "Nilai dari apa pun yang ditandai rahasia tidak disertakan. Nilai itu sudah ada di cluster Anda sendiri, sebagai Secret Kubernetes biasa yang bisa Anda akses.",
+    "exportDownload": "Unduh JSON",
+    "plugins": "Plugin",
+    "pluginStoreCheck": "Periksa store",
+    "pluginStoreCheckHelp": "Membaca katalog dengan nilai yang tersimpan, jadi alamat atau kunci yang salah ketahuan di sini, bukan pada hari Anda membutuhkan sebuah plugin.",
+    "pluginStoreCheckAction": "Baca katalognya",
+    "pluginStoreVerified": "Ditandatangani oleh kunci yang diatur di sini",
+    "pluginStoreCount_other": "{{count}} plugin di katalog",
+    "pluginStoreGoToPlugins": "Buka Plugin untuk memasang salah satunya",
+    "field": {
+      "cluster_flannel_backend": {
+        "label": "Cara server saling berkomunikasi",
+        "help": "WireGuard mengenkripsi lalu lintas antar server Anda, yang penting bila server berada di penyedia berbeda. Ia memerlukan modul kernel wireguard di setiap server. vxlan bekerja di mana saja dan tidak terenkripsi. Setiap server dalam satu cluster harus memakai yang sama, jadi ubah ini sebelum menambah server, bukan sesudahnya."
+      },
+      "cluster_k3s_version": {
+        "label": "Versi Kubernetes",
+        "help": "Versi k3s yang dipasang pada server yang ditambahkan dari sini. Kosongkan untuk mengikuti kanal stabil, yang dipakai cluster baru. Kunci versinya agar server yang Anda tambahkan bulan depan sama dengan yang sudah ada."
+      },
+      "cluster_preview_ttl_days": {
+        "label": "Hapus environment pratinjau setelah",
+        "help": "Jumlah hari tanpa deployment sebelum environment pratinjau sebuah pull request dihapus. Pratinjau yang masih menerima push bertahan selama pull request-nya terbuka. Isi 0 untuk menahannya sampai pull request ditutup — cara normalnya — tetapi webhook yang tidak pernah datang akan membiarkannya berjalan selamanya."
+      },
+      "dns_api_token": {
+        "label": "Token API DNS",
+        "help": "Token yang hanya berhak menyunting catatan di satu zona. Jangan memakai kunci akun global."
+      },
+      "dns_provider": {
+        "label": "Penyedia DNS",
+        "help": "Membuat Skifity bisa membuat catatan DNS untuk Anda saat menambah domain. Kosongkan untuk membuatnya sendiri."
+      },
+      "dns_zone": {
+        "label": "Zona DNS",
+        "help": "Zona tempat catatan dibuat."
+      },
+      "domains_acme_email": {
+        "label": "Email Let's Encrypt",
+        "help": "Tujuan peringatan kedaluwarsa sertifikat dari Let's Encrypt. Wajib diisi sebelum sertifikat HTTPS bisa diterbitkan."
+      },
+      "domains_acme_server": {
+        "label": "URL direktori ACME",
+        "help": "Kosongkan untuk Let's Encrypt produksi. Arahkan ke direktori staging selama pengujian agar tidak kena batas laju."
+      },
+      "domains_cloudflare_tunnel_token": {
+        "label": "Token Cloudflare tunnel",
+        "help": "Membuat aplikasi Anda bisa diakses dari internet tanpa IP publik, tanpa port terbuka, dan tanpa alamat tetap untuk DNS. Buat tunnel di dasbor Cloudflare pada Zero Trust, Networks, Tunnels; pilih konektor Cloudflared lalu salin tokennya. Kemudian tambahkan satu public hostname pada tunnel itu — wildcard seperti *.apps.example.com mencakup semua aplikasi sekaligus — dengan service HTTP dan alamat traefik.kube-system.svc.cluster.local:80. Pasang Cloudflare tunnel di Komponen setelah tokennya disimpan."
+      },
+      "domains_cluster_ip": {
+        "label": "IP publik cluster",
+        "help": "Alamat yang harus dituju domain Anda. Terdeteksi otomatis; timpa bila cluster Anda berada di belakang load balancer."
+      },
+      "domains_geo_asn_url": {
+        "label": "Basis data jaringan",
+        "help": "Sama, untuk jaringan tempat alamat pengunjung berada, yang diuji oleh aturan nomor AS."
+      },
+      "domains_geo_country_url": {
+        "label": "Basis data negara",
+        "help": "Sumber data negara untuk firewall, dalam format .mmdb milik MaxMind. Kosongkan untuk berkas bulanan gratis DB-IP yang tidak perlu akun. Sebuah %s pada alamat diganti dengan bulan. Arahkan ke salinan Anda sendiri, atau ke unduhan MaxMind, bila Anda mau."
+      },
+      "domains_geo_enabled": {
+        "label": "Cari tahu negara dan jaringan pengunjung",
+        "help": "Aktif secara bawaan. Firewall mengunduh basis data bulanan gratis dari DB-IP, yang tidak perlu akun, agar sebuah aturan bisa menyebut negara atau jaringan. Matikan pada cluster tanpa jalan keluar ke internet, atau bila Anda lebih suka tidak ada yang diunduh — aturan tentang negara lalu tidak bisa disimpan, yang lebih baik daripada aturan yang diam-diam dilewati."
+      },
+      "domains_trusted_proxies": {
+        "label": "Proxy tepercaya",
+        "help": "Rentang alamat di depan cluster ini yang boleh menyebut siapa pengunjungnya. Jaringan pod dan service sudah dipercaya; tambahkan rentang load balancer bila Anda punya. Salah di arah sebaliknya berarti pengunjung bisa memilih sendiri alamat yang dinilai aturan firewall Anda, jadi tambahkan hanya rentang yang Anda kuasai."
+      },
+      "domains_wildcard": {
+        "label": "Domain wildcard",
+        "help": "Domain dengan catatan DNS wildcard yang mengarah ke cluster ini. Setiap aplikasi mendapat subdomain gratis di bawahnya. Kosongkan untuk memakai alamat sslip.io."
+      },
+      "email_smtp_from": {
+        "label": "Kirim email sebagai",
+        "help": "Alamat yang tampak sebagai pengirim notifikasi. Biasanya harus alamat yang diizinkan server surat Anda, atau surat akan ditolak."
+      },
+      "email_smtp_host": {
+        "label": "Host SMTP",
+        "help": "Diperlukan untuk notifikasi email dan email pengaturan ulang kata sandi."
+      },
+      "email_smtp_password": {
+        "label": "Kata sandi SMTP",
+        "help": "Disimpan terenkripsi. Kebanyakan penyedia menginginkan app password di sini, bukan kata sandi akun Anda."
+      },
+      "email_smtp_port": {
+        "label": "Port SMTP",
+        "help": "587 untuk STARTTLS, yang dipakai hampir semua layanan sekarang. 465 adalah TLS implisit; 25 tidak terenkripsi dan biasanya diblokir penyedia hosting."
+      },
+      "email_smtp_tls": {
+        "label": "Pakai STARTTLS",
+        "help": "Biarkan menyala kecuali server surat Anda hanya menerima koneksi polos."
+      },
+      "email_smtp_user": {
+        "label": "Nama pengguna SMTP",
+        "help": "Kosongkan bila server surat Anda menerima surat dari cluster ini tanpa perlu masuk."
+      },
+      "general_default_builder": {
+        "label": "Builder bawaan",
+        "help": "Builder yang dipakai ketika repositori tidak punya Dockerfile. Railpack menghasilkan image lebih kecil; Nixpacks lebih lama ada dan lebih banyak diuji."
+      },
+      "general_panel_url": {
+        "label": "URL panel",
+        "help": "Alamat yang dipakai orang untuk membuka panel ini. Dipakai pada tautan di dalam notifikasi dan pada URL webhook."
+      },
+      "general_telemetry_disabled": {
+        "label": "Matikan pelaporan penggunaan",
+        "help": "Skifity tidak mengirim apa pun ke mana pun secara bawaan. Pengaturan ini ada supaya ketiadaan telemetri terlihat, bukan diasumsikan."
+      },
+      "maintenance_audit_history_days": {
+        "label": "Simpan log aktivitas selama",
+        "help": "Hari. Log aktivitas disimpan jauh lebih lama daripada apa pun di sini, karena log yang lupa hampir sama saja dengan tidak punya log. Perpendek hanya jika Anda punya alasan."
+      },
+      "maintenance_deployment_history": {
+        "label": "Catatan deployment yang disimpan, per aplikasi",
+        "help": "Berapa banyak deployment lama yang disimpan sebuah aplikasi, beserta log build-nya. Yang lebih lama dihapus agar database panel tidak tumbuh tanpa henti. Hanya sepuluh terbaru yang bisa di-rollback, karena sebanyak itulah image yang disimpan registry dan revisi yang diingat Kubernetes sendiri."
+      },
+      "plugins_store_public_key": {
+        "label": "Kunci penandatangan store plugin",
+        "help": "Kunci publik Ed25519 milik store, base64. Bila diisi, indeks yang tidak ditandatangani olehnya akan ditolak. Bila kosong, katalog tetap terbaca dan setiap entri ditampilkan sebagai tidak dijamin siapa pun. Buat sepasang kunci dengan: skifity admin plugin-key"
+      },
+      "plugins_store_url": {
+        "label": "Store plugin",
+        "help": "Tempat panel mencari plugin. Kosongkan untuk store Skifity. Arahkan ke indeks Anda sendiri untuk menjalankan store sendiri, atau kosongkan kunci publik di bawah untuk menelusuri store yang tidak ditandatangani — plugin selalu bisa dipasang dari alamat manifest atau dengan menempelkannya, yang dipakai cluster tanpa jalan keluar ke internet."
+      },
+      "registry_password": {
+        "label": "Kata sandi registry",
+        "help": "Token dengan izin mendorong image. Disimpan terenkripsi dan tidak pernah ditampilkan lagi."
+      },
+      "registry_url": {
+        "label": "Registry eksternal",
+        "help": "Tempat image hasil build didorong. Kosongkan untuk memakai registry di dalam cluster, yang paling sederhana."
+      },
+      "registry_username": {
+        "label": "Nama pengguna registry",
+        "help": "Hanya diperlukan untuk registry eksternal. Registry di dalam cluster tidak perlu kredensial."
+      },
+      "signin_oidc_allowed_domains": {
+        "label": "Domain email yang diizinkan",
+        "help": "Dipisah koma. Hanya orang dengan email terverifikasi di salah satu domain ini yang boleh masuk. Kosongkan untuk menerima siapa pun yang dijamin penyedia, yang hanya aman jika penyedianya milik Anda."
+      },
+      "signin_oidc_auto_create": {
+        "label": "Buat akun saat pertama masuk",
+        "help": "Jika dimatikan, orang yang dikenal penyedia tetapi tidak dikenal panel ini akan ditolak, sehingga akun dibuat lewat undangan, bukan oleh siapa pun yang punya alamat perusahaan."
+      },
+      "signin_oidc_button_label": {
+        "label": "Teks tombol masuk",
+        "help": "Tulisan pada tombol di halaman masuk. Kosongkan untuk label umum."
+      },
+      "signin_oidc_client_id": {
+        "label": "Client ID",
+        "help": "Dari aplikasi yang Anda daftarkan di penyedia. Redirect URI-nya adalah alamat panel ini diikuti /api/auth/sso/callback."
+      },
+      "signin_oidc_client_secret": {
+        "label": "Client secret",
+        "help": "Disimpan terenkripsi dan tidak pernah ditampilkan lagi."
+      },
+      "signin_oidc_issuer": {
+        "label": "Issuer single sign-on",
+        "help": "URL issuer OpenID Connect dari penyedia identitas Anda — Okta, Entra, Authentik, Keycloak, Zitadel, Google. Skifity membaca konfigurasinya dari /.well-known/openid-configuration di bawah alamat ini. Kosongkan untuk masuk dengan kata sandi saja."
+      },
+      "storage_s3_access_key": {
+        "label": "Access key S3",
+        "help": "Gunakan kunci yang hanya bisa menulis ke bucket ini."
+      },
+      "storage_s3_bucket": {
+        "label": "Bucket S3",
+        "help": "Bucket tempat cadangan ditulis. Skifity tidak membuatkannya untuk Anda."
+      },
+      "storage_s3_endpoint": {
+        "label": "Endpoint S3",
+        "help": "Layanan apa pun yang kompatibel S3 bisa dipakai: AWS, Backblaze B2, Cloudflare R2, Wasabi, atau server MinIO yang Anda jalankan sendiri."
+      },
+      "storage_s3_path_style": {
+        "label": "Pakai URL gaya path",
+        "help": "Nyalakan untuk MinIO dan kebanyakan layanan S3 yang dipasang sendiri."
+      },
+      "storage_s3_region": {
+        "label": "Region S3",
+        "help": "Sebagian penyedia mengabaikannya; AWS tidak."
+      },
+      "storage_s3_secret_key": {
+        "label": "Secret key S3",
+        "help": "Disimpan terenkripsi dan tidak pernah ditampilkan lagi."
+      }
+    },
+    "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
+    "revokeInvitationConfirm": "Tautan yang dikirim ke {{email}} berhenti berfungsi."
+  },
+  "errors": {
+    "whatHappened": "Apa yang terjadi",
+    "whatItMeans": "Apa artinya",
+    "howToFix": "Cara memperbaikinya",
+    "details": "Detail",
+    "errorCode": "Kode error",
+    "copiedForAI": "Tersalin. Tempelkan ke asisten AI Anda.",
+    "somethingWentWrong": "Terjadi kesalahan",
+    "crashTitle": "Halaman ini berhenti bekerja",
+    "crashHelp": "Ada bagian panel yang gagal ditampilkan. Aplikasi dan server Anda tidak terpengaruh — hanya layar ini. Coba lagi, atau buka halaman lain di panel.",
+    "pageNotFound": "Halaman itu tidak ada",
+    "pageNotFoundHelp": "Tautannya mungkin sudah lama, atau isinya sudah dihapus.",
+    "goHome": "Ke ringkasan",
+    "reload": "Muat ulang",
+    "offline": "Panel tidak bisa dihubungi",
+    "offlineHelp": "Aplikasi Anda tetap berjalan. Halaman ini akan tersambung kembali dengan sendirinya.",
+    "reconnecting": "Menyambungkan ulang...",
+    "catalogue": {
+      "admin_backup_failed": {
+        "title": "Database tidak bisa disalin",
+        "cause": "{{0}}",
+        "impact": "Tidak ada salinan yang ditulis.",
+        "fix": "Pastikan direktorinya ada, filenya belum ada, dan disknya masih muat."
+      },
+      "admin_no_database": {
+        "title": "Database panel tidak ada di sini",
+        "cause": "Tidak ada file di {{0}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jalankan ini di server tempat panel dipasang, sebagai root. Kalau databasenya di tempat lain, pakai --database, atau set SKIFITY_DATABASE_PATH."
+      },
+      "admin_no_such_user": {
+        "title": "Tidak ada akun dengan alamat itu",
+        "cause": "Tidak ada yang memakai {{0}} di panel ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jalankan `{{0}} admin list-users` untuk melihat akun yang ada."
+      },
+      "app_crash_loop": {
+        "title": "Aplikasi ini terus mengulang start",
+        "cause": "{{0}} sudah restart {{1}} kali berturut-turut. Kubernetes memberi jeda makin lama di antara restart.",
+        "impact": "Aplikasi tidak melayani trafik dengan andal.",
+        "fix": "Baca baris log terakhir di bawah: penyebabnya hampir selalu ada di situ. Tiga yang paling sering: variabel lingkungan yang kurang, database yang tidak terjangkau, dan port yang sebenarnya tidak didengarkan aplikasi."
+      },
+      "auth_csrf": {
+        "title": "Permintaan ini diblokir demi keamanan",
+        "cause": "Permintaan tidak membawa token CSRF yang cocok.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Muat ulang halaman lalu coba lagi. Kalau kamu memanggil API langsung, pakai token API lewat header Authorization, bukan cookie."
+      },
+      "auth_forbidden": {
+        "title": "Kamu tidak punya izin untuk ini",
+        "cause": "Peranmu di tim ini tidak mengizinkan {{0}}.",
+        "impact": "Tindakan tidak dijalankan.",
+        "fix": "Minta pemilik atau admin tim untuk melakukannya, atau menaikkan peranmu."
+      },
+      "auth_invalid_credentials": {
+        "title": "Email atau kata sandi tidak cocok",
+        "cause": "Alamat email dan kata sandi tidak cocok dengan akun mana pun di panel ini.",
+        "impact": "Kamu belum masuk.",
+        "fix": "Periksa salah ketik lalu coba lagi. Setelah beberapa kali gagal, proses masuk dijeda sebentar."
+      },
+      "auth_invalid_totp": {
+        "title": "Kode itu tidak cocok",
+        "cause": "Kode enam digitnya tidak sesuai dengan yang diharapkan panel ini.",
+        "impact": "Autentikasi dua langkah tidak dinyalakan.",
+        "fix": "Pastikan jam di ponselmu benar, lalu ketik kode yang sedang berlaku dari aplikasi autentikatormu."
+      },
+      "auth_rate_limited": {
+        "title": "Terlalu banyak percobaan",
+        "cause": "Sudah terlalu banyak percobaan masuk yang gagal untuk akun ini atau dari alamat ini.",
+        "impact": "Proses masuk dijeda supaya kata sandi tidak bisa ditebak.",
+        "fix": "Tunggu {{0}} lalu coba lagi. Kalau itu bukan kamu, ganti kata sandimu begitu bisa masuk."
+      },
+      "auth_required": {
+        "title": "Kamu perlu masuk dulu",
+        "cause": "Permintaan ini tidak membawa sesi atau token API yang sah.",
+        "impact": "Tindakan tidak dijalankan.",
+        "fix": "Masuk lagi. Kalau memakai CLI, jalankan `skifity login`."
+      },
+      "auth_token_scope": {
+        "title": "Token ini tidak boleh membuat permintaan itu",
+        "cause": "Token {{0}} dibatasi pada {{1}}.",
+        "impact": "Permintaan ditolak. Tidak ada yang diubah.",
+        "fix": "Pakai token tanpa batasan, atau buat token yang bisa menulis, di halaman Akun."
+      },
+      "backup_bad_schedule": {
+        "title": "Skifity tidak mengerti jadwal itu",
+        "cause": "{{0}}",
+        "impact": "Jadwal tidak diubah.",
+        "fix": "Pakai lima kolom cron, misalnya \"0 3 * * *\" untuk setiap hari pukul 03:00 UTC."
+      },
+      "backup_bucket_missing": {
+        "title": "Bucket itu tidak ada",
+        "cause": "Bucket {{0}} tidak ditemukan di {{1}}.",
+        "impact": "Backup tidak bisa jalan.",
+        "fix": "Buat bucketnya di penyedia penyimpananmu, lalu coba lagi. Skifity tidak membuat bucket: itu butuh izin yang jauh lebih luas daripada sekadar menulis backup."
+      },
+      "backup_database_not_running": {
+        "title": "Database ini tidak sedang berjalan",
+        "cause": "{{0}} sedang {{1}}, jadi tidak ada yang bisa dicadangkan.",
+        "impact": "Tidak ada backup yang diambil.",
+        "fix": "Tunggu sampai databasenya berjalan, lalu coba lagi."
+      },
+      "backup_failed": {
+        "title": "Backup gagal",
+        "cause": "Mencadangkan {{0}} gagal: {{1}}",
+        "impact": "Tidak ada backup baru dari proses ini. Backup sebelumnya tidak tersentuh.",
+        "fix": "Periksa kredensial penyimpanan di Pengaturan, dan pastikan bucketnya ada serta bisa ditulis. Lalu jalankan backup lagi dari halaman database."
+      },
+      "backup_restore_refused": {
+        "title": "Pemulihan ini akan menimpa data yang sedang dipakai",
+        "cause": "{{0}} sedang dipakai dan pemulihan akan mengganti isinya sekarang.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Pulihkan ke database baru dulu, periksa hasilnya, lalu arahkan aplikasimu ke sana. Kalau memang mau menimpa, konfirmasikan secara eksplisit di dialog pemulihan."
+      },
+      "backup_storage_no_delete": {
+        "title": "Backup lama tidak bisa dihapus",
+        "cause": "Access key-nya bisa menulis ke {{0}} tapi tidak bisa menghapus dari sana.",
+        "impact": "Backup tetap jalan, tapi yang lama tidak akan pernah dibersihkan dan bucketnya akan terus membesar.",
+        "fix": "Beri access key itu izin menghapus objek, atau atur kebijakan retensi di penyedia penyimpananmu."
+      },
+      "backup_storage_not_configured": {
+        "title": "Belum ada penyimpanan backup",
+        "cause": "Tim ini belum menyiapkan penyimpanan yang kompatibel dengan S3.",
+        "impact": "Backup tidak bisa jalan, jadi tidak ada yang sedang diamankan.",
+        "fix": "Buka Pengaturan, lalu Penyimpanan, dan tambahkan bucket yang kompatibel dengan S3. Penyedia mana pun bisa: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, atau server MinIO milikmu sendiri."
+      },
+      "backup_storage_read_only": {
+        "title": "Penyimpanan backup tidak bisa ditulis",
+        "cause": "Menulis objek uji ke {{0}} gagal: {{1}}",
+        "impact": "Backup akan gagal.",
+        "fix": "Beri access key itu izin menaruh objek di bucket ini."
+      },
+      "backup_storage_unreachable": {
+        "title": "Penyimpanan backup tidak bisa dihubungi",
+        "cause": "Koneksi ke {{0}} gagal: {{1}}",
+        "impact": "Backup tidak bisa jalan.",
+        "fix": "Periksa endpoint, access key, dan pastikan server ini bisa menjangkau layanan penyimpanannya."
+      },
+      "build_failed": {
+        "title": "Build gagal",
+        "cause": "Build {{0}} gagal di tahap {{1}}.",
+        "impact": "Versi baru tidak dideploy. Versi sebelumnya masih jalan dan masih melayani trafik.",
+        "fix": "Baca log build di bawah. Lalu perbaiki di repositorimu dan push lagi, atau tekan Coba lagi kalau menurutmu itu kegagalan sesaat."
+      },
+      "build_no_builder": {
+        "title": "Skifity tidak tahu cara mem-build repositori ini",
+        "cause": "Tidak ada Dockerfile di {{0}}, dan file yang ada tidak cocok dengan bahasa mana pun yang Skifity kenali.",
+        "impact": "Tidak ada build yang dimulai.",
+        "fix": "Tambahkan Dockerfile ke repositori, atau atur direktori akar kalau aplikasimu ada di subfolder sebuah monorepo, atau pilih image siap pakai saja."
+      },
+      "build_pod_not_started": {
+        "title": "Build tidak jadi dimulai",
+        "cause": "Tidak ada pod build yang siap dalam lima menit.",
+        "impact": "Tidak ada yang di-build atau dideploy.",
+        "fix": "Pastikan cluster masih punya CPU dan memori tersisa, dan komponen builder-nya berjalan."
+      },
+      "build_timeout": {
+        "title": "Build terlalu lama dan dihentikan",
+        "cause": "Build tidak selesai dalam 40 menit.",
+        "impact": "Tidak ada yang dideploy. Versi sebelumnya masih jalan.",
+        "fix": "Build selama ini biasanya berarti ada dependensi yang dikompilasi dari sumber. Tambahkan Dockerfile dengan layer dependensi yang di-cache, atau naikkan batas waktu build."
+      },
+      "cli_already_initialised": {
+        "title": "Direktori ini sudah punya aplikasi",
+        "cause": "{{0}} menunjuk ke aplikasi {{1}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jalankan `{{0}} deploy` untuk mendeploy-nya, atau hapus {{1}} untuk memulai dari awal."
+      },
+      "cli_ambiguous_app": {
+        "title": "Aplikasi yang mana?",
+        "cause": "Direktori ini tidak punya {{0}}, dan environment-nya berisi beberapa aplikasi.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Tambahkan --app dengan salah satu dari: {{0}}"
+      },
+      "cli_export_path": {
+        "title": "Panel menyebut file di luar direktori ekspor",
+        "cause": "{{0}} tidak berada di dalam {{1}}.",
+        "impact": "Tidak ada yang ditulis untuk itu.",
+        "fix": "Ini panel mengembalikan nama yang seharusnya tidak. Laporkan, dan pastikan panelnya memang panel yang kamu kira."
+      },
+      "cli_export_write_failed": {
+        "title": "Ekspor tidak bisa ditulis",
+        "cause": "Menulis {{0}} gagal: {{1}}",
+        "impact": "Ekspornya tidak lengkap.",
+        "fix": "Pilih direktori yang bisa kamu tulisi dengan --out, dan pastikan disknya masih muat."
+      },
+      "cli_no_app": {
+        "title": "Belum ada aplikasi di sini",
+        "cause": "Direktori ini tidak punya {{0}}, dan environment-nya belum berisi aplikasi.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Jalankan `{{0}} init` untuk membuatnya."
+      },
+      "cli_no_project": {
+        "title": "Tim ini belum punya project",
+        "cause": "Tidak ada tempat untuk menaruh aplikasi.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Buat project di panel dulu."
+      },
+      "cli_no_team": {
+        "title": "Kamu belum tergabung di tim mana pun",
+        "cause": "Akun ini bukan anggota tim mana pun, jadi tidak ada yang bisa dikerjakan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Minta seseorang di tim untuk menambahkanmu, atau buat tim di panel."
+      },
+      "cli_team_ambiguous": {
+        "title": "Kamu tergabung di lebih dari satu tim",
+        "cause": "Akun ini ada di {{0}} tim, jadi tidak jelas yang mana yang dimaksud.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jalankan `{{0}} login` untuk memilih salah satu, atau set SKIFITY_TEAM ke id dari: {{1}}"
+      },
+      "cli_unavailable": {
+        "title": "Panel ini tidak bisa membagikan binernya sendiri",
+        "cause": "Executable yang sedang berjalan tidak bisa dibaca: {{0}}",
+        "impact": "Alat baris perintahnya tidak terunduh. Panelnya sendiri tidak terpengaruh.",
+        "fix": "Bangun dari repositori dengan `make build`, atau salin binernya dari mesin lain. Panel dan CLI adalah file yang sama."
+      },
+      "cli_unexpected_response": {
+        "title": "Panel menjawab dengan sesuatu yang tidak diduga",
+        "cause": "HTTP {{0}} dari {{1}}: {{2}}",
+        "impact": "Perintahnya tidak selesai.",
+        "fix": "Pastikan URL-nya menunjuk ke panel Skifity, bukan ke sesuatu yang lain."
+      },
+      "cluster_control_plane_unverifiable": {
+        "title": "Cluster tidak bisa ditanya berapa server yang menjalankannya",
+        "cause": "Menghapus server control plane hanya aman kalau panel bisa melihat berapa yang tersisa, dan Kubernetes API tidak menjawab.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tunggu sampai cluster bisa dihubungi lalu coba lagi. Server worker tetap bisa dihapus kapan pun."
+      },
+      "cluster_drain_blocked": {
+        "title": "Sebuah aplikasi akan mati kalau server ini dihapus",
+        "cause": "{{0}} di {{1}} tidak bisa dipindahkan: {{2}}",
+        "impact": "Server tidak dihapus dan masih menjalankan aplikasimu.",
+        "fix": "Tambahkan server lain dulu, atau naikkan aplikasi yang menghalangi ini ke lebih dari satu instance supaya bisa dipindah."
+      },
+      "cluster_drain_timeout": {
+        "title": "Ada instance yang tidak mau pindah",
+        "cause": "{{0}} instance masih berjalan di {{1}} setelah lima menit.",
+        "impact": "Server tidak dihapus.",
+        "fix": "Aplikasi yang punya disk tidak bisa pindah ke server lain kecuali penyimpanan lintas-node dinyalakan. Hentikan aplikasi itu, atau nyalakan Longhorn di Pengaturan, lalu coba lagi."
+      },
+      "cluster_insufficient_capacity": {
+        "title": "Cluster sudah tidak muat",
+        "cause": "{{0}} tidak bisa dijadwalkan: {{1}}",
+        "impact": "Instance-nya menggantung dan tidak melayani trafik.",
+        "fix": "Tambahkan server di halaman Server, turunkan permintaan CPU atau memori aplikasi ini, atau kurangi jumlah instance-nya."
+      },
+      "cluster_last_control_plane": {
+        "title": "Ini satu-satunya server yang menjalankan cluster",
+        "cause": "Menghapusnya berarti menghapus node control plane terakhir. Kubernetes, semua aplikasi di atasnya, dan panel ini berjalan di sana.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tambahkan server lain dan promosikan jadi control plane dulu. Kalau memang mau menurunkan seluruh cluster dengan sengaja, jalankan uninstaller di servernya langsung."
+      },
+      "cluster_node_not_ready": {
+        "title": "Server tidak berhasil bergabung ke cluster",
+        "cause": "Kubernetes sudah dipasang di {{0}}, tapi tidak ada node yang siap dalam lima menit.",
+        "impact": "Server terdaftar tapi belum menjalankan apa pun.",
+        "fix": "Pastikan server ini bisa menjangkau server pertama di port 6443, dan keduanya bisa saling menjangkau di UDP 51820. Firewall di panel penyedia biasanya yang jadi sebab."
+      },
+      "cluster_not_enough_servers": {
+        "title": "Ketersediaan tinggi butuh tiga server",
+        "cause": "Cluster ini punya {{0}} server. etcd bawaan butuh tiga anggota control plane supaya tetap hidup kalau satu tumbang.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tambah server sampai minimal tiga, lalu promosikan tiga di antaranya."
+      },
+      "cluster_quorum_risk": {
+        "title": "Menghapus server ini akan merusak cluster",
+        "cause": "Ini server control plane, dan menghapusnya menyisakan {{0}}. etcd bawaan butuh jumlah ganjil minimal tiga supaya bisa bertahan saat ada yang tumbang.",
+        "impact": "Tidak ada yang diubah. Server masih jadi bagian cluster.",
+        "fix": "Promosikan server lain jadi control plane dulu, baru hapus yang ini. Kalau control plane-nya tinggal satu, satu-satunya cara menghapusnya adalah dengan menurunkan seluruh cluster."
+      },
+      "cluster_token_missing": {
+        "title": "Skifity tidak punya token gabung cluster ini",
+        "cause": "Panel berjalan di cluster Kubernetes yang bukan dia yang membuat, dan sebuah server hanya bisa bergabung ke cluster itu dengan token yang dipakai saat cluster dinyalakan.",
+        "impact": "Tidak ada server yang bisa ditambahkan. Tidak ada yang diubah di server yang sedang kamu tambahkan.",
+        "fix": "Di server tempat panel berjalan, salin tokennya ke tempatnya lalu mulai ulang panel:\n\n  sudo cp /var/lib/rancher/k3s/server/token {{0}}\n  sudo chmod 600 {{1}}"
+      },
+      "cluster_unreachable": {
+        "title": "Cluster tidak merespons",
+        "cause": "Kubernetes API tidak menjawab.",
+        "impact": "Aplikasimu tetap jalan, tapi Skifity tidak bisa mengubah apa pun atau membaca status terkini sekarang.",
+        "fix": "Biasanya pulih sendiri dalam semenit. Kalau tidak, pastikan server control plane menyala dan port 6443 bisa dijangkau antar server."
+      },
+      "component_external": {
+        "title": "{{0}} tidak dipasang oleh panel",
+        "cause": "Itu dipasang dengan Helm, karena isinya beberapa lusin objek dengan siklus rilisnya sendiri, dan panel akan jadi installer yang lebih buruk daripada yang ditulis pembuatnya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Perintahnya ada di dokumentasi."
+      },
+      "component_install_failed": {
+        "title": "Berhenti-saat-tidak-dipakai tidak bisa dinyalakan",
+        "cause": "Pemasangan KEDA, yang menyediakan fitur berhenti saat tidak dipakai, gagal: {{0}}",
+        "impact": "Pengaturan penskalaan tidak diubah.",
+        "fix": "Pastikan cluster masih muat untuk satu komponen kecil lagi, lalu coba lagi."
+      },
+      "config_missing": {
+        "title": "{{0}} belum disiapkan",
+        "cause": "{{0}} butuh konfigurasi yang belum diisi.",
+        "impact": "Tindakan tidak dijalankan.",
+        "fix": "Buka {{0}} lalu isi. Tidak ada yang perlu diubah di kode atau di server."
+      },
+      "database_failed": {
+        "title": "Database tidak bisa dinyalakan",
+        "cause": "{{0}}",
+        "impact": "Belum ada yang memakainya, jadi tidak ada hal lain yang terpengaruh.",
+        "fix": "Pastikan cluster punya cukup memori dan disk untuknya, lalu hapus dan coba lagi."
+      },
+      "database_no_credentials": {
+        "title": "Database ini tidak punya kredensial tersimpan",
+        "cause": "Kredensialnya tidak ada di database panel.",
+        "impact": "Detail koneksinya tidak bisa ditampilkan.",
+        "fix": "Baca dari Secret Kubernetes {{0}}, atau buat ulang databasenya."
+      },
+      "database_still_linked": {
+        "title": "Database ini masih dipakai sebuah aplikasi",
+        "cause": "{{0}} aplikasi masih disuntik connection string dari database ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Lepaskan tautannya dari aplikasi-aplikasi itu dulu, atau konfirmasikan kalau kamu memang tetap mau menghapusnya."
+      },
+      "database_timeout": {
+        "title": "Database tidak siap tepat waktu",
+        "cause": "{{0}} tidak siap dalam lima belas menit.",
+        "impact": "Databasenya ada tapi belum bisa dipakai.",
+        "fix": "Buka daftar instance untuk melihat sebabnya. Yang biasa: tidak ada sisa disk untuk volumenya, dan tidak ada server yang memorinya cukup."
+      },
+      "deploy_cannot_rollback": {
+        "title": "Versi ini tidak bisa dijadikan tujuan rollback",
+        "cause": "Deployment #{{0}} tidak selesai dengan sukses, jadi tidak ada image untuk dikembalikan.",
+        "impact": "Tidak ada yang diubah. Versi yang sekarang masih jalan.",
+        "fix": "Pilih deployment yang bertanda berhasil dari riwayat."
+      },
+      "deploy_image_collected": {
+        "title": "Versi itu terlalu lama untuk dijadikan tujuan rollback",
+        "cause": "Hanya {{0}} versi terakhir sebuah aplikasi yang imagenya disimpan. Versi {{1}} lebih jauh dari itu, dan imagenya dihapus supaya disk tidak penuh.",
+        "impact": "Tidak ada yang diubah. Versi yang berjalan sekarang tetap berjalan.",
+        "fix": "Kembali ke salah satu dari {{0}} versi terakhir, atau deploy lagi commit yang kamu mau — itu akan membangunnya dari awal."
+      },
+      "deploy_image_pull_failed": {
+        "title": "Image tidak bisa ditarik",
+        "cause": "Menarik {{0}} gagal: {{1}}",
+        "impact": "Instance baru tidak bisa mulai. Versi sebelumnya masih jalan.",
+        "fix": "Kalau ini image privat, tambahkan kredensial registry di Pengaturan. Kalau ini hasil build internal, registry di dalam cluster mungkin tidak terjangkau dari node ini: pastikan node-nya sudah bergabung ke jaringan cluster."
+      },
+      "deploy_refused_by_plugin": {
+        "title": "Sebuah plugin menghentikan deployment ini",
+        "cause": "{{0}} menolaknya: {{1}}",
+        "impact": "Tidak ada yang diubah. Versi yang sedang melayani tetap melayani.",
+        "fix": "Penuhi apa pun yang dimintanya, atau matikan plugin itu di halaman Plugin."
+      },
+      "deploy_rollout_timeout": {
+        "title": "Versi baru tidak berhasil menyala",
+        "cause": "{{0}} dari {{1}} instance {{2}} siap sebelum batas waktu. {{3}}",
+        "impact": "Kubernetes mempertahankan versi sebelumnya, jadi aplikasimu tetap hidup. Versi barunya tidak jadi dirilis.",
+        "fix": "Periksa log aplikasi untuk crash saat mulai. Yang biasa: variabel lingkungan yang kurang, jalur health check yang belum ada, dan port aplikasi yang beda dengan port yang diatur."
+      },
+      "detect_unreadable": {
+        "title": "Repositori itu tidak bisa dibaca",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dibuat. Kamu tetap bisa mengisi formulirnya sendiri.",
+        "fix": "Periksa alamat dan branch-nya. Repositori privat butuh akun Git yang terhubung dan punya akses ke sana, dipilih di bawah."
+      },
+      "domain_certificate_failed": {
+        "title": "Sertifikat HTTPS tidak bisa diterbitkan",
+        "cause": "Let's Encrypt menolak menerbitkan sertifikat untuk {{0}}: {{1}}",
+        "impact": "Domainnya jalan lewat HTTP tapi tidak lewat HTTPS.",
+        "fix": "Pastikan domainnya mengarah ke cluster ini dan port 80 bisa dijangkau dari internet — lewat situlah tantangannya diverifikasi. Kalau kamu kena batas laju, tunggu sejam sebelum mencoba lagi."
+      },
+      "domain_dns_mismatch": {
+        "title": "Domain ini belum mengarah ke sini",
+        "cause": "{{0}} saat ini mengarah ke {{1}}, padahal seharusnya ke {{2}}.",
+        "impact": "Sertifikatnya tidak bisa diterbitkan dan domainnya tidak akan melayani aplikasimu.",
+        "fix": "Buat record A untuk {{0}} yang mengarah ke {{1}}, lalu tunggu sampai menyebar. Skifity memeriksa lagi setiap menit."
+      },
+      "domain_is_the_panel": {
+        "title": "Itu alamat panel ini sendiri",
+        "cause": "{{0}} adalah tempat panel ini menjawab.",
+        "impact": "Tidak ada yang diubah. Mengarahkan aplikasi ke sana berarti menaruh dua hal di balik satu hostname, dan siapa yang menjawab akan diputuskan oleh ingress controller, bukan oleh siapa pun — termasuk untuk permintaan yang membawa cookie sesimu.",
+        "fix": "Beri aplikasinya hostname sendiri. Subdomain dari hostname panel pun tidak masalah."
+      },
+      "domain_no_free_address": {
+        "title": "Aplikasi ini tidak bisa diberi alamat",
+        "cause": "{{0}} dan {{1}} dua-duanya sudah dipakai aplikasi lain.",
+        "impact": "Aplikasinya terdeploy tapi tidak punya URL otomatis. Domain milikmu sendiri tetap bisa dipakai.",
+        "fix": "Ganti nama aplikasinya, atau tambahkan domainmu sendiri di tab Domain aplikasi itu."
+      },
+      "environment_level_not_applied": {
+        "title": "Levelnya tersimpan, tapi namespace-nya tidak berubah",
+        "cause": "{{0}}",
+        "impact": "Kubernetes masih menerapkan level yang lama, jadi sebuah deploy akan berperilaku seperti sebelumnya.",
+        "fix": "Perbaiki apa yang disebut di penyebabnya, lalu simpan levelnya lagi."
+      },
+      "firewall_failed": {
+        "title": "Firewall tidak bisa dikonfigurasi",
+        "cause": "Perintah firewall gagal di {{0}}: {{1}}",
+        "impact": "Servernya tidak jadi ditambahkan.",
+        "fix": "Pastikan akun yang dipakai Skifity untuk masuk bisa menjalankan ufw atau iptables. Perlu root, atau sudo tanpa kata sandi."
+      },
+      "firewall_no_geo_database": {
+        "title": "Panel ini tidak mencari tahu {{0}} pengunjung",
+        "cause": "Ada aturan yang menguji {{0}}, sementara pencarian negara dan jaringan pengunjung sedang dimatikan.",
+        "impact": "Tidak ada yang disimpan. Aturan yang tidak bisa dievaluasi akan dilewati di setiap permintaan, jadi dia akan tampak terpasang padahal tidak melindungi apa pun.",
+        "fix": "Nyalakan \"Cari tahu negara dan jaringan pengunjung\" di Pengaturan, lalu Domain dan HTTPS. Itu memakai basis data bulanan gratis dari DB-IP, yang tidak perlu akun."
+      },
+      "guard_no_panel_image": {
+        "title": "Firewall tidak bisa dipasang",
+        "cause": "Deployment milik panel sendiri tidak bisa dibaca, jadi tidak ada image untuk menjalankan penjaganya: {{0}}",
+        "impact": "Tidak ada yang diubah di cluster.",
+        "fix": "Ini bekerja kalau panelnya berjalan di dalam cluster yang dia kelola, dan begitulah cara installer menyiapkannya. Panel yang berjalan di luar cluster tidak bisa memasang komponen ini."
+      },
+      "guard_rules_too_large": {
+        "title": "Aturan firewall-nya terlalu banyak untuk diterapkan",
+        "cause": "Aturan untuk semua aplikasi yang dilindungi totalnya {{0}} KB, dan Kubernetes tidak mau menyimpan lebih dari {{1}} KB dalam satu objek.",
+        "impact": "Tidak ada yang diubah di cluster; aturan yang sudah ada tetap berlaku.",
+        "fix": "Pendekkan daftar yang paling panjang — biasanya daftar alamat yang membengkak — atau matikan firewall untuk aplikasi yang sudah tidak membutuhkannya."
+      },
+      "internal": {
+        "title": "Ada yang tidak beres",
+        "cause": "Panel mengalami error tak terduga saat mengerjakan server ini.",
+        "impact": "Operasinya berhenti di tempatnya. Servernya mungkin terkonfigurasi setengah jalan; langkah-langkah di atas menunjukkan sampai mana.",
+        "fix": "Jalankan lagi — setiap langkah aman diulang. Kalau gagal dengan cara yang sama, salin error ini dan buka issue: itu bug di Skifity."
+      },
+      "invite_account_exists": {
+        "title": "Alamat itu sudah punya akun",
+        "cause": "Ada yang mendaftar dengan {{0}} setelah undangan ini dikirim.",
+        "impact": "Tidak ada akun yang dibuat.",
+        "fix": "Masuk saja, lalu minta ditambahkan ke tim."
+      },
+      "invite_not_valid": {
+        "title": "Undangan ini tidak bisa dipakai",
+        "cause": "Tautannya sudah kedaluwarsa, sudah pernah dipakai, atau ditarik kembali.",
+        "impact": "Tidak ada akun yang dibuat.",
+        "fix": "Minta tautan baru ke orang yang mengundangmu."
+      },
+      "k3s_install_failed": {
+        "title": "Kubernetes tidak bisa dipasang di server ini",
+        "cause": "Installer k3s keluar dengan kode {{0}} di {{1}}.",
+        "impact": "Server terdaftar tapi bukan bagian dari cluster. Tidak ada beban kerja yang berjalan di sana.",
+        "fix": "Buka keluaran langkahnya di bawah. Yang paling sering: tidak ada akses internet keluar, kernel lama tanpa modul yang dibutuhkan, dan container runtime yang bentrok. Perbaiki sebabnya lalu tekan Coba lagi; langkah itu aman diulang."
+      },
+      "mcp_run_still_going": {
+        "title": "Perintahnya masih berjalan",
+        "cause": "Sudah berjalan selama {{0}}, dan itu batas waktu tunggunya.",
+        "impact": "Perintahnya tidak dihentikan. Dia masih berjalan di cluster, dan keluarannya disimpan bersama run-nya.",
+        "fix": "Tunggu, lalu baca kembali: run-nya {{0}} pada aplikasi {{1}}."
+      },
+      "network_port_blocked": {
+        "title": "Sebuah port cluster terblokir",
+        "cause": "Anggota cluster tidak bisa menjangkau {{0}} di {{1}}/{{2}}.",
+        "impact": "Node-nya tidak bisa bergabung ke cluster, atau pod di atasnya tidak bisa bicara dengan pod di tempat lain.",
+        "fix": "Buka {{0}}/{{1}} antar servermu. Skifity mengatur UFW dan iptables di servernya sendiri, tapi firewall di panel penyedia harus dibuka di sana. Periksa security group atau aturan firewall untuk mesin ini."
+      },
+      "notification_test_failed": {
+        "title": "Pesan uji tidak bisa dikirim",
+        "cause": "{{0}}",
+        "impact": "Kanal ini tidak akan mengirim notifikasi sampai bisa jalan.",
+        "fix": "Periksa URL webhook atau tokennya, dan pastikan server ini bisa menjangkau layanannya."
+      },
+      "operation_interrupted": {
+        "title": "Ini terputus saat panel dimulai ulang",
+        "cause": "Panel berhenti saat operasi ini sedang berjalan.",
+        "impact": "Servernya mungkin terkonfigurasi setengah jalan.",
+        "fix": "Tekan Coba lagi. Setiap langkah aman diulang, dan yang sudah selesai akan dilewati."
+      },
+      "operation_not_running": {
+        "title": "Operasi itu tidak sedang berjalan",
+        "cause": "Sudah selesai, atau panel dimulai ulang setelah operasi itu dimulai.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Muat ulang halaman untuk melihat keadaannya sekarang."
+      },
+      "operation_timeout": {
+        "title": "Ini terlalu lama dan dihentikan",
+        "cause": "Langkah {{0}} tidak selesai dalam {{1}}.",
+        "impact": "Servernya mungkin terkonfigurasi setengah jalan. Mencoba lagi aman: setiap langkah bisa diulang.",
+        "fix": "Tekan Coba lagi. Kalau habis waktu lagi, pastikan servernya punya akses internet keluar yang berfungsi."
+      },
+      "plugin_bad_manifest": {
+        "title": "Itu bukan manifest plugin",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dipasang.",
+        "fix": "Cocokkan dengan standar plugin, yang didokumentasikan di /docs/plugins."
+      },
+      "plugin_did_not_start": {
+        "title": "Plugin-nya terpasang tapi tidak mau jalan",
+        "cause": "{{0}}",
+        "impact": "Kredensialnya ada dan kontainernya tidak berjalan, jadi dia tidak menerima apa pun.",
+        "fix": "Lihat log plugin itu sendiri. Image plugin harus berjalan sebagai pengguna non-root; image yang mulai sebagai root ditolak oleh namespace tempatnya berjalan, dan itu alasan paling umum sebuah plugin tidak mau jalan."
+      },
+      "plugin_permissions_changed": {
+        "title": "Plugin ini sekarang meminta hal yang berbeda",
+        "cause": "Yang kamu setujui dulu adalah {{0}}; manifest-nya sekarang meminta {{1}}.",
+        "impact": "Tidak ada yang dipasang.",
+        "fix": "Baca lagi apa yang dimintanya, dan pasang kalau itu masih bisa kamu terima."
+      },
+      "plugin_unreachable": {
+        "title": "Manifest itu tidak bisa diambil",
+        "cause": "Servernya menjawab {{0}}.",
+        "impact": "Tidak ada yang dipasang.",
+        "fix": "Periksa alamatnya."
+      },
+      "preflight_arch_unknown": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Arsitektur CPU server ini tidak bisa ditentukan.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pastikan `uname -m` berfungsi lewat SSH."
+      },
+      "preflight_arch_unsupported": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini {{0}}, dan Skifity tidak membangun untuk arsitektur itu.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pakai server x86 64-bit (amd64) atau ARM (arm64)."
+      },
+      "preflight_cgroups": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Pengendali cgroup memori dimatikan di server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "kubelet tidak bisa mulai tanpa itu. Di Raspberry Pi OS dan Ubuntu untuk Pi, tambahkan `cgroup_memory=1 cgroup_enable=memory` di akhir baris tunggal pada /boot/firmware/cmdline.txt lalu reboot. Di sistem lain, periksa baris perintah kernel untuk `cgroup_disable=memory`."
+      },
+      "preflight_conflict_docker": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Docker sudah berjalan di server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Docker dan k3s bisa hidup berdampingan, tapi mereka berebut memori dan dua-duanya mengatur aturan iptables. Di server kecil, singkirkan Docker dulu dengan: systemctl disable --now docker"
+      },
+      "preflight_conflict_other": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "{{0}} sedang berjalan di server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pastikan dia tidak memakai port 80, 443, atau 6443."
+      },
+      "preflight_conflict_web_server": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "{{0}} sedang mendengarkan di server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Dia memakai port 80 dan 443, yang dibutuhkan ingress cluster. Hentikan dengan: systemctl disable --now {{0}}"
+      },
+      "preflight_cpu": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini punya {{0}} inti CPU; setidaknya butuh {{1}}.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Ganti ke server dengan inti yang lebih banyak."
+      },
+      "preflight_disk": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini punya {{0}} GB disk kosong; setidaknya butuh {{1}} GB.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Kosongkan ruang atau perbesar disknya. Image kontainer saja biasanya butuh beberapa gigabyte."
+      },
+      "preflight_memory_control_plane": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini punya {{0}} MB memori; sebuah server control plane butuh setidaknya {{1}} MB.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Perbesar servernya, atau tambahkan sebagai worker alih-alih server control plane."
+      },
+      "preflight_memory_worker": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini punya {{0}} MB memori; sebuah worker butuh setidaknya {{1}} MB.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Perbesar servernya, atau tambahkan sebagai worker alih-alih server control plane."
+      },
+      "preflight_network": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Skifity tidak bisa menentukan alamat publik server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Server di penyedia yang berbeda harus bisa saling menjangkau lewat alamat publik. Pastikan servernya punya satu, dan koneksi keluarnya berfungsi."
+      },
+      "preflight_os_unreadable": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Skifity tidak bisa menentukan distribusi apa yang dijalankan server ini.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pastikan /etc/os-release ada dan bisa dibaca. Ubuntu 24.04 dan Debian 12 adalah pilihan yang sudah diuji."
+      },
+      "preflight_os_unsupported": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "{{0}} bukan distribusi yang Skifity kenali.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pakai Ubuntu 24.04 atau Debian 12. Distribusi lain yang memakai systemd biasanya jalan, tapi belum diuji."
+      },
+      "preflight_os_untested": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "{{0}} {{1}} bukan salah satu distribusi yang diuji dengan Skifity.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Seharusnya jalan, tapi kalau kamu kena masalah, Ubuntu 24.04 dan Debian 12 adalah pilihan yang sudah diuji."
+      },
+      "preflight_port": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Ada yang sudah mendengarkan di port {{0}}.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Cari dengan: ss -lntup 'sport = :{{0}}' lalu hentikan, atau pakai server yang portnya masih kosong."
+      },
+      "preflight_systemd": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Server ini sepertinya tidak memakai systemd.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Skifity memasang Kubernetes sebagai layanan systemd dan mengelolanya dengan systemctl. Pakai distribusi yang punya systemd, seperti Ubuntu 24.04 atau Debian 12. Alpine dan apa pun yang memakai OpenRC tidak akan jalan, begitu juga kontainer tanpa sistem init — misalnya LXC tanpa hak penuh atau kontainer Docker."
+      },
+      "preflight_wireguard": {
+        "title": "Server ini belum siap bergabung",
+        "cause": "Kernel ini tidak punya modul WireGuard, sementara cluster ini mengenkripsi lalu lintas antar server dengan WireGuard.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pasang di server ini: apt-get install -y wireguard-tools (lalu reboot kalau modulnya masih tidak mau termuat). Kalau kernelnya memang tidak bisa sama sekali, ganti seluruh cluster ke vxlan di Pengaturan -> Klaster -> Jaringan pod, yang mematikan enkripsi itu untuk semua server."
+      },
+      "release_failed": {
+        "title": "Perintah rilis gagal",
+        "cause": "Perintahnya keluar dengan error sebelum versi barunya dirilis.",
+        "impact": "Deployment dihentikan. Versi yang berjalan sebelumnya masih berjalan, dan tidak ada trafik yang sampai ke versi baru.",
+        "fix": "Keluaran perintahnya ada di log build di atas. Perbaiki lalu deploy lagi; tidak ada yang berubah bagi penggunamu."
+      },
+      "release_timed_out": {
+        "title": "Perintah rilis tidak selesai",
+        "cause": "Masih berjalan setelah dua puluh menit.",
+        "impact": "Deployment dihentikan dan versi sebelumnya masih melayani.",
+        "fix": "Migrasi selama ini biasanya perlu dijalankan manual sekali saja, bukan di setiap deploy."
+      },
+      "request_invalid": {
+        "title": "Permintaan itu tidak sah",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Perbaiki kolom yang ditandai lalu coba lagi."
+      },
+      "resource_conflict": {
+        "title": "Nama itu sudah dipakai",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "{{0}}"
+      },
+      "resource_name_taken": {
+        "title": "Nama itu sudah dipakai di sini",
+        "cause": "{{0}} di environment ini sudah bernama {{1}}, dan sebuah aplikasi dan sebuah database dalam satu environment berbagi alamat.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Pilih nama lain. Environment lain tidak terpengaruh: nama yang sama di staging dan di production tidak masalah."
+      },
+      "resource_not_found": {
+        "title": "{{0}} itu tidak ada",
+        "cause": "Tidak ada {{0}} dengan id {{1}} yang terlihat olehmu.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Periksa id-nya, atau kembali ke daftarnya dan pilih lagi."
+      },
+      "run_never_deployed": {
+        "title": "Aplikasi ini belum pernah dideploy",
+        "cause": "Sebuah perintah berjalan di dalam image aplikasi itu sendiri, dan imagenya belum ada sampai aplikasinya dideploy sekali.",
+        "impact": "Tidak ada yang dijalankan.",
+        "fix": "Deploy aplikasinya dulu, baru jalankan perintahnya."
+      },
+      "scaling_risk": {
+        "title": "Aplikasi ini mungkin tidak bekerja benar dengan lebih dari satu instance",
+        "cause": "{{0}}",
+        "impact": "Dengan beberapa instance berjalan, sebagian permintaan akan berperilaku berbeda dari yang lain.",
+        "fix": "{{0}}"
+      },
+      "server_no_operation": {
+        "title": "Tidak ada yang bisa dicoba lagi",
+        "cause": "Tidak ada catatan percobaan sebelumnya untuk menambahkan server ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Hapus servernya lalu tambahkan lagi."
+      },
+      "server_not_in_cluster": {
+        "title": "Server ini belum ada di cluster",
+        "cause": "Tidak ada node Kubernetes yang cocok dengan {{0}}.",
+        "impact": "Tidak ada metrik langsung yang bisa ditampilkan.",
+        "fix": "Kalau servernya masih dalam proses ditambahkan, tunggu sampai selesai. Kalau gagal, buka servernya lalu tekan Coba lagi."
+      },
+      "server_not_ours": {
+        "title": "Server ini bukan Skifity yang menambahkan",
+        "cause": "{{0}} adalah node yang sudah ada di cluster ini sejak Skifity dipasang — biasanya mesin tempat panelnya sendiri berjalan. Tidak ada kunci ke sana dan tidak ada milik kami yang ditaruh di situ.",
+        "impact": "{{0}} tidak dilakukan.",
+        "fix": "Ubah mesin ini dari mesinnya sendiri. Untuk mengeluarkannya sepenuhnya dari cluster, jalankan uninstaller di situ: `sudo sh /usr/local/bin/skifity-uninstall`. Kalau yang kamu mau adalah kapasitas tambahan, tambahkan server kedua — yang itu memang Skifity pasang dan bisa dikelola."
+      },
+      "setup_already_done": {
+        "title": "Penyiapan sudah pernah diselesaikan",
+        "cause": "Panel ini sudah punya akun administrator.",
+        "impact": "Tidak ada akun yang dibuat.",
+        "fix": "Masuk dengan akun yang dibuat saat penyiapan. Kalau kata sandinya hilang, lihat panduan pemulihan akun."
+      },
+      "setup_bad_token": {
+        "title": "Token penyiapan itu tidak benar",
+        "cause": "Token yang kamu masukkan tidak cocok dengan yang dihasilkan panel ini.",
+        "impact": "Tidak ada akun yang dibuat.",
+        "fix": "Salin tokennya dari keluaran installer. Token itu juga ditulis ke berkas setup-token di direktori konfigurasi panel, di servernya."
+      },
+      "setup_no_token": {
+        "title": "Panel ini tidak punya token penyiapan",
+        "cause": "Panel dinyalakan tanpa token penyiapan sekali pakai, jadi penyiapan pertama tidak bisa diverifikasi.",
+        "impact": "Tidak ada akun yang dibuat.",
+        "fix": "Jalankan installer lagi, atau tulis sebuah token ke berkas token penyiapan lalu mulai ulang panelnya."
+      },
+      "setup_too_many_attempts": {
+        "title": "Terlalu banyak token penyiapan yang salah",
+        "cause": "Token penyiapan sudah terlalu sering ditebak.",
+        "impact": "Penyiapan dikunci sampai panelnya dimulai ulang.",
+        "fix": "Mulai ulang panelnya, lalu salin tokennya persis dari keluaran installer."
+      },
+      "ssh_auth_failed": {
+        "title": "Server menolak kredensial itu",
+        "cause": "Masuk sebagai {{0}} di {{1}} dengan {{2}} ditolak.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "{{0}}"
+      },
+      "ssh_host_key_changed": {
+        "title": "Identitas server ini berubah",
+        "cause": "{{0}} menunjukkan host key SSH yang berbeda dari yang dicatat saat dia ditambahkan.",
+        "impact": "Koneksinya ditolak. Skifity tidak akan menjalankan perintah di server yang tidak dia kenali.",
+        "fix": "Kalau kamu membangun ulang atau memasang ulang server ini, hapus dari Skifity lalu tambahkan lagi. Kalau tidak, berhenti dan selidiki: mungkin ada yang menyadap koneksinya."
+      },
+      "ssh_key_install_failed": {
+        "title": "Kunci panel tidak bisa dipasang",
+        "cause": "Menulis ke authorized_keys di {{0}} gagal: {{1}}",
+        "impact": "Server tidak jadi ditambahkan.",
+        "fix": "Pastikan {{0}} bisa menulis ke direktori home-nya sendiri dan disknya tidak penuh."
+      },
+      "ssh_key_verify_failed": {
+        "title": "Kunci panel terpasang tapi tidak berfungsi",
+        "cause": "Menyambung dengan kunci baru gagal: {{0}}",
+        "impact": "Server tidak jadi ditambahkan. Kata sandinya tidak dibuang.",
+        "fix": "Periksa pengaturan sshd di servernya: PubkeyAuthentication harus yes, dan direktori home tidak boleh bisa ditulisi oleh grup."
+      },
+      "ssh_no_credentials": {
+        "title": "Tidak ada kredensial untuk menyambung",
+        "cause": "Kata sandinya dipakai sekali saat percobaan pertama dan sengaja tidak disimpan.",
+        "impact": "Servernya tidak bisa dihubungi untuk melanjutkan.",
+        "fix": "Hapus server ini lalu tambahkan lagi dengan kata sandinya atau sebuah kunci privat."
+      },
+      "ssh_unreachable": {
+        "title": "Server tidak bisa dijangkau lewat SSH",
+        "cause": "Tidak ada yang menjawab di {{0}} port {{1}}.",
+        "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
+        "fix": "Pastikan alamat IP dan portnya benar, servernya menyala, dan firewall penyediamu mengizinkan TCP masuk di port {{0}}. Banyak penyedia memblokir semuanya secara default di panel mereka, dan SSH tidak bisa membukanya dari sini."
+      },
+      "sso_no_panel_url": {
+        "title": "Panel ini tidak tahu alamatnya sendiri",
+        "cause": "Single sign-on mengembalikan orang ke alamat yang tetap, dan pengaturan URL Panel masih kosong.",
+        "impact": "Proses masuknya tidak bisa dimulai.",
+        "fix": "Isi URL Panel di Pengaturan, lalu daftarkan alamat itu diikuti /api/auth/sso/callback ke penyedia identitasmu."
+      },
+      "sso_not_configured": {
+        "title": "Single sign-on belum disiapkan",
+        "cause": "Belum ada penyedia identitas yang dikonfigurasi di panel ini.",
+        "impact": "Masuklah dengan alamat email dan kata sandi saja.",
+        "fix": "Administrator bisa mengatur penyedianya di Pengaturan, lalu Masuk."
+      },
+      "sso_provider_unreachable": {
+        "title": "Penyedia identitasnya tidak bisa dihubungi",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang bisa masuk lewat single sign-on sampai ini diperbaiki.",
+        "fix": "Periksa URL issuer di Pengaturan, lalu Masuk, dan pastikan panel ini bisa menjangkaunya."
+      },
+      "store_bad_index": {
+        "title": "Indeks store plugin tidak bisa dibaca",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dibaca dari sana.",
+        "fix": "Kalau ini store milikmu sendiri, pastikan indeksnya berformat yang panel ini baca. Sebuah plugin tetap bisa dipasang dari alamat manifest atau dengan menempelkan manifest-nya."
+      },
+      "store_bad_signature": {
+        "title": "Indeks store plugin tidak ditandatangani oleh kunci yang dipercaya panel ini",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dibaca dari sana, dan tidak ada yang dipasang.",
+        "fix": "Periksa kunci penandatangannya di Pengaturan, lalu Plugin. Kalau kuncinya benar, berarti indeks di {{0}} bukan indeks yang ditandatangani kunci itu — dan itu layak ditelusuri sebelum memasang apa pun dari sana."
+      },
+      "store_unreachable": {
+        "title": "Store plugin tidak bisa dihubungi",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dibaca dari sana.",
+        "fix": "Pastikan cluster ini bisa menjangkau {{0}}. Sebuah plugin tetap bisa dipasang dari alamat manifest atau dengan menempelkannya — itulah yang dipakai cluster yang tidak punya jalan keluar ke internet."
+      },
+      "team_account_exists": {
+        "title": "Mereka sudah punya akun di sini",
+        "cause": "{{0}} pernah masuk ke panel ini, jadi tidak ada yang perlu didaftarkan.",
+        "impact": "Tidak ada undangan yang dibuat.",
+        "fix": "Tambahkan mereka ke tim di halaman Anggota, dengan alamat yang sama."
+      },
+      "team_already_a_member": {
+        "title": "Mereka sudah ada di tim ini",
+        "cause": "{{0}} sudah jadi anggota.",
+        "impact": "Tidak ada undangan yang dibuat.",
+        "fix": "Ubah perannya di halaman Anggota saja."
+      },
+      "team_last_owner": {
+        "title": "Sebuah tim butuh setidaknya satu pemilik",
+        "cause": "Ini satu-satunya pemilik tim ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jadikan orang lain pemilik dulu, baru hapus yang ini."
+      },
+      "team_no_such_user": {
+        "title": "Tidak ada akun dengan email itu",
+        "cause": "Tidak ada yang memakai alamat {{0}} di panel ini.",
+        "impact": "Tidak ada yang ditambahkan ke tim.",
+        "fix": "Minta mereka membuat akun dulu, baru tambahkan. Skifity tidak mengirim undangan ke alamat yang belum pernah masuk."
+      },
+      "tunnel_no_token": {
+        "title": "Belum ada token tunnel Cloudflare",
+        "cause": "Pengaturan belum berisi token tunnel, dan konektornya tidak bisa mengautentikasi tanpa itu.",
+        "impact": "Tunnel-nya tidak dipasang. Tidak ada yang diubah di cluster.",
+        "fix": "Buat tunnel di dasbor Cloudflare di Zero Trust, lalu Networks, lalu Tunnels. Pilih konektor Cloudflared, salin token yang ditampilkan, dan tempelkan ke Pengaturan, lalu Domain dan HTTPS, lalu Token tunnel Cloudflare. Di tunnel yang sama, tambahkan hostname publik — wildcard seperti *.apps.example.com mencakup semua aplikasi sekaligus — dengan service disetel ke HTTP dan alamat {{0}}."
+      },
+      "tunnel_not_applied": {
+        "title": "Tokennya tersimpan, tapi tunnel-nya tidak diperbarui",
+        "cause": "{{0}}",
+        "impact": "Konektornya masih berjalan dengan token yang lama, jadi trafik tetap mengalir sampai mereka dimulai ulang.",
+        "fix": "Perbaiki apa yang disebut penyebabnya lalu simpan tokennya lagi, atau pasang Cloudflare tunnel di halaman Komponen."
+      },
+      "upgrade_failed": {
+        "title": "Peningkatan tidak bisa dimulai",
+        "cause": "{{0}}",
+        "impact": "Panelnya masih menjalankan versi yang sekarang.",
+        "fix": "Pastikan versinya ada dan cluster bisa menarik imagenya."
+      },
+      "upgrade_unsupported": {
+        "title": "Panel ini tidak bisa meningkatkan dirinya sendiri",
+        "cause": "Panelnya tidak berjalan di dalam cluster yang bisa dia perbarui, dan itu wajar saat pengembangan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tingkatkan dengan menarik image baru lalu mulai ulang, atau jalankan lagi installer dengan versi yang kamu mau."
+      },
+      "webhook_unverified": {
+        "title": "Webhook ini tidak bisa diverifikasi",
+        "cause": "Tanda tangan pada permintaannya tidak cocok dengan rahasia webhook koneksi ini.",
+        "impact": "Tidak ada deploy yang dimulai.",
+        "fix": "Pastikan rahasia di pengaturan webhook di host Git-mu sama dengan yang ada di Skifity."
+      },
+      "auth_reauth_required": {
+        "title": "Pastikan ini memang Anda",
+        "cause": "Tindakan ini memerlukan kata sandi Anda lagi, karena memegang sesi yang sudah masuk tidak sama dengan berada di depan papan ketik.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Masukkan kata sandi Anda untuk melanjutkan."
+      },
+      "auth_reauth_failed": {
+        "title": "Kata sandi itu tidak benar",
+        "cause": "Kata sandi, atau kode dua faktor, tidak cocok dengan akun ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Ketik ulang. Setelah beberapa kali salah, ini dijeda sejenak."
+      },
+      "auth_no_password": {
+        "title": "Akun ini tidak punya kata sandi untuk dikonfirmasi",
+        "cause": "Akun ini masuk lewat penyedia identitas Anda, dan autentikasi dua faktor belum dinyalakan di sini, jadi tidak ada yang bisa panel ini tanyakan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Nyalakan dulu autentikasi dua faktor untuk akun ini, atau gunakan akun yang punya kata sandi."
+      },
+      "auth_needs_person": {
+        "title": "Ini harus dilakukan dari panel",
+        "cause": "Mengubah autentikasi dua faktor atau membuat token harus dilakukan oleh orang yang bisa membuktikan identitasnya, dan token API tidak bisa.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Masuk ke panel dan lakukan di sana."
+      },
+      "cli_app_not_created": {
+        "title": "Panel tidak menyebutkan aplikasi mana yang dibuat",
+        "cause": "Balasan saat membuat aplikasi tidak memuat aplikasinya.",
+        "impact": "Berkas proyek tidak ditulis, jadi `skifity deploy` di sini tidak tahu apa yang harus di-deploy.",
+        "fix": "Cari dengan `skifity apps`, lalu tulis id-nya di skifity.toml sebagai app = \"<id>\"."
+      },
+      "upload_none": {
+        "title": "Belum ada kode untuk di-deploy",
+        "cause": "{{0}} men-deploy folder dari komputer seseorang, dan belum ada yang dikirim.",
+        "impact": "Tidak ada yang di-build atau di-deploy.",
+        "fix": "Tekan Kirim versi baru di halaman aplikasinya lalu pilih foldernya, atau jalankan `skifity up` di folder itu."
+      },
+      "upload_not_found": {
+        "title": "Unggahan itu tidak ada di panel",
+        "cause": "Tidak ada unggahan dengan hash {{0}} milik aplikasi ini. Panel menyimpan sepuluh unggahan terbaru tiap aplikasi.",
+        "impact": "Tidak ada yang di-build atau di-deploy.",
+        "fix": "Kirim foldernya lagi, dari halaman aplikasi atau dengan `skifity up`."
+      },
+      "upload_not_an_archive": {
+        "title": "Panel tidak bisa membaca unggahan ini",
+        "cause": "Yang dikirim bukan arsip tar ber-gzip yang utuh.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Kirim foldernya dengan `skifity up`, yang mengemasnya dengan cara yang dibaca panel. Kalau sudah begitu, kemungkinan pengirimannya terputus, jadi jalankan lagi."
+      },
+      "upload_unsafe_entry": {
+        "title": "Unggahan berisi berkas yang tidak akan dibongkar panel",
+        "cause": "{{0}} adalah tautan, berkas khusus, atau jalur yang mengarah ke luar folder, dan membongkarnya bisa menulis ke tempat yang tidak semestinya.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Hapus dari foldernya, atau tulis di .skifityignore supaya tidak ikut dikirim."
+      },
+      "upload_secrets_file": {
+        "title": "Unggahan berisi berkas .env",
+        "cause": "{{0}} menyimpan pengaturan asli aplikasi. Build memasukkan setiap berkas yang diterimanya ke dalam image, dan siapa pun yang bisa menarik image itu bisa membacanya.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Isi nilai-nilai itu di Variabel aplikasi. `skifity up` otomatis tidak menyertakan berkas .env, jadi berkas ini dikirim dengan cara lain."
+      },
+      "upload_too_many_files": {
+        "title": "Unggahan berisi terlalu banyak berkas",
+        "cause": "Isinya lebih dari {{0}} berkas, padahal kode sumber hampir tidak pernah sebanyak itu.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Kemungkinan ada folder dependensi seperti node_modules atau virtualenv di dalamnya. Tulis di .skifityignore: build akan memasang dependensinya sendiri."
+      },
+      "upload_unpacks_too_large": {
+        "title": "Unggahan terlalu besar setelah dibongkar",
+        "cause": "Total isinya lebih dari {{0}} MB.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Kemungkinan ada hasil build, folder dependensi, atau berkas data di dalamnya. Tulis di .skifityignore lalu kirim lagi."
+      },
+      "upload_empty": {
+        "title": "Unggahan tidak berisi berkas apa pun",
+        "cause": "Arsipnya sudah dibaca sampai habis dan paling banyak hanya berisi folder.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Jalankan `skifity up` dari dalam folder aplikasinya, atau sebut foldernya: `skifity up ./aplikasi-saya`."
+      },
+      "upload_too_large": {
+        "title": "Unggahan terlalu besar",
+        "cause": "Panel menerima kode terkompresi paling besar {{0}} MB, dan ini lebih dari itu.",
+        "impact": "Tidak ada yang disimpan, di-build, atau di-deploy.",
+        "fix": "Kemungkinan ada sesuatu yang bukan kode sumber di folder itu, seperti folder dependensi, hasil build, atau berkas database. Tulis di .skifityignore lalu kirim lagi."
+      },
+      "upload_wrong_source": {
+        "title": "Aplikasi ini tidak men-deploy kode unggahan",
+        "cause": "{{0}} di-build dari repositori atau image, jadi kode yang dikirim ke sana tidak akan pernah dipakai.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Push ke repositorinya saja, atau buat aplikasi baru untuk folder ini dengan `skifity up --new`."
+      },
+      "upload_delivery_failed": {
+        "title": "Kode tidak bisa diserahkan ke build",
+        "cause": "Panel tidak bisa mengirim kode unggahan ke dalam build: {{0}}",
+        "impact": "Tidak ada yang di-build atau di-deploy. Versi sebelumnya masih berjalan.",
+        "fix": "Tekan Coba lagi. Kalau gagal lagi, pastikan panel bisa menjangkau API cluster dan pod build-nya sudah berjalan."
+      },
+      "cli_platform_unknown": {
+        "title": "Tidak ada alat baris perintah untuk platform itu",
+        "cause": "{{0}} bukan platform yang dibuatkan alat baris perintahnya. Alat ini dibuat untuk linux, darwin (macOS), dan windows, di amd64 dan arm64.",
+        "impact": "Tidak ada yang diunduh.",
+        "fix": "Minta salah satunya, misalnya ?os=darwin&arch=arm64 untuk Mac dengan Apple silicon."
+      },
+      "cli_platform_unavailable": {
+        "title": "Panel ini tidak punya alat baris perintah untuk platform itu",
+        "cause": "Tidak ada build untuk {{0}} di samping panel ini. Yang ada: {{1}}.",
+        "impact": "Tidak ada yang diunduh. Men-deploy folder dari halaman Aplikasi baru di panel tetap bisa tanpanya.",
+        "fix": "Buat dengan `make release` lalu salin ke direktori CLI panel, atau pakai image panel, yang membawa semua platform."
+      }
+    }
+  },
+  "time": {
+    "seconds": "{{count}} dtk",
+    "minutes": "{{count}} mnt",
+    "hours": "{{count}} jam"
+  },
+  "git": {
+    "title": "Git",
+    "help": "Hubungkan akun agar Skifity bisa membaca repositori privat Anda dan men-deploy setiap kali Anda push. Repositori publik tidak memerlukan ini.",
+    "empty": "Belum ada akun Git yang terhubung",
+    "connect": "Hubungkan akun",
+    "provider": "Lokasi kode",
+    "sourceName": "Nama",
+    "sourceNameHelp": "Sesuatu yang Anda kenali, misalnya \"GitHub kantor\".",
+    "token": "Token akses",
+    "tokenHelp": "Perlu izin untuk membaca repositori dan membuat webhook. Disimpan terenkripsi dan tidak pernah ditampilkan lagi.",
+    "baseURL": "Alamat server",
+    "baseURLHelp": "Untuk GitLab atau Gitea yang Anda hosting sendiri. Kosongkan untuk layanan resmi.",
+    "account": "Pengguna atau organisasi",
+    "disconnect": "Putuskan",
+    "disconnectWarning": "Aplikasi yang di-deploy dari akun ini berhenti men-deploy saat push. Aplikasi tetap berjalan.",
+    "webhookURL": "Alamat webhook",
+    "webhookURLHelp": "Skifity menambahkan ini ke repositori Anda sendiri jika token mengizinkannya. Jika tidak bisa, tambahkan secara manual di pengaturan webhook repositori.",
+    "pushDeploysOn": "Push ke repositori ini langsung men-deploy",
+    "pushDeploysOnHelp": "Skifity sudah menambahkan webhook di host Git Anda. Tidak ada lagi yang perlu diatur.",
+    "pushDeploysManual": "Deploy saat push butuh satu langkah lagi",
+    "pushDeploysManualHelp": "Skifity tidak bisa menambahkan webhook sendiri, jadi tambahkan URL ini di pengaturan webhook repositori. Gunakan secret dari Pengaturan, Git."
+  },
+  "notifications": {
+    "title": "Notifikasi",
+    "help": "Ke mana Skifity mengabari Anda saat terjadi sesuatu. Tidak ada yang dikirim sampai Anda menambahkan tujuan.",
+    "empty": "Belum ada tujuan notifikasi",
+    "add": "Tambahkan tujuan",
+    "channelKind": "Kirim ke",
+    "kindFromPlugin": "Dari plugin",
+    "providedBy": "Dikirim oleh plugin {{plugin}}.",
+    "channelName": "Nama",
+    "events": "Beri tahu saya tentang",
+    "eventsHelp": "Pilih sesedikit mungkin. Saluran yang tidak dibaca siapa pun lebih buruk daripada tidak ada.",
+    "test": "Kirim uji coba",
+    "testSent": "Terkirim. Jika tidak ada yang sampai, detailnya salah.",
+    "kind": {
+      "telegram": "Telegram",
+      "discord": "Discord",
+      "webhook": "Webhook",
+      "email": "Email"
+    },
+    "event": {
+      "deploy.succeeded": "Deployment berhasil",
+      "deploy.failed": "Deployment gagal",
+      "app.unhealthy": "Aplikasi berhenti merespons",
+      "server.added": "Server bergabung",
+      "server.lost": "Server berhenti merespons",
+      "backup.failed": "Pencadangan gagal",
+      "certificate.failed": "Sertifikat gagal diterbitkan"
+    },
+    "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan."
+  },
+  "invite": {
+    "title": "Gabung ke {{team}}",
+    "subtitle": "Anda diundang sebagai {{email}}, dengan peran {{role}}. Pilih kata sandi dan Anda masuk.",
+    "emailFixed": "Ini alamat yang diundang, dan tidak bisa diubah di sini.",
+    "join": "Gabung ke tim",
+    "notValidTitle": "Undangan ini tidak bisa dipakai",
+    "notValidHelp": "Tautannya kedaluwarsa, sudah dipakai, atau ditarik kembali. Minta tautan baru dari yang mengundang Anda.",
+    "goToSignIn": "Ke halaman masuk"
+  },
+  "environments": {
+    "confinement": "Pembatasan",
+    "confinementRestrictedHelp": "Pod di sini dipegang pada profil paling ketat. Image yang mulai sebagai root ditolak, dan itu sebagian besar image siap pakai.",
+    "confinementBaselineHelp": "Environment ini menerima image yang mulai sebagai root. Container privileged, jaringan host, dan path host tetap ditolak, jadi app tetap tidak bisa menyentuh server tempatnya berjalan.",
+    "confinementLower": "Terima image root",
+    "confinementRaise": "Kembali paling ketat",
+    "confinementLowerTitle": "Terima image yang mulai sebagai root?",
+    "confinementLowerConfirm": "App di environment ini akan boleh mulai sebagai root di dalam containernya sendiri, seperti yang dilakukan image resmi WordPress, Nextcloud, dan MediaWiki. Container privileged, jaringan host, path host, dan kapabilitas tambahan tetap ditolak. Deploy ulang setiap app agar perubahannya sampai.",
+    "podSecurity": {
+      "restricted": "Paling ketat",
+      "baseline": "Terima image root"
+    }
+  },
+  "firewall": {
+    "title": "Firewall",
+    "off": "Mati",
+    "help": "Aturan siapa yang boleh mencapai app ini: berdasarkan alamat, negara, jaringan, path, atau header, digabung dengan and dan or. Aturan pertama yang cocok yang memutuskan.",
+    "addRule": "Tambah aturan",
+    "addCondition": "Tambah kondisi",
+    "addGroup": "Tambah grup",
+    "rulePlaceholder": "Aturan ini untuk apa",
+    "ruleName": "Nama aturan",
+    "ruleEnabled": "Aturan menyala",
+    "otherwise": "Selain itu:",
+    "match": "Cocok",
+    "matchAll": "Cocok semua ini",
+    "matchAny": "Cocok salah satu ini",
+    "field": "Yang dilihat",
+    "operator": "Perbandingan",
+    "values": "Nilai",
+    "headerName": "Nama header",
+    "headerPlaceholder": "X-Api-Key",
+    "notInstalled": "Aturan ini belum ditegakkan",
+    "notInstalledHelp": "Komponen firewall belum dipasang, jadi tidak ada yang memeriksa request. Pasang di Setelan, lalu Komponen.",
+    "noDomain": "App ini belum punya alamat untuk dijaga",
+    "noDomainHelp": "Aturan berlaku pada sebuah hostname. Tambahkan domain di Domain, dan aturan ini akan mulai berlaku padanya.",
+    "noGeo": "Ada aturan yang menyebut negara atau jaringan, dan panel ini tidak mencarinya",
+    "noGeoHelp": "Nyalakan \"Cari negara dan jaringan pengunjung\" di Setelan, lalu Domain dan HTTPS. Sampai itu, aturan seperti ini dilewati di setiap request.",
+    "action": {
+      "allow": "Izinkan",
+      "block": "Blokir"
+    },
+    "fields": {
+      "ip.src": "Alamat pengunjung",
+      "ip.country": "Negara pengunjung",
+      "ip.asn": "Jaringan pengunjung",
+      "http.host": "Hostname",
+      "http.path": "Path",
+      "http.method": "Metode",
+      "http.user_agent": "Browser atau bot",
+      "http.header": "Sebuah header"
+    },
+    "operators": {
+      "in": "salah satu dari",
+      "not_in": "bukan salah satu dari",
+      "contains": "mengandung",
+      "starts_with": "diawali",
+      "ends_with": "diakhiri",
+      "matches": "cocok dengan pola"
+    },
+    "placeholders": {
+      "ip.src": "203.0.113.0/24, 198.51.100.9",
+      "ip.country": "ID, SG",
+      "ip.asn": "AS13335, 15169",
+      "http.host": "shop.example.com",
+      "http.path": "/admin",
+      "http.method": "POST",
+      "http.user_agent": "badbot",
+      "http.header": "sebuah nilai"
+    }
+  },
+  "plugins": {
+    "title": "Plugin",
+    "subtitle": "Fitur buatan orang lain, berjalan di samping panel dalam containernya sendiri.",
+    "installed": "Terpasang",
+    "store": "Store",
+    "fromAddress": "Dari alamat",
+    "empty": "Belum ada plugin",
+    "emptyHelp": "Telusuri store, atau pasang dari alamat atau manifes yang Anda tempel.",
+    "install": "Pasang",
+    "review": "Lihat apa yang bisa dilakukannya",
+    "enabled": "Plugin menyala",
+    "installedWhen": "dipasang {{when}}",
+    "notRunning": "Plugin ini tidak berjalan",
+    "removeTitle": "Copot {{name}}?",
+    "removeConfirm": "Containernya, setelannya, dan token aksesnya semua hilang. Apa pun yang sudah ditulisnya di tempat lain tetap di sana.",
+    "secretStored": "Tersimpan. Isi nilai baru untuk menggantinya.",
+    "storeVerified": "Ditandatangani kunci yang dipercaya panel ini · {{url}}",
+    "storeUnsigned": "Tidak ada yang menjamin katalog ini",
+    "storeUnsignedHelp": "Kunci penandatangan belum diisi, jadi panel tidak bisa tahu apakah daftar ini yang diterbitkan store. Isi di Setelan, lalu Plugin. Bagaimanapun, apa yang boleh dilakukan sebuah plugin ditampilkan sebelum Anda memasangnya.",
+    "storeEmpty": "Store-nya kosong",
+    "storeEmptyHelp": "Katalognya terbaca dan tidak memuat plugin.",
+    "paid": "Berbayar",
+    "buy": "Beli",
+    "alreadyInstalled": "Terpasang",
+    "upgradeAvailable": "Versi {{version}} tersedia",
+    "fromAddressHelp": "Plugin selalu bisa dipasang tanpa store — dari alamat manifesnya, atau dengan menempel manifesnya langsung. Ini jalur yang dipakai cluster tanpa akses internet, dan yang dipakai penulis plugin untuk mencoba buatannya sendiri.",
+    "manifestAddress": "Alamat manifes",
+    "orPaste": "Atau tempel manifesnya",
+    "willBeAbleTo": "Plugin ini akan bisa:",
+    "noPermissions": "Tidak meminta akses apa pun.",
+    "blocksDeploys": "Plugin ini bisa menghentikan deployment",
+    "blocksDeploysHelp": "Ia meminta ditanya sebelum setiap deploy dan boleh menolaknya. Plugin yang sedang mati tidak menghalangi apa pun, dan Anda bisa mematikannya kapan saja.",
+    "confinementNote": "Ia berjalan di namespace sendiri dan bisa menjangkau panel, DNS, dan internet — bukan app Anda, bukan database Anda, dan bukan server tempatnya berjalan.",
+    "digestNote": "Dikunci digest, jadi image-nya tidak bisa diganti setelah Anda menyetujuinya.",
+    "status": {
+      "installing": "Menyala",
+      "running": "Berjalan",
+      "failed": "Gagal",
+      "disabled": "Mati"
+    },
+    "permission": {
+      "read": "membaca",
+      "write": "membaca dan mengubah"
+    },
+    "resource": {
+      "apps": "app Anda",
+      "deployments": "deployment Anda",
+      "databases": "database Anda",
+      "backups": "backup Anda",
+      "projects": "project Anda",
+      "servers": "server Anda",
+      "templates": "katalog aplikasi",
+      "operations": "operasi berjalan lama",
+      "events": "aliran event",
+      "teams": "tim Anda",
+      "settings": "setelan panel",
+      "account": "akun Anda"
+    }
+  },
+  "needs": {
+    "databasesTitle": "Database yang dibutuhkan app ini",
+    "databaseCreate": "Buat database {{engine}} dan sambungkan sebagai {{variable}}",
+    "because": "Karena {{source}} memakai {{evidence}}.",
+    "databaseStarting": "Database butuh sekitar satu menit untuk menyala, jadi app mungkin restart sekali sambil menunggu. Itu wajar.",
+    "notProvidedTitle": "App ini memakai {{engine}}",
+    "notProvided": "Panel ini tidak menjalankan {{engine}}. Pakai layanan terkelola di luar, lalu isi {{variable}} di Variabel.",
+    "ephemeralTitle": "App ini menyimpan datanya di dalam berkas",
+    "ephemeral": "Data disimpan lewat {{evidence}} ({{what}}) di dalam container, dan deploy berikutnya mengganti container itu. Semua yang tersimpan di sana hilang.",
+    "ephemeralFixDatabase": "Centang database di atas dan arahkan app ke sana.",
+    "ephemeralFixVolume": "Pakai database terkelola, atau tambahkan volume untuk folder datanya setelah app dibuat.",
+    "variablesTitle": "Pengaturan",
+    "variablesExpected": "App ini mengharapkan pengaturan yang tercantum di {{source}}. Tempel .env Anda di sini dan semuanya disimpan sebelum deploy pertama.",
+    "variablesOptional": "Tempel .env Anda di sini dan pengaturannya disimpan sebelum deploy pertama.",
+    "variablesSecret": "Apa pun yang tampak seperti kunci atau kata sandi disimpan sebagai rahasia.",
+    "variablesPlaceholder": "OPENAI_API_KEY=sk-...",
+    "missing": "Masih kurang:",
+    "allSet": "Semua pengaturan yang dibutuhkan app ini sudah ada.",
+    "databaseFailed": "App sudah dibuat, tapi database {{engine}}-nya belum",
+    "engine": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "redis": "Redis",
+      "mongodb": "MongoDB",
+      "sqlserver": "SQL Server",
+      "sqlite": "SQLite",
+      "file": "berkas data"
+    },
+    "pastedReplaced": "{{variable}} dari yang Anda tempel tidak disertakan: database {{engine}} yang dibuat bersama aplikasi akan mengisinya, menunjuk ke dirinya sendiri, bukan ke komputer asal berkas itu."
+  },
+  "folder": {
+    "label": "Folder aplikasi Anda",
+    "choose": "Pilih folder",
+    "chooseAnother": "Pilih folder lain",
+    "help": "Pilih folder tempat aplikasi Anda berada. node_modules, semua berkas .env, dan apa pun yang tercantum di .gitignore tetap di komputer Anda.",
+    "files_other": "{{count}} berkas, {{size}}",
+    "leftOut_other": "{{count}} tidak disertakan",
+    "dotenvRead": "Pengaturan dari .env di folder Anda sudah ada di kotak di bawah. Berkasnya sendiri tidak diunggah: nilainya disimpan sebagai variabel aplikasi, dan apa pun yang terlihat seperti kunci atau kata sandi disimpan sebagai rahasia. Kosongkan kotaknya untuk tidak menyertakannya.",
+    "emptyTitle": "Tidak ada yang bisa dikirim dari folder itu",
+    "empty": "Semua berkas di dalamnya termasuk yang tidak ikut dikirim, seperti node_modules atau .env. Pilih folder tempat kode aplikasinya sendiri berada.",
+    "tooLargeTitle": "Folder itu terlalu besar untuk dikirim",
+    "tooLarge": {
+      "entries": "Isinya lebih dari {{entries}} berkas, padahal kode aplikasi hampir tidak pernah sebanyak itu. Bagian terbesarnya:",
+      "unpacked": "Total berkasnya lebih dari {{size}}. Bagian terbesarnya:",
+      "compressed": "Setelah dikemas, ukurannya lebih dari {{size}}. Bagian terbesarnya:"
+    },
+    "tooLargeFix": "Biasanya penyebabnya folder dependensi, hasil build, atau berkas data. Tulis di berkas .skifityignore di folder itu lalu pilih lagi.",
+    "sendNew": "Kirim versi baru",
+    "sending": "Mengirim…",
+    "sent": "Terkirim. Deployment #{{number}} sedang di-build.",
+    "sendFailed": "Aplikasinya sudah dibuat, tetapi kodenya gagal dikirim. Kirim lagi dari halaman aplikasinya.",
+    "terminalTitle": "Lebih suka terminal?",
+    "terminalHelp": "Jalankan ini di folder aplikasinya. Pertama kali, skifity up membuat aplikasinya, database yang dipakainya, dan tautan ke folder itu; setelah itu, menjalankannya lagi akan mengirim dan men-deploy versi baru.",
+    "terminalAssistant": "Asisten yang bisa menjalankan perintah bisa melakukannya untuk Anda, atau hubungkan ke skifity mcp dan pakai alat deploy_folder-nya.",
+    "platform": "Komputer Anda",
+    "platforms": {
+      "darwin_arm64": "macOS (Apple silicon)",
+      "darwin_amd64": "macOS (Intel)",
+      "windows_amd64": "Windows",
+      "windows_arm64": "Windows di Arm",
+      "linux_amd64": "Linux",
+      "linux_arm64": "Linux di Arm"
+    }
+  }
+}

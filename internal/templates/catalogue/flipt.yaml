@@ -1,0 +1,19 @@
+id: flipt
+name: Flipt
+description: Flipt is a fully managed feature flag solution that enables you to keep your feature flags
+  and remote config next to your code in Git.
+category: developer
+website: https://docs.flipt.io/cloud/overview
+services:
+- name: flipt
+  image: docker.flipt.io/flipt/flipt:v2
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: flipt-data
+    mount_path: /var/opt/flipt
+    size_gb: 5

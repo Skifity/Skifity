@@ -1,0 +1,50 @@
+id: langfuse
+name: Langfuse
+description: Langfuse is an open-source LLM engineering platform that helps teams collaboratively debug,
+  analyze, and iterate on their LLM applications.
+category: ai
+website: https://langfuse.com/docs
+services:
+- name: langfuse
+  image: langfuse/langfuse:3
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+- name: langfuse-worker
+  image: langfuse/langfuse-worker:3
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CLICKHOUSE_CLUSTER_ENABLED: 'false'
+- name: clickhouse
+  image: clickhouse/clickhouse-server:26.2.4.23
+  port: 9000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: langfuse-clickhouse-data
+    mount_path: /var/lib/clickhouse
+    size_gb: 5
+  - name: langfuse-clickhouse-logs
+    mount_path: /var/log/clickhouse-server
+    size_gb: 5
+databases:
+- name: langfuse-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - langfuse
+  - langfuse-worker
+  var_name: DATABASE_URL
+notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
+  together.

@@ -1,0 +1,18 @@
+id: apprise-api
+name: Apprise Api
+description: Push Notifications API.
+category: automation
+website: https://docs.linuxserver.io/images/docker-apprise-api/
+services:
+- name: apprise-api
+  image: linuxserver/apprise-api:1.5.4
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: UTC

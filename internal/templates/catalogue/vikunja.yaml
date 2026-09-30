@@ -1,0 +1,28 @@
+id: vikunja
+name: Vikunja
+description: The open-source, self-hostable to-do app. Organize everything, on all platforms.
+category: productivity
+website: https://vikunja.io
+services:
+- name: vikunja
+  image: vikunja/vikunja:2.6
+  port: 3456
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    VIKUNJA_SERVICE_ENABLEREGISTRATION: 'true'
+    VIKUNJA_DATABASE_PATH: /db/vikunja.db
+    VIKUNJA_DATABASE_TYPE: sqlite
+  volumes:
+  - name: vikunja-data
+    mount_path: /app/vikunja/
+    size_gb: 5
+  - name: vikunja-sqlite-data
+    mount_path: /db
+    size_gb: 5
+notes: 'This stack has a set-up step that runs once and exits — init. Skifity runs apps, not one-shot
+  containers, so that step is not installed: do it yourself from the app''s Commands tab, or follow the
+  project''s own instructions, before expecting everything to work.'

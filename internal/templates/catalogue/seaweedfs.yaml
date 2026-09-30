@@ -1,0 +1,35 @@
+id: seaweedfs
+name: Seaweedfs
+description: SeaweedFS is a simple and highly scalable distributed file system. Compatible with S3, with
+  an admin web interface.
+category: storage
+website: https://github.com/seaweedfs/seaweedfs
+services:
+- name: seaweedfs-master
+  image: chrislusf/seaweedfs:4.41
+  port: 8333
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: seaweedfs-s3-data
+    mount_path: /data
+    size_gb: 5
+- name: seaweedfs-admin
+  image: chrislusf/seaweedfs:4.41
+  port: 23646
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: seaweedfs-admin-data
+    mount_path: /data
+    size_gb: 5
+notes: In the original this stack shares /data between seaweedfs-admin and seaweedfs-master. Skifity gives
+  each app storage of its own, so those are separate directories here. If the apps need to see the same
+  files, point them at object storage — MinIO is in this catalogue — rather than a path. This template
+  installs 2 apps. They reach each other by name inside the environment, so keep them together.

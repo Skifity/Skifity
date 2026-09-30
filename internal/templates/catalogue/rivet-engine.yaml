@@ -1,0 +1,20 @@
+id: rivet-engine
+name: Rivet Engine
+description: Build and scale stateful workloads with long-lived processes.
+category: developer
+website: https://www.rivet.dev/docs
+services:
+- name: rivet-engine
+  image: rivetdev/engine:2.2.0
+  port: 6420
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    RIVET__FILE_SYSTEM__PATH: /data
+  volumes:
+  - name: rivet-data
+    mount_path: /data
+    size_gb: 5

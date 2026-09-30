@@ -1,0 +1,19 @@
+id: readeck
+name: Readeck
+description: Simple web application that lets you save the precious readable content of web pages you
+  like and want to keep forever.
+category: productivity
+website: https://readeck.org/en/docs/
+services:
+- name: readeck
+  image: codeberg.org/readeck/readeck:0.23
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: readeck-data
+    mount_path: /readeck
+    size_gb: 5

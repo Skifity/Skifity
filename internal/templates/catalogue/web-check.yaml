@@ -1,0 +1,14 @@
+id: web-check
+name: Web Check
+description: All-in-one OSINT tool for analysing any website.
+category: monitoring
+website: https://github.com/lissy93/web-check
+services:
+- name: web-check
+  image: lissy93/web-check:2.2
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

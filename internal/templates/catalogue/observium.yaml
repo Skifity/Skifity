@@ -1,0 +1,29 @@
+id: observium
+name: Observium
+description: Observium is a comprehensive network monitoring platform designed to deliver powerful monitoring
+  capabilities, combined with an elegant and intuitive user interface.
+category: monitoring
+website: https://docs.observium.org/
+services:
+- name: observium
+  image: mbixtech/observium:24.12
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: observium-logs
+    mount_path: /opt/observium/logs
+    size_gb: 5
+  - name: observium-rrd
+    mount_path: /opt/observium/rrd
+    size_gb: 5
+databases:
+- name: observium-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - observium
+  var_name: DATABASE_URL

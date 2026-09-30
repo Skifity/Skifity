@@ -1,0 +1,16 @@
+id: soketi-app-manager
+name: Soketi App Manager
+description: Manage soketi websocket server and apps with ease.
+category: developer
+website: https://github.com/rahulhaque/soketi-app-manager-filament
+services:
+- name: soketi-app-manager
+  image: ghcr.io/rahulhaque/soketi-app-manager-filament-alpine:1.1.7
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    AUTORUN_ENABLED: 'true'

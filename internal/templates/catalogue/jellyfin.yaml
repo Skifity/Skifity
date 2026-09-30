@@ -1,0 +1,25 @@
+id: jellyfin
+name: Jellyfin
+description: Jellyfin is a media server for hosting and streaming your media collection.
+category: media
+website: https://jellyfin.org
+services:
+- name: jellyfin
+  image: linuxserver/jellyfin:10.11.8
+  port: 8096
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: jellyfin-config
+    mount_path: /config
+    size_gb: 5
+  - name: jellyfin-tvshows
+    mount_path: /data/tvshows
+    size_gb: 5

@@ -1,0 +1,18 @@
+id: once-campfire
+name: Once Campfire
+description: Super simple group chat, without a subscription.
+category: communication
+website: https://github.com/basecamp/once-campfire
+services:
+- name: campfire
+  image: ghcr.io/basecamp/once-campfire:1.4
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: campfire-storage
+    mount_path: /rails/storage
+    size_gb: 5

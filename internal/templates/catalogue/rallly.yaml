@@ -1,0 +1,22 @@
+id: rallly
+name: Rallly
+description: Rallly is an open-source scheduling and collaboration tool designed to make organizing events
+  and meetings easier.
+category: productivity
+website: https://support.rallly.co/self-hosting/introduction
+services:
+- name: rallly
+  image: lukevella/rallly:4.15
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: rallly-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - rallly
+  var_name: DATABASE_URL

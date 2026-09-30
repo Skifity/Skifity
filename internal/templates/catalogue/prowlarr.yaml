@@ -1,0 +1,22 @@
+id: prowlarr
+name: Prowlarr
+description: Prowlarr⁠ is a indexer manager/proxy built on the popular arr .net/reactjs base stack to
+  integrate with your various PVR apps.
+category: media
+website: https://hub.docker.com/r/linuxserver/prowlarr
+services:
+- name: prowlarr
+  image: linuxserver/prowlarr:2.6.5
+  port: 9696
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: prowlarr-config
+    mount_path: /config
+    size_gb: 5

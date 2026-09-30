@@ -1,0 +1,24 @@
+id: phpmyadmin
+name: Phpmyadmin
+description: phpMyAdmin is a web-based database management tool for administering your MySQL and MariaDB
+  databases through a user-friendly interface.
+category: storage
+website: https://phpmyadmin.net
+services:
+- name: phpmyadmin
+  image: linuxserver/phpmyadmin:5.2.3
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+    PMA_ARBITRARY: '1'
+  volumes:
+  - name: phpmyadmin-config
+    mount_path: /config
+    size_gb: 5

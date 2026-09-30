@@ -1,0 +1,29 @@
+id: langflow
+name: Langflow
+description: Langflow is an open-source, Python-based, customizable framework for building AI applications.
+category: ai
+website: https://docs.langflow.org
+services:
+- name: langflow
+  image: langflowai/langflow:1.7.2
+  port: 7860
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    LANGFLOW_CONFIG_DIR: app/langflow
+    LANGFLOW_HOST: 0.0.0.0
+    PORT: '7860'
+  volumes:
+  - name: langflow-data
+    mount_path: /app/langflow
+    size_gb: 5
+databases:
+- name: langflow-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - langflow
+  var_name: DATABASE_URL

@@ -1,0 +1,2247 @@
+{
+  "common": {
+    "save": "保存",
+    "saving": "正在保存…",
+    "cancel": "取消",
+    "clear": "清除",
+    "delete": "删除",
+    "remove": "移除",
+    "close": "关闭",
+    "navigation": "导航",
+    "navigationHelp": "面板的导航，在小屏幕上以抽屉形式呈现。",
+    "create": "创建",
+    "edit": "编辑",
+    "add": "添加",
+    "retry": "重试",
+    "back": "返回",
+    "next": "下一步",
+    "done": "完成",
+    "confirm": "确认",
+    "search": "搜索",
+    "loading": "加载中…",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyForAI": "复制错误给 AI",
+    "showAdvanced": "高级",
+    "hideAdvanced": "隐藏高级选项",
+    "optional": "可选",
+    "required": "必填",
+    "beta": "测试版",
+    "yes": "是",
+    "no": "否",
+    "on": "开启",
+    "off": "关闭",
+    "none": "无",
+    "unknown": "未知",
+    "never": "从未",
+    "learnMore": "了解更多",
+    "openDocs": "打开文档",
+    "refresh": "刷新",
+    "viewAll": "查看全部",
+    "actions": "操作",
+    "name": "名称",
+    "status": "状态",
+    "created": "创建时间",
+    "updated": "更新时间",
+    "type": "类型",
+    "size": "大小",
+    "of": "共",
+    "and": "和",
+    "instance_other": "{{count}} 个实例",
+    "server_other": "{{count}} 台服务器",
+    "app_other": "{{count}} 个应用",
+    "day_other": "{{count}} 天",
+    "justNow": "刚刚",
+    "minutesAgo_other": "{{count}} 分钟前",
+    "hoursAgo_other": "{{count}} 小时前",
+    "daysAgo_other": "{{count}} 天前",
+    "typeToConfirm": "输入 {{phrase}} 以确认",
+    "deleteNamed": "删除 {{name}}？",
+    "cannotBeUndone": "此操作无法撤销。",
+    "keepGoing": "继续",
+    "noMatches": "没有匹配项",
+    "noMatchesHelp": "试试更短的搜索词，或清除筛选。",
+    "more": "更多",
+    "toggleSidebar": "显示或隐藏侧边栏",
+    "skipToContent": "跳到主要内容",
+    "breadcrumb": "导航路径",
+    "dismiss": "关闭",
+    "copyFailed": "此处无法使用剪贴板。",
+    "copyValue": "复制{{name}}",
+    "show": "显示",
+    "hide": "隐藏"
+  },
+  "nav": {
+    "overview": "总览",
+    "projects": "项目",
+    "apps": "应用",
+    "databases": "数据库",
+    "servers": "服务器",
+    "templates": "模板",
+    "activity": "活动",
+    "settings": "设置",
+    "account": "账户",
+    "signOut": "退出登录",
+    "commandPalette": "搜索或跳转…",
+    "theme": "主题",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "language": "语言",
+    "documentation": "文档",
+    "plugins": "插件"
+  },
+  "auth": {
+    "signIn": "登录",
+    "signingIn": "正在登录…",
+    "email": "邮箱",
+    "password": "密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "twoFactorCode": "两步验证码",
+    "twoFactorPrompt": "请输入验证器应用中的六位验证码。",
+    "signInTitle": "登录 {{product}}",
+    "signInSubtitle": "你的应用，跑在你自己的服务器上。",
+    "forgotPassword": "忘记密码？",
+    "forgotPasswordHelp": "自托管面板不提供邮件重置。请在服务器上恢复访问：参见故障排查指南。",
+    "setupTitle": "欢迎使用 {{product}}",
+    "setupSubtitle": "创建第一个账户，只需一分钟。",
+    "setupToken": "安装令牌",
+    "setupTokenHelp": "安装程序已显示过它，同时也保存在服务器的 /etc/skifity/setup-token 中。",
+    "yourName": "你的姓名",
+    "teamName": "团队名称",
+    "teamNameHelp": "以后可以修改。项目和服务器都归属于团队。",
+    "createAccount": "创建账户",
+    "creatingAccount": "正在创建账户…",
+    "recoveryKeyTitle": "保存你的恢复密钥",
+    "recoveryKeyIntro": "这把密钥能解密 {{product}} 保存的所有机密。没有它，恢复出来的备份将无法读取。",
+    "recoveryKeyWarning": "它只显示一次。请离线保存在安全的地方，不要放在本面板里。",
+    "recoveryKeyConfirm": "我已妥善保存",
+    "recoveryKeyReminder": "你还没有保存恢复密钥。",
+    "download": "下载",
+    "enableTwoFactor": "开启两步验证",
+    "twoFactorIntro": "用验证器应用扫描此二维码，然后输入它显示的验证码。",
+    "twoFactorSecret": "或手动输入此密钥",
+    "twoFactorConfirm": "开启",
+    "twoFactorSkip": "暂时跳过",
+    "twoFactorEnabled": "两步验证已开启",
+    "twoFactorDisable": "关闭",
+    "recoveryCodesTitle": "保存你的恢复码",
+    "recoveryCodesIntro": "手机丢失时，每个恢复码可用于登录一次。它们只在此刻显示，之后不再出现。",
+    "recoveryCodesLeft_other": "还剩 {{count}} 个恢复码",
+    "recoveryCodesNone": "恢复码已用完。关闭两步验证后重新开启即可获得新的一组。",
+    "recoveryCodesRegenerate": "获取新的恢复码",
+    "recoveryCodesReplaced": "你之前的恢复码将失效。",
+    "sessions": "已登录的设备",
+    "currentSession": "当前设备",
+    "revokeSession": "退出登录",
+    "apiTokens": "API 令牌",
+    "apiTokensHelp": "令牌让 CLI 和 AI 助手以你的身份操作。给每个令牌起个名字，方便区分。",
+    "newToken": "新建令牌",
+    "tokenName": "用途是什么？",
+    "tokenShownOnce": "令牌只显示这一次，请现在复制。",
+    "revokeToken": "吊销",
+    "subtitle": "你的登录方式、已登录的设备，以及代表你行事的令牌。",
+    "twoFactorTitle": "双因素认证",
+    "twoFactorOff": "未开启。此时只有一个密码挡在任何人和这个集群之间。",
+    "or": "或",
+    "signInWithSSO": "使用单点登录",
+    "ssoError": {
+      "refused": "此次登录被拒绝。请重试，或使用密码登录。",
+      "no_account": "你在此面板上还没有账户。请让管理员邀请你。",
+      "state": "此次登录返回的内容与发出时不符。请重新开始。",
+      "expired": "此次登录用时过长。请重新开始。",
+      "disabled": "该账户已在此面板上停用。"
+    },
+    "teamNameExample": "示例公司",
+    "revokeSessionConfirm": "{{device}} 会被登出，需要重新登录。",
+    "revokeTokenConfirm": "令牌 {{name}} 会立即失效。",
+    "revokeTokenConsequence": "令牌拿不回来。任何在用它的东西——脚本、部署流水线、助手——在换上新令牌之前都会一直失败。",
+    "reauth": {
+      "title": "确认是你本人",
+      "description": "此操作需要再次输入密码。保持登录状态并不等于本人就在键盘前。",
+      "confirm": "确认"
+    },
+    "signOutEverywhere": "退出其他所有设备",
+    "signOutEverywhereConfirm": "已登录此账户的其他所有设备都会被退出，当前设备保持登录。",
+    "signedOutEverywhereDone": "其他所有设备都已退出。"
+  },
+  "dashboard": {
+    "title": "总览",
+    "welcome": "欢迎回来",
+    "noServers": "还没有服务器",
+    "noServersHelp": "添加第一台服务器，{{product}} 会把它变成一个集群。你只需要 IP 地址和密码。",
+    "addFirstServer": "添加服务器",
+    "noApps": "还没有部署任何东西",
+    "noAppsHelp": "可以从 Git 仓库部署、运行容器镜像，或从模板开始。",
+    "deployFirstApp": "部署应用",
+    "clusterHealth": "集群",
+    "clusterUnreachable": "集群没有响应",
+    "clusterUnreachableHelp": "你的应用仍在运行。在恢复连接之前，{{product}} 无法做出变更。",
+    "highAvailability": "可承受一台服务器故障",
+    "notHighlyAvailable": "只有一台控制平面服务器",
+    "notHighlyAvailableHelp": "有三台控制平面服务器时，其中一台故障，集群仍能继续工作。",
+    "cpuUsed": "CPU 使用",
+    "memoryUsed": "内存使用",
+    "recentActivity": "最近活动",
+    "nothingYet": "目前还没有任何动作。",
+    "welcomeBack": "欢迎回来，{{name}}。"
+  },
+  "activity": {
+    "subtitle": "这个团队里发生的变化，最新的在前。",
+    "empty": "还没有任何记录",
+    "emptyHelp": "团队成员做的每件事都会实时显示在这里。",
+    "action": {
+      "app.command_run": "已运行命令",
+      "app.created": "已创建应用",
+      "app.deleted": "已删除应用",
+      "app.deploy_started": "已开始部署",
+      "app.job_created": "已添加计划任务",
+      "app.job_deleted": "已删除计划任务",
+      "app.job_updated": "已修改计划任务",
+      "app.restarted": "已重启应用",
+      "app.rolled_back": "已回滚",
+      "app.scaling_changed": "已更改伸缩设置",
+      "app.updated": "已更改应用设置",
+      "auth.login": "已登录",
+      "auth.login_sso": "通过单点登录登录",
+      "auth.logout": "已退出登录",
+      "auth.password_changed": "已修改密码",
+      "auth.session_revoked": "已注销会话",
+      "auth.totp_disabled": "已关闭双重验证",
+      "auth.totp_enabled": "已开启双重验证",
+      "backup.policy_changed": "已更改备份计划",
+      "backup.restore_started": "已开始恢复",
+      "backup.started": "已开始备份",
+      "component.installed": "已安装组件",
+      "database.created": "已创建数据库",
+      "database.credentials_viewed": "已查看数据库凭据",
+      "database.deleted": "已删除数据库",
+      "database.linked": "已关联数据库",
+      "database.unlinked": "已取消关联数据库",
+      "deployment.cancelled": "已取消部署",
+      "domain.added": "已添加域名",
+      "domain.removed": "已删除域名",
+      "environment.created": "已创建环境",
+      "environment.deleted": "已删除环境",
+      "environment.pod_security_changed": "已更改运行限制",
+      "firewall.updated": "已更改防火墙",
+      "git_source.created": "已连接 Git 账户",
+      "git_source.deleted": "已移除 Git 账户",
+      "notification.created": "已添加通知渠道",
+      "notification.deleted": "已删除通知渠道",
+      "operation.cancelled": "已取消操作",
+      "panel.upgrade_started": "已开始升级面板",
+      "plugin.configured": "已更改插件设置",
+      "plugin.installed": "已安装插件",
+      "plugin.switched": "已启用或停用插件",
+      "plugin.uninstalled": "已卸载插件",
+      "project.created": "已创建项目",
+      "project.deleted": "已删除项目",
+      "project.updated": "已更新项目",
+      "security.key_rotated": "已轮换主密钥",
+      "security.recovery_key_viewed": "已查看恢复密钥",
+      "server.add_started": "正在添加服务器",
+      "server.promote_started": "正在提升服务器",
+      "server.remove_started": "正在移除服务器",
+      "server.retry": "已重试服务器",
+      "server.updated": "已更新服务器",
+      "settings.updated": "已更改设置",
+      "setup.completed": "面板完成设置",
+      "shared_variable.deleted": "已删除共享变量",
+      "shared_variable.set": "已设置共享变量",
+      "team.created": "已创建团队",
+      "team.exported": "已导出团队",
+      "team.invitation_revoked": "已撤销邀请",
+      "team.invited": "已发送邀请",
+      "team.member_added": "已添加成员",
+      "team.member_removed": "已移除成员",
+      "team.updated": "已更新团队",
+      "template.installed": "已安装模板",
+      "token.created": "已创建 API 令牌",
+      "token.revoked": "已吊销 API 令牌",
+      "variable.deleted": "已删除变量",
+      "variable.set": "已设置变量",
+      "volume.created": "已创建存储卷",
+      "volume.deleted": "已删除存储卷",
+      "auth.reauthenticated": "再次确认了身份",
+      "auth.sessions_revoked": "退出了其他所有设备",
+      "git_source.webhook_registered": "已在仓库上注册 webhook",
+      "app.source_uploaded": "上传了应用代码"
+    }
+  },
+  "projects": {
+    "title": "项目",
+    "subtitle": "每个应用和数据库都属于某个项目的某个环境。",
+    "newProject": "新建项目",
+    "projectName": "项目名称",
+    "description": "描述",
+    "environments": "环境",
+    "newEnvironment": "新建环境",
+    "environmentName": "环境名称",
+    "production": "生产",
+    "preview": "预览",
+    "previewFor": "{{ref}} 的预览",
+    "empty": "还没有项目",
+    "emptyHelp": "项目把彼此相关的应用和数据库放在一起。",
+    "sharedVariables": "共享变量",
+    "sharedVariablesHelp": "本项目中的每个应用都会拿到它们。应用可以用自己的变量覆盖。",
+    "canvas": "画布",
+    "canvasHelp": "本项目的应用与数据库是如何连接的。",
+    "deleteProject": "删除项目",
+    "deleteProjectWarning": "这会删除其中所有应用、数据库和存储卷，且无法撤销。",
+    "quota": "此环境的限额",
+    "quotaHelp": "此环境的配额已使用多少。超出限额的部署会被拒绝。",
+    "quotaFull": "此环境已达到限额。在释放资源或提高限额之前，新实例不会启动。",
+    "quotaResource": {
+      "requests.cpu": "已预留 CPU",
+      "requests.memory": "已预留内存",
+      "pods": "实例",
+      "requests.storage": "存储"
+    }
+  },
+  "schedule": {
+    "label": "计划",
+    "everyHour": "每小时",
+    "everyDay": "每天 03:00 UTC",
+    "everyWeek": "每周一 03:00 UTC",
+    "everyMonth": "每月 1 日 03:00 UTC",
+    "custom": "自定义…",
+    "customLabel": "Cron 表达式",
+    "customHelp": "UTC 时区的五个 cron 字段：分钟、小时、日、月、星期。"
+  },
+  "apps": {
+    "title": "应用",
+    "newApp": "新建应用",
+    "newAppSubtitle": "从 Git 仓库或你电脑上的文件夹部署，或运行你已有的容器镜像。",
+    "startFromTemplate": "从模板开始",
+    "appName": "应用名称",
+    "source": "来源",
+    "sourceGit": "Git 仓库",
+    "sourceImage": "容器镜像",
+    "sourceTemplate": "模板",
+    "repository": "仓库",
+    "repositoryPlaceholder": "https://github.com/you/your-app",
+    "branch": "分支",
+    "rootDirectory": "根目录",
+    "rootDirectoryHelp": "对于 monorepo：此应用所在的目录。",
+    "image": "镜像",
+    "imagePlaceholder": "nginx:1.27-alpine",
+    "port": "端口",
+    "portHelp": "应用监听的端口。多数框架会从 PORT 变量读取，而 {{product}} 已经帮你设置好了。",
+    "healthPath": "健康检查路径",
+    "healthPathHelp": "应用准备好提供服务后返回 200 的路径，例如 /healthz。",
+    "startCommand": "启动命令",
+    "dockerfilePath": "Dockerfile 路径",
+    "startCommandHelp": "留空则使用镜像自带的启动命令。",
+    "builder": "构建器",
+    "builderAuto": "自动识别",
+    "builderDockerfile": "Dockerfile",
+    "deployOnPush": "推送时自动部署",
+    "previewEnvironments": "为每个 pull request 创建预览环境",
+    "previewEnvironmentsHelp": "每个 pull request 都有自己的副本和网址，pull request 关闭时自动删除。",
+    "empty": "此环境中还没有应用",
+    "emptyHelp": "从 Git 部署、运行容器镜像，或从模板开始。",
+    "overview": "总览",
+    "deployments": "部署记录",
+    "logs": "日志",
+    "logsLive": "实时",
+    "logsPrevious": "重启之前",
+    "logsPreviousHelp": "当前容器之前运行的那个容器。应用反复重启时，原因就写在这里。",
+    "logsPreviousNone": "该应用没有重启过，因此没有更早的日志。",
+    "variables": "变量",
+    "domains": "域名",
+    "scaling": "伸缩",
+    "storage": "存储",
+    "advanced": "高级",
+    "settings": "设置",
+    "deploy": "部署",
+    "deploying": "正在部署…",
+    "restart": "重启",
+    "restartConfirm": "重启所有实例？流量不会中断：实例会逐个替换。",
+    "deleteApp": "删除应用",
+    "deleteAppWarning": "这会停止并删除该应用。存储卷会保留，因此其中的数据不会丢失。",
+    "instances": "实例",
+    "instancesReady": "就绪实例",
+    "instanceName": "实例",
+    "restarts": "重启次数",
+    "node": "服务器",
+    "noInstances": "没有正在运行的实例。",
+    "noInstancesTitle": "还没有任何实例在运行",
+    "noInstancesHelp": "页面顶部的“{{action}}”会构建应用并启动第一个实例。",
+    "phase": {
+      "running": "运行中",
+      "starting": "启动中",
+      "updating": "更新中",
+      "pending": "等待资源",
+      "crashing": "反复崩溃",
+      "unhealthy": "没有实例在运行",
+      "failed": "失败",
+      "stopped": "已停止",
+      "not_deployed": "尚未部署",
+      "unknown": "未知",
+      "created": "尚未部署",
+      "sleeping": "休眠中"
+    },
+    "runCommand": "运行命令",
+    "noOutputYet": "还没有输出",
+    "noOutputYetHelp": "命令打印的内容会显示在这里。",
+    "nothingScheduled": "没有计划任务",
+    "runCommandHelp": "在该应用自己的镜像中、带着该应用的变量运行一次。用于迁移、回填数据，或查看数据。",
+    "run": "运行",
+    "running": "正在运行...",
+    "runningHelp": "命令正在运行，完成后会在这里显示输出。",
+    "runNoOutput": "命令已完成，没有任何输出。",
+    "console": "控制台",
+    "releaseCommand": "发布命令",
+    "releaseCommandHelp": "每次部署都会运行，在构建之后、流量到达新版本之前。迁移就该放在这里：一旦失败，部署即停止，正在服务的版本继续服务。",
+    "scheduledCommands": "定时命令",
+    "scheduledCommandsHelp": "每晚的报表、每小时的清理。每一条都单独运行，使用该应用的镜像，按你设定的时间。",
+    "scheduledNamePlaceholder": "每晚报表",
+    "scheduleHelp": "五个 cron 字段，使用 UTC。\"0 3 * * *\" 表示每天 03:00。",
+    "schedule": "计划",
+    "detect": "检查这个仓库",
+    "detected": "这看起来是 {{what}}。",
+    "detectedMaybe": "这可能是 {{what}}。没有自动填写任何内容，请检查下面的字段。",
+    "detectedPartly": "仓库较大，只读取了顶层内容。",
+    "composeFound": "这个 Compose 文件里有 {{count}} 个服务。选择这个应用对应的那一个：",
+    "composeFound_other": "这个 Compose 文件里有 {{count}} 个服务。选择这个应用对应的那一个：",
+    "composeBuilt": "从仓库构建",
+    "composePort": "监听 {{port}}",
+    "composeVariables": "{{count}} 个变量",
+    "composeVariables_other": "{{count}} 个变量",
+    "composeRest": "其余服务用同样的方式在这个环境里创建。它们通过名字互相访问，这就是 Compose 文件里的链接在这里的样子。",
+    "builderStatic": "静态文件",
+    "lastBackup": "上次备份",
+    "firewall": "防火墙",
+    "address": "地址",
+    "detail": {
+      "sleeping": "没有人在使用，所以这个应用正在休眠。下一个请求会让它重新启动。",
+      "stopped": "这个应用已缩容到零个实例。",
+      "not_deployed": "这个应用还没有部署过。"
+    },
+    "mountPath": "挂载路径",
+    "sizeGB": "大小（GB）",
+    "volumeHelp": "一块能在部署之后继续存在的磁盘。应用写在它之外的文件会在实例重启时消失。以后可以扩大，但不能缩小。",
+    "noVolumes": "还没有磁盘",
+    "noVolumesHelp": "当应用的文件需要在部署之后继续存在时就需要磁盘——上传的文件、自己运行的数据库、值得保留的缓存。",
+    "addVolume": "添加磁盘",
+    "deleteVolumeConfirm": "这会删除挂载在 {{path}} 的磁盘，以及上面的全部内容。",
+    "deleteVolumeConsequence": "之后文件无法找回。如果还可能用到，请先做一次备份。",
+    "deleteVolumeLastBackup": "这块磁盘最近一次成功备份是{{when}}。那之后写入的内容会一并消失。",
+    "deleteVolumeNeverBackedUp": "这块磁盘从未备份过。上面的所有内容将永久消失。",
+    "buildCommand": "构建命令",
+    "buildCommandHelp": "前端项目中生成待发布文件的命令。仓库里已有这些文件时留空。",
+    "outputDirectory": "输出目录",
+    "outputDirectoryHelp": "该命令把文件写到哪里：Vite 是 dist，Create React App 是 build。",
+    "volumeBackups": "{{name}} 的备份",
+    "volumeBackupsHelp": "备份计划、已有的副本，以及把某个副本还原回去。",
+    "noVolumeBackups": "这个磁盘还没有备份。",
+    "volumeRestoreStarted": "还原已开始。过程中应用会停止，结束后自动重新启动。",
+    "volumeRestoreWarning": "{{app}} 上的内容会被这个备份的内容全部覆盖，过程中应用会被停止。",
+    "volumeStopsRollingDeploys": "有磁盘后部署不再无缝",
+    "volumeStopsRollingDeploysHelp": "一块磁盘同一时间只能被一个实例写入，所以 Skifity 会先停掉旧实例再启动新的。每次部署都会有几秒钟无人响应，应用也无法运行多个实例。",
+    "sourceUpload": "上传的文件夹",
+    "sourceFolder": "我电脑上的文件夹"
+  },
+  "deploy": {
+    "title": "部署记录",
+    "deployNow": "立即部署",
+    "rebuild": "从头重新构建",
+    "rebuildHelp": "忽略缓存，即使没有变化也重新构建。",
+    "rollback": "回滚",
+    "imageCollected": "镜像已删除",
+    "imageCollectedHelp": "只有最近几个版本会保留镜像，以免磁盘被占满。重新部署这个提交即可重新得到它。",
+    "rollbackTo": "回滚到 #{{number}}",
+    "rollbackHelp": "恢复该版本的镜像，以及它当时使用的设置。",
+    "cancel": "取消部署",
+    "buildLog": "构建日志",
+    "noDeployments": "还没有部署过",
+    "noDeploymentsHelp": "第一次部署会构建你的应用并为它分配网址。",
+    "commit": "提交",
+    "duration": "耗时",
+    "status": {
+      "queued": "排队中",
+      "building": "构建中",
+      "deploying": "部署中",
+      "succeeded": "成功",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "superseded": "已被更新的部署取代"
+    },
+    "reusedImage": "无需构建：此版本此前已构建过，直接复用了现有镜像。",
+    "noRebuildNeeded": "已保存并生效，无需重新构建。",
+    "live": "当前版本",
+    "triggerRollbackTo": "回滚到 #{{number}}",
+    "trigger": {
+      "manual": "手动部署",
+      "create": "这个应用的第一次部署",
+      "template": "从目录安装",
+      "push": "分支收到一次推送",
+      "preview": "一个拉取请求的预览",
+      "rollback": "一次回滚"
+    }
+  },
+  "variables": {
+    "title": "变量",
+    "help": "它们会成为应用内部的环境变量。",
+    "key": "名称",
+    "value": "值",
+    "secret": "机密",
+    "secretHelp": "加密保存，之后不再显示。请用于密码、令牌和密钥。",
+    "buildTime": "构建时需要",
+    "buildTimeHelp": "会被写进镜像的值，例如前端构建用的公开 API 地址。修改它会触发重新构建。",
+    "hidden": "已隐藏",
+    "empty": "还没有变量",
+    "addVariable": "添加变量",
+    "bulkEdit": "以文本方式编辑",
+    "bulkEditHelp": "每行一个 KEY=value，可以直接粘贴 .env 文件。",
+    "invalidKey": "名称只能包含字母、数字和下划线，且不能以数字开头。",
+    "rebuildQueued": "已保存。该值会写入镜像，因此正在重新构建应用。",
+    "deleteConfirm": "应用会在没有它的情况下重新上线。",
+    "deleteSecretConsequence": "这个值已被封存，无法再读出来，所以你需要回到它的来源重新填一次。"
+  },
+  "domains": {
+    "title": "域名",
+    "automatic": "自动分配",
+    "automaticHelp": "{{product}} 会立即给每个应用一个可用网址，并自动配置 HTTPS。",
+    "custom": "你自己的域名",
+    "addDomain": "添加域名",
+    "hostname": "域名",
+    "hostnamePlaceholder": "app.example.com",
+    "https": "HTTPS",
+    "dnsInstructions": "把这个域名指向这里",
+    "checking": "正在检查 DNS…",
+    "statusPending": "等待 DNS 生效",
+    "statusActive": "已生效",
+    "statusFailed": "无法访问",
+    "certificateFailed": "无法签发证书",
+    "certificateFailedHelp": "请确认该域名的 DNS 记录指向此集群，然后删除该域名并重新添加。",
+    "certificateIssuing": "正在申请证书…",
+    "removeDomain": "移除域名",
+    "cannotRemoveAutomatic": "自动域名不能移除。在你配置自己的域名期间，它保证应用可访问。",
+    "dnsUnknown": "还没有人告诉这个面板它的应用对外使用哪个地址。管理员可以在设置、域名中填写。",
+    "removeDomainConfirm": "{{hostname}} 将不再指向这个应用。在你重新添加或改指到别处之前，访问者会看到错误。",
+    "dnsIntro": "在管理你域名 DNS 的地方添加这条记录——你的注册商，或者你用的 Cloudflare。",
+    "recordType": "类型",
+    "recordName": "名称",
+    "recordValue": "值",
+    "dnsPropagation": "新记录通常几分钟内生效，也可能要等上几个小时。",
+    "checkAgain": "重新检查",
+    "dnsNameVaries": "有些注册商要在这里填完整名称，有些只要域名前面的那一段。"
+  },
+  "scaling": {
+    "title": "伸缩",
+    "fixed": "固定实例数",
+    "automatic": "自动伸缩",
+    "automaticHelp": "Skifity 会根据应用的繁忙程度，在下面的数字之间增减实例。",
+    "instances": "实例数",
+    "minInstances": "最少实例数",
+    "maxInstances": "最多实例数",
+    "cpuTarget": "CPU 超过此值时扩容",
+    "memoryTarget": "内存超过此值时扩容",
+    "scaleToZero": "无人使用时停止",
+    "scaleToZeroHelp": "应用闲置几分钟后停止，收到第一个请求时再启动。那第一个请求会多等几秒。",
+    "scaleToZeroUsesRequests": "启用后，应用按等待中的请求数量扩缩，而不是按 CPU 或内存。最多实例数仍然有效。",
+    "readiness": "扩容之前",
+    "readinessOk": "这个应用看起来可以安全地运行多个实例。",
+    "readinessChecking": "检查中…",
+    "resources": "每个实例的资源",
+    "cpuReserved": "预留 CPU",
+    "cpuLimit": "CPU 上限",
+    "memoryReserved": "预留内存",
+    "memoryLimit": "内存上限",
+    "resourcesHelp": "预留量是每个实例一定能拿到的资源。上限是超过后实例会被重启的最大用量。",
+    "spread": "分散到多台服务器",
+    "spreadHelp": "尽可能把实例放在不同服务器上，这样单台服务器故障不会让应用下线。",
+    "finding": {
+      "file_cache": {
+        "title": "缓存存在本地磁盘上",
+        "detail": "{{0}} 被设成了 {{1}}，于是每个实例各有各的缓存，内容会对不上。",
+        "fix": "改用 Redis 做缓存，或者接受各实例的缓存值不一致。"
+      },
+      "in_memory_sessions": {
+        "title": "会话被存在内存或磁盘上",
+        "detail": "{{0}} 被设成了 {{1}}。每个实例都会保存自己的会话，所以请求落到不同实例时，用户会莫名其妙被登出。",
+        "fix": "在这个环境里建一个 Redis 数据库，把会话存储指过去。Skifity 会自动把它作为变量接进来。"
+      },
+      "in_process_cron": {
+        "title": "定时任务跑在应用里面",
+        "detail": "{{0}} 是开着的。有多个实例时，每个实例都会跑一遍计划，于是每个任务被执行好几次。",
+        "fix": "把调度器拆成单实例的独立应用，或者加锁，让每个任务只由一个实例执行。"
+      },
+      "local_uploads": {
+        "title": "上传的文件被写到本地磁盘",
+        "detail": "{{0}} 指向容器内部的一个目录。一个实例写的文件别的实例看不到，下次部署时还会消失。",
+        "fix": "把上传文件放到 S3 兼容的对象存储里。不想用云服务商的话，MinIO 有一键模板。"
+      },
+      "memory_target_below_idle": {
+        "title": "应用还没干活，内存阈值就到了",
+        "detail": "阈值是这个应用预留量的百分比。它预留 {{0}}Mi，阈值 {{1}}%，所以超过 {{2}}Mi 就会加一个新实例——而 Node 或 JVM 进程一启动就超过了。",
+        "fix": "在应用设置里把预留内存调到它空闲时的用量再加上工作余量。内存一旦占用就不会回落，所以低于空闲值的阈值永远降不回来。"
+      },
+      "no_health_check": {
+        "title": "没有设置健康检查路径",
+        "detail": "没有它，Skifity 只能检查端口是否打开，而端口打开往往早于大多数框架真正能对外服务。",
+        "fix": "加一个像 /healthz 这样的路径，应用就绪后返回 200，然后在应用设置里填上它。"
+      },
+      "no_metrics": {
+        "title": "集群没有上报 CPU 和内存",
+        "detail": "按 CPU 或内存目标自动伸缩要从 metrics-server 读这些数字，而没有任何东西在应答。不管多忙，应用都会停在最少实例数上，而且没人会告诉你。",
+        "fix": "k3s 默认会装 metrics-server。检查它是否在 kube-system 里运行，在此之前先设一个固定的实例数。"
+      },
+      "single_instance": {
+        "title": "这个应用只跑一个实例",
+        "detail": "它所在的服务器一重启，应用就不可用，直到 Kubernetes 在别处把它拉起来。",
+        "fix": "把上面的问题解决之后，把实例数提到两个，或者打开自动伸缩。"
+      },
+      "sqlite": {
+        "title": "这个应用用的是 SQLite",
+        "detail": "{{0}} 指向一个 SQLite 文件。SQLite 就是一块磁盘上的单个文件，不同服务器上的实例没法共用。",
+        "fix": "在这个环境里建一个 PostgreSQL 数据库，把应用指过去。Skifity 会自动注入连接串。"
+      },
+      "target_below_idle": {
+        "title": "应用还没干活，CPU 阈值就到了",
+        "detail": "阈值是这个应用预留量的百分比，不是服务器的。它预留 {{0}}m CPU，阈值 {{1}}%，所以超过 {{2}}m 就会加一个新实例——大约十分之一个核，多数框架空转时就超过了。",
+        "fix": "在应用设置里把预留 CPU 调到它忙起来真正会用的量，百分比才有意义。预留是给应用的保证，不是给它设的上限。"
+      },
+      "volume": {
+        "title": "这个应用写入的磁盘只能由一个实例使用",
+        "detail": "有一个卷挂载在 {{0}}。那种存储同一时刻只能挂到一台服务器上，所以第二个实例要么起不来，要么被排到同一台服务器。",
+        "fix": "把上传文件挪到 S3 或 MinIO 这类对象存储，或者在「设置」里打开跨节点存储让卷可以共享。在那之前，把这个应用保持在一个实例。"
+      },
+      "volume_with_replicas": {
+        "title": "配置了多个实例，而这个应用有卷",
+        "detail": "多出来的实例要么一直挂起，要么被排到同一台服务器上，同时往同一批文件里写。",
+        "fix": "把实例数改回一个，或者启用跨节点存储，或者把数据挪出卷。"
+      }
+    }
+  },
+  "servers": {
+    "title": "服务器",
+    "subtitle": "运行你的应用的机器。Skifity 会把它们组成一个集群。",
+    "addServer": "添加服务器",
+    "addServerIntro": "填写地址和登录方式，其余交给 {{product}}。",
+    "host": "IP 地址或主机名",
+    "hostPlaceholder": "203.0.113.10",
+    "sshPort": "SSH 端口",
+    "sshUser": "用户名",
+    "authPassword": "密码",
+    "authKey": "私钥",
+    "authKeyPlaceholder": "粘贴你的私钥文件内容",
+    "passphrase": "私钥口令",
+    "passwordNotStored": "你的密码只使用一次，用来安装一把属于 {{product}} 的密钥，之后不会被保存。",
+    "serverName": "名称",
+    "serverNameHelp": "取一个你认得出的名字，例如“法兰克福 1 号”。",
+    "location": "位置",
+    "locationHelp": "一个标签，方便把应用放在离用户更近的地方。",
+    "size": "规格",
+    "controlPlane": "控制平面服务器",
+    "controlPlaneHelp": "控制平面服务器运行集群本身。有三台时，其中一台故障集群仍能继续工作。",
+    "empty": "还没有服务器",
+    "emptyHelp": "任何装有 Ubuntu 或 Debian 的 VPS 都可以。一台就足以开始。",
+    "requirements": "服务器需要什么",
+    "requirementsList": "Ubuntu 24.04 或 Debian 12，至少 1 GB 内存、8 GB 可用磁盘，以及以 root 身份的 SSH 访问。",
+    "progress": "正在添加 {{name}}",
+    "steps": {
+      "connect": "通过 SSH 连接",
+      "preflight": "检查服务器",
+      "install-key": "安装密钥",
+      "firewall": "配置防火墙",
+      "connectivity": "检查网络",
+      "install-k3s": "安装 Kubernetes",
+      "wait-ready": "加入集群",
+      "cordon": "停止分配新任务",
+      "drain": "迁走实例",
+      "delete-node": "退出集群",
+      "uninstall": "清理机器",
+      "leave": "退出集群",
+      "prepare": "准备",
+      "restore": "恢复",
+      "verify": "校验"
+    },
+    "status": {
+      "pending": "等待中",
+      "provisioning": "正在添加",
+      "ready": "就绪",
+      "not_ready": "无响应",
+      "failed": "失败",
+      "removing": "正在移除"
+    },
+    "role": {
+      "control-plane": "控制平面",
+      "worker": "工作节点"
+    },
+    "promote": "设为控制平面服务器",
+    "promoteHelp": "有三台控制平面服务器时，集群可承受其中一台故障。此操作会先把应用迁离这台服务器。",
+    "removeServer": "移除服务器",
+    "removeServerWarning": "这里运行的实例会先迁移到你的其他服务器上，不会丢失任何东西。",
+    "wipeServer": "同时从这台机器上卸载 Kubernetes",
+    "cancelAndClean": "取消并清理",
+    "cpu": "CPU",
+    "memory": "内存",
+    "disk": "磁盘",
+    "operatingSystem": "操作系统",
+    "lastSeen": "最后响应",
+    "filter": {
+      "all": "全部",
+      "ready": "就绪",
+      "attention": "需要处理"
+    },
+    "needAttention_other": "{{count}} 台需要处理",
+    "adopted": "这台服务器不是 Skifity 装的",
+    "adoptedHelp": "安装 Skifity 时它已经是集群的节点了——通常就是面板自己运行的那台机器。这里列出它是为了让你看清集群的全貌；面板无法移除或提升它，因为没有通往它的密钥。要把它移出集群，请在那台机器上运行卸载程序。",
+    "architecture": "架构",
+    "locationExample": "法兰克福",
+    "serverNameExample": "法兰克福 1",
+    "stepMessage": {
+      "appsRestarted": "重启了 {{0}} 个应用，让它们重新连上",
+      "cancelled": "已取消",
+      "connected": "已连接到 {{0}}",
+      "connectivityFirstServer": "这是第一台服务器，暂时还没有可连接的对象",
+      "cordoned": "不会再往这里安排新实例",
+      "drained": "已把 {{0}} 个实例迁到其他服务器",
+      "drainedFirst": "先把 {{0}} 个实例从这台服务器挪走了",
+      "firewallFirstServer": "还没有别的服务器，所以只开了 80 和 443 端口",
+      "firewallIptables": "用 iptables 只对其他服务器开放了集群端口",
+      "firewallUfw": "用 ufw 只对其他服务器开放了集群端口",
+      "interrupted": "因面板重启而中断",
+      "joined": "{{0}} 已加入集群并就绪",
+      "k3sRunning": "Kubernetes 已安装并运行中",
+      "k3sUnconfirmed": "已安装，但面板没有连上集群，无法确认",
+      "keyAlreadyThere": "这台服务器上已经有 Skifity 的密钥了",
+      "keyInstalled": "已为这台服务器单独装了一把密钥；密码没有被保存",
+      "leftAsWorker": "以工作节点身份离开了集群",
+      "nodeDeleted": "已从集群中移除",
+      "preflightOk": "{{0}}，{{1}} 核，内存 {{2}} MB，剩余 {{3}} GB",
+      "reached": "已通过 6443 端口连上 {{0}}",
+      "readyToRestore": "可以开始恢复了",
+      "restored": "已从 {{0}} 那次备份恢复",
+      "uninstallFailed": "没能从这台机器上卸载 Kubernetes",
+      "uninstallSkipped": "Kubernetes 被保留在这台机器上",
+      "uninstalled": "已从这台机器上卸载 Kubernetes",
+      "appStopped": "应用已停止",
+      "archiveUnpacked": "归档已解包",
+      "appRunningAgain": "{{0}} 已重新运行"
+    },
+    "stepNote": {
+      "fingerprint": "指纹 {{0}}",
+      "hostKey": "主机密钥 {{0}}"
+    }
+  },
+  "databases": {
+    "title": "数据库",
+    "subtitle": "托管数据库，自动备份并连接到你的应用。",
+    "newDatabase": "新建数据库",
+    "engine": "类型",
+    "postgres": "PostgreSQL",
+    "redis": "Redis",
+    "mysql": "MySQL / MariaDB",
+    "version": "版本",
+    "storage": "存储",
+    "storageHelp": "分配给数据库的磁盘空间。以后可以扩大，但不能缩小。",
+    "databaseName": "名称",
+    "empty": "还没有数据库",
+    "emptyHelp": "托管数据库会自动备份、恢复，并连接到你的应用。",
+    "connectionDetails": "连接信息",
+    "showCredentials": "显示凭据",
+    "credentialsWarning": "拿到这些凭据的人可以读取和修改数据库中的一切。",
+    "connectionString": "连接字符串",
+    "linkedApps": "已连接的应用",
+    "linkApp": "连接应用",
+    "linkAppHelp": "连接字符串会作为变量加入应用，并重启该应用以便读取到它。",
+    "variableName": "变量名",
+    "unlink": "断开连接",
+    "backups": "备份",
+    "backupNow": "立即备份",
+    "backupSchedule": "自动备份",
+    "backupsOn": "自动备份",
+    "backupScheduleFieldHelp": "备份运行的时间，使用 UTC。",
+    "retentionHelp": "新备份成功后会删除更早的备份。",
+    "backupScheduleHelp": "备份会写入你在设置中配置的存储。",
+    "retention": "保留最近",
+    "restore": "恢复",
+    "restoreWarning": "这会用该备份的内容替换数据库中现有的全部数据，且无法撤销。",
+    "restoreConfirm": "是的，替换现有数据",
+    "noBackups": "还没有备份",
+    "backupStatus": {
+      "running": "进行中",
+      "succeeded": "成功",
+      "failed": "失败"
+    },
+    "status": {
+      "creating": "创建中",
+      "starting": "启动中",
+      "running": "运行中",
+      "degraded": "已降级",
+      "failed": "失败",
+      "missing": "已不存在",
+      "unknown": "未知"
+    },
+    "restoreStarted": "恢复已开始。完成之前数据库不可用。",
+    "deleteWarning": "所有表、数据行和备份计划都会一并消失。存储中已有的备份会保留，但面板将不再知道它们。",
+    "backupStarted": "备份已开始，完成后会出现在列表中。",
+    "host": "主机",
+    "port": "端口",
+    "user": "用户",
+    "unlinkConfirm": "{{app}} 会失去 {{variable}} 变量，因此从下一次部署起就连不上这个数据库了。"
+  },
+  "templates": {
+    "title": "模板",
+    "subtitle": "一步即可安装的应用，数据库和配置都已连接好。",
+    "install": "安装",
+    "installing": "正在安装…",
+    "category": "分类",
+    "website": "官网",
+    "installedNote": "已安装。启动可能需要一分钟。",
+    "installedApps_other": "已安装 {{count}} 个应用。启动可能需要一分钟。",
+    "search": "搜索模板",
+    "notesTitle": "在它能用之前",
+    "categories": {
+      "ai": "人工智能",
+      "analytics": "分析",
+      "automation": "自动化",
+      "business": "商务",
+      "cms": "网站与发布",
+      "communication": "沟通",
+      "developer": "开发者工具",
+      "ecommerce": "商店",
+      "finance": "财务",
+      "media": "媒体",
+      "monitoring": "监控",
+      "networking": "网络",
+      "other": "其他",
+      "productivity": "效率",
+      "security": "安全",
+      "storage": "存储与文件"
+    },
+    "installWhere": "装到哪里"
+  },
+  "settings": {
+    "title": "设置",
+    "general": "通用",
+    "cluster": "集群",
+    "domains": "域名与 HTTPS",
+    "git": "Git",
+    "storage": "备份存储",
+    "email": "邮件",
+    "notifications": "通知",
+    "registry": "镜像仓库",
+    "signin": "单点登录",
+    "security": "安全",
+    "components": "组件",
+    "team": "团队",
+    "members": "成员",
+    "inviteMember": "添加成员",
+    "memberEmail": "对方的邮箱地址",
+    "memberRole": "角色",
+    "roleOwner": "所有者",
+    "roleAdmin": "管理员",
+    "roleMember": "成员",
+    "roleHelp": "所有者可以做任何事，包括删除团队。管理员管理服务器和设置。成员部署应用。",
+    "removeMember": "移除",
+    "configured": "已配置",
+    "notConfigured": "尚未配置",
+    "secretStored": "已保存。输入新值即可替换。",
+    "componentsHelp": "较重的功能只在你第一次使用时才安装，这样全新安装始终保持轻量。",
+    "componentInstall": "安装",
+    "componentInstalled": "已安装",
+    "componentMemory": "约 {{mb}} MB 内存",
+    "rotateKey": "轮换主密钥",
+    "rotateKeyHelp": "生成新的主密钥，并用它重新加密所有已保存的机密。过程中不会解密这些机密。",
+    "rotateKeyConfirm": "开始轮换",
+    "recoveryKey": "恢复密钥",
+    "auditLog": "审计日志",
+    "auditLogHelp": "谁、在什么时候、从哪里做了什么。",
+    "upgrade": "升级",
+    "currentVersion": "当前版本",
+    "noUpdateCheck": "{{product}} 不会联系任何服务器来检查更新。",
+    "saved": "设置已保存。",
+    "rotateKeyDone": "主密钥已轮换，所有已保存的机密都用新密钥重新加密。",
+    "rotateKeyPartial": "新的主密钥已生效，但部分机密未能重新加密。旧密钥已保留，以便这些机密仍可读取。",
+    "edited": "已修改",
+    "unsaved_other": "{{count}} 项未保存的更改",
+    "subtitle": "运维需要配置的一切都在这里。其中任何一项都不需要去改服务器上的文件。",
+    "componentExternal": "如何安装",
+    "inviteLinkTitle": "把这个链接发给他们",
+    "inviteLink": "邀请链接",
+    "inviteLinkHelp": "只显示一次，有效期七天，且只能使用一次。除非你配置了 SMTP，否则 Skifity 不会发送邮件。",
+    "pendingInvitations": "等待接受",
+    "revokeInvitation": "撤回此邀请",
+    "invitationExpires": "{{when}} 过期",
+    "inviteMemberHelp": "用邮箱邀请某人。Skifity 会给你一个链接发给对方；密码由他们自己设置。已经在此有账户的人则直接添加。",
+    "export": "带走你的数据",
+    "exportHelp": "这个团队的一切——项目、应用、域名、数据库、变量和计划任务——导出为一个 JSON 文件，并附上每个应用的 Kubernetes 对象。",
+    "exportSecrets": "标记为机密的值不会包含在内。那些值已经在你自己的集群里，是你有权访问的普通 Kubernetes Secret。",
+    "exportDownload": "下载 JSON",
+    "plugins": "插件",
+    "pluginStoreCheck": "检查插件商店",
+    "pluginStoreCheckHelp": "用已保存的值读取目录，让错误的地址或错误的密钥在这里就暴露出来，而不是在你需要插件的那天。",
+    "pluginStoreCheckAction": "读取目录",
+    "pluginStoreVerified": "由此处设置的密钥签名",
+    "pluginStoreCount_other": "目录中有 {{count}} 个插件",
+    "pluginStoreGoToPlugins": "前往插件页面安装",
+    "field": {
+      "cluster_flannel_backend": {
+        "label": "服务器之间如何通信",
+        "help": "WireGuard 会加密服务器之间的流量，服务器分布在不同服务商时尤其重要。它需要每台服务器都有 wireguard 内核模块。vxlan 到处都能用，但不加密。同一集群中的每台服务器必须一致，所以请在添加服务器之前修改，而不是之后。"
+      },
+      "cluster_k3s_version": {
+        "label": "Kubernetes 版本",
+        "help": "从这里添加的服务器所安装的 k3s 版本。留空则跟随稳定通道，新集群用的就是它。固定版本可以让你下个月添加的服务器与现有的一致。"
+      },
+      "cluster_preview_ttl_days": {
+        "label": "多久后移除预览环境",
+        "help": "拉取请求的预览环境在多少天没有部署后被移除。仍在被推送的预览会一直存在，直到拉取请求关闭。填 0 表示保留到拉取请求关闭 —— 这也是通常的移除方式 —— 但一个始终没有送达的 webhook 会让它永远运行下去。"
+      },
+      "dns_api_token": {
+        "label": "DNS API 令牌",
+        "help": "仅限编辑某一个区域记录的令牌。不要使用全局账户密钥。"
+      },
+      "dns_provider": {
+        "label": "DNS 服务商",
+        "help": "让 Skifity 在你添加域名时替你创建 DNS 记录。留空则自行创建。"
+      },
+      "dns_zone": {
+        "label": "DNS 区域",
+        "help": "记录创建在哪个区域。"
+      },
+      "domains_acme_email": {
+        "label": "Let's Encrypt 邮箱",
+        "help": "Let's Encrypt 发送证书到期提醒的地址。签发 HTTPS 证书前必须填写。"
+      },
+      "domains_acme_server": {
+        "label": "ACME 目录地址",
+        "help": "留空表示使用 Let's Encrypt 正式环境。测试时请指向 staging 目录，以免触发速率限制。"
+      },
+      "domains_cloudflare_tunnel_token": {
+        "label": "Cloudflare tunnel 令牌",
+        "help": "让你的应用无需公网 IP、无需开放端口、也无需固定地址供 DNS 指向就能对外提供服务。在 Cloudflare 控制台的 Zero Trust → Networks → Tunnels 创建隧道；选择 Cloudflared 连接器并复制显示的令牌。然后在该隧道上添加一个 public hostname —— 像 *.apps.example.com 这样的通配符可一次覆盖所有应用 —— 服务选 HTTP，地址填 traefik.kube-system.svc.cluster.local:80。令牌保存后在“组件”里安装 Cloudflare tunnel。"
+      },
+      "domains_cluster_ip": {
+        "label": "集群公网 IP",
+        "help": "你的域名应当指向的地址。会自动探测；如果集群在负载均衡器后面，请手动覆盖。"
+      },
+      "domains_geo_asn_url": {
+        "label": "网络数据库",
+        "help": "同上，用于访问者地址所属的网络，也就是 AS 号规则所检查的对象。"
+      },
+      "domains_geo_country_url": {
+        "label": "国家数据库",
+        "help": "防火墙的国家数据来源，采用 MaxMind 的 .mmdb 格式。留空则使用 DB-IP 的免费月度文件，无需账户。地址中的 %s 会被替换为月份。你也可以指向自己的副本或 MaxMind 的下载地址。"
+      },
+      "domains_geo_enabled": {
+        "label": "查询访问者的国家与网络",
+        "help": "默认开启。防火墙会下载 DB-IP 的免费月度数据库（无需账户），以便规则能指定国家或网络。在无法访问互联网的集群上，或你不希望下载任何东西时，请关闭 —— 关于国家的规则届时将无法保存，这比一条被悄悄跳过的规则要好。"
+      },
+      "domains_trusted_proxies": {
+        "label": "受信任的代理",
+        "help": "位于本集群前面、可以声明访问者身份的地址段。Pod 网络和 Service 网络已默认受信任；如果你有负载均衡器，把它的地址段加在这里。反方向配错，访问者就能自己挑选防火墙规则据以判断的地址，所以只添加你自己掌控的地址段。"
+      },
+      "domains_wildcard": {
+        "label": "通配符域名",
+        "help": "一个带通配符 DNS 记录并指向本集群的域名。每个应用都会在它下面获得一个免费子域名。留空则使用 sslip.io 地址。"
+      },
+      "email_smtp_from": {
+        "label": "发件地址",
+        "help": "通知看起来的发件地址。通常必须是你的邮件服务器允许代发的地址，否则邮件会被拒收。"
+      },
+      "email_smtp_host": {
+        "label": "SMTP 主机",
+        "help": "邮件通知和密码重置邮件都需要它。"
+      },
+      "email_smtp_password": {
+        "label": "SMTP 密码",
+        "help": "加密存储。多数服务商希望这里填应用专用密码，而不是账户密码。"
+      },
+      "email_smtp_port": {
+        "label": "SMTP 端口",
+        "help": "587 用于 STARTTLS，现在几乎所有服务都用它。465 是隐式 TLS；25 不加密，通常被主机商封锁。"
+      },
+      "email_smtp_tls": {
+        "label": "使用 STARTTLS",
+        "help": "除非你的邮件服务器只接受明文连接，否则保持开启。"
+      },
+      "email_smtp_user": {
+        "label": "SMTP 用户名",
+        "help": "如果你的邮件服务器无需登录即可接收本集群的邮件，请留空。"
+      },
+      "general_default_builder": {
+        "label": "默认构建器",
+        "help": "仓库里没有 Dockerfile 时使用哪个构建器。Railpack 生成的镜像更小；Nixpacks 更老，经受过更广泛的验证。"
+      },
+      "general_panel_url": {
+        "label": "面板地址",
+        "help": "别人访问这个面板时使用的地址。用于通知里的链接和 webhook 的 URL。"
+      },
+      "general_telemetry_disabled": {
+        "label": "关闭使用情况上报",
+        "help": "Skifity 默认不向任何地方发送任何数据。这个开关存在，是为了让“没有遥测”这件事看得见，而不是靠假设。"
+      },
+      "maintenance_audit_history_days": {
+        "label": "活动日志保留时长",
+        "help": "天数。活动日志保留的时间远长于这里的其他数据，因为会遗忘的日志和没有日志相差无几。除非有理由，否则不要缩短。"
+      },
+      "maintenance_deployment_history": {
+        "label": "每个应用保留的部署记录数",
+        "help": "一个应用保留多少条历史部署及其构建日志。更早的会被删除，以免面板数据库无止境地增长。只有最近十条可以回滚，因为镜像仓库保留的镜像数与 Kubernetes 自身记住的修订数都是十。"
+      },
+      "plugins_store_public_key": {
+        "label": "插件商店签名密钥",
+        "help": "商店的 Ed25519 公钥，base64 编码。设置后，不是由它签名的索引会被拒绝。留空时目录仍可读取，每一项都会显示为无人背书。用以下命令生成密钥对：skifity admin plugin-key"
+      },
+      "plugins_store_url": {
+        "label": "插件商店",
+        "help": "面板到哪里去找插件。留空表示 Skifity 商店。指向你自己的索引即可运行自己的商店；清空下面的公钥则可浏览未签名的商店 —— 插件始终可以通过清单地址安装或直接粘贴清单，无法访问互联网的集群用的就是这种方式。"
+      },
+      "registry_password": {
+        "label": "仓库密码",
+        "help": "具有推送权限的令牌。加密存储，之后不再显示。"
+      },
+      "registry_url": {
+        "label": "外部镜像仓库",
+        "help": "构建好的镜像推送到哪里。留空表示使用集群内部的仓库，这是最简单的选择。"
+      },
+      "registry_username": {
+        "label": "仓库用户名",
+        "help": "只有外部仓库才需要。集群内部的仓库不需要凭据。"
+      },
+      "signin_oidc_allowed_domains": {
+        "label": "允许的邮箱域名",
+        "help": "用逗号分隔。只有已验证邮箱属于这些域名的人才能登录。留空表示接受提供方担保的任何人，只有提供方是你自己的时才安全。"
+      },
+      "signin_oidc_auto_create": {
+        "label": "首次登录时创建账户",
+        "help": "关闭后，提供方认识而本面板不认识的人会被拒绝，于是账户由邀请创建，而不是任何拥有公司邮箱的人都能创建。"
+      },
+      "signin_oidc_button_label": {
+        "label": "登录按钮文字",
+        "help": "登录页面上按钮显示的文字。留空则使用通用文案。"
+      },
+      "signin_oidc_client_id": {
+        "label": "Client ID",
+        "help": "来自你在提供方注册的应用。它的 redirect URI 是本面板地址加上 /api/auth/sso/callback。"
+      },
+      "signin_oidc_client_secret": {
+        "label": "Client secret",
+        "help": "加密存储，之后不再显示。"
+      },
+      "signin_oidc_issuer": {
+        "label": "单点登录 issuer",
+        "help": "你的身份提供方的 OpenID Connect issuer 地址 —— Okta、Entra、Authentik、Keycloak、Zitadel、Google。Skifity 会从该地址下的 /.well-known/openid-configuration 读取配置。留空表示只用密码登录。"
+      },
+      "storage_s3_access_key": {
+        "label": "S3 访问密钥",
+        "help": "请使用只能写入这个存储桶的密钥。"
+      },
+      "storage_s3_bucket": {
+        "label": "S3 存储桶",
+        "help": "备份写入的存储桶。Skifity 不会替你创建。"
+      },
+      "storage_s3_endpoint": {
+        "label": "S3 端点",
+        "help": "任何兼容 S3 的服务都可以：AWS、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
+      },
+      "storage_s3_path_style": {
+        "label": "使用 path 风格地址",
+        "help": "MinIO 和大多数自建 S3 服务需要打开它。"
+      },
+      "storage_s3_region": {
+        "label": "S3 区域",
+        "help": "有些服务商会忽略它；AWS 不会。"
+      },
+      "storage_s3_secret_key": {
+        "label": "S3 私密密钥",
+        "help": "加密存储，之后不再显示。"
+      }
+    },
+    "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
+    "revokeInvitationConfirm": "发给 {{email}} 的链接会失效。"
+  },
+  "errors": {
+    "whatHappened": "发生了什么",
+    "whatItMeans": "这意味着什么",
+    "howToFix": "如何解决",
+    "details": "详细信息",
+    "errorCode": "错误代码",
+    "copiedForAI": "已复制。粘贴到你的 AI 助手里即可。",
+    "somethingWentWrong": "出了点问题",
+    "crashTitle": "此页面已停止工作",
+    "crashHelp": "面板中有内容无法渲染。您的应用和服务器不受影响，只有这个页面受影响。请重试，或前往面板的其他页面。",
+    "pageNotFound": "该页面不存在",
+    "pageNotFoundHelp": "链接可能已过期，或它指向的内容已被删除。",
+    "goHome": "回到总览",
+    "reload": "重新加载",
+    "offline": "无法连接到面板",
+    "offlineHelp": "你的应用仍在运行。此页面会自动重新连接。",
+    "reconnecting": "正在重新连接…",
+    "catalogue": {
+      "admin_backup_failed": {
+        "title": "无法复制数据库",
+        "cause": "{{0}}",
+        "impact": "没有写入任何副本。",
+        "fix": "检查目录是否存在、文件是否尚未存在，以及磁盘是否还有空间。"
+      },
+      "admin_no_database": {
+        "title": "这里没有面板的数据库",
+        "cause": "{{0}} 处没有文件。",
+        "impact": "没有改动任何东西。",
+        "fix": "请在安装面板的那台服务器上以 root 运行。数据库在别处就加 --database，或设置 SKIFITY_DATABASE_PATH。"
+      },
+      "admin_no_such_user": {
+        "title": "没有使用该地址的账户",
+        "cause": "这个面板上没有人使用 {{0}}。",
+        "impact": "没有改动任何东西。",
+        "fix": "运行 `{{0}} admin list-users` 查看现有账户。"
+      },
+      "app_crash_loop": {
+        "title": "这个应用一直在重启",
+        "cause": "{{0}} 已经连续重启 {{1}} 次。Kubernetes 正在拉长每次重启之间的间隔。",
+        "impact": "应用无法稳定处理流量。",
+        "fix": "看下面最后几行日志：原因几乎总在里面。最常见的三种是：缺少环境变量、连不上数据库、应用其实没有监听那个端口。"
+      },
+      "auth_csrf": {
+        "title": "出于安全，这个请求被拦下了",
+        "cause": "请求没有带上匹配的 CSRF 令牌。",
+        "impact": "没有改动任何东西。",
+        "fix": "重新加载页面再试一次。如果你在直接调用 API，请用 Authorization 头里的 API 令牌，而不是 cookie。"
+      },
+      "auth_forbidden": {
+        "title": "你没有做这件事的权限",
+        "cause": "你在这个团队中的角色不允许{{0}}。",
+        "impact": "操作没有执行。",
+        "fix": "请团队所有者或管理员来做，或者请他们提升你的角色。"
+      },
+      "auth_invalid_credentials": {
+        "title": "邮箱或密码不正确",
+        "cause": "这个邮箱和密码与面板上的任何账户都不匹配。",
+        "impact": "你没有登录。",
+        "fix": "检查有没有打错再试一次。连续失败几次后，登录会暂停一段时间。"
+      },
+      "auth_invalid_totp": {
+        "title": "这个验证码不对",
+        "cause": "六位数字与面板期待的不一致。",
+        "impact": "两步验证没有开启。",
+        "fix": "检查手机时间是否准确，然后输入验证器应用里当前显示的验证码。"
+      },
+      "auth_rate_limited": {
+        "title": "尝试次数太多",
+        "cause": "这个账户或这个地址的登录失败次数太多了。",
+        "impact": "登录已暂停，以免密码被猜出来。",
+        "fix": "等待 {{0}} 后再试。如果这不是你本人，登录后请立即改密码。"
+      },
+      "auth_required": {
+        "title": "你需要先登录",
+        "cause": "这个请求没有带有效的会话或 API 令牌。",
+        "impact": "操作没有执行。",
+        "fix": "重新登录。如果在用 CLI，运行 `skifity login`。"
+      },
+      "auth_token_scope": {
+        "title": "这个令牌不能发起该请求",
+        "cause": "令牌 {{0}} 被限制为 {{1}}。",
+        "impact": "请求被拒绝。没有改动任何东西。",
+        "fix": "改用没有作用域限制的令牌，或在「账户」中创建一个可写的令牌。"
+      },
+      "backup_bad_schedule": {
+        "title": "Skifity 看不懂这个计划",
+        "cause": "{{0}}",
+        "impact": "计划没有改动。",
+        "fix": "用五个 cron 字段，例如 \"0 3 * * *\" 表示每天 UTC 03:00。"
+      },
+      "backup_bucket_missing": {
+        "title": "这个存储桶不存在",
+        "cause": "在 {{1}} 上找不到存储桶 {{0}}。",
+        "impact": "备份无法运行。",
+        "fix": "先在你的存储服务商那里创建存储桶，然后重试。Skifity 不会自己创建：那需要比写入备份宽得多的权限。"
+      },
+      "backup_database_not_running": {
+        "title": "这个数据库没在运行",
+        "cause": "{{0}} 目前是{{1}}，没有可备份的内容。",
+        "impact": "没有生成备份。",
+        "fix": "等数据库运行起来再试一次。"
+      },
+      "backup_failed": {
+        "title": "备份失败",
+        "cause": "备份 {{0}} 失败：{{1}}",
+        "impact": "这一次没有生成新备份。以前的备份没有受影响。",
+        "fix": "在「设置」里检查存储凭据，并确认存储桶存在且可写。然后从数据库页面重新运行备份。"
+      },
+      "backup_restore_refused": {
+        "title": "这次恢复会覆盖正在使用的数据",
+        "cause": "{{0}} 正在被使用，恢复会替换掉它现在的内容。",
+        "impact": "没有改动任何东西。",
+        "fix": "先恢复到一个新数据库，检查无误后再把应用指过去。如果你确实要覆盖，请在恢复对话框里明确确认。"
+      },
+      "backup_storage_no_delete": {
+        "title": "旧备份无法删除",
+        "cause": "这个访问密钥能写入 {{0}}，但不能从中删除。",
+        "impact": "备份还能继续，但旧备份永远不会清理，存储桶会一直变大。",
+        "fix": "给访问密钥加上删除对象的权限，或者在存储服务商那边设置保留策略。"
+      },
+      "backup_storage_not_configured": {
+        "title": "还没有配置备份存储",
+        "cause": "这个团队还没有设置 S3 兼容的存储。",
+        "impact": "备份无法运行，也就没有任何东西在被保存。",
+        "fix": "打开「设置」→「存储」，添加一个 S3 兼容的存储桶。任何服务商都行：AWS S3、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
+      },
+      "backup_storage_read_only": {
+        "title": "备份存储无法写入",
+        "cause": "向 {{0}} 写入测试对象失败：{{1}}",
+        "impact": "备份会失败。",
+        "fix": "给访问密钥加上向这个存储桶写入对象的权限。"
+      },
+      "backup_storage_unreachable": {
+        "title": "连不上备份存储",
+        "cause": "连接 {{0}} 失败：{{1}}",
+        "impact": "备份无法运行。",
+        "fix": "检查端点地址、访问密钥，以及这台服务器能否访问到存储服务。"
+      },
+      "build_failed": {
+        "title": "构建失败",
+        "cause": "{{0}} 的构建在 {{1}} 阶段失败。",
+        "impact": "新版本没有部署。旧版本仍在运行并继续处理流量。",
+        "fix": "看下面的构建日志。然后在仓库里改好再推一次；如果你认为只是偶发失败，也可以按「重试」。"
+      },
+      "build_no_builder": {
+        "title": "Skifity 想不出该怎么构建这个仓库",
+        "cause": "{{0}} 里没有 Dockerfile，现有文件也不匹配 Skifity 认识的任何语言。",
+        "impact": "没有开始构建。",
+        "fix": "往仓库里加一个 Dockerfile；如果应用在 monorepo 的子目录里，就设置根目录；或者干脆改用现成镜像。"
+      },
+      "build_pod_not_started": {
+        "title": "构建没有启动",
+        "cause": "五分钟内没有任何构建 Pod 就绪。",
+        "impact": "既没有构建，也没有部署。",
+        "fix": "检查集群还有没有空闲的 CPU 和内存，以及构建组件是否在运行。"
+      },
+      "build_timeout": {
+        "title": "构建太久，已被中止",
+        "cause": "构建在 40 分钟内没有完成。",
+        "impact": "没有部署任何东西。旧版本仍在运行。",
+        "fix": "这么久通常说明某个依赖在从源码编译。加一个带依赖缓存层的 Dockerfile，或者调高构建超时时间。"
+      },
+      "cli_already_initialised": {
+        "title": "这个目录里已经有一个应用了",
+        "cause": "{{0}} 指向应用 {{1}}。",
+        "impact": "没有改动任何东西。",
+        "fix": "运行 `{{0}} deploy` 部署它，或者删掉 {{1}} 重新开始。"
+      },
+      "cli_ambiguous_app": {
+        "title": "你指的是哪个应用？",
+        "cause": "这个目录里没有 {{0}}，而环境里有好几个应用。",
+        "impact": "命令没有执行。",
+        "fix": "用 --app 指定其中之一：{{0}}"
+      },
+      "cli_export_path": {
+        "title": "面板报了一个导出目录之外的文件",
+        "cause": "{{0}} 不在 {{1}} 里面。",
+        "impact": "没有为它写入任何内容。",
+        "fix": "这是面板返回了不该返回的名字。请上报，并确认这个面板确实是你以为的那一个。"
+      },
+      "cli_export_write_failed": {
+        "title": "导出写不下去",
+        "cause": "写入 {{0}} 失败：{{1}}",
+        "impact": "导出不完整。",
+        "fix": "用 --out 选一个你有写权限的目录，并确认磁盘还有空间。"
+      },
+      "cli_no_app": {
+        "title": "这里还没有应用",
+        "cause": "这个目录里没有 {{0}}，环境里也没有应用。",
+        "impact": "命令没有执行。",
+        "fix": "运行 `{{0}} init` 创建一个。"
+      },
+      "cli_no_project": {
+        "title": "这个团队还没有项目",
+        "cause": "没有地方可以放应用。",
+        "impact": "命令没有执行。",
+        "fix": "先在面板里创建一个项目。"
+      },
+      "cli_no_team": {
+        "title": "你还不属于任何团队",
+        "cause": "这个账户不在任何团队里，也就没有可操作的对象。",
+        "impact": "没有改动任何东西。",
+        "fix": "请团队里的人把你加进去，或者在面板里创建一个团队。"
+      },
+      "cli_team_ambiguous": {
+        "title": "你同时在多个团队里",
+        "cause": "这个账户属于 {{0}} 个团队，不清楚该用哪一个。",
+        "impact": "没有改动任何东西。",
+        "fix": "运行 `{{0}} login` 选一个，或把 SKIFITY_TEAM 设成其中之一的 id：{{1}}"
+      },
+      "cli_unavailable": {
+        "title": "这个面板拿不出自己的可执行文件",
+        "cause": "读取正在运行的可执行文件失败：{{0}}",
+        "impact": "命令行工具没有下载成功。面板本身不受影响。",
+        "fix": "用 `make build` 从仓库构建，或从别的机器拷一份过来。面板和 CLI 是同一个文件。"
+      },
+      "cli_unexpected_response": {
+        "title": "面板返回了意料之外的内容",
+        "cause": "来自 {{1}} 的 HTTP {{0}}：{{2}}",
+        "impact": "命令没有完成。",
+        "fix": "确认这个网址指向的是一个 Skifity 面板，而不是别的东西。"
+      },
+      "cluster_control_plane_unverifiable": {
+        "title": "问不到集群由几台服务器在支撑",
+        "cause": "只有在面板能看到还剩几台时，移除控制平面服务器才是安全的，而 Kubernetes API 没有回应。",
+        "impact": "没有改动任何东西。",
+        "fix": "等集群恢复可达再试。工作节点服务器则随时都可以移除。"
+      },
+      "cluster_drain_blocked": {
+        "title": "移除这台服务器会让一个应用下线",
+        "cause": "{{1}} 中的 {{0}} 无法迁移：{{2}}",
+        "impact": "服务器没有被移除，仍在运行你的应用。",
+        "fix": "先加一台服务器，或者把挡路的那个应用扩到多个实例，它才有地方可去。"
+      },
+      "cluster_drain_timeout": {
+        "title": "有些实例挪不走",
+        "cause": "五分钟后 {{1}} 上仍有 {{0}} 个实例在运行。",
+        "impact": "服务器没有被移除。",
+        "fix": "带磁盘的应用在没有开启跨节点存储时无法迁到别的服务器。停掉那个应用，或者在「设置」里启用 Longhorn，然后再试。"
+      },
+      "cluster_insufficient_capacity": {
+        "title": "集群里没有足够的空间了",
+        "cause": "{{0}} 无法被调度：{{1}}",
+        "impact": "这些实例一直挂起，没有在处理流量。",
+        "fix": "在「服务器」页加一台服务器，调低这个应用的 CPU 或内存请求，或者减少实例数量。"
+      },
+      "cluster_last_control_plane": {
+        "title": "这是唯一一台在跑集群的服务器",
+        "cause": "移除它就是删掉最后一个控制平面节点。Kubernetes、上面所有应用，以及这个面板本身，都跑在那里。",
+        "impact": "没有改动任何东西。",
+        "fix": "先加一台服务器并把它提升为控制平面。如果你确实想把整个集群拆掉，请直接在那台服务器上运行卸载程序。"
+      },
+      "cluster_node_not_ready": {
+        "title": "服务器没有加入集群",
+        "cause": "Kubernetes 已装在 {{0}} 上，但五分钟内没有节点就绪。",
+        "impact": "服务器已登记，但还没有运行任何东西。",
+        "fix": "检查这台服务器能否通过 6443 端口访问第一台，以及两台之间能否通过 UDP 51820 互通。最常见的原因是你服务商控制台里的防火墙。"
+      },
+      "cluster_not_enough_servers": {
+        "title": "高可用需要三台服务器",
+        "cause": "这个集群有 {{0}} 台服务器。内置 etcd 需要三个控制平面成员，才能在挂掉一台时继续工作。",
+        "impact": "没有改动任何东西。",
+        "fix": "把服务器加到至少三台，然后把其中三台提升为控制平面。"
+      },
+      "cluster_quorum_risk": {
+        "title": "移除这台服务器会弄坏集群",
+        "cause": "这是一台控制平面服务器，移除后只剩 {{0}} 台。内置 etcd 需要至少三台的奇数个，才能扛住一次故障。",
+        "impact": "没有改动任何东西。这台服务器仍属于集群。",
+        "fix": "先把另一台服务器提升为控制平面，再移除这台。如果只剩一台控制平面，唯一的移除方式就是拆掉整个集群。"
+      },
+      "cluster_token_missing": {
+        "title": "Skifity 没有这个集群的加入令牌",
+        "cause": "面板运行在一个不是它创建的 Kubernetes 集群里，而服务器只能用集群启动时的那个令牌加入。",
+        "impact": "无法添加任何服务器。你正在添加的那台服务器上没有任何改动。",
+        "fix": "在运行面板的那台服务器上，把令牌复制到位再重启面板：\n\n  sudo cp /var/lib/rancher/k3s/server/token {{0}}\n  sudo chmod 600 {{1}}"
+      },
+      "cluster_unreachable": {
+        "title": "集群没有响应",
+        "cause": "Kubernetes API 没有回应。",
+        "impact": "你的应用照常运行，但 Skifity 现在无法做任何改动，也读不到实时状态。",
+        "fix": "通常一分钟内会自行恢复。如果没有，检查控制平面服务器是否在线，以及服务器之间的 6443 端口是否可达。"
+      },
+      "component_external": {
+        "title": "{{0}} 不是由面板安装的",
+        "cause": "它用 Helm 安装，因为那是几十个有自己发布节奏的对象，面板来当安装器只会比它作者写的那个更差。",
+        "impact": "没有改动任何东西。",
+        "fix": "命令在文档里。"
+      },
+      "component_install_failed": {
+        "title": "无法启用闲时停机",
+        "cause": "安装 KEDA（闲时停机由它提供）失败：{{0}}",
+        "impact": "伸缩设置没有改动。",
+        "fix": "确认集群还放得下一个小组件，然后重试。"
+      },
+      "config_missing": {
+        "title": "{{0}} 还没有设置",
+        "cause": "{{0}} 需要一些还没填的配置。",
+        "impact": "操作没有执行。",
+        "fix": "打开 {{0}} 填一下。代码和服务器上都不需要改动。"
+      },
+      "database_failed": {
+        "title": "数据库启动不起来",
+        "cause": "{{0}}",
+        "impact": "还没有人在用它，所以没有影响到别的东西。",
+        "fix": "确认集群有足够的内存和磁盘，然后删掉它再试一次。"
+      },
+      "database_no_credentials": {
+        "title": "这个数据库没有保存凭据",
+        "cause": "面板的数据库里找不到它的凭据。",
+        "impact": "无法显示连接信息。",
+        "fix": "从 Kubernetes Secret {{0}} 里读取，或者重新创建这个数据库。"
+      },
+      "database_still_linked": {
+        "title": "这个数据库还有应用在用",
+        "cause": "有 {{0}} 个应用被注入了这个数据库的连接串。",
+        "impact": "没有改动任何东西。",
+        "fix": "先解除这些应用的关联，或者确认你就是要删掉它。"
+      },
+      "database_timeout": {
+        "title": "数据库没能按时就绪",
+        "cause": "{{0}} 在十五分钟内没有就绪。",
+        "impact": "数据库存在，但还不能用。",
+        "fix": "打开实例列表看原因。常见的是卷没有可用磁盘空间，以及没有哪台服务器的内存够用。"
+      },
+      "deploy_cannot_rollback": {
+        "title": "回不到这个版本",
+        "cause": "第 {{0}} 次部署没有成功完成，所以没有可回退的镜像。",
+        "impact": "没有改动任何东西。当前版本仍在运行。",
+        "fix": "从历史里挑一个标记为成功的部署。"
+      },
+      "deploy_image_collected": {
+        "title": "那个版本太旧了，回不去",
+        "cause": "一个应用只保留最近 {{0}} 个版本的镜像。版本 {{1}} 比这更早，镜像已被清理以腾出磁盘。",
+        "impact": "没有改动任何东西。现在跑着的版本继续跑。",
+        "fix": "回退到最近 {{0}} 个版本之一，或者把你想要的那个提交重新部署一次，它会重新构建。"
+      },
+      "deploy_image_pull_failed": {
+        "title": "镜像拉不下来",
+        "cause": "拉取 {{0}} 失败：{{1}}",
+        "impact": "新实例起不来。旧版本仍在运行。",
+        "fix": "如果是私有镜像，请在「设置」里添加仓库凭据。如果是内部构建的镜像，可能是这个节点访问不到集群内的镜像仓库：检查该节点是否已加入集群网络。"
+      },
+      "deploy_refused_by_plugin": {
+        "title": "一个插件拦下了这次部署",
+        "cause": "{{0}} 拒绝了它：{{1}}",
+        "impact": "没有改动任何东西。原本在服务的版本继续服务。",
+        "fix": "按它的要求处理，或者在「插件」页把那个插件关掉。"
+      },
+      "deploy_rollout_timeout": {
+        "title": "新版本没能起来",
+        "cause": "超时前 {{2}} 的 {{1}} 个实例中只有 {{0}} 个就绪。{{3}}",
+        "impact": "Kubernetes 保留了旧版本，所以你的应用还在线。新版本没有发布出去。",
+        "fix": "看看应用日志里有没有启动时崩溃。常见原因：缺少环境变量、健康检查路径还不存在、应用监听的端口和配置的端口对不上。"
+      },
+      "detect_unreadable": {
+        "title": "读不了那个仓库",
+        "cause": "{{0}}",
+        "impact": "没有创建任何东西。你仍然可以自己把表单填完。",
+        "fix": "检查地址和分支。私有仓库需要一个有权限访问它的、已连接的 Git 账户——在下面选择。"
+      },
+      "domain_certificate_failed": {
+        "title": "HTTPS 证书没能签发",
+        "cause": "Let's Encrypt 拒绝为 {{0}} 签发证书：{{1}}",
+        "impact": "域名能走 HTTP，但走不了 HTTPS。",
+        "fix": "确认域名解析到这个集群，且 80 端口可从公网访问——验证就是走那里。如果撞上了频率限制，等一小时再试。"
+      },
+      "domain_dns_mismatch": {
+        "title": "这个域名还没有指到这里",
+        "cause": "{{0}} 目前解析到 {{1}}，但它需要解析到 {{2}}。",
+        "impact": "证书签发不了，域名也不会提供你的应用。",
+        "fix": "为 {{0}} 创建一条指向 {{1}} 的 A 记录，然后等它生效。Skifity 每分钟会再查一次。"
+      },
+      "domain_is_the_panel": {
+        "title": "那是面板自己的地址",
+        "cause": "{{0}} 正是这个面板应答的地方。",
+        "impact": "没有改动任何东西。把应用指过去等于让两样东西共用一个主机名，到底谁来应答将由 ingress 控制器决定，而不是由人决定——带着你登录 cookie 的请求也一样。",
+        "fix": "给应用一个自己的主机名。用面板主机名的子域名也可以。"
+      },
+      "domain_no_free_address": {
+        "title": "没能给这个应用分到地址",
+        "cause": "{{0}} 和 {{1}} 都已经被别的应用占用了。",
+        "impact": "应用已部署，但没有自动地址。你自己的域名仍然可用。",
+        "fix": "给应用改个名字，或者在这个应用的「域名」标签里加上你自己的域名。"
+      },
+      "environment_level_not_applied": {
+        "title": "级别已保存，但命名空间没有改动",
+        "cause": "{{0}}",
+        "impact": "Kubernetes 仍在按旧级别执行，所以部署的表现和以前一样。",
+        "fix": "按「原因」里说的修好，然后再保存一次级别。"
+      },
+      "firewall_failed": {
+        "title": "防火墙没能配置好",
+        "cause": "在 {{0}} 上执行防火墙命令失败：{{1}}",
+        "impact": "服务器没有被添加。",
+        "fix": "确认 Skifity 用来连接的账户能运行 ufw 或 iptables。需要 root，或免密码的 sudo。"
+      },
+      "firewall_no_geo_database": {
+        "title": "这个面板不查访客的{{0}}",
+        "cause": "有条规则要判断{{0}}，而访客国家与网络的查询是关着的。",
+        "impact": "什么都没保存。无法判断的规则每次请求都会被跳过，看着像配好了，实际什么也没挡住。",
+        "fix": "在「设置」→「域名与 HTTPS」里打开「查询访客的国家与网络」。它用的是 DB-IP 每月免费的数据库，不需要注册账号。"
+      },
+      "guard_no_panel_image": {
+        "title": "防火墙没能安装",
+        "cause": "读不到面板自己的 Deployment，也就没有镜像可以用来运行守卫：{{0}}",
+        "impact": "集群里没有任何改动。",
+        "fix": "只有当面板运行在它所管理的集群内部时这才可行，安装程序正是这么装的。运行在集群外的面板装不了这个组件。"
+      },
+      "guard_rules_too_large": {
+        "title": "防火墙规则太多，装不下",
+        "cause": "所有受保护应用的规则加起来有 {{0}} KB，而 Kubernetes 单个对象最多只存 {{1}} KB。",
+        "impact": "集群里没有任何改动；已有的规则仍然生效。",
+        "fix": "把最长的列表缩短——通常是地址列表在膨胀——或者给不再需要的应用关掉防火墙。"
+      },
+      "internal": {
+        "title": "出了点问题",
+        "cause": "面板在处理这台服务器时遇到了意料之外的错误。",
+        "impact": "操作停在了原地。服务器可能只配置了一半；上面的步骤显示走到了哪里。",
+        "fix": "再跑一次——每个步骤重复执行都是安全的。如果仍以同样方式失败，请复制这个错误并提个 issue：那是 Skifity 的缺陷。"
+      },
+      "invite_account_exists": {
+        "title": "这个地址已经有账户了",
+        "cause": "这份邀请发出之后，有人用 {{0}} 注册了。",
+        "impact": "没有创建账户。",
+        "fix": "直接登录，然后请人把你加进团队。"
+      },
+      "invite_not_valid": {
+        "title": "这份邀请没法用了",
+        "cause": "链接已过期、已被使用过，或者被撤回了。",
+        "impact": "没有创建账户。",
+        "fix": "向邀请你的人要一个新链接。"
+      },
+      "k3s_install_failed": {
+        "title": "这台服务器上装不了 Kubernetes",
+        "cause": "k3s 安装程序在 {{1}} 上以代码 {{0}} 退出。",
+        "impact": "服务器已登记，但不属于集群。上面没有运行任何负载。",
+        "fix": "打开下面的步骤输出。最常见的原因是：没有出网、内核太旧缺少必需模块、以及已有容器运行时冲突。修好原因后按「重试」；这个步骤重复执行是安全的。"
+      },
+      "mcp_run_still_going": {
+        "title": "命令还在跑",
+        "cause": "它已经跑了 {{0}}，这里最多就等这么久。",
+        "impact": "命令没有被停掉。它还在集群里运行，输出会随这次运行一起保留。",
+        "fix": "等一等再回来读：这次运行是 {{0}}，在应用 {{1}} 上。"
+      },
+      "network_port_blocked": {
+        "title": "集群的一个端口被挡住了",
+        "cause": "集群成员无法通过 {{1}}/{{2}} 访问 {{0}}。",
+        "impact": "节点加入不了集群，或者节点上的 Pod 无法与别处的 Pod 通信。",
+        "fix": "在你的服务器之间放通 {{0}}/{{1}}。Skifity 会在服务器本机配置 UFW 和 iptables，但服务商控制台里的防火墙必须你自己去开。检查这台机器的安全组或防火墙规则。"
+      },
+      "notification_test_failed": {
+        "title": "测试消息没发出去",
+        "cause": "{{0}}",
+        "impact": "在它能用之前，这个渠道不会送出任何通知。",
+        "fix": "检查 webhook 地址或令牌，以及这台服务器能否访问到该服务。"
+      },
+      "operation_interrupted": {
+        "title": "面板重启时这件事被打断了",
+        "cause": "这个操作还在进行时面板停了。",
+        "impact": "服务器可能只配置了一半。",
+        "fix": "按「重试」。每个步骤重复执行都是安全的，已经完成的会被跳过。"
+      },
+      "operation_not_running": {
+        "title": "那个操作没有在运行",
+        "cause": "它已经结束了，或者在它开始之后面板重启过。",
+        "impact": "没有改动任何东西。",
+        "fix": "重新加载页面看看它现在的状态。"
+      },
+      "operation_timeout": {
+        "title": "这件事拖太久，已被中止",
+        "cause": "步骤 {{0}} 没有在 {{1}} 内完成。",
+        "impact": "服务器可能只配置了一半。重试是安全的：每个步骤都可以再跑一次。",
+        "fix": "按「重试」。如果又超时，检查服务器的出网是否正常。"
+      },
+      "plugin_bad_manifest": {
+        "title": "这不是一份插件清单",
+        "cause": "{{0}}",
+        "impact": "什么都没有安装。",
+        "fix": "对照插件规范检查一下，规范写在 /docs/plugins。"
+      },
+      "plugin_did_not_start": {
+        "title": "插件装上了却没起来",
+        "cause": "{{0}}",
+        "impact": "它的凭据已经存在，但容器没在运行，所以它收不到任何东西。",
+        "fix": "看插件自己的日志。插件镜像必须以非 root 用户运行；以 root 启动的镜像会被它所在的命名空间拒绝，这也是插件起不来最常见的原因。"
+      },
+      "plugin_permissions_changed": {
+        "title": "这个插件现在要的东西不一样了",
+        "cause": "你当初同意的是 {{0}}；清单现在要的是 {{1}}。",
+        "impact": "什么都没有安装。",
+        "fix": "再读一遍它要什么，如果仍然可以接受就安装。"
+      },
+      "plugin_unreachable": {
+        "title": "这份清单取不下来",
+        "cause": "服务器返回 {{0}}。",
+        "impact": "什么都没有安装。",
+        "fix": "检查一下地址。"
+      },
+      "preflight_arch_unknown": {
+        "title": "这台服务器还不能加入",
+        "cause": "判断不出这台服务器的 CPU 架构。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "检查 `uname -m` 能否通过 SSH 正常执行。"
+      },
+      "preflight_arch_unsupported": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器是 {{0}}，Skifity 不为这种架构构建。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "请用 64 位 x86（amd64）或 ARM（arm64）服务器。"
+      },
+      "preflight_cgroups": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器上的内存 cgroup 控制器被关掉了。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "没有它 kubelet 起不来。在 Raspberry Pi OS 和树莓派版 Ubuntu 上，把 `cgroup_memory=1 cgroup_enable=memory` 加到 /boot/firmware/cmdline.txt 那唯一一行的末尾再重启。其他系统请检查内核命令行里有没有 `cgroup_disable=memory`。"
+      },
+      "preflight_conflict_docker": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器上已经在跑 Docker。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "Docker 和 k3s 可以共存，但它们会争内存，而且都要管 iptables 规则。服务器不大的话，先把 Docker 关掉：systemctl disable --now docker"
+      },
+      "preflight_conflict_other": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器上正在跑 {{0}}。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "确认它没有占用 80、443 或 6443 端口。"
+      },
+      "preflight_conflict_web_server": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器上 {{0}} 正在监听。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "它占着 80 和 443 端口，而集群的 ingress 需要这两个端口。停掉它：systemctl disable --now {{0}}"
+      },
+      "preflight_cpu": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器有 {{0}} 个 CPU 核心；至少需要 {{1}} 个。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "换成核心更多的服务器。"
+      },
+      "preflight_disk": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器有 {{0}} GB 可用磁盘；至少需要 {{1}} GB。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "腾出空间或者把磁盘扩大。光是容器镜像通常就要好几个 GB。"
+      },
+      "preflight_memory_control_plane": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器有 {{0}} MB 内存；一台控制平面服务器至少需要 {{1}} MB。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "把服务器规格调大，或者把它当作工作节点而不是控制平面服务器来添加。"
+      },
+      "preflight_memory_worker": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器有 {{0}} MB 内存；一个工作节点至少需要 {{1}} MB。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "把服务器规格调大，或者把它当作工作节点而不是控制平面服务器来添加。"
+      },
+      "preflight_network": {
+        "title": "这台服务器还不能加入",
+        "cause": "Skifity 判断不出这台服务器的公网地址。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "不同服务商的服务器之间必须靠公网地址互通。确认这台服务器有公网地址，而且出站连接正常。"
+      },
+      "preflight_os_unreadable": {
+        "title": "这台服务器还不能加入",
+        "cause": "Skifity 判断不出这台服务器跑的是哪个发行版。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "检查 /etc/os-release 是否存在且可读。经过测试的是 Ubuntu 24.04 和 Debian 12。"
+      },
+      "preflight_os_unsupported": {
+        "title": "这台服务器还不能加入",
+        "cause": "{{0}} 不是 Skifity 认识的发行版。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "请用 Ubuntu 24.04 或 Debian 12。其他带 systemd 的发行版通常也能跑，但没有测试过。"
+      },
+      "preflight_os_untested": {
+        "title": "这台服务器还不能加入",
+        "cause": "{{0}} {{1}} 不在 Skifity 测试过的发行版之列。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "应该能用，但如果遇到问题，经过测试的是 Ubuntu 24.04 和 Debian 12。"
+      },
+      "preflight_port": {
+        "title": "这台服务器还不能加入",
+        "cause": "已经有东西在监听 {{0}} 端口。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "用 ss -lntup 'sport = :{{0}}' 找出来并停掉，或者换一台该端口空闲的服务器。"
+      },
+      "preflight_systemd": {
+        "title": "这台服务器还不能加入",
+        "cause": "这台服务器看起来没有用 systemd。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "Skifity 把 Kubernetes 装成 systemd 服务，并用 systemctl 管理它。请用带 systemd 的发行版，比如 Ubuntu 24.04 或 Debian 12。Alpine 以及其他用 OpenRC 的系统都不行，没有 init 系统的容器也不行——比如非特权 LXC 或 Docker 容器。"
+      },
+      "preflight_wireguard": {
+        "title": "这台服务器还不能加入",
+        "cause": "这个内核没有 WireGuard 模块，而这个集群用 WireGuard 加密服务器之间的流量。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "在这台服务器上安装：apt-get install -y wireguard-tools（若模块仍加载不了就重启）。如果内核根本装不了，就在「设置 -> 集群 -> Pod 网络」里把整个集群切到 vxlan，这会让所有服务器都关掉那层加密。"
+      },
+      "release_failed": {
+        "title": "发布命令失败了",
+        "cause": "新版本还没上线，命令就带着错误退出了。",
+        "impact": "部署被中止。之前运行的版本仍在运行，没有流量到过新版本。",
+        "fix": "命令的输出在上面的构建日志里。改好后重新部署；对你的用户来说什么都没变。"
+      },
+      "release_timed_out": {
+        "title": "发布命令没有跑完",
+        "cause": "二十分钟后它还在运行。",
+        "impact": "部署被中止，仍由旧版本提供服务。",
+        "fix": "这么久的迁移通常应该手动跑一次，而不是每次部署都跑。"
+      },
+      "request_invalid": {
+        "title": "这个请求不合法",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "改好标出来的字段再试一次。"
+      },
+      "resource_conflict": {
+        "title": "这个名字已经被占用了",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "{{0}}"
+      },
+      "resource_name_taken": {
+        "title": "这个名字在这里已经用了",
+        "cause": "这个环境里的 {{0}} 已经叫 {{1}}，而同一个环境中的应用和数据库共用地址。",
+        "impact": "没有创建任何东西。",
+        "fix": "换个名字。别的环境不受影响：staging 和 production 里用同一个名字是可以的。"
+      },
+      "resource_not_found": {
+        "title": "那个{{0}}不存在",
+        "cause": "没有 id 为 {{1}} 的{{0}}对你可见。",
+        "impact": "没有改动任何东西。",
+        "fix": "检查一下 id，或者回到列表里重新选。"
+      },
+      "run_never_deployed": {
+        "title": "这个应用还没有部署过",
+        "cause": "命令在应用自己的镜像里运行，而应用没部署过一次就没有镜像。",
+        "impact": "什么都没有运行。",
+        "fix": "先部署应用，再运行命令。"
+      },
+      "scaling_risk": {
+        "title": "这个应用在多个实例下可能工作不正常",
+        "cause": "{{0}}",
+        "impact": "多个实例同时运行时，一部分请求的表现会和另一部分不一样。",
+        "fix": "{{0}}"
+      },
+      "server_no_operation": {
+        "title": "没有可以重试的东西",
+        "cause": "没有记录到添加这台服务器的任何先前尝试。",
+        "impact": "没有改动任何东西。",
+        "fix": "把服务器移除后重新添加。"
+      },
+      "server_not_in_cluster": {
+        "title": "这台服务器还不在集群里",
+        "cause": "没有哪个 Kubernetes 节点匹配 {{0}}。",
+        "impact": "没有实时指标可以展示。",
+        "fix": "如果服务器还在添加中，等它完成。如果失败了，打开它按「重试」。"
+      },
+      "server_not_ours": {
+        "title": "这台服务器不是 Skifity 添加的",
+        "cause": "{{0}} 是 Skifity 安装之前集群里就已经有的节点——通常就是跑面板的那台机器。我们没有它的密钥，也没有往上面放过任何东西。",
+        "impact": "{{0}} 没有执行。",
+        "fix": "要改这台机器，请到机器上去改。要把它彻底移出集群，在它上面运行卸载程序：`sudo sh /usr/local/bin/skifity-uninstall`。如果只是想加算力，那就添加第二台服务器——那种 Skifity 会自己安装，也管得了。"
+      },
+      "setup_already_done": {
+        "title": "初始设置已经做过了",
+        "cause": "这个面板已经有一个管理员账户。",
+        "impact": "没有创建账户。",
+        "fix": "用初始设置时创建的账户登录。密码丢了就看账户恢复指南。"
+      },
+      "setup_bad_token": {
+        "title": "这个安装令牌不对",
+        "cause": "你输入的令牌和这个面板生成的不一致。",
+        "impact": "没有创建账户。",
+        "fix": "从安装程序的输出里复制令牌。它也被写到了服务器上面板配置目录里的 setup-token 文件中。"
+      },
+      "setup_no_token": {
+        "title": "这个面板没有安装令牌",
+        "cause": "面板启动时没有一次性安装令牌，所以首次设置无法验证。",
+        "impact": "没有创建账户。",
+        "fix": "重新运行安装程序，或者往安装令牌文件里写一个令牌再重启面板。"
+      },
+      "setup_too_many_attempts": {
+        "title": "安装令牌错得太多次了",
+        "cause": "安装令牌被反复猜了太多次。",
+        "impact": "在面板重启之前，设置被锁住了。",
+        "fix": "重启面板，然后从安装程序的输出里一字不差地复制令牌。"
+      },
+      "ssh_auth_failed": {
+        "title": "服务器拒绝了这套凭据",
+        "cause": "在 {{1}} 上以 {{0}} 身份用{{2}}登录被拒绝。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "{{0}}"
+      },
+      "ssh_host_key_changed": {
+        "title": "这台服务器的身份变了",
+        "cause": "{{0}} 出示的 SSH 主机密钥与添加时记录的不一致。",
+        "impact": "连接被拒绝。Skifity 不会在认不出来的服务器上执行命令。",
+        "fix": "如果你重建或重装过这台服务器，把它从 Skifity 移除再重新添加。如果没有，请停下来查清楚：可能有人在中间拦截连接。"
+      },
+      "ssh_key_install_failed": {
+        "title": "面板的密钥装不上去",
+        "cause": "在 {{0}} 上写入 authorized_keys 失败：{{1}}",
+        "impact": "服务器没有被添加。",
+        "fix": "检查 {{0}} 能否写入自己的主目录，以及磁盘是不是满了。"
+      },
+      "ssh_key_verify_failed": {
+        "title": "面板的密钥装上了却不管用",
+        "cause": "用新密钥连接失败：{{0}}",
+        "impact": "服务器没有被添加。密码也没有被丢弃。",
+        "fix": "检查服务器的 sshd 设置：PubkeyAuthentication 必须是 yes，而且主目录不能对同组可写。"
+      },
+      "ssh_no_credentials": {
+        "title": "没有可用来连接的凭据",
+        "cause": "密码在第一次尝试时用过一次，并且是故意没有保存的。",
+        "impact": "无法连上服务器继续下去。",
+        "fix": "把这台服务器移除，再用密码或私钥重新添加。"
+      },
+      "ssh_unreachable": {
+        "title": "通过 SSH 连不上服务器",
+        "cause": "{{0}} 的 {{1}} 端口没有任何回应。",
+        "impact": "服务器没有被添加。上面没有任何改动。",
+        "fix": "确认 IP 和端口没错、服务器开着，以及你服务商的防火墙允许 {{0}} 端口的入站 TCP。很多服务商在控制台里默认全部拦截，而 SSH 在这边是打不开它的。"
+      },
+      "sso_no_panel_url": {
+        "title": "这个面板不知道自己的地址",
+        "cause": "单点登录会把人送回一个固定地址，而「面板地址」这项设置是空的。",
+        "impact": "登录流程根本起不来。",
+        "fix": "在「设置」里填好面板地址，然后把这个地址加上 /api/auth/sso/callback 注册到你的身份提供商那里。"
+      },
+      "sso_not_configured": {
+        "title": "单点登录还没设置",
+        "cause": "这个面板上没有配置任何身份提供商。",
+        "impact": "请改用邮箱和密码登录。",
+        "fix": "管理员可以在「设置」→「登录」里配置一个提供商。"
+      },
+      "sso_provider_unreachable": {
+        "title": "连不上身份提供商",
+        "cause": "{{0}}",
+        "impact": "在修好之前，没有人能用单点登录进来。",
+        "fix": "在「设置」→「登录」里检查 issuer 地址，以及这个面板能否访问到它。"
+      },
+      "store_bad_index": {
+        "title": "读不了插件商店的索引",
+        "cause": "{{0}}",
+        "impact": "没有从它那里读到任何内容。",
+        "fix": "如果这是你自己的商店，检查索引是不是这个面板能读的格式。插件仍然可以通过清单地址或直接粘贴清单来安装。"
+      },
+      "store_bad_signature": {
+        "title": "插件商店的索引不是这个面板信任的密钥签的",
+        "cause": "{{0}}",
+        "impact": "没有从它那里读到任何内容，也没有安装任何东西。",
+        "fix": "在「设置」→「插件」里检查签名密钥。如果密钥没错，那就说明 {{0}} 上的索引不是那把密钥签的——在从那里安装任何东西之前，这件事值得查清楚。"
+      },
+      "store_unreachable": {
+        "title": "连不上插件商店",
+        "cause": "{{0}}",
+        "impact": "没有从它那里读到任何内容。",
+        "fix": "检查这个集群能否访问 {{0}}。插件仍可通过清单地址或粘贴清单来安装——没有外网的集群就是这么做的。"
+      },
+      "team_account_exists": {
+        "title": "对方在这里已经有账户了",
+        "cause": "{{0}} 之前登录过这个面板，没有什么需要注册的。",
+        "impact": "没有创建邀请。",
+        "fix": "用同一个地址，在「成员」里把他们加进团队。"
+      },
+      "team_already_a_member": {
+        "title": "对方已经在这个团队里了",
+        "cause": "{{0}} 已经是成员。",
+        "impact": "没有创建邀请。",
+        "fix": "改成在「成员」里调整他们的角色。"
+      },
+      "team_last_owner": {
+        "title": "团队至少要有一个所有者",
+        "cause": "这是这个团队唯一的所有者。",
+        "impact": "没有改动任何东西。",
+        "fix": "先把别人设为所有者，再移除这一位。"
+      },
+      "team_no_such_user": {
+        "title": "没有用这个邮箱的账户",
+        "cause": "这个面板上没有人使用地址 {{0}}。",
+        "impact": "没有人被加进团队。",
+        "fix": "先让他们注册一个账户，然后再添加。Skifity 不会给从未登录过的地址发邀请。"
+      },
+      "tunnel_no_token": {
+        "title": "还没有 Cloudflare 隧道令牌",
+        "cause": "设置里没有隧道令牌，没有它连接器就无法完成认证。",
+        "impact": "隧道没有安装。集群里没有任何改动。",
+        "fix": "在 Cloudflare 控制台的 Zero Trust → Networks → Tunnels 里创建一条隧道。选 Cloudflared 连接器，复制它显示的令牌，粘贴到「设置」→「域名与 HTTPS」→「Cloudflare 隧道令牌」。在同一条隧道上添加一个公开主机名——像 *.apps.example.com 这样的通配符可以一次覆盖所有应用——service 选 HTTP，地址填 {{0}}。"
+      },
+      "tunnel_not_applied": {
+        "title": "令牌保存了，但隧道没更新",
+        "cause": "{{0}}",
+        "impact": "连接器仍在用旧令牌运行，所以在它们重启之前流量照常。",
+        "fix": "按「原因」里说的修好再保存一次令牌，或者在「组件」里安装 Cloudflare tunnel。"
+      },
+      "upgrade_failed": {
+        "title": "升级启动不了",
+        "cause": "{{0}}",
+        "impact": "面板仍在运行当前版本。",
+        "fix": "确认该版本存在，并且集群能拉到它的镜像。"
+      },
+      "upgrade_unsupported": {
+        "title": "这个面板没法自己升级",
+        "cause": "面板并不运行在它能更新的集群里，在开发环境中这很正常。",
+        "impact": "没有改动任何东西。",
+        "fix": "拉取新镜像再重启来升级，或者带上你想要的版本重新跑一遍安装程序。"
+      },
+      "webhook_unverified": {
+        "title": "这个 webhook 没能通过校验",
+        "cause": "请求上的签名和这个连接的 webhook 密钥对不上。",
+        "impact": "没有开始任何部署。",
+        "fix": "确认你 Git 托管方 webhook 设置里的密钥和 Skifity 里的一致。"
+      },
+      "auth_reauth_required": {
+        "title": "确认是你本人",
+        "cause": "此操作需要再次输入密码：持有已登录的会话，并不等于本人就在键盘前。",
+        "impact": "没有做任何更改。",
+        "fix": "输入密码以继续。"
+      },
+      "auth_reauth_failed": {
+        "title": "密码不正确",
+        "cause": "密码或两步验证码与此账户不符。",
+        "impact": "没有做任何更改。",
+        "fix": "请重新输入。多次输错后会暂停一段时间。"
+      },
+      "auth_no_password": {
+        "title": "此账户没有可用于确认的密码",
+        "cause": "它通过你的身份提供方登录，而这里没有启用两步验证，所以面板无从询问。",
+        "impact": "没有做任何更改。",
+        "fix": "请先为此账户启用两步验证，或改用设有密码的账户。"
+      },
+      "auth_needs_person": {
+        "title": "这必须在面板中完成",
+        "cause": "更改两步验证或创建令牌必须由能够证明身份的人来做，而 API 令牌做不到。",
+        "impact": "没有做任何更改。",
+        "fix": "登录面板并在那里操作。"
+      },
+      "cli_app_not_created": {
+        "title": "面板没有说明它创建了哪个应用",
+        "cause": "创建应用的响应里没有应用。",
+        "impact": "项目文件没有写入，所以这里的 `skifity deploy` 不知道要部署什么。",
+        "fix": "用 `skifity apps` 找到它，并在 skifity.toml 中写入 app = \"<id>\"。"
+      },
+      "upload_none": {
+        "title": "还没有可部署的代码",
+        "cause": "{{0}} 部署的是某人电脑上的文件夹，而目前还没有发送任何内容。",
+        "impact": "没有构建或部署任何内容。",
+        "fix": "在应用页面点击“发送新版本”并选择其文件夹，或在该文件夹中运行 `skifity up`。"
+      },
+      "upload_not_found": {
+        "title": "面板上没有这次上传",
+        "cause": "此应用没有哈希为 {{0}} 的上传。面板会为每个应用保留最近的十次上传。",
+        "impact": "没有构建或部署任何内容。",
+        "fix": "重新发送文件夹，可在应用页面操作或使用 `skifity up`。"
+      },
+      "upload_not_an_archive": {
+        "title": "面板无法读取这次上传",
+        "cause": "发送的内容不是完整的 gzip 压缩 tar 归档。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "请用 `skifity up` 发送文件夹，它会按面板能读取的方式打包。如果你就是这样做的，传输可能中途断开了，请再运行一次。"
+      },
+      "upload_unsafe_entry": {
+        "title": "上传中有面板不会解包的文件",
+        "cause": "{{0}} 是链接、特殊文件或指向文件夹外部的路径，解包它可能会写入不该写的位置。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "把它从文件夹中移除，或写进 .skifityignore，使其不被发送。"
+      },
+      "upload_secrets_file": {
+        "title": "上传中包含 .env 文件",
+        "cause": "{{0}} 保存着应用的真实配置。构建会把收到的每个文件都放进镜像，任何能拉取镜像的人都能读到它们。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "请改在应用的变量中设置这些值。`skifity up` 会自动排除 .env 文件，所以这个文件是通过其他方式发送的。"
+      },
+      "upload_too_many_files": {
+        "title": "上传的文件太多",
+        "cause": "其中有超过 {{0}} 个文件，源代码几乎不会有这么多。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "里面很可能有 node_modules 或 virtualenv 之类的依赖文件夹。把它写进 .skifityignore：构建会自行安装依赖。"
+      },
+      "upload_unpacks_too_large": {
+        "title": "上传解包后太大",
+        "cause": "其内容总计超过 {{0}} MB。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "里面很可能有构建产物、依赖文件夹或数据文件。把它写进 .skifityignore 后重新发送。"
+      },
+      "upload_empty": {
+        "title": "上传中没有任何文件",
+        "cause": "归档已读到末尾，里面最多只有文件夹。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "在应用的文件夹内运行 `skifity up`，或指定文件夹：`skifity up ./my-app`。"
+      },
+      "upload_too_large": {
+        "title": "上传太大",
+        "cause": "面板最多接受 {{0}} MB 的压缩代码，而这次超出了。",
+        "impact": "没有保存、构建或部署任何内容。",
+        "fix": "文件夹里很可能有非源代码的内容，例如依赖文件夹、构建产物或数据库文件。把它加入 .skifityignore 后重新发送。"
+      },
+      "upload_wrong_source": {
+        "title": "此应用不部署上传的代码",
+        "cause": "{{0}} 从仓库或镜像构建，因此发送给它的代码永远不会被使用。",
+        "impact": "没有保存任何内容。",
+        "fix": "请改为推送到仓库，或用 `skifity up --new` 为这个文件夹创建一个新应用。"
+      },
+      "upload_delivery_failed": {
+        "title": "无法把代码交给构建",
+        "cause": "面板无法把上传的代码发送到构建中：{{0}}",
+        "impact": "没有构建或部署任何内容。之前的版本仍在运行。",
+        "fix": "点击重试。如果仍然失败，请检查面板能否访问集群的 API，以及构建 Pod 是否已启动。"
+      },
+      "cli_platform_unknown": {
+        "title": "该平台没有命令行工具",
+        "cause": "{{0}} 不是命令行工具所构建的平台。它为 linux、darwin（macOS）和 windows 构建，支持 amd64 和 arm64。",
+        "impact": "没有下载任何内容。",
+        "fix": "请选择其中之一，例如 Apple 芯片的 Mac 使用 ?os=darwin&arch=arm64。"
+      },
+      "cli_platform_unavailable": {
+        "title": "此面板没有该平台的命令行工具",
+        "cause": "此面板旁没有 {{0}} 的构建。现有：{{1}}。",
+        "impact": "没有下载任何内容。在面板自己的“新建应用”页面部署文件夹不需要它。",
+        "fix": "用 `make release` 构建并复制到面板的 CLI 目录，或使用包含所有平台的面板镜像。"
+      }
+    }
+  },
+  "time": {
+    "seconds": "{{count}} 秒",
+    "minutes": "{{count}} 分",
+    "hours": "{{count}} 小时"
+  },
+  "git": {
+    "title": "Git",
+    "help": "连接一个账户，Skifity 就能读取你的私有仓库，并在你推送时部署。公开仓库不需要这一步。",
+    "empty": "尚未连接 Git 账户",
+    "connect": "连接账户",
+    "provider": "代码在哪里",
+    "sourceName": "名称",
+    "sourceNameHelp": "一个你能认出的名字，例如“工作用 GitHub”。",
+    "token": "访问令牌",
+    "tokenHelp": "需要读取仓库和创建 webhook 的权限。加密保存，且不会再次显示。",
+    "baseURL": "服务器地址",
+    "baseURLHelp": "用于自建的 GitLab 或 Gitea。使用官方服务时留空。",
+    "account": "用户或组织",
+    "disconnect": "断开连接",
+    "disconnectWarning": "从该账户部署的应用将不再在推送时部署，但会继续运行。",
+    "webhookURL": "Webhook 地址",
+    "webhookURLHelp": "如果令牌权限足够，Skifity 会自行把它加入你的仓库。如果没能加上，请在仓库的 webhook 设置中手动添加。",
+    "pushDeploysOn": "推送到这个仓库就会自动部署",
+    "pushDeploysOnHelp": "Skifity 已在你的 Git 主机上添加了 webhook，无需再设置。",
+    "pushDeploysManual": "推送即部署还差一步",
+    "pushDeploysManualHelp": "Skifity 无法自行添加 webhook，请把这个地址填进仓库的 webhook 设置，密钥在「设置 → Git」。"
+  },
+  "notifications": {
+    "title": "通知",
+    "help": "发生事情时通知你的去处。在你添加之前不会发送任何内容。",
+    "empty": "还没有通知去处",
+    "add": "添加去处",
+    "channelKind": "发送到",
+    "kindFromPlugin": "来自插件",
+    "providedBy": "由 {{plugin}} 插件发送。",
+    "channelName": "名称",
+    "events": "通知我关于",
+    "eventsHelp": "尽量少选。没人看的通知比没有通知更糟。",
+    "test": "发送测试",
+    "testSent": "已发送。如果没有收到，说明填写的信息不对。",
+    "kind": {
+      "telegram": "Telegram",
+      "discord": "Discord",
+      "webhook": "Webhook",
+      "email": "电子邮件"
+    },
+    "event": {
+      "deploy.succeeded": "部署成功",
+      "deploy.failed": "部署失败",
+      "app.unhealthy": "应用停止响应",
+      "server.added": "有服务器加入",
+      "server.lost": "服务器停止响应",
+      "backup.failed": "备份失败",
+      "certificate.failed": "证书签发失败"
+    },
+    "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。"
+  },
+  "invite": {
+    "title": "加入 {{team}}",
+    "subtitle": "你以 {{email}} 的身份受邀，角色为 {{role}}。设置一个密码即可进入。",
+    "emailFixed": "这是邀请对应的地址，在此不可更改。",
+    "join": "加入团队",
+    "notValidTitle": "此邀请无法使用",
+    "notValidHelp": "链接已过期、已被使用，或已被撤回。请向邀请你的人索取新链接。",
+    "goToSignIn": "前往登录"
+  },
+  "environments": {
+    "confinement": "约束级别",
+    "confinementRestrictedHelp": "这里的 Pod 受最严格的配置约束。以 root 启动的镜像会被拒绝，而大多数现成镜像正是如此。",
+    "confinementBaselineHelp": "该环境接受以 root 启动的镜像。特权容器、主机网络和主机路径仍被拒绝，因此应用依然碰不到它所运行的服务器。",
+    "confinementLower": "接受 root 镜像",
+    "confinementRaise": "恢复最严格",
+    "confinementLowerTitle": "接受以 root 启动的镜像？",
+    "confinementLowerConfirm": "该环境中的应用将获准在自己的容器内以 root 启动，官方的 WordPress、Nextcloud 和 MediaWiki 镜像都是这样做的。特权容器、主机网络、主机路径和额外权能仍然被拒绝。请重新部署每个应用，改动才会生效。",
+    "podSecurity": {
+      "restricted": "最严格",
+      "baseline": "接受 root 镜像"
+    }
+  },
+  "firewall": {
+    "title": "防火墙",
+    "off": "已关闭",
+    "help": "谁可以访问该应用的规则：按地址、国家、网络、路径或标头，用 and 与 or 组合。第一条匹配的规则做决定。",
+    "addRule": "添加规则",
+    "addCondition": "添加条件",
+    "addGroup": "添加分组",
+    "rulePlaceholder": "这条规则用来做什么",
+    "ruleName": "规则名称",
+    "ruleEnabled": "规则已启用",
+    "otherwise": "其他情况：",
+    "match": "匹配",
+    "matchAll": "全部匹配",
+    "matchAny": "任一匹配",
+    "field": "检查什么",
+    "operator": "比较方式",
+    "values": "值",
+    "headerName": "标头名称",
+    "headerPlaceholder": "X-Api-Key",
+    "notInstalled": "这些规则并未生效",
+    "notInstalledHelp": "防火墙组件尚未安装，因此没有任何东西在检查请求。请在设置、组件中安装。",
+    "noDomain": "该应用还没有可保护的地址",
+    "noDomainHelp": "规则作用于主机名。请在域名中添加一个域名，这些规则便会开始生效。",
+    "noGeo": "有规则用到国家或网络，而本面板并不查询它们",
+    "noGeoHelp": "请在设置、域名与 HTTPS 中打开「查询访客的国家和网络」。在此之前，这类规则在每次请求时都会被跳过。",
+    "action": {
+      "allow": "允许",
+      "block": "拦截"
+    },
+    "fields": {
+      "ip.src": "访客地址",
+      "ip.country": "访客国家",
+      "ip.asn": "访客网络",
+      "http.host": "主机名",
+      "http.path": "路径",
+      "http.method": "方法",
+      "http.user_agent": "浏览器或机器人",
+      "http.header": "某个标头"
+    },
+    "operators": {
+      "in": "属于",
+      "not_in": "不属于",
+      "contains": "包含",
+      "starts_with": "开头是",
+      "ends_with": "结尾是",
+      "matches": "匹配该模式"
+    },
+    "placeholders": {
+      "ip.src": "203.0.113.0/24, 198.51.100.9",
+      "ip.country": "ID, SG",
+      "ip.asn": "AS13335, 15169",
+      "http.host": "shop.example.com",
+      "http.path": "/admin",
+      "http.method": "POST",
+      "http.user_agent": "badbot",
+      "http.header": "一个值"
+    }
+  },
+  "plugins": {
+    "title": "插件",
+    "subtitle": "别人写的功能，在各自的容器里于面板旁运行。",
+    "installed": "已安装",
+    "store": "商店",
+    "fromAddress": "从地址安装",
+    "empty": "还没有插件",
+    "emptyHelp": "浏览商店，或从地址或粘贴的清单安装一个。",
+    "install": "安装",
+    "review": "查看它能做什么",
+    "enabled": "插件已启用",
+    "installedWhen": "{{when}}安装",
+    "notRunning": "该插件未在运行",
+    "removeTitle": "移除 {{name}}？",
+    "removeConfirm": "它的容器、设置和访问令牌都会消失。它写在别处的东西仍留在原地。",
+    "secretStored": "已保存。输入新值以替换。",
+    "storeVerified": "由本面板信任的密钥签名 · {{url}}",
+    "storeUnsigned": "没有人为这份目录背书",
+    "storeUnsignedHelp": "未设置签名密钥，因此面板无法判断这份列表是否是商店发布的那一份。请在设置、插件中填写。无论如何，插件能做什么都会在安装前展示。",
+    "storeEmpty": "商店里没有内容",
+    "storeEmptyHelp": "目录已读取，其中没有插件。",
+    "paid": "付费",
+    "buy": "购买",
+    "alreadyInstalled": "已安装",
+    "upgradeAvailable": "有 {{version}} 版可用",
+    "fromAddressHelp": "插件始终可以不经商店安装 —— 通过其清单地址，或直接粘贴清单。没有外网的集群走的正是这条路。",
+    "manifestAddress": "清单地址",
+    "orPaste": "或粘贴清单",
+    "willBeAbleTo": "该插件将能够：",
+    "noPermissions": "它没有请求任何访问权限。",
+    "blocksDeploys": "该插件可以拦下一次部署",
+    "blocksDeploysHelp": "它要求在每次部署前被询问，并可以拒绝。已停止的插件不会拦下任何东西，你随时可以关掉它。",
+    "confinementNote": "它在自己的命名空间中运行，可以访问面板、DNS 和互联网 —— 而不是你的应用、数据库或它所在的服务器。",
+    "digestNote": "按 digest 锁定，因此你同意之后镜像无法被替换。",
+    "status": {
+      "installing": "启动中",
+      "running": "运行中",
+      "failed": "失败",
+      "disabled": "已关闭"
+    },
+    "permission": {
+      "read": "读取",
+      "write": "读取并修改"
+    },
+    "resource": {
+      "apps": "你的应用",
+      "deployments": "你的部署",
+      "databases": "你的数据库",
+      "backups": "你的备份",
+      "projects": "你的项目",
+      "servers": "你的服务器",
+      "templates": "应用目录",
+      "operations": "长时间运行的操作",
+      "events": "事件流",
+      "teams": "你的团队",
+      "settings": "面板设置",
+      "account": "你的账户"
+    }
+  },
+  "needs": {
+    "databasesTitle": "此应用需要的数据库",
+    "databaseCreate": "创建一个 {{engine}} 数据库，并以 {{variable}} 连接",
+    "because": "因为 {{source}} 使用了 {{evidence}}。",
+    "databaseStarting": "数据库大约需要一分钟启动，因此应用在等待时可能会重启一次。这是正常的。",
+    "notProvidedTitle": "此应用使用 {{engine}}",
+    "notProvided": "此面板不运行 {{engine}}。请使用托管服务，并在“变量”中设置 {{variable}}。",
+    "ephemeralTitle": "此应用把数据保存在文件中",
+    "ephemeral": "它通过 {{evidence}}（{{what}}）把数据保存在容器内，而下一次部署会替换容器。保存在那里的所有内容都会丢失。",
+    "ephemeralFixDatabase": "勾选上面的数据库，并让应用改用它。",
+    "ephemeralFixVolume": "请改用托管数据库，或在应用创建后为其数据目录添加一个卷。",
+    "variablesTitle": "设置",
+    "variablesExpected": "此应用需要 {{source}} 中列出的设置。把你的 .env 粘贴到这里，它们会在第一次部署前保存。",
+    "variablesOptional": "把你的 .env 粘贴到这里，其中的设置会在第一次部署前保存。",
+    "variablesSecret": "任何看起来像密钥或密码的内容都会作为机密保存。",
+    "variablesPlaceholder": "OPENAI_API_KEY=sk-...",
+    "missing": "仍缺少：",
+    "allSet": "此应用需要的所有设置都已就绪。",
+    "databaseFailed": "应用已创建，但其 {{engine}} 数据库没有创建成功",
+    "engine": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "redis": "Redis",
+      "mongodb": "MongoDB",
+      "sqlserver": "SQL Server",
+      "sqlite": "SQLite",
+      "file": "数据文件"
+    },
+    "pastedReplaced": "粘贴内容中的 {{variable}} 不会保存：随应用创建的 {{engine}} 数据库会设置它，指向该数据库本身，而不是文件来源的那台电脑。"
+  },
+  "folder": {
+    "label": "应用所在的文件夹",
+    "choose": "选择文件夹",
+    "chooseAnother": "选择其他文件夹",
+    "help": "选择应用所在的文件夹。node_modules、所有 .env 文件以及 .gitignore 列出的内容都会留在你的电脑上。",
+    "files_other": "{{count}} 个文件，{{size}}",
+    "leftOut_other": "已排除 {{count}} 个",
+    "dotenvRead": "文件夹中 .env 的设置已填入下方的框中。文件本身不会上传：其中的值会保存为应用的变量，看起来像密钥或密码的内容会作为机密保存。清空该框即可不发送它们。",
+    "emptyTitle": "该文件夹中没有可发送的内容",
+    "empty": "其中的每个文件都属于不会发送的内容，例如 node_modules 或 .env。请选择应用自身代码所在的文件夹。",
+    "tooLargeTitle": "该文件夹太大，无法发送",
+    "tooLarge": {
+      "entries": "其中有超过 {{entries}} 个文件，应用自身的代码几乎不会有这么多。最大的部分是：",
+      "unpacked": "其中文件总计超过 {{size}}。最大的部分是：",
+      "compressed": "打包后超过 {{size}}。最大的部分是："
+    },
+    "tooLargeFix": "原因通常是依赖文件夹、构建产物或数据文件。把它写进文件夹中的 .skifityignore 文件后重新选择。",
+    "sendNew": "发送新版本",
+    "sending": "正在发送…",
+    "sent": "已发送。部署 #{{number}} 正在构建。",
+    "sendFailed": "应用已创建，但代码未能发送。请在应用页面重新发送。",
+    "terminalTitle": "更喜欢用终端？",
+    "terminalHelp": "在应用的文件夹中运行以下命令。第一次运行时，skifity up 会创建应用、它使用的数据库以及与该文件夹的关联；之后再次运行会发送并部署新版本。",
+    "terminalAssistant": "能运行命令的助手可以替你完成这些，或者连接 skifity mcp 并使用其 deploy_folder 工具。",
+    "platform": "你的电脑",
+    "platforms": {
+      "darwin_arm64": "macOS（Apple 芯片）",
+      "darwin_amd64": "macOS（Intel）",
+      "windows_amd64": "Windows",
+      "windows_arm64": "Arm 版 Windows",
+      "linux_amd64": "Linux",
+      "linux_arm64": "Arm 版 Linux"
+    }
+  }
+}

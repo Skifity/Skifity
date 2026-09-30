@@ -1,0 +1,74 @@
+id: librechat
+name: Librechat
+description: Self-hosted, powerful, and privacy-focused chat UI for multiple AI models.
+category: ai
+website: https://docs.librechat.ai/install/configuration/dotenv.html
+services:
+- name: librechat
+  image: ghcr.io/danny-avila/librechat-dev-api:6ecd1b510faaa593ad954fb6276c18e5f12a8e53
+  port: 3080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    HOST: 0.0.0.0
+    PORT: '3080'
+    RAG_PORT: '8000'
+    RAG_API_URL: http://rag-api:8000
+  volumes:
+  - name: librechat-images
+    mount_path: /app/client/public/images
+    size_gb: 5
+  - name: librechat-logs
+    mount_path: /app/api/logs
+    size_gb: 5
+- name: mongodb
+  image: mongo:8
+  port: 27017
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: mongodb-data
+    mount_path: /data/db
+    size_gb: 5
+- name: meilisearch
+  image: getmeili/meilisearch:v1.35.1
+  port: 7700
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    MEILI_ENV: production
+  volumes:
+  - name: meilisearch-data
+    mount_path: /meili_data
+    size_gb: 5
+- name: rag-api
+  image: ghcr.io/danny-avila/librechat-rag-api-dev-lite:v0.7.3
+  port: 8000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    POSTGRES_DB: rag
+    DB_NAME: rag
+    RAG_PORT: '8000'
+databases:
+- name: librechat-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - librechat
+  - rag-api
+  var_name: DATABASE_URL
+notes: This template installs 4 apps. They reach each other by name inside the environment, so keep them
+  together.

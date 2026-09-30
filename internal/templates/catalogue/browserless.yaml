@@ -1,0 +1,14 @@
+id: browserless
+name: Browserless
+description: A headless Chrome browser as a service.
+category: developer
+website: https://docs.browserless.io/
+services:
+- name: browserless
+  image: ghcr.io/browserless/chromium:v2.56.7
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

@@ -1,0 +1,18 @@
+id: slash
+name: Slash
+description: An open source, self-hosted links shortener and sharing platform.
+category: productivity
+website: https://github.com/yourselfhosted/slash
+services:
+- name: slash
+  image: yourselfhosted/slash:0.5.3
+  port: 5231
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: slash-data
+    mount_path: /var/opt/slash
+    size_gb: 5

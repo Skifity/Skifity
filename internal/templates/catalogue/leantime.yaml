@@ -1,0 +1,28 @@
+id: leantime
+name: Leantime
+description: Leantime is a goals focused project management system for non-project managers.
+category: productivity
+website: https://leantime.io
+services:
+- name: leantime
+  image: leantime/leantime:3.9.8
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: public-userfiles
+    mount_path: /var/www/html/public/userfiles
+    size_gb: 5
+  - name: userfiles
+    mount_path: /var/www/html/userfiles
+    size_gb: 5
+databases:
+- name: leantime-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - leantime
+  var_name: DATABASE_URL

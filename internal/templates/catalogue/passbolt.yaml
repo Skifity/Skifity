@@ -1,0 +1,29 @@
+id: passbolt
+name: Passbolt
+description: Passbolt Community Edition (CE) API. The JSON API for the open source password manager for
+  teams!.
+category: security
+website: https://www.passbolt.com/ce/docker
+services:
+- name: passbolt
+  image: passbolt/passbolt:3.11.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: gpg-volume
+    mount_path: /etc/passbolt/gpg
+    size_gb: 5
+  - name: jwt-volume
+    mount_path: /etc/passbolt/jwt
+    size_gb: 5
+databases:
+- name: passbolt-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - passbolt
+  var_name: DATABASE_URL

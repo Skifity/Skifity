@@ -1,0 +1,16 @@
+id: minecraft
+name: Minecraft
+description: Minecraft Server that will automatically download selected version at startup.
+category: productivity
+website: https://github.com/itzg/docker-minecraft-server
+services:
+- name: mc
+  image: itzg/minecraft-server:2026.9.1
+  port: 25565
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    EULA: 'true'

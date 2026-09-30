@@ -1,0 +1,31 @@
+id: onedev
+name: Onedev
+description: Git server with CI/CD, kanban, and packages. Seamless integration. Unparalleled experience.
+category: developer
+website: https://docs.onedev.io/
+services:
+- name: onedev
+  image: 1dev/server:16.6
+  port: 6610
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    hibernate_dialect: io.onedev.server.persistence.PostgreSQLDialect
+    hibernate_connection_driver_class: org.postgresql.Driver
+  volumes:
+  - name: onedev-docker-sock
+    mount_path: /var/run/docker.sock
+    size_gb: 5
+  - name: onedev-data
+    mount_path: /opt/onedev
+    size_gb: 5
+databases:
+- name: onedev-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - onedev
+  var_name: DATABASE_URL

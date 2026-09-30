@@ -1,0 +1,21 @@
+id: emqx-enterprise
+name: Emqx Enterprise
+description: Open-source MQTT broker for IoT, IIoT, and connected vehicles.
+category: networking
+website: https://www.emqx.io/docs/en/latest/deploy/install-docker.html
+services:
+- name: emqx
+  image: emqx/emqx-enterprise:6.2.0
+  port: 18083
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: emqx-data
+    mount_path: /opt/emqx/data
+    size_gb: 5
+  - name: emqx-log
+    mount_path: /opt/emqx/log
+    size_gb: 5

@@ -1,0 +1,38 @@
+id: kuzzle
+name: Kuzzle
+description: Kuzzle is a generic backend offering the basic building blocks common to every application.
+category: developer
+website: https://kuzzle.io
+services:
+- name: elasticsearch
+  image: kuzzleio/elasticsearch:7
+  port: 9200
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+- name: kuzzle
+  image: kuzzleio/kuzzle:2
+  port: 7512
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    kuzzle_services__storageEngine__client__node: http://elasticsearch:9200
+    kuzzle_services__storageEngine__commonMapping__dynamic: 'true'
+    kuzzle_server__protocols__mqtt__enabled: 'true'
+    kuzzle_server__protocols__mqtt__developmentMode: 'false'
+    kuzzle_limits__loginsPerSecond: '50'
+    NODE_ENV: production
+databases:
+- name: kuzzle-db
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - kuzzle
+  var_name: DATABASE_URL
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

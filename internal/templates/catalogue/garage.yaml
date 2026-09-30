@@ -1,0 +1,23 @@
+id: garage
+name: Garage
+description: Garage is an S3-compatible distributed object storage service designed for self-hosting.
+category: storage
+website: https://garagehq.deuxfleurs.fr/documentation/
+services:
+- name: garage
+  image: dxflrs/garage:v2.1.0
+  port: 3900
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GARAGE_ALLOW_WORLD_READABLE_SECRETS: 'true'
+  volumes:
+  - name: garage-meta
+    mount_path: /var/lib/garage/meta
+    size_gb: 5
+  - name: garage-data
+    mount_path: /var/lib/garage/data
+    size_gb: 5

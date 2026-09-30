@@ -1,0 +1,20 @@
+id: typesense
+name: Typesense
+description: Cutting-edge, in-memory search engine for mere mortals. Knowledge of rocket science optional.
+category: storage
+website: https://typesense.org/docs
+services:
+- name: typesense
+  image: typesense/typesense:28.0
+  port: 8108
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TYPESENSE_DATA_DIR: /data
+  volumes:
+  - name: typesense-data
+    mount_path: /data
+    size_gb: 5

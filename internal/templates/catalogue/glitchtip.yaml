@@ -1,0 +1,45 @@
+id: glitchtip
+name: Glitchtip
+description: GlitchTip is a error tracking system.
+category: monitoring
+website: https://glitchtip.com
+services:
+- name: web
+  image: glitchtip/glitchtip:6.0
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: uploads
+    mount_path: /code/uploads
+    size_gb: 5
+- name: worker
+  image: glitchtip/glitchtip:6.0
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: uploads
+    mount_path: /code/uploads
+    size_gb: 5
+databases:
+- name: glitchtip-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - web
+  - worker
+  var_name: DATABASE_URL
+notes: 'In the original this stack shares /code/uploads between web and worker. Skifity gives each app
+  storage of its own, so those are separate directories here. If the apps need to see the same files,
+  point them at object storage — MinIO is in this catalogue — rather than a path. This stack has a set-up
+  step that runs once and exits — migrate. Skifity runs apps, not one-shot containers, so that step is
+  not installed: do it yourself from the app''s Commands tab, or follow the project''s own instructions,
+  before expecting everything to work. This template installs 2 apps. They reach each other by name inside
+  the environment, so keep them together.'

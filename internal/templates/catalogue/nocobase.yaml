@@ -1,0 +1,25 @@
+id: nocobase
+name: Nocobase
+description: NocoBase is the most extensible AI-powered no-code/low-code platform.
+category: developer
+website: https://docs.nocobase.com/
+services:
+- name: nocobase
+  image: nocobase/nocobase:1.9.33
+  port: 13000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: nocobase-storage
+    mount_path: /app/nocobase/storage
+    size_gb: 5
+databases:
+- name: nocobase-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - nocobase
+  var_name: DATABASE_URL

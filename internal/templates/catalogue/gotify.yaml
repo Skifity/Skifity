@@ -1,0 +1,18 @@
+id: gotify
+name: Gotify
+description: Gotify is an open-source self-hosted notification server.
+category: communication
+website: https://gotify.net/docs/install
+services:
+- name: gotify
+  image: gotify/server:2.7.3
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: gotify-data
+    mount_path: /app/data
+    size_gb: 5

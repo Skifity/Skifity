@@ -1,0 +1,94 @@
+# Linting rules for Skifity.
+#
+# The set is deliberately small. Every rule here has caught a real bug in this
+# codebase or guards something the product promises: errors that are checked,
+# requests that carry a context, and no dead code left behind.
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - misspell
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - unconvert
+
+  settings:
+    staticcheck:
+      # Everything staticcheck offers except one rule.
+      #
+      # QF1001 rewrites `!(r >= 'a' && r <= 'z')` into `r < 'a' || r > 'z'`.
+      # Both say the same thing, and the first says "not in this range", which
+      # is what the code means and what a reader checks it against. A linter
+      # that makes a range test harder to read is a linter people learn to
+      # ignore, and this set only holds rules worth obeying every time.
+      checks:
+        - "all"
+        - "-QF1001"
+    errcheck:
+      # Closing a handle that is only being read from, rolling back a
+      # transaction that already committed, and writing to a terminal are the
+      # three cases where there is nothing a caller could do with the error.
+      # Everything else must be checked.
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (net.Conn).Close
+        - (*os.File).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*database/sql.Tx).Rollback
+        - (*net/smtp.Client).Quit
+        - (*golang.org/x/crypto/ssh.Session).Close
+        - (*skifity/internal/sshx.Client).Close
+        - (*skifity/internal/store.DB).Close
+        - os.Remove
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    misspell:
+      # No locale: the product's prose is British, but Kubernetes field names,
+      # HTTP status names and third-party API fields are not, and renaming
+      # those would not compile. Only genuine typos are worth failing a build.
+      ignore-rules:
+        - behavior
+        - color
+        - unauthorized
+        - synchronize
+
+  exclusions:
+    paths:
+      # Vendored JavaScript dependencies happen to contain Go files.
+      - web/node_modules
+    rules:
+      # A test may ignore an error that production code must not, and a test
+      # server listening on localhost does not need a context.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - noctx
+      - path: internal/sshx/testserver\.go
+        linters:
+          - noctx
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - web/node_modules

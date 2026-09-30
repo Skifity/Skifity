@@ -1,0 +1,22 @@
+id: budge
+name: Budge
+description: A budgeting personal finance app.
+category: finance
+website: https://github.com/linuxserver/budge
+services:
+- name: budge
+  image: linuxserver/budge:0.0.9
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: budge-config
+    mount_path: /config
+    size_gb: 5

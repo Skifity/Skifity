@@ -1,0 +1,28 @@
+id: bookstack
+name: Bookstack
+description: BookStack is a simple, self-hosted, easy-to-use platform for organising and storing information.
+category: cms
+website: https://www.bookstackapp.com/docs/
+services:
+- name: bookstack
+  image: linuxserver/bookstack:26.05.20260608
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: bookstack-data
+    mount_path: /config
+    size_gb: 5
+databases:
+- name: bookstack-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - bookstack
+  var_name: DATABASE_URL

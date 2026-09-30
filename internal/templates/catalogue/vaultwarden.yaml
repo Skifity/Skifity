@@ -1,0 +1,29 @@
+id: vaultwarden
+name: Vaultwarden
+description: A lightweight password manager server compatible with Bitwarden clients.
+category: productivity
+website: https://github.com/dani-garcia/vaultwarden
+services:
+- name: vaultwarden
+  image: vaultwarden/server:1.37.3
+  port: 80
+  health_path: /alive
+  variables:
+    SIGNUPS_ALLOWED: 'false'
+    WEBSOCKET_ENABLED: 'true'
+  volumes:
+  - name: data
+    mount_path: /data
+    size_gb: 2
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 50
+  cpu_limit_m: 500
+  public: true
+inputs:
+- key: ADMIN_TOKEN
+  label: Admin token
+  help: Needed to reach the admin page at /admin.
+  secret: true
+  generate: true
+notes: Sign-ups are turned off. Use the admin page to invite the first user, then keep them off.

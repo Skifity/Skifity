@@ -1,0 +1,19 @@
+# What the image build does not need.
+#
+# `docs` is NOT here, and must not be: docs/embed.go embeds the pages into the
+# binary, so excluding the directory removes a Go package and the build fails on
+# a missing import. It was excluded, and nothing noticed because building the
+# image needs a Docker daemon that no check here has.
+#
+# `*.md` is likewise gone: it matched the repository's own README, which is
+# harmless, but the rule is one careless edit away from matching a file the
+# build needs.
+.git
+.github
+bin
+web/node_modules
+web/dist
+test
+.env
+.env.local
+*.key

@@ -1,0 +1,26 @@
+id: joomla-with-mariadb
+name: Joomla With Mariadb
+description: Joomla! is the mobile-ready and user-friendly way to build your website. Choose from thousands
+  of features and designs. Joomla! is free and open source.
+category: cms
+website: https://joomla.org
+services:
+- name: joomla
+  image: joomla:6.1
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: joomla-data
+    mount_path: /var/www/html
+    size_gb: 5
+databases:
+- name: joomla-with-mariadb-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - joomla
+  var_name: DATABASE_URL

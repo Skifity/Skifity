@@ -1,0 +1,21 @@
+id: gitlab
+name: Gitlab
+description: The all-in-one DevOps platform for seamless collaboration and continuous delivery.
+category: developer
+website: https://docs.gitlab.com/ee/install/docker.html
+services:
+- name: gitlab
+  image: gitlab/gitlab-ce:19.1.8-ce.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: gitlab-config
+    mount_path: /etc/gitlab
+    size_gb: 5
+  - name: gitlab-logs
+    mount_path: /var/log/gitlab
+    size_gb: 5

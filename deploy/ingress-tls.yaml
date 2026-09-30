@@ -1,0 +1,32 @@
+# The panel's route in, with a Let's Encrypt certificate.
+#
+# Applied instead of ingress.yaml once the panel has a domain of its own.
+# cert-manager watches this Ingress and issues the certificate into the
+# skifity-panel-tls Secret.
+#
+# Placeholders: __NAMESPACE__, __HOST__, __ISSUER__
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: skifity-panel
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: skifity
+  annotations:
+    cert-manager.io/cluster-issuer: __ISSUER__
+spec:
+  tls:
+    - hosts:
+        - __HOST__
+      secretName: skifity-panel-tls
+  rules:
+    - host: __HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: skifity-panel
+                port:
+                  name: http

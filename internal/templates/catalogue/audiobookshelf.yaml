@@ -1,0 +1,21 @@
+id: audiobookshelf
+name: Audiobookshelf
+description: Self-hosted audiobook, ebook, and podcast server.
+category: media
+website: https://www.audiobookshelf.org/
+services:
+- name: audiobookshelf
+  image: ghcr.io/advplyr/audiobookshelf:2.34.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: audiobookshelf-audiobooks
+    mount_path: /audiobooks
+    size_gb: 5
+  - name: audiobookshelf-podcasts
+    mount_path: /podcasts
+    size_gb: 5

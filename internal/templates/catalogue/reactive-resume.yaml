@@ -1,0 +1,54 @@
+id: reactive-resume
+name: Reactive Resume
+description: A one-of-a-kind resume builder that keeps your privacy in mind.
+category: productivity
+website: https://rxresu.me/
+services:
+- name: reactive-resume
+  image: amruthpillai/reactive-resume:v4.3.7
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CHROME_URL: ws://chrome:3000/chrome
+    STORAGE_ENDPOINT: minio
+    STORAGE_PORT: '9000'
+    STORAGE_REGION: us-east-1
+    STORAGE_BUCKET: default
+    STORAGE_USE_SSL: 'false'
+- name: minio
+  image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+  port: 9000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: minio-data
+    mount_path: /data
+    size_gb: 5
+- name: chrome
+  image: ghcr.io/browserless/chrome:v2.56.7
+  port: 3000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    HEALTH: 'true'
+    TIMEOUT: '10000'
+    CONCURRENT: '10'
+databases:
+- name: reactive-resume-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - reactive-resume
+  var_name: DATABASE_URL
+notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
+  together.

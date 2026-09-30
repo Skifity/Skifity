@@ -1,0 +1,16 @@
+id: glances
+name: Glances
+description: An Eye on your system.
+category: monitoring
+website: https://nicolargo.github.io/glances/
+services:
+- name: glances
+  image: nicolargo/glances:4.5.6
+  port: 61208
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GLANCES_OPT: -w

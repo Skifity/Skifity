@@ -1,0 +1,19 @@
+id: jenkins
+name: Jenkins
+description: Jenkins is an open source automation server, Jenkins provides hundreds of plugins to support
+  building, deploying and automating any project.
+category: automation
+website: https://www.jenkins.io/doc/
+services:
+- name: jenkins
+  image: jenkins/jenkins:2.582
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: jenkins-home
+    mount_path: /var/jenkins_home
+    size_gb: 5

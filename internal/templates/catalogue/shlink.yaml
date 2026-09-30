@@ -1,0 +1,30 @@
+id: shlink
+name: Shlink
+description: The definitive self-hosted URL shortener.
+category: productivity
+website: https://shlink.io/
+services:
+- name: shlink
+  image: shlinkio/shlink:5.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    IS_HTTPS_ENABLED: 'false'
+  volumes:
+  - name: shlink-data
+    mount_path: /etc/shlink/data
+    size_gb: 5
+- name: shlink-web
+  image: shlinkio/shlink-web-client:4.8
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

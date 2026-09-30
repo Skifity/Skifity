@@ -1,0 +1,54 @@
+id: alexandrie
+name: Alexandrie
+description: A powerful Markdown workspace designed for speed, clarity, and creativity.
+category: productivity
+website: https://github.com/Smaug6739/Alexandrie/tree/main/docs
+services:
+- name: frontend
+  image: ghcr.io/smaug6739/alexandrie-frontend:v8.10.0
+  port: 8200
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PORT: '8200'
+- name: backend
+  image: ghcr.io/smaug6739/alexandrie-backend:v8.10.0
+  port: 8201
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    BACKEND_PORT: '8201'
+    GIN_MODE: release
+    MINIO_ENDPOINT: rustfs:9000
+- name: rustfs
+  image: rustfs/rustfs:1.0.0
+  port: 9000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: rustfs-data
+    mount_path: /data
+    size_gb: 5
+  - name: rustfs-logs
+    mount_path: /logs
+    size_gb: 5
+databases:
+- name: alexandrie-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - frontend
+  - backend
+  - rustfs
+  var_name: DATABASE_URL
+notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
+  together.

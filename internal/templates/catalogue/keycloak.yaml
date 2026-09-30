@@ -1,0 +1,18 @@
+id: keycloak
+name: Keycloak
+description: Keycloak is an open-source Identity and Access Management tool.
+category: security
+website: https://www.keycloak.org
+services:
+- name: keycloak
+  image: quay.io/keycloak/keycloak:26.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: keycloak-data
+    mount_path: /opt/keycloak/data
+    size_gb: 5

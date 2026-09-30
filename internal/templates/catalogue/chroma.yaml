@@ -1,0 +1,21 @@
+id: chroma
+name: Chroma
+description: Chroma is the open-source search and retrieval database for AI applications.
+category: ai
+website: https://cookbook.chromadb.dev/
+services:
+- name: chromadb
+  image: chromadb/chroma:1.0.15
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    IS_PERSISTENT: 'TRUE'
+    PERSIST_DIRECTORY: /data
+  volumes:
+  - name: chroma-data
+    mount_path: /data
+    size_gb: 5

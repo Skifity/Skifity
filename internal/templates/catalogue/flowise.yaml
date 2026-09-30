@@ -1,0 +1,25 @@
+id: flowise
+name: Flowise
+description: Flowise is an open source low-code tool for developers to build customized LLM orchestration
+  flows & AI agents.
+category: ai
+website: https://docs.flowiseai.com/
+services:
+- name: flowise
+  image: flowiseai/flowise:3.1.4
+  port: 3001
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DATABASE_PATH: /root/.flowise
+    APIKEY_PATH: /root/.flowise
+    SECRETKEY_PATH: /root/.flowise
+    LOG_PATH: /root/.flowise/logs
+    BLOB_STORAGE_PATH: /root/.flowise/storage
+  volumes:
+  - name: flowise-data
+    mount_path: /root/.flowise
+    size_gb: 5

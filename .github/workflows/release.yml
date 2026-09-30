@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # GoReleaser builds the changelog from the commits since the last
+          # tag, which it cannot see in a shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ghcr.io wants a lowercase path and GITHUB_REPOSITORY keeps the owner's
+      # capitalisation, so it is lowered here rather than assumed.
+      - name: Where this release publishes to
+        run: |
+          echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}" >> "$GITHUB_ENV"
+          echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}" >> "$GITHUB_ENV"
+
+      # The installer downloaded from this tag has to know which release it is.
+      # It reads RELEASED_VERSION from its own source, so a tag whose installer
+      # still says something else would install the wrong image — or, while the
+      # line is empty, refuse to install at all. Caught here, before anything is
+      # published, rather than by the first person to run it.
+      - name: The installer agrees with the tag
+        run: |
+          set -eu
+          declared=$(SKIFITY_INSTALLER_LIB=1 sh -c '. ./installer/install.sh; printf "%s" "$RELEASED_VERSION"')
+          if [ "$declared" != "${GITHUB_REF_NAME}" ]; then
+            echo "installer/install.sh says RELEASED_VERSION=\"${declared}\", but this tag is ${GITHUB_REF_NAME}." >&2
+            echo "Set it in the release commit and tag that commit. See docs/releasing.md." >&2
+            exit 1
+          fi
+          echo "installer/install.sh installs ${declared}"
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,18 @@
+id: terraria-server
+name: Terraria Server
+description: Docker multi-arch Image for Terraria Server.
+category: productivity
+website: https://github.com/hexlo/terraria-server-docker
+services:
+- name: terraria-server
+  image: hexlo/terraria-server-docker:1.4.4.9
+  port: 7777
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: terraria-server
+    mount_path: /root/.local/share/Terraria/Worlds
+    size_gb: 5

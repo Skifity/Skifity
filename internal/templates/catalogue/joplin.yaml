@@ -1,0 +1,23 @@
+id: joplin
+name: Joplin
+description: Self-hosted sync server for Joplin.
+category: productivity
+website: https://github.com/laurent22/joplin/blob/dev/packages/server/README.md
+services:
+- name: joplin
+  image: joplin/server:3.7.2
+  port: 22300
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_CLIENT: pg
+databases:
+- name: joplin-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - joplin
+  var_name: DATABASE_URL

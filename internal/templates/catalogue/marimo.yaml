@@ -1,0 +1,19 @@
+id: marimo
+name: Marimo
+description: An open-source reactive notebook for Python — reproducible, git-friendly, SQL built-in, executable
+  as a script, and shareable as an app.
+category: developer
+website: https://marimo.io/
+services:
+- name: marimo
+  image: ghcr.io/marimo-team/marimo:0.24.0
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: marimo
+    mount_path: /app
+    size_gb: 5

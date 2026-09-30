@@ -1,0 +1,22 @@
+id: mage-ai
+name: Mage Ai
+description: Build, run, and manage data pipelines for integrating and transforming data.
+category: automation
+website: https://docs.mage.ai
+services:
+- name: mage-ai
+  image: mageai/mageai:0.9.78
+  port: 6789
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PROJECT_NAME: default_project
+    USER_CODE_PATH: /home/src/default_project
+    ENV: production
+  volumes:
+  - name: mageai-data
+    mount_path: /home/src/
+    size_gb: 5

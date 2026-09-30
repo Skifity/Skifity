@@ -1,0 +1,25 @@
+id: anythingllm
+name: Anythingllm
+description: AnythingLLM is the easiest to use, all-in-one AI application that can do RAG, AI Agents,
+  and much more with no code or infrastructure headaches.
+category: ai
+website: https://docs.anythingllm.com/installation-docker/overview
+services:
+- name: anything-llm
+  image: mintplexlabs/anythingllm:1.16
+  port: 3001
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    STORAGE_DIR: /app/server/storage
+    VECTOR_DB: lancedb
+  volumes:
+  - name: anythingllm-storage
+    mount_path: /app/server/storage
+    size_gb: 5
+  - name: anythingllm-hot
+    mount_path: /app/collector/hotdir
+    size_gb: 5

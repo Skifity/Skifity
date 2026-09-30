@@ -1,0 +1,18 @@
+id: denokv
+name: Denokv
+description: The Denoland key-value database.
+category: storage
+website: https://docs.deno.com/deploy/kv/manual/
+services:
+- name: denokv
+  image: ghcr.io/denoland/denokv:0.14.0
+  port: 4512
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: coolify-volume-app
+    mount_path: /data
+    size_gb: 5

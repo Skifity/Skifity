@@ -1,0 +1,25 @@
+id: kimai
+name: Kimai
+description: Open source time-tracking app.
+category: productivity
+website: https://www.kimai.org/
+services:
+- name: kimai
+  image: kimai/kimai2:2.67.0
+  port: 8001
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: kimai-data
+    mount_path: /opt/kimai/var/data
+    size_gb: 5
+databases:
+- name: kimai-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - kimai
+  var_name: DATABASE_URL

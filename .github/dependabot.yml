@@ -1,0 +1,60 @@
+# Dependency updates, so a known vulnerability is a pull request rather than
+# something `make audit` reports months later.
+#
+# govulncheck already fails CI on a vulnerability the code reaches. This is the
+# other half: it opens the update before anyone has to notice.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: wednesday
+    open-pull-requests-limit: 5
+    groups:
+      # Kubernetes releases a dozen modules in lockstep; one pull request per
+      # module is a dozen CI runs that all say the same thing.
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+      golang-x:
+        patterns: ["golang.org/x/*"]
+
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule:
+      interval: weekly
+      day: wednesday
+    open-pull-requests-limit: 5
+    groups:
+      # Everything under @radix-ui moves together, and shadcn/ui components are
+      # built on it, so they are reviewed together too.
+      radix:
+        patterns: ["@radix-ui/*"]
+      types:
+        patterns: ["@types/*"]
+      # Packages that only work at matching major versions move in one pull
+      # request, or not at all. Opened one at a time, each of these was a
+      # pull request that could not install on its own: @eslint/js 10 needs
+      # eslint 10, @vitejs/plugin-react 6 needs vite 8, react-i18next 17
+      # needs i18next 26 — and four such pull requests merged in a row left
+      # the branch unable to run `npm ci`.
+      eslint:
+        patterns: ["eslint", "@eslint/*", "typescript-eslint", "eslint-plugin-*"]
+      vite:
+        patterns: ["vite", "@vitejs/*", "@tailwindcss/vite", "tailwindcss"]
+      i18next:
+        patterns: ["i18next", "react-i18next", "i18next-*"]
+    ignore:
+      # typescript-eslint supports TypeScript below 6.1, so a newer major
+      # cannot be installed beside it. Lift this when it can.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # The panel's own Node is 22 (CI and the e2e server). Types for a newer
+      # Node would let code use an API that does not exist where it runs.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

@@ -1,0 +1,18 @@
+id: goatcounter
+name: Goatcounter
+description: Lightweight web analytics platform.
+category: analytics
+website: https://www.goatcounter.com/help
+services:
+- name: goatcounter
+  image: arp242/goatcounter:2.7
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: goatcounter-data
+    mount_path: /home/goatcounter/goatcounter-data
+    size_gb: 5

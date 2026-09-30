@@ -1,0 +1,22 @@
+id: metube
+name: Metube
+description: A web GUI for youtube-dl with playlist support. It enables you to effortlessly download videos
+  from YouTube and dozens of other sites.
+category: media
+website: https://github.com/alexta69/metube
+services:
+- name: metube
+  image: ghcr.io/alexta69/metube:2026.09.15
+  port: 8081
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    UID: '1000'
+    GID: '1000'
+  volumes:
+  - name: metube-downloads
+    mount_path: /downloads
+    size_gb: 5

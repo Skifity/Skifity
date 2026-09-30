@@ -1,0 +1,27 @@
+id: grafana-with-postgresql
+name: Grafana With Postgresql
+description: Grafana is the open source analytics & monitoring solution for every database.
+category: monitoring
+website: https://grafana.com
+services:
+- name: grafana
+  image: grafana/grafana-oss:13.0.2
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GF_DATABASE_TYPE: postgres
+  volumes:
+  - name: grafana-data
+    mount_path: /var/lib/grafana
+    size_gb: 5
+databases:
+- name: grafana-with-postgresql-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - grafana
+  var_name: DATABASE_URL

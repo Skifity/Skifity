@@ -1,0 +1,31 @@
+id: paymenter
+name: Paymenter
+description: Open-Source Billing, Built for Hosting.
+category: finance
+website: https://paymenter.org/docs/guides/docker
+services:
+- name: paymenter
+  image: ghcr.io/paymenter/paymenter:v1.4.5
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    APP_ENV: production
+    REDIS_USERNAME: default
+  volumes:
+  - name: app-logs
+    mount_path: /app/storage/logs
+    size_gb: 5
+  - name: extenstions
+    mount_path: /app/extensions
+    size_gb: 5
+databases:
+- name: paymenter-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - paymenter
+  var_name: DATABASE_URL

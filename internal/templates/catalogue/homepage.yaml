@@ -1,0 +1,14 @@
+id: homepage
+name: Homepage
+description: A modern, fully static, fast, secure fully proxied, highly customizable application dashboard.
+category: productivity
+website: https://gethomepage.dev/latest/
+services:
+- name: homepage
+  image: ghcr.io/gethomepage/homepage:v2.3
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

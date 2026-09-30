@@ -1,0 +1,51 @@
+id: twenty
+name: Twenty
+description: Twenty is a CRM designed to fit your unique business needs.
+category: productivity
+website: https://docs.twenty.com
+services:
+- name: twenty
+  image: twentycrm/twenty:v1.15
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ENABLE_DB_MIGRATIONS: 'true'
+    SIGN_IN_PREFILLED: 'false'
+  volumes:
+  - name: twenty-local-storage
+    mount_path: /app/packages/twenty-server/.local-storage
+    size_gb: 5
+- name: worker
+  image: twentycrm/twenty:v1.15
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ENABLE_DB_MIGRATIONS: 'true'
+    SIGN_IN_PREFILLED: 'false'
+    DISABLE_DB_MIGRATIONS: 'true'
+    DISABLE_CRON_JOBS_REGISTRATION: 'true'
+  volumes:
+  - name: twenty-local-storage
+    mount_path: /app/packages/twenty-server/.local-storage
+    size_gb: 5
+databases:
+- name: twenty-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - twenty
+  - worker
+  var_name: DATABASE_URL
+notes: In the original this stack shares /app/packages/twenty-server/.local-storage between twenty and
+  worker. Skifity gives each app storage of its own, so those are separate directories here. If the apps
+  need to see the same files, point them at object storage — MinIO is in this catalogue — rather than
+  a path. This template installs 2 apps. They reach each other by name inside the environment, so keep
+  them together.

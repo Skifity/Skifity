@@ -1,0 +1,18 @@
+id: matrix-synapse-with-sqlite
+name: Matrix Synapse With Sqlite
+description: Chat securely with your family, friends, community, or build great apps with Matrix!.
+category: communication
+website: https://element-hq.github.io/synapse/latest/welcome_and_overview.html
+services:
+- name: synapse
+  image: matrixdotorg/synapse:v1.161.0
+  port: 8008
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: synapse-data
+    mount_path: /data
+    size_gb: 5

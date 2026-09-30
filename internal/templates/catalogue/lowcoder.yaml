@@ -1,0 +1,19 @@
+id: lowcoder
+name: Lowcoder
+description: Lowcoder (forked from OpenBlocks) is a self-hosted, open-source, low-code platform for building
+  internal tools.
+category: productivity
+website: https://docs.lowcoder.cloud/
+services:
+- name: lowcoder
+  image: lowcoderorg/lowcoder-ce:2.7.6
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: lowcoder-data
+    mount_path: /lowcoder-stacks
+    size_gb: 5

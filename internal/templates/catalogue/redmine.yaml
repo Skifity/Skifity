@@ -1,0 +1,28 @@
+id: redmine
+name: Redmine
+description: Redmine is a flexible project management web application.
+category: productivity
+website: https://www.redmine.org/
+services:
+- name: redmine
+  image: redmine:6-alpine
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: redmine-config
+    mount_path: /usr/src/redmine/config
+    size_gb: 5
+  - name: redmine-files
+    mount_path: /usr/src/redmine/files
+    size_gb: 5
+databases:
+- name: redmine-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - redmine
+  var_name: DATABASE_URL

@@ -1,0 +1,22 @@
+id: docker-registry
+name: Docker Registry
+description: The Docker Registry lets you distribute Docker images.
+category: developer
+website: https://distribution.github.io/distribution/
+services:
+- name: registry
+  image: registry:3
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    REGISTRY_AUTH: htpasswd
+    REGISTRY_AUTH_HTPASSWD_REALM: Registry Realm
+    REGISTRY_AUTH_HTPASSWD_PATH: /auth/registry.password
+  volumes:
+  - name: registry-data
+    mount_path: /var/lib/registry
+    size_gb: 5

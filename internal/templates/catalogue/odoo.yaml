@@ -1,0 +1,28 @@
+id: odoo
+name: Odoo
+description: Odoo is a suite of open-source business apps that cover all your company needs.
+category: productivity
+website: https://www.odoo.com/
+services:
+- name: odoo
+  image: odoo:18
+  port: 8069
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: odoo-web-data
+    mount_path: /var/lib/odoo
+    size_gb: 5
+  - name: odoo-extra-addons
+    mount_path: /mnt/extra-addons
+    size_gb: 5
+databases:
+- name: odoo-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - odoo
+  var_name: DATABASE_URL

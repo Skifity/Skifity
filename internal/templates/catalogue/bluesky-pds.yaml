@@ -1,0 +1,18 @@
+id: bluesky-pds
+name: Bluesky Pds
+description: Bluesky PDS (Personal Data Server).
+category: developer
+website: https://github.com/bluesky-social/pds
+services:
+- name: pds
+  image: ghcr.io/bluesky-social/pds:0.4.182
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: pds-data
+    mount_path: /pds
+    size_gb: 5

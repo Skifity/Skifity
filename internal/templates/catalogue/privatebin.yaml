@@ -1,0 +1,19 @@
+id: privatebin
+name: Privatebin
+description: PrivateBin is a minimalist, open source online pastebin where the server has zero knowledge
+  of pasted data.
+category: security
+website: https://github.com/PrivateBin/PrivateBin/blob/master/doc/README.md
+services:
+- name: privatebin
+  image: privatebin/nginx-fpm-alpine:2.0.6
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: privatebin-data
+    mount_path: /srv/data
+    size_gb: 5

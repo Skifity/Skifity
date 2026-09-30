@@ -1,0 +1,37 @@
+id: seafile
+name: Seafile
+description: Open source cloud storage system for file sync, share and document collaboration.
+category: storage
+website: https://manual.seafile.com
+services:
+- name: seafile
+  image: seafileltd/seafile-mc:13.0.25
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SEAFILE_SERVER_PROTOCOL: https
+  volumes:
+  - name: seafile-data
+    mount_path: /shared
+    size_gb: 5
+- name: memcached
+  image: memcached:1.6
+  port: 11211
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: seafile-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - seafile
+  var_name: DATABASE_URL
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

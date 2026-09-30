@@ -1,0 +1,20 @@
+id: elasticsearch
+name: Elasticsearch
+description: Elasticsearch is free and Open Source, Distributed, RESTful Search Engine.
+category: storage
+website: https://www.elastic.co/products/elasticsearch
+services:
+- name: elasticsearch
+  image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:8.19.0
+  port: 9200
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ES_JAVA_OPTS: -Xms512m -Xmx512m
+  volumes:
+  - name: elasticsearch-data
+    mount_path: /usr/share/elasticsearch/data
+    size_gb: 5

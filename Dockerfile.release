@@ -1,0 +1,19 @@
+# The image GoReleaser builds around an already-compiled binary.
+#
+# Dockerfile at the repository root builds from source and is what `make image`
+# and CI use. This one exists because GoReleaser has already cross-compiled the
+# binary and only needs it packaged, which keeps a release from compiling the
+# same code twice per architecture.
+#
+# It carries no CLI for other platforms yet: GoReleaser builds them, but
+# wiring its output into this context has never been run, and a line here
+# that copies a path nobody checked is a release that fails on tag day. The
+# panel says so when asked (cli.platform_unavailable), and every release
+# publishes them beside the image. See docs/progress.md, Phase 73.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY skifity /usr/local/bin/skifity
+USER 65532:65532
+WORKDIR /var/lib/skifity
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/skifity"]
+CMD ["server"]

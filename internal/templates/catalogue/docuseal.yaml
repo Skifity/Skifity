@@ -1,0 +1,19 @@
+id: docuseal
+name: Docuseal
+description: Document Signing for Everyone free forever for individuals, extensible for businesses and
+  developers. Open Source Alternative to DocuSign, PandaDoc and more.
+category: productivity
+website: https://www.docuseal.co/
+services:
+- name: docuseal
+  image: docuseal/docuseal:3.2.5
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: docuseal-data
+    mount_path: /data
+    size_gb: 5

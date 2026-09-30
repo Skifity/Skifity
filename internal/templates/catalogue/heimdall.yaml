@@ -1,0 +1,22 @@
+id: heimdall
+name: Heimdall
+description: Heimdall is a dashboard for managing and organizing your server applications.
+category: productivity
+website: https://github.com/linuxserver/Heimdall
+services:
+- name: heimdall
+  image: linuxserver/heimdall:2.8.3
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: heimdall-config
+    mount_path: /config
+    size_gb: 5

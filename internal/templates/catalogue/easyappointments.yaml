@@ -1,0 +1,24 @@
+id: easyappointments
+name: Easyappointments
+description: Schedule Anything. Let's start with easy! Get the best free online appointment scheduler
+  on your server, today.
+category: productivity
+website: https://easyappointments.org/
+services:
+- name: easyappointments
+  image: alextselegidis/easyappointments:1.6.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_USERNAME: root
+databases:
+- name: easyappointments-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - easyappointments
+  var_name: DATABASE_URL

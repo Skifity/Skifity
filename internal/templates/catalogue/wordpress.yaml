@@ -1,0 +1,28 @@
+id: wordpress
+name: WordPress
+description: The blogging and content platform that runs a large share of the web.
+category: cms
+website: https://wordpress.org
+services:
+- name: wordpress
+  image: wordpress:6-apache
+  port: 80
+  health_path: /wp-admin/install.php
+  volumes:
+  - name: content
+    mount_path: /var/www/html/wp-content
+    size_gb: 5
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  public: true
+databases:
+- name: wordpress-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - wordpress
+  var_name: WORDPRESS_DB_URL
+notes: Open the site to finish the WordPress installer. The uploads folder is on a volume, so it survives
+  redeploys.

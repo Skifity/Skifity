@@ -1,0 +1,21 @@
+id: metamcp
+name: Metamcp
+description: MCP Aggregator, Orchestrator, Middleware, Gateway in one app.
+category: ai
+website: https://github.com/metatool-ai/metamcp
+services:
+- name: app
+  image: ghcr.io/metatool-ai/metamcp:2.4
+  port: 12008
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: metamcp-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - app
+  var_name: DATABASE_URL

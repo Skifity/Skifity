@@ -1,0 +1,19 @@
+id: memos
+name: Memos
+description: An open-source, lightweight note-taking solution. The pain-less way to create your meaningful
+  notes. Your Notes, Your Way.
+category: productivity
+website: https://github.com/usememos/memos
+services:
+- name: memos
+  image: neosmemo/memos:0.30
+  port: 5230
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: memos
+    mount_path: /var/opt/memos
+    size_gb: 5

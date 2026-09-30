@@ -1,0 +1,25 @@
+id: plex
+name: Plex
+description: Plex organizes video, music and photos from personal media libraries and streams them to
+  smart TVs, streaming boxes and mobile devices.
+category: media
+website: https://docs.linuxserver.io/images/docker-plex/
+services:
+- name: plex
+  image: linuxserver/plex:1.43.4
+  port: 32400
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: plex-config
+    mount_path: /config
+    size_gb: 5
+  - name: plex-tv
+    mount_path: /tv
+    size_gb: 5

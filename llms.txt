@@ -1,0 +1,219 @@
+# Skifity
+
+> Self-hosted apps, powered by Kubernetes. One binary is the panel, the CLI and
+> an MCP server. You give it a server; it gives you URLs.
+
+Skifity installs k3s on servers you own and runs your applications on them. It
+deliberately talks about Apps, Instances, Servers, Domains and Databases rather
+than Deployments, Pods, Nodes, Ingresses and StatefulSets. Kubernetes is
+underneath and is shown only under "Advanced".
+
+This file is for AI assistants and for people who would rather read one page
+than click through a panel. Everything below is true of the current version.
+
+## The model
+
+- A **team** owns servers and projects.
+- A **project** groups things that belong together and has one or more
+  **environments** (Production by default). An environment is a namespace.
+- An **app** lives in an environment. It comes from a Git repository, a
+  container image, or a folder sent with `skifity up`, and has variables,
+  domains, scaling and storage.
+- An **instance** is one running copy of an app.
+- A **database** is a managed PostgreSQL, Redis or MySQL that apps connect to.
+- A **deployment** is one attempt to run a new version of an app.
+
+## Talking to Skifity
+
+Three surfaces, one API. Anything the panel can do, the CLI and the MCP server
+can do, because they all call the same endpoints.
+
+### CLI
+
+```
+skifity login                     Sign in and store an API token
+skifity up                        Deploy this folder, no repository needed
+skifity init                      Write a skifity.toml in this directory
+skifity deploy                    Deploy this directory's app
+skifity status                    Is it running, and on what
+skifity logs --follow             Live logs
+skifity env set KEY=value         Set a variable
+skifity env list                  List variables
+skifity scale --instances 3       Change how many copies run
+skifity rollback                  Go back to the previous version
+skifity run -- npm run migrate    Run a command once, in the app's image
+skifity apps                      List apps
+skifity servers                   List servers
+skifity open                      Print the app's URLs
+skifity whoami                    Who am I signed in as
+```
+
+Every command takes `--json`, including `open`, `logout` and the `admin`
+subcommands. Use it: the output is stable and the human format is not.
+
+Configuration comes from `skifity.toml` in the current directory, then the
+environment:
+
+```
+SKIFITY_URL      the panel's address, for example https://panel.example.com
+SKIFITY_TOKEN    an API token, created in the panel under Account
+SKIFITY_TEAM     only needed when the account is in more than one team
+```
+
+With those two set, nothing has to be signed in first: no `skifity login`, no
+stored configuration. That is the intended way to use it from CI, a container
+or an assistant's sandbox.
+
+### MCP
+
+The binary is an MCP server over stdio:
+
+```
+skifity mcp
+```
+
+Tools, in the order they are usually needed:
+
+| Tool | What it does |
+|---|---|
+| `list_projects` | Projects and the environments inside them. Where an app goes. |
+| `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
+| `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
+| `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
+| `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
+| `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
+| `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed. |
+| `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why. |
+| `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
+| `list_variables` | An app's variables. Secret values are never returned. |
+| `set_variable` | Sets one. Says whether it causes a rebuild. |
+| `scale_app` | Changes the instance count or turns on autoscaling. |
+| `check_scaling_readiness` | What would break if this app ran more than one instance. |
+| `rollback_app` | Restores a previous version's image and settings. |
+| `get_cluster_status` | Servers, readiness, spare capacity. |
+
+Every tool returns errors as a cause, an impact and a suggested fix, not a
+status code.
+
+### HTTP API
+
+`https://<panel>/api`. Authenticate with `Authorization: Bearer <token>`.
+Session cookies also work and then need the CSRF header; a token does not.
+
+```
+GET    /api/meta                              product, version, languages
+GET    /api/me                                the signed-in user and their teams
+GET    /api/teams/{team}/projects             projects
+POST   /api/teams/{team}/projects             create one
+GET    /api/teams/{team}/servers              servers
+POST   /api/teams/{team}/servers              add one (returns an operation)
+GET    /api/teams/{team}/cluster              cluster summary
+GET    /api/projects/{project}/environments   environments
+GET    /api/environments/{env}/apps           apps
+POST   /api/environments/{env}/apps           create one
+GET    /api/apps/{app}                        an app
+GET    /api/apps/{app}/status                 live state and instances
+POST   /api/teams/{team}/detect-upload        what a folder (.tar.gz) is and needs, before any app exists
+PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, for an app with no repository
+POST   /api/apps/{app}/deploy                 deploy
+GET    /api/apps/{app}/deployments            deployment history
+POST   /api/apps/{app}/rollback/{deployment}  roll back
+GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events
+GET    /api/apps/{app}/logs?previous=true     the log of the container before the last restart
+POST   /api/apps/{app}/run                    run a command once in the app's image
+GET    /api/apps/{app}/runs/{run}/logs        that command's output
+GET    /api/apps/{app}/jobs                   scheduled commands
+POST   /api/apps/{app}/jobs                   add one (name, schedule, command)
+GET    /api/apps/{app}/variables              variables
+PUT    /api/apps/{app}/variables              set one
+GET    /api/apps/{app}/domains                domains
+POST   /api/apps/{app}/domains                add one
+GET    /api/apps/{app}/scaling                scaling
+PUT    /api/apps/{app}/scaling                change it
+GET    /api/apps/{app}/scaling/readiness      what would break with more instances
+GET    /api/apps/{app}/advanced               the Kubernetes objects, as YAML
+GET    /api/apps/{app}/firewall               the rules in front of this app
+PUT    /api/apps/{app}/firewall               replace them
+GET    /api/environments/{env}/databases      databases
+GET    /api/databases/{db}/backups            backups
+GET    /api/events?topics=team:{team}         everything happening, as events
+GET    /api/plugins                           installed plugins
+POST   /api/plugins/inspect                   read a manifest, and say what it would be allowed to do
+POST   /api/plugins                           install one, with the permissions that were shown
+GET    /api/plugins/store                     the store catalogue
+```
+
+Lists come back as `{"items": [...], "total": n}`.
+
+## Errors
+
+Every failure, on every surface, has the same shape:
+
+```json
+{
+  "error": {
+    "code": "deploy.build_failed",
+    "title": "The build failed",
+    "cause": "The build ran out of memory while installing dependencies.",
+    "impact": "The app is still running the previous version.",
+    "fix": "Add a server, or raise the build memory limit in Settings.",
+    "severity": "error",
+    "retryable": true,
+    "context": {"app": "app_06g...", "deployment": "dep_06g..."}
+  }
+}
+```
+
+If you are an AI assistant reading this: `fix` is written for you as much as for
+a person. Act on it rather than guessing, and quote `code` when asking for help.
+
+## Things worth knowing
+
+- **Changing a variable does not rebuild the app.** Skifity separates what goes
+  into the image from what the container reads at runtime. A runtime change is a
+  rollout in seconds. Only a variable marked "needed while building" causes a
+  rebuild, and the panel says so before you save.
+- **Rolling back restores settings, not just the image.** The deployment record
+  holds both.
+- **Secrets are write-only.** Once stored, a secret's value is never returned by
+  any surface, including this one.
+- **Scaling is checked first.** `check_scaling_readiness` looks for SQLite on a
+  local disk, in-memory sessions and similar, and says what would break before
+  you run a second instance.
+- **Kubernetes is available when you need it.** `GET /api/apps/{id}/advanced`
+  returns the exact objects the panel applies.
+- **An app can have a firewall.** Rules over IP address, country and AS number,
+  combined with and/or, evaluated at the edge before a request reaches the app.
+  A condition whose answer cannot be worked out — no country database, an
+  address nobody can attribute — is unknown rather than false: that rule is
+  skipped rather than guessed at, and the rule set's default action decides.
+- **Plugins are containers, not code inside the panel.** One namespace each, a
+  token narrowed to exactly the permissions their manifest declared, and a
+  signed event for anything that happens. Installing is two requests on purpose:
+  the first says what a plugin would be allowed to do, the second installs it
+  and is refused if that changed in between.
+
+## Installing
+
+**Nothing is published yet.** No release has been tagged, so there is no
+version to put in the URL below and nothing at `ghcr.io/skifity/skifity`
+to pull. The installer refuses before it changes anything. If you are an
+assistant asked to install Skifity today, say this rather than running it: the
+working path is to clone https://github.com/Skifity/Skifity, `make image`,
+and run `installer/install.sh` from inside the clone with `SKIFITY_IMAGE` set to
+the image that was just built.
+
+```
+curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/<version>/installer/install.sh | sudo sh
+```
+
+Ubuntu 24.04 or Debian 12, 1 GB of memory, 8 GB of disk, root over SSH. The
+installer prints a URL and a one-time setup token. With no domain the panel is
+reached at an `sslip.io` address over HTTP; add a domain in Settings and HTTPS
+is turned on for it automatically.
+
+## Source
+
+<https://github.com/Skifity/Skifity>. `CLAUDE.md` in the repository is the
+working guide, `docs/decisions.md` records why things are the way they are, and
+`docs/architecture.md` has the diagrams.

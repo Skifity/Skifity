@@ -1,0 +1,18 @@
+id: mealie
+name: Mealie
+description: A recipe manager and meal planner.
+category: productivity
+website: https://docs.mealie.io/
+services:
+- name: mealie
+  image: ghcr.io/mealie-recipes/mealie:v3.26.0
+  port: 9000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: mealie-data
+    mount_path: /app/data
+    size_gb: 5

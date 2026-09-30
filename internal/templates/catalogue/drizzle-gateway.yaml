@@ -1,0 +1,20 @@
+id: drizzle-gateway
+name: Drizzle Gateway
+description: Free self-hosted Drizzle Studio on steroids.
+category: developer
+website: https://gateway.drizzle.team/
+services:
+- name: drizzle-gateway
+  image: ghcr.io/drizzle-team/gateway:1.6.2
+  port: 4983
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    STORE_PATH: /app
+  volumes:
+  - name: drizzle-gateway-data
+    mount_path: /app
+    size_gb: 5

@@ -1,0 +1,19 @@
+id: pgadmin
+name: Pgadmin
+description: pgAdmin is a web-based database management tool for administering your PostgreSQL databases
+  through a user-friendly interface.
+category: storage
+website: https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html
+services:
+- name: pgadmin
+  image: dpage/pgadmin4:9.17
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: pgadmin-data
+    mount_path: /var/lib/pgadmin
+    size_gb: 5

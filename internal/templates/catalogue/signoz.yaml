@@ -1,0 +1,60 @@
+id: signoz
+name: Signoz
+description: An observability platform native to OpenTelemetry with logs, traces and metrics.
+category: monitoring
+website: https://signoz.io/docs/introduction/
+services:
+- name: zookeeper
+  image: signoz/zookeeper:3.9.3
+  port: 2181
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: zookeeper
+    mount_path: /bitnami/zookeeper
+    size_gb: 5
+- name: clickhouse
+  image: clickhouse/clickhouse-server:25.5.6-alpine
+  port: 9000
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CLICKHOUSE_SKIP_USER_SETUP: '1'
+- name: signoz
+  image: signoz/signoz:v0.97.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SIGNOZ_SQLSTORE_SQLITE_PATH: /var/lib/signoz/signoz.db
+    DASHBOARDS_PATH: /root/config/dashboards
+    STORAGE: clickhouse
+    GODEBUG: netdns=go
+    DEPLOYMENT_TYPE: docker-standalone-amd
+    SIGNOZ_ALERTMANAGER_PROVIDER: signoz
+    DOT_METRICS_ENABLED: 'true'
+- name: otel-collector
+  image: signoz/signoz-otel-collector:v0.129.7
+  port: 4318
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    OTEL_RESOURCE_ATTRIBUTES: host.name=signoz-host,os.type=linux
+    LOW_CARDINAL_EXCEPTION_GROUPING: 'false'
+notes: 'This stack has a set-up step that runs once and exits — init-clickhouse, schema-migrator-async,
+  schema-migrator-sync. Skifity runs apps, not one-shot containers, so that step is not installed: do
+  it yourself from the app''s Commands tab, or follow the project''s own instructions, before expecting
+  everything to work. This template installs 4 apps. They reach each other by name inside the environment,
+  so keep them together.'

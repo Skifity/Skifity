@@ -1,0 +1,18 @@
+id: cloudbeaver
+name: Cloudbeaver
+description: CloudBeaver is a lightweight web application designed for comprehensive data management.
+category: developer
+website: https://dbeaver.com/docs/cloudbeaver/
+services:
+- name: cloudbeaver
+  image: dbeaver/cloudbeaver:24
+  port: 8978
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: cloudbeaver-data
+    mount_path: /opt/cloudbeaver/workspace
+    size_gb: 5

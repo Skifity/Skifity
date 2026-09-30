@@ -1,0 +1,21 @@
+id: stalwart
+name: Stalwart
+description: Modern mail server platform.
+category: communication
+website: https://stalw.art/docs/
+services:
+- name: stalwart
+  image: stalwartlabs/stalwart:v0.16.13
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: stalwart-mail
+    mount_path: /etc/stalwart
+    size_gb: 5
+  - name: stalwart-data
+    mount_path: /var/lib/stalwart
+    size_gb: 5

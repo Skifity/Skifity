@@ -1,0 +1,14 @@
+id: filebrowser
+name: Filebrowser
+description: FileBrowser is a web-based file manager and file explorer with a user-friendly interface.
+category: storage
+website: https://filebrowser.org
+services:
+- name: filebrowser
+  image: filebrowser/filebrowser:v2
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

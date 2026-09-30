@@ -1,0 +1,50 @@
+id: sure
+name: Sure
+description: An all-in-one personal finance platform.
+category: finance
+website: https://github.com/we-promise/sure
+services:
+- name: web
+  image: ghcr.io/we-promise/sure:0.6.7
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SELF_HOSTED: 'true'
+    RAILS_FORCE_SSL: 'false'
+    RAILS_ASSUME_SSL: 'false'
+  volumes:
+  - name: sure-app-storage
+    mount_path: /rails/storage
+    size_gb: 5
+- name: worker
+  image: ghcr.io/we-promise/sure:0.6.7
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SELF_HOSTED: 'true'
+    RAILS_FORCE_SSL: 'false'
+    RAILS_ASSUME_SSL: 'false'
+  volumes:
+  - name: sure-app-storage
+    mount_path: /rails/storage
+    size_gb: 5
+databases:
+- name: sure-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - web
+  - worker
+  var_name: DATABASE_URL
+notes: In the original this stack shares /rails/storage between web and worker. Skifity gives each app
+  storage of its own, so those are separate directories here. If the apps need to see the same files,
+  point them at object storage — MinIO is in this catalogue — rather than a path. This template installs
+  2 apps. They reach each other by name inside the environment, so keep them together.

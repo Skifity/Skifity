@@ -1,0 +1,19 @@
+id: qdrant
+name: Qdrant
+description: Qdrant is a vector similarity search engine that provides a production-ready service with
+  a convenient API to store, search, and manage points (i.e. vectors) with an additional payload.
+category: storage
+website: https://qdrant.tech/documentation/
+services:
+- name: qdrant
+  image: qdrant/qdrant:v1.19
+  port: 6333
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: qdrant-storage
+    mount_path: /qdrant/storage
+    size_gb: 5

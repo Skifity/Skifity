@@ -1,0 +1,14 @@
+id: gotenberg
+name: Gotenberg
+description: Gotenberg is a Docker-powered stateless API for PDF files.
+category: developer
+website: https://gotenberg.dev/docs/getting-started/introduction
+services:
+- name: gotenberg
+  image: gotenberg/gotenberg:8.37
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

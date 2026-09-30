@@ -1,0 +1,24 @@
+id: metabase
+name: Metabase
+description: Fast analytics with the friendly UX and integrated tooling to let your company explore data
+  on their own.
+category: analytics
+website: https://www.metabase.com
+services:
+- name: metabase
+  image: metabase/metabase:v0.63.18
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    MB_DB_TYPE: postgres
+databases:
+- name: metabase-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - metabase
+  var_name: DATABASE_URL

@@ -1,0 +1,18 @@
+id: triliumnext
+name: Triliumnext
+description: Build your personal knowledge base with TriliumNext Notes.
+category: productivity
+website: https://github.com/TriliumNext/Trilium
+services:
+- name: triliumnext
+  image: ghcr.io/triliumnext/trilium:v0.103.0
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: triliumnext-data
+    mount_path: /home/node/trilium-data
+    size_gb: 5

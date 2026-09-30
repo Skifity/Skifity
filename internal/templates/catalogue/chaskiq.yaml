@@ -1,0 +1,62 @@
+id: chaskiq
+name: Chaskiq
+description: Chaskiq is an messaging platform for marketing, support & sales.
+category: productivity
+website: https://chaskiq.io
+services:
+- name: chaskiq
+  image: chaskiq/chaskiq:2.0.2
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SNS_CONFIGURATION_SET: metrics
+    LOCAL_STORAGE_PATH: /data/storage
+    APP_ENV: production
+    RAILS_ENV: production
+    RACK_ENV: production
+    RAILS_SERVE_STATIC_FILES: 'true'
+    RAILS_LOG_TO_STDOUT: 'true'
+    ENABLED_AUDITS: 'true'
+    TZ: Europe/Madrid
+  volumes:
+  - name: chaskiq-storage
+    mount_path: /data/storage
+    size_gb: 5
+- name: sidekiq
+  image: chaskiq/chaskiq:2.0.2
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SNS_CONFIGURATION_SET: metrics
+    LOCAL_STORAGE_PATH: /data/storage
+    APP_ENV: production
+    RAILS_ENV: production
+    RACK_ENV: production
+    RAILS_SERVE_STATIC_FILES: 'true'
+    RAILS_LOG_TO_STDOUT: 'true'
+    ENABLED_AUDITS: 'true'
+    TZ: Europe/Madrid
+  volumes:
+  - name: chaskiq-storage
+    mount_path: /data/storage
+    size_gb: 5
+databases:
+- name: chaskiq-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - chaskiq
+  - sidekiq
+  var_name: DATABASE_URL
+notes: In the original this stack shares /data/storage between chaskiq and sidekiq. Skifity gives each
+  app storage of its own, so those are separate directories here. If the apps need to see the same files,
+  point them at object storage — MinIO is in this catalogue — rather than a path. This template installs
+  2 apps. They reach each other by name inside the environment, so keep them together.

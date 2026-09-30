@@ -1,0 +1,23 @@
+id: embystat
+name: Embystat
+description: EmbyStat is a web analytics tool, designed to provide insight into website traffic and user
+  behavior.
+category: analytics
+website: https://github.com/mregni/EmbyStat
+services:
+- name: embystat
+  image: linuxserver/embystat:0.2.0
+  port: 6555
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: embystat-config
+    mount_path: /config
+    size_gb: 5

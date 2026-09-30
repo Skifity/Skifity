@@ -1,0 +1,24 @@
+id: transmission
+name: Transmission
+description: Fast, easy, and free BitTorrent client.
+category: media
+website: https://docs.linuxserver.io/images/docker-transmission/
+services:
+- name: transmission
+  image: linuxserver/transmission:4.1.3
+  port: 9091
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: transmission-config
+    mount_path: /config
+    size_gb: 5
+  - name: transmission-downloads
+    mount_path: /downloads
+    size_gb: 5

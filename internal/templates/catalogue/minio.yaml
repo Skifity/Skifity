@@ -1,0 +1,29 @@
+id: minio
+name: MinIO
+description: S3-compatible object storage, useful as a backup target for Skifity itself.
+category: storage
+website: https://min.io
+services:
+- name: minio
+  image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+  port: 9001
+  variables: {}
+  volumes:
+  - name: data
+    mount_path: /data
+    size_gb: 20
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  public: true
+inputs:
+- key: MINIO_ROOT_USER
+  label: Root user
+  default: skifity
+  required: true
+- key: MINIO_ROOT_PASSWORD
+  label: Root password
+  secret: true
+  generate: true
+notes: Create a bucket, then point Settings, then Storage at this MinIO to back up your databases.

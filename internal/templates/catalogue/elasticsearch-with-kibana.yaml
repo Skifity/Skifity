@@ -1,0 +1,39 @@
+id: elasticsearch-with-kibana
+name: Elasticsearch With Kibana
+description: Elastic + Kibana is a Free and Open Source Search, Monitoring, and Visualization Stack.
+category: monitoring
+website: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-kibana-with-docker
+services:
+- name: elasticsearch
+  image: elastic/elasticsearch:9.1.2
+  port: 9200
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ELASTIC_USER: elastic
+    ES_JAVA_OPTS: -Xms512m -Xmx512m
+  volumes:
+  - name: elasticsearch-data
+    mount_path: /usr/share/elasticsearch/data
+    size_gb: 5
+- name: kibana
+  image: kibana:9.1.2
+  port: 5601
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+  volumes:
+  - name: kibana-data
+    mount_path: /usr/share/kibana/data
+    size_gb: 5
+notes: 'This stack has a set-up step that runs once and exits — kibana-token-generator. Skifity runs apps,
+  not one-shot containers, so that step is not installed: do it yourself from the app''s Commands tab,
+  or follow the project''s own instructions, before expecting everything to work. This template installs
+  2 apps. They reach each other by name inside the environment, so keep them together.'

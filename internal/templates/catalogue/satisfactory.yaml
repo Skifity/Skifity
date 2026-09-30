@@ -1,0 +1,18 @@
+id: satisfactory
+name: Satisfactory
+description: Satisfactory Dedicated Server for hosting your own Satisfactory game sessions.
+category: productivity
+website: https://github.com/wolveix/satisfactory-server
+services:
+- name: satisfactory-server
+  image: wolveix/satisfactory-server:v1.9.10
+  port: 7777
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: satisfactory-server
+    mount_path: /config
+    size_gb: 5

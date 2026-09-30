@@ -1,0 +1,41 @@
+id: open-archiver
+name: Open Archiver
+description: A self-hosted, open-source email archiving solution with full-text search capability.
+category: communication
+website: https://docs.openarchiver.com/
+services:
+- name: open-archiver
+  image: logiclabshq/open-archiver:v0.6.0
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    REDIS_TLS_ENABLED: 'false'
+  volumes:
+  - name: archiver-data
+    mount_path: /var/data/open-archiver
+    size_gb: 5
+- name: meilisearch
+  image: getmeili/meilisearch:v1.15
+  port: 7700
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: meilisearch-data
+    mount_path: /meili_data
+    size_gb: 5
+databases:
+- name: open-archiver-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - open-archiver
+  var_name: DATABASE_URL
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

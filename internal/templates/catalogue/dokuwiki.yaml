@@ -1,0 +1,23 @@
+id: dokuwiki
+name: Dokuwiki
+description: A lightweight and easy-to-use wiki platform for creating and managing documentation and knowledge
+  bases.
+category: cms
+website: https://www.dokuwiki.org/
+services:
+- name: dokuwiki
+  image: linuxserver/dokuwiki:version-2026-07-14c
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: dokuwiki-config
+    mount_path: /config
+    size_gb: 5

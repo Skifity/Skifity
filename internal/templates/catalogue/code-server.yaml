@@ -1,0 +1,24 @@
+id: code-server
+name: Code Server
+description: Code-Server is a web-based code editor that enables remote coding and collaboration from
+  any device, anywhere.
+category: developer
+website: https://coder.com/docs/code-server/latest
+services:
+- name: code-server
+  image: linuxserver/code-server:4.137.0
+  port: 8443
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+    DEFAULT_WORKSPACE: /config/workspace
+  volumes:
+  - name: code-server-config
+    mount_path: /config
+    size_gb: 5

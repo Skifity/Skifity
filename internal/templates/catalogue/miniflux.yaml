@@ -1,0 +1,21 @@
+id: miniflux
+name: Miniflux
+description: Miniflux is a minimalist and opinionated feed reader.
+category: media
+website: https://miniflux.app/docs/index.html
+services:
+- name: miniflux
+  image: ghcr.io/miniflux/miniflux:2.3.3
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: miniflux-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - miniflux
+  var_name: DATABASE_URL

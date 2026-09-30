@@ -1,0 +1,30 @@
+id: ghost
+name: Ghost
+description: A fast publishing platform for newsletters and blogs.
+category: cms
+website: https://ghost.org
+services:
+- name: ghost
+  image: ghost:5-alpine
+  port: 2368
+  health_path: /
+  variables:
+    NODE_ENV: production
+    database__client: mysql
+  volumes:
+  - name: content
+    mount_path: /var/lib/ghost/content
+    size_gb: 5
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  public: true
+databases:
+- name: ghost-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - ghost
+  var_name: DATABASE_URL
+notes: Set the mail settings in Ghost's admin area, or it cannot send member emails.

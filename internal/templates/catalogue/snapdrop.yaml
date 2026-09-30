@@ -1,0 +1,23 @@
+id: snapdrop
+name: Snapdrop
+description: A self-hosted file-sharing service for secure and convenient file transfers, whether on a
+  local network or the internet.
+category: productivity
+website: https://github.com/RobinLinus/snapdrop
+services:
+- name: snapdrop
+  image: linuxserver/snapdrop:version-b8b78cc2
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Europe/Madrid
+  volumes:
+  - name: snapdrop-config
+    mount_path: /config
+    size_gb: 5

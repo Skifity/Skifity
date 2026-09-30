@@ -1,0 +1,22 @@
+id: siyuan
+name: Siyuan
+description: A privacy-first, self-hosted, fully open source personal knowledge management software, written
+  in typescript and golang.
+category: cms
+website: https://github.com/siyuan-note/siyuan
+services:
+- name: siyuan
+  image: b3log/siyuan:v3.3.5
+  port: 6806
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: siyuan-workspace
+    mount_path: /siyuan/workspace
+    size_gb: 5

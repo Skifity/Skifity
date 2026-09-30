@@ -1,0 +1,30 @@
+id: mattermost
+name: Mattermost
+description: Mattermost is an open source, self-hosted Slack-alternative.
+category: communication
+website: https://docs.mattermost.com
+services:
+- name: mattermost
+  image: mattermost/mattermost-team-edition:11.11
+  port: 8065
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+  volumes:
+  - name: mattermost-data-config
+    mount_path: /mattermost/config
+    size_gb: 5
+  - name: mattermost-data-data
+    mount_path: /mattermost/data
+    size_gb: 5
+databases:
+- name: mattermost-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - mattermost
+  var_name: DATABASE_URL

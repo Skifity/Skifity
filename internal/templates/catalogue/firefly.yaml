@@ -1,0 +1,38 @@
+id: firefly
+name: Firefly
+description: A personal finances manager that can help you save money.
+category: finance
+website: https://firefly-iii.org
+services:
+- name: firefly
+  image: fireflyiii/core:version-6.7.2
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TRUSTED_PROXIES: '*'
+  volumes:
+  - name: firefly-upload
+    mount_path: /var/www/html/storage/upload
+    size_gb: 5
+- name: cron
+  image: alpine:3.24.1
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: firefly-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - firefly
+  - cron
+  var_name: DATABASE_URL
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

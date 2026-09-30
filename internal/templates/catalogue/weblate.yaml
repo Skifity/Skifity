@@ -1,0 +1,28 @@
+id: weblate
+name: Weblate
+description: Weblate is a libre software web-based continuous localization system.
+category: productivity
+website: https://weblate.org
+services:
+- name: weblate
+  image: weblate/weblate:2026.9
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: weblate-data
+    mount_path: /app/data
+    size_gb: 5
+  - name: weblate-cache
+    mount_path: /app/cache
+    size_gb: 5
+databases:
+- name: weblate-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - weblate
+  var_name: DATABASE_URL

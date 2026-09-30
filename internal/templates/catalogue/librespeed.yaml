@@ -1,0 +1,19 @@
+id: librespeed
+name: Librespeed
+description: Self-hosted lightweight Speed Test.
+category: developer
+website: https://github.com/librespeed/speedtest
+services:
+- name: librespeed
+  image: ghcr.io/librespeed/speedtest:6.3
+  port: 82
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    MODE: standalone
+    TELEMETRY: 'false'
+    DISTANCE: km
+    WEBPORT: '82'

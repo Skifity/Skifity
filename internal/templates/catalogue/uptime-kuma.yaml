@@ -1,0 +1,19 @@
+id: uptime-kuma
+name: Uptime Kuma
+description: Watch your sites and services, and get told when one goes down.
+category: monitoring
+website: https://uptime.kuma.pet
+services:
+- name: uptime-kuma
+  image: louislam/uptime-kuma:1
+  port: 3001
+  volumes:
+  - name: data
+    mount_path: /app/data
+    size_gb: 2
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 500
+  public: true
+notes: Uptime Kuma keeps its own SQLite database on the volume, so it runs as a single instance.

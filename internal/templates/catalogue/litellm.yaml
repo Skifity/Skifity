@@ -1,0 +1,22 @@
+id: litellm
+name: Litellm
+description: Call all LLM APIs using the OpenAI format. Use Bedrock, Azure, OpenAI, Cohere, Anthropic,
+  Ollama, Sagemaker, HuggingFace, Replicate, Groq (100+ LLMs).
+category: ai
+website: https://docs.litellm.ai
+services:
+- name: litellm
+  image: ghcr.io/berriai/litellm-database:v1.101.0
+  port: 4000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: litellm-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - litellm
+  var_name: DATABASE_URL

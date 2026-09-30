@@ -1,0 +1,69 @@
+{
+  "about": "What `skifity up` and the panel's folder picker send. Both read this file: internal/cli/up_test.go for the Go packer, web/scripts/check-ignore.mjs for the browser's. Two implementations of one rule stay one rule only if they are held to the same cases.",
+  "cases": [
+    {
+      "name": "the app and not what is around it",
+      "files": {
+        "package.json": "{}",
+        "src/index.js": "1",
+        ".env": "STRIPE_KEY=sk_live_x",
+        ".env.local": "X=1",
+        "api/.env.production": "X=1",
+        ".env.example": "STRIPE_KEY=",
+        "node_modules/react/index.js": "x",
+        ".git/config": "x",
+        ".next/cache/a": "x",
+        "skifity.toml": "app = \"app_1\"",
+        ".gitignore": "dist\n*.sqlite\n/secret.txt\n!keep.sqlite\nlogs/\n",
+        "dist/bundle.js": "x",
+        "data/app.sqlite": "x",
+        "keep.sqlite": "x",
+        "secret.txt": "x",
+        "sub/secret.txt": "kept: the rule is anchored to the root",
+        "logs/today": "x",
+        "sub/.gitignore": "local.txt\n",
+        "sub/local.txt": "x",
+        "local.txt": "kept: the rule is only for sub/",
+        ".skifityignore": "fixtures/\n",
+        "fixtures/big.json": "x"
+      },
+      "sent": [
+        ".env.example", ".gitignore", ".skifityignore", "keep.sqlite", "local.txt",
+        "package.json", "src/index.js", "sub/.gitignore", "sub/secret.txt"
+      ]
+    },
+    {
+      "name": "an ignore file cannot bring back the secrets",
+      "files": {
+        "index.html": "x",
+        ".env": "KEY=1",
+        ".gitignore": "!.env\n!node_modules/\n",
+        "node_modules/x/index.js": "x"
+      },
+      "sent": [".gitignore", "index.html"]
+    },
+    {
+      "name": "globs, double stars, classes and a kept default",
+      "files": {
+        ".gitignore": "**/tmp/**\n*.log\n!important.log\ndocs/*.md\nbuild?/\n[Tt]humbs.db\n!.vscode/\n",
+        "a/tmp/x.txt": "x",
+        "tmp/y.txt": "x",
+        "tmpfile.txt": "x",
+        "debug.log": "x",
+        "important.log": "x",
+        "docs/intro.md": "x",
+        "docs/deep/keep.md": "x",
+        "build1/out.js": "x",
+        "build10/out.js": "x",
+        "thumbs.db": "x",
+        ".vscode/settings.json": "x",
+        "__pycache__/m.pyc": "x",
+        "src/app.py": "x"
+      },
+      "sent": [
+        ".gitignore", ".vscode/settings.json", "build10/out.js", "docs/deep/keep.md",
+        "important.log", "src/app.py", "tmpfile.txt"
+      ]
+    }
+  ]
+}

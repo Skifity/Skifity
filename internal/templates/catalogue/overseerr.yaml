@@ -1,0 +1,22 @@
+id: overseerr
+name: Overseerr
+description: Overseerr is a request management and media discovery tool built to work with your existing
+  Plex ecosystem.
+category: media
+website: https://docs.overseerr.dev/getting-started/installation#docker
+services:
+- name: overseerr
+  image: sctx/overseerr:1.35.0
+  port: 5055
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: overseerr-config
+    mount_path: /app/config
+    size_gb: 5

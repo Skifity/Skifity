@@ -1,0 +1,33 @@
+id: forgejo-with-mariadb
+name: Forgejo With Mariadb
+description: Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance,
+  it just does the job.
+category: developer
+website: https://forgejo.org/docs
+services:
+- name: forgejo
+  image: codeberg.org/forgejo/forgejo:15
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    USER_UID: '1000'
+    USER_GID: '1000'
+    FORGEJO__database__DB_TYPE: mysql
+  volumes:
+  - name: forgejo-data
+    mount_path: /data
+    size_gb: 5
+  - name: forgejo-timezone
+    mount_path: /etc/timezone
+    size_gb: 5
+databases:
+- name: forgejo-with-mariadb-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - forgejo
+  var_name: DATABASE_URL

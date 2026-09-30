@@ -1,0 +1,2261 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "delete": "Delete",
+    "remove": "Remove",
+    "close": "Close",
+    "navigation": "Navigation",
+    "navigationHelp": "The panel’s navigation, as a drawer on a small screen.",
+    "create": "Create",
+    "edit": "Edit",
+    "add": "Add",
+    "retry": "Retry",
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "confirm": "Confirm",
+    "search": "Search",
+    "loading": "Loading...",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyForAI": "Copy error for AI",
+    "showAdvanced": "Advanced",
+    "hideAdvanced": "Hide advanced",
+    "optional": "optional",
+    "required": "required",
+    "beta": "Beta",
+    "yes": "Yes",
+    "no": "No",
+    "on": "On",
+    "off": "Off",
+    "none": "None",
+    "unknown": "Unknown",
+    "never": "Never",
+    "learnMore": "Learn more",
+    "openDocs": "Open the documentation",
+    "refresh": "Refresh",
+    "viewAll": "View all",
+    "actions": "Actions",
+    "name": "Name",
+    "status": "Status",
+    "created": "Created",
+    "updated": "Updated",
+    "type": "Type",
+    "size": "Size",
+    "of": "of",
+    "and": "and",
+    "instance_one": "{{count}} instance",
+    "instance_other": "{{count}} instances",
+    "server_one": "{{count}} server",
+    "server_other": "{{count}} servers",
+    "app_one": "{{count}} app",
+    "app_other": "{{count}} apps",
+    "day_one": "{{count}} day",
+    "day_other": "{{count}} days",
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo_one": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "typeToConfirm": "Type {{phrase}} to confirm",
+    "deleteNamed": "Delete {{name}}?",
+    "cannotBeUndone": "This cannot be undone.",
+    "keepGoing": "Go ahead",
+    "noMatches": "Nothing matches that",
+    "noMatchesHelp": "Try a shorter search, or clear the filter.",
+    "more": "More",
+    "toggleSidebar": "Show or hide the sidebar",
+    "skipToContent": "Skip to content",
+    "breadcrumb": "Breadcrumb",
+    "dismiss": "Dismiss",
+    "copyFailed": "The clipboard is not available here.",
+    "copyValue": "Copy {{name}}",
+    "show": "Show",
+    "hide": "Hide"
+  },
+  "nav": {
+    "overview": "Overview",
+    "projects": "Projects",
+    "apps": "Apps",
+    "databases": "Databases",
+    "servers": "Servers",
+    "templates": "Templates",
+    "activity": "Activity",
+    "settings": "Settings",
+    "account": "Account",
+    "signOut": "Sign out",
+    "commandPalette": "Search or jump to...",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "Match system",
+    "language": "Language",
+    "documentation": "Documentation",
+    "plugins": "Plugins"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signingIn": "Signing in...",
+    "email": "Email",
+    "password": "Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "twoFactorCode": "Two-factor code",
+    "twoFactorPrompt": "Enter the six-digit code from your authenticator app.",
+    "signInTitle": "Sign in to {{product}}",
+    "signInSubtitle": "Your apps, on servers you own.",
+    "forgotPassword": "Lost your password?",
+    "forgotPasswordHelp": "There is no email reset on a self-hosted panel. Recover access from the server: see the troubleshooting guide.",
+    "setupTitle": "Welcome to {{product}}",
+    "setupSubtitle": "Create the first account. This takes a minute.",
+    "setupToken": "Setup token",
+    "setupTokenHelp": "The installer printed this. It was also saved to /etc/skifity/setup-token on the server.",
+    "yourName": "Your name",
+    "teamName": "Team name",
+    "teamNameHelp": "You can rename this later. Projects and servers belong to a team.",
+    "createAccount": "Create account",
+    "creatingAccount": "Creating your account...",
+    "recoveryKeyTitle": "Save your recovery key",
+    "recoveryKeyIntro": "This key can decrypt every secret {{product}} stores. Without it, a restored backup is unreadable.",
+    "recoveryKeyWarning": "It is shown once. Store it somewhere safe and offline, not in this panel.",
+    "recoveryKeyConfirm": "I have saved it somewhere safe",
+    "recoveryKeyReminder": "You have not saved your recovery key yet.",
+    "download": "Download",
+    "enableTwoFactor": "Turn on two-factor authentication",
+    "twoFactorIntro": "Scan this with an authenticator app, then enter the code it shows.",
+    "twoFactorSecret": "Or enter this code manually",
+    "twoFactorConfirm": "Turn it on",
+    "twoFactorSkip": "Skip for now",
+    "twoFactorEnabled": "Two-factor authentication is on",
+    "twoFactorDisable": "Turn it off",
+    "recoveryCodesTitle": "Save your recovery codes",
+    "recoveryCodesIntro": "Each code signs you in once if you lose your phone. They are shown now and never again.",
+    "recoveryCodesLeft_one": "{{count}} recovery code left",
+    "recoveryCodesLeft_other": "{{count}} recovery codes left",
+    "recoveryCodesNone": "No recovery codes left. Turn two-factor off and on again to get a new set.",
+    "recoveryCodesRegenerate": "Get new codes",
+    "recoveryCodesReplaced": "The codes you had before stop working.",
+    "sessions": "Signed-in devices",
+    "currentSession": "This device",
+    "revokeSession": "Sign out",
+    "apiTokens": "API tokens",
+    "apiTokensHelp": "Tokens let the CLI and AI assistants act as you. Give each one a name so you can tell them apart.",
+    "newToken": "New token",
+    "tokenName": "What is it for?",
+    "tokenShownOnce": "This is the only time the token is shown. Copy it now.",
+    "revokeToken": "Revoke",
+    "subtitle": "Your sign-in, the devices you are signed in on, and the tokens that act as you.",
+    "twoFactorTitle": "Two-factor authentication",
+    "twoFactorOff": "Off. A password on its own is the only thing between anyone and this cluster.",
+    "or": "or",
+    "signInWithSSO": "Sign in with single sign-on",
+    "ssoError": {
+      "refused": "That sign-in was refused. Try again, or sign in with a password.",
+      "no_account": "You do not have an account on this panel. Ask an administrator to invite you.",
+      "state": "That sign-in did not come back the way it left. Start again.",
+      "expired": "That sign-in took too long. Start again.",
+      "disabled": "That account has been disabled on this panel."
+    },
+    "teamNameExample": "Acme",
+    "revokeSessionConfirm": "{{device}} is signed out and has to sign in again.",
+    "revokeTokenConfirm": "The token {{name}} stops working immediately.",
+    "revokeTokenConsequence": "A token cannot be got back. Anything using it — a script, a deploy pipeline, an assistant — fails until it is given a new one.",
+    "reauth": {
+      "title": "Confirm it is you",
+      "description": "This action needs your password again. Being signed in is not the same as being at the keyboard.",
+      "confirm": "Confirm"
+    },
+    "signOutEverywhere": "Sign out everywhere else",
+    "signOutEverywhereConfirm": "Every other device signed in to this account will be signed out. This one stays signed in.",
+    "signedOutEverywhereDone": "Every other device has been signed out."
+  },
+  "dashboard": {
+    "title": "Overview",
+    "welcome": "Welcome back",
+    "noServers": "No servers yet",
+    "noServersHelp": "Add your first server and {{product}} will turn it into a cluster. All you need is an IP address and a password.",
+    "addFirstServer": "Add a server",
+    "noApps": "Nothing deployed yet",
+    "noAppsHelp": "Deploy from a Git repository, a container image, or start from a template.",
+    "deployFirstApp": "Deploy an app",
+    "clusterHealth": "Cluster",
+    "clusterUnreachable": "The cluster is not answering",
+    "clusterUnreachableHelp": "Your apps keep running. {{product}} cannot make changes until it can reach the cluster again.",
+    "highAvailability": "Survives a server failure",
+    "notHighlyAvailable": "One control plane server",
+    "notHighlyAvailableHelp": "With three control plane servers, the cluster keeps working when one of them fails.",
+    "cpuUsed": "CPU in use",
+    "memoryUsed": "Memory in use",
+    "recentActivity": "Recent activity",
+    "nothingYet": "Nothing has happened yet.",
+    "welcomeBack": "Welcome back, {{name}}."
+  },
+  "activity": {
+    "subtitle": "What changed in this team, newest first.",
+    "empty": "Nothing has happened yet",
+    "emptyHelp": "Everything people do in this team shows up here as it happens.",
+    "action": {
+      "app.command_run": "Command run",
+      "app.created": "App created",
+      "app.deleted": "App deleted",
+      "app.deploy_started": "Deployment started",
+      "app.job_created": "Scheduled command added",
+      "app.job_deleted": "Scheduled command removed",
+      "app.job_updated": "Scheduled command changed",
+      "app.restarted": "App restarted",
+      "app.rolled_back": "Rolled back",
+      "app.scaling_changed": "Scaling changed",
+      "app.updated": "App settings changed",
+      "auth.login": "Signed in",
+      "auth.login_sso": "Signed in with single sign-on",
+      "auth.logout": "Signed out",
+      "auth.password_changed": "Password changed",
+      "auth.session_revoked": "Session revoked",
+      "auth.totp_disabled": "Two-factor turned off",
+      "auth.totp_enabled": "Two-factor turned on",
+      "backup.policy_changed": "Backup schedule changed",
+      "backup.restore_started": "Restore started",
+      "backup.started": "Backup started",
+      "component.installed": "Component installed",
+      "database.created": "Database created",
+      "database.credentials_viewed": "Database credentials viewed",
+      "database.deleted": "Database deleted",
+      "database.linked": "Database linked",
+      "database.unlinked": "Database unlinked",
+      "deployment.cancelled": "Deployment cancelled",
+      "domain.added": "Domain added",
+      "domain.removed": "Domain removed",
+      "environment.created": "Environment created",
+      "environment.deleted": "Environment deleted",
+      "environment.pod_security_changed": "Confinement changed",
+      "firewall.updated": "Firewall changed",
+      "git_source.created": "Git account connected",
+      "git_source.deleted": "Git account removed",
+      "notification.created": "Notification channel added",
+      "notification.deleted": "Notification channel removed",
+      "operation.cancelled": "Operation cancelled",
+      "panel.upgrade_started": "Panel upgrade started",
+      "plugin.configured": "Plugin settings changed",
+      "plugin.installed": "Plugin installed",
+      "plugin.switched": "Plugin switched on or off",
+      "plugin.uninstalled": "Plugin removed",
+      "project.created": "Project created",
+      "project.deleted": "Project deleted",
+      "project.updated": "Project updated",
+      "security.key_rotated": "Master key rotated",
+      "security.recovery_key_viewed": "Recovery key viewed",
+      "server.add_started": "Adding a server",
+      "server.promote_started": "Promoting a server",
+      "server.remove_started": "Removing a server",
+      "server.retry": "Server retried",
+      "server.updated": "Server updated",
+      "settings.updated": "Settings changed",
+      "setup.completed": "Panel set up",
+      "shared_variable.deleted": "Shared variable removed",
+      "shared_variable.set": "Shared variable set",
+      "team.created": "Team created",
+      "team.exported": "Team exported",
+      "team.invitation_revoked": "Invitation revoked",
+      "team.invited": "Invitation sent",
+      "team.member_added": "Member added",
+      "team.member_removed": "Member removed",
+      "team.updated": "Team updated",
+      "template.installed": "Template installed",
+      "token.created": "API token created",
+      "token.revoked": "API token revoked",
+      "variable.deleted": "Variable removed",
+      "variable.set": "Variable set",
+      "volume.created": "Volume created",
+      "volume.deleted": "Volume deleted",
+      "auth.reauthenticated": "Confirmed who they are",
+      "auth.sessions_revoked": "Signed out every other device",
+      "git_source.webhook_registered": "Webhook registered on the repository",
+      "app.source_uploaded": "Uploaded the app's code"
+    }
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Every app and database lives in a project, in one of its environments.",
+    "newProject": "New project",
+    "projectName": "Project name",
+    "description": "Description",
+    "environments": "Environments",
+    "newEnvironment": "New environment",
+    "environmentName": "Environment name",
+    "production": "Production",
+    "preview": "Preview",
+    "previewFor": "Preview for {{ref}}",
+    "empty": "No projects yet",
+    "emptyHelp": "A project groups the apps and databases that belong together.",
+    "sharedVariables": "Shared variables",
+    "sharedVariablesHelp": "Every app in this project gets these. An app can override one with its own.",
+    "canvas": "Canvas",
+    "canvasHelp": "How this project's apps and databases connect.",
+    "deleteProject": "Delete project",
+    "deleteProjectWarning": "This removes every app, database and volume in it. This cannot be undone.",
+    "quota": "This environment's limits",
+    "quotaHelp": "How much of what this environment is allowed has been used. A deployment that would go over is refused.",
+    "quotaFull": "This environment has reached a limit. New instances will not start until something is freed or the limit is raised.",
+    "quotaResource": {
+      "requests.cpu": "CPU reserved",
+      "requests.memory": "Memory reserved",
+      "pods": "Instances",
+      "requests.storage": "Storage"
+    }
+  },
+  "schedule": {
+    "label": "Schedule",
+    "everyHour": "Every hour",
+    "everyDay": "Every day at 03:00 UTC",
+    "everyWeek": "Every Monday at 03:00 UTC",
+    "everyMonth": "On the 1st of each month at 03:00 UTC",
+    "custom": "Custom…",
+    "customLabel": "Cron expression",
+    "customHelp": "Five cron fields in UTC: minute, hour, day of month, month, day of week."
+  },
+  "apps": {
+    "title": "Apps",
+    "newApp": "New app",
+    "newAppSubtitle": "Deploy from a Git repository or a folder on your computer, or run a container image you already have.",
+    "startFromTemplate": "Start from a template",
+    "appName": "App name",
+    "source": "Source",
+    "sourceGit": "Git repository",
+    "sourceImage": "Container image",
+    "sourceTemplate": "Template",
+    "repository": "Repository",
+    "repositoryPlaceholder": "https://github.com/you/your-app",
+    "branch": "Branch",
+    "rootDirectory": "Root directory",
+    "rootDirectoryHelp": "For a monorepo: the folder this app lives in.",
+    "image": "Image",
+    "imagePlaceholder": "nginx:1.27-alpine",
+    "port": "Port",
+    "portHelp": "The port your app listens on. Most frameworks read it from the PORT variable, which {{product}} sets for you.",
+    "healthPath": "Health check path",
+    "healthPathHelp": "A path that returns 200 once the app is ready to serve, such as /healthz.",
+    "startCommand": "Start command",
+    "dockerfilePath": "Dockerfile path",
+    "startCommandHelp": "Leave empty to use the image’s own start command.",
+    "builder": "Builder",
+    "builderAuto": "Detect automatically",
+    "builderDockerfile": "Dockerfile",
+    "deployOnPush": "Deploy when I push",
+    "previewEnvironments": "Preview environment per pull request",
+    "previewEnvironmentsHelp": "Each pull request gets its own copy with its own URL, removed when the pull request closes.",
+    "empty": "No apps in this environment",
+    "emptyHelp": "Deploy from Git, run a container image, or start from a template.",
+    "overview": "Overview",
+    "deployments": "Deployments",
+    "logs": "Logs",
+    "logsLive": "Live",
+    "logsPrevious": "Before the restart",
+    "logsPreviousHelp": "The container that ran before this one. When an app keeps restarting, this is where it said why.",
+    "logsPreviousNone": "This app has not restarted, so there is no earlier log to read.",
+    "variables": "Variables",
+    "domains": "Domains",
+    "scaling": "Scaling",
+    "storage": "Storage",
+    "advanced": "Advanced",
+    "settings": "Settings",
+    "deploy": "Deploy",
+    "deploying": "Deploying...",
+    "restart": "Restart",
+    "restartConfirm": "Restart every instance? Traffic keeps flowing: instances are replaced one at a time.",
+    "deleteApp": "Delete app",
+    "deleteAppWarning": "This stops the app and removes it. Volumes are kept, so their data survives.",
+    "instances": "Instances",
+    "instancesReady": "Instances ready",
+    "instanceName": "Instance",
+    "restarts": "Restarts",
+    "node": "Server",
+    "noInstances": "No instances are running.",
+    "noInstancesTitle": "Nothing is running yet",
+    "noInstancesHelp": "{{action}}, at the top of this page, builds the app and starts the first one.",
+    "phase": {
+      "running": "Running",
+      "starting": "Starting",
+      "updating": "Updating",
+      "pending": "Waiting for capacity",
+      "crashing": "Crashing",
+      "unhealthy": "No instances running",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "not_deployed": "Not deployed yet",
+      "unknown": "Unknown",
+      "created": "Not deployed yet",
+      "sleeping": "Sleeping"
+    },
+    "runCommand": "Run a command",
+    "noOutputYet": "No output yet",
+    "noOutputYetHelp": "What a command prints appears here.",
+    "nothingScheduled": "Nothing scheduled",
+    "runCommandHelp": "Runs once, in this app's image, with this app's variables. A migration, a backfill, a look at the data.",
+    "run": "Run",
+    "running": "Running...",
+    "runningHelp": "The command is running. Its output appears here when it finishes.",
+    "runNoOutput": "The command finished and printed nothing.",
+    "console": "Console",
+    "releaseCommand": "Release command",
+    "releaseCommandHelp": "Runs on every deployment, after the build and before any traffic reaches the new version. This is where a migration belongs: if it fails the deployment stops and the version that was serving keeps serving.",
+    "scheduledCommands": "Scheduled commands",
+    "scheduledCommandsHelp": "A nightly report, an hourly cleanup. Each runs on its own, in this app's image, on the schedule you give it.",
+    "scheduledNamePlaceholder": "nightly report",
+    "scheduleHelp": "Five cron fields, in UTC. \"0 3 * * *\" is every day at 03:00.",
+    "schedule": "Schedule",
+    "detect": "Check this repository",
+    "detected": "This looks like {{what}}.",
+    "detectedMaybe": "This might be {{what}}. Nothing was filled in — check the fields below.",
+    "detectedPartly": "The repository is large, so only the top of it was read.",
+    "composeFound": "This Compose file has {{count}} service. Pick the one this app is:",
+    "composeFound_other": "This Compose file has {{count}} services. Pick the one this app is:",
+    "composeBuilt": "built from the repository",
+    "composePort": "listens on {{port}}",
+    "composeVariables": "{{count}} variable",
+    "composeVariables_other": "{{count}} variables",
+    "composeRest": "Create the other services the same way, in this environment. They reach each other by name, which is what the links in a Compose file become.",
+    "builderStatic": "Static files",
+    "lastBackup": "Last backup",
+    "firewall": "Firewall",
+    "address": "address",
+    "detail": {
+      "sleeping": "This app is asleep because nobody is using it. The next request starts it again.",
+      "stopped": "This app is scaled to zero instances.",
+      "not_deployed": "This app has not been deployed yet."
+    },
+    "mountPath": "Mount path",
+    "sizeGB": "Size (GB)",
+    "volumeHelp": "A disk that survives a deployment. Files the app writes outside it are lost when an instance restarts. It can be made bigger later, but not smaller.",
+    "noVolumes": "No disks yet",
+    "noVolumesHelp": "An app writes to a disk when its files have to outlive a deployment — uploads, a database it runs itself, a cache worth keeping.",
+    "addVolume": "Add a disk",
+    "deleteVolumeConfirm": "This deletes the disk mounted at {{path}} and everything on it.",
+    "deleteVolumeConsequence": "The files cannot be recovered afterwards. Take a backup first if you might need them.",
+    "deleteVolumeLastBackup": "The last working backup of this disk was {{when}}. Anything written since then goes with it.",
+    "deleteVolumeNeverBackedUp": "This disk has never been backed up. Everything on it is gone for good.",
+    "buildCommand": "Build command",
+    "buildCommandHelp": "What produces the files to serve, for a front end. Leave empty when the repository already holds them.",
+    "outputDirectory": "Output directory",
+    "outputDirectoryHelp": "Where that command writes them: dist for Vite, build for Create React App.",
+    "volumeBackups": "Backups for {{name}}",
+    "volumeBackupsHelp": "A schedule, the copies taken so far, and putting one back.",
+    "noVolumeBackups": "No backups of this disk yet.",
+    "volumeRestoreStarted": "The restore has started. The app stops while it runs and starts again afterwards.",
+    "volumeRestoreWarning": "Everything on {{app}} is replaced by what was in this backup, and the app is stopped while that happens.",
+    "volumeStopsRollingDeploys": "A disk means deploys are no longer seamless",
+    "volumeStopsRollingDeploysHelp": "One disk can only be written by one instance at a time, so Skifity stops the old instance before starting the new one. Each deploy has a few seconds with nothing answering, and the app cannot run more than one instance.",
+    "sourceUpload": "An uploaded folder",
+    "sourceFolder": "A folder on my computer"
+  },
+  "deploy": {
+    "title": "Deployments",
+    "deployNow": "Deploy now",
+    "rebuild": "Rebuild from scratch",
+    "rebuildHelp": "Ignores the cache and builds again even if nothing changed.",
+    "rollback": "Roll back",
+    "imageCollected": "Image removed",
+    "imageCollectedHelp": "Only the last few versions keep their image, so the disk does not fill. Deploy this commit again to get it back.",
+    "rollbackTo": "Roll back to #{{number}}",
+    "rollbackHelp": "Puts back this version's image and the settings it ran with.",
+    "cancel": "Cancel deployment",
+    "buildLog": "Build log",
+    "noDeployments": "Nothing has been deployed yet",
+    "noDeploymentsHelp": "The first deployment builds your app and gives it a URL.",
+    "commit": "Commit",
+    "duration": "Took",
+    "status": {
+      "queued": "Queued",
+      "building": "Building",
+      "deploying": "Deploying",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "superseded": "Replaced by a newer deployment"
+    },
+    "reusedImage": "Nothing needed building: this version was already built, so the existing image was reused.",
+    "noRebuildNeeded": "Saved and rolled out. No rebuild was needed.",
+    "live": "Live",
+    "triggerRollbackTo": "Rolled back to #{{number}}",
+    "trigger": {
+      "manual": "Deployed by hand",
+      "create": "The app's first deployment",
+      "template": "Installed from the catalogue",
+      "push": "A push to the branch",
+      "preview": "A preview of a pull request",
+      "rollback": "A rollback"
+    }
+  },
+  "variables": {
+    "title": "Variables",
+    "help": "These become environment variables inside your app.",
+    "key": "Name",
+    "value": "Value",
+    "secret": "Secret",
+    "secretHelp": "Stored encrypted and never shown again. Use this for passwords, tokens and keys.",
+    "buildTime": "Needed while building",
+    "buildTimeHelp": "Values baked into the image, such as a public API URL for a front-end build. Changing one rebuilds the app.",
+    "hidden": "Hidden",
+    "empty": "No variables yet",
+    "addVariable": "Add a variable",
+    "bulkEdit": "Edit as text",
+    "bulkEditHelp": "One KEY=value per line. Paste a .env file here.",
+    "invalidKey": "A name can only contain letters, digits and underscores, and cannot start with a digit.",
+    "rebuildQueued": "Saved. This value is baked into the image, so the app is being rebuilt.",
+    "deleteConfirm": "The app is rolled out again without it.",
+    "deleteSecretConsequence": "This value is sealed and cannot be read back, so you will have to enter it again from wherever it came from."
+  },
+  "domains": {
+    "title": "Domains",
+    "automatic": "Automatic",
+    "automaticHelp": "{{product}} gives every app a working URL straight away, with HTTPS.",
+    "custom": "Your own domain",
+    "addDomain": "Add a domain",
+    "hostname": "Domain",
+    "hostnamePlaceholder": "app.example.com",
+    "https": "HTTPS",
+    "dnsInstructions": "Point this domain here",
+    "checking": "Checking DNS...",
+    "statusPending": "Waiting for DNS",
+    "statusActive": "Active",
+    "statusFailed": "Not working",
+    "certificateFailed": "The certificate could not be issued",
+    "certificateFailedHelp": "Check that the domain's DNS record points at this cluster, then remove the domain and add it again.",
+    "certificateIssuing": "Getting a certificate...",
+    "removeDomain": "Remove domain",
+    "cannotRemoveAutomatic": "The automatic domain cannot be removed. It keeps the app reachable while you set up your own.",
+    "dnsUnknown": "Nobody has told this panel which public address its apps answer on. An administrator can set it under Settings, Domains.",
+    "removeDomainConfirm": "{{hostname}} stops reaching this app. Visitors get an error until you add it back or point it somewhere else.",
+    "dnsIntro": "Add this record at whoever manages your domain's DNS — your registrar, or Cloudflare if you use it.",
+    "recordType": "Type",
+    "recordName": "Name",
+    "recordValue": "Value",
+    "dnsPropagation": "A new record usually works within a few minutes, and can take a few hours.",
+    "checkAgain": "Check again",
+    "dnsNameVaries": "Some registrars want the whole name here; others want only the part in front of your domain."
+  },
+  "scaling": {
+    "title": "Scaling",
+    "fixed": "A fixed number of instances",
+    "automatic": "Scale automatically",
+    "automaticHelp": "Skifity adds and removes instances between the numbers below, by how busy the app is.",
+    "instances": "Instances",
+    "minInstances": "Fewest instances",
+    "maxInstances": "Most instances",
+    "cpuTarget": "Scale when CPU is above",
+    "memoryTarget": "Scale when memory is above",
+    "scaleToZero": "Stop when nobody is using it",
+    "scaleToZeroHelp": "The app stops after a few idle minutes and starts again on the first request. The first request after that takes a few seconds.",
+    "scaleToZeroUsesRequests": "While this is on, the app is scaled by how many requests are waiting rather than by CPU or memory. The most instances still applies.",
+    "readiness": "Before you scale",
+    "readinessOk": "This app looks ready to run several instances.",
+    "readinessChecking": "Checking...",
+    "resources": "Resources per instance",
+    "cpuReserved": "CPU reserved",
+    "cpuLimit": "CPU limit",
+    "memoryReserved": "Memory reserved",
+    "memoryLimit": "Memory limit",
+    "resourcesHelp": "Reserved is what each instance is guaranteed. The limit is the most it may use before it is restarted.",
+    "spread": "Spread across servers",
+    "spreadHelp": "Instances are placed on different servers where possible, so losing one server does not take the app down.",
+    "finding": {
+      "file_cache": {
+        "title": "The cache is stored on local disk",
+        "detail": "{{0}} is set to {{1}}, so each instance would have its own cache and they would disagree.",
+        "fix": "Use Redis for the cache, or accept that cached values differ between instances."
+      },
+      "in_memory_sessions": {
+        "title": "Sessions are kept in memory or on disk",
+        "detail": "{{0}} is set to {{1}}. Each instance would keep its own sessions, so users would be signed out at random as requests land on different instances.",
+        "fix": "Create a Redis database in this environment and point the session store at it. Skifity links it in as a variable for you."
+      },
+      "in_process_cron": {
+        "title": "Scheduled jobs run inside the app",
+        "detail": "{{0}} is on. With several instances, every instance runs the schedule, so each job runs several times.",
+        "fix": "Run the scheduler as a separate app with one instance, or use a lock so only one instance runs each job."
+      },
+      "local_uploads": {
+        "title": "Uploaded files are written to local disk",
+        "detail": "{{0}} points at a directory inside the container. Files written by one instance would be invisible to the others, and would disappear on the next deploy.",
+        "fix": "Store uploads in S3-compatible object storage. MinIO is available as a one-click template if you would rather not use a cloud provider."
+      },
+      "memory_target_below_idle": {
+        "title": "The memory target is reached before the app does anything",
+        "detail": "The target is a percentage of what this app reserves. It reserves {{0}}Mi and the target is {{1}}%, so a new instance is added above {{2}}Mi — which a Node or JVM process passes at startup.",
+        "fix": "Raise the reserved memory under the app's settings to what the app uses when it is idle, plus room to work. Memory does not fall once it has been claimed, so a target below the idle figure never comes back down."
+      },
+      "no_health_check": {
+        "title": "There is no health check path",
+        "detail": "Without one, Skifity can only check that the port is open, which happens before most frameworks are ready to serve.",
+        "fix": "Add a path such as /healthz that returns 200 once the app is ready, and set it under the app's settings."
+      },
+      "no_metrics": {
+        "title": "The cluster is not reporting CPU and memory",
+        "detail": "Autoscaling on a CPU or memory target reads those numbers from metrics-server, and nothing is answering. The app will stay at its minimum number of instances however busy it gets, and nothing will say so.",
+        "fix": "k3s installs metrics-server by default. Check that it is running in kube-system, or set a fixed number of instances until it is."
+      },
+      "single_instance": {
+        "title": "This app runs as a single instance",
+        "detail": "If the server it is on restarts, the app is unavailable until Kubernetes starts it somewhere else.",
+        "fix": "Raise the number of instances to two, or turn on autoscaling, once the points above are addressed."
+      },
+      "sqlite": {
+        "title": "This app uses SQLite",
+        "detail": "{{0}} points at a SQLite file. SQLite is a single file on one disk, so instances on different servers cannot share it.",
+        "fix": "Create a PostgreSQL database in this environment and point the app at it. Skifity injects the connection string for you."
+      },
+      "target_below_idle": {
+        "title": "The CPU target is reached before the app does anything",
+        "detail": "The target is a percentage of what this app reserves, not of the server. It reserves {{0}}m of CPU and the target is {{1}}%, so a new instance is added above {{2}}m — about a tenth of one core, which most frameworks pass while idle.",
+        "fix": "Raise the reserved CPU under the app's settings to what it actually uses when busy, so the percentage means something. The reservation is what the app is guaranteed, not a limit on it."
+      },
+      "volume": {
+        "title": "This app writes to a disk that only one instance can use",
+        "detail": "A volume is mounted at {{0}}. That storage can be attached to one server at a time, so a second instance would either fail to start or end up on the same server.",
+        "fix": "Move uploads to object storage such as S3 or MinIO, or turn on cross-node storage in Settings so the volume can be shared. Until then, keep this app at one instance."
+      },
+      "volume_with_replicas": {
+        "title": "More than one instance is configured, and this app has a volume",
+        "detail": "The extra instances will stay pending, or will be scheduled onto the same server and write to the same files at once.",
+        "fix": "Set the instance count back to one, or enable cross-node storage, or move the data out of the volume."
+      }
+    }
+  },
+  "servers": {
+    "title": "Servers",
+    "subtitle": "The machines your apps run on. Skifity joins them into one cluster.",
+    "addServer": "Add a server",
+    "addServerIntro": "Enter the address and how to sign in. {{product}} does the rest.",
+    "host": "IP address or hostname",
+    "hostPlaceholder": "203.0.113.10",
+    "sshPort": "SSH port",
+    "sshUser": "Username",
+    "authPassword": "Password",
+    "authKey": "Private key",
+    "authKeyPlaceholder": "Paste the contents of your private key file",
+    "passphrase": "Key passphrase",
+    "passwordNotStored": "Your password is used once, to install a key {{product}} owns, and is never stored.",
+    "serverName": "Name",
+    "serverNameHelp": "Something you will recognise, such as \"Frankfurt 1\".",
+    "location": "Location",
+    "locationHelp": "A label, so you can place apps near your users.",
+    "size": "Size",
+    "controlPlane": "Control plane server",
+    "controlPlaneHelp": "Control plane servers run the cluster itself. Three of them keep it working when one fails.",
+    "empty": "No servers yet",
+    "emptyHelp": "Any VPS with Ubuntu or Debian works. One server is enough to start.",
+    "requirements": "What a server needs",
+    "requirementsList": "Ubuntu 24.04 or Debian 12, at least 1 GB of memory, 8 GB of free disk, and SSH access as root.",
+    "progress": "Adding {{name}}",
+    "steps": {
+      "connect": "Connecting over SSH",
+      "preflight": "Checking the server",
+      "install-key": "Installing a key",
+      "firewall": "Configuring the firewall",
+      "connectivity": "Checking the network",
+      "install-k3s": "Installing Kubernetes",
+      "wait-ready": "Joining the cluster",
+      "cordon": "Stopping new work",
+      "drain": "Moving instances off",
+      "delete-node": "Leaving the cluster",
+      "uninstall": "Cleaning up the machine",
+      "leave": "Leaving the cluster",
+      "prepare": "Preparing",
+      "restore": "Restoring",
+      "verify": "Checking"
+    },
+    "status": {
+      "pending": "Waiting",
+      "provisioning": "Being added",
+      "ready": "Ready",
+      "not_ready": "Not responding",
+      "failed": "Failed",
+      "removing": "Being removed"
+    },
+    "role": {
+      "control-plane": "Control plane",
+      "worker": "Worker"
+    },
+    "promote": "Make it a control plane server",
+    "promoteHelp": "With three control plane servers, the cluster survives losing one. This moves the apps off this server first.",
+    "removeServer": "Remove server",
+    "removeServerWarning": "Instances running here move to your other servers first. Nothing is lost.",
+    "wipeServer": "Also remove Kubernetes from the machine",
+    "cancelAndClean": "Cancel and clean up",
+    "cpu": "CPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "operatingSystem": "Operating system",
+    "lastSeen": "Last seen",
+    "filter": {
+      "all": "All",
+      "ready": "Ready",
+      "attention": "Needs attention"
+    },
+    "needAttention_one": "{{count}} needs attention",
+    "needAttention_other": "{{count}} need attention",
+    "adopted": "Skifity did not install this server",
+    "adoptedHelp": "It was already a node of the cluster when Skifity was installed — usually the machine the panel itself runs on. It is shown here so you can see what the cluster has, and it cannot be removed or promoted from the panel, because there is no key to it. Run the uninstaller on the machine itself to take it out.",
+    "architecture": "Architecture",
+    "locationExample": "Frankfurt",
+    "serverNameExample": "Frankfurt 1",
+    "stepMessage": {
+      "appsRestarted": "Restarted {{0}} app(s) so they reconnect",
+      "cancelled": "Cancelled",
+      "connected": "Connected to {{0}}",
+      "connectivityFirstServer": "This is the first server, so there is nothing to connect to yet",
+      "cordoned": "No new instances will be placed here",
+      "drained": "Moved {{0}} instance(s) to the other servers",
+      "drainedFirst": "Moved {{0}} instance(s) off this server first",
+      "firewallFirstServer": "No other servers yet, so only ports 80 and 443 were opened",
+      "firewallIptables": "Opened the cluster ports to the other servers only, using iptables",
+      "firewallUfw": "Opened the cluster ports to the other servers only, using ufw",
+      "interrupted": "Interrupted by a panel restart",
+      "joined": "{{0}} joined the cluster and is ready",
+      "k3sRunning": "Kubernetes is installed and running",
+      "k3sUnconfirmed": "Installed, but the panel is not connected to the cluster to confirm",
+      "keyAlreadyThere": "This server already has a key from Skifity",
+      "keyInstalled": "Installed a key just for this server; the password was not stored",
+      "leftAsWorker": "Left the cluster as a worker",
+      "nodeDeleted": "Removed from the cluster",
+      "preflightOk": "{{0}}, {{1}} cores, {{2}} MB memory, {{3}} GB free",
+      "reached": "Reached {{0}} on port 6443",
+      "readyToRestore": "Ready to restore",
+      "restored": "Restored from the backup taken on {{0}}",
+      "uninstallFailed": "Kubernetes could not be removed from the machine",
+      "uninstallSkipped": "Kubernetes was left installed on the machine",
+      "uninstalled": "Kubernetes was removed from the machine",
+      "appStopped": "The app is stopped",
+      "archiveUnpacked": "The archive is unpacked",
+      "appRunningAgain": "{{0}} is running again"
+    },
+    "stepNote": {
+      "fingerprint": "Fingerprint {{0}}",
+      "hostKey": "Host key {{0}}"
+    }
+  },
+  "databases": {
+    "title": "Databases",
+    "subtitle": "Managed databases, backed up and connected to your apps.",
+    "newDatabase": "New database",
+    "engine": "Type",
+    "postgres": "PostgreSQL",
+    "redis": "Redis",
+    "mysql": "MySQL / MariaDB",
+    "version": "Version",
+    "storage": "Storage",
+    "storageHelp": "How much disk the database gets. This can be increased later, but not reduced.",
+    "databaseName": "Name",
+    "empty": "No databases yet",
+    "emptyHelp": "A managed database is backed up, restored and connected to your apps for you.",
+    "connectionDetails": "Connection details",
+    "showCredentials": "Show credentials",
+    "credentialsWarning": "Anyone with these can read and change everything in the database.",
+    "connectionString": "Connection string",
+    "linkedApps": "Connected apps",
+    "linkApp": "Connect an app",
+    "linkAppHelp": "The connection string is added to the app as a variable, and the app is restarted so it picks it up.",
+    "variableName": "Variable name",
+    "unlink": "Disconnect",
+    "backups": "Backups",
+    "backupNow": "Back up now",
+    "backupSchedule": "Automatic backups",
+    "backupsOn": "Take a backup automatically",
+    "backupScheduleFieldHelp": "When the backup runs. Times are UTC.",
+    "retentionHelp": "Older backups are deleted when a new one succeeds.",
+    "backupScheduleHelp": "Backups are written to the storage you configured in Settings.",
+    "retention": "Keep the last",
+    "restore": "Restore",
+    "restoreWarning": "This replaces everything currently in the database with the contents of this backup. It cannot be undone.",
+    "restoreConfirm": "Yes, replace the current data",
+    "noBackups": "No backups yet",
+    "backupStatus": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    },
+    "status": {
+      "creating": "Creating",
+      "starting": "Starting",
+      "running": "Running",
+      "degraded": "Degraded",
+      "failed": "Failed",
+      "missing": "Missing",
+      "unknown": "Unknown"
+    },
+    "restoreStarted": "Restore started. The database is unavailable until it finishes.",
+    "deleteWarning": "Every table, row and backup schedule goes with it. Existing backups in your storage are kept, but the panel will no longer know about them.",
+    "backupStarted": "The backup has started. It will appear in the list when it finishes.",
+    "host": "Host",
+    "port": "Port",
+    "user": "User",
+    "unlinkConfirm": "{{app}} loses the {{variable}} variable, so it cannot reach this database from its next deployment onwards."
+  },
+  "templates": {
+    "title": "Templates",
+    "subtitle": "Applications that install in one step, with their databases and settings already connected.",
+    "install": "Install",
+    "installing": "Installing...",
+    "category": "Category",
+    "website": "Website",
+    "installedNote": "Installed. It may take a minute to start.",
+    "installedApps_one": "Installed {{count}} app. It may take a minute to start.",
+    "installedApps_other": "Installed {{count}} apps. They may take a minute to start.",
+    "search": "Search templates",
+    "notesTitle": "Before this works",
+    "categories": {
+      "ai": "AI",
+      "analytics": "Analytics",
+      "automation": "Automation",
+      "business": "Business",
+      "cms": "Websites and publishing",
+      "communication": "Communication",
+      "developer": "Developer tools",
+      "ecommerce": "Shops",
+      "finance": "Finance",
+      "media": "Media",
+      "monitoring": "Monitoring",
+      "networking": "Networking",
+      "other": "Everything else",
+      "productivity": "Productivity",
+      "security": "Security",
+      "storage": "Storage and files"
+    },
+    "installWhere": "Where to install it"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "cluster": "Cluster",
+    "domains": "Domains and HTTPS",
+    "git": "Git",
+    "storage": "Backup storage",
+    "email": "Email",
+    "notifications": "Notifications",
+    "registry": "Image registry",
+    "signin": "Single sign-on",
+    "security": "Security",
+    "components": "Components",
+    "team": "Team",
+    "members": "Members",
+    "inviteMember": "Add a member",
+    "memberEmail": "Their email address",
+    "memberRole": "Role",
+    "roleOwner": "Owner",
+    "roleAdmin": "Admin",
+    "roleMember": "Member",
+    "roleHelp": "Owners can do anything, including removing the team. Admins manage servers and settings. Members deploy apps.",
+    "removeMember": "Remove",
+    "configured": "Configured",
+    "notConfigured": "Not set up",
+    "secretStored": "Stored. Enter a new value to replace it.",
+    "componentsHelp": "Heavy features are installed only when you first use them, so a fresh install stays small.",
+    "componentInstall": "Install",
+    "componentInstalled": "Installed",
+    "componentMemory": "About {{mb}} MB of memory",
+    "rotateKey": "Rotate the master key",
+    "rotateKeyHelp": "Creates a new master key and re-encrypts every stored secret with it. Your secrets are not decrypted in the process.",
+    "rotateKeyConfirm": "Rotate it",
+    "recoveryKey": "Recovery key",
+    "auditLog": "Audit log",
+    "auditLogHelp": "Who did what, when, and from where.",
+    "upgrade": "Upgrade",
+    "currentVersion": "Current version",
+    "noUpdateCheck": "{{product}} does not contact any server to check for updates.",
+    "saved": "Settings saved.",
+    "rotateKeyDone": "The master key was rotated and every stored secret was re-encrypted with it.",
+    "rotateKeyPartial": "The new master key is in place, but some secrets could not be re-encrypted. The old key was kept so they stay readable.",
+    "edited": "Edited",
+    "unsaved_one": "{{count}} unsaved change",
+    "unsaved_other": "{{count}} unsaved changes",
+    "subtitle": "Everything an operator configures, in one place. Nothing here needs a file on the server.",
+    "componentExternal": "How to install it",
+    "inviteLinkTitle": "Send them this link",
+    "inviteLink": "Invitation link",
+    "inviteLinkHelp": "It is shown once, works for seven days, and can only be used once. Skifity does not send email unless you have configured SMTP.",
+    "pendingInvitations": "Waiting to be accepted",
+    "revokeInvitation": "Withdraw this invitation",
+    "invitationExpires": "Expires {{when}}",
+    "inviteMemberHelp": "Invite somebody by email. Skifity gives you a link to send them; they choose their own password. Somebody who already has an account here is added directly instead.",
+    "export": "Take your data with you",
+    "exportHelp": "Everything this team has — projects, apps, domains, databases, variables and schedules — as one JSON file, with each app's Kubernetes objects beside it.",
+    "exportSecrets": "The value of anything marked secret is not included. Those values are already in your own cluster, as ordinary Kubernetes Secrets you have access to.",
+    "exportDownload": "Download the JSON",
+    "plugins": "Plugins",
+    "pluginStoreCheck": "Check the store",
+    "pluginStoreCheckHelp": "Reads the catalogue with the values as they are saved, so a wrong address or a wrong key turns up here rather than on the day you wanted a plugin.",
+    "pluginStoreCheckAction": "Read the catalogue",
+    "pluginStoreVerified": "Signed by the key set here",
+    "pluginStoreCount_one": "{{count}} plugin in the catalogue",
+    "pluginStoreCount_other": "{{count}} plugins in the catalogue",
+    "pluginStoreGoToPlugins": "Go to Plugins to install one",
+    "field": {
+      "cluster_flannel_backend": {
+        "label": "How servers talk to each other",
+        "help": "WireGuard encrypts traffic between your servers, which matters when they are with different providers. It needs the wireguard kernel module on every server. vxlan works everywhere and is not encrypted. Every server in a cluster has to use the same one, so change this before adding servers, not after."
+      },
+      "cluster_k3s_version": {
+        "label": "Kubernetes version",
+        "help": "The k3s version a server added from here is installed with. Leave empty to follow the stable channel, which is what a new cluster gets. Pin it to keep a server you add next month on the same version as the ones you have."
+      },
+      "cluster_preview_ttl_days": {
+        "label": "Remove preview environments after",
+        "help": "Days with no deployment before a pull request's preview environment is removed. A preview that is still being pushed to survives however long the pull request stays open. Set to 0 to keep them until their pull request closes, which is how previews are normally removed — but a webhook that never arrives then leaves one running forever."
+      },
+      "dns_api_token": {
+        "label": "DNS API token",
+        "help": "A token scoped to edit records in one zone. Do not use a global account key."
+      },
+      "dns_provider": {
+        "label": "DNS provider",
+        "help": "Lets Skifity create DNS records for you when you add a domain. Leave empty to create them yourself."
+      },
+      "dns_zone": {
+        "label": "DNS zone",
+        "help": "The zone records are created in."
+      },
+      "domains_acme_email": {
+        "label": "Let's Encrypt email",
+        "help": "Where Let's Encrypt sends certificate expiry warnings. Required before HTTPS certificates can be issued."
+      },
+      "domains_acme_server": {
+        "label": "ACME directory URL",
+        "help": "Leave empty for Let's Encrypt production. Point it at the staging directory while you are testing, so you do not hit the rate limit."
+      },
+      "domains_cloudflare_tunnel_token": {
+        "label": "Cloudflare tunnel token",
+        "help": "Lets your apps answer on the internet without a public IP, a port open, or a fixed address for DNS to point at. Create a tunnel in the Cloudflare dashboard under Zero Trust, Networks, Tunnels; choose the Cloudflared connector and copy the token it shows. Then add one public hostname on that tunnel — a wildcard such as *.apps.example.com covers every app at once — with the service set to HTTP and the address traefik.kube-system.svc.cluster.local:80. Install Cloudflare tunnel under Components once the token is saved."
+      },
+      "domains_cluster_ip": {
+        "label": "Cluster public IP",
+        "help": "The address your domains should point at. Detected automatically; override it if your cluster sits behind a load balancer."
+      },
+      "domains_geo_asn_url": {
+        "label": "Network database",
+        "help": "The same, for the network a visitor's address belongs to, which is what an AS number rule tests."
+      },
+      "domains_geo_country_url": {
+        "label": "Country database",
+        "help": "Where the firewall's country data comes from, in MaxMind's .mmdb format. Leave empty for DB-IP's free monthly file, which needs no account. A %s in the address is replaced with the month. Point it at your own copy, or at a MaxMind download, if you would rather."
+      },
+      "domains_geo_enabled": {
+        "label": "Look up a visitor's country and network",
+        "help": "On by default. The firewall downloads DB-IP's free monthly databases, which need no account, so that a rule can name a country or a network. Turn it off on a cluster with no way out to the internet, or if you would rather nothing was downloaded — a rule about a country cannot then be saved, which is better than one that is quietly skipped."
+      },
+      "domains_trusted_proxies": {
+        "label": "Trusted proxies",
+        "help": "Address ranges in front of this cluster that may say who a visitor is. The pod and service networks are trusted already; add a load balancer's range here if you have one. Get this wrong in the other direction and a visitor can choose the address your firewall rules judge them by, so add only ranges you control."
+      },
+      "domains_wildcard": {
+        "label": "Wildcard domain",
+        "help": "A domain with a wildcard DNS record pointing at this cluster. Every app gets a free subdomain under it. Leave empty to use sslip.io addresses instead."
+      },
+      "email_smtp_from": {
+        "label": "Send email from",
+        "help": "The address notifications appear to come from. It usually has to be one your mail server is allowed to send as, or the mail is rejected."
+      },
+      "email_smtp_host": {
+        "label": "SMTP host",
+        "help": "Needed for email notifications and for password reset emails."
+      },
+      "email_smtp_password": {
+        "label": "SMTP password",
+        "help": "Stored encrypted. Most providers want an app password here rather than your account password."
+      },
+      "email_smtp_port": {
+        "label": "SMTP port",
+        "help": "587 for STARTTLS, which is what almost everything uses now. 465 is implicit TLS; 25 is unencrypted and usually blocked by hosting providers."
+      },
+      "email_smtp_tls": {
+        "label": "Use STARTTLS",
+        "help": "Leave on unless your mail server only accepts plain connections."
+      },
+      "email_smtp_user": {
+        "label": "SMTP username",
+        "help": "Leave empty if your mail server accepts mail from this cluster without signing in."
+      },
+      "general_default_builder": {
+        "label": "Default builder",
+        "help": "Which builder to use when a repository has no Dockerfile. Railpack produces smaller images; Nixpacks is older and more widely tested."
+      },
+      "general_panel_url": {
+        "label": "Panel URL",
+        "help": "The address people use to reach this panel. Used in links inside notifications and in webhook URLs."
+      },
+      "general_telemetry_disabled": {
+        "label": "Disable usage reporting",
+        "help": "Skifity sends nothing anywhere by default. This setting exists so that the absence of telemetry is visible rather than assumed."
+      },
+      "maintenance_audit_history_days": {
+        "label": "Keep the activity log for",
+        "help": "Days. The activity log is kept far longer than anything else here, because a log that forgets is most of the way to not having one. Shorten it only if you have a reason to."
+      },
+      "maintenance_deployment_history": {
+        "label": "Deployment records to keep, per app",
+        "help": "How many past deployments an app keeps, with their build logs. Older ones are removed so the panel's database does not grow without end. Only the ten most recent can be rolled back to, because that is how many images the registry keeps and how many revisions Kubernetes itself remembers."
+      },
+      "plugins_store_public_key": {
+        "label": "Plugin store signing key",
+        "help": "The store's Ed25519 public key, base64. With one set, an index that is not signed by it is refused. With none, the catalogue is still readable and every entry is shown as vouched for by nobody. Generate a pair with: skifity admin plugin-key"
+      },
+      "plugins_store_url": {
+        "label": "Plugin store",
+        "help": "Where the panel looks for plugins. Leave empty for the Skifity store. Point it at your own index to run a store of your own, or clear the public key below to browse one that is not signed — a plugin can always be installed from a manifest address or by pasting one, which is what a cluster with no way out to the internet uses."
+      },
+      "registry_password": {
+        "label": "Registry password",
+        "help": "A token with permission to push. Stored encrypted and never shown again."
+      },
+      "registry_url": {
+        "label": "External registry",
+        "help": "Where built images are pushed. Leave empty to use the registry inside the cluster, which is the simplest option."
+      },
+      "registry_username": {
+        "label": "Registry username",
+        "help": "Needed only for an external registry. The registry inside the cluster needs no credentials."
+      },
+      "signin_oidc_allowed_domains": {
+        "label": "Allowed email domains",
+        "help": "Comma-separated. Only people whose verified email is in one of these domains may sign in. Leave empty to accept anybody the provider vouches for, which is only safe when the provider is yours."
+      },
+      "signin_oidc_auto_create": {
+        "label": "Create an account on first sign-in",
+        "help": "With this off, somebody the provider knows and this panel does not is refused, so accounts are created by invitation rather than by anyone with a company address."
+      },
+      "signin_oidc_button_label": {
+        "label": "Sign-in button text",
+        "help": "What the button on the sign-in page says. Leave empty for a generic label."
+      },
+      "signin_oidc_client_id": {
+        "label": "Client ID",
+        "help": "From the application you registered with the provider. Its redirect URI is this panel's address followed by /api/auth/sso/callback."
+      },
+      "signin_oidc_client_secret": {
+        "label": "Client secret",
+        "help": "Stored encrypted and never shown again."
+      },
+      "signin_oidc_issuer": {
+        "label": "Single sign-on issuer",
+        "help": "The OpenID Connect issuer URL of your identity provider — Okta, Entra, Authentik, Keycloak, Zitadel, Google. Skifity reads its configuration from /.well-known/openid-configuration under this address. Leave empty to sign in with a password only."
+      },
+      "storage_s3_access_key": {
+        "label": "S3 access key",
+        "help": "Use a key that can only write to this bucket."
+      },
+      "storage_s3_bucket": {
+        "label": "S3 bucket",
+        "help": "The bucket backups are written to. Skifity does not create it for you."
+      },
+      "storage_s3_endpoint": {
+        "label": "S3 endpoint",
+        "help": "Any S3-compatible service works: AWS, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
+      },
+      "storage_s3_path_style": {
+        "label": "Use path-style URLs",
+        "help": "Turn this on for MinIO and most self-hosted S3 services."
+      },
+      "storage_s3_region": {
+        "label": "S3 region",
+        "help": "Some providers ignore this; AWS does not."
+      },
+      "storage_s3_secret_key": {
+        "label": "S3 secret key",
+        "help": "Stored encrypted and never shown again."
+      }
+    },
+    "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
+    "revokeInvitationConfirm": "The link sent to {{email}} stops working."
+  },
+  "errors": {
+    "whatHappened": "What happened",
+    "whatItMeans": "What it means",
+    "howToFix": "How to fix it",
+    "details": "Details",
+    "errorCode": "Error code",
+    "copiedForAI": "Copied. Paste it into your AI assistant.",
+    "somethingWentWrong": "Something went wrong",
+    "crashTitle": "This page stopped working",
+    "crashHelp": "Something in the panel could not be drawn. Your apps and servers are not affected — only this screen is. Try again, or go somewhere else in the panel.",
+    "pageNotFound": "That page does not exist",
+    "pageNotFoundHelp": "The link may be old, or the thing it pointed at may have been deleted.",
+    "goHome": "Go to the overview",
+    "reload": "Reload",
+    "offline": "The panel is not reachable",
+    "offlineHelp": "Your apps keep running. This page will reconnect on its own.",
+    "reconnecting": "Reconnecting...",
+    "catalogue": {
+      "admin_backup_failed": {
+        "title": "The database could not be copied",
+        "cause": "{{0}}",
+        "impact": "No copy was written.",
+        "fix": "Check that the directory exists, that the file does not, and that there is room on the disk."
+      },
+      "admin_no_database": {
+        "title": "The panel's database is not here",
+        "cause": "There is no file at {{0}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Run this on the server the panel is installed on, as root. If the database is somewhere else, pass --database, or set SKIFITY_DATABASE_PATH."
+      },
+      "admin_no_such_user": {
+        "title": "No account with that address",
+        "cause": "Nobody on this panel uses {{0}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Run `{{0}} admin list-users` to see the accounts that do exist."
+      },
+      "app_crash_loop": {
+        "title": "This app keeps restarting",
+        "cause": "{{0}} has restarted {{1}} times in a row. Kubernetes is backing off between restarts.",
+        "impact": "The app is not serving traffic reliably.",
+        "fix": "Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three."
+      },
+      "auth_csrf": {
+        "title": "This request was blocked for safety",
+        "cause": "The request did not carry a matching CSRF token.",
+        "impact": "Nothing was changed.",
+        "fix": "Reload the page and try again. If you are calling the API directly, use an API token with an Authorization header instead of a cookie."
+      },
+      "auth_forbidden": {
+        "title": "You do not have permission for this",
+        "cause": "Your role in this team does not allow {{0}}.",
+        "impact": "The action was not performed.",
+        "fix": "Ask a team owner or admin to do this, or to raise your role."
+      },
+      "auth_invalid_credentials": {
+        "title": "Email or password is not correct",
+        "cause": "The email address and password do not match an account on this panel.",
+        "impact": "You are not signed in.",
+        "fix": "Check for typos and try again. After several failed attempts sign-in pauses for a while."
+      },
+      "auth_invalid_totp": {
+        "title": "That code is not correct",
+        "cause": "The six-digit code did not match the one this panel expects.",
+        "impact": "Two-factor authentication was not turned on.",
+        "fix": "Check that your phone's clock is correct, then type the current code from your authenticator app."
+      },
+      "auth_rate_limited": {
+        "title": "Too many attempts",
+        "cause": "There have been too many failed sign-in attempts for this account or from this address.",
+        "impact": "Sign-in is paused so that passwords cannot be guessed.",
+        "fix": "Wait {{0}} and try again. If this was not you, change your password once you can sign in."
+      },
+      "auth_required": {
+        "title": "You need to sign in",
+        "cause": "This request had no valid session or API token.",
+        "impact": "The action was not performed.",
+        "fix": "Sign in again. If you are using the CLI, run `skifity login`."
+      },
+      "auth_token_scope": {
+        "title": "This token cannot make that request",
+        "cause": "The token {{0}} is limited to {{1}}.",
+        "impact": "The request was refused. Nothing was changed.",
+        "fix": "Use a token without a scope, or create one that can write, under Account."
+      },
+      "backup_bad_schedule": {
+        "title": "That is not a schedule Skifity understands",
+        "cause": "{{0}}",
+        "impact": "The schedule was not changed.",
+        "fix": "Use five cron fields, for example \"0 3 * * *\" for every day at 03:00 UTC."
+      },
+      "backup_bucket_missing": {
+        "title": "That bucket does not exist",
+        "cause": "The bucket {{0}} was not found at {{1}}.",
+        "impact": "Backups cannot run.",
+        "fix": "Create the bucket in your storage provider, then try again. Skifity does not create buckets: doing so would need broader permissions than writing backups."
+      },
+      "backup_database_not_running": {
+        "title": "This database is not running",
+        "cause": "{{0}} is {{1}}, so there is nothing to back up.",
+        "impact": "No backup was taken.",
+        "fix": "Wait for the database to be running, then try again."
+      },
+      "backup_failed": {
+        "title": "The backup failed",
+        "cause": "Backing up {{0}} failed: {{1}}",
+        "impact": "There is no new backup from this run. Earlier backups are untouched.",
+        "fix": "Check the storage credentials in Settings and that the bucket exists and is writable. Then run the backup again from the database page."
+      },
+      "backup_restore_refused": {
+        "title": "This restore would overwrite live data",
+        "cause": "{{0}} is in use and the restore would replace its current contents.",
+        "impact": "Nothing was changed.",
+        "fix": "Restore into a new database instead, check it, then point your app at it. If you really do mean to overwrite, confirm it explicitly on the restore dialog."
+      },
+      "backup_storage_no_delete": {
+        "title": "Old backups cannot be removed",
+        "cause": "The access key can write to {{0}} but cannot delete from it.",
+        "impact": "Backups will work, but old ones will never be cleaned up and the bucket will grow forever.",
+        "fix": "Give the access key permission to delete objects, or set the retention policy in your storage provider instead."
+      },
+      "backup_storage_not_configured": {
+        "title": "No backup storage is configured",
+        "cause": "This team has no S3-compatible storage set up yet.",
+        "impact": "Backups cannot run, so nothing is being kept safe.",
+        "fix": "Open Settings, then Storage, and add an S3-compatible bucket. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
+      },
+      "backup_storage_read_only": {
+        "title": "The backup storage cannot be written to",
+        "cause": "Writing a test object to {{0}} failed: {{1}}",
+        "impact": "Backups would fail.",
+        "fix": "Give the access key permission to put objects in this bucket."
+      },
+      "backup_storage_unreachable": {
+        "title": "The backup storage could not be reached",
+        "cause": "Connecting to {{0}} failed: {{1}}",
+        "impact": "Backups cannot run.",
+        "fix": "Check the endpoint, the access key and that this server can reach the storage service."
+      },
+      "build_failed": {
+        "title": "The build failed",
+        "cause": "Building {{0}} failed during the {{1}} stage.",
+        "impact": "The new version was not deployed. The previous version is still running and still serving traffic.",
+        "fix": "Read the build log below. Then fix it in your repository and push again, or press Retry if you believe it was a transient failure."
+      },
+      "build_no_builder": {
+        "title": "Skifity could not work out how to build this repository",
+        "cause": "No Dockerfile was found in {{0}}, and the files present do not match any language Skifity recognises.",
+        "impact": "No build was started.",
+        "fix": "Add a Dockerfile to the repository, or set the root directory if your app lives in a subfolder of a monorepo, or choose a prebuilt image instead."
+      },
+      "build_pod_not_started": {
+        "title": "The build did not start",
+        "cause": "No build pod became ready within five minutes.",
+        "impact": "Nothing was built or deployed.",
+        "fix": "Check that the cluster has free CPU and memory, and that the builder component is running."
+      },
+      "build_timeout": {
+        "title": "The build took too long and was stopped",
+        "cause": "The build did not finish within 40 minutes.",
+        "impact": "Nothing was deployed. The previous version is still running.",
+        "fix": "Builds this long usually mean a dependency is being compiled from source. Add a Dockerfile with a cached dependency layer, or raise the build timeout."
+      },
+      "cli_already_initialised": {
+        "title": "This directory already has an app",
+        "cause": "{{0}} points at the app {{1}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Run `{{0}} deploy` to deploy it, or delete {{1}} to start again."
+      },
+      "cli_ambiguous_app": {
+        "title": "Which app did you mean?",
+        "cause": "This directory has no {{0}}, and the environment has several apps.",
+        "impact": "The command did not run.",
+        "fix": "Pass --app with one of: {{0}}"
+      },
+      "cli_export_path": {
+        "title": "The panel named a file outside the export directory",
+        "cause": "{{0}} is not inside {{1}}.",
+        "impact": "Nothing was written for it.",
+        "fix": "This is the panel returning a name it should not. Report it, and check the panel is the one you think it is."
+      },
+      "cli_export_write_failed": {
+        "title": "The export could not be written",
+        "cause": "Writing {{0}} failed: {{1}}",
+        "impact": "The export is incomplete.",
+        "fix": "Choose a directory you can write to with --out, and check there is room on the disk."
+      },
+      "cli_no_app": {
+        "title": "There is no app here yet",
+        "cause": "This directory has no {{0}}, and the environment has no apps.",
+        "impact": "The command did not run.",
+        "fix": "Run `{{0}} init` to create one."
+      },
+      "cli_no_project": {
+        "title": "This team has no projects",
+        "cause": "There is nowhere to put an app.",
+        "impact": "The command did not run.",
+        "fix": "Create a project in the panel first."
+      },
+      "cli_no_team": {
+        "title": "You are not in any team",
+        "cause": "This account belongs to no team, so there is nothing to act on.",
+        "impact": "Nothing was changed.",
+        "fix": "Ask someone in the team to add you, or create a team in the panel."
+      },
+      "cli_team_ambiguous": {
+        "title": "You are in more than one team",
+        "cause": "This account is in {{0}} teams, so the one to use is not obvious.",
+        "impact": "Nothing was changed.",
+        "fix": "Run `{{0}} login` to choose one, or set SKIFITY_TEAM to the id of: {{1}}"
+      },
+      "cli_unavailable": {
+        "title": "This panel cannot hand out its own binary",
+        "cause": "The running executable could not be read: {{0}}",
+        "impact": "The command line tool was not downloaded. The panel itself is unaffected.",
+        "fix": "Build it from the repository with `make build`, or copy the binary from another machine. The panel and the CLI are the same file."
+      },
+      "cli_unexpected_response": {
+        "title": "The panel answered with something unexpected",
+        "cause": "HTTP {{0}} from {{1}}: {{2}}",
+        "impact": "The command did not complete.",
+        "fix": "Check that the URL points at a Skifity panel and not at something else."
+      },
+      "cluster_control_plane_unverifiable": {
+        "title": "The cluster cannot be asked how many servers run it",
+        "cause": "Removing a control plane server is only safe when the panel can see how many are left, and the Kubernetes API did not answer.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for the cluster to be reachable and try again. A worker server can be removed either way."
+      },
+      "cluster_drain_blocked": {
+        "title": "An app would go down if this server is removed",
+        "cause": "{{0}} in {{1}} could not be moved: {{2}}",
+        "impact": "The server was not removed and is still running your apps.",
+        "fix": "Add another server first, or scale the app that is blocking this to more than one instance so it can move."
+      },
+      "cluster_drain_timeout": {
+        "title": "Some instances would not move",
+        "cause": "{{0}} instance(s) were still running on {{1}} after five minutes.",
+        "impact": "The server was not removed.",
+        "fix": "An app with a volume cannot move to another server unless cross-node storage is enabled. Stop that app, or enable Longhorn under Settings, then try again."
+      },
+      "cluster_insufficient_capacity": {
+        "title": "There is not enough room in the cluster",
+        "cause": "{{0}} could not be scheduled: {{1}}",
+        "impact": "The instances are pending and not serving traffic.",
+        "fix": "Add another server in Servers, lower this app's CPU or memory request, or reduce the number of instances."
+      },
+      "cluster_last_control_plane": {
+        "title": "This is the only server running the cluster",
+        "cause": "Removing it would delete the last control plane node. Kubernetes, every app on it, and this panel run there.",
+        "impact": "Nothing was changed.",
+        "fix": "Add another server and promote it to control plane first. To take the whole cluster down deliberately, run the uninstaller on the server itself."
+      },
+      "cluster_node_not_ready": {
+        "title": "The server did not join the cluster",
+        "cause": "Kubernetes was installed on {{0}}, but no node became ready within five minutes.",
+        "impact": "The server is registered but is not running anything yet.",
+        "fix": "Check that this server can reach the first server on port 6443, and that the two can reach each other on UDP 51820. A firewall in your provider's control panel is the usual cause."
+      },
+      "cluster_not_enough_servers": {
+        "title": "High availability needs three servers",
+        "cause": "This cluster has {{0}} servers. Embedded etcd needs three control plane members to survive one of them failing.",
+        "impact": "Nothing was changed.",
+        "fix": "Add servers until you have at least three, then promote three of them."
+      },
+      "cluster_quorum_risk": {
+        "title": "Removing this server would break the cluster",
+        "cause": "This is a control plane server, and removing it would leave {{0}} of them. Embedded etcd needs an odd number of at least three to survive a failure.",
+        "impact": "Nothing was changed. The server is still part of the cluster.",
+        "fix": "Promote another server to control plane first, then remove this one. With one control plane server you can remove it only by removing the whole cluster."
+      },
+      "cluster_token_missing": {
+        "title": "Skifity does not have this cluster's join token",
+        "cause": "The panel is running in a Kubernetes cluster it did not create, and a server can only join that cluster with the token it was started with.",
+        "impact": "No server can be added. Nothing was changed on the server you were adding.",
+        "fix": "On the server the panel runs on, copy the token into place and restart the panel:\n\n  sudo cp /var/lib/rancher/k3s/server/token {{0}}\n  sudo chmod 600 {{1}}"
+      },
+      "cluster_unreachable": {
+        "title": "The cluster is not responding",
+        "cause": "The Kubernetes API did not answer.",
+        "impact": "Your apps keep running, but Skifity cannot make changes or read live status right now.",
+        "fix": "This usually clears up on its own within a minute. If it does not, check that the control plane server is up and that port 6443 is reachable between your servers."
+      },
+      "component_external": {
+        "title": "{{0}} is not installed by the panel",
+        "cause": "It is installed with Helm, because it is several dozen objects with their own release cadence and the panel would be a worse installer than the one its authors wrote.",
+        "impact": "Nothing was changed.",
+        "fix": "The documentation has the command."
+      },
+      "component_install_failed": {
+        "title": "Scale to zero could not be enabled",
+        "cause": "Installing KEDA, which provides scale to zero, failed: {{0}}",
+        "impact": "The scaling settings were not changed.",
+        "fix": "Check that the cluster has room for another small component and try again."
+      },
+      "config_missing": {
+        "title": "{{0}} is not set up yet",
+        "cause": "{{0}} needs configuration that has not been provided.",
+        "impact": "The action was not performed.",
+        "fix": "Open {{0}} and fill it in. Nothing needs to be changed in code or on the server."
+      },
+      "database_failed": {
+        "title": "The database could not start",
+        "cause": "{{0}}",
+        "impact": "Nothing is using it yet, so nothing else is affected.",
+        "fix": "Check that the cluster has enough free memory and disk for it, then delete it and try again."
+      },
+      "database_no_credentials": {
+        "title": "This database has no stored credentials",
+        "cause": "Its credentials are missing from the panel's database.",
+        "impact": "The connection details cannot be shown.",
+        "fix": "Read them from the Kubernetes Secret {{0}}, or recreate the database."
+      },
+      "database_still_linked": {
+        "title": "This database is still used by an app",
+        "cause": "{{0}} app(s) have a connection string from this database injected.",
+        "impact": "Nothing was changed.",
+        "fix": "Unlink the apps first, or confirm that you want to delete it anyway."
+      },
+      "database_timeout": {
+        "title": "The database did not start in time",
+        "cause": "{{0}} did not become ready within fifteen minutes.",
+        "impact": "The database exists but is not usable.",
+        "fix": "Open the instance list to see why. The usual causes are no free disk for the volume, and not enough memory on any server."
+      },
+      "deploy_cannot_rollback": {
+        "title": "This version cannot be rolled back to",
+        "cause": "Deployment #{{0}} did not finish successfully, so there is no image to go back to.",
+        "impact": "Nothing was changed. The current version is still running.",
+        "fix": "Pick a deployment marked as succeeded from the history."
+      },
+      "deploy_image_collected": {
+        "title": "That version is too old to roll back to",
+        "cause": "Only the last {{0}} versions of an app keep their image. Version {{1}} is further back than that, and its image was removed to keep the disk free.",
+        "impact": "Nothing was changed. The version that is running now is still running.",
+        "fix": "Roll back to one of the last {{0}} versions, or deploy the commit you want again, which builds it fresh."
+      },
+      "deploy_image_pull_failed": {
+        "title": "The image could not be pulled",
+        "cause": "Pulling {{0}} failed: {{1}}",
+        "impact": "The new instances cannot start. The previous version is still running.",
+        "fix": "If this is a private image, add the registry credentials in Settings. If it is an internal build, the in-cluster registry may not be reachable from this node: check that the node joined the cluster network."
+      },
+      "deploy_refused_by_plugin": {
+        "title": "A plugin stopped this deployment",
+        "cause": "{{0}} refused it: {{1}}",
+        "impact": "Nothing was changed. The version that was serving is still serving.",
+        "fix": "Take up whatever it is asking for, or switch that plugin off under Plugins."
+      },
+      "deploy_rollout_timeout": {
+        "title": "The new version did not start",
+        "cause": "{{0}} of {{1}} instances of {{2}} became ready before the timeout. {{3}}",
+        "impact": "Kubernetes kept the previous version running, so your app is still up. The new version was not rolled out.",
+        "fix": "Check the app logs for a crash on startup. The usual causes are a missing environment variable, a health check path that does not exist yet, and a port mismatch between the app and the configured port."
+      },
+      "detect_unreadable": {
+        "title": "That repository could not be read",
+        "cause": "{{0}}",
+        "impact": "Nothing was created. You can still fill the form in yourself.",
+        "fix": "Check the address and the branch. A private repository needs a connected Git account with access to it, chosen below."
+      },
+      "domain_certificate_failed": {
+        "title": "The HTTPS certificate could not be issued",
+        "cause": "Let's Encrypt refused to issue a certificate for {{0}}: {{1}}",
+        "impact": "The domain works over HTTP but not HTTPS.",
+        "fix": "Check that the domain resolves to this cluster and that port 80 is reachable from the internet, which is how the challenge is verified. If you have hit a rate limit, wait an hour before retrying."
+      },
+      "domain_dns_mismatch": {
+        "title": "This domain does not point here yet",
+        "cause": "{{0}} currently resolves to {{1}}, but it needs to resolve to {{2}}.",
+        "impact": "The certificate cannot be issued and the domain will not serve your app.",
+        "fix": "Create an A record for {{0}} pointing to {{1}}, then wait for it to propagate. Skifity checks again every minute."
+      },
+      "domain_is_the_panel": {
+        "title": "That is this panel's own address",
+        "cause": "{{0}} is where this panel answers.",
+        "impact": "Nothing was changed. Routing an app there would put two things behind one hostname, and which of them answered would be decided by the ingress controller rather than by anybody — including for the requests carrying your sign-in cookie.",
+        "fix": "Give the app a hostname of its own. A subdomain of the panel's is fine."
+      },
+      "domain_no_free_address": {
+        "title": "This app could not be given an address",
+        "cause": "Both {{0}} and {{1}} are already used by other apps.",
+        "impact": "The app is deployed and has no automatic URL. A domain of your own still works.",
+        "fix": "Rename the app, or add a domain of your own under the app's Domains tab."
+      },
+      "environment_level_not_applied": {
+        "title": "The level was saved, but the namespace was not changed",
+        "cause": "{{0}}",
+        "impact": "Kubernetes is still enforcing the previous level, so a deploy will behave as it did before.",
+        "fix": "Fix what the cause says and save the level again."
+      },
+      "firewall_failed": {
+        "title": "The firewall could not be configured",
+        "cause": "The firewall commands failed on {{0}}: {{1}}",
+        "impact": "The server was not added.",
+        "fix": "Check that the account Skifity connects with can run ufw or iptables. Root, or sudo without a password, is needed."
+      },
+      "firewall_no_geo_database": {
+        "title": "This panel does not look up a visitor's {{0}}",
+        "cause": "A rule tests {{0}}, and looking up a visitor's country and network is switched off.",
+        "impact": "Nothing was saved. A rule that cannot be evaluated is skipped on every request, so it would have looked configured and protected nothing.",
+        "fix": "Turn on \"Look up a visitor's country and network\" under Settings, then Domains and HTTPS. It uses DB-IP's free monthly databases, which need no account."
+      },
+      "guard_no_panel_image": {
+        "title": "The firewall could not be installed",
+        "cause": "The panel's own Deployment could not be read, so there is no image to run the guard from: {{0}}",
+        "impact": "Nothing was changed in the cluster.",
+        "fix": "This works when the panel is running inside the cluster it manages, which is how the installer sets it up. A panel running outside the cluster cannot install this component."
+      },
+      "guard_rules_too_large": {
+        "title": "There are too many firewall rules to apply",
+        "cause": "The rules for every protected app together come to {{0}} KB, and Kubernetes will not store more than {{1}} KB in one object.",
+        "impact": "Nothing was changed in the cluster; the rules already there are still in force.",
+        "fix": "Shorten the longest lists — a list of addresses is usually what grows — or turn the firewall off for an app that no longer needs it."
+      },
+      "internal": {
+        "title": "Something went wrong",
+        "cause": "The panel hit an unexpected error while working on this server.",
+        "impact": "The operation stopped where it was. The server may be half-configured; the steps above show how far it got.",
+        "fix": "Run it again — every step is safe to repeat. If it fails the same way, copy this error and open an issue: it is a bug in Skifity."
+      },
+      "invite_account_exists": {
+        "title": "That address already has an account",
+        "cause": "Somebody signed up with {{0}} since this invitation was sent.",
+        "impact": "No account was created.",
+        "fix": "Sign in instead, and ask to be added to the team."
+      },
+      "invite_not_valid": {
+        "title": "This invitation cannot be used",
+        "cause": "The link has expired, has been used already, or was withdrawn.",
+        "impact": "No account was created.",
+        "fix": "Ask whoever invited you for a new link."
+      },
+      "k3s_install_failed": {
+        "title": "Kubernetes could not be installed on this server",
+        "cause": "The k3s installer exited with code {{0}} on {{1}}.",
+        "impact": "The server is registered but is not part of the cluster. No workloads are running on it.",
+        "fix": "Open the step output below. The most common causes are no outbound internet access, an old kernel without the required modules, and a conflicting container runtime. Fix the cause and press Retry; the step is safe to run again."
+      },
+      "mcp_run_still_going": {
+        "title": "The command is still running",
+        "cause": "It has been going for {{0}}, which is as long as this waits.",
+        "impact": "The command was not stopped. It is still running in the cluster, and its output is kept with the run.",
+        "fix": "Wait, then read it back: the run is {{0}} on app {{1}}."
+      },
+      "network_port_blocked": {
+        "title": "A cluster port is blocked",
+        "cause": "Cluster members could not reach {{0}} on {{1}}/{{2}}.",
+        "impact": "The node cannot join the cluster, or pods on it cannot talk to pods elsewhere.",
+        "fix": "Open {{0}}/{{1}} between your servers. Skifity configures UFW and iptables on the server itself, but a firewall in your provider's control panel has to be opened there. Check the security group or firewall rules for this machine."
+      },
+      "notification_test_failed": {
+        "title": "The test message could not be sent",
+        "cause": "{{0}}",
+        "impact": "This channel will not deliver notifications until it works.",
+        "fix": "Check the webhook URL or token, and that this server can reach the service."
+      },
+      "operation_interrupted": {
+        "title": "This was interrupted when the panel restarted",
+        "cause": "The panel stopped while this operation was running.",
+        "impact": "The server may be half configured.",
+        "fix": "Press Retry. Every step is safe to run again, and the ones that already finished are skipped."
+      },
+      "operation_not_running": {
+        "title": "That operation is not running",
+        "cause": "It has already finished, or the panel restarted since it started.",
+        "impact": "Nothing was changed.",
+        "fix": "Reload the page to see its current state."
+      },
+      "operation_timeout": {
+        "title": "This took too long and was stopped",
+        "cause": "The step {{0}} did not finish within {{1}}.",
+        "impact": "The server may be half configured. Retrying is safe: every step can be run again.",
+        "fix": "Press Retry. If it times out again, check that the server has working outbound internet access."
+      },
+      "plugin_bad_manifest": {
+        "title": "That is not a plugin manifest",
+        "cause": "{{0}}",
+        "impact": "Nothing was installed.",
+        "fix": "Check it against the plugin standard, which is documented at /docs/plugins."
+      },
+      "plugin_did_not_start": {
+        "title": "The plugin was installed and did not start",
+        "cause": "{{0}}",
+        "impact": "Its credentials exist and its container is not running, so it receives nothing.",
+        "fix": "Look at the plugin's own logs. A plugin image has to run as a non-root user; an image that starts as root is refused by the namespace it runs in, and that is the most common reason a plugin will not start."
+      },
+      "plugin_permissions_changed": {
+        "title": "This plugin is asking for something else now",
+        "cause": "What you agreed to was {{0}}; the manifest now asks for {{1}}.",
+        "impact": "Nothing was installed.",
+        "fix": "Read what it is asking for again, and install it if that is still acceptable."
+      },
+      "plugin_unreachable": {
+        "title": "That manifest could not be fetched",
+        "cause": "The server answered {{0}}.",
+        "impact": "Nothing was installed.",
+        "fix": "Check the address."
+      },
+      "preflight_arch_unknown": {
+        "title": "This server is not ready to join",
+        "cause": "The server's CPU architecture could not be determined.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Check that `uname -m` works over SSH."
+      },
+      "preflight_arch_unsupported": {
+        "title": "This server is not ready to join",
+        "cause": "This server is {{0}}, which Skifity does not build for.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Use a 64-bit x86 (amd64) or ARM (arm64) server."
+      },
+      "preflight_cgroups": {
+        "title": "This server is not ready to join",
+        "cause": "The memory cgroup controller is switched off on this server.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "The kubelet cannot start without it. On Raspberry Pi OS and Ubuntu for the Pi, add `cgroup_memory=1 cgroup_enable=memory` to the end of the single line in /boot/firmware/cmdline.txt and reboot. On other systems, check the kernel command line for `cgroup_disable=memory`."
+      },
+      "preflight_conflict_docker": {
+        "title": "This server is not ready to join",
+        "cause": "Docker is already running on this server.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Docker and k3s can coexist, but they compete for memory and both manage iptables rules. On a small server, remove Docker first with: systemctl disable --now docker"
+      },
+      "preflight_conflict_other": {
+        "title": "This server is not ready to join",
+        "cause": "{{0}} is running on this server.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Check that it does not use ports 80, 443 or 6443."
+      },
+      "preflight_conflict_web_server": {
+        "title": "This server is not ready to join",
+        "cause": "{{0}} is listening on this server.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "It is using ports 80 and 443, which the cluster's ingress needs. Stop it with: systemctl disable --now {{0}}"
+      },
+      "preflight_cpu": {
+        "title": "This server is not ready to join",
+        "cause": "This server has {{0}} CPU core(s); at least {{1}} is needed.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Resize the server to one with more cores."
+      },
+      "preflight_disk": {
+        "title": "This server is not ready to join",
+        "cause": "This server has {{0}} GB of free disk; at least {{1}} GB is needed.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Free up space or resize the disk. Container images alone usually need several gigabytes."
+      },
+      "preflight_memory_control_plane": {
+        "title": "This server is not ready to join",
+        "cause": "This server has {{0}} MB of memory; a control plane server needs at least {{1}} MB.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Resize the server, or add it as a worker rather than a control plane server."
+      },
+      "preflight_memory_worker": {
+        "title": "This server is not ready to join",
+        "cause": "This server has {{0}} MB of memory; a worker needs at least {{1}} MB.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Resize the server, or add it as a worker rather than a control plane server."
+      },
+      "preflight_network": {
+        "title": "This server is not ready to join",
+        "cause": "Skifity could not determine this server's public address.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Servers at different providers must reach each other by public address. Check that the server has one, and that outbound connections work."
+      },
+      "preflight_os_unreadable": {
+        "title": "This server is not ready to join",
+        "cause": "Skifity could not work out which distribution this server runs.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Check that /etc/os-release exists and is readable. Ubuntu 24.04 and Debian 12 are the tested options."
+      },
+      "preflight_os_unsupported": {
+        "title": "This server is not ready to join",
+        "cause": "{{0}} is not a distribution Skifity recognises.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Use Ubuntu 24.04 or Debian 12. Other systemd distributions usually work, but are not tested."
+      },
+      "preflight_os_untested": {
+        "title": "This server is not ready to join",
+        "cause": "{{0}} {{1}} is not one of the distributions Skifity is tested on.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "It should work, but if you hit trouble, Ubuntu 24.04 and Debian 12 are the tested options."
+      },
+      "preflight_port": {
+        "title": "This server is not ready to join",
+        "cause": "Something is already listening on port {{0}}.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Find it with: ss -lntup 'sport = :{{0}}' and stop it, or use a server with that port free."
+      },
+      "preflight_systemd": {
+        "title": "This server is not ready to join",
+        "cause": "This server does not appear to use systemd.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Skifity installs Kubernetes as a systemd service and manages it with systemctl. Use a distribution with systemd, such as Ubuntu 24.04 or Debian 12. Alpine and anything else on OpenRC will not work, and neither will a container without an init system — an unprivileged LXC or a Docker container, for instance."
+      },
+      "preflight_wireguard": {
+        "title": "This server is not ready to join",
+        "cause": "This kernel does not have the WireGuard module, and this cluster encrypts traffic between servers with WireGuard.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Install it on this server: apt-get install -y wireguard-tools (then reboot if the module still does not load). If the kernel cannot have it at all, switch the whole cluster to vxlan in Settings -> Cluster -> Pod network, which turns that encryption off for every server."
+      },
+      "release_failed": {
+        "title": "The release command failed",
+        "cause": "The command exited with an error before the new version was rolled out.",
+        "impact": "The deployment was stopped. The version that was running before is still running, and no traffic reached the new one.",
+        "fix": "The command's output is in the build log above. Fix it and deploy again; nothing was changed for your users."
+      },
+      "release_timed_out": {
+        "title": "The release command did not finish",
+        "cause": "It was still running after twenty minutes.",
+        "impact": "The deployment was stopped and the previous version is still serving.",
+        "fix": "A migration that takes this long usually needs to be run by hand, once, rather than on every deploy."
+      },
+      "request_invalid": {
+        "title": "That request was not valid",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Correct the highlighted field and try again."
+      },
+      "resource_conflict": {
+        "title": "That name is already taken",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "{{0}}"
+      },
+      "resource_name_taken": {
+        "title": "That name is already used here",
+        "cause": "{{0}} in this environment is already called {{1}}, and an app and a database in one environment share an address.",
+        "impact": "Nothing was created.",
+        "fix": "Pick a different name. Other environments are unaffected: the same name in staging and in production is fine."
+      },
+      "resource_not_found": {
+        "title": "That {{0}} does not exist",
+        "cause": "No {{0}} with the id {{1}} is visible to you.",
+        "impact": "Nothing was changed.",
+        "fix": "Check the id, or go back to the list and pick it again."
+      },
+      "run_never_deployed": {
+        "title": "This app has not been deployed yet",
+        "cause": "A command runs in the app's own image, and there is no image until the app has been deployed once.",
+        "impact": "Nothing was run.",
+        "fix": "Deploy the app, then run the command."
+      },
+      "scaling_risk": {
+        "title": "This app may not work correctly with more than one instance",
+        "cause": "{{0}}",
+        "impact": "With several instances running, some requests will behave differently from others.",
+        "fix": "{{0}}"
+      },
+      "server_no_operation": {
+        "title": "There is nothing to retry",
+        "cause": "No previous attempt to add this server was recorded.",
+        "impact": "Nothing was changed.",
+        "fix": "Remove the server and add it again."
+      },
+      "server_not_in_cluster": {
+        "title": "This server is not in the cluster yet",
+        "cause": "No Kubernetes node matches {{0}}.",
+        "impact": "There are no live metrics to show.",
+        "fix": "If the server is still being added, wait for it to finish. If it failed, open it and press Retry."
+      },
+      "server_not_ours": {
+        "title": "Skifity did not add this server",
+        "cause": "{{0}} is a node this cluster already had when Skifity was installed — usually the machine the panel itself runs on. There is no key to it and nothing of ours was put on it.",
+        "impact": "{{0}} was not done.",
+        "fix": "Change this machine from the machine itself. To take it out of the cluster entirely, run the uninstaller on it: `sudo sh /usr/local/bin/skifity-uninstall`. To add capacity instead, add a second server, which Skifity does install and can manage."
+      },
+      "setup_already_done": {
+        "title": "Setup has already been completed",
+        "cause": "This panel already has an administrator account.",
+        "impact": "No account was created.",
+        "fix": "Sign in with the account that was created during setup. If you have lost the password, see the account recovery guide."
+      },
+      "setup_bad_token": {
+        "title": "That setup token is not correct",
+        "cause": "The token you entered does not match the one this panel generated.",
+        "impact": "No account was created.",
+        "fix": "<computed>"
+      },
+      "setup_no_token": {
+        "title": "This panel has no setup token",
+        "cause": "The panel started without a one-time setup token, so first-run setup cannot be verified.",
+        "impact": "No account was created.",
+        "fix": "Run the installer again, or write a token to the setup token file and restart the panel."
+      },
+      "setup_too_many_attempts": {
+        "title": "Too many incorrect setup tokens",
+        "cause": "The setup token has been guessed at too many times.",
+        "impact": "Setup is locked until the panel is restarted.",
+        "fix": "Restart the panel, then copy the token from the installer output exactly."
+      },
+      "ssh_auth_failed": {
+        "title": "The server refused those credentials",
+        "cause": "Signing in as {{0}} on {{1}} with a {{2}} was rejected.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "{{0}}"
+      },
+      "ssh_host_key_changed": {
+        "title": "This server's identity has changed",
+        "cause": "{{0}} presented a different SSH host key than the one recorded when it was added.",
+        "impact": "The connection was refused. Skifity will not run commands on a server it cannot recognise.",
+        "fix": "If you rebuilt or reinstalled this server, remove it from Skifity and add it again. If you did not, stop and investigate: something may be intercepting the connection."
+      },
+      "ssh_key_install_failed": {
+        "title": "The panel's key could not be installed",
+        "cause": "Writing to authorized_keys on {{0}} failed: {{1}}",
+        "impact": "The server was not added.",
+        "fix": "Check that {{0}} can write to its own home directory and that the disk is not full."
+      },
+      "ssh_key_verify_failed": {
+        "title": "The panel's key was installed but does not work",
+        "cause": "Connecting with the new key failed: {{0}}",
+        "impact": "The server was not added. The password was not discarded.",
+        "fix": "Check the server's sshd settings: PubkeyAuthentication must be yes, and the home directory must not be group-writable."
+      },
+      "ssh_no_credentials": {
+        "title": "There are no credentials to connect with",
+        "cause": "The password was used once during the first attempt and deliberately not stored.",
+        "impact": "The server cannot be reached to continue.",
+        "fix": "Remove this server and add it again with its password or a private key."
+      },
+      "ssh_unreachable": {
+        "title": "Could not reach the server over SSH",
+        "cause": "Nothing answered on {{0}} port {{1}}.",
+        "impact": "The server was not added. Nothing was changed on it.",
+        "fix": "Check that the IP address and port are right, that the server is running, and that your provider's firewall allows inbound TCP on port {{0}}. Many providers block everything by default in their control panel, which SSH cannot open from here."
+      },
+      "sso_no_panel_url": {
+        "title": "This panel does not know its own address",
+        "cause": "Single sign-on sends people back to a fixed address, and the Panel URL setting is empty.",
+        "impact": "Sign-on cannot start.",
+        "fix": "Set the Panel URL under Settings, then register that address followed by /api/auth/sso/callback with your provider."
+      },
+      "sso_not_configured": {
+        "title": "Single sign-on is not set up",
+        "cause": "No identity provider is configured on this panel.",
+        "impact": "Sign in with an email address and password instead.",
+        "fix": "An administrator can configure a provider under Settings, Sign-in."
+      },
+      "sso_provider_unreachable": {
+        "title": "The identity provider could not be reached",
+        "cause": "{{0}}",
+        "impact": "Nobody can sign in with single sign-on until this is fixed.",
+        "fix": "Check the issuer URL under Settings, Sign-in, and that this panel can reach it."
+      },
+      "store_bad_index": {
+        "title": "The plugin store's index could not be read",
+        "cause": "{{0}}",
+        "impact": "Nothing was read from it.",
+        "fix": "If this is a store of your own, check that the index is the format this panel reads. A plugin can still be installed from a manifest address or by pasting one."
+      },
+      "store_bad_signature": {
+        "title": "The plugin store's index is not signed by the key this panel trusts",
+        "cause": "{{0}}",
+        "impact": "Nothing was read from it, and nothing was installed.",
+        "fix": "Check the signing key under Settings, then Plugins. If it is right, the index at {{0}} is not the one that key signs, and that is worth finding out about before installing anything from it."
+      },
+      "store_unreachable": {
+        "title": "The plugin store could not be reached",
+        "cause": "{{0}}",
+        "impact": "Nothing was read from it.",
+        "fix": "Check that this cluster can reach {{0}}. A plugin can still be installed from a manifest address or by pasting one, which is what a cluster with no way out to the internet uses."
+      },
+      "team_account_exists": {
+        "title": "They already have an account here",
+        "cause": "{{0}} has signed in to this panel before, so there is nothing to sign up for.",
+        "impact": "No invitation was created.",
+        "fix": "Add them to the team under Members, by the same address."
+      },
+      "team_already_a_member": {
+        "title": "They are already in this team",
+        "cause": "{{0}} is already a member.",
+        "impact": "No invitation was created.",
+        "fix": "Change their role under Members instead."
+      },
+      "team_last_owner": {
+        "title": "A team needs at least one owner",
+        "cause": "This is the only owner of the team.",
+        "impact": "Nothing was changed.",
+        "fix": "Make someone else an owner first, then remove this one."
+      },
+      "team_no_such_user": {
+        "title": "No account with that email",
+        "cause": "Nobody on this panel uses the address {{0}}.",
+        "impact": "Nobody was added to the team.",
+        "fix": "Ask them to create an account first, then add them. Skifity does not send invitations to addresses that have never signed in."
+      },
+      "tunnel_no_token": {
+        "title": "There is no Cloudflare tunnel token",
+        "cause": "Settings has no tunnel token, and the connector cannot authenticate without one.",
+        "impact": "The tunnel was not installed. Nothing was changed in the cluster.",
+        "fix": "Create a tunnel in the Cloudflare dashboard under Zero Trust, then Networks, then Tunnels. Choose the Cloudflared connector, copy the token it shows, and paste it into Settings, then Domains and HTTPS, then Cloudflare tunnel token. On the same tunnel, add a public hostname — a wildcard such as *.apps.example.com covers every app at once — with the service set to HTTP and the address {{0}}."
+      },
+      "tunnel_not_applied": {
+        "title": "The token was saved, but the tunnel was not updated",
+        "cause": "{{0}}",
+        "impact": "The connectors are still running on the previous token, so traffic keeps flowing until they are restarted.",
+        "fix": "Fix what the cause says and save the token again, or install Cloudflare tunnel under Components."
+      },
+      "upgrade_failed": {
+        "title": "The upgrade could not be started",
+        "cause": "{{0}}",
+        "impact": "The panel is still running the current version.",
+        "fix": "Check that the version exists and that the cluster can pull its image."
+      },
+      "upgrade_unsupported": {
+        "title": "This panel cannot upgrade itself",
+        "cause": "The panel is not running inside a cluster it can update, which is normal in development.",
+        "impact": "Nothing was changed.",
+        "fix": "Upgrade by pulling the new image and restarting, or re-run the installer with the version you want."
+      },
+      "webhook_unverified": {
+        "title": "This webhook could not be verified",
+        "cause": "The signature on the request does not match this connection's webhook secret.",
+        "impact": "No deploy was started.",
+        "fix": "Check that the secret in your Git host's webhook settings matches the one in Skifity."
+      },
+      "auth_reauth_required": {
+        "title": "Confirm it is you",
+        "cause": "This action needs your password again, because holding a signed-in session is not the same as being at the keyboard.",
+        "impact": "Nothing was changed.",
+        "fix": "Enter your password to continue."
+      },
+      "auth_reauth_failed": {
+        "title": "That is not the right password",
+        "cause": "The password, or the two-factor code, did not match this account.",
+        "impact": "Nothing was changed.",
+        "fix": "Type it again. After several wrong attempts this pauses for a while."
+      },
+      "auth_no_password": {
+        "title": "This account has no password to confirm with",
+        "cause": "It signs in through your identity provider, and two-factor authentication is not turned on here, so there is nothing this panel can ask you for.",
+        "impact": "Nothing was changed.",
+        "fix": "Turn on two-factor authentication for this account first, or use an account with a password."
+      },
+      "auth_needs_person": {
+        "title": "This has to be done from the panel",
+        "cause": "Changing two-factor authentication or creating a token has to be done by somebody who can prove who they are, and an API token cannot.",
+        "impact": "Nothing was changed.",
+        "fix": "Sign in to the panel and do it there."
+      },
+      "cli_app_not_created": {
+        "title": "The panel did not say which app it created",
+        "cause": "The reply to creating an app had no app in it.",
+        "impact": "The project file was not written, so `skifity deploy` here would not know what to deploy.",
+        "fix": "Find it with `skifity apps`, and put its id in skifity.toml as app = \"<id>\"."
+      },
+      "upload_none": {
+        "title": "There is no code to deploy yet",
+        "cause": "{{0}} deploys a folder from somebody's computer, and nothing has been sent yet.",
+        "impact": "Nothing was built or deployed.",
+        "fix": "Press Send a new version on the app's page and pick its folder, or run `skifity up` in the folder."
+      },
+      "upload_not_found": {
+        "title": "That upload is not on the panel",
+        "cause": "No upload with the hash {{0}} belongs to this app. The panel keeps each app's ten newest uploads.",
+        "impact": "Nothing was built or deployed.",
+        "fix": "Send the folder again, from the app's page or with `skifity up`."
+      },
+      "upload_not_an_archive": {
+        "title": "The panel could not read this upload",
+        "cause": "What was sent is not a whole gzipped tar archive.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Send the folder with `skifity up`, which packs it the way the panel reads it. If you did, the transfer was probably cut off, so run it again."
+      },
+      "upload_unsafe_entry": {
+        "title": "The upload has a file the panel will not unpack",
+        "cause": "{{0}} is a link, a special file or a path that leads outside the folder, and unpacking it could write somewhere it should not.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Remove it from the folder, or list it in .skifityignore so it is not sent."
+      },
+      "upload_secrets_file": {
+        "title": "The upload has a .env file in it",
+        "cause": "{{0}} holds the app's real settings. A build puts every file it is given into the image, where anyone who can pull the image could read them.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Set those values under the app's Variables instead. `skifity up` leaves .env files out by itself, so this one was sent some other way."
+      },
+      "upload_too_many_files": {
+        "title": "The upload has too many files",
+        "cause": "It holds more than {{0}} files, which source code almost never does.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "A dependency folder such as node_modules or a virtualenv is probably in it. List it in .skifityignore: the build installs dependencies itself."
+      },
+      "upload_unpacks_too_large": {
+        "title": "The upload is too large once unpacked",
+        "cause": "Its contents add up to more than {{0}} MB.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Build output, a dependency folder or a data file is probably in it. List it in .skifityignore and send it again."
+      },
+      "upload_empty": {
+        "title": "The upload has no files in it",
+        "cause": "The archive was read to the end and held folders at most.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Run `skifity up` from inside the app's folder, or name the folder: `skifity up ./my-app`."
+      },
+      "upload_too_large": {
+        "title": "The upload is too large",
+        "cause": "The panel accepts up to {{0}} MB of compressed code, and this was more.",
+        "impact": "Nothing was stored, built or deployed.",
+        "fix": "Something that is not source code is probably in the folder, such as a dependency folder, build output or a database file. Add it to .skifityignore and send it again."
+      },
+      "upload_wrong_source": {
+        "title": "This app does not deploy uploaded code",
+        "cause": "{{0}} builds from a repository or an image, so code sent to it would never be used.",
+        "impact": "Nothing was stored.",
+        "fix": "Push to the repository instead, or create a new app for the folder with `skifity up --new`."
+      },
+      "upload_delivery_failed": {
+        "title": "The code could not be handed to the build",
+        "cause": "The panel could not send the uploaded code into the build: {{0}}",
+        "impact": "Nothing was built or deployed. The previous version is still running.",
+        "fix": "Press Retry. If it fails again, check that the panel can reach the cluster's API and that the build pod started."
+      },
+      "cli_platform_unknown": {
+        "title": "There is no command line tool for that platform",
+        "cause": "{{0}} is not a platform the command line tool is built for. It is built for linux, darwin (macOS) and windows, on amd64 and arm64.",
+        "impact": "Nothing was downloaded.",
+        "fix": "Ask for one of those, for example ?os=darwin&arch=arm64 for a Mac with Apple silicon."
+      },
+      "cli_platform_unavailable": {
+        "title": "This panel does not have the command line tool for that platform",
+        "cause": "There is no build for {{0}} beside this panel. It has: {{1}}.",
+        "impact": "Nothing was downloaded. Deploying a folder from the panel's own New app page works without it.",
+        "fix": "Build it with `make release` and copy it into the panel's CLI directory, or use the panel's image, which carries every platform."
+      }
+    }
+  },
+  "time": {
+    "seconds": "{{count}}s",
+    "minutes": "{{count}}m",
+    "hours": "{{count}}h"
+  },
+  "git": {
+    "title": "Git",
+    "help": "Connect an account so Skifity can read your private repositories and deploy when you push. A public repository needs none of this.",
+    "empty": "No Git account connected",
+    "connect": "Connect an account",
+    "provider": "Where the code is",
+    "sourceName": "Name",
+    "sourceNameHelp": "Something you will recognise, such as \"Work GitHub\".",
+    "token": "Access token",
+    "tokenHelp": "Needs permission to read the repository and to create a webhook. Stored encrypted and never shown again.",
+    "baseURL": "Server address",
+    "baseURLHelp": "For a self-hosted GitLab or Gitea. Leave empty for the hosted service.",
+    "account": "User or organisation",
+    "disconnect": "Disconnect",
+    "disconnectWarning": "Apps deployed from this account stop deploying on push. They keep running.",
+    "webhookURL": "Webhook address",
+    "webhookURLHelp": "Skifity adds this to your repositories by itself when the token allows it. If it could not, add it by hand in the repository's webhook settings.",
+    "pushDeploysOn": "Pushes to this repository deploy it",
+    "pushDeploysOnHelp": "Skifity added the webhook to your Git host. Nothing else to set up.",
+    "pushDeploysManual": "Deploy on push needs one more step",
+    "pushDeploysManualHelp": "Skifity could not add the webhook itself, so add this URL to the repository's webhook settings. Use the secret from Settings, Git."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "help": "Where to tell you when something happens. Nothing is sent until you add somewhere.",
+    "empty": "Nowhere to notify yet",
+    "add": "Add somewhere",
+    "channelKind": "Send it to",
+    "kindFromPlugin": "From a plugin",
+    "providedBy": "Sent by the {{plugin}} plugin.",
+    "channelName": "Name",
+    "events": "Tell me about",
+    "eventsHelp": "Choose as few as you can live with. A channel nobody reads is worse than none.",
+    "test": "Send a test",
+    "testSent": "Sent. If nothing arrives, the details are wrong.",
+    "kind": {
+      "telegram": "Telegram",
+      "discord": "Discord",
+      "webhook": "A webhook",
+      "email": "Email"
+    },
+    "event": {
+      "deploy.succeeded": "A deployment succeeded",
+      "deploy.failed": "A deployment failed",
+      "app.unhealthy": "An app stopped answering",
+      "server.added": "A server joined",
+      "server.lost": "A server stopped responding",
+      "backup.failed": "A backup failed",
+      "certificate.failed": "A certificate could not be issued"
+    },
+    "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten."
+  },
+  "invite": {
+    "title": "Join {{team}}",
+    "subtitle": "You have been invited as {{email}}, as a {{role}}. Choose a password and you are in.",
+    "emailFixed": "This is the address the invitation was for, and it cannot be changed here.",
+    "join": "Join the team",
+    "notValidTitle": "This invitation cannot be used",
+    "notValidHelp": "The link has expired, has been used already, or was withdrawn. Ask whoever invited you for a new one.",
+    "goToSignIn": "Go to sign in"
+  },
+  "environments": {
+    "confinement": "Confinement",
+    "confinementRestrictedHelp": "Pods here are held to the strictest profile. An image that starts as root is refused, which is most off-the-shelf images.",
+    "confinementBaselineHelp": "This environment accepts an image that starts as root. A privileged container, host networking and host paths are still refused, so an app still cannot reach the server it runs on.",
+    "confinementLower": "Accept root images",
+    "confinementRaise": "Back to strictest",
+    "confinementLowerTitle": "Accept images that start as root?",
+    "confinementLowerConfirm": "Apps in this environment will be allowed to start as root inside their own container, which is what the official WordPress, Nextcloud and MediaWiki images do. A privileged container, host networking, host paths and extra capabilities stay refused. Redeploy each app for the change to reach it.",
+    "podSecurity": {
+      "restricted": "Strictest",
+      "baseline": "Accepts root images"
+    }
+  },
+  "firewall": {
+    "title": "Firewall",
+    "off": "Off",
+    "help": "Rules on who may reach this app: by address, by country, by network, by path or by header, combined with and and or. The first rule that matches decides.",
+    "addRule": "Add a rule",
+    "addCondition": "Add a condition",
+    "addGroup": "Add a group",
+    "rulePlaceholder": "What this rule is for",
+    "ruleName": "Rule name",
+    "ruleEnabled": "Rule is on",
+    "otherwise": "Anything else:",
+    "match": "Match",
+    "matchAll": "Match all of these",
+    "matchAny": "Match any of these",
+    "field": "What to look at",
+    "operator": "Comparison",
+    "values": "Values",
+    "headerName": "Header name",
+    "headerPlaceholder": "X-Api-Key",
+    "notInstalled": "These rules are not being enforced",
+    "notInstalledHelp": "The firewall component is not installed, so nothing is checking requests. Install it under Settings, then Components.",
+    "noDomain": "This app has no address to guard",
+    "noDomainHelp": "Rules apply to a hostname. Add a domain under Domains, and these rules will start applying to it.",
+    "noGeo": "A rule names a country or a network, and this panel does not look them up",
+    "noGeoHelp": "Turn on \"Look up a visitor's country and network\" under Settings, then Domains and HTTPS. Until then, a rule like this is skipped on every request.",
+    "action": {
+      "allow": "Allow",
+      "block": "Block"
+    },
+    "fields": {
+      "ip.src": "Visitor's address",
+      "ip.country": "Visitor's country",
+      "ip.asn": "Visitor's network",
+      "http.host": "Hostname",
+      "http.path": "Path",
+      "http.method": "Method",
+      "http.user_agent": "Browser or bot",
+      "http.header": "A header"
+    },
+    "operators": {
+      "in": "is one of",
+      "not_in": "is not one of",
+      "contains": "contains",
+      "starts_with": "starts with",
+      "ends_with": "ends with",
+      "matches": "matches the pattern"
+    },
+    "placeholders": {
+      "ip.src": "203.0.113.0/24, 198.51.100.9",
+      "ip.country": "ID, SG",
+      "ip.asn": "AS13335, 15169",
+      "http.host": "shop.example.com",
+      "http.path": "/admin",
+      "http.method": "POST",
+      "http.user_agent": "badbot",
+      "http.header": "a value"
+    }
+  },
+  "plugins": {
+    "title": "Plugins",
+    "subtitle": "Features other people wrote, running beside the panel in a container of their own.",
+    "installed": "Installed",
+    "store": "Store",
+    "fromAddress": "From an address",
+    "empty": "No plugins yet",
+    "emptyHelp": "Browse the store, or install one from an address or a manifest you paste.",
+    "install": "Install",
+    "review": "See what it can do",
+    "enabled": "Plugin is on",
+    "installedWhen": "installed {{when}}",
+    "notRunning": "This plugin is not running",
+    "removeTitle": "Remove {{name}}?",
+    "removeConfirm": "Its container, its settings and its access token all go. Anything it wrote elsewhere stays where it is.",
+    "secretStored": "Stored. Enter a new value to replace it.",
+    "storeVerified": "Signed by the key this panel trusts · {{url}}",
+    "storeUnsigned": "Nobody has vouched for this catalogue",
+    "storeUnsignedHelp": "No signing key is set, so the panel cannot tell whether this list is the one the store published. Set one under Settings, then Plugins. Either way, what a plugin may do is shown before you install it.",
+    "storeEmpty": "The store has nothing in it",
+    "storeEmptyHelp": "The catalogue was read and lists no plugins.",
+    "paid": "Paid",
+    "buy": "Buy",
+    "alreadyInstalled": "Installed",
+    "upgradeAvailable": "Version {{version}} available",
+    "fromAddressHelp": "A plugin can always be installed without a store — from the address of its manifest, or by pasting the manifest itself. This is the path a cluster with no way out to the internet uses, and the one a plugin author uses to try their own.",
+    "manifestAddress": "The manifest's address",
+    "orPaste": "Or paste the manifest",
+    "willBeAbleTo": "This plugin will be able to:",
+    "noPermissions": "It is not asking for access to anything.",
+    "blocksDeploys": "This plugin can stop a deployment",
+    "blocksDeploysHelp": "It asked to be consulted before every deploy and may refuse one. A plugin that is down does not block anything, and you can switch it off at any time.",
+    "confinementNote": "It runs in a namespace of its own and can reach the panel, DNS and the internet — not your apps, not your databases, and not the server it runs on.",
+    "digestNote": "Pinned by digest, so the image cannot be changed under you after you have agreed to it.",
+    "status": {
+      "installing": "Starting",
+      "running": "Running",
+      "failed": "Failed",
+      "disabled": "Off"
+    },
+    "permission": {
+      "read": "read",
+      "write": "read and change"
+    },
+    "resource": {
+      "apps": "your apps",
+      "deployments": "your deployments",
+      "databases": "your databases",
+      "backups": "your backups",
+      "projects": "your projects",
+      "servers": "your servers",
+      "templates": "the app catalogue",
+      "operations": "long-running operations",
+      "events": "the event stream",
+      "teams": "your teams",
+      "settings": "the panel's settings",
+      "account": "your account"
+    }
+  },
+  "needs": {
+    "databasesTitle": "Databases this app needs",
+    "databaseCreate": "Create a {{engine}} database and connect it as {{variable}}",
+    "because": "Because {{source}} uses {{evidence}}.",
+    "databaseStarting": "A database takes about a minute to start, so the app may restart once while it waits. That is expected.",
+    "notProvidedTitle": "This app uses {{engine}}",
+    "notProvided": "This panel does not run {{engine}}. Use a hosted one and set {{variable}} under Variables.",
+    "ephemeralTitle": "This app keeps its data in a file",
+    "ephemeral": "It stores data through {{evidence}} ({{what}}) inside the container, and the next deploy replaces the container. Everything saved there is lost.",
+    "ephemeralFixDatabase": "Tick the database above and point the app at it instead.",
+    "ephemeralFixVolume": "Use a managed database instead, or add a volume for its data folder once the app is created.",
+    "variablesTitle": "Settings",
+    "variablesExpected": "This app expects the settings listed in {{source}}. Paste your .env here and they are saved before the first deploy.",
+    "variablesOptional": "Paste your .env here and its settings are saved before the first deploy.",
+    "variablesSecret": "Anything that looks like a key or a password is kept secret.",
+    "variablesPlaceholder": "OPENAI_API_KEY=sk-...",
+    "missing": "Still missing:",
+    "allSet": "Every setting this app expects is here.",
+    "databaseFailed": "The app was created, but its {{engine}} database was not",
+    "engine": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "redis": "Redis",
+      "mongodb": "MongoDB",
+      "sqlserver": "SQL Server",
+      "sqlite": "SQLite",
+      "file": "a data file"
+    },
+    "pastedReplaced": "{{variable}} from what you pasted is left out: the {{engine}} database created with the app sets it, pointing at itself rather than at the computer the file came from."
+  },
+  "folder": {
+    "label": "Your app's folder",
+    "choose": "Choose a folder",
+    "chooseAnother": "Choose another folder",
+    "help": "Pick the folder your app is in. node_modules, every .env file and whatever .gitignore lists stay on your computer.",
+    "files_one": "{{count}} file, {{size}}",
+    "files_other": "{{count}} files, {{size}}",
+    "leftOut_one": "{{count}} left out",
+    "leftOut_other": "{{count}} left out",
+    "dotenvRead": "The settings from your folder's .env are in the box below. The file itself is not uploaded: its values are saved as the app's variables, and anything that looks like a key or a password is stored as a secret. Clear the box to leave them out.",
+    "emptyTitle": "There is nothing to send in that folder",
+    "empty": "Every file in it is one that stays behind, such as node_modules or a .env. Pick the folder the app's own code is in.",
+    "tooLargeTitle": "That folder is too large to send",
+    "tooLarge": {
+      "entries": "It has more than {{entries}} files, which an app's own code almost never does. The largest parts are:",
+      "unpacked": "Its files add up to more than {{size}}. The largest parts are:",
+      "compressed": "Packed, it is more than {{size}}. The largest parts are:"
+    },
+    "tooLargeFix": "A dependency folder, build output or a data file is usually the cause. List it in a .skifityignore file in the folder and pick it again.",
+    "sendNew": "Send a new version",
+    "sending": "Sending…",
+    "sent": "Sent. Deployment #{{number}} is building.",
+    "sendFailed": "The app was created, but its code could not be sent. Send it again from the app's page.",
+    "terminalTitle": "Prefer a terminal?",
+    "terminalHelp": "Run these in the app's folder. The first time, skifity up creates the app, the database it uses and the link to the folder; after that, running it again sends and deploys the new version.",
+    "terminalAssistant": "An assistant that can run commands can do this for you, or connect to skifity mcp and use its deploy_folder tool.",
+    "platform": "Your computer",
+    "platforms": {
+      "darwin_arm64": "macOS (Apple silicon)",
+      "darwin_amd64": "macOS (Intel)",
+      "windows_amd64": "Windows",
+      "windows_arm64": "Windows on Arm",
+      "linux_amd64": "Linux",
+      "linux_arm64": "Linux on Arm"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+id: codimd
+name: Codimd
+description: Realtime collaborative markdown notes on all platforms.
+category: productivity
+website: https://hackmd.io/c/codimd-documentation
+services:
+- name: codimd
+  image: nabo.codimd.dev/hackmdio/hackmd:2.6.1
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: uploads-data
+    mount_path: /home/hackmd/app/public/uploads
+    size_gb: 5
+databases:
+- name: codimd-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - codimd
+  var_name: DATABASE_URL

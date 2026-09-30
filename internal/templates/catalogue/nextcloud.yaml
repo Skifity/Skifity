@@ -1,0 +1,25 @@
+id: nextcloud
+name: Nextcloud
+description: NextCloud is a self-hosted, open-source platform that provides file storage, collaboration,
+  and communication tools for seamless data management.
+category: storage
+website: https://docs.nextcloud.com
+services:
+- name: nextcloud
+  image: linuxserver/nextcloud:35.0.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: nextcloud-config
+    mount_path: /config
+    size_gb: 5
+  - name: nextcloud-data
+    mount_path: /data
+    size_gb: 5

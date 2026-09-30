@@ -1,0 +1,23 @@
+id: stirling-pdf
+name: Stirling Pdf
+description: Stirling is a powerful web based PDF manipulation tool.
+category: productivity
+website: https://github.com/Stirling-Tools/Stirling-PDF
+services:
+- name: stirling-pdf
+  image: stirlingtools/stirling-pdf:2.14.3
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DOCKER_ENABLE_SECURITY: 'false'
+  volumes:
+  - name: stirling-training-data
+    mount_path: /usr/share/tesseract-ocr/5/tessdata
+    size_gb: 5
+  - name: stirling-configs
+    mount_path: /configs
+    size_gb: 5

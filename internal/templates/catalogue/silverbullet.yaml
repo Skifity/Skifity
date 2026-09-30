@@ -1,0 +1,19 @@
+id: silverbullet
+name: Silverbullet
+description: SilverBullet is a tool to develop, organize, and structure your personal knowledge and to
+  make it universally accessible across all your devices.
+category: productivity
+website: https://v2.silverbullet.md/Install/Configuration
+services:
+- name: silverbullet
+  image: ghcr.io/silverbulletmd/silverbullet:2.10.0
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: silverbullet-space
+    mount_path: /space
+    size_gb: 5

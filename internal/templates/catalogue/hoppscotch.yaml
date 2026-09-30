@@ -1,0 +1,28 @@
+id: hoppscotch
+name: Hoppscotch
+description: The Open Source API Development Platform.
+category: developer
+website: https://docs.hoppscotch.io
+services:
+- name: backend
+  image: hoppscotch/hoppscotch:2026.2.1
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    VITE_APP_TOS_LINK: https://docs.hoppscotch.io/support/terms
+    VITE_APP_PRIVACY_POLICY_LINK: https://docs.hoppscotch.io/support/privacy
+    ENABLE_SUBPATH_BASED_ACCESS: 'true'
+databases:
+- name: hoppscotch-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - backend
+  var_name: DATABASE_URL
+notes: 'This stack has a set-up step that runs once and exits — db-migration. Skifity runs apps, not one-shot
+  containers, so that step is not installed: do it yourself from the app''s Commands tab, or follow the
+  project''s own instructions, before expecting everything to work.'

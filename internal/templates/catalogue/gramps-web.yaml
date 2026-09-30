@@ -1,0 +1,54 @@
+id: gramps-web
+name: Gramps Web
+description: Open Source Online Genealogy System.
+category: other
+website: https://www.grampsweb.org/install_setup/setup/
+services:
+- name: grampsweb
+  image: ghcr.io/gramps-project/grampsweb:25.9.0
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GRAMPSWEB_CELERY_CONFIG__result_backend: redis://grampsweb_redis:6379/0
+    GRAMPSWEB_RATELIMIT_STORAGE_URI: redis://grampsweb_redis:6379/1
+  volumes:
+  - name: gramps-users
+    mount_path: /app/users
+    size_gb: 5
+  - name: gramps-index
+    mount_path: /app/indexdir
+    size_gb: 5
+- name: grampsweb-celery
+  image: ghcr.io/gramps-project/grampsweb:25.9.0
+  port: 0
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    GRAMPSWEB_CELERY_CONFIG__result_backend: redis://grampsweb_redis:6379/0
+    GRAMPSWEB_RATELIMIT_STORAGE_URI: redis://grampsweb_redis:6379/1
+  volumes:
+  - name: gramps-users
+    mount_path: /app/users
+    size_gb: 5
+  - name: gramps-index
+    mount_path: /app/indexdir
+    size_gb: 5
+databases:
+- name: gramps-web-db
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - grampsweb
+  - grampsweb-celery
+  var_name: DATABASE_URL
+notes: In the original this stack shares /app/indexdir, /app/users between grampsweb and grampsweb-celery.
+  Skifity gives each app storage of its own, so those are separate directories here. If the apps need
+  to see the same files, point them at object storage — MinIO is in this catalogue — rather than a path.
+  This template installs 2 apps. They reach each other by name inside the environment, so keep them together.

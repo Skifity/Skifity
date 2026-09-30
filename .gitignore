@@ -1,0 +1,39 @@
+# Build output
+/bin/
+/dist/
+*.test
+coverage.out
+
+# Frontend
+node_modules/
+# web/dist keeps its own .gitignore: the directory is tracked, its contents are not.
+.vite/
+
+# Local development
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+*.key
+!*.key.example
+
+# Editors
+.DS_Store
+.idea/
+.vscode/
+
+# Copied from the repository root at build time so the panel serves /llms.txt.
+web/public/llms.txt
+
+# Interface test output
+web/test-results/
+web/playwright-report/
+web/.e2e-workdir
+
+# Python bytecode from the one-off importers in hack/.
+__pycache__/
+*.pyc
+
+# The report test/cluster/verify-remote.sh brings back from a server.
+verify-report.log

@@ -1,0 +1,18 @@
+id: it-tools
+name: It Tools
+description: IT Tools is a self-hosted solution for managing various IT tasks.
+category: developer
+website: https://github.com/corentinth/it-tools
+services:
+- name: it-tools
+  image: corentinth/it-tools:2024.10.22-7ca5933
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: it-tools-data
+    mount_path: /app/data
+    size_gb: 5

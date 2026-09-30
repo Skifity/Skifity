@@ -1,0 +1,21 @@
+id: activepieces
+name: Activepieces
+description: Open source no-code business automation.
+category: automation
+website: https://www.activepieces.com/docs/getting-started/introduction
+services:
+- name: activepieces
+  image: ghcr.io/activepieces/activepieces:0.75.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: activepieces-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - activepieces
+  var_name: DATABASE_URL

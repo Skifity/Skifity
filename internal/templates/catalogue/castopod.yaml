@@ -1,0 +1,26 @@
+id: castopod
+name: Castopod
+description: Castopod is a free & open-source hosting platform made for podcasters who want engage and
+  interact with their audience.
+category: media
+website: https://docs.castopod.org/main/en/
+services:
+- name: castopod
+  image: castopod/castopod:1.15.4
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: castopod-media
+    mount_path: /var/www/castopod/public/media
+    size_gb: 5
+databases:
+- name: castopod-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - castopod
+  var_name: DATABASE_URL

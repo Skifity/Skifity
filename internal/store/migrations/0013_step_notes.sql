@@ -1,0 +1,12 @@
+-- The extra lines a step leaves behind, as keys the interface can translate.
+--
+-- Three things were written against steps that succeeded — the preflight
+-- warnings, the server's SSH host key and the fingerprint of the key the panel
+-- installed — and the interface rendered `detail` only when a step had failed.
+-- So all three were collected, stored, and shown to nobody.
+--
+-- `detail` stays for the one case that is genuinely unstructured: the rendered
+-- text of the problem a failed step hit. Anything the panel writes itself now
+-- goes here instead, as a JSON array of {key, args, text}, so it can be shown
+-- in the reader's language rather than in the English a Go file happened to use.
+ALTER TABLE operation_steps ADD COLUMN notes TEXT NOT NULL DEFAULT '';

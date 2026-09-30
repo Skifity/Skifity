@@ -1,0 +1,35 @@
+id: plausible
+name: Plausible Analytics
+description: Privacy-friendly website analytics without cookies.
+category: analytics
+website: https://plausible.io
+beta: true
+services:
+- name: plausible
+  image: ghcr.io/plausible/community-edition:v2
+  port: 8000
+  variables:
+    DISABLE_REGISTRATION: invite_only
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  public: true
+databases:
+- name: plausible-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - plausible
+  var_name: DATABASE_URL
+inputs:
+- key: SECRET_KEY_BASE
+  label: Secret key base
+  secret: true
+  generate: true
+- key: BASE_URL
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+notes: Plausible also needs ClickHouse for its event data. This template sets up the app and PostgreSQL;
+  add ClickHouse yourself, or use the official Compose file, until the ClickHouse template lands.

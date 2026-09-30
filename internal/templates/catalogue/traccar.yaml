@@ -1,0 +1,21 @@
+id: traccar
+name: Traccar
+description: Traccar is a free and open source modern GPS tracking system.
+category: monitoring
+website: https://www.traccar.org/documentation/
+services:
+- name: traccar
+  image: traccar/traccar:6.15
+  port: 8082
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: traccar-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - traccar
+  var_name: DATABASE_URL

@@ -1,0 +1,26 @@
+id: glpi
+name: Glpi
+description: GLPI (Gestionnaire Libre de Parc Informatique) is a free, open-source IT Service Management
+  (ITSM) platform used for IT asset management, helpdesk, and service desk operations.
+category: productivity
+website: https://help.glpi-project.org/documentation
+services:
+- name: glpi
+  image: glpi/glpi:11
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: glpi-data
+    mount_path: /var/glpi
+    size_gb: 5
+databases:
+- name: glpi-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - glpi
+  var_name: DATABASE_URL

@@ -1,0 +1,25 @@
+id: cloudreve
+name: Cloudreve
+description: A self-hosted file management and sharing system.
+category: storage
+website: https://docs.cloudreve.org/
+services:
+- name: cloudreve
+  image: cloudreve/cloudreve:4.10.1
+  port: 5212
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: cloudreve-data
+    mount_path: /cloudreve/data
+    size_gb: 5
+databases:
+- name: cloudreve-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - cloudreve
+  var_name: DATABASE_URL

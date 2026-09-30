@@ -1,0 +1,18 @@
+id: meilisearch
+name: Meilisearch
+description: MeiliSearch is a powerful, fast, easy to use and deploy search engine.
+category: storage
+website: https://www.meilisearch.com
+services:
+- name: meilisearch
+  image: getmeili/meilisearch:v1.53
+  port: 7700
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: meilisearch-data
+    mount_path: /meili_data
+    size_gb: 5

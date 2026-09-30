@@ -1,0 +1,28 @@
+id: vikunja-with-postgresql
+name: Vikunja With Postgresql
+description: The open-source, self-hostable to-do app. Organize everything, on all platforms.
+category: productivity
+website: https://vikunja.io
+services:
+- name: vikunja
+  image: vikunja/vikunja:2.6
+  port: 3456
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    VIKUNJA_SERVICE_ENABLEREGISTRATION: 'true'
+    VIKUNJA_DATABASE_TYPE: postgres
+  volumes:
+  - name: vikunja-data
+    mount_path: /app/vikunja/
+    size_gb: 5
+databases:
+- name: vikunja-with-postgresql-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - vikunja
+  var_name: DATABASE_URL

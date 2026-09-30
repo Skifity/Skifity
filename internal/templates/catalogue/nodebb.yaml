@@ -1,0 +1,28 @@
+id: nodebb
+name: Nodebb
+description: A next-generation discussion platform.
+category: communication
+website: https://docs.nodebb.org/
+services:
+- name: nodebb
+  image: ghcr.io/nodebb/nodebb:4.0
+  port: 4567
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: nodebb-build
+    mount_path: /usr/src/app/build
+    size_gb: 5
+  - name: nodebb-uploads
+    mount_path: /usr/src/app/public/uploads
+    size_gb: 5
+databases:
+- name: nodebb-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - nodebb
+  var_name: DATABASE_URL

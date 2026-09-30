@@ -1,0 +1,14 @@
+id: bento-pdf
+name: Bento Pdf
+description: Process PDFs entirely in your browser. No uploads. No servers. Complete privacy.
+category: productivity
+website: https://bentopdf.com/docs
+services:
+- name: bento-pdf
+  image: ghcr.io/alam00000/bentopdf:v1.16.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

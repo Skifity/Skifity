@@ -1,0 +1,28 @@
+id: sftpgo
+name: Sftpgo
+description: SFTPGo is an event-driven SFTP, FTP/S, HTTP/S and WebDAV server.
+category: storage
+website: https://docs.sftpgo.com/2.7/
+services:
+- name: sftpgo
+  image: ghcr.io/drakkan/sftpgo:v2.7-alpine
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: sftpgo-data
+    mount_path: /srv/sftpgo/data
+    size_gb: 5
+  - name: sftpgo-keys
+    mount_path: /var/lib/sftpgo
+    size_gb: 5
+databases:
+- name: sftpgo-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - sftpgo
+  var_name: DATABASE_URL

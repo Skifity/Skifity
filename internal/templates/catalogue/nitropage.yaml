@@ -1,0 +1,19 @@
+id: nitropage
+name: Nitropage
+description: Nitropage is an extensible, visual website builder, offering a growing library of versatile
+  building blocks, focal-point image cropping and sovereign font management.
+category: cms
+website: https://nitropage.org
+services:
+- name: nitropage
+  image: nitropage/nitropage:0.70
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: nitropage-data
+    mount_path: /app/.data
+    size_gb: 5

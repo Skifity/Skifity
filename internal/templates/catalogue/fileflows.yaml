@@ -1,0 +1,25 @@
+id: fileflows
+name: Fileflows
+description: FileFlows can drastically reduce your files, up to 90%, saving you space and money. No need
+  to buy more hard drives, just shrink your files and start saving.
+category: media
+website: https://fileflows.com/docs/
+services:
+- name: fileflows
+  image: revenz/fileflows:26.09
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: fileflows-temp
+    mount_path: /temp
+    size_gb: 5
+  - name: fileflows-configs
+    mount_path: /app/Data
+    size_gb: 5

@@ -1,0 +1,15 @@
+id: unstructured
+name: Unstructured
+description: Unstructured provides a platform and tools to ingest and process unstructured documents for
+  Retrieval Augmented Generation (RAG) and model fine-tuning.
+category: ai
+website: https://github.com/Unstructured-IO/unstructured-api
+services:
+- name: unstructured
+  image: downloads.unstructured.io/unstructured-io/unstructured-api:0.1.11
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

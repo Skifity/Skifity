@@ -1,0 +1,18 @@
+id: databasus
+name: Databasus
+description: Databasus is a free, open source and self-hosted tool to backup PostgreSQL, MySQL, and MongoDB.
+category: developer
+website: https://databasus.com/installation
+services:
+- name: databasus
+  image: databasus/databasus:v3.16.2
+  port: 4005
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: databasus-data
+    mount_path: /databasus-data
+    size_gb: 5

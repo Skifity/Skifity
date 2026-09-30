@@ -1,0 +1,21 @@
+id: libretranslate
+name: Libretranslate
+description: Free and open-source machine translation API, entirely self-hosted.
+category: ai
+website: https://libretranslate.com/docs/
+services:
+- name: libretranslate
+  image: libretranslate/libretranslate:v1.9.6
+  port: 5000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: libretranslate-api-keys
+    mount_path: /app/db
+    size_gb: 5
+  - name: libretranslate-models
+    mount_path: /home/libretranslate/.local
+    size_gb: 5

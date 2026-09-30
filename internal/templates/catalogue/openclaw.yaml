@@ -1,0 +1,43 @@
+id: openclaw
+name: Openclaw
+description: AI-powered coding assistant with multi-provider support and browser automation.
+category: ai
+website: https://coolify.io/docs/services/openclaw
+services:
+- name: openclaw
+  image: coollabsio/openclaw:2026.2.6
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PORT: '8080'
+    OPENCLAW_GATEWAY_PORT: '18789'
+    OPENCLAW_STATE_DIR: /data/.openclaw
+    OPENCLAW_WORKSPACE_DIR: /data/workspace
+    BROWSER_CDP_URL: http://browser:9223
+  volumes:
+  - name: openclaw-data
+    mount_path: /data
+    size_gb: 5
+- name: browser
+  image: coollabsio/openclaw-browser:0.3.0
+  port: 9223
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Etc/UTC
+    CHROME_CLI: --remote-debugging-port=9222
+  volumes:
+  - name: browser-data
+    mount_path: /config
+    size_gb: 5
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.

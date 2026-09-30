@@ -1,0 +1,20 @@
+id: executor
+name: Executor
+description: Self-hosted AI agent integrations and code execution server.
+category: developer
+website: https://executor.sh/docs/hosted/docker
+services:
+- name: executor
+  image: ghcr.io/rhyssullivan/executor-selfhost:v1.6.8
+  port: 4788
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    EXECUTOR_DATA_DIR: /data
+  volumes:
+  - name: executor-data
+    mount_path: /data
+    size_gb: 5

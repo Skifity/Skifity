@@ -1,0 +1,21 @@
+id: radarr
+name: Radarr
+description: Radarr⁠ - A fork of Sonarr to work with movies à la Couchpotato.
+category: media
+website: https://hub.docker.com/r/linuxserver/radarr
+services:
+- name: radarr
+  image: linuxserver/radarr:6.4.4
+  port: 7878
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: radarr-config
+    mount_path: /config
+    size_gb: 5

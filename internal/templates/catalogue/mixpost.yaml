@@ -1,0 +1,32 @@
+id: mixpost
+name: Mixpost
+description: Mixpost is a robust and versatile social media management software, designed to streamline
+  social media operations and enhance content marketing strategies.
+category: analytics
+website: https://docs.mixpost.app/lite
+services:
+- name: mixpost
+  image: inovector/mixpost:v2.6.0
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    APP_NAME: Mixpost
+    APP_DEBUG: 'false'
+  volumes:
+  - name: mixpost-storage
+    mount_path: /var/www/html/storage/app
+    size_gb: 5
+  - name: mixpost-logs
+    mount_path: /var/www/html/storage/logs
+    size_gb: 5
+databases:
+- name: mixpost-db
+  engine: mysql
+  storage_gb: 5
+  link_to:
+  - mixpost
+  var_name: DATABASE_URL

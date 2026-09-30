@@ -1,0 +1,21 @@
+id: mediawiki
+name: Mediawiki
+description: MediaWiki is a collaboration and documentation platform brought to you by a vibrant community.
+category: cms
+website: https://www.mediawiki.org
+services:
+- name: mediawiki
+  image: mediawiki:1.46
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: mediawiki-images
+    mount_path: /var/www/html/images
+    size_gb: 5
+  - name: mediawiki-sqlite
+    mount_path: /var/www/html/data
+    size_gb: 5

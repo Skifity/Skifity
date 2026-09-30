@@ -1,0 +1,30 @@
+id: umami
+name: Umami
+description: Simple, self-hosted website analytics.
+category: analytics
+website: https://umami.is
+services:
+- name: umami
+  image: ghcr.io/umami-software/umami:postgresql-v2.20
+  port: 3000
+  health_path: /api/heartbeat
+  variables:
+    DATABASE_TYPE: postgresql
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 500
+  public: true
+databases:
+- name: umami-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - umami
+  var_name: DATABASE_URL
+inputs:
+- key: APP_SECRET
+  label: App secret
+  secret: true
+  generate: true
+notes: The first sign-in is admin / umami. Change it immediately.

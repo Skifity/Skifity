@@ -1,0 +1,24 @@
+id: sonarr
+name: Sonarr
+description: Sonarr⁠ (formerly NZBdrone) is a PVR for usenet and bittorrent users. It can monitor multiple
+  RSS feeds for new episodes of your favorite shows and will grab, sort and rename them. It can also be
+  configured to automatically upgrade the quality of files already downloaded when a better quality format
+  becomes available.
+category: media
+website: https://hub.docker.com/r/linuxserver/sonarr
+services:
+- name: sonarr
+  image: linuxserver/sonarr:4.0.20
+  port: 8989
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+  volumes:
+  - name: sonarr-config
+    mount_path: /config
+    size_gb: 5

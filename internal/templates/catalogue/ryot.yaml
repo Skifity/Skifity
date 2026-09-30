@@ -1,0 +1,22 @@
+id: ryot
+name: Ryot
+description: Roll your own tracker! Ryot is a self-hosted platform for tracking various aspects of life
+  such as media consumption, fitness activities, and more.
+category: productivity
+website: https://github.com/ignisda/ryot
+services:
+- name: ryot
+  image: ignisda/ryot:v10.3.0
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: ryot-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - ryot
+  var_name: DATABASE_URL

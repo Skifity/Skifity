@@ -1,0 +1,28 @@
+id: zipline
+name: Zipline
+description: A ShareX/file upload server that is easy to use, packed with features, and with an easy setup!.
+category: media
+website: https://zipline.diced.sh/docs/config
+services:
+- name: zipline
+  image: ghcr.io/diced/zipline:4.0.2
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: zipline-uploads
+    mount_path: /zipline/uploads
+    size_gb: 5
+  - name: zipline-public
+    mount_path: /zipline/public
+    size_gb: 5
+databases:
+- name: zipline-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - zipline
+  var_name: DATABASE_URL

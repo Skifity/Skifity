@@ -1,0 +1,49 @@
+id: rybbit
+name: Rybbit
+description: Open-source, privacy-first web analytics.
+category: analytics
+website: https://rybbit.io/docs
+services:
+- name: rybbit
+  image: ghcr.io/rybbit-io/rybbit-client:v2.2.3
+  port: 3002
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+- name: rybbit-backend
+  image: ghcr.io/rybbit-io/rybbit-backend:v2.2.3
+  port: 3001
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    NODE_ENV: production
+    TRUST_PROXY: 'true'
+- name: rybbit-clickhouse
+  image: clickhouse/clickhouse-server:25.4.2
+  port: 8123
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: clickhouse-data
+    mount_path: /var/lib/clickhouse
+    size_gb: 5
+databases:
+- name: rybbit-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - rybbit
+  - rybbit-backend
+  var_name: DATABASE_URL
+notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
+  together.

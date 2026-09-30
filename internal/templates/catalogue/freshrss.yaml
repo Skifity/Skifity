@@ -1,0 +1,21 @@
+id: freshrss
+name: Freshrss
+description: A free, self-hostable feed aggregator.
+category: media
+website: https://freshrss.org/index.html
+services:
+- name: freshrss
+  image: freshrss/freshrss:1
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: freshrss-data
+    mount_path: /var/www/FreshRSS/data
+    size_gb: 5
+  - name: freshrss-extensions
+    mount_path: /var/www/FreshRSS/extensions
+    size_gb: 5

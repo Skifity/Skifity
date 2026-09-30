@@ -1,0 +1,22 @@
+id: wings
+name: Wings
+description: The server control plane for Pterodactyl Panel. Written from the ground-up with security,
+  speed, and stability in mind.
+category: developer
+website: https://pterodactyl.io/
+services:
+- name: wings
+  image: ghcr.io/pterodactyl/wings:v1.12.1
+  port: 8443
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: wings-lib
+    mount_path: /var/lib/pterodactyl/
+    size_gb: 5
+  - name: wings-logs
+    mount_path: /var/log/pterodactyl/
+    size_gb: 5

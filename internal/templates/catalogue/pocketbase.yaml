@@ -1,0 +1,21 @@
+id: pocketbase
+name: Pocketbase
+description: Open Source backend for your next SaaS and Mobile app in 1 file.
+category: developer
+website: https://pocketbase.io/docs/
+services:
+- name: pocketbase
+  image: ghcr.io/coollabsio/pocketbase:0.40.4
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: pocketbase-data
+    mount_path: /app/pb_data
+    size_gb: 5
+  - name: pocketbase-hooks
+    mount_path: /app/pb_hooks
+    size_gb: 5

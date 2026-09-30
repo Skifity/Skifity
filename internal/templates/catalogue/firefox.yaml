@@ -1,0 +1,18 @@
+id: firefox
+name: Firefox
+description: Fast, private, and self-hosted secure browser for browsing without limits.
+category: productivity
+website: https://github.com/jlesage/docker-firefox
+services:
+- name: firefox
+  image: jlesage/firefox:v26.08.3
+  port: 5800
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: firefox-config
+    mount_path: /config
+    size_gb: 5

@@ -1,0 +1,24 @@
+id: mailpit
+name: Mailpit
+description: Email & SMTP testing tool with API for developers.
+category: communication
+website: https://mailpit.axllent.org/docs/
+services:
+- name: mailpit
+  image: axllent/mailpit:v1.31
+  port: 8025
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    MP_MAX_MESSAGES: '5000'
+    MP_DATABASE: /data/mailpit.db
+    MP_SMTP_AUTH_ACCEPT_ANY: '1'
+    MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+    MP_UI_AUTH_FILE: /data/htpasswd
+  volumes:
+  - name: mailpit-data
+    mount_path: /data
+    size_gb: 5

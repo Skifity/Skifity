@@ -1,0 +1,20 @@
+id: actualbudget
+name: Actualbudget
+description: A local-first personal finance app.
+category: finance
+website: https://actualbudget.org/docs/install/docker
+services:
+- name: actual-server
+  image: actualbudget/actual-server:26.9.0
+  port: 5006
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ACTUAL_LOGIN_METHOD: password
+  volumes:
+  - name: actual-data
+    mount_path: /data
+    size_gb: 5

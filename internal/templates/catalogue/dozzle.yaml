@@ -1,0 +1,14 @@
+id: dozzle
+name: Dozzle
+description: Dozzle is a simple and lightweight web UI for Docker logs.
+category: developer
+website: https://dozzle.dev/guide/getting-started#running-with-docker
+services:
+- name: dozzle
+  image: amir20/dozzle:v11.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000

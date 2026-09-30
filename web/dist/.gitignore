@@ -1,0 +1,10 @@
+# Keep this directory in git, but none of its contents.
+#
+# The Go binary embeds web/dist, and embedding a directory that does not exist
+# is a compile error, so `go build ./...` in a fresh clone would fail before the
+# frontend had ever been built. With this file the build succeeds and the panel
+# reports that it has no user interface, which is a much better failure.
+#
+# Run `npm --prefix web run build` to fill it.
+*
+!.gitignore

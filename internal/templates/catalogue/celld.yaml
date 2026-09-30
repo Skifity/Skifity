@@ -1,0 +1,22 @@
+id: celld
+name: Celld
+description: Self-hosted, distributed Durable Objects powered by Deno.
+category: developer
+website: https://celld.dev/docs
+services:
+- name: celld
+  image: ghcr.io/denoland/celld:v0.5.0
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CELLD_ADDR: 0.0.0.0:8080
+    CELLD_ADVERTISE: celld:8080
+    CELLD_WATCH: /var/lib/celld/state
+  volumes:
+  - name: celld-data
+    mount_path: /var/lib/celld
+    size_gb: 5

@@ -1,0 +1,18 @@
+id: open-webui
+name: Open Webui
+description: User-friendly AI Interface (Supports Ollama, OpenAI API, ...).
+category: ai
+website: https://docs.openwebui.com
+services:
+- name: open-webui
+  image: ghcr.io/open-webui/open-webui:0.1
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: open-webui
+    mount_path: /app/backend/data
+    size_gb: 5

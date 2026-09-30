@@ -1,0 +1,30 @@
+id: strapi
+name: Strapi
+description: Open-source headless CMS to build powerful APIs with built-in content management.
+category: developer
+website: https://docs.strapi.io/
+services:
+- name: strapi
+  image: elestio/strapi-production:v5.33.4
+  port: 1337
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DATABASE_CLIENT: postgres
+  volumes:
+  - name: strapi-config
+    mount_path: /opt/app/config
+    size_gb: 5
+  - name: strapi-src
+    mount_path: /opt/app/src
+    size_gb: 5
+databases:
+- name: strapi-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - strapi
+  var_name: DATABASE_URL

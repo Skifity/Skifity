@@ -1,0 +1,40 @@
+id: heyform
+name: Heyform
+description: Allows anyone to create engaging conversational forms for surveys, questionnaires, quizzes,
+  and polls. No coding skills required.
+category: productivity
+website: https://docs.heyform.net/open-source/self-hosting
+services:
+- name: heyform
+  image: heyform/community-edition:v3.0.3
+  port: 9157
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: heyform-assets
+    mount_path: /app/static/upload
+    size_gb: 5
+- name: mongo
+  image: percona/percona-server-mongodb:8.3
+  port: 27017
+  public: false
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: heyform-mongo-data
+    mount_path: /data/db
+    size_gb: 5
+databases:
+- name: heyform-db
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - heyform
+  var_name: DATABASE_URL
+notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
+  together.
