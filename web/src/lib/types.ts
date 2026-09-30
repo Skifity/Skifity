@@ -329,6 +329,9 @@ export type NodeInfo = {
   memory_used_mb: number
   pod_count: number
   schedulable: boolean
+  /** From the watcher's last reading, at most a minute old; absent until then. */
+  disk_used_mb?: number
+  disk_capacity_mb?: number
 }
 
 export type ClusterSummary = {

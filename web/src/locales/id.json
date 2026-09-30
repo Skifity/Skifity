@@ -296,7 +296,8 @@
       "app.deploys_unlocked": "Kunci deploy dibuka",
       "app.alerts_changed": "Peringatan pemakaian diubah",
       "app.maintenance_started": "Pemeliharaan dimulai",
-      "app.maintenance_ended": "Pemeliharaan diakhiri"
+      "app.maintenance_ended": "Pemeliharaan diakhiri",
+      "server.alerts_changed": "Peringatan server diubah"
     }
   },
   "projects": {
@@ -838,6 +839,20 @@
     "stepNote": {
       "fingerprint": "Sidik jari {{0}}",
       "hostKey": "Host key {{0}}"
+    },
+    "diskUsed": "Disk terpakai",
+    "usageDisk": "Disk",
+    "usageHelp": "Disk, memori, dan CPU sebagai bagian dari kapasitas server, dibaca setiap menit dan disimpan selama tiga hari. Disk diukur dengan cara yang sama seperti Kubernetes mengukurnya sebelum mulai menghentikan instance. Garis putus-putus adalah batas pengiriman peringatan.",
+    "usageNone": "Belum ada yang tercatat. Panel membaca setiap server yang siap sekali per menit.",
+    "alertField": {
+      "disk_pct": "Disk, % terisi",
+      "memory_pct": "Memori, % terpakai",
+      "cpu_pct": "CPU, % sibuk"
+    },
+    "alertName": {
+      "disk": "disk",
+      "memory": "memori",
+      "cpu": "CPU"
     }
   },
   "databases": {
@@ -2293,7 +2308,8 @@
       "server.lost": "Server berhenti merespons",
       "backup.failed": "Pencadangan gagal",
       "certificate.failed": "Sertifikat gagal diterbitkan",
-      "app.alert": "Sebuah app melewati ambang pemakaian"
+      "app.alert": "Sebuah app melewati ambang pemakaian",
+      "server.alert": "Sebuah server melewati ambang pemakaian"
     },
     "removeConfirm": "{{name}} berhenti menerima notifikasi, dan alamat serta tokennya dilupakan.",
     "field": {

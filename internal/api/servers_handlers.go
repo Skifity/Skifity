@@ -286,7 +286,7 @@ func (s *Server) handleServerMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, node := range summary.Nodes {
 		if node.Name == server.NodeName {
-			writeJSON(w, http.StatusOK, node)
+			writeJSON(w, http.StatusOK, s.withDisk(r, server.ID, node))
 			return
 		}
 	}

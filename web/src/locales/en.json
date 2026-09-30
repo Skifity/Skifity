@@ -304,7 +304,8 @@
       "app.deploys_unlocked": "Deploys unlocked",
       "app.alerts_changed": "Usage warnings changed",
       "app.maintenance_started": "Maintenance started",
-      "app.maintenance_ended": "Maintenance ended"
+      "app.maintenance_ended": "Maintenance ended",
+      "server.alerts_changed": "Server warnings changed"
     }
   },
   "projects": {
@@ -847,6 +848,20 @@
     "stepNote": {
       "fingerprint": "Fingerprint {{0}}",
       "hostKey": "Host key {{0}}"
+    },
+    "diskUsed": "Disk in use",
+    "usageDisk": "Disk",
+    "usageHelp": "Disk, memory and CPU as a share of what the server has, read every minute and kept for three days. The disk is measured the way Kubernetes measures it before it starts stopping instances. The dashed line is where a warning is sent.",
+    "usageNone": "Nothing recorded yet. The panel reads every ready server once a minute.",
+    "alertField": {
+      "disk_pct": "Disk, % full",
+      "memory_pct": "Memory, % used",
+      "cpu_pct": "CPU, % busy"
+    },
+    "alertName": {
+      "disk": "disk",
+      "memory": "memory",
+      "cpu": "CPU"
     }
   },
   "databases": {
@@ -2305,7 +2320,8 @@
       "server.lost": "A server stopped responding",
       "backup.failed": "A backup failed",
       "certificate.failed": "A certificate could not be issued",
-      "app.alert": "An app crossed a usage threshold"
+      "app.alert": "An app crossed a usage threshold",
+      "server.alert": "A server crossed a usage threshold"
     },
     "removeConfirm": "{{name}} stops receiving notifications, and its address and token are forgotten.",
     "field": {

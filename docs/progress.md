@@ -4933,6 +4933,44 @@ audit, and nothing recorded when the guard cannot be installed.
 Not executed: Traefik passing the guard's 503 page through to a browser. Its
 forward-auth documentation says a non-2xx answer is returned as it is.
 
+## Phase 99 — what a server used, and how full its disk is
+
+The rest of gap 1. Phase 95 kept an app's history; a server's stayed "now",
+and its disk was not shown at all — while a full disk is how a self-hosted
+server usually dies, images and logs piling up until the kubelet evicts
+everything on it.
+
+The disk is read from the kubelet's own summary, through the API server's node
+proxy (the panel is cluster-admin already), every node at once with five
+seconds each: `kube.NodeDisks`. Used is capacity minus available, which is what
+the kubelet measures its eviction threshold against, so the panel's percentage
+is the one Kubernetes acts on. The summary is too heavy to ask for on every
+page view, so only the watcher reads it, and the server page shows the
+watcher's last reading, at most a minute old.
+
+The watcher now keeps a minute of each ready server (migration 0028,
+`server_samples`, three days: CPU, memory and disk against capacity, and
+instances) and watches three thresholds (`server_alerts`: disk 85%, memory
+90%, CPU off). `evaluateServer` is a pure function like the app one; a minute
+whose disk could not be read is not a minute above the threshold. Crossing is
+said once as the new `server.alert` event, with the disk in gigabytes, and so
+is its end.
+
+`GET /api/servers/{server}/usage` buckets to at most 120 points keeping the
+highest, and leaves a bucket with no disk reading out of the disk line rather
+than drawing an empty disk; `GET/PUT /api/servers/{server}/alerts` (admin to
+change, audited). The server page has disk beside CPU and memory, and three
+charts with the thresholds.
+
+Tested: reading a kubelet summary, and refusing five malformed ones; the rules
+above; a ready server sampled with its disk and a lost one not; a full disk
+said once over two passes and its end said once; the buckets, the unread disk
+left out, the latest disk; and the thresholds' defaults, validation and audit.
+
+Not executed: a real kubelet's summary through the proxy. The fields read are
+`node.fs.capacityBytes` and `node.fs.availableBytes` from its documented
+`stats/summary`.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -32,6 +32,9 @@ type fakeStore struct {
 
 	samples map[string][]store.AppSample
 	alerts  map[string]store.AppAlerts
+
+	serverSamples map[string][]store.ServerSample
+	serverAlerts  map[string]store.ServerAlerts
 }
 
 func newFakeStore() *fakeStore {
@@ -43,7 +46,41 @@ func newFakeStore() *fakeStore {
 		settingValues: map[string]string{},
 		samples:       map[string][]store.AppSample{},
 		alerts:        map[string]store.AppAlerts{},
+		serverSamples: map[string][]store.ServerSample{},
+		serverAlerts:  map[string]store.ServerAlerts{},
 	}
+}
+
+func (f *fakeStore) RecordServerSample(_ context.Context, serverID string, s store.ServerSample) error {
+	s.At = s.At.UTC().Truncate(time.Minute)
+	f.serverSamples[serverID] = append(f.serverSamples[serverID], s)
+	return nil
+}
+
+func (f *fakeStore) ServerSamples(_ context.Context, serverID string, since time.Time) ([]store.ServerSample, error) {
+	out := []store.ServerSample{}
+	for _, s := range f.serverSamples[serverID] {
+		if !s.At.Before(since) {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) PruneServerSamples(context.Context, time.Time) error { return nil }
+
+func (f *fakeStore) GetServerAlerts(_ context.Context, serverID string) (store.ServerAlerts, error) {
+	if a, ok := f.serverAlerts[serverID]; ok {
+		return a, nil
+	}
+	return store.DefaultServerAlerts(), nil
+}
+
+func (f *fakeStore) SetServerAlertsFiring(_ context.Context, serverID string, firing []string) error {
+	a, _ := f.GetServerAlerts(context.Background(), serverID)
+	a.Firing = firing
+	f.serverAlerts[serverID] = a
+	return nil
 }
 
 func (f *fakeStore) RecordAppSample(_ context.Context, appID string, s store.AppSample) error {
@@ -146,6 +183,7 @@ func (f *fakeStore) GetSetting(_ context.Context, key string) (string, bool, err
 // fakeCluster answers with whatever the test set up.
 type fakeCluster struct {
 	nodes           []api.NodeInfo
+	disks           map[string]api.NodeDisk
 	apps            map[string]api.AppRuntimeStatus
 	certs           map[string]cluster.CertificateState
 	deletedSpaces   []string
@@ -158,6 +196,10 @@ func (f *fakeCluster) DeleteNamespace(_ context.Context, namespace string) error
 	}
 	f.deletedSpaces = append(f.deletedSpaces, namespace)
 	return nil
+}
+
+func (f *fakeCluster) NodeDisks(context.Context) (map[string]api.NodeDisk, error) {
+	return f.disks, nil
 }
 
 func (f *fakeCluster) Summary(context.Context) (api.ClusterSummary, error) {

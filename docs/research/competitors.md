@@ -124,7 +124,7 @@ here, or needs `make verify` on a real server.
 
 | # | Gap | Cited by | Size | Without a cluster |
 |---|---|---|---|---|
-| 1 | **Mostly closed in Phase 95** (an app's usage history, charts, and memory, CPU and restart alerts). Still open: server history and disk | Coolify, Dokploy, Railway, Render, Heroku, Northflank, Vercel, Netlify, Canine, Kubero, Easypanel, Cloudron | M | The storage, API and charts; real numbers need one |
+| 1 | **Closed in Phases 95 and 99.** Usage history and charts for apps and servers, the disk included; memory, CPU, restart and disk alerts | Coolify, Dokploy, Railway, Render, Heroku, Northflank, Vercel, Netlify, Canine, Kubero, Easypanel, Cloudron | M | The storage, API and charts; real numbers need one |
 | 2 | **Closed in Phase 84.** Scheduled off-site backup of the panel's own database, and a restore command | Coolify, Dokploy, CapRover, Cloudron, Portainer | S–M | Yes |
 | 3 | **Closed in Phases 85 and 86.** A read-only role, and members limited to projects | Coolify, Fly, Portainer, Dokploy, Easypanel, Kubero, Canine, Netlify | M | Yes |
 | 4 | **Closed in Phase 87.** A remote MCP endpoint over HTTP, and read-only/destructive annotations on the tools | Coolify, Canine, Vercel, Netlify, Dokploy, Easypanel, Portainer | M | Yes |

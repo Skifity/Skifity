@@ -16,6 +16,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress } from "@/components/operation-progress"
+import { ServerUsageCard } from "@/components/server-usage-card"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -245,10 +246,27 @@ export function ServerDetailPage() {
               total={metrics.data.memory_capacity_mb}
               render={formatMemory}
             />
+            {(metrics.data.disk_capacity_mb ?? 0) > 0 && (
+              <Usage
+                label={t("servers.diskUsed")}
+                used={metrics.data.disk_used_mb ?? 0}
+                total={metrics.data.disk_capacity_mb ?? 0}
+                render={formatMemory}
+              />
+            )}
             <Fact label={t("apps.instances")} value={String(metrics.data.pod_count)} />
             <Fact label="Kubelet" value={metrics.data.kubelet_version} mono />
           </CardContent>
         </Card>
+      )}
+
+      {/* History outlives the node: a server that stopped answering is the
+          one whose last hours somebody wants to see. */}
+      {(current.status === "ready" || current.status === "not_ready") && (
+        <ServerUsageCard
+          serverId={serverId}
+          canEdit={team?.role === "admin" || team?.role === "owner"}
+        />
       )}
 
       {/*
@@ -265,38 +283,40 @@ export function ServerDetailPage() {
       )}
 
       {!current.adopted && (
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-base text-destructive">{t("servers.removeServer")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("servers.removeServerWarning")}</p>
-          <label className="flex items-center gap-2.5 text-sm">
-            <Checkbox checked={wipe} onCheckedChange={(checked) => setWipe(checked === true)} />
-            {t("servers.wipeServer")}
-          </label>
-          {remove.error != null && <ErrorDisplay error={remove.error} compact />}
-          <Button
-            variant="destructive"
-            disabled={remove.isPending}
-            onClick={() => {
-              void confirm({
-                title: t("servers.removeServer"),
-                description: t("servers.removeServerWarning"),
-                consequence: wipe ? t("servers.wipeServer") : undefined,
-                confirmLabel: t("servers.removeServer"),
-                destructive: true,
-                typeToConfirm: current.name,
-              }).then((yes) => {
-                if (yes) remove.mutate()
-              })
-            }}
-          >
-            <Trash2Icon className="size-4" />
-            {t("servers.removeServer")}
-          </Button>
-        </CardContent>
-      </Card>
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">
+              {t("servers.removeServer")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("servers.removeServerWarning")}</p>
+            <label className="flex items-center gap-2.5 text-sm">
+              <Checkbox checked={wipe} onCheckedChange={(checked) => setWipe(checked === true)} />
+              {t("servers.wipeServer")}
+            </label>
+            {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => {
+                void confirm({
+                  title: t("servers.removeServer"),
+                  description: t("servers.removeServerWarning"),
+                  consequence: wipe ? t("servers.wipeServer") : undefined,
+                  confirmLabel: t("servers.removeServer"),
+                  destructive: true,
+                  typeToConfirm: current.name,
+                }).then((yes) => {
+                  if (yes) remove.mutate()
+                })
+              }}
+            >
+              <Trash2Icon className="size-4" />
+              {t("servers.removeServer")}
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </Page>
   )

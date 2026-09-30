@@ -253,6 +253,9 @@ func (s *Server) routes() chi.Router {
 				server.Post("/retry", s.handleRetryServer)
 				server.Post("/promote", s.handlePromoteServer)
 				server.Get("/metrics", s.handleServerMetrics)
+				server.Get("/usage", s.handleServerUsage)
+				server.Get("/alerts", s.handleGetServerAlerts)
+				server.Put("/alerts", s.handleSetServerAlerts)
 			})
 
 			authed.Route("/projects/{projectID}", func(project chi.Router) {

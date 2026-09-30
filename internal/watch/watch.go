@@ -48,6 +48,12 @@ type Store interface {
 	GetAppAlerts(ctx context.Context, appID string) (store.AppAlerts, error)
 	SetAlertsFiring(ctx context.Context, appID string, firing []string) error
 
+	RecordServerSample(ctx context.Context, serverID string, s store.ServerSample) error
+	ServerSamples(ctx context.Context, serverID string, since time.Time) ([]store.ServerSample, error)
+	PruneServerSamples(ctx context.Context, before time.Time) error
+	GetServerAlerts(ctx context.Context, serverID string) (store.ServerAlerts, error)
+	SetServerAlertsFiring(ctx context.Context, serverID string, firing []string) error
+
 	ListDomains(ctx context.Context, appID string) ([]store.Domain, error)
 	SetDomainStatus(ctx context.Context, id, status, detail string) error
 
@@ -60,6 +66,7 @@ type Store interface {
 // removes.
 type Cluster interface {
 	Summary(ctx context.Context) (api.ClusterSummary, error)
+	NodeDisks(ctx context.Context) (map[string]api.NodeDisk, error)
 	AppStatus(ctx context.Context, namespace, appSlug string) (api.AppRuntimeStatus, error)
 	CertificateStatus(ctx context.Context, namespace, name string) (cluster.CertificateState, error)
 	DeleteNamespace(ctx context.Context, namespace string) error
@@ -268,6 +275,7 @@ func (w *Watcher) checkServers(ctx context.Context) {
 			})
 		}
 	}
+	w.recordServers(ctx, servers, nodes, now.UTC())
 }
 
 // checkApps notices an app whose instances have all gone, and an app whose

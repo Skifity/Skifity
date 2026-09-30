@@ -296,7 +296,8 @@
       "app.deploys_unlocked": "已解锁部署",
       "app.alerts_changed": "已更改用量警告",
       "app.maintenance_started": "开始维护",
-      "app.maintenance_ended": "结束维护"
+      "app.maintenance_ended": "结束维护",
+      "server.alerts_changed": "已更改服务器警告"
     }
   },
   "projects": {
@@ -838,6 +839,20 @@
     "stepNote": {
       "fingerprint": "指纹 {{0}}",
       "hostKey": "主机密钥 {{0}}"
+    },
+    "diskUsed": "已用磁盘",
+    "usageDisk": "磁盘",
+    "usageHelp": "磁盘、内存和 CPU 占服务器总量的比例，每分钟读取一次，保留三天。磁盘的计算方式与 Kubernetes 在开始停止实例之前的计算方式相同。虚线是发送警告的阈值。",
+    "usageNone": "尚无记录。面板每分钟读取一次每台就绪的服务器。",
+    "alertField": {
+      "disk_pct": "磁盘，已用 %",
+      "memory_pct": "内存，已用 %",
+      "cpu_pct": "CPU，繁忙 %"
+    },
+    "alertName": {
+      "disk": "磁盘",
+      "memory": "内存",
+      "cpu": "CPU"
     }
   },
   "databases": {
@@ -2293,7 +2308,8 @@
       "server.lost": "服务器停止响应",
       "backup.failed": "备份失败",
       "certificate.failed": "证书签发失败",
-      "app.alert": "应用超过了用量阈值"
+      "app.alert": "应用超过了用量阈值",
+      "server.alert": "服务器超过了用量阈值"
     },
     "removeConfirm": "{{name}} 将不再收到通知，它的地址和令牌也会被清除。",
     "field": {

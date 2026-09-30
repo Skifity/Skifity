@@ -470,6 +470,27 @@ deploy is in progress, when new instances starting and old ones stopping are
 expected. `GET /api/apps/{app}/metrics?range=6h` and `/api/apps/{app}/alerts`
 are the same for a script.
 
+### A server's usage, and its disk
+
+Servers are read the same way: CPU, memory, instances and the disk, once a
+minute, kept for three days, drawn on the server's page. The disk is measured
+as the kubelet measures it — capacity minus what is available, reserved blocks
+included, which is why it can read a few points higher than `df` — because at
+90% by that measure Kubernetes starts stopping instances on the server to free
+space. A full disk is the way a self-hosted server usually dies: images and
+logs pile up quietly until it does.
+
+Three thresholds, sent as **A server crossed a usage threshold** once when
+crossed and once when over:
+
+* **disk** — 85% full for three minutes, by default, five points before
+  Kubernetes acts;
+* **memory** — 90% used, by default;
+* **CPU** — off by default.
+
+An admin sets them on the server's page. `GET /api/servers/{server}/usage` and
+`/api/servers/{server}/alerts` are the same for a script.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

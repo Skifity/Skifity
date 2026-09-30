@@ -31,6 +31,17 @@ type NodeInfo struct {
 	PodCount      int               `json:"pod_count"`
 	Labels        map[string]string `json:"labels,omitempty"`
 	Schedulable   bool              `json:"schedulable"`
+	// DiskUsedMB and DiskCapacityMB come from the watcher's last reading,
+	// at most a minute old: the kubelet's summary is too heavy to ask for on
+	// every page. Zero capacity is not known yet.
+	DiskUsedMB     int64 `json:"disk_used_mb,omitempty"`
+	DiskCapacityMB int64 `json:"disk_capacity_mb,omitempty"`
+}
+
+// NodeDisk is how full a node's disk is, as the kubelet measures it.
+type NodeDisk struct {
+	UsedMB     int64
+	CapacityMB int64
 }
 
 // InstanceInfo is one running instance of an app, in human terms.

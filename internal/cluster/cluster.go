@@ -90,6 +90,23 @@ func (c *Cluster) Summary(ctx context.Context) (api.ClusterSummary, error) {
 	return out, nil
 }
 
+// NodeDisks reads how full every node's disk is. A node that does not answer
+// is missing from the result.
+func (c *Cluster) NodeDisks(ctx context.Context) (map[string]api.NodeDisk, error) {
+	raw, err := c.client.NodeDisks(ctx)
+	if err != nil {
+		if kube.IsUnreachable(err) {
+			return nil, errdoc.ClusterUnreachable(err)
+		}
+		return nil, err
+	}
+	out := make(map[string]api.NodeDisk, len(raw))
+	for name, disk := range raw {
+		out[name] = api.NodeDisk{UsedMB: disk.UsedMB, CapacityMB: disk.CapacityMB}
+	}
+	return out, nil
+}
+
 // AppStatus describes one app's live state.
 func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api.AppRuntimeStatus, error) {
 	raw, err := c.client.AppStatus(ctx, namespace, appSlug)
