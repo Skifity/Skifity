@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"skifity/internal/store"
 )
 
 func TestOnlyAPanelAdministratorManagesPlugins(t *testing.T) {
@@ -74,5 +76,34 @@ func TestAStoreManifestIsTheOneTheStoreSigned(t *testing.T) {
 	if status, answer := h.do(admin, http.MethodPost, "/api/plugins/inspect", body); status != http.StatusConflict ||
 		!strings.Contains(answer, "plugin.manifest_changed") {
 		t.Fatalf("a manifest swapped after signing answered %d: %s", status, truncate(answer, 200))
+	}
+}
+
+func TestOnlyAPanelAdministratorChangesTheClustersServers(t *testing.T) {
+	// A server that joins is handed the cluster's join token, and a control
+	// plane's is the whole cluster. Owning a team was enough to add one, and
+	// anybody signed in can make a team.
+	h := newHarness(t)
+	owner := h.newTenant("shop")
+	server := store.Server{TeamID: owner.team.ID, Name: "box", Host: "203.0.113.9", Role: "worker", Status: "failed"}
+	if err := h.db.CreateServer(t.Context(), &server); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/api/teams/" + owner.team.ID + "/servers"},
+		{http.MethodPost, "/api/servers/" + server.ID + "/retry"},
+		{http.MethodPost, "/api/servers/" + server.ID + "/promote"},
+		{http.MethodDelete, "/api/servers/" + server.ID},
+	} {
+		if status, body := h.do(owner, route.method, route.path, map[string]any{"host": "203.0.113.10", "control_plane": true}); status != http.StatusForbidden {
+			t.Errorf("a team owner: %s %s answered %d: %s", route.method, route.path, status, truncate(body, 120))
+		}
+	}
+	// Seeing them, and naming one, stay the team's.
+	if status, _ := h.do(owner, http.MethodGet, "/api/teams/"+owner.team.ID+"/servers", nil); status != http.StatusOK {
+		t.Errorf("a team owner listing its servers answered %d", status)
+	}
+	if status, _ := h.do(owner, http.MethodPatch, "/api/servers/"+server.ID, map[string]any{"name": "edge"}); status != http.StatusOK {
+		t.Errorf("a team owner renaming its server answered %d", status)
 	}
 }

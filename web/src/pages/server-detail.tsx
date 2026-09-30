@@ -37,7 +37,9 @@ export function ServerDetailPage() {
   const { t } = useTranslation()
   const { serverId = "" } = useParams()
   const navigate = useNavigate()
-  const { team } = useSession()
+  const { team, user } = useSession()
+  // Which machines are in the cluster is the panel administrator's to change.
+  const canChangeServers = user?.is_admin === true
   const confirm = useConfirm()
   const [wipe, setWipe] = useState(true)
   const [name, setName] = useState<string | null>(null)
@@ -158,30 +160,33 @@ export function ServerDetailPage() {
         }
         actions={
           <>
-            {current.status === "failed" && !current.adopted && (
+            {canChangeServers && current.status === "failed" && !current.adopted && (
               <Button variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
                 <RefreshCwIcon className="size-4" />
                 {t("common.retry")}
               </Button>
             )}
-            {current.role === "worker" && current.status === "ready" && !current.adopted && (
-              <Button
-                variant="outline"
-                disabled={promote.isPending}
-                onClick={() => {
-                  void confirm({
-                    title: t("servers.promote"),
-                    description: t("servers.promoteHelp"),
-                    confirmLabel: t("servers.promote"),
-                  }).then((yes) => {
-                    if (yes) promote.mutate()
-                  })
-                }}
-              >
-                <ArrowUpCircleIcon />
-                {t("servers.promote")}
-              </Button>
-            )}
+            {canChangeServers &&
+              current.role === "worker" &&
+              current.status === "ready" &&
+              !current.adopted && (
+                <Button
+                  variant="outline"
+                  disabled={promote.isPending}
+                  onClick={() => {
+                    void confirm({
+                      title: t("servers.promote"),
+                      description: t("servers.promoteHelp"),
+                      confirmLabel: t("servers.promote"),
+                    }).then((yes) => {
+                      if (yes) promote.mutate()
+                    })
+                  }}
+                >
+                  <ArrowUpCircleIcon />
+                  {t("servers.promote")}
+                </Button>
+              )}
           </>
         }
       />
@@ -282,7 +287,7 @@ export function ServerDetailPage() {
         </Alert>
       )}
 
-      {!current.adopted && (
+      {canChangeServers && !current.adopted && (
         <Card className="border-destructive/30">
           <CardHeader>
             <CardTitle className="text-base text-destructive">

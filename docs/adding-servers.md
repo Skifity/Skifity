@@ -11,6 +11,13 @@ Everything below is about the *second* server.
 
 You give Skifity an IP address and a way to sign in. It does the rest.
 
+Only the panel's administrator adds, retries, promotes or removes a server.
+Every server that joins is given the cluster's join token, and whoever controls
+that machine controls the token — which, for a control-plane server, is the
+whole cluster: every team's apps and secrets, and the panel's own. A team's
+members see the team's servers and can rename one; which machines are in the
+cluster is not a team's decision.
+
 ## What it does, step by step
 
 The panel shows these as they happen, and says what each one found.

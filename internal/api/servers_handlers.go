@@ -27,6 +27,9 @@ func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAddServer(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	user, err := s.authorizeTeam(r, teamID, store.RoleAdmin)
+	if err == nil {
+		err = serverAdmin(user)
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -148,7 +151,10 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
-	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	server, user, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	if err == nil {
+		err = serverAdmin(user)
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -206,7 +212,10 @@ func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRetryServer(w http.ResponseWriter, r *http.Request) {
-	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	server, user, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	if err == nil {
+		err = serverAdmin(user)
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -229,7 +238,10 @@ func (s *Server) handleRetryServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePromoteServer(w http.ResponseWriter, r *http.Request) {
-	server, _, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	server, user, err := s.authorizeServer(r, chi.URLParam(r, "serverID"), store.RoleAdmin)
+	if err == nil {
+		err = serverAdmin(user)
+	}
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -376,4 +388,19 @@ func validUnixName(name string) bool {
 	// A name starting with a digit is legal and is also how a numeric uid gets
 	// mistaken for one, so it goes with the rest.
 	return !(name[0] >= '0' && name[0] <= '9')
+}
+
+// serverAdmin refuses anybody but a panel administrator a change to which
+// machines are in the cluster.
+//
+// Every server that joins is given the cluster's join token, and whoever holds
+// the machine holds the token — and a token that joins a control plane is the
+// whole cluster: every team's Secrets and the panel's own. A team admin could
+// add one, and any signed-in user can make a team to be the admin of. Seeing a
+// team's servers, and renaming one, stay the team's.
+func serverAdmin(user store.User) error {
+	if !user.IsAdmin {
+		return errdoc.Forbidden("adding, retrying, promoting and removing servers, which only a panel administrator may do")
+	}
+	return nil
 }

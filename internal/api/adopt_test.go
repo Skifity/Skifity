@@ -100,7 +100,7 @@ func TestTheMachineThePanelRunsOnBecomesAServer(t *testing.T) {
 func TestAnAdoptedServerIsListedAndNotManaged(t *testing.T) {
 	h := newHarness(t)
 	h.withCluster(nodesCluster{summary: oneNode()})
-	acme := h.newTenant("acme")
+	acme := adminTenant(h, "acme")
 	h.api.adoptClusterNodes(t.Context(), acme.team.ID)
 
 	servers := serversOf(t, h, acme)

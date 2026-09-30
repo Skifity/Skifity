@@ -33,7 +33,7 @@ type Filter = "all" | "ready" | "attention"
 
 export function ServersPage() {
   const { t } = useTranslation()
-  const { team } = useSession()
+  const { team, user } = useSession()
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
 
@@ -76,14 +76,16 @@ export function ServersPage() {
     })
   }, [items, search, filter, needsAttention])
 
-  const addButton = (
+  // Every server that joins holds the cluster's join token, so only the
+  // panel's administrator adds one.
+  const addButton = user?.is_admin ? (
     <Button asChild>
       <Link to="/servers/new">
         <PlusIcon />
         {t("servers.addServer")}
       </Link>
     </Button>
-  )
+  ) : undefined
 
   return (
     <Page>
