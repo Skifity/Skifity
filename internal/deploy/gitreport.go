@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -170,15 +169,7 @@ func pullRequestNumber(env store.Environment) int {
 	if env.Kind != store.EnvPreview {
 		return 0
 	}
-	digits, ok := strings.CutPrefix(env.SourceRef, "pr-")
-	if !ok {
-		return 0
-	}
-	number, err := strconv.Atoi(digits)
-	if err != nil || number <= 0 {
-		return 0
-	}
-	return number
+	return store.PreviewPullRequest(env.SourceRef)
 }
 
 // appURL is the address a reviewer should open: a domain of the team's own when

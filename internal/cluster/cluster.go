@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -494,9 +493,7 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	}
 	if env.Kind == store.EnvPreview {
 		spec.Preview = true
-		if number, ok := strings.CutPrefix(env.SourceRef, "pr-"); ok {
-			spec.PullRequest, _ = strconv.Atoi(number)
-		}
+		spec.PullRequest = store.PreviewPullRequest(env.SourceRef)
 	}
 
 	// An app with the firewall switched on gets the guard's middleware in

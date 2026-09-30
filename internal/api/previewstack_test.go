@@ -244,3 +244,122 @@ func pullRequest(number int) gitsrc.PushEvent {
 	return gitsrc.PushEvent{Kind: "pull_request_opened", PullRequest: number, SourceBranch: "feature",
 		CommitSHA: "abc", RepoURL: "https://github.com/acme/web"}
 }
+
+func TestTwoRepositoriesPullRequestsAreTwoPreviews(t *testing.T) {
+	// Pull request 3 of the front end and pull request 3 of the API were one
+	// preview: a stranger's fork pull request on the API reused the front
+	// end's, and the copy there that held the API's secrets.
+	p, deployer, source := stackHarness(t, true)
+	api := source["api"]
+	api.AutoDeploy, api.PreviewDeploys = true, true
+	if err := p.db.UpdateApp(t.Context(), &api); err != nil {
+		t.Fatal(err)
+	}
+	// STRIPE_KEY on web, and a secret on the API.
+	sealed, _ := p.keyring.Seal([]byte("sk_api_secret"), variableContext(api.ID, "API_TOKEN"))
+	if err := p.db.SetVariable(t.Context(), &store.Variable{AppID: api.ID, Key: "API_TOKEN", IsSecret: true}, sealed); err != nil {
+		t.Fatal(err)
+	}
+
+	webPR := pullRequest(3)
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, webPR); err != nil {
+		t.Fatal(err)
+	}
+	forkPR := gitsrc.PushEvent{Kind: "pull_request_opened", PullRequest: 3, SourceBranch: "main",
+		CommitSHA: "evil", RepoURL: "https://github.com/acme/api", Fork: true}
+	if _, err := p.api.deployPreview(httptestRequest(), api, forkPR); err != nil {
+		t.Fatal(err)
+	}
+	if previewRef(webPR) == previewRef(forkPR) {
+		t.Fatalf("both pull requests are %s", previewRef(webPR))
+	}
+	forkEnv, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(forkPR))
+	if err != nil || !forkEnv.FromFork {
+		t.Fatalf("the fork's preview is %+v (%v)", forkEnv, err)
+	}
+	apps, _ := p.db.ListApps(t.Context(), forkEnv.ID)
+	for _, app := range apps {
+		if app.Slug != "api" {
+			continue
+		}
+		rows, _ := p.db.ListVariables(t.Context(), app.ID)
+		for _, row := range rows {
+			if row.Key == "API_TOKEN" {
+				t.Fatal("a fork's pull request got the API's secret")
+			}
+		}
+	}
+	// The fork's commit went into the fork's own preview.
+	last := deployer.requests[len(deployer.requests)-1]
+	if last.CommitSHA != "evil" {
+		t.Fatalf("the last deploy was %+v", last)
+	}
+	if !slices.ContainsFunc(apps, func(app store.App) bool { return app.ID == last.AppID }) {
+		t.Fatal("the fork's commit was deployed outside the fork's preview")
+	}
+
+	// Closing one pull request leaves the other's preview alone.
+	p.api.cleanupPreviewFor(httptestRequest(), p.app, gitsrc.PushEvent{Kind: "pull_request_closed", PullRequest: 3,
+		RepoURL: "https://github.com/acme/web"})
+	if _, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(forkPR)); err != nil {
+		t.Fatal("closing the front end's pull request removed the API's preview")
+	}
+	if _, err := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(webPR)); err == nil {
+		t.Fatal("the closed pull request's preview is still there")
+	}
+}
+
+func TestAPreviewCopyNeitherDeploysOnPushNorIsLeftHalfMade(t *testing.T) {
+	p, _, _ := stackHarness(t, false)
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(5)); err != nil {
+		t.Fatal(err)
+	}
+	copies := previewApps(t, p)
+	if web := copies["web"]; web.AutoDeploy {
+		t.Fatal("a preview copy deploys on push as well as on its pull request's events")
+	}
+
+	// A copy that fails partway is removed, so the next push makes it whole.
+	env, _ := p.db.FindEnvironmentBySourceRef(t.Context(), p.acme.project.ID, previewRef(pullRequest(5)))
+	h := p.harness
+	h.breakTable("app_processes")
+	if _, _, err := p.api.previewCopy(httptestRequest(), env, store.App{
+		EnvironmentID: p.acme.env.ID, Name: "admin2", Slug: "admin2", SourceType: "image", Image: "nginx",
+	}, "main", false); err == nil {
+		t.Fatal("a copy with a broken table was made")
+	}
+	if _, ok := previewApps(t, p)["admin2"]; ok {
+		t.Fatal("a half-made copy was left for the next push to deploy")
+	}
+}
+
+func TestAWholeEnvironmentPreviewFillsInWhatFailedBefore(t *testing.T) {
+	p, deployer, source := stackHarness(t, true)
+	// The API has not been deployed yet when the pull request opens.
+	if _, err := p.db.Exec(t.Context(), `DELETE FROM deployments WHERE app_id = ?`, source["api"].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(8)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := previewApps(t, p)["api"]; ok {
+		t.Fatal("an app never deployed was copied")
+	}
+	// It is deployed; the next push to the pull request brings it in, and
+	// does not redeploy what is there.
+	running := store.Deployment{AppID: source["api"].ID, Status: store.DeployQueued, Image: "registry.internal/acme/api:def"}
+	if err := p.db.CreateDeployment(t.Context(), &running); err != nil {
+		t.Fatal(err)
+	}
+	_ = p.db.UpdateDeploymentStatus(t.Context(), running.ID, store.DeploySucceeded, "", "", "")
+	deployer.requests = nil
+	if _, err := p.api.deployPreview(httptestRequest(), p.app, pullRequest(8)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := previewApps(t, p)["api"]; !ok {
+		t.Fatal("the API was not copied on the next push")
+	}
+	if len(deployer.requests) != 2 {
+		t.Fatalf("the second push deployed %d apps: web and the new API copy only", len(deployer.requests))
+	}
+}

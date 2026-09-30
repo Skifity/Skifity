@@ -190,13 +190,12 @@ func TestAPreviewOfALockedAppIsLockedToo(t *testing.T) {
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "/api/webhooks/git/src", nil)
-	if _, err := h.api.deployPreview(request, app, gitsrc.PushEvent{
-		Kind: "pull_request_opened", PullRequest: 7, SourceBranch: "feature", CommitSHA: "abc",
-	}); err != nil {
+	event := gitsrc.PushEvent{Kind: "pull_request_opened", PullRequest: 7, SourceBranch: "feature", CommitSHA: "abc"}
+	if _, err := h.api.deployPreview(request, app, event); err != nil {
 		t.Fatalf("deployPreview: %v", err)
 	}
 
-	env, err := h.db.FindEnvironmentBySourceRef(t.Context(), acme.project.ID, "pr-7")
+	env, err := h.db.FindEnvironmentBySourceRef(t.Context(), acme.project.ID, previewRef(event))
 	if err != nil {
 		t.Fatalf("no preview environment: %v", err)
 	}

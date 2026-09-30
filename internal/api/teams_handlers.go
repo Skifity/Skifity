@@ -592,6 +592,13 @@ func (s *Server) handleUpdateEnvironment(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
+	// Checked before anything is changed, so a request is applied whole or
+	// not at all.
+	if req.PodSecurity != "" && !kube.ValidPodSecurity(req.PodSecurity) {
+		writeError(w, r, errdoc.BadRequest(
+			"That is not a confinement level. It is \"restricted\" or \"baseline\"."))
+		return
+	}
 	if req.PreviewStack != nil {
 		if env.Kind == store.EnvPreview {
 			writeError(w, r, errdoc.BadRequest("A preview has no previews of its own; set this on the environment it copies."))

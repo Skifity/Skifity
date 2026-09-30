@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -403,6 +404,21 @@ func (db *DB) CreateEnvironment(ctx context.Context, e *Environment) error {
 // GetEnvironment looks an environment up by id.
 func (db *DB) GetEnvironment(ctx context.Context, id string) (Environment, error) {
 	return scanEnvironment(db.QueryRowContext(ctx, `SELECT `+envColumns+` FROM environments WHERE id = ?`, id))
+}
+
+// PreviewPullRequest reads the pull request a preview's source ref names —
+// pr-<number>, followed by the repository's tag — or zero for a branch.
+func PreviewPullRequest(ref string) int {
+	rest, ok := strings.CutPrefix(ref, "pr-")
+	if !ok {
+		return 0
+	}
+	digits, _, _ := strings.Cut(rest, "-")
+	number, err := strconv.Atoi(digits)
+	if err != nil || number <= 0 {
+		return 0
+	}
+	return number
 }
 
 // FindEnvironmentBySourceRef finds the preview environment created for a branch

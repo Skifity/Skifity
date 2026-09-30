@@ -1,10 +1,13 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -212,12 +215,27 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 	return result
 }
 
-// previewRef identifies the preview environment for a branch or pull request.
+// previewRef identifies the preview environment for a branch or pull
+// request of one repository.
+//
+// The repository is part of it. It was not, so pull request 3 of the front
+// end and pull request 3 of the API, in one project, were one preview: a
+// stranger's fork pull request 3 on the API reused the front end's preview,
+// deployed its own code into the copy there that held the API's secrets, and
+// closing either pull request removed both.
 func previewRef(event gitsrc.PushEvent) string {
+	ref := "branch-" + kube.Slugify(event.SourceBranch)
 	if event.PullRequest > 0 {
-		return "pr-" + strconv.Itoa(event.PullRequest)
+		ref = "pr-" + strconv.Itoa(event.PullRequest)
 	}
-	return "branch-" + kube.Slugify(event.SourceBranch)
+	return ref + "-" + repoTag(event.RepoURL)
+}
+
+// repoTag is a short, stable name for a repository, for a preview's ref.
+func repoTag(repoURL string) string {
+	normal := strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(repoURL), "/"), ".git"))
+	sum := sha256.Sum256([]byte(normal))
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:]))[:6]
 }
 
 // deployPreview creates or updates the preview environment for a pull request.
@@ -239,7 +257,6 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 	}
 
 	ref := previewRef(event)
-	created := false
 	env, err := s.db.FindEnvironmentBySourceRef(r.Context(), project.ID, ref)
 	if err != nil {
 		// First push to this pull request: make the environment.
@@ -255,18 +272,25 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 		if err := s.db.CreateEnvironment(r.Context(), &env); err != nil {
 			return "", err
 		}
-		if s.cluster != nil {
-			if err := s.cluster.EnsureNamespace(r.Context(), env, team.ID, project.ID); err != nil {
-				return "", err
-			}
+	}
+	// Every time, not only when the environment is made: a namespace that
+	// could not be made on the first push is made on the next one, rather
+	// than every later deploy failing into a namespace that is not there.
+	if s.cluster != nil {
+		if err := s.cluster.EnsureNamespace(r.Context(), env, team.ID, project.ID); err != nil {
+			return "", err
 		}
-		created = true
 	}
 
 	// One app per preview environment, copied from the app being previewed.
-	previewApp, err := s.previewCopy(r, env, app, event.SourceBranch, event.Fork)
+	previewApp, _, err := s.previewCopy(r, env, app, event.SourceBranch, event.Fork)
 	if err != nil {
 		return "", err
+	}
+	// Before the previewed app's own deploy, and on every push: a copy that
+	// failed last time is tried again, and one that exists is left alone.
+	if sourceEnv.PreviewStack {
+		s.previewStack(r, sourceEnv, env, app, event.Fork)
 	}
 	deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
 		AppID: previewApp.ID, Trigger: "preview", CommitSHA: event.CommitSHA, CreatedBy: "webhook",
@@ -274,23 +298,24 @@ func (s *Server) deployPreview(r *http.Request, app store.App, event gitsrc.Push
 	if err != nil {
 		return "", err
 	}
-	if created && sourceEnv.PreviewStack {
-		s.previewStack(r, sourceEnv, env, app, event.Fork)
-	}
 	return deployment.ID, nil
 }
 
 // previewCopy is an app's copy in a preview environment: the one already
-// there, or a new one with the app's variables, databases of its own, its
-// password and its processes.
-func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.App, branch string, fork bool) (store.App, error) {
+// there, or a new one with the app's variables, its password, its processes
+// and databases of its own. It reports whether it made one.
+//
+// A copy is made whole or not at all. One left half-made by an error — the
+// row there, the password not yet — would be found by the next push and
+// deployed as it was, a password-protected site in the open.
+func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.App, branch string, fork bool) (store.App, bool, error) {
 	previewApps, err := s.db.ListApps(r.Context(), env.ID)
 	if err != nil {
-		return store.App{}, err
+		return store.App{}, false, err
 	}
 	for _, candidate := range previewApps {
 		if candidate.Slug == app.Slug {
-			return candidate, nil
+			return candidate, false, nil
 		}
 	}
 
@@ -299,25 +324,35 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	previewApp.EnvironmentID = env.ID
 	previewApp.Branch = branch
 	previewApp.PreviewDeploys = false
+	// The pull request's own events deploy a preview. Deploy on push as
+	// well built every push twice, and a fork's pull request from its own
+	// main was redeployed with the base repository's main on every push to it.
+	previewApp.AutoDeploy = false
 	previewApp.SeededAt = ""
 	// A preview is throwaway, so it never autoscales and asks for little.
 	previewApp.Autoscale = false
 	previewApp.Replicas = 1
 	if err := s.db.CreateApp(r.Context(), &previewApp); err != nil {
-		return store.App{}, err
+		return store.App{}, false, err
 	}
+	undo := func(err error) (store.App, bool, error) {
+		if removeErr := s.db.DeleteApp(r.Context(), previewApp.ID); removeErr != nil {
+			s.log.Warn("could not remove a half-made preview copy", "app", previewApp.ID, "error", removeErr)
+		}
+		return store.App{}, false, err
+	}
+
 	links, err := s.db.ListLinksForApp(r.Context(), app.ID)
 	if err != nil {
-		return store.App{}, err
+		return undo(err)
 	}
 	linked := map[string]bool{}
 	for _, link := range links {
 		linked[link.VarName] = true
 	}
 	if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, fork, linked); err != nil {
-		return store.App{}, err
+		return undo(err)
 	}
-	s.previewDatabases(r, env, previewApp, links, fork)
 	if fork {
 		s.log.Info("a preview from a fork was given no secrets", "app", previewApp.ID)
 	}
@@ -326,11 +361,11 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	// copy of it open to whoever guessed the address. Only the hash is
 	// copied, so a fork's preview learns nothing it could not already.
 	if password, ok, err := s.db.GetAppPassword(r.Context(), app.ID); err != nil {
-		return store.App{}, err
+		return undo(err)
 	} else if ok {
 		password.AppID = previewApp.ID
 		if err := s.db.SetAppPassword(r.Context(), password, "webhook"); err != nil {
-			return store.App{}, err
+			return undo(err)
 		}
 	}
 	// Its processes too, one instance each: a pull request that changes a job
@@ -338,23 +373,30 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	// stopped stays stopped.
 	processes, err := s.db.ListProcesses(r.Context(), app.ID)
 	if err != nil {
-		return store.App{}, err
+		return undo(err)
 	}
 	for _, process := range processes {
 		process.AppID, process.Instances = previewApp.ID, min(process.Instances, 1)
 		if err := s.db.SetProcess(r.Context(), &process); err != nil {
-			return store.App{}, err
+			return undo(err)
 		}
 	}
-	return previewApp, nil
+	// Last, because a database is made in the cluster and is not undone
+	// with a row: nothing after this can fail the copy.
+	s.previewDatabases(r, env, previewApp, links, fork)
+	return previewApp, true, nil
 }
 
-// previewStack copies the rest of an environment into a new preview of it,
-// for an environment that asks for that: the API the front end calls, the
+// previewStack copies the rest of an environment into a preview of it, for
+// an environment that asks for that: the API the front end calls, the
 // service a Compose file named, the app another repository builds. Each runs
 // the version it runs in the environment it came from — only the pull
 // request's own repository is built from the pull request — and stays there:
 // it neither deploys on push nor previews itself.
+//
+// Only what the preview does not have yet is copied and deployed, so it runs
+// on every push: an app that could not be copied last time is tried again,
+// and one that was is not redeployed.
 //
 // Best effort, app by app. A copy that cannot be made or deployed is in the
 // panel's log, and the rest of the preview is still worth having.
@@ -382,14 +424,13 @@ func (s *Server) previewStack(r *http.Request, sourceEnv, env store.Environment,
 			// Its own settings, copied: nothing here was built differently.
 			request.Force = true
 		}
-		copied, err := s.previewCopy(r, env, app, app.Branch, fork)
+		copied, made, err := s.previewCopy(r, env, app, app.Branch, fork)
 		if err != nil {
 			s.log.Warn("could not copy an app into a preview", "app", app.ID, "error", err)
 			continue
 		}
-		copied.AutoDeploy = false
-		if err := s.db.UpdateApp(r.Context(), &copied); err != nil {
-			s.log.Warn("could not settle an app copied into a preview", "app", copied.ID, "error", err)
+		if !made {
+			continue
 		}
 		request.AppID = copied.ID
 		if _, err := s.deployer.Deploy(r.Context(), request); err != nil {
@@ -554,8 +595,13 @@ func (s *Server) cleanupPreviewFor(r *http.Request, app store.App, event gitsrc.
 }
 
 func previewName(event gitsrc.PushEvent) string {
+	name := "Branch " + strings.TrimSpace(event.SourceBranch)
 	if event.PullRequest > 0 {
-		return "Pull request #" + strconv.Itoa(event.PullRequest)
+		name = "Pull request #" + strconv.Itoa(event.PullRequest)
 	}
-	return "Branch " + strings.TrimSpace(event.SourceBranch)
+	// Which repository's, for a project with apps from more than one.
+	if repo := path.Base(strings.TrimSuffix(strings.TrimSuffix(event.RepoURL, "/"), ".git")); repo != "." && repo != "/" && repo != "" {
+		name += " · " + repo
+	}
+	return name
 }
