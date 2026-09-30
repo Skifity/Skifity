@@ -4971,6 +4971,41 @@ Not executed: a real kubelet's summary through the proxy. The fields read are
 `node.fs.capacityBytes` and `node.fs.availableBytes` from its documented
 `stats/summary`.
 
+## Phase 100 — what a repository written for Heroku already says
+
+Gap 9. Heroku's two files say most of what the new-app form asks, and nothing
+read them past Railpack's use of the `web` line: a migration in the Procfile's
+`release` line ran on every Heroku deploy and never here, and an `app.json`
+that says "heroku-postgresql" in so many words still left the form guessing
+from the drivers.
+
+`internal/builder/heroku.go`: the Procfile's `web` line is the start command
+(over a framework guess, never over a Dockerfile's `CMD`), `release` is the
+release command whatever the confidence of the rest, and the other lines are
+returned as `processes` and named, since an app runs one. `app.json`'s add-ons
+become database needs under the variable Heroku sets — or the one its `as`
+names — replacing a guess for the same engine rather than doubling it; its
+`env` becomes `env_template`, a `.env` with the values filled in, 64 hex
+characters generated wherever it says `"generator": "secret"`, descriptions as
+comments, and the required ones without a value listed as missing rather than
+set to ""; its `postdeploy` script is named with the `skifity run` that runs it.
+`app.json` joined the files detection reads.
+
+The form fills the release command and the settings box from these; `skifity
+up` sends the release command and sets the template's values on the app it
+creates, the folder's own `.env` winning where it is sent, and says the
+Procfile's lines.
+
+Tested: a Procfile read line by line; start, release and a named worker from a
+Rails repository, and a Dockerfile's `CMD` left alone; app.json's add-ons, one
+database for a driver and an add-on, the template's generated secret, values,
+quoting, comments, optional and required settings, a name no variable can have
+left out, and two detections giving two secrets; a broken app.json said and
+ignored.
+
+Not done: running a worker line from the same build as the web one. That is
+gap 10.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -387,6 +387,13 @@ func describeDetection(d builder.Detection, say func(string, ...any)) {
 				orDefault(need.Source, "a file"), need.Evidence)
 		}
 	}
+	if d.ReleaseCommand != "" {
+		say("  Its Procfile runs `%s` after each build, before the new version takes traffic.\n", d.ReleaseCommand)
+	}
+	for _, process := range d.Processes {
+		say("  Its Procfile also names %s (`%s`). An app runs one process: make another app for it with that as its start command.\n",
+			process.Name, process.Command)
+	}
 	// Said on every `up`, which is every deploy of a folder: the version that
 	// was fine last month is the one an advisory names this month.
 	for _, a := range d.Advisories {
@@ -455,11 +462,24 @@ func createUploadApp(ctx context.Context, client *Client, cfg Config, req create
 			body["builder"] = string(d.Builder)
 		}
 	}
+	// A Procfile's release line is the repository saying so, not a guess.
+	if d.ReleaseCommand != "" {
+		body["release_command"] = d.ReleaseCommand
+	}
 	if len(req.databases) > 0 {
 		body["databases"] = req.databases
 	}
-	if req.sendValues && len(req.values) > 0 {
-		body["variables"] = req.values
+	// app.json's defaults and generated secrets, once, when the app is made,
+	// the way Heroku sets them when an app is created from one. The folder's
+	// own .env, when it is sent, wins.
+	variables := parseDotEnv(d.EnvTemplate)
+	if req.sendValues {
+		for key, value := range req.values {
+			variables[key] = value
+		}
+	}
+	if len(variables) > 0 {
+		body["variables"] = variables
 	}
 
 	say("Creating the app %s...\n", appName)

@@ -601,6 +601,12 @@ export type Detection = {
   needs?: AppNeed[]
   /** Critical vulnerabilities in the framework versions the source installs. */
   advisories?: Advisory[]
+  /** The Procfile's release line. */
+  release_command?: string
+  /** The Procfile's other lines, which an app does not run by itself. */
+  processes?: { name: string; command: string }[]
+  /** app.json's settings as a .env, defaults filled in and secrets generated. */
+  env_template?: string
 }
 
 /** A known critical vulnerability in a version the source installs. */

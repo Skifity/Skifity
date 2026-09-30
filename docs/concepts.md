@@ -258,6 +258,30 @@ as a secret: it is never shown again, and it is not handed to the MCP server.
 Everything this says comes with the file it read it from, so you can check it.
 The panel reads `.env.example` for the names; it never reads `.env` itself.
 
+### A repository written for Heroku
+
+A `Procfile` and an `app.json` already say most of this, and are read:
+
+* The Procfile's **`web`** line is the start command — over a guess from the
+  framework, though not over a Dockerfile's own `CMD`.
+* Its **`release`** line is the [release command](#release-command): it runs
+  after each build and before the new version takes traffic, which is what
+  Heroku's release phase does, so a migration that ran on every Heroku deploy
+  runs on every deploy here.
+* Any other line — a `worker`, a `clock` — is named. An app runs one process,
+  so make another app from the same repository with that line as its start
+  command and no port.
+* **`app.json`'s add-ons** are databases: `heroku-postgresql`, `heroku-redis`,
+  `jawsdb`, `cleardb` and the like are offered like any other database, under
+  the variable Heroku would set (`DATABASE_URL`, `REDIS_URL`, or the one its
+  `as` names).
+* **Its `env`** fills the settings box: values filled in, a fresh random secret
+  wherever it says `"generator": "secret"`, descriptions as comments, and the
+  required ones with no value listed as missing. `skifity up` sets the same on
+  the app it creates.
+* **Its `postdeploy` script** is named, with the `skifity run` command that runs
+  it once.
+
 ## How your code becomes an image
 
 Four ways, in the order the panel picks them:

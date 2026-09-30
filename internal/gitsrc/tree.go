@@ -46,7 +46,7 @@ const MaxTreeEntries = 4000
 var readableFiles = []string{
 	"package.json", "go.mod", "requirements.txt", "pyproject.toml",
 	"composer.json", "Gemfile", "Cargo.toml", "pom.xml", "build.gradle",
-	"deno.json", "bun.lockb", "Procfile",
+	"deno.json", "bun.lockb", "Procfile", "app.json",
 	"Dockerfile", "dockerfile", "docker/Dockerfile", "build/Dockerfile",
 	"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml",
 	// What the app will need once it runs. A Prisma schema names its database

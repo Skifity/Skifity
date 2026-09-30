@@ -74,6 +74,14 @@ type Detection struct {
 	// Advisories are critical vulnerabilities in the framework versions the
 	// source installs. See advisories.go.
 	Advisories []Advisory `json:"advisories,omitempty"`
+	// ReleaseCommand is the Procfile's release line. See heroku.go.
+	ReleaseCommand string `json:"release_command,omitempty"`
+	// Processes are the Procfile's other lines — a worker, a clock — which
+	// an app, running one process, does not run by itself.
+	Processes []Process `json:"processes,omitempty"`
+	// EnvTemplate is app.json's settings as a .env, defaults filled in and
+	// generated secrets generated, for the form to start from.
+	EnvTemplate string `json:"env_template,omitempty"`
 }
 
 // Tree is the subset of a repository the detector needs: the list of paths, and
@@ -139,6 +147,8 @@ func (t Tree) Read(name string) string { return t.Contents[name] }
 func Detect(tree Tree) Detection {
 	d := detectBuild(tree)
 	d.Needs = DetectNeeds(tree)
+	applyProcfile(&d, tree)
+	applyAppJSON(&d, tree)
 	d.Advisories = FindAdvisories(tree)
 	return d
 }
@@ -349,9 +359,6 @@ func detectPython(tree Tree) (Detection, bool) {
 		d.Framework, d.Port = "Streamlit", 8501
 	}
 
-	if tree.Has("Procfile") {
-		d.Notes = append(d.Notes, "The Procfile is used to start the app.")
-	}
 	return d, true
 }
 

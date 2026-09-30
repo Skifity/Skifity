@@ -132,7 +132,7 @@ here, or needs `make verify` on a real server.
 | 6 | A Compose file deployed as one stack of apps | Coolify, CapRover, Sealos, Render | M | Yes, except running it |
 | 7 | Promote the exact image from one environment to the next | Heroku, Northflank, Vercel, Render | M | Mostly |
 | 8 | **Half closed in Phase 93** (preview-only values). Still open: previews of the whole stack with a seed step | Vercel, Netlify, Railway, Render, Coolify | M | Yes |
-| 9 | Honour a Procfile's `release` and `worker` lines and `app.json` | Heroku | M | Yes |
+| 9 | **Closed in Phase 100.** A Procfile's `web` and `release` lines, its other lines named, and `app.json`'s add-ons and settings | Heroku | M | Yes |
 | 10 | Several processes (web, worker) from one build; service types in the new-app form | Fly, Dokku, Render | M–L | Manifests yes |
 | 11 | `skifity db connect`: reach a private database from a laptop | Coolify, Fly, Sealos, Epinio | M | Partly |
 | 12 | Upgrade what the installer installed: components and k3s | Kubero, Epinio | L | The plan yes; the upgrade needs one |

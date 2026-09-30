@@ -80,6 +80,7 @@ export function NewAppPage() {
   const [buildCommand, setBuildCommand] = useState("")
   const [staticDir, setStaticDir] = useState("")
   const [startCommand, setStartCommand] = useState("")
+  const [releaseCommand, setReleaseCommand] = useState("")
   const [deployNow, setDeployNow] = useState(true)
   const [gitSourceID, setGitSourceID] = useState("")
   // The Compose service this app is, when the repository has a Compose file.
@@ -155,6 +156,10 @@ export function NewAppPage() {
       setComposeService("")
       setVariables({})
     }
+    // A Procfile's release line and app.json's settings are the repository
+    // saying so rather than a guess, so they apply whatever the confidence.
+    if (!releaseCommand && found.release_command) setReleaseCommand(found.release_command)
+    if (found.env_template && !pastedEnv.trim()) setPastedEnv(found.env_template)
     if (found.confidence !== "high") return
     if (!port && found.port) setPort(String(found.port))
     if (!healthPath && found.health_path) setHealthPath(found.health_path)
@@ -215,6 +220,7 @@ export function NewAppPage() {
         build_command: buildCommand.trim(),
         static_dir: staticDir.trim(),
         start_command: startCommand.trim(),
+        release_command: releaseCommand.trim(),
         // An app from a folder has no code until the folder is sent, which
         // happens below, once it exists.
         deploy: sourceType === "upload" ? false : deployNow,
@@ -592,6 +598,18 @@ export function NewAppPage() {
                   className="font-mono"
                 />
                 <FieldDescription>{t("apps.startCommandHelp")}</FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="release-command">{t("apps.releaseCommand")}</FieldLabel>
+                <Input
+                  id="release-command"
+                  value={releaseCommand}
+                  onChange={(event) => setReleaseCommand(event.target.value)}
+                  placeholder="npm run migrate"
+                  className="font-mono"
+                />
+                <FieldDescription>{t("apps.releaseCommandHelp")}</FieldDescription>
               </Field>
             </div>
           </CollapsibleContent>
