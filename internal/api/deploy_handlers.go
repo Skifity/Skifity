@@ -162,6 +162,69 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, deployment)
 }
 
+// rollbackPlanVersion is one side of a rollback plan.
+type rollbackPlanVersion struct {
+	Number        int    `json:"number"`
+	CommitSHA     string `json:"commit_sha,omitempty"`
+	CommitMessage string `json:"commit_message,omitempty"`
+	Image         string `json:"image,omitempty"`
+}
+
+// handleRollbackPlan says what rolling back to a deployment would change,
+// before anybody does it: the version it goes back to, the one running now,
+// and each setting it would put back, from what to what.
+//
+// "Roll back" read as "undo the last change", and it is not that. It restores
+// the image and the scaling, resources, port, health check and start command
+// that version ran with — and leaves the variables, the domains and the disks
+// as they are now, because those are not the version's to take back. A person
+// deciding whether to press it should see that list, not find it out.
+func (s *Server) handleRollbackPlan(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleViewer)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	targetID := chi.URLParam(r, "deploymentID")
+	target, err := s.db.GetDeployment(r.Context(), targetID)
+	if err != nil || target.AppID != app.ID {
+		writeError(w, r, errdoc.NotFound("deployment", targetID))
+		return
+	}
+	changes, err := store.RollbackChanges(app, target.RuntimeSpec)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	var current *rollbackPlanVersion
+	recent, err := s.db.ListDeployments(r.Context(), app.ID, 50)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	for _, deployment := range recent {
+		if deployment.Status == store.DeploySucceeded {
+			current = &rollbackPlanVersion{
+				Number: deployment.Number, CommitSHA: deployment.CommitSHA,
+				CommitMessage: deployment.CommitMessage, Image: deployment.Image,
+			}
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"target": rollbackPlanVersion{
+			Number: target.Number, CommitSHA: target.CommitSHA,
+			CommitMessage: target.CommitMessage, Image: target.Image,
+		},
+		"current":      current,
+		"changes":      changes,
+		"can_rollback": target.Status == store.DeploySucceeded && target.Image != "",
+		// What a rollback leaves as it is now, named so nobody expects it back.
+		"unchanged": []string{"variables", "domains", "volumes"},
+	})
+}
+
 // deploymentForApp loads a deployment and checks it belongs to the app in the
 // URL, so a deployment id from another team cannot be read by guessing.
 func (s *Server) deploymentForApp(r *http.Request, required store.Role) (store.Deployment, error) {

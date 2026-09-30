@@ -129,11 +129,27 @@ rather than empty.
 ## Deployments and rollback
 
 Each deployment records the image it produced *and* the settings it ran with:
-variables, instance count, resources, domains.
+the instance count and autoscaling, the resources, the port, the health check
+and the start command.
 
-Rolling back therefore restores a working state, not just an old image. If you
-changed a variable and the app broke, rolling back puts the old variable back
-too.
+Rolling back puts back that image and those settings. It does **not** put back
+variables, domains or disks: those stay as they are now, because they are not
+the version's to take back — a variable changed since may be a rotated key, a
+domain added since may be one customers already use. If a variable change broke
+the app, change the variable back.
+
+Before anything happens, the rollback dialog shows what it would change: the
+version running now, the one it goes back to, and each setting it would put
+back, from what to what. `GET /api/apps/{app}/rollback/{deployment}/plan` is the
+same answer for a script or an assistant.
+
+**Locking deploys.** During an incident, a migration somebody is running by
+hand, or a freeze before a launch, **Lock deploys** on the app's page — or
+`skifity lock "why"` — stops every deploy and rollback of it, from the panel,
+the CLI, an assistant or a push, until somebody unlocks it. The app's page says
+who locked it, when and why, and a push to a locked app is skipped with that
+reason rather than failed. Changing a variable or the instance count still
+applies: those are not new code, and an incident is often when they are needed.
 
 **How far back you can go.** The panel keeps a long list of deployments and the
 registry keeps the images for the last ten of them; older images are removed so

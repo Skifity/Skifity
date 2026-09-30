@@ -290,6 +290,8 @@ func (s *Server) routes() chi.Router {
 				app.Put("/password", s.handleSetPassword)
 				app.Delete("/password", s.handleRemovePassword)
 				app.Post("/deploy", s.handleDeployApp)
+				app.Put("/lock", s.handleLockDeploys)
+				app.Delete("/lock", s.handleUnlockDeploys)
 				// The code of an app with no repository, from `skifity up`.
 				app.Put("/source", s.handleUploadSource)
 				app.Get("/deployments", s.handleListDeployments)
@@ -297,6 +299,8 @@ func (s *Server) routes() chi.Router {
 				app.Get("/deployments/{deploymentID}/logs", s.handleDeploymentLogs)
 				app.Post("/deployments/{deploymentID}/cancel", s.handleCancelDeployment)
 				app.Post("/rollback/{deploymentID}", s.handleRollback)
+				// What that would change, asked before it is done.
+				app.Get("/rollback/{deploymentID}/plan", s.handleRollbackPlan)
 				app.Get("/logs", s.handleAppLogs)
 				// A one-off command runs in the app's own image with the app's
 				// own variables. It is where a migration runs.

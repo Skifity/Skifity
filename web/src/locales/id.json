@@ -291,7 +291,9 @@
       "team.strong_auth_required": "Dua faktor diwajibkan untuk tim",
       "team.strong_auth_relaxed": "Dua faktor tidak lagi diwajibkan untuk tim",
       "team.member_synced": "Keanggotaan disesuaikan dengan grup single sign-on",
-      "variable.preview_set": "Isi variabel untuk preview diubah"
+      "variable.preview_set": "Isi variabel untuk preview diubah",
+      "app.deploys_locked": "Deploy dikunci",
+      "app.deploys_unlocked": "Kunci deploy dibuka"
     }
   },
   "projects": {
@@ -466,7 +468,14 @@
     "volumeStopsRollingDeploys": "Dengan disk, deploy tidak lagi mulus",
     "volumeStopsRollingDeploysHelp": "Satu disk hanya boleh ditulis satu instance dalam satu waktu, jadi Skifity menghentikan instance lama sebelum menjalankan yang baru. Setiap deploy punya jeda beberapa detik tanpa yang menjawab, dan aplikasi tidak bisa berjalan lebih dari satu instance.",
     "sourceUpload": "Folder yang diunggah",
-    "sourceFolder": "Folder di komputer saya"
+    "sourceFolder": "Folder di komputer saya",
+    "lockDeploys": "Kunci deploy",
+    "unlockDeploys": "Buka kunci deploy",
+    "lockDeploysHelp": "Menghentikan setiap deploy dan rollback app ini — dari sini, CLI, asisten, atau push — sampai ada yang membukanya. Mengubah variabel atau jumlah instance tetap berlaku.",
+    "lockReason": "Alasan",
+    "lockReasonPlaceholder": "Insiden 42: failover database sedang berjalan",
+    "deploysLocked": "Deploy dikunci",
+    "deploysLockedBy": "{{who}} menguncinya {{when}}: {{reason}}"
   },
   "deploy": {
     "title": "Deployment",
@@ -476,8 +485,8 @@
     "rollback": "Kembalikan",
     "imageCollected": "Image sudah dihapus",
     "imageCollectedHelp": "Hanya beberapa versi terakhir yang menyimpan image-nya, agar disk tidak penuh. Deploy ulang commit ini untuk mendapatkannya kembali.",
-    "rollbackTo": "Kembalikan ke #{{number}}",
-    "rollbackHelp": "Mengembalikan image versi ini beserta pengaturan yang dipakainya saat itu.",
+    "rollbackTo": "Kembali ke",
+    "rollbackHelp": "Ini mengembalikan kode versi itu dan pengaturan di bawah yang dipakainya.",
     "cancel": "Batalkan deployment",
     "buildLog": "Log build",
     "noDeployments": "Belum ada yang di-deploy",
@@ -504,6 +513,26 @@
       "push": "Push ke branch",
       "preview": "Pratinjau sebuah pull request",
       "rollback": "Sebuah rollback"
+    },
+    "rollbackTitle": "Rollback ke #{{number}}",
+    "rollbackFrom": "Berjalan sekarang",
+    "rollbackChanges": "Pengaturan yang dikembalikan",
+    "rollbackNoSettings": "Tidak ada pengaturan yang berubah: hanya kodenya.",
+    "rollbackUnchanged": "Variabel, domain, dan disk tetap seperti sekarang: bukan milik versi itu untuk ditarik kembali.",
+    "rollbackNothingLive": "Tidak ada yang live",
+    "rollbackField": {
+      "replicas": "Instance",
+      "autoscale": "Penskalaan otomatis",
+      "min_replicas": "Instance paling sedikit",
+      "max_replicas": "Instance paling banyak",
+      "cpu_target": "Target CPU (%)",
+      "cpu_request_m": "CPU dicadangkan (m)",
+      "cpu_limit_m": "Batas CPU (m)",
+      "mem_request_mb": "Memori dicadangkan (MB)",
+      "mem_limit_mb": "Batas memori (MB)",
+      "port": "Port",
+      "health_path": "Path cek kesehatan",
+      "start_command": "Perintah mulai"
     }
   },
   "variables": {
@@ -2121,6 +2150,12 @@
         "cause": "Tim ini akan mewajibkan faktor kedua atau single sign-on, dan Anda masuk tanpa keduanya.",
         "impact": "Tidak ada yang diubah. Mengaktifkannya sekarang akan mengunci Anda dari tim ini.",
         "fix": "Aktifkan autentikasi dua faktor di Akun, atau masuk dengan single sign-on, lalu aktifkan ini."
+      },
+      "deploy_locked": {
+        "title": "Deploy ke app ini dikunci",
+        "cause": "{{0}} menguncinya: {{1}}",
+        "impact": "Tidak ada yang di-deploy. Versi yang berjalan sekarang tetap berjalan.",
+        "fix": "Buka kunci deploy di halaman app, atau dengan `{{0}} unlock`, setelah alasan penguncian selesai."
       }
     }
   },

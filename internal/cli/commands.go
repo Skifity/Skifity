@@ -51,6 +51,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdScale(ctx, rest, stdout)
 	case "rollback":
 		err = cmdRollback(ctx, rest, stdout)
+	case "lock":
+		err = cmdLock(ctx, rest, stdout)
+	case "unlock":
+		err = cmdUnlock(ctx, rest, stdout)
 	case "run":
 		err = cmdRun(ctx, rest, stdout)
 	case "status":
@@ -115,6 +119,7 @@ Working with apps:
   env                   List, set, import or remove environment variables
   scale                 Change the number of instances or turn on autoscaling
   rollback              Go back to a previous deployment
+  lock, unlock          Stop every deploy and rollback of an app, and start them again
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
   open                  Print an app's URLs
@@ -1107,5 +1112,69 @@ func cmdRun(ctx context.Context, args []string, out io.Writer) error {
 	for _, line := range logs.Lines {
 		fmt.Fprintln(out, line)
 	}
+	return nil
+}
+
+// --- lock ---
+
+// cmdLock stops every deploy and rollback of an app until it is unlocked:
+// `skifity lock "incident 42"`.
+func cmdLock(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("lock", flag.ContinueOnError)
+	flags.SetOutput(out)
+	appID := flags.String("app", "", "the app id")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	positional, err := parseInterspersed(flags, args)
+	if err != nil {
+		return err
+	}
+	reason := strings.TrimSpace(strings.Join(positional, " "))
+	if reason == "" {
+		return errdoc.BadRequest(fmt.Sprintf("Say why, for example `%s lock \"incident 42: failover\"`.", version.Binary))
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	client := NewClient(cfg)
+	app, err := resolveApp(ctx, client, cfg, *appID)
+	if err != nil {
+		return err
+	}
+	var lock store.DeployLock
+	if err := client.Do(ctx, "PUT", "/api/apps/"+app+"/lock", map[string]string{"reason": reason}, &lock); err != nil {
+		return err
+	}
+	if *asJSON {
+		return writeJSON(out, lock)
+	}
+	fmt.Fprintf(out, "Deploys and rollbacks are locked: %s\nUnlock with `%s unlock`.\n", lock.Reason, version.Binary)
+	return nil
+}
+
+func cmdUnlock(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet("unlock", flag.ContinueOnError)
+	flags.SetOutput(out)
+	appID := flags.String("app", "", "the app id")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	client := NewClient(cfg)
+	app, err := resolveApp(ctx, client, cfg, *appID)
+	if err != nil {
+		return err
+	}
+	if err := client.Do(ctx, "DELETE", "/api/apps/"+app+"/lock", nil, nil); err != nil {
+		return err
+	}
+	if *asJSON {
+		return writeJSON(out, map[string]bool{"unlocked": true})
+	}
+	fmt.Fprintln(out, "Deploys are unlocked.")
 	return nil
 }

@@ -170,6 +170,8 @@ export type App = {
   status: string
   created_at: string
   updated_at: string
+  /** Present while deploys are locked: who, why and since when. */
+  deploy_lock?: { reason: string; locked_by: string; locked_at: string }
 }
 
 export type Instance = {

@@ -18,6 +18,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
+import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock"
 import { Page, PageHeader } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { VariablesEditor } from "@/components/variables-editor"
@@ -158,6 +159,7 @@ export function AppDetailPage() {
               {t("apps.restart")}
             </Button>
             {current.source_type === "upload" && <SendFolderButton app={current} />}
+            <DeployLockButton app={current} />
             <DeployButton appId={appId} />
           </>
         }
@@ -185,6 +187,7 @@ export function AppDetailPage() {
       )}
 
       {restart.error != null && <ErrorDisplay error={restart.error} />}
+      <DeployLockNotice app={current} />
 
       <Tabs
         value={tab}

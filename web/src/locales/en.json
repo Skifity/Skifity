@@ -299,7 +299,9 @@
       "team.strong_auth_required": "Two-factor required for the team",
       "team.strong_auth_relaxed": "Two-factor no longer required for the team",
       "team.member_synced": "Membership brought in line with single sign-on groups",
-      "variable.preview_set": "What previews get for a variable changed"
+      "variable.preview_set": "What previews get for a variable changed",
+      "app.deploys_locked": "Deploys locked",
+      "app.deploys_unlocked": "Deploys unlocked"
     }
   },
   "projects": {
@@ -474,7 +476,14 @@
     "volumeStopsRollingDeploys": "A disk means deploys are no longer seamless",
     "volumeStopsRollingDeploysHelp": "One disk can only be written by one instance at a time, so Skifity stops the old instance before starting the new one. Each deploy has a few seconds with nothing answering, and the app cannot run more than one instance.",
     "sourceUpload": "An uploaded folder",
-    "sourceFolder": "A folder on my computer"
+    "sourceFolder": "A folder on my computer",
+    "lockDeploys": "Lock deploys",
+    "unlockDeploys": "Unlock deploys",
+    "lockDeploysHelp": "Stops every deploy and rollback of this app — from here, the CLI, an assistant or a push — until somebody unlocks it. Changing variables or instances still applies.",
+    "lockReason": "Why",
+    "lockReasonPlaceholder": "Incident 42: database failover in progress",
+    "deploysLocked": "Deploys are locked",
+    "deploysLockedBy": "{{who}} locked them {{when}}: {{reason}}"
   },
   "deploy": {
     "title": "Deployments",
@@ -484,8 +493,8 @@
     "rollback": "Roll back",
     "imageCollected": "Image removed",
     "imageCollectedHelp": "Only the last few versions keep their image, so the disk does not fill. Deploy this commit again to get it back.",
-    "rollbackTo": "Roll back to #{{number}}",
-    "rollbackHelp": "Puts back this version's image and the settings it ran with.",
+    "rollbackTo": "Goes back to",
+    "rollbackHelp": "This puts back that version's code and the settings below it ran with.",
     "cancel": "Cancel deployment",
     "buildLog": "Build log",
     "noDeployments": "Nothing has been deployed yet",
@@ -512,6 +521,26 @@
       "push": "A push to the branch",
       "preview": "A preview of a pull request",
       "rollback": "A rollback"
+    },
+    "rollbackTitle": "Roll back to #{{number}}",
+    "rollbackFrom": "Running now",
+    "rollbackChanges": "Settings it puts back",
+    "rollbackNoSettings": "No settings change: only the code does.",
+    "rollbackUnchanged": "Variables, domains and disks stay as they are now: they are not the version's to take back.",
+    "rollbackNothingLive": "Nothing live",
+    "rollbackField": {
+      "replicas": "Instances",
+      "autoscale": "Autoscaling",
+      "min_replicas": "Fewest instances",
+      "max_replicas": "Most instances",
+      "cpu_target": "CPU target (%)",
+      "cpu_request_m": "CPU reserved (m)",
+      "cpu_limit_m": "CPU limit (m)",
+      "mem_request_mb": "Memory reserved (MB)",
+      "mem_limit_mb": "Memory limit (MB)",
+      "port": "Port",
+      "health_path": "Health check path",
+      "start_command": "Start command"
     }
   },
   "variables": {
@@ -2133,6 +2162,12 @@
         "cause": "This team is about to require a second factor or single sign-on, and you signed in with neither.",
         "impact": "Nothing was changed. Turning it on now would have locked you out of this team.",
         "fix": "Turn on two-factor authentication under Account, or sign in with single sign-on, then turn this on."
+      },
+      "deploy_locked": {
+        "title": "Deploys to this app are locked",
+        "cause": "{{0}} locked them: {{1}}",
+        "impact": "Nothing was deployed. The version running now keeps running.",
+        "fix": "Unlock deploys on the app's page, or with `{{0}} unlock`, once what they were locked for is over."
       }
     }
   },

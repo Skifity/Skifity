@@ -142,7 +142,7 @@ here, or needs `make verify` on a real server.
 | 16 | Encrypted, verifiable backups | Cloudron, Dokploy, Dokku | M | The crypto yes |
 | 17 | **Closed in Phase 89.** Set several variables in one rollout, and import a `.env` | Dokku | S | Yes |
 | 18 | Skip a monorepo app whose directory did not change; warn on framework versions with critical advisories | Vercel, Netlify | S–M | Yes |
-| 19 | Maintenance mode; locked deploys; a rollback that shows what it will change | DigitalOcean, Kamal, Easypanel, Netlify | S–M | Yes |
+| 19 | **Two of three closed in Phase 94** (locked deploys; a rollback that shows what it will change). Still open: maintenance mode | DigitalOcean, Kamal, Easypanel, Netlify | S–M | Yes |
 | 20 | **Closed in Phase 90.** `SECURITY.md` and a support and upgrade policy before the first release | Epinio | S | Yes |
 
 ## Where Skifity is actually different

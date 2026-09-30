@@ -75,6 +75,9 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 	if err != nil {
 		return store.Deployment{}, err
 	}
+	if err := d.checkUnlocked(ctx, app.ID); err != nil {
+		return store.Deployment{}, err
+	}
 	env, err := d.db.GetEnvironment(ctx, app.EnvironmentID)
 	if err != nil {
 		return store.Deployment{}, err
@@ -487,6 +490,9 @@ func (d *Deployer) Sync(ctx context.Context, appID string) error {
 
 // Rollback re-applies a previous deployment's image and runtime configuration.
 func (d *Deployer) Rollback(ctx context.Context, appID, deploymentID, actorID string) (store.Deployment, error) {
+	if err := d.checkUnlocked(ctx, appID); err != nil {
+		return store.Deployment{}, err
+	}
 	previous, err := d.db.GetDeployment(ctx, deploymentID)
 	if err != nil {
 		return store.Deployment{}, err
@@ -823,25 +829,27 @@ func (d *Deployer) runtimeSpec(ctx context.Context, app store.App, env store.Env
 	return string(encoded), nil
 }
 
+// checkUnlocked refuses a deploy or a rollback of an app whose deploys are
+// locked. Here, where every one of them passes — the panel, the CLI, an
+// assistant, a webhook — rather than in each of those.
+func (d *Deployer) checkUnlocked(ctx context.Context, appID string) error {
+	lock, err := d.db.GetDeployLock(ctx, appID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		// A lock that cannot be read is not one to assume is absent.
+		return err
+	}
+	return errdoc.DeployLocked(lock.LockedBy, lock.Reason)
+}
+
 // restoreRuntimeSpec puts back the settings a previous deployment ran with.
 func (d *Deployer) restoreRuntimeSpec(ctx context.Context, appID, encoded string) error {
 	if encoded == "" || encoded == "{}" {
 		return nil
 	}
-	var spec struct {
-		Replicas     int    `json:"replicas"`
-		Autoscale    bool   `json:"autoscale"`
-		MinReplicas  int    `json:"min_replicas"`
-		MaxReplicas  int    `json:"max_replicas"`
-		CPUTarget    int    `json:"cpu_target"`
-		CPURequestM  int    `json:"cpu_request_m"`
-		CPULimitM    int    `json:"cpu_limit_m"`
-		MemRequestMB int    `json:"mem_request_mb"`
-		MemLimitMB   int    `json:"mem_limit_mb"`
-		Port         int    `json:"port"`
-		HealthPath   string `json:"health_path"`
-		StartCommand string `json:"start_command"`
-	}
+	var spec store.RecordedSpec
 	if err := json.Unmarshal([]byte(encoded), &spec); err != nil {
 		return fmt.Errorf("read the recorded settings: %w", err)
 	}

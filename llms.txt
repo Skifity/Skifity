@@ -44,6 +44,8 @@ skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
 skifity scale --instances 3       Change how many copies run
 skifity rollback                  Go back to the previous version
+skifity lock "reason"             Stop every deploy and rollback of the app
+skifity unlock                    Allow them again
 skifity run -- npm run migrate    Run a command once, in the app's image
 skifity apps                      List apps
 skifity servers                   List servers
@@ -130,6 +132,9 @@ PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, f
 POST   /api/apps/{app}/deploy                 deploy
 GET    /api/apps/{app}/deployments            deployment history
 POST   /api/apps/{app}/rollback/{deployment}  roll back
+GET    /api/apps/{app}/rollback/{deployment}/plan  what a rollback would change, and what it leaves
+PUT    /api/apps/{app}/lock                   lock deploys and rollbacks (reason)
+DELETE /api/apps/{app}/lock                   unlock them
 GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events
 GET    /api/apps/{app}/logs?previous=true     the log of the container before the last restart
 POST   /api/apps/{app}/run                    run a command once in the app's image

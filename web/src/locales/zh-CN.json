@@ -291,7 +291,9 @@
       "team.strong_auth_required": "已要求团队使用双重验证",
       "team.strong_auth_relaxed": "已取消团队的双重验证要求",
       "team.member_synced": "已按单点登录群组调整成员身份",
-      "variable.preview_set": "已更改变量在预览中的取值"
+      "variable.preview_set": "已更改变量在预览中的取值",
+      "app.deploys_locked": "已锁定部署",
+      "app.deploys_unlocked": "已解锁部署"
     }
   },
   "projects": {
@@ -466,7 +468,14 @@
     "volumeStopsRollingDeploys": "有磁盘后部署不再无缝",
     "volumeStopsRollingDeploysHelp": "一块磁盘同一时间只能被一个实例写入，所以 Skifity 会先停掉旧实例再启动新的。每次部署都会有几秒钟无人响应，应用也无法运行多个实例。",
     "sourceUpload": "上传的文件夹",
-    "sourceFolder": "我电脑上的文件夹"
+    "sourceFolder": "我电脑上的文件夹",
+    "lockDeploys": "锁定部署",
+    "unlockDeploys": "解锁部署",
+    "lockDeploysHelp": "阻止此应用的所有部署和回滚——无论来自这里、CLI、助手还是推送——直到有人解锁。更改变量或实例数仍然生效。",
+    "lockReason": "原因",
+    "lockReasonPlaceholder": "事故 42：数据库正在故障转移",
+    "deploysLocked": "部署已锁定",
+    "deploysLockedBy": "{{who}} 于 {{when}} 锁定：{{reason}}"
   },
   "deploy": {
     "title": "部署记录",
@@ -476,8 +485,8 @@
     "rollback": "回滚",
     "imageCollected": "镜像已删除",
     "imageCollectedHelp": "只有最近几个版本会保留镜像，以免磁盘被占满。重新部署这个提交即可重新得到它。",
-    "rollbackTo": "回滚到 #{{number}}",
-    "rollbackHelp": "恢复该版本的镜像，以及它当时使用的设置。",
+    "rollbackTo": "回到",
+    "rollbackHelp": "这会恢复那个版本的代码，以及下面列出的它运行时的设置。",
     "cancel": "取消部署",
     "buildLog": "构建日志",
     "noDeployments": "还没有部署过",
@@ -504,6 +513,26 @@
       "push": "分支收到一次推送",
       "preview": "一个拉取请求的预览",
       "rollback": "一次回滚"
+    },
+    "rollbackTitle": "回滚到 #{{number}}",
+    "rollbackFrom": "当前运行",
+    "rollbackChanges": "将恢复的设置",
+    "rollbackNoSettings": "没有设置变化：只有代码变化。",
+    "rollbackUnchanged": "变量、域名和磁盘保持现状：它们不属于那个版本，不会被收回。",
+    "rollbackNothingLive": "没有在线版本",
+    "rollbackField": {
+      "replicas": "实例数",
+      "autoscale": "自动扩缩容",
+      "min_replicas": "最少实例数",
+      "max_replicas": "最多实例数",
+      "cpu_target": "CPU 目标 (%)",
+      "cpu_request_m": "预留 CPU (m)",
+      "cpu_limit_m": "CPU 上限 (m)",
+      "mem_request_mb": "预留内存 (MB)",
+      "mem_limit_mb": "内存上限 (MB)",
+      "port": "端口",
+      "health_path": "健康检查路径",
+      "start_command": "启动命令"
     }
   },
   "variables": {
@@ -2121,6 +2150,12 @@
         "cause": "这个团队即将要求第二重验证或单点登录，而你登录时两者都没有使用。",
         "impact": "没有更改任何内容。现在开启会把你自己锁在这个团队之外。",
         "fix": "在“账户”中开启双重验证，或通过单点登录登录，然后再开启此项。"
+      },
+      "deploy_locked": {
+        "title": "此应用的部署已锁定",
+        "cause": "{{0}} 锁定了部署：{{1}}",
+        "impact": "没有部署任何内容。当前运行的版本继续运行。",
+        "fix": "锁定原因结束后，在应用页面或用 `{{0}} unlock` 解锁部署。"
       }
     }
   },

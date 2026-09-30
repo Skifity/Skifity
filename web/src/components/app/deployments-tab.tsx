@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { CircleDotIcon, GitCommitHorizontalIcon, RocketIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import {
+  CircleDotIcon,
+  GitCommitHorizontalIcon,
+  RocketIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react"
 import { cn } from "cn"
 
 import { EmptyState } from "@/components/empty-state"
@@ -10,6 +16,14 @@ import { ErrorDisplay } from "@/components/error-display"
 import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -51,10 +65,10 @@ export function DeploymentsTab({ app }: { app: App }) {
     setOpened(id)
   }
 
-  const rollback = useMutation({
-    mutationFn: (deploymentID: string) => api.post(`/api/apps/${app.id}/rollback/${deploymentID}`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["deployments", app.id] }),
-  })
+  // Which deployment a rollback is being considered to, while its plan is on
+  // screen. Rolling back used to be one click with nothing said about what it
+  // would put back and what it would leave.
+  const [rollingBackTo, setRollingBackTo] = useState<Deployment | null>(null)
 
   const cancel = useMutation({
     mutationFn: (deploymentID: string) =>
@@ -79,8 +93,15 @@ export function DeploymentsTab({ app }: { app: App }) {
 
   return (
     <div className="space-y-3">
-      {rollback.error && <ErrorDisplay error={rollback.error} />}
       {cancel.error && <ErrorDisplay error={cancel.error} />}
+      {rollingBackTo != null && (
+        <RollbackDialog
+          key={rollingBackTo.id}
+          app={app}
+          target={rollingBackTo}
+          onClose={() => setRollingBackTo(null)}
+        />
+      )}
 
       {items.map((deployment) => {
         const open = selected === deployment.id
@@ -149,8 +170,7 @@ export function DeploymentsTab({ app }: { app: App }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={rollback.isPending}
-                      onClick={() => rollback.mutate(deployment.id)}
+                      onClick={() => setRollingBackTo(deployment)}
                     >
                       <RotateCcwIcon className="size-3.5" />
                       {t("deploy.rollback")}
@@ -184,6 +204,106 @@ export function DeploymentsTab({ app }: { app: App }) {
         )
       })}
     </div>
+  )
+}
+
+type RollbackPlan = {
+  target: { number: number; commit_sha?: string; commit_message?: string; image?: string }
+  current?: { number: number; commit_sha?: string; commit_message?: string } | null
+  changes: { field: string; from: string; to: string }[]
+  unchanged: string[]
+  can_rollback: boolean
+}
+
+/**
+ * What going back to a deployment would change, before it is done.
+ *
+ * A rollback restores that version's image and the settings it ran with, and
+ * leaves the variables, the domains and the disks as they are now. That is the
+ * difference between it and an undo, and it is said here rather than found out.
+ */
+function RollbackDialog({
+  app,
+  target,
+  onClose,
+}: {
+  app: App
+  target: Deployment
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const plan = useQuery({
+    queryKey: ["rollback-plan", app.id, target.id],
+    queryFn: () => api.get<RollbackPlan>(`/api/apps/${app.id}/rollback/${target.id}/plan`),
+  })
+  const rollback = useMutation({
+    mutationFn: () => api.post(`/api/apps/${app.id}/rollback/${target.id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["deployments", app.id] })
+      onClose()
+    },
+  })
+  const version = (side?: { number: number; commit_sha?: string } | null) =>
+    side
+      ? `#${side.number}${side.commit_sha ? ` · ${shortCommit(side.commit_sha)}` : ""}`
+      : t("deploy.rollbackNothingLive")
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("deploy.rollbackTitle", { number: target.number })}</DialogTitle>
+          <DialogDescription>{t("deploy.rollbackHelp")}</DialogDescription>
+        </DialogHeader>
+        {plan.isLoading ? (
+          <Skeleton className="h-32" />
+        ) : plan.error ? (
+          <ErrorDisplay error={plan.error} compact />
+        ) : plan.data ? (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">{t("deploy.rollbackFrom")}</span>
+              <span className="font-mono text-xs">{version(plan.data.current)}</span>
+              <span className="text-muted-foreground">{t("deploy.rollbackTo")}</span>
+              <span className="font-mono text-xs">{version(plan.data.target)}</span>
+            </div>
+            {plan.data.changes.length > 0 ? (
+              <div className="space-y-1">
+                <p className="font-medium">{t("deploy.rollbackChanges")}</p>
+                <ul className="space-y-0.5 text-xs">
+                  {plan.data.changes.map((change) => (
+                    <li key={change.field} className="flex flex-wrap gap-x-2">
+                      <span className="text-muted-foreground">
+                        {t(`deploy.rollbackField.${change.field}`, { defaultValue: change.field })}
+                      </span>
+                      <span className="font-mono">
+                        {change.from || "—"} → {change.to || "—"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">{t("deploy.rollbackNoSettings")}</p>
+            )}
+            <p className="text-xs text-muted-foreground">{t("deploy.rollbackUnchanged")}</p>
+          </div>
+        ) : null}
+        {rollback.error != null && <ErrorDisplay error={rollback.error} compact />}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={rollback.isPending || !plan.data?.can_rollback}
+            onClick={() => rollback.mutate()}
+          >
+            {rollback.isPending ? <Spinner /> : <RotateCcwIcon />}
+            {t("deploy.rollback")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

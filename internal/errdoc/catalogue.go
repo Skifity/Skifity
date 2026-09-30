@@ -63,6 +63,15 @@ func StrongAuthRequired() *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// DeployLocked is a deploy or a rollback of an app somebody has locked.
+func DeployLocked(by, reason string) *Problem {
+	return New("deploy.locked", "Deploys to this app are locked").
+		WithCause("%s locked them: %s", by, reason).
+		WithImpact("Nothing was deployed. The version running now keeps running.").
+		WithFix("Unlock deploys on the app's page, or with `%s unlock`, once what they were locked for is over.", version.Binary).
+		WithStatus(http.StatusConflict)
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

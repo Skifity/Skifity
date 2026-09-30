@@ -172,6 +172,8 @@ skifity env rm LOG_LEVEL          # remove one
 skifity scale --instances 3       # a fixed number
 skifity scale --auto --max 5      # or automatically
 skifity rollback                  # back to the previous version
+skifity lock "incident 42"        # no deploys or rollbacks until...
+skifity unlock                    # ...this
 skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment

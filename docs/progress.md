@@ -4742,6 +4742,40 @@ showing the modes.
 
 Still open from gap 8: previews of several apps together, with a seed step.
 
+## Phase 94 — locked deploys, and a rollback that says what it does
+
+Two thirds of gap 19, from Kamal and DigitalOcean.
+
+**Locks.** `kamal lock` exists because a push during an incident, a manual
+migration or a launch freeze should not ship. An app's deploys can now be
+locked with a reason (migration 0024, a table of its own rather than columns on
+`apps`, so nothing that writes an app can clear it by accident). The check is in
+the deployer's `Deploy` and `Rollback`, which every deploy passes through — the
+panel, the CLI, an assistant, a template, a webhook — and refuses with
+`deploy.locked`, naming who locked it and why. A push to a locked app is listed
+as skipped, with the reason, rather than failed. Variable changes and scaling
+still roll out: they are not new code. The app's page has Lock and Unlock and a
+notice while it holds; the CLI has `skifity lock "why"` and `skifity unlock`.
+
+**Rollback plans.** A rollback was one click, and `docs/concepts.md` said it
+put back the old variables and domains. It never did: `restoreRuntimeSpec` puts
+back the image and the instance count, autoscaling, resources, port, health
+check and start command, and leaves variables, domains and disks as they are.
+The document now says what the code does. `RollbackChanges`, next to the spec
+it reads (moved into `store` so the API can use it), lists each setting a
+rollback would change, from what to what, and
+`GET /api/apps/{app}/rollback/{deployment}/plan` returns it with the version
+running now and the one it goes back to. The deployments tab opens that plan
+in a dialog before anything happens, and names what is left alone.
+
+Tested: every trigger of a deploy and a rollback refused while locked and
+allowed once unlocked, in the deployer; the lock's endpoints, its reason
+required, its appearance on the app and its audit events; a plan listing four
+changed settings, and one that recorded nothing listing none; and the plan
+endpoint naming the commit and what it leaves.
+
+Still open from gap 19: a maintenance page served in front of an app.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

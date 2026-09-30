@@ -457,7 +457,70 @@ func (s *Server) handleGetApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, app)
+	// The lock goes with the app, so the page that would offer a deploy
+	// knows not to.
+	type appWithLock struct {
+		store.App
+		DeployLock *store.DeployLock `json:"deploy_lock,omitempty"`
+	}
+	answer := appWithLock{App: app}
+	lock, err := s.db.GetDeployLock(r.Context(), app.ID)
+	switch {
+	case err == nil:
+		answer.DeployLock = &lock
+	case !errors.Is(err, store.ErrNotFound):
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, answer)
+}
+
+type lockRequest struct {
+	Reason string `json:"reason"`
+}
+
+// handleLockDeploys stops every deploy and rollback of an app, from anywhere,
+// until somebody unlocks it. A reason is required: a lock nobody can explain
+// is one nobody dares lift.
+func (s *Server) handleLockDeploys(w http.ResponseWriter, r *http.Request) {
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var req lockRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		writeError(w, r, errdoc.BadRequest("Say why deploys are locked, so whoever finds them locked knows who to ask and when it is over."))
+		return
+	}
+	lock := store.DeployLock{AppID: app.ID, Reason: truncate(reason, 200), LockedBy: user.Email}
+	if err := s.db.LockDeploys(r.Context(), &lock); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	s.audit(r, teamID, "app.deploys_locked", "app", app.ID, lock.Reason)
+	writeJSON(w, http.StatusOK, lock)
+}
+
+func (s *Server) handleUnlockDeploys(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.db.UnlockDeploys(r.Context(), app.ID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	s.audit(r, teamID, "app.deploys_unlocked", "app", app.ID, app.Name)
+	writeOK(w)
 }
 
 type updateAppRequest struct {

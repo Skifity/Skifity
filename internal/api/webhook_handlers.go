@@ -171,6 +171,12 @@ func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event
 			if s.deployer == nil {
 				continue
 			}
+			// A locked app is skipped and says why, rather than failing a
+			// deploy the webhook's sender would then show as an error.
+			if _, err := s.db.GetDeployLock(r.Context(), app.ID); err == nil {
+				result.Skipped = append(result.Skipped, app.Name+" (deploys are locked)")
+				continue
+			}
 			deployment, err := s.deployer.Deploy(r.Context(), DeployRequest{
 				AppID: app.ID, Trigger: "push", CommitSHA: event.CommitSHA, CreatedBy: "webhook",
 			})
