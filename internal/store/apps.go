@@ -534,24 +534,35 @@ type SealedRef struct {
 	ContextPrefix string
 }
 
-// UpdateSealed writes a rewrapped envelope back where it came from.
-func (db *DB) UpdateSealed(ctx context.Context, ref SealedRef, sealed string) error {
+// UpdateSealed writes a rewrapped envelope back where it came from, over the
+// value that was read and nothing else, and reports whether it did.
+//
+// A rotation reads every sealed value first and writes them back one by one;
+// a value somebody changed in between was put back as it was. Once the rotation
+// has begun, anything written is sealed with the new key already, so a value
+// that has changed is left as it is.
+func (db *DB) UpdateSealed(ctx context.Context, ref SealedRef, sealed string) (bool, error) {
 	keyCol := ref.KeyColumn
 	if keyCol == "" {
 		keyCol = "id"
 	}
 	// Table and column names come from the fixed list in ListSealedSecrets, never
 	// from user input, so interpolating them is safe here.
-	query := fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ?`, ref.Table, ref.Column, keyCol)
-	args := []any{sealed, ref.ID}
+	query := fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ? AND %s = ?`, ref.Table, ref.Column, keyCol, ref.Column)
+	args := []any{sealed, ref.ID, ref.Sealed}
 	if ref.KeyColumn2 != "" {
 		query += fmt.Sprintf(` AND %s = ?`, ref.KeyColumn2)
 		args = append(args, ref.ID2)
 	}
-	if _, err := db.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("rewrap %s.%s: %w", ref.Table, ref.Column, err)
+	res, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("rewrap %s.%s: %w", ref.Table, ref.Column, err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rewrap %s.%s: %w", ref.Table, ref.Column, err)
+	}
+	return n > 0, nil
 }
 
 // --- domains ---

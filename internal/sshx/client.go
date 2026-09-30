@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"skifity/internal/netguard"
 	"skifity/internal/runsafe"
 )
 
@@ -111,7 +112,15 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 	}
 
 	address := net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port))
-	dialer := net.Dialer{Timeout: cfg.Timeout}
+	// Through netguard, like every other address the panel is given: the add-
+	// server form dialled whatever it was handed, which made it a way to probe
+	// the panel's own machine and the cloud's metadata service. A machine to
+	// install on is never either. The one exception is this package's own
+	// in-process server, which tests run on loopback.
+	dialer := netguard.Dialer(cfg.Timeout)
+	if isTestServer(address) {
+		dialer = &net.Dialer{Timeout: cfg.Timeout}
+	}
 	rawConn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", ErrUnreachable, address, err)

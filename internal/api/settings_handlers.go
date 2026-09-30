@@ -261,13 +261,18 @@ func (s *Server) handleRotateMasterKey(w http.ResponseWriter, r *http.Request) {
 		if !changed {
 			continue
 		}
-		if err := s.db.UpdateSealed(ctx, ref, next); err != nil {
+		written, err := s.db.UpdateSealed(ctx, ref, next)
+		if err != nil {
 			s.log.Error("could not store a rewrapped secret",
 				"table", ref.Table, "column", ref.Column, "id", ref.ID, "error", err)
 			failed++
 			continue
 		}
-		rewrapped++
+		// Not written: changed since it was read, and so sealed with the new
+		// key already.
+		if written {
+			rewrapped++
+		}
 	}
 
 	recovery, err := s.keyring.RecoveryKey()

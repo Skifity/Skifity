@@ -519,8 +519,8 @@ func TestListSealedSecretsFindsEveryEncryptedColumn(t *testing.T) {
 	// And rewriting through UpdateSealed must land in the right row.
 	for _, r := range refs {
 		if r.Table == "servers" {
-			if err := db.UpdateSealed(ctx, r, "SKF1.rewrapped"); err != nil {
-				t.Fatalf("UpdateSealed: %v", err)
+			if written, err := db.UpdateSealed(ctx, r, "SKF1.rewrapped"); err != nil || !written {
+				t.Fatalf("UpdateSealed: %t, %v", written, err)
 			}
 		}
 	}
@@ -1308,5 +1308,51 @@ func TestNoPreviewCopyDeploysOnPushAfterTheUpgrade(t *testing.T) {
 	}
 	if got, _ := db.GetApp(ctx, ordinary.ID); !got.AutoDeploy {
 		t.Fatal("an ordinary app stopped deploying on push")
+	}
+}
+
+// A key rotation reads every sealed value, rewraps it and writes it back. A
+// value changed in between — a variable edited, a password reset — was put
+// back as it was when the rotation read it. The write is now only made over
+// the value that was read; one changed since was sealed with the new key
+// anyway and is left alone.
+func TestARewrapDoesNotPutBackAnOldValue(t *testing.T) {
+	db := testDB(t)
+	ctx := t.Context()
+	_, _, _, env := seedTeam(t, db)
+	app := App{EnvironmentID: env.ID, Name: "web", Slug: "web", Replicas: 1}
+	if err := db.CreateApp(ctx, &app); err != nil {
+		t.Fatal(err)
+	}
+	variable := Variable{AppID: app.ID, Key: "API_KEY", IsSecret: true}
+	if err := db.SetVariable(ctx, &variable, "sealed-under-the-old-key"); err != nil {
+		t.Fatal(err)
+	}
+	refs, err := db.ListSealedSecrets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ref SealedRef
+	for _, candidate := range refs {
+		if candidate.Table == "app_variables" && candidate.Sealed == "sealed-under-the-old-key" {
+			ref = candidate
+		}
+	}
+	if ref.Table == "" {
+		t.Fatalf("the variable is not among the sealed values: %+v", refs)
+	}
+	// Somebody saves a new value while the rotation is under way.
+	if err := db.SetVariable(ctx, &variable, "the-new-value-sealed-under-the-new-key"); err != nil {
+		t.Fatal(err)
+	}
+	written, err := db.UpdateSealed(ctx, ref, "the-old-value-rewrapped")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := db.ListVariables(ctx, app.ID)
+	var stored string
+	_ = db.QueryRowContext(ctx, `SELECT value_enc FROM app_variables WHERE id = ?`, rows[0].ID).Scan(&stored)
+	if written || stored != "the-new-value-sealed-under-the-new-key" {
+		t.Fatalf("the rewrap wrote %t, and the variable is %q", written, stored)
 	}
 }

@@ -2,9 +2,12 @@ package sshx
 
 import (
 	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"skifity/internal/netguard"
 )
 
 func TestDialWithPassword(t *testing.T) {
@@ -323,4 +326,38 @@ func firstLine(s string) string {
 		return s[:idx]
 	}
 	return s
+}
+
+// Adding a server dials whatever address it is given. It went straight to the
+// socket, so the form could be used to probe the panel's own machine and the
+// cloud's metadata service, which netguard keeps every other dial away from.
+func TestDialRefusesThisMachineAndTheMetadataService(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	accepted := make(chan struct{}, 1)
+	go func() {
+		if conn, err := listener.Accept(); err == nil {
+			accepted <- struct{}{}
+			_ = conn.Close()
+		}
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+	for _, host := range []string{"127.0.0.1", "169.254.169.254"} {
+		_, err := Dial(t.Context(), Config{
+			Host: host, Port: port, Timeout: time.Second,
+			Credentials: Credentials{User: "root", Password: "x"},
+		})
+		var blocked *netguard.Blocked
+		if !errors.As(err, &blocked) {
+			t.Errorf("dialling %s gave %v, want it refused before connecting", host, err)
+		}
+	}
+	select {
+	case <-accepted:
+		t.Fatal("a connection reached this machine's own port")
+	case <-time.After(50 * time.Millisecond):
+	}
 }

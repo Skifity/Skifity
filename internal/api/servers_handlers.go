@@ -311,7 +311,8 @@ func (s *Server) handleServerMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
-	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
+	user, err := s.authorizeTeam(r, teamID, store.RoleViewer)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -328,6 +329,35 @@ func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
 		// error page: the rest of the panel still works.
 		writeJSON(w, http.StatusOK, ClusterSummary{Reachable: false, Message: err.Error()})
 		return
+	}
+	// One cluster serves every team on the panel. A team is told about the
+	// servers it added — another team's addresses, labels and load are
+	// theirs — and about the capacity it shares, which is what its apps run
+	// on. The whole list is a panel administrator's.
+	if !user.IsAdmin {
+		servers, err := s.db.ListServers(r.Context(), teamID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		ours := map[string]bool{}
+		for _, server := range servers {
+			if server.NodeName != "" {
+				ours[server.NodeName] = true
+			}
+		}
+		nodes := summary.Nodes[:0:0]
+		summary.ReadyNodes = 0
+		for _, node := range summary.Nodes {
+			if !ours[node.Name] {
+				continue
+			}
+			nodes = append(nodes, node)
+			if node.Ready {
+				summary.ReadyNodes++
+			}
+		}
+		summary.Nodes = nodes
 	}
 	writeJSON(w, http.StatusOK, summary)
 }

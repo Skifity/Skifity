@@ -1035,7 +1035,7 @@
     "noUpdateCheck": "{{product}} tidak menghubungi server mana pun untuk memeriksa pembaruan.",
     "saved": "Pengaturan disimpan.",
     "rotateKeyDone": "Kunci utama telah dirotasi dan semua rahasia tersimpan dienkripsi ulang dengan kunci baru.",
-    "rotateKeyPartial": "Kunci utama baru sudah aktif, tetapi sebagian rahasia gagal dienkripsi ulang. Kunci lama tetap disimpan agar rahasia itu masih bisa dibaca.",
+    "rotateKeyPartial": "Master key baru sudah terpasang, tetapi beberapa secret tidak bisa dienkripsi ulang. Key lama disimpan agar secret tersebut tetap bisa dibaca — simpan juga recovery key sebelumnya sampai rotasi selesai tanpa kegagalan, karena recovery key baru tidak bisa membukanya.",
     "edited": "Diubah",
     "unsaved_other": "{{count}} perubahan belum disimpan",
     "subtitle": "Semua yang diatur operator, dalam satu tempat. Tidak ada di sini yang memerlukan berkas di server.",

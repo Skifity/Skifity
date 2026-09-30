@@ -59,6 +59,16 @@ type TestServerOptions struct {
 	RejectAllAuth bool
 }
 
+// testServers are the addresses NewTestServer listens on: loopback, which
+// Dial otherwise refuses, and nothing a person can type into the panel, since
+// a port is only listed while this process's own test server holds it.
+var testServers sync.Map
+
+func isTestServer(address string) bool {
+	_, ok := testServers.Load(address)
+	return ok
+}
+
 // NewTestServer starts a server on a random local port.
 func NewTestServer(opts TestServerOptions) (*TestServer, error) {
 	hostKey, err := GenerateKeyPair("test-host")
@@ -104,6 +114,7 @@ func NewTestServer(opts TestServerOptions) (*TestServer, error) {
 	}
 	server.listener = listener
 	server.config = config
+	testServers.Store(listener.Addr().String(), true)
 
 	go server.accept()
 	return server, nil
@@ -168,6 +179,7 @@ func (s *TestServer) Close() error {
 	s.mu.Lock()
 	s.closed = true
 	s.mu.Unlock()
+	testServers.Delete(s.listener.Addr().String())
 	return s.listener.Close()
 }
 

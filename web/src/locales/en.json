@@ -1047,7 +1047,7 @@
     "noUpdateCheck": "{{product}} does not contact any server to check for updates.",
     "saved": "Settings saved.",
     "rotateKeyDone": "The master key was rotated and every stored secret was re-encrypted with it.",
-    "rotateKeyPartial": "The new master key is in place, but some secrets could not be re-encrypted. The old key was kept so they stay readable.",
+    "rotateKeyPartial": "The new master key is in place, but some secrets could not be re-encrypted. The old key was kept so they stay readable — keep your previous recovery key as well until a rotation finishes cleanly, because the new one does not open them.",
     "edited": "Edited",
     "unsaved_one": "{{count}} unsaved change",
     "unsaved_other": "{{count}} unsaved changes",

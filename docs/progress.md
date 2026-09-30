@@ -5647,6 +5647,30 @@ container has it, as a header scoped to the repository's own host on the one
 command that fetches, never on disk; the build that runs the fork's code does
 not have it.
 
+Authorization and keys, the last of it:
+
+* **The cluster's servers, per team.** One cluster serves every team, and its
+  summary listed every node — addresses, labels, load — to a viewer of any of
+  them. A team now sees the servers it added and the capacity it shares; the
+  whole list is a panel administrator's.
+* **Tests that aim at real objects.** The route walks filled every child id with
+  one that does not exist, so "does this deployment belong to this app" had
+  never been asked of another team's real deployment. A new walk asks every
+  route with a child id — deployments, domains, schedules, volumes, backups, Git
+  connections, channels, invitations, members, operations, tokens — through the
+  caller's own parent with the other team's real child, and checks nothing of
+  theirs changed. It found nothing: the checks hold. The live stream's topics,
+  which no test had touched, are refused for another team's too, mixed with the
+  caller's own or not.
+* **Key rotation put back old values.** It reads every sealed value, rewraps
+  it and writes it back; a variable or password changed in between went back to
+  what it was. The write is now made only over the value that was read. After a
+  rotation that could not rewrap everything, the page says to keep the previous
+  recovery key too, since the new one does not open what was left.
+* **Adding a server dialled anything.** The SSH connection went straight to the
+  socket, past netguard, so the form could probe the panel's own machine and the
+  metadata service. It goes through netguard now.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
