@@ -36,6 +36,7 @@ import {
   limitFor,
 } from "@/components/settings/member-access"
 import { NotificationChannels } from "@/components/settings/notification-channels"
+import { SecretManagersCard } from "@/components/settings/secret-managers"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -141,6 +142,7 @@ export function SettingsPage() {
           <TabsTrigger value="git">{t("settings.git")}</TabsTrigger>
           <TabsTrigger value="certificates">{t("settings.certificates")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
+          <TabsTrigger value="secrets">{t("settings.secretManagers")}</TabsTrigger>
           <TabsTrigger value="components">{t("settings.components")}</TabsTrigger>
           <TabsTrigger value="plugins">{t("settings.plugins")}</TabsTrigger>
           <TabsTrigger value="members">{t("settings.members")}</TabsTrigger>
@@ -165,6 +167,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="notifications" className="pt-4">
           <NotificationChannels />
+        </TabsContent>
+        <TabsContent value="secrets" className="pt-4">
+          <SecretManagersCard />
         </TabsContent>
         <TabsContent value="components" className="pt-4">
           <ComponentsPanel />

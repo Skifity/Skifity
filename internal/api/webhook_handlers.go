@@ -708,7 +708,10 @@ func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string
 		return err
 	}
 	for _, row := range rows {
-		if fork && row.IsSecret {
+		// A variable read from a secret manager is a secret whatever it is
+		// marked, and a fork's preview is given none: not the value, and not
+		// the reference either, which would read the value at its deploy.
+		if fork && (row.IsSecret || row.Reference != nil) {
 			continue
 		}
 		if linked[row.Key] {
@@ -723,6 +726,17 @@ func (s *Server) copyPreviewVariables(r *http.Request, fromAppID, toAppID string
 		case store.PreviewValue:
 			plaintext, err = s.keyring.Open(row.PreviewSealed, previewVariableContext(fromAppID, row.Key))
 		default:
+			if row.Reference != nil {
+				// Its own is the same reference, read at the preview's own
+				// deploy: the value is never copied, because it is never here.
+				ref := *row.Reference
+				variable := store.Variable{AppID: toAppID, Key: row.Key, IsSecret: true, BuildTime: row.BuildTime,
+					Reference: &store.SecretReference{ConnectionID: ref.ConnectionID, Path: ref.Path, Key: ref.Key}}
+				if err := s.db.SetVariable(r.Context(), &variable, ""); err != nil {
+					return err
+				}
+				continue
+			}
 			plaintext, err = s.keyring.Open(row.Sealed, variableContext(fromAppID, row.Key))
 		}
 		if err != nil {

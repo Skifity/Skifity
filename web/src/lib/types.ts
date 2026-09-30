@@ -1131,6 +1131,49 @@ export type RegistryCredential = {
   updated_at: string
 }
 
+/** The kinds of secret manager a variable can be read from. */
+export type SecretManagerKind = "vault" | "infisical" | "doppler" | "aws"
+
+/**
+ * A connection to a secret manager the team already runs. What it signs in
+ * with is never sent back: `credentials` names them and nothing more.
+ */
+export type SecretManager = {
+  id: string
+  team_id: string
+  name: string
+  kind: SecretManagerKind
+  settings: Record<string, string>
+  credentials: string[]
+  used_by: number
+  refresh_minutes: number
+  next_refresh_at?: string
+  last_refresh_at?: string
+  refresh_failures: number
+  last_error?: string
+  created_at: string
+  updated_at: string
+}
+
+/** Where a variable's value is read from, for one not stored in the panel. */
+export type SecretReference = {
+  connection_id: string
+  path: string
+  key?: string
+  connection?: string
+  kind?: SecretManagerKind
+}
+
+/** What refreshing an app's variables from their secret managers did. */
+export type VariablesRefresh = {
+  references: number
+  changed: string[]
+  build_time_changed: string[]
+  rolled_out: boolean
+  deployment?: Deployment
+  not_deployed?: boolean
+}
+
 /** A file an app's containers read, mounted read-only at its path. */
 export type AppFile = {
   id: string

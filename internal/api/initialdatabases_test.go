@@ -95,6 +95,9 @@ func (f *fakeDeployer) RunResult(context.Context, string, string) (RunResult, er
 func (f *fakeDeployer) RunLogs(context.Context, string, string, bool) (io.ReadCloser, error) {
 	return nil, nil
 }
+func (f *fakeDeployer) RefreshReferences(context.Context, string, string) (ReferenceRefresh, error) {
+	return ReferenceRefresh{Changed: []string{}, BuildTimeChanged: []string{}}, nil
+}
 
 func withDatabases(t *testing.T, failFor string) (*harness, *recorder) {
 	t.Helper()

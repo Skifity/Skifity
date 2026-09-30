@@ -124,6 +124,23 @@ func TestScrubIsUsableOnItsOwn(t *testing.T) {
 	}
 }
 
+// What a secret manager connection signs in with, pasted into a message: a
+// Vault token, a Doppler service token, an AWS access key's id.
+func TestSecretManagerCredentialsAreScrubbed(t *testing.T) {
+	for _, credential := range []string{
+		"hvs.CAESIFakeFakeFakeFakeFakeFakeFakeFake",
+		"dp.st.prd.FakeFakeFakeFakeFakeFakeFakeFake",
+		"AKIAFAKEFAKEFAKEFAKE",
+	} {
+		if got := Scrub("signing in with " + credential + " failed"); strings.Contains(got, credential) {
+			t.Errorf("%s survived: %s", credential, got)
+		}
+		if !LooksSecret("UPSTREAM", credential) {
+			t.Errorf("a variable holding %s is not treated as a secret", credential)
+		}
+	}
+}
+
 // A variable nobody marked is stored as a secret when it looks like one.
 //
 // The case this exists for is a pasted .env file, which is where a person's

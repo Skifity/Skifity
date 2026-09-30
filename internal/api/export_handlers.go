@@ -27,14 +27,17 @@ import (
 
 // exportDocument is the whole of a team, as JSON.
 type exportDocument struct {
-	Product    string          `json:"product"`
-	Version    string          `json:"version"`
-	ExportedAt time.Time       `json:"exported_at"`
-	Note       string          `json:"note"`
-	Secrets    string          `json:"secrets"`
-	Team       store.Team      `json:"team"`
-	Servers    []store.Server  `json:"servers"`
-	Projects   []exportProject `json:"projects"`
+	Product    string         `json:"product"`
+	Version    string         `json:"version"`
+	ExportedAt time.Time      `json:"exported_at"`
+	Note       string         `json:"note"`
+	Secrets    string         `json:"secrets"`
+	Team       store.Team     `json:"team"`
+	Servers    []store.Server `json:"servers"`
+	// SecretManagers are the connections variables are read from: their
+	// names, kinds and settings, and never what they sign in with.
+	SecretManagers []store.SecretConnection `json:"secret_managers"`
+	Projects       []exportProject          `json:"projects"`
 }
 
 type exportProject struct {
@@ -100,6 +103,16 @@ func (s *Server) handleExportTeam(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	connections, err := s.db.ListSecretConnections(ctx, teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	secretManagers := make([]store.SecretConnection, 0, len(connections))
+	for _, row := range connections {
+		secretManagers = append(secretManagers, row.SecretConnection)
+	}
+	name := s.referenceNames(ctx, teamID)
 
 	out := exportDocument{
 		Product:    version.Name,
@@ -109,7 +122,9 @@ func (s *Server) handleExportTeam(w http.ResponseWriter, r *http.Request) {
 		Secrets:    exportSecretsNote,
 		Team:       team,
 		Servers:    servers,
-		Projects:   make([]exportProject, 0, len(projects)),
+		// A variable read from one says where from, under its reference.
+		SecretManagers: secretManagers,
+		Projects:       make([]exportProject, 0, len(projects)),
 	}
 
 	for _, project := range projects {
@@ -122,7 +137,10 @@ func (s *Server) handleExportTeam(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, row := range shared {
 			v := row.SharedVariable
-			if v.IsSecret {
+			if v.Reference != nil {
+				name(v.Reference)
+				v.Value = ""
+			} else if v.IsSecret {
 				v.Value = ""
 			} else if plaintext, err := s.keyring.Open(row.Sealed, sharedVariableContext(project.ID, v.Key)); err == nil {
 				v.Value = string(plaintext)
@@ -181,7 +199,10 @@ func (s *Server) exportApp(r *http.Request, app store.App, env store.Environment
 	if err != nil {
 		return exportApp{}, err
 	}
+	teamID, _ := s.db.TeamIDForApp(ctx, app.ID)
+	name := s.referenceNames(ctx, teamID)
 	for _, row := range rows {
+		name(row.Reference)
 		out.Variables = append(out.Variables,
 			s.exportVariable(row.Variable, row.Sealed, variableContext(app.ID, row.Key)))
 	}
@@ -242,7 +263,7 @@ func (s *Server) renderManifests(ctx context.Context, app store.App, env store.E
 
 // exportVariable copies a variable, opening it only when it is not a secret.
 func (s *Server) exportVariable(v store.Variable, sealed, context string) store.Variable {
-	if v.IsSecret {
+	if v.IsSecret || v.Reference != nil {
 		v.Value = ""
 		return v
 	}

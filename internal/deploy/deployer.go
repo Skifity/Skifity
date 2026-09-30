@@ -24,6 +24,7 @@ import (
 	"skifity/internal/plugins"
 	"skifity/internal/registry"
 	"skifity/internal/runsafe"
+	"skifity/internal/secretmgr"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 	"skifity/internal/upload"
@@ -49,8 +50,11 @@ type Deployer struct {
 	// PanelURL is the panel's public address, for the link a Git host shows
 	// beside a commit's status. Nil or empty means the status carries none.
 	PanelURL func(context.Context) string
-	gitHost  gitHost
-	log      *slog.Logger
+	// Secrets reads the variables whose values live in a secret manager. New
+	// gives every Deployer one that dials through internal/netguard.
+	Secrets *secretmgr.Resolver
+	gitHost gitHost
+	log     *slog.Logger
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -71,6 +75,7 @@ type Deployer struct {
 func New(db *store.DB, keyring *crypto.Keyring, hub *events.Hub, c *cluster.Cluster, notifier notify.Notifier, log *slog.Logger) *Deployer {
 	return &Deployer{
 		db: db, keyring: keyring, hub: hub, cluster: c, notifier: notifier, log: log,
+		Secrets: secretmgr.New(db, keyring),
 		running: map[string]context.CancelFunc{},
 		syncing: map[string]int{},
 		slots:   newBuildSlots(),
@@ -238,6 +243,17 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 	}
 
 	d.reportToGit(ctx, deployment, gitsrc.StatePending, "")
+
+	// Every variable read from a secret manager is read before anything is
+	// built or applied: one that cannot be read fails the deployment now,
+	// with the version that was serving still serving, rather than after a
+	// ten-minute build. What was read is kept for the rest of this deploy, so
+	// the build and the rollout ask each manager once between them.
+	ctx = secretmgr.WithCache(ctx)
+	if _, err := d.resolveVariables(ctx, app, env); err != nil {
+		d.fail(ctx, deployment, errdoc.From(err))
+		return
+	}
 
 	if deployment.Image == "" {
 		// Queued until a build slot is free, and said so: a deployment that
@@ -426,6 +442,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	// A sync applies everything the app has; a new version, everything but
 	// its processes, which keep their place in the list until they follow.
 	d.recordApplied(ctx, app.ID, objects, !newVersion)
+	// What the app's Secret now holds for each variable read from a secret
+	// manager, so the next refresh can say which of them changed.
+	d.recordReferences(ctx, app.ID, out.variables)
 
 	// Scheduled commands run the version that is deployed, so they are applied
 	// with it rather than when somebody writes the schedule — and a new
@@ -658,6 +677,14 @@ func (d *Deployer) Sync(ctx context.Context, appID string) error {
 	}
 	env, err := d.db.GetEnvironment(ctx, app.EnvironmentID)
 	if err != nil {
+		return err
+	}
+	// A variable read from a secret manager that cannot be read stops the
+	// sync before anything reaches the cluster, whether or not there is one:
+	// the app keeps the configuration it has, and the problem, naming the
+	// variable, goes back to the caller.
+	ctx = secretmgr.WithCache(ctx)
+	if _, err := d.resolveVariables(ctx, app, env); err != nil {
 		return err
 	}
 	if d.cluster == nil {
@@ -984,49 +1011,6 @@ func (d *Deployer) appendLog(ctx context.Context, deploymentID, line string) {
 		map[string]any{"seq": seq, "stream": "stdout", "line": line})
 }
 
-// runtimeVariables collects everything that becomes an environment variable:
-// the project's shared variables, then the app's own, then the connection
-// strings of the databases linked to it.
-//
-// Later sources win, so an app can override a shared value, and a database link
-// cannot be shadowed by accident.
-func (d *Deployer) runtimeVariables(ctx context.Context, app store.App, env store.Environment) (map[string]string, error) {
-	out := map[string]string{}
-
-	shared, err := d.db.ListSharedVariables(ctx, env.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range shared {
-		// A preview of a pull request from a fork runs code anybody could
-		// have written, and its first commit could print the environment. It
-		// gets the project's plain settings and none of its secrets — the same
-		// line GitHub Actions draws, and the one the preview's own copy of the
-		// app's variables already drew.
-		if env.FromFork && row.IsSecret {
-			continue
-		}
-		plaintext, err := d.keyring.Open(row.Sealed, "shared_variable:"+env.ProjectID+":"+row.Key)
-		if err != nil {
-			return nil, fmt.Errorf("read the shared variable %s: %w", row.Key, err)
-		}
-		out[row.Key] = string(plaintext)
-	}
-
-	own, err := d.db.ListVariables(ctx, app.ID)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range own {
-		plaintext, err := d.keyring.Open(row.Sealed, "variable:"+app.ID+":"+row.Key)
-		if err != nil {
-			return nil, fmt.Errorf("read the variable %s: %w", row.Key, err)
-		}
-		out[row.Key] = string(plaintext)
-	}
-	return out, nil
-}
-
 // certificatePairs opens the team's own certificates the app's hostnames
 // are served with, keyed by id, for their Secrets.
 func (d *Deployer) certificatePairs(ctx context.Context, spec kube.AppSpec) (map[string]kube.CertificatePair, error) {
@@ -1059,43 +1043,6 @@ func (d *Deployer) fileContents(ctx context.Context, app store.App) (map[string]
 			return nil, fmt.Errorf("read the file %s: %w", row.Path, err)
 		}
 		out[kube.FileKey(row.Path)] = content
-	}
-	return out, nil
-}
-
-// buildTimeVariables are the subset that affects what the image contains, and
-// therefore the build fingerprint.
-func (d *Deployer) buildTimeVariables(ctx context.Context, app store.App) (map[string]string, error) {
-	rows, err := d.db.ListVariables(ctx, app.ID)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]string{}
-	for _, row := range rows {
-		if !row.BuildTime {
-			continue
-		}
-		plaintext, err := d.keyring.Open(row.Sealed, "variable:"+app.ID+":"+row.Key)
-		if err != nil {
-			return nil, fmt.Errorf("read the build variable %s: %w", row.Key, err)
-		}
-		out[row.Key] = string(plaintext)
-	}
-	return out, nil
-}
-
-// secretBuildTimeVariables names the build-time variables marked secret, which
-// reach the build as BuildKit secrets and never as build arguments.
-func (d *Deployer) secretBuildTimeVariables(ctx context.Context, app store.App) (map[string]bool, error) {
-	rows, err := d.db.ListVariables(ctx, app.ID)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]bool{}
-	for _, row := range rows {
-		if row.BuildTime && row.IsSecret {
-			out[row.Key] = true
-		}
 	}
 	return out, nil
 }

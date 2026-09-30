@@ -358,6 +358,55 @@ type Variable struct {
 	PreviewMode string `json:"preview_mode,omitempty"`
 	// PreviewValue is shown only for a variable that is not a secret.
 	PreviewValue string `json:"preview_value,omitempty"`
+	// Reference is where the value is read from when it is not stored here:
+	// a secret manager the team connected. Nil for a variable with a value.
+	Reference *SecretReference `json:"reference,omitempty"`
+}
+
+// SecretReference names a secret in a secret manager: the connection, the
+// secret's path, and the key inside it for a secret that holds several.
+//
+// None of it is secret. The value it points at is read when an app is
+// deployed or synced, handed to the cluster, and never stored by the panel.
+type SecretReference struct {
+	ConnectionID string `json:"connection_id"`
+	Path         string `json:"path"`
+	Key          string `json:"key,omitempty"`
+	// Connection and Kind are the connection's name and kind, filled in by
+	// the API for whoever reads the reference.
+	Connection string `json:"connection,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+}
+
+// String is the reference as the CLI writes it: connection:path#key.
+func (r SecretReference) String() string {
+	name := r.Connection
+	if name == "" {
+		name = r.ConnectionID
+	}
+	out := name + ":" + r.Path
+	if r.Key != "" {
+		out += "#" + r.Key
+	}
+	return out
+}
+
+// referenceOf is a variable's reference from its three columns, nil when the
+// variable has a value instead.
+func referenceOf(connectionID, path, key string) *SecretReference {
+	if connectionID == "" {
+		return nil
+	}
+	return &SecretReference{ConnectionID: connectionID, Path: path, Key: key}
+}
+
+// refColumns are a reference's three columns, empty for a variable with a
+// value.
+func refColumns(r *SecretReference) (string, string, string) {
+	if r == nil {
+		return "", "", ""
+	}
+	return r.ConnectionID, r.Path, r.Key
 }
 
 // What a preview gets for a variable.
@@ -376,6 +425,8 @@ type SharedVariable struct {
 	IsSecret  bool      `json:"is_secret"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Reference is where the value is read from when it is not stored here.
+	Reference *SecretReference `json:"reference,omitempty"`
 }
 
 // Domain is a hostname that routes to an app.

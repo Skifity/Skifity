@@ -1481,6 +1481,88 @@ func BackupNotOffered(database, engine string) *Problem {
 		With("database", database).With("engine", engine)
 }
 
+// --- secret managers ---
+//
+// name is the connection's name, kind what it is ("Vault"), and detail the
+// sentence internal/secretmgr wrote about what happened, which names hosts,
+// paths and keys and never a value.
+
+// SecretManagerUnreachable is a secret manager that did not answer.
+func SecretManagerUnreachable(name, kind, detail string) *Problem {
+	return New("secrets.unreachable", "The secret manager could not be reached").
+		WithCause("%s (%s): %s.", name, kind, detail).
+		WithImpact("Nothing was read from it and nothing was changed.").
+		WithFix("Check the address in Settings → Secret managers, and that the panel's server can reach it: a firewall, a VPN, a certificate the panel does not trust. Then try again.").
+		WithDocs("/docs/configuration#secret-managers").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("connection", name)
+}
+
+// SecretManagerDenied is a secret manager that refused the credentials, or
+// refused what was asked with them.
+func SecretManagerDenied(name, kind, detail string) *Problem {
+	return New("secrets.denied", "The secret manager refused the panel").
+		WithCause("%s (%s): %s.", name, kind, detail).
+		WithImpact("Nothing was read from it and nothing was changed.").
+		WithFix("Check the connection's credentials, and that the policy they have allows reading this secret. Give the connection new credentials in Settings → Secret managers if they expired.").
+		WithDocs("/docs/configuration#secret-managers").
+		WithStatus(http.StatusBadGateway).
+		With("connection", name)
+}
+
+// SecretNotFound is a secret, or a key of one, that is not there.
+func SecretNotFound(name, kind, detail string) *Problem {
+	return New("secrets.not_found", "The secret is not in the secret manager").
+		WithCause("%s (%s): %s.", name, kind, detail).
+		WithImpact("Nothing was read from it and nothing was changed.").
+		WithFix("Check the path and the key, and that the secret exists in the project, environment or mount the connection reads.").
+		WithDocs("/docs/configuration#secret-managers").
+		WithStatus(http.StatusUnprocessableEntity).
+		With("connection", name)
+}
+
+// SecretManagerBadAnswer is a secret manager whose answer was not what that
+// kind of manager sends.
+func SecretManagerBadAnswer(name, kind, detail string) *Problem {
+	return New("secrets.bad_answer", "The secret manager answered something unexpected").
+		WithCause("%s (%s): %s.", name, kind, detail).
+		WithImpact("Nothing was read from it and nothing was changed.").
+		WithFix("Check that the address is the secret manager's API and not a page in front of it, and that it is the kind of manager the connection says.").
+		WithDocs("/docs/configuration#secret-managers").
+		WithStatus(http.StatusBadGateway).
+		With("connection", name)
+}
+
+// ReferenceUnresolved is a variable read from a secret manager that could not
+// be read, found while deploying, applying a change or refreshing.
+//
+// It names the variable, where it is read from, and why, and says the one
+// thing a person most needs to know: the version already running keeps
+// running with what it had. Nothing is ever deployed with the variable empty.
+func ReferenceUnresolved(variable, reference, name, kind, detail, reason string) *Problem {
+	return New("secrets.reference_unresolved", "A variable could not be read from its secret manager").
+		WithCause("%s is read from %s (%s, %s), and %s.", variable, reference, name, kind, detail).
+		WithImpact("Nothing was deployed or changed. The version running now keeps running with the values it had.").
+		WithFix("Check the connection with Test under Settings → Secret managers, and that the secret exists at that path. Then deploy again, or refresh the app's variables.").
+		WithDocs("/docs/concepts#variables-from-a-secret-manager").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("variable", variable).With("connection", name).With("reason", reason)
+}
+
+// SecretManagerInUse is a connection somebody tried to remove while variables
+// still read it.
+func SecretManagerInUse(name string, count int, uses string) *Problem {
+	return New("secrets.connection_in_use", "Variables still read this secret manager").
+		WithCause("%d variables read %s: %s.", count, name, uses).
+		WithImpact("Nothing was removed. Without the connection, the next deploy of those apps would fail.").
+		WithFix("Give those variables a value of their own, or point them at another connection, then remove this one.").
+		WithDocs("/docs/configuration#secret-managers").
+		WithStatus(http.StatusConflict).
+		With("connection", name)
+}
+
 // --- configuration ---
 
 // NotConfigured reports a feature used before its settings were filled in.

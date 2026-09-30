@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/secretmgr"
 	"skifity/internal/store"
 )
 
@@ -23,7 +24,8 @@ type setVariablesInput struct {
 
 type variableChange struct {
 	Key   string `json:"key" jsonschema:"the variable's name, in CAPITALS_WITH_UNDERSCORES"`
-	Value string `json:"value" jsonschema:"the value"`
+	Value string `json:"value" jsonschema:"the value; empty when from is given"`
+	From  string `json:"from,omitempty" jsonschema:"read the value from one of the team's secret managers instead, written connection:path or connection:path#key"`
 	// Pointers, for the reason set_variable's are.
 	IsSecret  *bool `json:"is_secret,omitempty" jsonschema:"store it encrypted and never show it again; leave it out to keep an existing secret a secret and let the panel decide for a new one"`
 	BuildTime *bool `json:"build_time,omitempty" jsonschema:"the value is needed while building, so setting it causes a rebuild; leave it out to keep what the variable was"`
@@ -56,6 +58,14 @@ func (s *Server) registerVariables() {
 	}, s.setVariables)
 
 	addTool(s, &mcp.Tool{
+		Name:        "refresh_variables",
+		Annotations: changes("Refresh variables from secret managers", true, true),
+		Description: "Read an app's variables from the secret managers they come from again, and roll the app out if any changed: " +
+			"a rollout for runtime values, a rebuild of the running version when one the build reads changed. Nothing happens when nothing changed. " +
+			"The answer names what changed; it never holds a value.",
+	}, s.refreshVariables)
+
+	addTool(s, &mcp.Tool{
 		Name:        "delete_variable",
 		Annotations: changes("Remove a variable", true, true),
 		Description: "Remove one of an app's environment variables and roll the app out without it. A secret's value is gone for good, so ask the person before removing one. " +
@@ -72,6 +82,13 @@ func (s *Server) setVariables(ctx context.Context, _ *mcp.CallToolRequest, in se
 		set := make([]map[string]any, 0, len(in.Set))
 		for _, change := range in.Set {
 			entry := map[string]any{"key": change.Key, "value": change.Value}
+			if change.From != "" {
+				from, err := referenceBody(change.From)
+				if err != nil {
+					return errorResult(err), setVariablesOutput{}, nil
+				}
+				entry = map[string]any{"key": change.Key, "from": from}
+			}
 			if change.IsSecret != nil {
 				entry["is_secret"] = *change.IsSecret
 			}
@@ -115,6 +132,62 @@ func (s *Server) setVariables(ctx context.Context, _ *mcp.CallToolRequest, in se
 	}
 	return textResult(fmt.Sprintf("Set %d and removed %d: %s. %s",
 		len(out.Set), len(out.Unset), strings.Join(append(keys, out.Unset...), ", "), out.Note)), out, nil
+}
+
+// referenceBody is a reference as the API takes it, from the way the CLI
+// writes one.
+func referenceBody(text string) (map[string]string, error) {
+	connection, path, key, err := secretmgr.ParseReference(text)
+	if err != nil {
+		return nil, errdoc.BadRequest(err.Error())
+	}
+	return map[string]string{"connection": connection, "path": path, "key": key}, nil
+}
+
+type refreshVariablesOutput struct {
+	Changed          []string `json:"changed"`
+	BuildTimeChanged []string `json:"build_time_changed"`
+	RolledOut        bool     `json:"rolled_out"`
+	DeploymentID     string   `json:"deployment_id,omitempty"`
+	Note             string   `json:"note"`
+}
+
+func (s *Server) refreshVariables(ctx context.Context, _ *mcp.CallToolRequest, in appIDInput) (*mcp.CallToolResult, refreshVariablesOutput, error) {
+	var response struct {
+		References       int               `json:"references"`
+		Changed          []string          `json:"changed"`
+		BuildTimeChanged []string          `json:"build_time_changed"`
+		RolledOut        bool              `json:"rolled_out"`
+		Deployment       *store.Deployment `json:"deployment"`
+		NotDeployed      bool              `json:"not_deployed"`
+	}
+	if err := s.client.Do(ctx, "POST", appPath(in.AppID, "/variables/refresh"), nil, &response); err != nil {
+		return errorResult(err), refreshVariablesOutput{}, nil
+	}
+	out := refreshVariablesOutput{
+		Changed: response.Changed, BuildTimeChanged: response.BuildTimeChanged, RolledOut: response.RolledOut,
+	}
+	if out.Changed == nil {
+		out.Changed = []string{}
+	}
+	if out.BuildTimeChanged == nil {
+		out.BuildTimeChanged = []string{}
+	}
+	switch {
+	case response.References == 0:
+		out.Note = "None of this app's variables is read from a secret manager."
+	case len(out.Changed) == 0:
+		out.Note = "Nothing changed in the secret managers, so nothing was rolled out."
+	case response.NotDeployed:
+		out.Note = "Values changed, and the app has not been deployed yet: the first deploy reads them."
+	case response.Deployment != nil:
+		out.DeploymentID = response.Deployment.ID
+		out.Note = fmt.Sprintf("%s changed and the build reads it, so the running version is being rebuilt with it (deployment %s).",
+			strings.Join(out.BuildTimeChanged, ", "), response.Deployment.ID)
+	default:
+		out.Note = fmt.Sprintf("%s changed and was rolled out without rebuilding.", strings.Join(out.Changed, ", "))
+	}
+	return textResult(out.Note), out, nil
 }
 
 func (s *Server) deleteVariable(ctx context.Context, _ *mcp.CallToolRequest, in deleteVariableInput) (*mcp.CallToolResult, doneOutput, error) {

@@ -273,6 +273,121 @@ the case where one alert goes somewhere else. Before this, every channel
 carried its own copy of the SMTP password and this page configured nothing at
 all.
 
+## Secret managers
+
+A variable can be read from the secret manager your team already keeps its
+secrets in, rather than stored in the panel. [Variables from a secret
+manager](concepts.md#variables-from-a-secret-manager) says how that works; this
+is how to connect one.
+
+An administrator connects it under **Settings → Secret managers**, or with the
+CLI:
+
+```sh
+skifity secrets connections add company-vault --kind vault \
+  --address https://vault.example.com:8200 --credentials-file vault.json
+skifity secrets connections list
+skifity secrets connections test company-vault
+skifity secrets connections remove company-vault
+```
+
+What it signs in with is never an argument, where it would sit in the shell's
+history: it comes from `--credentials-file` (JSON such as `{"token": "..."}`, or
+`KEY=value` lines; `-` is standard input), from standard input when something
+is piped in, or is asked for without echoing.
+
+Every connection signs in **before it is saved**, and reads no secret to do it:
+a token that is wrong is refused there and then. **Test** does the same again
+later. What it signs in with is sealed like every other secret the panel keeps,
+under the connection's own id, and is never shown again; new credentials — a
+rotated token — replace the old only once they have signed in. A connection a
+variable still reads cannot be removed, and the refusal names the variables.
+
+The name is how a variable points at it, as in `company-vault:path#key`:
+lower-case letters, digits, `-` and `_`.
+
+Every request goes out from the panel's own process through the same guard as
+a Git host or a webhook: never to the cloud metadata address or the panel's own
+machine, fifteen seconds at most, and at most 1 MiB of answer. A redirect to
+another host is refused rather than followed, since it would carry the token
+with it.
+
+### HashiCorp Vault and OpenBao
+
+| Setting | What it is |
+|---|---|
+| Address | Where Vault answers, such as `https://vault.example.com:8200`. |
+| KV version 2 mount | The secrets engine to read, `secret` when left out. Only KV version 2. |
+| Namespace | For Vault Enterprise namespaces and OpenBao; sent as `X-Vault-Namespace`. |
+| Sign in with | A **token**, or an **AppRole** with its role ID and secret ID. AppRole is mounted at `approle` unless `--approle-mount` says otherwise. |
+
+The path of a secret is under the mount: `shop/production` is
+`GET /v1/secret/data/shop/production`, and the key is one of its fields. The
+test is `auth/token/lookup-self`, which every token's default policy allows. A
+policy that reads what the apps use is enough:
+
+```hcl
+path "secret/data/shop/*" {
+  capabilities = ["read"]
+}
+```
+
+An AppRole signs in afresh at each deploy, so its tokens can be short-lived. A
+plain token has to outlive the gap between deploys; a periodic token, renewed
+by whoever issued it, suits that.
+
+### Infisical
+
+| Setting | What it is |
+|---|---|
+| Site URL | `https://app.infisical.com`, `https://eu.infisical.com`, or your own. |
+| Project ID | The project's id, from its settings. |
+| Environment slug | Such as `dev`, `staging` or `prod`. |
+| Client ID, client secret | A **machine identity** with **universal auth**. |
+
+Give the identity read access to that project and environment only. A path is
+the secret's name, or `/folder/NAME` for one in a folder; references to other
+secrets inside a value are expanded, as Infisical's own CLI does. The test is
+the universal-auth login. Every request uses Infisical's v4 secrets API, so a
+self-hosted Infisical has to be recent enough to have it.
+
+### Doppler
+
+Only a **service token**, which belongs to one config of one project: it says
+itself which secrets it reads, so there is nothing else to set. A path is the
+secret's name, such as `STRIPE_KEY`, and its computed value is what an app
+gets — with `${OTHER}` references filled in, as `doppler run` does. The test is
+`/v3/me`, which describes the token and reads nothing. A secret whose value the
+token may not see is refused rather than read as empty.
+
+### AWS Secrets Manager
+
+| Setting | What it is |
+|---|---|
+| Region | Such as `eu-central-1`. |
+| Endpoint | Only for a VPC endpoint, or LocalStack. Left out, the region's own. |
+| Access key ID, secret access key | An IAM user's key, and a session token for temporary credentials. |
+
+A path is the secret's name or its ARN. A secret stored as JSON — which is what
+the console makes of key/value pairs — gives each key with `#key`, and the whole
+JSON without one. A binary secret cannot be a variable. The test is STS
+`GetCallerIdentity`, which every valid key may call and which reads nothing;
+reading needs `secretsmanager:GetSecretValue` on the secrets the apps use, and
+`kms:Decrypt` on their key when it is not the default one.
+
+Requests are signed with Signature Version 4 by the panel itself; there is no
+AWS SDK in it.
+
+### Refreshing on a schedule
+
+Off by default. A connection can refresh every app that reads it every 15
+minutes, hour, 6 hours or day: whatever changed is rolled out, and an app is
+rebuilt only when its build reads the value that changed. It is bounded so that
+a manager is never hammered — a few connections a minute, fifty apps each, one
+request per secret however many apps read it — and a connection whose refresh
+fails waits twice as long each time, up to a day, with the reason shown beside
+it.
+
 ## Single sign-on
 
 Skifity speaks **OpenID Connect**: Okta, Entra ID, Authentik, Keycloak, Zitadel,

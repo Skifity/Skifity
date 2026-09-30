@@ -64,6 +64,11 @@ var valuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._\-]{16,}`),
 	regexp.MustCompile(`\bghp_[A-Za-z0-9]{20,}\b`),
 	regexp.MustCompile(`\bsk-[A-Za-z0-9]{20,}\b`),
+	// What the secret managers a variable can be read from sign in with:
+	// a Vault or OpenBao token, a Doppler token, an AWS access key's id.
+	regexp.MustCompile(`\bhv[sbr]\.[A-Za-z0-9_\-]{20,}`),
+	regexp.MustCompile(`\bdp\.(?:st|sa|pt|ct|scim|audit)\.[A-Za-z0-9_.\-]{20,}`),
+	regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`),
 }
 
 // redactor wraps a slog.Handler and rewrites sensitive attributes and messages.

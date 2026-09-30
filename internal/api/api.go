@@ -20,6 +20,7 @@ import (
 	"skifity/internal/notify"
 	"skifity/internal/plugins"
 	"skifity/internal/runsafe"
+	"skifity/internal/secretmgr"
 	"skifity/internal/store"
 	"skifity/internal/templates/remote"
 	"skifity/internal/upload"
@@ -83,6 +84,9 @@ type Server struct {
 	// catalogues keeps each of them read, and says whether the daily
 	// refresh is running. See template_catalogues.go.
 	catalogues *catalogueCache
+	// secrets reads the secret managers a team connected: a connection's
+	// test, and a reference checked when it is set.
+	secrets *secretmgr.Resolver
 
 	// frontend serves the embedded UI.
 	frontend http.Handler
@@ -127,6 +131,9 @@ type Options struct {
 	// appears on the same page as a request counted here. Nil is fine and
 	// means the panel keeps its own.
 	Metrics *metrics.Registry
+	// SecretManagers reads the secret managers teams connect. Nil builds one
+	// that dials through internal/netguard, which is what a panel wants.
+	SecretManagers *secretmgr.Resolver
 }
 
 // New builds the API server and its routes.
@@ -156,9 +163,13 @@ func New(opts Options) *Server {
 
 		catalogueFetcher: &remote.Fetcher{},
 		catalogues:       &catalogueCache{},
+		secrets:          opts.SecretManagers,
 	}
 	if s.metrics == nil {
 		s.metrics = metrics.New()
+	}
+	if s.secrets == nil {
+		s.secrets = secretmgr.New(opts.DB, opts.Keyring)
 	}
 	if s.resolver == nil {
 		s.resolver = systemResolver
@@ -315,6 +326,14 @@ func (s *Server) routes() chi.Router {
 				team.Put("/notifications/{channelID}", s.handleUpdateNotificationChannel)
 				team.Delete("/notifications/{channelID}", s.handleDeleteNotificationChannel)
 				team.Post("/notifications/{channelID}/test", s.handleTestNotificationChannel)
+
+				// Where a variable can be read from instead of stored here.
+				// See secretmgr_handlers.go for who may do what.
+				team.Get("/secret-managers", s.handleListSecretManagers)
+				team.Post("/secret-managers", s.handleCreateSecretManager)
+				team.Patch("/secret-managers/{connectionID}", s.handleUpdateSecretManager)
+				team.Delete("/secret-managers/{connectionID}", s.handleDeleteSecretManager)
+				team.Post("/secret-managers/{connectionID}/test", s.handleTestSecretManager)
 			})
 
 			authed.Route("/servers/{serverID}", func(server chi.Router) {
@@ -407,6 +426,9 @@ func (s *Server) routes() chi.Router {
 				app.Post("/variables/batch", s.handleChangeVariables)
 				app.Delete("/variables/{key}", s.handleDeleteVariable)
 				app.Put("/variables/{key}/preview", s.handleSetVariablePreview)
+				// Read the ones from secret managers again, and roll out
+				// what changed.
+				app.Post("/variables/refresh", s.handleRefreshVariables)
 				app.Get("/ports", s.handleListPorts)
 				app.Post("/ports", s.handleAddPort)
 				app.Delete("/ports/{portID}", s.handleDeletePort)

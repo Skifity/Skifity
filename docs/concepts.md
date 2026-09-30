@@ -180,6 +180,82 @@ The `SKIFITY_` prefix is the panel's: a variable of your own with one of these
 names is replaced by the panel's value. A value that is not known is left unset
 rather than empty.
 
+### Variables from a secret manager
+
+A variable does not have to hold its value. It can say where the value is
+instead — in the HashiCorp Vault or OpenBao, Infisical, Doppler or AWS Secrets
+Manager your team already keeps its secrets in — and Skifity reads it from
+there. An administrator connects the manager once, under **Settings → Secret
+managers** ([how, for each](configuration.md#secret-managers)); after that,
+anybody who can set a variable can choose **A secret manager** instead of typing
+a value, or run:
+
+```sh
+skifity env set STRIPE_KEY --from company-vault:shop/production#stripe_key
+```
+
+That is `connection:path#key`. The path is where the secret is in that manager:
+a path under the Vault mount, `/folder/NAME` in Infisical, the secret's name in
+Doppler, the secret's name or ARN in AWS. The key picks one value out of a
+secret that holds several — a Vault secret's field, or a key of a secret whose
+value is a JSON object, which is how AWS keeps several values in one secret. A
+Vault secret with one field, and any other secret, needs no key.
+
+**What is stored.** The reference: the connection, the path and the key. The
+value never is — not in the database, not in a deployment's record, not in the
+audit log. The page, the CLI, the API and an AI assistant all show
+`from Vault: company-vault:shop/production#stripe_key` where a value would be. A
+variable read from a secret manager is a secret whatever it is marked.
+
+**When it is read.** At the same moments any other variable is:
+
+* A **runtime** variable is read whenever the app's variables are written to
+  its Kubernetes Secret — each deploy, each change that rolls the app out, each
+  one-off command — and handed to the app there, and nowhere else. A new value
+  in the manager never changes the build fingerprint, so it never rebuilds.
+* A **build-time** variable is read when the deploy works out the build
+  fingerprint and again when the image is built, and it is part of the
+  fingerprint like any other build argument: a new value is a new image, the
+  same value reuses the old one. It reaches the build as a secret, never as a
+  build argument.
+* It is read **once when you set it**, so a typo in a path is refused there and
+  then rather than at the next deploy. The value read is thrown away.
+
+**When it cannot be read** — the manager is down, the token expired, the
+secret was deleted — whatever was reading it stops before anything reaches the
+cluster. A deploy fails before it builds, with an error that names the
+variable, the connection and why; a change that would have rolled the app out
+does not. The version that was running keeps running with the values it had.
+Nothing is ever deployed with such a variable empty, and a secret that *is*
+empty in the manager is refused the same way, because it is nearly always the
+wrong environment or a placeholder. The same holds for everything that writes
+the app's variables: while a manager cannot be read, a rollback, a scale change
+or another variable's new value is not applied either, and the app keeps
+running exactly as it is until it can be.
+
+**When the value changes** in the manager, nothing happens until something
+reads it. **Refresh from secret managers** on the app's **Variables** tab, or
+`skifity env refresh`, reads them all again and says which changed: runtime ones
+are rolled out without a rebuild, and when one the build reads changed, the
+version that is running — the same commit — is rebuilt with it. When nothing
+changed, nothing happens. A connection can also refresh every app that reads it
+on its own, every 15 minutes to once a day; that is off unless an administrator
+turns it on.
+
+**Previews.** A preview of a pull request from the repository itself gets the
+same reference, read at the preview's own deploy — or a value of its own, the
+test key, set with the pull-request icon the way any variable's is. A preview of
+a pull request from a **fork** gets nothing read from a secret manager, not the
+value and not the reference, for the reason in [A preview's
+variables](#a-previews-variables).
+
+**Who can read what.** A connection reads whatever its policy allows, and
+anybody who can set a variable can point one at any path it can read. Give each
+connection a policy that reads only what your apps use — a Vault policy on
+`shop/*`, an Infisical identity with read access to one environment, a Doppler
+service token for one config, an IAM policy on a prefix — and a team that needs
+a wall between projects a connection per project.
+
 ## Files
 
 Some software is configured by a file rather than by variables: nginx reads
@@ -1287,6 +1363,10 @@ download a recovery key before it stops nagging.
 
 Once stored, a secret's value is never shown again, by the panel, the CLI, the
 API or an AI assistant.
+
+A secret you would rather not store here at all can stay in the secret manager
+it lives in now, and be read from there at each deploy: see [Variables from a
+secret manager](#variables-from-a-secret-manager).
 
 ## Components
 

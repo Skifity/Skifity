@@ -117,9 +117,10 @@ Tools, in the order they are usually needed:
 | `get_events` | What Kubernetes said about an app's or a database's instances, newest first: a pod that could not be placed, a failed health check, an instance killed for its memory. The common warnings come with what they mean. Where the answer is when the logs are empty. |
 | `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, and `process` for a worker's. |
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
-| `list_variables` | An app's variables. Secret values are never returned. |
-| `set_variable` | Sets one. Says whether it causes a rebuild. |
+| `list_variables` | An app's variables. Secret values are never returned; one read from a secret manager says where from, as `connection:path#key`. |
+| `set_variable` | Sets one, or with `from` reads it from one of the team's secret managers (Vault, Infisical, Doppler, AWS Secrets Manager) instead of storing it. Says whether it causes a rebuild. |
 | `set_variables` | Sets and removes several at once: all or none, one rollout. |
+| `refresh_variables` | Reads an app's variables from their secret managers again and rolls out what changed; rebuilds only when a build-time one did. |
 | `delete_variable` | Removes one. |
 | `list_files` | The files an app reads at a path, and one file's content. A secret file's content is never returned. |
 | `set_file` | Saves a config file at a path, or replaces it. Rolled out, never rebuilt. |

@@ -167,6 +167,9 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		Databases: databases, Backups: backups, Scanner: deployer, Plugins: pluginEvents, Drift: drift,
 		Frontend: frontend, SetupToken: setupToken, Metrics: registry,
 		Uploads: uploads, Traffic: watcher,
+		// One reader of the teams' secret managers for the API and the
+		// deployer, dialling through internal/netguard.
+		SecretManagers: deployer.Secrets,
 	})
 
 	// Anything left running when the panel stopped is marked failed with an
@@ -185,7 +188,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	defer stopBackground()
 	go server.Background(background)
 	sweepUploads(ctx, db, uploads, log)
-	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, server.RefreshTemplateCatalogues, log)
+	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, server.RefreshTemplateCatalogues, deployer.RefreshDue, log)
 	go watcher.Run(background)
 
 	httpServer := &http.Server{
@@ -444,8 +447,12 @@ type rescanner interface {
 //
 // refreshCatalogues is handed each minute and refreshes the teams' own
 // template catalogues that are due; see api.Server.RefreshTemplateCatalogues.
+//
+// refreshSecrets is the periodic refresh of the variables read from secret
+// managers, for the connections that have it switched on; see
+// Deployer.RefreshDue for how it is bounded.
 func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store,
-	notifier notify.Notifier, refreshCatalogues func(context.Context, time.Time), log *slog.Logger) {
+	notifier notify.Notifier, refreshCatalogues, refreshSecrets func(context.Context, time.Time), log *slog.Logger) {
 	// Align to the start of the next minute so a schedule of "0 3 * * *" fires
 	// at 03:00 rather than at whatever second the panel happened to start.
 	timer := time.NewTimer(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
@@ -514,6 +521,12 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 			// a restart neither skips a day nor repeats one.
 			if refreshCatalogues != nil {
 				runsafe.Go(log, "refreshing template catalogues", func() { refreshCatalogues(ctx, now) })
+			}
+			// Beside the tick too: a secret manager that is slow to answer
+			// must not hold up a backup. It returns at once when the last
+			// minute's refresh is still running.
+			if refreshSecrets != nil {
+				runsafe.Go(log, "refreshing variables from secret managers", func() { refreshSecrets(ctx, now) })
 			}
 		}()
 		select {

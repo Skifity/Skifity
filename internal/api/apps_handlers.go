@@ -981,9 +981,20 @@ func (s *Server) handleListVariables(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	name := s.referenceNames(r.Context(), teamID)
 	out := make([]store.Variable, 0, len(rows))
 	for _, row := range rows {
 		v := row.Variable
+		if v.Reference != nil {
+			// Where it is read from, which is not secret; the value is not
+			// here to show, and would not be shown if it were. A reference
+			// is a secret, so neither is its preview value.
+			name(v.Reference)
+			v.Value = ""
+			out = append(out, v)
+			continue
+		}
 		if v.IsSecret {
 			// A secret is never shown again after it is set. This is the whole
 			// point of storing it encrypted. Nor is its preview value.
@@ -1014,6 +1025,10 @@ type setVariableRequest struct {
 	// command that does not ask made it a runtime variable, and the next
 	// build went without it.
 	BuildTime *bool `json:"build_time,omitempty"`
+	// From reads the value from a secret manager instead of storing one.
+	// Value is then empty, and the variable is a secret whatever IsSecret
+	// says.
+	From *referenceRequest `json:"from,omitempty"`
 }
 
 // buildTimeness decides whether a variable is read by the build: what the
@@ -1060,12 +1075,8 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 
-	sealed, err := s.keyring.Seal([]byte(req.Value), variableContext(app.ID, key))
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
 	existing, err := s.db.ListVariables(r.Context(), app.ID)
 	if err != nil {
 		writeError(w, r, err)
@@ -1081,6 +1092,23 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		AppID: app.ID, Key: key, BuildTime: buildTimeness(req.BuildTime, wasBuildTime),
 		IsSecret: secretness(req.IsSecret, wasSecret, key, req.Value),
 	}
+	sealed := ""
+	if req.From != nil {
+		if req.Value != "" {
+			writeError(w, r, errdoc.BadRequest("Give a value, or a secret manager to read it from, not both."))
+			return
+		}
+		// Read once now, so a wrong path is found here; the value is never
+		// stored, and a variable read from a secret manager is a secret.
+		if variable.Reference, err = s.referenceFor(r.Context(), teamID, key, *req.From); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		variable.IsSecret = true
+	} else if sealed, err = s.keyring.Seal([]byte(req.Value), variableContext(app.ID, key)); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if err := s.db.SetVariable(r.Context(), &variable, sealed); err != nil {
 		writeError(w, r, err)
 		return
@@ -1095,9 +1123,13 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	// The value is never audited, only the key.
-	s.audit(r, teamID, "variable.set", "app", app.ID, key)
+	// The value is never audited, only the key; for a reference, also where
+	// it is read from, which is not secret.
+	if variable.Reference != nil {
+		s.audit(r, teamID, "variable.reference_set", "app", app.ID, truncate(key+" from "+variable.Reference.String(), 255))
+	} else {
+		s.audit(r, teamID, "variable.set", "app", app.ID, key)
+	}
 	variable.Value = ""
 	writeJSON(w, http.StatusOK, map[string]any{"variable": variable, "requires_rebuild": rebuilt})
 }
@@ -1136,7 +1168,8 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 	for _, row := range existing {
 		wasSecret[row.Key], wasBuildTime[row.Key] = row.IsSecret, row.BuildTime
 	}
-	batch, err := s.prepareVariableChanges(req, wasSecret, wasBuildTime, true,
+	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	batch, err := s.prepareVariableChanges(r.Context(), teamID, req, wasSecret, wasBuildTime, true,
 		func(key string) string { return variableContext(app.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1153,7 +1186,6 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	// Keys only, as for one variable: a value is never audited.
 	s.audit(r, teamID, "variables.changed", "app", app.ID, batch.label())
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1184,7 +1216,7 @@ func (s *Server) handleChangeSharedVariables(w http.ResponseWriter, r *http.Requ
 	for _, row := range existing {
 		wasSecret[row.Key] = row.IsSecret
 	}
-	batch, err := s.prepareVariableChanges(req, wasSecret, nil, false,
+	batch, err := s.prepareVariableChanges(r.Context(), project.TeamID, req, wasSecret, nil, false,
 		func(key string) string { return sharedVariableContext(project.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1233,8 +1265,8 @@ func (b variableBatch) answer() []store.Variable {
 // prepareVariableChanges checks a batch and seals its values, before anything
 // is written: a key that is not one, a key given twice, or a key both set and
 // removed refuses the whole batch.
-func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret, wasBuildTime map[string]bool,
-	buildTimeAllowed bool, sealContext func(key string) string) (variableBatch, error) {
+func (s *Server) prepareVariableChanges(ctx context.Context, teamID string, req changeVariablesRequest,
+	wasSecret, wasBuildTime map[string]bool, buildTimeAllowed bool, sealContext func(key string) string) (variableBatch, error) {
 	var batch variableBatch
 	if len(req.Set)+len(req.Unset) == 0 {
 		return batch, errdoc.BadRequest("Give at least one variable to set or remove.")
@@ -1257,17 +1289,27 @@ func (s *Server) prepareVariableChanges(req changeVariablesRequest, wasSecret, w
 		if buildTime && !buildTimeAllowed {
 			return batch, errdoc.BadRequest("A shared variable is read when an app runs, never while it builds.")
 		}
-		sealed, err := s.keyring.Seal([]byte(item.Value), sealContext(key))
-		if err != nil {
-			return batch, err
+		variable := store.Variable{
+			Key: key, BuildTime: buildTime,
+			IsSecret: secretness(item.IsSecret, wasSecret[key], key, item.Value),
 		}
-		batch.set = append(batch.set, store.VariableChange{
-			Variable: store.Variable{
-				Key: key, BuildTime: buildTime,
-				IsSecret: secretness(item.IsSecret, wasSecret[key], key, item.Value),
-			},
-			Sealed: sealed,
-		})
+		sealed := ""
+		if item.From != nil {
+			if item.Value != "" {
+				return batch, errdoc.BadRequest(fmt.Sprintf("%s has a value and a secret manager to read it from. Give one.", key))
+			}
+			ref, err := s.referenceFor(ctx, teamID, key, *item.From)
+			if err != nil {
+				return batch, err
+			}
+			variable.Reference, variable.IsSecret = ref, true
+		} else {
+			var err error
+			if sealed, err = s.keyring.Seal([]byte(item.Value), sealContext(key)); err != nil {
+				return batch, err
+			}
+		}
+		batch.set = append(batch.set, store.VariableChange{Variable: variable, Sealed: sealed})
 		if buildTime {
 			batch.rebuild = true
 		} else {
@@ -1372,10 +1414,14 @@ func (s *Server) handleListSharedVariables(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, err)
 		return
 	}
+	name := s.referenceNames(r.Context(), project.TeamID)
 	out := make([]store.SharedVariable, 0, len(rows))
 	for _, row := range rows {
 		v := row.SharedVariable
-		if v.IsSecret {
+		if v.Reference != nil {
+			name(v.Reference)
+			v.Value = ""
+		} else if v.IsSecret {
 			v.Value = ""
 		} else if plaintext, err := s.keyring.Open(row.Sealed, sharedVariableContext(project.ID, v.Key)); err == nil {
 			v.Value = string(plaintext)
@@ -1401,11 +1447,6 @@ func (s *Server) handleSetSharedVariable(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	sealed, err := s.keyring.Seal([]byte(req.Value), sharedVariableContext(project.ID, key))
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
 	existing, err := s.db.ListSharedVariables(r.Context(), project.ID)
 	if err != nil {
 		writeError(w, r, err)
@@ -1420,6 +1461,21 @@ func (s *Server) handleSetSharedVariable(w http.ResponseWriter, r *http.Request)
 	variable := store.SharedVariable{
 		ProjectID: project.ID, Key: key,
 		IsSecret: secretness(req.IsSecret, wasSecret, key, req.Value),
+	}
+	sealed := ""
+	if req.From != nil {
+		if req.Value != "" {
+			writeError(w, r, errdoc.BadRequest("Give a value, or a secret manager to read it from, not both."))
+			return
+		}
+		if variable.Reference, err = s.referenceFor(r.Context(), project.TeamID, key, *req.From); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		variable.IsSecret = true
+	} else if sealed, err = s.keyring.Seal([]byte(req.Value), sharedVariableContext(project.ID, key)); err != nil {
+		writeError(w, r, err)
+		return
 	}
 	if err := s.db.SetSharedVariable(r.Context(), &variable, sealed); err != nil {
 		writeError(w, r, err)
@@ -1438,7 +1494,12 @@ func (s *Server) handleSetSharedVariable(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-	s.audit(r, project.TeamID, "shared_variable.set", "project", project.ID, key)
+	if variable.Reference != nil {
+		s.audit(r, project.TeamID, "shared_variable.reference_set", "project", project.ID,
+			truncate(key+" from "+variable.Reference.String(), 255))
+	} else {
+		s.audit(r, project.TeamID, "shared_variable.set", "project", project.ID, key)
+	}
 	variable.Value = ""
 	writeJSON(w, http.StatusOK, variable)
 }

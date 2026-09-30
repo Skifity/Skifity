@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -11,6 +12,7 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
+	"skifity/internal/secretmgr"
 	"skifity/internal/store"
 )
 
@@ -53,7 +55,7 @@ func (d *Deployer) CheckDrift(ctx context.Context, appID string) (api.DriftRepor
 	if err != nil {
 		return report, err
 	}
-	out, err := d.render(ctx, target, app, env)
+	out, err := d.renderWith(ctx, target, app, env, d.appliedReferences(env))
 	if err != nil {
 		return report, err
 	}
@@ -91,6 +93,9 @@ func (d *Deployer) CheckDrift(ctx context.Context, appID string) (api.DriftRepor
 	}
 
 	secrets := d.cluster.SecretValues(ctx, app, env)
+	for key := range out.variables.references {
+		secrets = append(secrets, out.variables.values[key])
+	}
 	for _, change := range changes {
 		report.Items = append(report.Items, api.DriftItem{
 			Kind: change.Kind, Name: change.Name, Path: change.Path, Change: change.Change,
@@ -107,6 +112,47 @@ func (d *Deployer) CheckDrift(ctx context.Context, appID string) (api.DriftRepor
 		}
 	}
 	return report, nil
+}
+
+// appliedReferences reads the variables that come from a secret manager out
+// of the app's Secret, as the last apply wrote it, rather than from the
+// managers.
+//
+// The check runs every five minutes for every app. Asking Vault or Doppler
+// each time would be a steady load on somebody else's service, and a manager
+// that is down would fail every check. What the check compares is the cluster
+// with what the panel applied, and for these values the Secret is the record
+// of that. A value somebody changed there with kubectl is still found: the
+// field is then held by another manager, which is drift whatever it says. A
+// key the Secret does not hold yet is left out, as a change the panel has
+// still to apply.
+func (d *Deployer) appliedReferences(env store.Environment) referenceReader {
+	return func(ctx context.Context, app store.App, wanted map[string]secretmgr.Wanted) (map[string]string, error) {
+		if len(wanted) == 0 {
+			return nil, nil
+		}
+		live, err := d.cluster.Client().Applier().Get(ctx, "v1", "Secret", env.Namespace, kube.ResourceName(app.Slug, "env"))
+		if kube.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		data, _, _ := unstructured.NestedStringMap(live.Object, "data")
+		out := make(map[string]string, len(wanted))
+		for key := range wanted {
+			encoded, ok := data[key]
+			if !ok {
+				continue
+			}
+			value, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				continue
+			}
+			out[key] = string(value)
+		}
+		return out, nil
+	}
 }
 
 // applying reports whether the panel is changing an app right now: a sync in

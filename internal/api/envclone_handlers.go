@@ -213,6 +213,17 @@ func (s *Server) cloneApp(r *http.Request, from, to store.App, notes *[]cloneNot
 		if linked[row.Key] {
 			continue
 		}
+		if row.Reference != nil {
+			// The clone reads the same secret from the same manager: there is
+			// no value here to copy.
+			ref := *row.Reference
+			variable := store.Variable{AppID: to.ID, Key: row.Key, IsSecret: true, BuildTime: row.BuildTime,
+				Reference: &store.SecretReference{ConnectionID: ref.ConnectionID, Path: ref.Path, Key: ref.Key}}
+			if err := s.db.SetVariable(ctx, &variable, ""); err != nil {
+				return err
+			}
+			continue
+		}
 		plaintext, err := s.keyring.Open(row.Sealed, variableContext(from.ID, row.Key))
 		if err != nil {
 			return err

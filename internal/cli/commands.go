@@ -49,6 +49,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdLogs(ctx, rest, stdout)
 	case "env":
 		err = cmdEnv(ctx, rest, stdout)
+	case "secrets":
+		err = cmdSecrets(ctx, rest, stdout)
 	case "scale":
 		err = cmdScale(ctx, rest, stdout)
 	case "rollback":
@@ -240,7 +242,8 @@ Working with apps:
   logs                  Show or follow an app's logs
   events                What Kubernetes said about an app's instances, newest first
   drift                 What was changed outside the panel, with kubectl; --repair puts it back
-  env                   List, set, import or remove environment variables
+  env                   List, set, import or remove environment variables, or refresh
+                        the ones read from a secret manager
   scale                 Change the number of instances or turn on autoscaling
   processes             List, add or stop the app's workers and other processes
   files                 List, save or remove files the app reads, such as an nginx.conf
@@ -270,6 +273,10 @@ Databases:
 Cluster:
   servers               List the servers in a team
   certs                 List, upload or remove the team's own TLS certificates
+
+Secret managers:
+  secrets connections   List, add, test or remove the Vault, Infisical, Doppler or
+                        AWS Secrets Manager connections variables are read from
 
 Leaving:
   export                Write this team out as JSON and Kubernetes objects
@@ -905,6 +912,7 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 	appID := flags.String("app", "", "the app id")
 	secret := flags.Bool("secret", false, "store the value encrypted and never show it again")
 	buildTime := flags.Bool("build", false, "the value is needed during the build, so setting it rebuilds")
+	from := flags.String("from", "", "read the value from a secret manager instead of storing it: connection:path or connection:path#key")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 
 	// The subcommand is the first word that is not a flag, so all of these
@@ -957,7 +965,11 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		table := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 		for _, variable := range response.Items {
 			value := variable.Value
-			if variable.IsSecret {
+			switch {
+			case variable.Reference != nil:
+				// Where it is read from; its value is never in the panel.
+				value = "(from " + variable.Reference.String() + ")"
+			case variable.IsSecret:
 				// A secret is write-only once set; a placeholder is the honest
 				// thing rather than pretending it is empty.
 				value = "(secret)"
@@ -966,7 +978,40 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		}
 		return table.Flush()
 
+	case "refresh":
+		var result struct {
+			References       int               `json:"references"`
+			Changed          []string          `json:"changed"`
+			BuildTimeChanged []string          `json:"build_time_changed"`
+			RolledOut        bool              `json:"rolled_out"`
+			Deployment       *store.Deployment `json:"deployment,omitempty"`
+			NotDeployed      bool              `json:"not_deployed,omitempty"`
+		}
+		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/refresh", nil, &result); err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeJSON(out, result)
+		}
+		switch {
+		case result.References == 0:
+			fmt.Fprintln(out, "None of this app's variables is read from a secret manager.")
+		case len(result.Changed) == 0:
+			fmt.Fprintf(out, "Nothing changed in the secret managers, so nothing was rolled out (%d read from one).\n", result.References)
+		case result.NotDeployed:
+			fmt.Fprintf(out, "%s changed. The app has not been deployed yet; its first deploy reads them.\n", strings.Join(result.Changed, ", "))
+		case result.Deployment != nil:
+			fmt.Fprintf(out, "%s changed, and the build reads %s, so the running version is being rebuilt with it: deployment #%d.\n",
+				strings.Join(result.Changed, ", "), strings.Join(result.BuildTimeChanged, ", "), result.Deployment.Number)
+		default:
+			fmt.Fprintf(out, "%s changed and was rolled out. No rebuild was needed.\n", strings.Join(result.Changed, ", "))
+		}
+		return nil
+
 	case "set", "import":
+		if *from != "" {
+			return setFromSecretManager(ctx, client, app, sub, values, *from, buildTimeGiven, *buildTime, *asJSON, out)
+		}
 		// Every pair in one request: all of them or none, and one rollout.
 		// One request each rolled the app out once per pair.
 		pairs := map[string]string{}
@@ -1057,8 +1102,48 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		return nil
 
 	default:
-		return errdoc.BadRequest(fmt.Sprintf("%q is not an env subcommand. Use list, set or unset.", sub))
+		return errdoc.BadRequest(fmt.Sprintf("%q is not an env subcommand. Use list, set, unset, import or refresh.", sub))
 	}
+}
+
+// setFromSecretManager makes one variable a reference: its value is read from
+// a secret manager at every deploy, and never stored in the panel.
+func setFromSecretManager(ctx context.Context, client *Client, app, sub string, values []string, from string,
+	buildTimeGiven, buildTime, asJSON bool, out io.Writer) error {
+	if sub != "set" || len(values) != 1 || strings.Contains(values[0], "=") {
+		return errdoc.BadRequest(fmt.Sprintf("--from sets one variable, named without a value: `%s env set STRIPE_KEY --from company-vault:shop#stripe_key`.",
+			version.Binary))
+	}
+	reference, err := referenceBody(from)
+	if err != nil {
+		return err
+	}
+	body := map[string]any{"key": values[0], "from": reference}
+	if buildTimeGiven {
+		body["build_time"] = buildTime
+	}
+	var result struct {
+		Variable        store.Variable `json:"variable"`
+		RequiresRebuild bool           `json:"requires_rebuild"`
+	}
+	if err := client.Do(ctx, "PUT", "/api/apps/"+app+"/variables", body, &result); err != nil {
+		return err
+	}
+	if asJSON {
+		return writeJSON(out, result)
+	}
+	where := from
+	if result.Variable.Reference != nil {
+		where = result.Variable.Reference.String()
+	}
+	fmt.Fprintf(out, "%s is read from %s at every deploy. It was read once to check it, and its value is not stored in the panel.\n",
+		values[0], where)
+	if result.RequiresRebuild {
+		fmt.Fprintln(out, "It is used during the build, so the next deploy will rebuild.")
+	} else {
+		fmt.Fprintln(out, "Rolled out. No rebuild was needed.")
+	}
+	return nil
 }
 
 // envSubcommand works out what `env` was asked to do.
@@ -1078,6 +1163,8 @@ func envSubcommand(positional []string) (sub string, values []string) {
 		return "unset", positional[1:]
 	case "import":
 		return "import", positional[1:]
+	case "refresh":
+		return "refresh", positional[1:]
 	}
 	if strings.Contains(positional[0], "=") {
 		return "set", positional

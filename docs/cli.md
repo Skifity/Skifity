@@ -182,7 +182,10 @@ skifity env set LOG_LEVEL=debug   # set one; says whether it rebuilds
 skifity env set A=1 B=2 C=3       # several, rolled out once
 skifity env set --secret API_KEY=... # stored encrypted, never shown again
 skifity env import .env           # every KEY=value line in a file, rolled out once
+skifity env set STRIPE_KEY --from company-vault:shop#stripe_key  # read from a secret manager, never stored
+skifity env refresh               # read those again; roll out, or rebuild, only what changed
 skifity env rm LOG_LEVEL          # remove one
+skifity secrets connections list  # the team's secret managers; add, test, remove
 skifity scale --instances 3       # a fixed number
 skifity scale --auto --max 5      # or automatically
 skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, same build

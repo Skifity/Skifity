@@ -19,6 +19,9 @@ type rendered struct {
 	objects        []*unstructured.Unstructured
 	processes      []store.AppProcess
 	processObjects []*unstructured.Unstructured
+	// variables are the values the app's Secret is rendered with, and which
+	// of them were read from a secret manager.
+	variables resolved
 }
 
 // render builds what an apply of this deployment writes, and changes nothing.
@@ -28,6 +31,12 @@ type rendered struct {
 // field — including the fingerprint each object carries, which is how the
 // check tells a field somebody removed from one the panel has yet to add.
 func (d *Deployer) render(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment) (rendered, error) {
+	return d.renderWith(ctx, deployment, app, env, d.readReferences)
+}
+
+// renderWith is render with the variables read from secret managers read by
+// read.
+func (d *Deployer) renderWith(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment, read referenceReader) (rendered, error) {
 	spec, err := d.cluster.SpecFor(ctx, app, env, deployment.Image)
 	if err != nil {
 		return rendered{}, err
@@ -40,10 +49,11 @@ func (d *Deployer) render(ctx context.Context, deployment store.Deployment, app 
 	}
 	spec.DeploymentID = deployment.ID
 
-	variables, err := d.runtimeVariables(ctx, app, env)
+	resolved, err := d.resolveVariablesWith(ctx, app, env, read)
 	if err != nil {
 		return rendered{}, err
 	}
+	variables := resolved.values
 	files, err := d.fileContents(ctx, app)
 	if err != nil {
 		return rendered{}, err
@@ -121,7 +131,7 @@ func (d *Deployer) render(ctx context.Context, deployment store.Deployment, app 
 		processObjects = append(processObjects, kube.BuildProcessDeployment(spec, process.Name, process.Command, process.Instances))
 	}
 
-	out := rendered{spec: spec, processes: processes}
+	out := rendered{spec: spec, processes: processes, variables: resolved}
 	if out.objects, err = kube.Prepare(objects...); err != nil {
 		return rendered{}, err
 	}

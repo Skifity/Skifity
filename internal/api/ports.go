@@ -316,6 +316,30 @@ type Deployer interface {
 	// RunResult says how a run ended, waiting a little for its container to
 	// stop once its output has.
 	RunResult(ctx context.Context, appID, name string) (RunResult, error)
+	// RefreshReferences reads an app's variables from their secret managers
+	// again, and rolls the app out when any of them changed: a rollout for
+	// runtime values, a build of the running version for build-time ones.
+	RefreshReferences(ctx context.Context, appID, actorID string) (ReferenceRefresh, error)
+}
+
+// ReferenceRefresh is what refreshing an app's variables from their secret
+// managers found and did. It names variables and never holds a value.
+type ReferenceRefresh struct {
+	// References is how many of the app's variables are read from a secret
+	// manager.
+	References int `json:"references"`
+	// Changed are the ones whose values changed since they last reached the
+	// app.
+	Changed []string `json:"changed"`
+	// BuildTimeChanged are those of them the build reads, which is why the
+	// app is being rebuilt.
+	BuildTimeChanged []string `json:"build_time_changed"`
+	// RolledOut is a rollout with the new values and the image the app has.
+	RolledOut bool `json:"rolled_out"`
+	// Deployment is the build started because a build-time value changed.
+	Deployment *store.Deployment `json:"deployment,omitempty"`
+	// NotDeployed is an app with nothing running yet, so nothing to roll out.
+	NotDeployed bool `json:"not_deployed,omitempty"`
 }
 
 // Scanner looks for known vulnerabilities in the images apps run.

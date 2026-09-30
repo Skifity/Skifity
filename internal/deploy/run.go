@@ -231,7 +231,7 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 	if err := d.ensureTeamRegistries(ctx, env.Namespace, project.TeamID); err != nil {
 		return err
 	}
-	variables, err := d.runtimeVariables(ctx, app, env)
+	variables, err := d.resolveVariables(ctx, app, env)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 	// Stamped as the deployer stamps them: the same Secrets with the same
 	// contents carry the same fingerprint, so a run between two deploys does
 	// not make the drift check think the app has something new to apply.
-	secrets, err := kube.Prepare(kube.BuildEnvSecret(spec, variables), kube.BuildFilesSecret(spec, files))
+	secrets, err := kube.Prepare(kube.BuildEnvSecret(spec, variables.values), kube.BuildFilesSecret(spec, files))
 	if err != nil {
 		return err
 	}
@@ -250,6 +250,7 @@ func (d *Deployer) prepareRuntime(ctx context.Context, app store.App, env store.
 		return err
 	}
 	d.recordApplied(ctx, app.ID, asAny(secrets), false)
+	d.recordReferences(ctx, app.ID, variables)
 	return nil
 }
 

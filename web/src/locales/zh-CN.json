@@ -354,7 +354,13 @@
       "certificate.deleted": "删除了证书",
       "template_catalogue.added": "添加了模板目录",
       "template_catalogue.refreshed": "刷新了模板目录",
-      "template_catalogue.removed": "删除了模板目录"
+      "template_catalogue.removed": "删除了模板目录",
+      "variable.reference_set": "变量改为从密钥管理器读取",
+      "shared_variable.reference_set": "共享变量改为从密钥管理器读取",
+      "secret_manager.created": "已连接密钥管理器",
+      "secret_manager.updated": "已更改密钥管理器",
+      "secret_manager.deleted": "已删除密钥管理器",
+      "variables.refreshed": "已从密钥管理器刷新变量"
     }
   },
   "projects": {
@@ -694,7 +700,8 @@
       "preview": "一个拉取请求的预览",
       "rollback": "一次回滚",
       "promote": "从另一个环境提升",
-      "tag": "推送了一个标签"
+      "tag": "推送了一个标签",
+      "refresh": "密钥管理器中的值发生了变化"
     },
     "rollbackTitle": "回滚到 #{{number}}",
     "rollbackFrom": "当前运行",
@@ -761,7 +768,23 @@
     "previewBadge": {
       "value": "预览中使用自己的值",
       "none": "预览中不提供"
-    }
+    },
+    "refresh": "从密钥管理器刷新",
+    "refreshNothing": "密钥管理器中没有任何变化。",
+    "refreshNotDeployed": "{{names}} 已变化。应用的首次部署会读取它们。",
+    "refreshRebuilding": "{{names}} 已变化，且在构建时读取，因此正在重新构建应用。",
+    "refreshRolledOut": "{{names}} 已变化并已上线，无需重新构建。",
+    "fromManager": "密钥管理器",
+    "from": "来自 {{manager}}：{{reference}}",
+    "unknownManager": "密钥管理器",
+    "source": "值的来源",
+    "sourceValue": "在此输入",
+    "sourceManager": "密钥管理器",
+    "noSecretManagers": "尚未连接密钥管理器。管理员可在“设置”→“密钥管理器”中连接。",
+    "connection": "密钥管理器",
+    "path": "路径",
+    "refKey": "键（可选）",
+    "referenceHelp": "该值在每次部署时读取，绝不保存在面板中。包含多个值的密钥需要指定所用值的键。现在会读取一次以进行检查。"
   },
   "domains": {
     "title": "域名",
@@ -1582,7 +1605,8 @@
     "componentUpgradeConfirm": "版本 {{to}} 的清单会应用在 {{from}} 之上，这正是该项目自己文档里的升级方式。重启的是这个组件，不是你的应用。",
     "componentVersionUnknown": "开始记录版本之前安装的版本",
     "scanning": "镜像扫描",
-    "certificates": "证书"
+    "certificates": "证书",
+    "secretManagers": "密钥管理器"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -3131,6 +3155,42 @@
         "cause": "{{1}} 中的 {{0}} 未通过每个模板都要接受的检查：{{2}}",
         "impact": "没有创建任何内容。",
         "fix": "在目录中修正该模板并刷新目录。模板页面中该目录的条目列出了每个模板被拒绝的原因。"
+      },
+      "secrets_unreachable": {
+        "title": "无法连接到密钥管理器",
+        "cause": "{{0}}（{{1}}）：{{2}}。",
+        "impact": "没有从中读取任何内容，也没有更改任何内容。",
+        "fix": "检查“设置”→“密钥管理器”中的地址，并确认面板所在服务器能够访问它：防火墙、VPN，或面板不信任的证书。然后重试。"
+      },
+      "secrets_denied": {
+        "title": "密钥管理器拒绝了面板",
+        "cause": "{{0}}（{{1}}）：{{2}}。",
+        "impact": "没有从中读取任何内容，也没有更改任何内容。",
+        "fix": "检查连接的凭据，以及其策略是否允许读取此密钥。如果凭据已过期，请在“设置”→“密钥管理器”中为连接提供新的凭据。"
+      },
+      "secrets_not_found": {
+        "title": "密钥管理器中没有该密钥",
+        "cause": "{{0}}（{{1}}）：{{2}}。",
+        "impact": "没有从中读取任何内容，也没有更改任何内容。",
+        "fix": "检查路径和键，并确认该密钥存在于连接所读取的项目、环境或挂载点中。"
+      },
+      "secrets_bad_answer": {
+        "title": "密钥管理器返回了意外的应答",
+        "cause": "{{0}}（{{1}}）：{{2}}。",
+        "impact": "没有从中读取任何内容，也没有更改任何内容。",
+        "fix": "确认地址是密钥管理器的 API，而不是它前面的某个页面，并且管理器类型与连接所声明的一致。"
+      },
+      "secrets_reference_unresolved": {
+        "title": "无法从密钥管理器读取变量",
+        "cause": "{{0}} 从 {{1}}（{{2}}，{{3}}）读取，但 {{4}}。",
+        "impact": "没有部署或更改任何内容。当前运行的版本继续使用原有的值运行。",
+        "fix": "在“设置”→“密钥管理器”中用“测试”检查连接，并确认该路径下存在该密钥。然后重新部署，或刷新应用的变量。"
+      },
+      "secrets_connection_in_use": {
+        "title": "仍有变量在读取此密钥管理器",
+        "cause": "{{0}} 个变量读取 {{1}}：{{2}}。",
+        "impact": "没有删除任何内容。没有这个连接，这些应用的下一次部署将会失败。",
+        "fix": "为这些变量设置自己的值，或将它们指向另一个连接，然后再删除这个。"
       }
     }
   },
@@ -3877,5 +3937,65 @@
     "noDomains": "团队中暂无域名使用它。",
     "usedBy": "使用者",
     "fingerprint": "SHA-256"
+  },
+  "secretManagers": {
+    "title": "密钥管理器",
+    "help": "从团队已在使用的 Vault、Infisical、Doppler 或 AWS Secrets Manager 读取变量。值在应用部署或应用其变量时读取，绝不保存在面板中。",
+    "add": "连接密钥管理器",
+    "empty": "尚未连接。连接一个后，即可从中读取变量，而不必把它们存放在这里。",
+    "emptyMember": "尚未连接。由管理员进行连接。",
+    "kind": {
+      "vault": "Vault",
+      "infisical": "Infisical",
+      "doppler": "Doppler",
+      "aws": "AWS Secrets Manager"
+    },
+    "dopplerWhere": "服务令牌所属的项目和配置",
+    "usedBy_other": "{{count}} 个变量读取它",
+    "test": "测试",
+    "tested": "{{name}} 登录成功。未读取任何内容。",
+    "remove": "删除 {{name}}",
+    "removeConfirm": "面板将忘记如何登录 {{name}}。只要还有变量从它读取，就无法删除。",
+    "refresh": "刷新读取它的应用",
+    "refreshOption": {
+      "0": "仅在请求时",
+      "15": "每 15 分钟",
+      "60": "每小时",
+      "360": "每 6 小时",
+      "1440": "每天"
+    },
+    "refreshHelp": "发生变化的值会被上线；只有当应用的构建读取该值时才会重新构建。出错的管理器会被越来越少地询问，最少每天一次。",
+    "lastRefresh": "上次刷新：{{when}}",
+    "lastError": "上次刷新失败：{{error}}",
+    "formHelp": "保存前面板会先登录，且不会为此读取任何密钥。登录所用的凭据会被封存，之后不再显示。",
+    "kindLabel": "类型",
+    "name": "名称",
+    "nameHelp": "变量引用它时使用的名称，例如 company-vault:path#key。只能使用小写字母、数字、- 和 _。",
+    "auth": "登录方式",
+    "authToken": "令牌",
+    "authAppRole": "AppRole",
+    "dopplerHelp": "请使用服务令牌：它属于某个项目的某个配置，因此它本身就指明了密钥在哪里。",
+    "field": {
+      "address": "地址",
+      "mount": "KV v2 挂载点",
+      "namespace": "命名空间",
+      "site_url": "站点地址",
+      "project_id": "项目 ID",
+      "environment": "环境 slug",
+      "region": "区域",
+      "endpoint": "端点",
+      "token": "令牌",
+      "role_id": "Role ID",
+      "secret_id": "Secret ID",
+      "client_id": "Client ID",
+      "client_secret": "Client secret",
+      "access_key_id": "Access key ID",
+      "secret_access_key": "Secret access key",
+      "session_token": "Session token"
+    },
+    "optional": "（可选）",
+    "credentialsHelp": "只授予所需的最小权限：一个只读取应用所用密钥的策略。任何能设置变量的人，都能读取该连接能读取的内容。",
+    "connect": "检查并连接",
+    "connected": "{{name}} 已连接。"
   }
 }

@@ -34,9 +34,12 @@ const (
 	// plantedCatalogueHeader is the token a team catalogue is fetched with,
 	// which the real panel never answers with anything.
 	plantedCatalogueHeader = "planted-catalogue-header"
+	// plantedReference is a value read from a secret manager, sent by a panel
+	// that should not have: under a variable not even marked secret.
+	plantedReference = "planted-secret-manager-value"
 )
 
-var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader}
+var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader, plantedReference}
 
 type fakePanel struct {
 	t      *testing.T
@@ -177,10 +180,16 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/apps/{app}/variables": items(
 			map[string]any{"key": "GREETING", "value": "hello", "is_secret": false},
 			map[string]any{"key": "API_KEY", "value": plantedVariable, "is_secret": true},
+			map[string]any{"key": "STRIPE_KEY", "value": plantedReference, "is_secret": false, "reference": map[string]any{
+				"connection_id": "sm_1", "connection": "company-vault", "kind": "vault", "path": "shop", "key": "stripe_key",
+			}},
 		),
 		"PUT /api/apps/{app}/variables":          map[string]any{"variable": map[string]any{"key": "GREETING"}, "requires_rebuild": false},
 		"POST /api/apps/{app}/variables/batch":   map[string]any{"set": []any{map[string]any{"key": "GREETING", "is_secret": false}}, "unset": []string{"OLD"}, "requires_rebuild": false},
 		"DELETE /api/apps/{app}/variables/{key}": ok,
+		"POST /api/apps/{app}/variables/refresh": map[string]any{
+			"references": 1, "changed": []string{"STRIPE_KEY"}, "build_time_changed": []string{}, "rolled_out": true,
+		},
 
 		"GET /api/apps/{app}/files": items(
 			map[string]any{"id": "file_1", "path": "/etc/nginx/nginx.conf", "content": "events {}", "size": 9},

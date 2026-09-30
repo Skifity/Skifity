@@ -36,9 +36,11 @@ func TestRebuildingTheAppsTableKeepsWhatReferencesIt(t *testing.T) {
 	if err := insertAppAtVersion15(ctx, db, app); err != nil {
 		t.Fatalf("insert the app: %v", err)
 	}
-	v := Variable{AppID: app.ID, Key: "PORT"}
-	if err := db.SetVariable(ctx, &v, "SKF1.sealed"); err != nil {
-		t.Fatalf("SetVariable: %v", err)
+	// Written as the schema at 15 has it: SetVariable writes the columns later
+	// migrations added, which this schema does not have yet.
+	if _, err := db.ExecContext(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, created_at, updated_at)
+		VALUES (?,?,?,?,?,?)`, NewID("var"), app.ID, "PORT", "SKF1.sealed", Now(), Now()); err != nil {
+		t.Fatalf("insert a variable: %v", err)
 	}
 	d := Deployment{ID: NewID("dep"), AppID: app.ID}
 	if err := insertDeploymentAtVersion15(ctx, db, d); err != nil {

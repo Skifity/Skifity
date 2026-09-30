@@ -362,7 +362,13 @@
       "certificate.deleted": "removed a certificate",
       "template_catalogue.added": "added a template catalogue",
       "template_catalogue.refreshed": "refreshed a template catalogue",
-      "template_catalogue.removed": "removed a template catalogue"
+      "template_catalogue.removed": "removed a template catalogue",
+      "variable.reference_set": "Variable read from a secret manager",
+      "shared_variable.reference_set": "Shared variable read from a secret manager",
+      "secret_manager.created": "Secret manager connected",
+      "secret_manager.updated": "Secret manager changed",
+      "secret_manager.deleted": "Secret manager removed",
+      "variables.refreshed": "Variables refreshed from secret managers"
     }
   },
   "projects": {
@@ -704,7 +710,8 @@
       "preview": "A preview of a pull request",
       "rollback": "A rollback",
       "promote": "Promoted from another environment",
-      "tag": "A pushed tag"
+      "tag": "A pushed tag",
+      "refresh": "A value in a secret manager changed"
     },
     "rollbackTitle": "Roll back to #{{number}}",
     "rollbackFrom": "Running now",
@@ -771,7 +778,23 @@
     "previewBadge": {
       "value": "Own value in previews",
       "none": "Not in previews"
-    }
+    },
+    "refresh": "Refresh from secret managers",
+    "refreshNothing": "Nothing changed in the secret managers.",
+    "refreshNotDeployed": "{{names}} changed. The app's first deploy will read them.",
+    "refreshRebuilding": "{{names}} changed and is read while building, so the app is being rebuilt.",
+    "refreshRolledOut": "{{names}} changed and was rolled out, without a rebuild.",
+    "fromManager": "Secret manager",
+    "from": "From {{manager}}: {{reference}}",
+    "unknownManager": "a secret manager",
+    "source": "Value from",
+    "sourceValue": "Typed here",
+    "sourceManager": "A secret manager",
+    "noSecretManagers": "No secret manager is connected. An administrator connects one under Settings, Secret managers.",
+    "connection": "Secret manager",
+    "path": "Path",
+    "refKey": "Key (optional)",
+    "referenceHelp": "The value is read at every deploy and never stored in the panel. A secret that holds several values needs the key of the one to use. It is read once now, to check it."
   },
   "domains": {
     "title": "Domains",
@@ -1601,7 +1624,8 @@
     "componentUpgradeConfirm": "The manifest of version {{to}} is applied over {{from}}, which is how the project documents its own upgrade. The component restarts; your apps do not.",
     "componentVersionUnknown": "the version installed before versions were recorded",
     "scanning": "Image scanning",
-    "certificates": "Certificates"
+    "certificates": "Certificates",
+    "secretManagers": "Secret managers"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -3150,6 +3174,42 @@
         "cause": "{{0}} in {{1}} does not pass the checks every template is held to: {{2}}",
         "impact": "Nothing was created.",
         "fix": "Correct the template in the catalogue and refresh it. The catalogue's entry under Templates lists why each template was refused."
+      },
+      "secrets_unreachable": {
+        "title": "The secret manager could not be reached",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Nothing was read from it and nothing was changed.",
+        "fix": "Check the address in Settings → Secret managers, and that the panel's server can reach it: a firewall, a VPN, a certificate the panel does not trust. Then try again."
+      },
+      "secrets_denied": {
+        "title": "The secret manager refused the panel",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Nothing was read from it and nothing was changed.",
+        "fix": "Check the connection's credentials, and that the policy they have allows reading this secret. Give the connection new credentials in Settings → Secret managers if they expired."
+      },
+      "secrets_not_found": {
+        "title": "The secret is not in the secret manager",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Nothing was read from it and nothing was changed.",
+        "fix": "Check the path and the key, and that the secret exists in the project, environment or mount the connection reads."
+      },
+      "secrets_bad_answer": {
+        "title": "The secret manager answered something unexpected",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Nothing was read from it and nothing was changed.",
+        "fix": "Check that the address is the secret manager's API and not a page in front of it, and that it is the kind of manager the connection says."
+      },
+      "secrets_reference_unresolved": {
+        "title": "A variable could not be read from its secret manager",
+        "cause": "{{0}} is read from {{1}} ({{2}}, {{3}}), and {{4}}.",
+        "impact": "Nothing was deployed or changed. The version running now keeps running with the values it had.",
+        "fix": "Check the connection with Test under Settings → Secret managers, and that the secret exists at that path. Then deploy again, or refresh the app's variables."
+      },
+      "secrets_connection_in_use": {
+        "title": "Variables still read this secret manager",
+        "cause": "{{0}} variables read {{1}}: {{2}}.",
+        "impact": "Nothing was removed. Without the connection, the next deploy of those apps would fail.",
+        "fix": "Give those variables a value of their own, or point them at another connection, then remove this one."
       }
     }
   },
@@ -3900,5 +3960,66 @@
     "noDomains": "No domain in the team uses it yet.",
     "usedBy": "Used by",
     "fingerprint": "SHA-256"
+  },
+  "secretManagers": {
+    "title": "Secret managers",
+    "help": "Read variables from the Vault, Infisical, Doppler or AWS Secrets Manager your team already runs. A value is read when an app is deployed or its variables are applied, and is never stored in the panel.",
+    "add": "Connect a secret manager",
+    "empty": "None connected. Connect one to read variables from it instead of storing them here.",
+    "emptyMember": "None connected. An administrator connects them.",
+    "kind": {
+      "vault": "Vault",
+      "infisical": "Infisical",
+      "doppler": "Doppler",
+      "aws": "AWS Secrets Manager"
+    },
+    "dopplerWhere": "The service token's project and config",
+    "usedBy_one": "{{count}} variable reads it",
+    "usedBy_other": "{{count}} variables read it",
+    "test": "Test",
+    "tested": "{{name}} signs in. Nothing was read.",
+    "remove": "Remove {{name}}",
+    "removeConfirm": "The panel forgets how to sign in to {{name}}. It cannot be removed while a variable is still read from it.",
+    "refresh": "Refresh the apps that read it",
+    "refreshOption": {
+      "0": "Only when asked",
+      "15": "Every 15 minutes",
+      "60": "Every hour",
+      "360": "Every 6 hours",
+      "1440": "Every day"
+    },
+    "refreshHelp": "A value that changed is rolled out, and an app is rebuilt only when its build reads it. A manager that fails is asked less and less often, down to once a day.",
+    "lastRefresh": "Last refreshed {{when}}",
+    "lastError": "The last refresh failed: {{error}}",
+    "formHelp": "The panel signs in before anything is saved, and reads no secret to do it. What it signs in with is sealed and never shown again.",
+    "kindLabel": "Kind",
+    "name": "Name",
+    "nameHelp": "How a variable names it, as in company-vault:path#key. Lower-case letters, digits, - and _.",
+    "auth": "Sign in with",
+    "authToken": "A token",
+    "authAppRole": "AppRole",
+    "dopplerHelp": "Use a service token: it belongs to one config of one project, so it says itself where the secrets are.",
+    "field": {
+      "address": "Address",
+      "mount": "KV version 2 mount",
+      "namespace": "Namespace",
+      "site_url": "Site URL",
+      "project_id": "Project ID",
+      "environment": "Environment slug",
+      "region": "Region",
+      "endpoint": "Endpoint",
+      "token": "Token",
+      "role_id": "Role ID",
+      "secret_id": "Secret ID",
+      "client_id": "Client ID",
+      "client_secret": "Client secret",
+      "access_key_id": "Access key ID",
+      "secret_access_key": "Secret access key",
+      "session_token": "Session token"
+    },
+    "optional": "(optional)",
+    "credentialsHelp": "Give it the least it needs: a policy that reads only the secrets your apps use. Anybody who can set a variable can read what the connection can.",
+    "connect": "Check and connect",
+    "connected": "{{name}} is connected."
   }
 }

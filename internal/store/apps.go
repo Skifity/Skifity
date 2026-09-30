@@ -272,11 +272,15 @@ func (db *DB) SetVariable(ctx context.Context, v *Variable, sealed string) error
 		v.ID = NewID("var")
 	}
 	now := Now()
-	_, err := db.Exec(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?)
+	connectionID, path, key := refColumns(v.Reference)
+	_, err := db.Exec(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, is_secret, build_time,
+		ref_connection_id, ref_path, ref_key, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (app_id, key) DO UPDATE SET value_enc = excluded.value_enc,
-			is_secret = excluded.is_secret, build_time = excluded.build_time, updated_at = excluded.updated_at`,
-		v.ID, v.AppID, v.Key, sealed, v.IsSecret, v.BuildTime, now, now)
+			is_secret = excluded.is_secret, build_time = excluded.build_time,
+			ref_connection_id = excluded.ref_connection_id, ref_path = excluded.ref_path, ref_key = excluded.ref_key,
+			updated_at = excluded.updated_at`,
+		v.ID, v.AppID, v.Key, sealed, v.IsSecret, v.BuildTime, connectionID, path, key, now, now)
 	if err != nil {
 		return fmt.Errorf("set variable: %w", err)
 	}
@@ -301,11 +305,15 @@ func (db *DB) ChangeVariables(ctx context.Context, appID string, set []VariableC
 			if v.ID == "" {
 				v.ID = NewID("var")
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at)
-				VALUES (?,?,?,?,?,?,?,?)
+			connectionID, path, key := refColumns(v.Reference)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO app_variables (id, app_id, key, value_enc, is_secret, build_time,
+				ref_connection_id, ref_path, ref_key, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?)
 				ON CONFLICT (app_id, key) DO UPDATE SET value_enc = excluded.value_enc,
-					is_secret = excluded.is_secret, build_time = excluded.build_time, updated_at = excluded.updated_at`,
-				v.ID, appID, v.Key, set[i].Sealed, v.IsSecret, v.BuildTime, now, now); err != nil {
+					is_secret = excluded.is_secret, build_time = excluded.build_time,
+					ref_connection_id = excluded.ref_connection_id, ref_path = excluded.ref_path, ref_key = excluded.ref_key,
+					updated_at = excluded.updated_at`,
+				v.ID, appID, v.Key, set[i].Sealed, v.IsSecret, v.BuildTime, connectionID, path, key, now, now); err != nil {
 				return fmt.Errorf("set variable %s: %w", v.Key, err)
 			}
 			v.AppID = appID
@@ -348,7 +356,7 @@ func (db *DB) SetVariablePreview(ctx context.Context, appID, key, mode, sealed s
 // ListVariables returns an app's variables with their sealed values.
 func (db *DB) ListVariables(ctx context.Context, appID string) ([]variableRow, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, app_id, key, value_enc, is_secret, build_time, created_at, updated_at,
-		preview_mode, preview_value_enc
+		preview_mode, preview_value_enc, ref_connection_id, ref_path, ref_key
 		FROM app_variables WHERE app_id = ? ORDER BY key`, appID)
 	if err != nil {
 		return nil, fmt.Errorf("list variables: %w", err)
@@ -357,11 +365,12 @@ func (db *DB) ListVariables(ctx context.Context, appID string) ([]variableRow, e
 	out := []variableRow{}
 	for rows.Next() {
 		var r variableRow
-		var created, updated string
+		var created, updated, connectionID, path, key string
 		if err := rows.Scan(&r.ID, &r.AppID, &r.Key, &r.Sealed, &r.IsSecret, &r.BuildTime, &created, &updated,
-			&r.PreviewMode, &r.PreviewSealed); err != nil {
+			&r.PreviewMode, &r.PreviewSealed, &connectionID, &path, &key); err != nil {
 			return nil, fmt.Errorf("scan variable: %w", err)
 		}
+		r.Reference = referenceOf(connectionID, path, key)
 		r.CreatedAt, _ = ParseTime(created)
 		r.UpdatedAt, _ = ParseTime(updated)
 		out = append(out, r)
@@ -387,11 +396,15 @@ func (db *DB) SetSharedVariable(ctx context.Context, v *SharedVariable, sealed s
 		v.ID = NewID("svar")
 	}
 	now := Now()
-	_, err := db.Exec(ctx, `INSERT INTO shared_variables (id, project_id, key, value_enc, is_secret, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?)
+	connectionID, path, key := refColumns(v.Reference)
+	_, err := db.Exec(ctx, `INSERT INTO shared_variables (id, project_id, key, value_enc, is_secret,
+		ref_connection_id, ref_path, ref_key, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (project_id, key) DO UPDATE SET value_enc = excluded.value_enc,
-			is_secret = excluded.is_secret, updated_at = excluded.updated_at`,
-		v.ID, v.ProjectID, v.Key, sealed, v.IsSecret, now, now)
+			is_secret = excluded.is_secret,
+			ref_connection_id = excluded.ref_connection_id, ref_path = excluded.ref_path, ref_key = excluded.ref_key,
+			updated_at = excluded.updated_at`,
+		v.ID, v.ProjectID, v.Key, sealed, v.IsSecret, connectionID, path, key, now, now)
 	if err != nil {
 		return fmt.Errorf("set shared variable: %w", err)
 	}
@@ -409,11 +422,15 @@ func (db *DB) ChangeSharedVariables(ctx context.Context, projectID string, set [
 			if v.ID == "" {
 				v.ID = NewID("svar")
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO shared_variables (id, project_id, key, value_enc, is_secret, created_at, updated_at)
-				VALUES (?,?,?,?,?,?,?)
+			connectionID, path, key := refColumns(v.Reference)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO shared_variables (id, project_id, key, value_enc, is_secret,
+				ref_connection_id, ref_path, ref_key, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?,?,?,?)
 				ON CONFLICT (project_id, key) DO UPDATE SET value_enc = excluded.value_enc,
-					is_secret = excluded.is_secret, updated_at = excluded.updated_at`,
-				v.ID, projectID, v.Key, set[i].Sealed, v.IsSecret, now, now); err != nil {
+					is_secret = excluded.is_secret,
+					ref_connection_id = excluded.ref_connection_id, ref_path = excluded.ref_path, ref_key = excluded.ref_key,
+					updated_at = excluded.updated_at`,
+				v.ID, projectID, v.Key, set[i].Sealed, v.IsSecret, connectionID, path, key, now, now); err != nil {
 				return fmt.Errorf("set shared variable %s: %w", v.Key, err)
 			}
 		}
@@ -434,7 +451,8 @@ type sharedVariableRow struct {
 
 // ListSharedVariables returns a project's shared variables.
 func (db *DB) ListSharedVariables(ctx context.Context, projectID string) ([]sharedVariableRow, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, project_id, key, value_enc, is_secret, created_at, updated_at
+	rows, err := db.QueryContext(ctx, `SELECT id, project_id, key, value_enc, is_secret, created_at, updated_at,
+		ref_connection_id, ref_path, ref_key
 		FROM shared_variables WHERE project_id = ? ORDER BY key`, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list shared variables: %w", err)
@@ -443,10 +461,12 @@ func (db *DB) ListSharedVariables(ctx context.Context, projectID string) ([]shar
 	out := []sharedVariableRow{}
 	for rows.Next() {
 		var r sharedVariableRow
-		var created, updated string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Key, &r.Sealed, &r.IsSecret, &created, &updated); err != nil {
+		var created, updated, connectionID, path, key string
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Key, &r.Sealed, &r.IsSecret, &created, &updated,
+			&connectionID, &path, &key); err != nil {
 			return nil, fmt.Errorf("scan shared variable: %w", err)
 		}
+		r.Reference = referenceOf(connectionID, path, key)
 		r.CreatedAt, _ = ParseTime(created)
 		r.UpdatedAt, _ = ParseTime(updated)
 		out = append(out, r)
@@ -498,6 +518,9 @@ var sealedSources = []sealedSource{
 	{table: "settings", valueCol: "value", keyCol: "key", ctxPrefix: "setting", where: "encrypted = 1"},
 	{table: "plugin_settings", valueCol: "value", keyCol: "plugin_id", keyCol2: "key",
 		ctxPrefix: "plugin-setting", where: "encrypted = 1"},
+	{table: "secret_connections", valueCol: "credentials_enc", ctxPrefix: "secret_manager"},
+	{table: "app_reference_digests", valueCol: "digest_enc", keyCol: "app_id", keyCol2: "key",
+		ctxPrefix: "reference_digest"},
 }
 
 // ListSealedSecrets returns every sealed value in the database with the context

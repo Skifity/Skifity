@@ -77,8 +77,9 @@ var exampleCalls = map[string]map[string]any{
 	"list_templates":   {"query": "wordpress"},
 	"install_template": {"template_id": "plausible", "environment_id": "env_1", "values": map[string]any{"BASE_URL": "https://stats.example.com"}},
 
-	"set_variables":   {"app_id": "app_1", "set": []any{map[string]any{"key": "GREETING", "value": "hello"}}, "unset": []any{"OLD"}},
-	"delete_variable": {"app_id": "app_1", "key": "OLD"},
+	"set_variables":     {"app_id": "app_1", "set": []any{map[string]any{"key": "GREETING", "value": "hello"}}, "unset": []any{"OLD"}},
+	"delete_variable":   {"app_id": "app_1", "key": "OLD"},
+	"refresh_variables": {"app_id": "app_1"},
 
 	// The secret one: its content is what must not come back.
 	"list_files": {"app_id": "app_1", "path": "/app/secrets.yml"},
@@ -269,6 +270,8 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		"deploy_app", "deploy_folder", "rollback_app", "run_command", "scale_app", "set_process",
 		// Overwrites or removes a value, a file, a hostname or a port.
 		"set_variable", "set_variables", "delete_variable", "set_file", "link_database",
+		// Rolls out, or rebuilds, with whatever a secret manager holds now.
+		"refresh_variables",
 		"remove_domain", "close_port",
 		// Can delete the oldest backup, and lifts somebody's freeze.
 		"run_backup", "unlock_deploys",

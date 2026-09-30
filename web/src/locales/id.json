@@ -354,7 +354,13 @@
       "certificate.deleted": "menghapus sertifikat",
       "template_catalogue.added": "menambahkan katalog template",
       "template_catalogue.refreshed": "menyegarkan katalog template",
-      "template_catalogue.removed": "menghapus katalog template"
+      "template_catalogue.removed": "menghapus katalog template",
+      "variable.reference_set": "Variabel dibaca dari pengelola rahasia",
+      "shared_variable.reference_set": "Variabel bersama dibaca dari pengelola rahasia",
+      "secret_manager.created": "Pengelola rahasia dihubungkan",
+      "secret_manager.updated": "Pengelola rahasia diubah",
+      "secret_manager.deleted": "Pengelola rahasia dihapus",
+      "variables.refreshed": "Variabel disegarkan dari pengelola rahasia"
     }
   },
   "projects": {
@@ -694,7 +700,8 @@
       "preview": "Pratinjau sebuah pull request",
       "rollback": "Sebuah rollback",
       "promote": "Dipromosikan dari environment lain",
-      "tag": "Tag yang di-push"
+      "tag": "Tag yang di-push",
+      "refresh": "Nilai di pengelola rahasia berubah"
     },
     "rollbackTitle": "Rollback ke #{{number}}",
     "rollbackFrom": "Berjalan sekarang",
@@ -761,7 +768,23 @@
     "previewBadge": {
       "value": "Nilai sendiri di preview",
       "none": "Tidak ada di preview"
-    }
+    },
+    "refresh": "Segarkan dari pengelola rahasia",
+    "refreshNothing": "Tidak ada yang berubah di pengelola rahasia.",
+    "refreshNotDeployed": "{{names}} berubah. Deploy pertama aplikasi akan membacanya.",
+    "refreshRebuilding": "{{names}} berubah dan dibaca saat build, jadi aplikasi sedang dibangun ulang.",
+    "refreshRolledOut": "{{names}} berubah dan sudah di-rollout, tanpa build ulang.",
+    "fromManager": "Pengelola rahasia",
+    "from": "Dari {{manager}}: {{reference}}",
+    "unknownManager": "pengelola rahasia",
+    "source": "Nilai dari",
+    "sourceValue": "Diketik di sini",
+    "sourceManager": "Pengelola rahasia",
+    "noSecretManagers": "Belum ada pengelola rahasia yang terhubung. Administrator menghubungkannya di Pengaturan, Pengelola rahasia.",
+    "connection": "Pengelola rahasia",
+    "path": "Path",
+    "refKey": "Kunci (opsional)",
+    "referenceHelp": "Nilainya dibaca di setiap deploy dan tidak pernah disimpan di panel. Rahasia yang berisi beberapa nilai memerlukan kunci dari nilai yang dipakai. Nilainya dibaca sekali sekarang untuk memeriksanya."
   },
   "domains": {
     "title": "Domain",
@@ -1582,7 +1605,8 @@
     "componentUpgradeConfirm": "Manifest versi {{to}} diterapkan di atas {{from}}, sesuai cara proyek itu mendokumentasikan peningkatannya. Komponennya dimulai ulang; aplikasi Anda tidak.",
     "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat",
     "scanning": "Pemindaian image",
-    "certificates": "Sertifikat"
+    "certificates": "Sertifikat",
+    "secretManagers": "Pengelola rahasia"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -3131,6 +3155,42 @@
         "cause": "{{0}} di {{1}} tidak lolos pemeriksaan yang berlaku untuk setiap template: {{2}}",
         "impact": "Tidak ada yang dibuat.",
         "fix": "Perbaiki template itu di katalog lalu segarkan katalognya. Entri katalog di halaman Template mencantumkan alasan setiap template ditolak."
+      },
+      "secrets_unreachable": {
+        "title": "Pengelola rahasia tidak dapat dijangkau",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Tidak ada yang dibaca darinya dan tidak ada yang diubah.",
+        "fix": "Periksa alamat di Pengaturan → Pengelola rahasia, dan pastikan server panel bisa menjangkaunya: firewall, VPN, atau sertifikat yang tidak dipercaya panel. Lalu coba lagi."
+      },
+      "secrets_denied": {
+        "title": "Pengelola rahasia menolak panel",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Tidak ada yang dibaca darinya dan tidak ada yang diubah.",
+        "fix": "Periksa kredensial koneksi, dan pastikan kebijakannya mengizinkan membaca rahasia ini. Berikan kredensial baru di Pengaturan → Pengelola rahasia jika sudah kedaluwarsa."
+      },
+      "secrets_not_found": {
+        "title": "Rahasia tidak ada di pengelola rahasia",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Tidak ada yang dibaca darinya dan tidak ada yang diubah.",
+        "fix": "Periksa path dan kuncinya, dan pastikan rahasia itu ada di proyek, environment, atau mount yang dibaca koneksi."
+      },
+      "secrets_bad_answer": {
+        "title": "Pengelola rahasia memberi jawaban yang tidak terduga",
+        "cause": "{{0}} ({{1}}): {{2}}.",
+        "impact": "Tidak ada yang dibaca darinya dan tidak ada yang diubah.",
+        "fix": "Pastikan alamatnya adalah API pengelola rahasia, bukan halaman di depannya, dan jenis pengelolanya sesuai dengan yang disebut koneksi."
+      },
+      "secrets_reference_unresolved": {
+        "title": "Sebuah variabel tidak bisa dibaca dari pengelola rahasianya",
+        "cause": "{{0}} dibaca dari {{1}} ({{2}}, {{3}}), dan {{4}}.",
+        "impact": "Tidak ada yang di-deploy atau diubah. Versi yang berjalan sekarang tetap berjalan dengan nilai yang dimilikinya.",
+        "fix": "Periksa koneksi dengan Uji di Pengaturan → Pengelola rahasia, dan pastikan rahasianya ada di path itu. Lalu deploy lagi, atau segarkan variabel aplikasi."
+      },
+      "secrets_connection_in_use": {
+        "title": "Variabel masih membaca pengelola rahasia ini",
+        "cause": "{{0}} variabel membaca {{1}}: {{2}}.",
+        "impact": "Tidak ada yang dihapus. Tanpa koneksi ini, deploy berikutnya dari aplikasi-aplikasi itu akan gagal.",
+        "fix": "Beri variabel-variabel itu nilai sendiri, atau arahkan ke koneksi lain, lalu hapus yang ini."
       }
     }
   },
@@ -3877,5 +3937,65 @@
     "noDomains": "Belum ada domain di tim yang memakainya.",
     "usedBy": "Dipakai oleh",
     "fingerprint": "SHA-256"
+  },
+  "secretManagers": {
+    "title": "Pengelola rahasia",
+    "help": "Baca variabel dari Vault, Infisical, Doppler, atau AWS Secrets Manager yang sudah dijalankan tim Anda. Nilainya dibaca saat aplikasi di-deploy atau variabelnya diterapkan, dan tidak pernah disimpan di panel.",
+    "add": "Hubungkan pengelola rahasia",
+    "empty": "Belum ada yang terhubung. Hubungkan satu untuk membaca variabel darinya alih-alih menyimpannya di sini.",
+    "emptyMember": "Belum ada yang terhubung. Administrator yang menghubungkannya.",
+    "kind": {
+      "vault": "Vault",
+      "infisical": "Infisical",
+      "doppler": "Doppler",
+      "aws": "AWS Secrets Manager"
+    },
+    "dopplerWhere": "Proyek dan config milik service token",
+    "usedBy_other": "{{count}} variabel membacanya",
+    "test": "Uji",
+    "tested": "{{name}} berhasil masuk. Tidak ada yang dibaca.",
+    "remove": "Hapus {{name}}",
+    "removeConfirm": "Panel melupakan cara masuk ke {{name}}. Koneksi ini tidak bisa dihapus selama masih ada variabel yang dibaca darinya.",
+    "refresh": "Segarkan aplikasi yang membacanya",
+    "refreshOption": {
+      "0": "Hanya saat diminta",
+      "15": "Setiap 15 menit",
+      "60": "Setiap jam",
+      "360": "Setiap 6 jam",
+      "1440": "Setiap hari"
+    },
+    "refreshHelp": "Nilai yang berubah di-rollout, dan aplikasi hanya dibangun ulang jika build-nya membaca nilai itu. Pengelola yang gagal akan semakin jarang ditanya, paling jarang sekali sehari.",
+    "lastRefresh": "Terakhir disegarkan {{when}}",
+    "lastError": "Penyegaran terakhir gagal: {{error}}",
+    "formHelp": "Panel masuk terlebih dahulu sebelum apa pun disimpan, tanpa membaca rahasia apa pun. Kredensial yang dipakainya disegel dan tidak pernah ditampilkan lagi.",
+    "kindLabel": "Jenis",
+    "name": "Nama",
+    "nameHelp": "Cara variabel menyebutnya, seperti company-vault:path#key. Huruf kecil, angka, - dan _.",
+    "auth": "Masuk dengan",
+    "authToken": "Token",
+    "authAppRole": "AppRole",
+    "dopplerHelp": "Gunakan service token: token ini milik satu config dari satu proyek, jadi ia sendiri yang menunjukkan di mana rahasianya berada.",
+    "field": {
+      "address": "Alamat",
+      "mount": "Mount KV versi 2",
+      "namespace": "Namespace",
+      "site_url": "URL situs",
+      "project_id": "ID proyek",
+      "environment": "Slug environment",
+      "region": "Region",
+      "endpoint": "Endpoint",
+      "token": "Token",
+      "role_id": "Role ID",
+      "secret_id": "Secret ID",
+      "client_id": "Client ID",
+      "client_secret": "Client secret",
+      "access_key_id": "Access key ID",
+      "secret_access_key": "Secret access key",
+      "session_token": "Session token"
+    },
+    "optional": "(opsional)",
+    "credentialsHelp": "Berikan akses seminimal mungkin: kebijakan yang hanya membaca rahasia yang dipakai aplikasi Anda. Siapa pun yang bisa mengatur variabel bisa membaca apa yang bisa dibaca koneksi ini.",
+    "connect": "Periksa dan hubungkan",
+    "connected": "{{name}} terhubung."
   }
 }

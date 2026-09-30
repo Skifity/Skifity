@@ -77,6 +77,10 @@ tags:
     description: Deploying, rolling back and promoting versions of an app.
   - name: Variables
     description: Environment variables, per app and shared across a project.
+  - name: Secret managers
+    description: >-
+      Connections to the Vault, Infisical, Doppler or AWS Secrets Manager a team
+      already runs, so a variable can be read from there instead of stored here.
   - name: Domains
     description: The hostnames an app answers on.
   - name: Scaling
@@ -1508,6 +1512,94 @@ paths:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
+  # --- secret managers ---
+
+  /api/teams/{teamID}/secret-managers:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listSecretManagers
+      tags: [Secret managers]
+      summary: The team's secret manager connections
+      description: >-
+        Anybody in the team, including a member limited to some projects, who
+        picks one for a variable. Names, kinds and settings; what a connection
+        signs in with is never returned.
+      responses:
+        '200':
+          description: The connections.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SecretManagerList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createSecretManager
+      tags: [Secret managers]
+      summary: Connect a secret manager
+      description: >-
+        Admin. The connection signs in before it is saved, reading no secret,
+        and is refused with the reason when it cannot. Its credentials are
+        sealed and never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateSecretManagerRequest'}
+      responses:
+        '201':
+          description: The connection.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SecretManager'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/secret-managers/{connectionID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/connectionID'
+    patch:
+      operationId: updateSecretManager
+      tags: [Secret managers]
+      summary: Change a connection's settings, credentials or periodic refresh
+      description: >-
+        Admin. New settings or credentials sign in before they replace what
+        worked. Credentials left out are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateSecretManagerRequest'}
+      responses:
+        '200':
+          description: The connection as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SecretManager'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteSecretManager
+      tags: [Secret managers]
+      summary: Remove a connection
+      description: Admin. Refused, naming them, while any variable is read from it.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/secret-managers/{connectionID}/test:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/connectionID'
+    post:
+      operationId: testSecretManager
+      tags: [Secret managers]
+      summary: Check that a connection still signs in
+      description: >-
+        Admin. Vault's token lookup, Infisical's login, Doppler's token
+        details, or AWS's GetCallerIdentity: nothing is read.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
   # --- servers ---
 
   /api/servers/{serverID}:
@@ -2744,6 +2836,27 @@ paths:
                     type: [array, 'null']
                     items: {type: string}
                   requires_rebuild: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/variables/refresh:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: refreshVariables
+      tags: [Variables]
+      summary: Read an app's variables from their secret managers again
+      description: >-
+        Member. When any changed since it last reached the app, the app is
+        rolled out with the new values; when one the build reads changed, the
+        running version is built again with it, and the answer says which.
+        Nothing changes when nothing did. A variable that cannot be read fails
+        the refresh with a problem naming it, and the app keeps what it has.
+      responses:
+        '200':
+          description: What changed, by name, and what was done.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VariablesRefresh'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/{key}:
@@ -4299,6 +4412,7 @@ components:
     operationID: {name: operationID, in: path, required: true, description: 'An operation''s id.', schema: {type: string}}
     sourceID: {name: sourceID, in: path, required: true, description: 'A Git connection''s id.', schema: {type: string}}
     channelID: {name: channelID, in: path, required: true, description: 'A notification channel''s id.', schema: {type: string}}
+    connectionID: {name: connectionID, in: path, required: true, description: 'A secret manager connection''s id, or its name.', schema: {type: string}}
     pluginID: {name: pluginID, in: path, required: true, description: 'A plugin''s id, reverse-DNS, such as com.example.backup.', schema: {type: string}}
     templateID: {name: templateID, in: path, required: true, description: 'A template''s id, such as uptime-kuma.', schema: {type: string}}
     catalogueID: {name: catalogueID, in: path, required: true, description: 'A team template catalogue''s id.', schema: {type: string}}
@@ -4800,7 +4914,7 @@ components:
 
     TeamExport:
       type: object
-      required: [product, version, exported_at, note, secrets, team, servers, projects]
+      required: [product, version, exported_at, note, secrets, team, servers, secret_managers, projects]
       properties:
         product: {type: string}
         version: {type: string}
@@ -4811,6 +4925,9 @@ components:
         servers:
           type: [array, 'null']
           items: {$ref: '#/components/schemas/Server'}
+        secret_managers:
+          type: array
+          items: {$ref: '#/components/schemas/SecretManager'}
         projects:
           type: array
           items:
@@ -5412,6 +5529,63 @@ components:
         projects: {type: array, items: {type: string}, description: 'The project ids a scoped channel follows.'}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+
+    SecretManager:
+      type: object
+      required: [id, team_id, name, kind, settings, refresh_minutes, refresh_failures, created_at, updated_at]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [vault, infisical, doppler, aws]}
+        settings:
+          type: object
+          additionalProperties: {type: string}
+          description: >-
+            What is not secret. Vault: address, mount, namespace, auth (token
+            or approle), approle_mount. Infisical: site_url, project_id,
+            environment. Doppler: none. AWS: region, endpoint.
+        credentials: {type: array, items: {type: string}, description: 'The names of what it signs in with; never their values.'}
+        used_by: {type: integer, description: 'How many variables read it.'}
+        refresh_minutes: {type: integer, description: 'How often the apps that read it are refreshed. 0 is never.'}
+        next_refresh_at: {type: string, format: date-time}
+        last_refresh_at: {type: string, format: date-time}
+        refresh_failures: {type: integer, description: 'Periodic refreshes in a row that failed; each doubles the wait, up to a day.'}
+        last_error: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    SecretManagerList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/SecretManager'}}
+        total: {type: integer}
+
+    CreateSecretManagerRequest:
+      type: object
+      required: [name, kind, credentials]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: 'Lower-case letters, digits, - and _. How a reference names it.'}
+        kind: {type: string, enum: [vault, infisical, doppler, aws]}
+        settings: {type: object, additionalProperties: {type: string}}
+        credentials:
+          type: object
+          additionalProperties: {type: string}
+          description: >-
+            Vault: token, or role_id and secret_id. Infisical: client_id and
+            client_secret. Doppler: token. AWS: access_key_id,
+            secret_access_key, and session_token when it has one.
+        refresh_minutes: {type: integer, description: '0, or 5 to 1440.'}
+
+    UpdateSecretManagerRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        settings: {type: object, additionalProperties: {type: string}, description: 'Only the settings named change; an empty one goes back to its default.'}
+        credentials: {type: object, additionalProperties: {type: string}}
+        refresh_minutes: {type: integer, description: '0, or 5 to 1440.'}
 
     NotificationChannelDetail:
       allOf:
@@ -6326,6 +6500,40 @@ components:
         updated_at: {type: string, format: date-time}
         preview_mode: {type: string, enum: [value, none], description: 'What a preview gets. Its own value when empty.'}
         preview_value: {type: string, description: 'Never returned for a secret.'}
+        reference: {$ref: '#/components/schemas/SecretReference'}
+
+    SecretReference:
+      type: object
+      description: >-
+        Where a variable's value is read from, for one that is not stored in
+        the panel. The value itself is never returned, and never stored.
+      required: [connection_id, path]
+      properties:
+        connection_id: {type: string}
+        path: {type: string, description: 'The secret: a Vault path under the mount, an Infisical /folder/NAME, a Doppler name, an AWS secret name or ARN.'}
+        key: {type: string, description: 'The key inside the secret: a Vault field, or a key of a JSON value.'}
+        connection: {type: string, description: 'The connection''s name.'}
+        kind: {type: string, enum: [vault, infisical, doppler, aws]}
+
+    VariableReferenceRequest:
+      type: object
+      required: [connection, path]
+      additionalProperties: false
+      properties:
+        connection: {type: string, description: 'The connection''s name or id.'}
+        path: {type: string}
+        key: {type: string}
+
+    VariablesRefresh:
+      type: object
+      required: [references, changed, build_time_changed, rolled_out]
+      properties:
+        references: {type: integer, description: 'How many of the app''s variables are read from a secret manager.'}
+        changed: {type: array, items: {type: string}, description: 'The variables whose values changed.'}
+        build_time_changed: {type: array, items: {type: string}, description: 'Those of them the build reads.'}
+        rolled_out: {type: boolean, description: 'Rolled out with the image the app has.'}
+        deployment: {$ref: '#/components/schemas/Deployment'}
+        not_deployed: {type: boolean, description: 'Nothing is running yet, so nothing was rolled out.'}
 
     VariableList:
       type: object
@@ -6336,11 +6544,18 @@ components:
 
     SetVariableRequest:
       type: object
-      required: [key, value]
+      required: [key]
       additionalProperties: false
       properties:
         key: {type: string}
-        value: {type: string}
+        value: {type: string, description: 'The value; left out for one read from a secret manager.'}
+        from:
+          allOf:
+            - $ref: '#/components/schemas/VariableReferenceRequest'
+          description: >-
+            Read the value from a secret manager instead: it is read once now,
+            so a wrong path is refused here, and at every deploy and sync
+            after. Never stored. The variable is a secret.
         is_secret:
           type: boolean
           description: >-
@@ -6381,6 +6596,7 @@ components:
         is_secret: {type: boolean}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+        reference: {$ref: '#/components/schemas/SecretReference'}
 
     SharedVariableList:
       type: object

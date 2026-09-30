@@ -263,6 +263,7 @@ export function AppDetailPage() {
             queryKey={["variables", appId]}
             showBuildTime
             showPreviews
+            refreshable
           />
           <FilesCard app={current} />
         </TabsContent>

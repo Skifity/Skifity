@@ -252,23 +252,29 @@ type logsOutput struct {
 }
 
 type listVariablesOutput struct {
-	Variables []struct {
-		Key      string `json:"key"`
-		Value    string `json:"value,omitempty"`
-		IsSecret bool   `json:"is_secret"`
-	} `json:"variables"`
-	Note string `json:"note"`
+	Variables []listedVariable `json:"variables"`
+	Note      string           `json:"note"`
+}
+
+type listedVariable struct {
+	Key      string `json:"key"`
+	Value    string `json:"value,omitempty"`
+	IsSecret bool   `json:"is_secret"`
+	// From is where a variable read from a secret manager is read from,
+	// written connection:path#key. Its value is never here.
+	From string `json:"from,omitempty"`
 }
 
 type setVariableInput struct {
 	AppID string `json:"app_id" jsonschema:"the app's id"`
 	Key   string `json:"key" jsonschema:"the variable's name, in CAPITALS_WITH_UNDERSCORES"`
-	Value string `json:"value" jsonschema:"the value"`
+	Value string `json:"value" jsonschema:"the value; empty when from is given"`
 	// A pointer, because a model that leaves this out has said nothing — and
 	// as a plain bool that became "not a secret", so a model overwriting an API
 	// key demoted it into a value the next list_variables handed straight back.
-	IsSecret  *bool `json:"is_secret,omitempty" jsonschema:"store it encrypted and never show it again; leave it out to keep an existing secret a secret and let the panel decide for a new one"`
-	BuildTime *bool `json:"build_time,omitempty" jsonschema:"the value is needed while building, so setting it causes a rebuild; leave it out to keep what the variable was"`
+	IsSecret  *bool  `json:"is_secret,omitempty" jsonschema:"store it encrypted and never show it again; leave it out to keep an existing secret a secret and let the panel decide for a new one"`
+	BuildTime *bool  `json:"build_time,omitempty" jsonschema:"the value is needed while building, so setting it causes a rebuild; leave it out to keep what the variable was"`
+	From      string `json:"from,omitempty" jsonschema:"read the value from one of the team's secret managers instead of storing it, written connection:path or connection:path#key; leave value empty"`
 }
 
 type setVariableOutput struct {
@@ -800,23 +806,31 @@ func (s *Server) listVariables(ctx context.Context, _ *mcp.CallToolRequest, in a
 		// The panel never sends a secret's value, and this does not rest on
 		// that alone: a value that has reached an assistant's context is in
 		// its provider's logs and can be repeated anywhere, and there is no
-		// taking it back.
-		value := variable.Value
-		if variable.IsSecret {
-			value = ""
+		// taking it back. A variable read from a secret manager is a secret
+		// whatever it is marked: where it is read from, and nothing else.
+		listed := listedVariable{Key: variable.Key, Value: variable.Value, IsSecret: variable.IsSecret}
+		if variable.Reference != nil {
+			listed.From, listed.Value, listed.IsSecret = variable.Reference.String(), "", true
 		}
-		out.Variables = append(out.Variables, struct {
-			Key      string `json:"key"`
-			Value    string `json:"value,omitempty"`
-			IsSecret bool   `json:"is_secret"`
-		}{Key: variable.Key, Value: value, IsSecret: variable.IsSecret})
+		if listed.IsSecret {
+			listed.Value = ""
+		}
+		out.Variables = append(out.Variables, listed)
 	}
-	out.Note = "Secrets are stored encrypted and are never returned. You can set a new value but not read the current one."
+	out.Note = "Secrets are stored encrypted and are never returned. You can set a new value but not read the current one. " +
+		"A variable with from is read from a secret manager at every deploy; its value is never in the panel."
 	return textResult(fmt.Sprintf("%d variable(s).", len(out.Variables))), out, nil
 }
 
 func (s *Server) setVariable(ctx context.Context, _ *mcp.CallToolRequest, in setVariableInput) (*mcp.CallToolResult, setVariableOutput, error) {
 	body := map[string]any{"key": in.Key, "value": in.Value}
+	if in.From != "" {
+		from, err := referenceBody(in.From)
+		if err != nil {
+			return errorResult(err), setVariableOutput{}, nil
+		}
+		body = map[string]any{"key": in.Key, "from": from}
+	}
 	if in.BuildTime != nil {
 		body["build_time"] = *in.BuildTime
 	}
