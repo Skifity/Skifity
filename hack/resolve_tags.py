@@ -2,9 +2,9 @@
 
 A floating tag is not a version, so every template in the catalogue has to name
 one. Upstreams disagree about how: some publish a major series (`1`, `5-alpine`)
-that takes patches, some publish only exact releases. This asks the registry and
-prefers, in order: an existing major or major.minor series tag, then the newest
-exact semver release.
+that takes patches, some publish only exact releases. A major series moves as
+much as `latest` does within its line, and the catalogue's tests refuse one, so
+this asks the registry for the newest exact semver release.
 
 Run: python3 hack/resolve_tags.py < images.json > resolved.json
 """
@@ -222,15 +222,10 @@ def best(tags, variant, ordered=False):
                     return tag
         return None
     releases.sort()
-    version, newest, base = releases[-1]
+    _, newest, _ = releases[-1]
 
-    # A series tag that exists and tracks this release is better than pinning a
-    # patch: it takes fixes without taking a new major.
-    for series in (f"{version[0]}.{version[1]}", str(version[0])):
-        for candidate in ({series, "v" + series} if base.startswith("v") else {series}):
-            full = candidate + ("-" + variant if variant else "")
-            if full in tags:
-                return full
+    # The exact release, not the series tag that tracks it: a series moves
+    # under the app, which is what naming a version is meant to stop.
     return newest
 
 

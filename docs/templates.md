@@ -81,9 +81,10 @@ Every template names a version of the software it installs. None of them runs
 
 A floating tag is not a version. Two deploys of what looks like the same app run
 different software, a rollback restores a tag rather than the thing that worked,
-and an upstream release arrives on a restart nobody asked for. Where the project
-publishes a series tag that takes patches without breaking changes, that is what
-a template uses; where it does not, an exact version is.
+and an upstream release arrives on a restart nobody asked for. A tag that names
+only a major version — `1`, `5-alpine` — moves as much as `latest` does within
+that line, so a template names the exact release instead, and a test refuses the
+first kind as it refuses the second.
 
 So a template does not update itself. Moving one forward is a change to Skifity,
 and a newer version arrives when the panel is upgraded.

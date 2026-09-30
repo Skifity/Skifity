@@ -28,10 +28,9 @@ import (
 // Every image names a version. A floating tag is not a version: two deploys of
 // the same app run different software, a rollback restores a tag rather than
 // the thing that worked, and an upstream release arrives on a restart nobody
-// asked for. Where upstream publishes a series tag that takes patches without
-// breaking changes, that is what is used; where it does not, an exact version
-// is, and moving it forward is a change to a file here. A test refuses anything
-// that ends in `latest`.
+// asked for. A tag naming only a major version moves as much within its line,
+// so an exact release is named, and moving it forward is a change to a file
+// here. A test refuses a floating tag and a major-only one alike.
 //
 //go:embed catalogue/*.yaml
 var files embed.FS

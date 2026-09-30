@@ -16,6 +16,8 @@ services:
   cpu_limit_m: 1000
   variables:
     DEPLOY_METHOD: docker
+    MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=rs0
+    MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=rs0
 - name: mongodb
   image: mongo:7.0.43
   port: 27017
@@ -24,15 +26,15 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+  # Rocket.Chat only runs against a replica set. The set is started here and
+  # initiated once, by a loop that stops as soon as it has one.
+  command: (until mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]}).ok }"
+    >/dev/null 2>&1; do sleep 2; done) & exec docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all
   volumes:
   - name: mongodb-data
     mount_path: /data/db
     size_gb: 5
-notes: Rocket.Chat will not start until it is told where its MongoDB is, and this template does not do
-  that for you yet. After installing, set the start command of the mongodb app to docker-entrypoint.sh
-  mongod --replSet rs0 --bind_ip_all, because Rocket.Chat only runs against a replica set, and once it
-  is up run the one-off command
-  mongosh --host mongodb --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]})" in
-  it. Then add MONGO_URL=mongodb://mongodb:27017/rocketchat?replicaSet=rs0 to the rocketchat app and
-  redeploy it. This template installs 2 apps. They reach each other by name inside the environment, so
-  keep them together.
+notes: Rocket.Chat reaches its MongoDB by name, and the MongoDB app starts itself as a one-member
+  replica set, which Rocket.Chat needs. Set ROOT_URL on the rocketchat app to the address it is reached
+  at, or links in its emails point at localhost. This template installs 2 apps. They reach each other
+  by name inside the environment, so keep them together.

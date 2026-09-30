@@ -783,7 +783,7 @@ RUN %s
 
 	// Caddy rather than nginx: it needs no configuration to serve a directory
 	// with correct MIME types and SPA fallback, and its image is smaller.
-	fmt.Fprintf(&b, `FROM caddy:2-alpine
+	fmt.Fprintf(&b, `FROM caddy:2.11.4-alpine
 COPY %s /srv
 `, source)
 	// Never the repository's own history. With no build stage the context is

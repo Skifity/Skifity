@@ -270,7 +270,7 @@ func TestStaticSiteGeneratesItsOwnDockerfile(t *testing.T) {
 		t.Fatalf("BuildJob: %v", err)
 	}
 	script := withDockerfile(t, job.Spec.Template.Spec.Containers[0].Args[0])
-	if !strings.Contains(script, "FROM caddy:2-alpine") {
+	if !strings.Contains(script, "FROM caddy:2.11.4-alpine") {
 		t.Fatalf("no Dockerfile was generated for the static site:\n%s", script)
 	}
 	if !strings.Contains(script, "COPY dist /srv") {

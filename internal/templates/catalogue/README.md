@@ -11,7 +11,7 @@ category: productivity           # groups it on the Templates page
 website: https://example.org     # https, and somewhere that explains the app
 services:
   - name: example                # a slug; it becomes a Kubernetes object
-    image: example/app:2.4       # a version, never `latest` — see below
+    image: example/app:2.4.1     # a release, never `latest` or `2` — see below
     port: 8080
     public: true                 # gets a domain; a worker would not
     health_path: /healthz        # optional, and only if it really exists
@@ -105,10 +105,14 @@ ask for:
 **Name a version.** `latest` is not a version: two deploys of the same app would
 run different software, a rollback would restore a tag rather than the thing
 that worked, and an upstream release would arrive on a restart nobody asked for.
-Use a series tag where upstream publishes one — `1`, `5-alpine`, `6-apache` —
-and an exact version where it does not. A test refuses anything ending in
-`latest`, `main`, `master`, `stable`, `edge`, `release` or `dev`, and the image
-must exist: check before you commit.
+A tag that names only a major version — `1`, `v2`, `5-alpine`, `6-apache` — is
+the same thing with a fence around it: it moves on every minor and patch
+release. Name the release instead, `5.130.6-alpine` rather than `5-alpine`, and
+stay on the major the template was written for: a database's data directory
+from one major does not always open in the next, so moving up is a change of
+its own. A test refuses anything ending in `latest`, `main`, `master`, `stable`,
+`edge`, `nightly`, `release` or `dev`, and any tag that is only a major version,
+and the image must exist: check before you commit.
 
 Not every project ships semver, and that is fine. `19.1.8-ce.0`,
 `2026.9.17-c49771992` and `version-2026-07-14c` each name one build exactly. An
@@ -120,7 +124,11 @@ other by name (`DB_HOST=mariadb`). There is no sibling container here — the
 database is a managed one and arrives as the `var_name` above, or in pieces
 through `vars` — so a variable like `DB_HOST`, `REDIS_PORT` or `MB_DB_URL`
 written by hand points at nothing and the app will crash-loop with a hostname
-nobody recognises. A test refuses those too.
+nobody recognises. A test refuses those too, and it reads values as well as
+names: a URL whose host is a bare name (`PAPERLESS_REDIS=redis://redis:6379`)
+must name a service in the same template or one of its databases. Where an app
+wants its Redis or its database under a name of its own, that name is the
+`var_name`.
 
 ## What the tests check
 
@@ -128,8 +136,9 @@ nobody recognises. A test refuses those too.
 description and an https website, at least one service somebody can open, ports
 in range, requests that do not exceed limits, variable names a container can
 carry, absolute mount paths, every `link_to` naming a real service, every engine
-one Skifity provisions, no floating tags, no service named for a worker that is
-public, and no database wiring.
+one Skifity provisions, no floating or major-only tags, no service named for a
+worker that is public, no database wiring, and no URL pointing at a host the
+template does not install.
 
 Run `make check` before opening a pull request. A template that fails is not a
 template.

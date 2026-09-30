@@ -295,8 +295,22 @@ func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 
 	for _, tpl := range All() {
 		reachable := map[string]bool{"localhost": true}
+		services := map[string]bool{}
 		for _, svc := range tpl.Services {
 			reachable[svc.Name] = true
+			services[svc.Name] = true
+		}
+		// A datastore that is a service of the template — a MongoDB, which
+		// Skifity does not manage — is reached by name like any sibling, and
+		// the address of one is not wiring a managed database by hand.
+		pointsAtService := func(value string) bool {
+			for _, match := range urlHost.FindAllStringSubmatch(value, -1) {
+				if services[strings.ToLower(match[1])] {
+					return true
+				}
+			}
+			host, _, _ := strings.Cut(value, ":")
+			return services[host]
 		}
 		for _, db := range tpl.Databases {
 			reachable[db.Name] = true
@@ -313,7 +327,7 @@ func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 						tpl.ID, svc.Name, key, value, host)
 				}
 				upper := strings.ToUpper(key)
-				if datastore.MatchString(upper) && address.MatchString(upper) {
+				if datastore.MatchString(upper) && address.MatchString(upper) && !pointsAtService(value) {
 					t.Errorf("%s/%s sets %s=%q; Skifity injects a connection string instead, "+
 						"and this points at a container that does not exist",
 						tpl.ID, svc.Name, key, value)

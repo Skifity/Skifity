@@ -26,3 +26,9 @@ databases:
   link_to:
   - limesurvey
   var_name: DATABASE_URL
+  vars:
+    host: LIMESURVEY_DB_HOST
+    port: LIMESURVEY_DB_PORT
+    name: LIMESURVEY_DB_NAME
+    user: LIMESURVEY_DB_USER
+    password: LIMESURVEY_DB_PASSWORD

@@ -17,6 +17,7 @@ services:
     PORT: '3080'
     RAG_PORT: '8000'
     RAG_API_URL: http://rag-api:8000
+    MONGO_URI: mongodb://mongodb:27017/LibreChat
   volumes:
   - name: librechat-images
     mount_path: /app/client/public/images
