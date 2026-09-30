@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -44,19 +45,19 @@ func panelDatabase(t *testing.T, path, email string, keyring *crypto.Keyring) {
 }
 
 // gzipped writes a copy of the file at path, compressed the way the panel
-// uploads it, and returns where.
+// uploads it, and returns where. It reads the file as it is, without opening
+// it the way the panel does, which would migrate it.
 func gzipped(t *testing.T, path string) string {
 	t.Helper()
-	db, err := store.Open(t.Context(), path)
+	raw, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot := filepath.Join(t.TempDir(), "snapshot.db")
-	if err := db.Snapshot(t.Context(), snapshot); err != nil {
+	if _, err := raw.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
-	plain, err := os.ReadFile(snapshot)
+	raw.Close()
+	plain, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,4 +239,74 @@ func TestRestoringSaysWhenTheMasterKeyIsNotTheBackupsOne(t *testing.T) {
 	if !strings.Contains(out.String(), "do not open with the master key at "+keyPath) {
 		t.Fatalf("a backup sealed with another key was not called out:\n%s", out.String())
 	}
+}
+
+// A backup is put back as it was taken. Checking it used to open it the way
+// the panel does, which migrates it — so the copy taken before an upgrade,
+// restored to go back to the version before, came out upgraded again.
+func TestRestoringDoesNotMigrateTheBackup(t *testing.T) {
+	_, target, keyPath, keyring := restoreHarness(t)
+	source := filepath.Join(t.TempDir(), "backup.db")
+	panelDatabase(t, source, "from-backup@example.test", keyring)
+	older := gzipped(t, dropNewestMigration(t, source))
+
+	if err := adminRestoreDatabase(context.Background(),
+		[]string{"--database", target, "--master-key", keyPath, "--yes", older}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("restore-db: %v", err)
+	}
+	restored, err := store.Inspect(context.Background(), target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.SchemaVersion != restored.Known-1 {
+		t.Fatalf("the restored database is at schema %d, want it left at %d", restored.SchemaVersion, restored.Known-1)
+	}
+}
+
+// A backup from a newer version is put back, and said to be one: the panel
+// will refuse it until it runs that version.
+func TestRestoringABackupFromANewerVersionSaysSo(t *testing.T) {
+	_, target, keyPath, keyring := restoreHarness(t)
+	source := filepath.Join(t.TempDir(), "backup.db")
+	panelDatabase(t, source, "from-backup@example.test", keyring)
+	raw, err := sql.Open("sqlite", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`INSERT INTO schema_migrations (version, name, applied_at) VALUES (9999, 'x', '')`); err != nil {
+		t.Fatal(err)
+	}
+	raw.Close()
+
+	var out bytes.Buffer
+	if err := adminRestoreDatabase(context.Background(),
+		[]string{"--database", target, "--master-key", keyPath, source}, &out); err != nil {
+		t.Fatalf("restore-db: %v", err)
+	}
+	if !strings.Contains(out.String(), "taken by a newer version") {
+		t.Fatalf("a newer backup was not called out:\n%s", out.String())
+	}
+}
+
+// dropNewestMigration makes a copy of a database that looks one migration
+// older, and returns where.
+func dropNewestMigration(t *testing.T, path string) string {
+	t.Helper()
+	out := filepath.Join(t.TempDir(), "older.db")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(out, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := sql.Open("sqlite", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	if _, err := raw.Exec(`DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)`); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

@@ -42,6 +42,16 @@ func Forbidden(action string) *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// SchemaNewer is a binary asked to open a database that a later version has
+// already migrated.
+func SchemaNewer(have, know int) *Problem {
+	return New("store.schema_newer", "This database belongs to a newer version").
+		WithCause("The database has been migrated to schema %d, and this version knows schema %d at most.", have, know).
+		WithImpact("Nothing was read or changed. An older version writing to a newer database is how data is lost without anybody noticing.").
+		WithFix("Run the version that upgraded it. To go back to this version instead, restore the copy taken before the upgrade with `%s admin restore-db`.", version.Binary).
+		WithDocs("/docs/configuration#upgrading")
+}
+
 // ScopedToProjects is a member limited to some of a team's projects asking
 // for something that belongs to the whole team.
 func ScopedToProjects() *Problem {

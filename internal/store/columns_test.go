@@ -1,7 +1,10 @@
 package store
 
 import (
+	"errors"
 	"testing"
+
+	"skifity/internal/errdoc"
 )
 
 // Every column list, qualified the way a join qualifies it, run against the
@@ -89,5 +92,32 @@ func TestTheQueriesBuiltOnAQualifiedAppListAnswer(t *testing.T) {
 	if err != nil || len(running) != 1 || running[0].ID != deployed.ID ||
 		running[0].TeamID != team.ID || running[0].Namespace != env.Namespace {
 		t.Fatalf("ListDeployedApps: %+v, %v", running, err)
+	}
+}
+
+// A database a later version has migrated is refused rather than read: this
+// is what rolling the panel's image back after an upgrade looks like.
+func TestADatabaseFromANewerVersionIsRefused(t *testing.T) {
+	path := t.TempDir() + "/panel.db"
+	db, err := Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(t.Context(),
+		`INSERT INTO schema_migrations (version, name, applied_at) VALUES (9999, 'from_the_future', ?)`, Now()); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	_, err = Open(t.Context(), path)
+	var problem *errdoc.Problem
+	if !errors.As(err, &problem) || problem.Code != "store.schema_newer" {
+		t.Fatalf("opening a newer database answered %v", err)
+	}
+
+	// Inspecting it is still possible, and says so.
+	inspection, err := Inspect(t.Context(), path)
+	if err != nil || inspection.SchemaVersion != 9999 || inspection.Known >= 9999 || inspection.Integrity != "ok" {
+		t.Fatalf("Inspect: %+v, %v", inspection, err)
 	}
 }

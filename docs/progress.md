@@ -4615,6 +4615,43 @@ qualified, against the real schema. The watcher's own tests used a fake store,
 which is how a query that never worked went unnoticed; the new store test is
 the one that runs the SQL.
 
+## Phase 90 — a security policy, and a way back from an upgrade
+
+Gap 20, from Epinio's research: there was no `SECURITY.md`, no statement of
+which versions get fixes, and no upgrade policy — before a first release, which
+is when somebody installing it wants to know. `SECURITY.md` now says how to
+report (GitHub's private vulnerability reporting), what happens and how fast,
+that only the latest release is supported before 1.0 and what changes after,
+and the trust boundaries the code defends, each pointing at the test or the
+decision that holds it: a panel administrator is root on every server by
+design, a team is isolated from every other, members, viewers and project
+limits are walks of the router, apps and builds are untrusted.
+
+Writing the upgrade policy down found that there was no way back from an
+upgrade. The panel upgrades itself by changing its Deployment's image and
+handed back `kubectl rollout undo` as the undo — but the new version migrates
+the database when it starts, and nothing stopped the old version from then
+opening a database a later version had migrated: reading tables whose rules it
+did not know, writing rows without columns it had never heard of. And
+`restore-db` checked a backup by opening it the way the panel does, which
+migrates it, so restoring the copy taken before an upgrade with the upgraded
+binary upgraded the copy again on the way in.
+
+Three changes. The store refuses to open a database with a migration newer
+than any it has, with `store.schema_newer` saying which version to run or which
+copy to restore. An upgrade copies the database beside itself first —
+`panel.db.before-upgrade-<time>-to-<version>`, the last three kept, never
+touching a copy `restore-db` set aside — and to the bucket too when there is
+one, and refuses to start if the local copy cannot be taken; its answer now
+gives the four commands that actually go back, with the copy's path in them.
+And `restore-db` reads a backup with `store.Inspect`, which opens it read-only
+and never migrates it, and says when a backup is from a newer version. Each has
+a test: a database from the future is refused and still inspectable; a
+restored backup keeps the schema it had; four upgrades leave three copies and
+the restore copy alone.
+
+The upgrade is documented in `docs/configuration.md`, with the way back.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

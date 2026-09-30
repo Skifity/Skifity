@@ -2080,6 +2080,18 @@
         "cause": "This request was signed in with a browser session rather than an API token.",
         "impact": "Nothing was done.",
         "fix": "Create a token under Account, then give it to the assistant as an Authorization: Bearer header."
+      },
+      "store_schema_newer": {
+        "title": "This database belongs to a newer version",
+        "cause": "The database has been migrated to schema {{0}}, and this version knows schema {{1}} at most.",
+        "impact": "Nothing was read or changed. An older version writing to a newer database is how data is lost without anybody noticing.",
+        "fix": "Run the version that upgraded it. To go back to this version instead, restore the copy taken before the upgrade with `{{0}} admin restore-db`."
+      },
+      "upgrade_no_snapshot": {
+        "title": "The database could not be copied before upgrading",
+        "cause": "{{0}}",
+        "impact": "The upgrade was not started. The panel is still running the current version.",
+        "fix": "Make room on the disk the database is on, then upgrade again."
       }
     }
   },

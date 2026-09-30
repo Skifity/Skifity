@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -475,19 +476,33 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	// Upgrading the panel means changing the image of the Deployment the panel
 	// itself runs in, which Kubernetes then rolls out. The panel is restarted
 	// by that rollout, which is why the response is sent first.
-	previous, err := s.upgradePanel(r, strings.TrimSpace(req.Version))
+	started, err := s.upgradePanel(r, strings.TrimSpace(req.Version))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	s.audit(r, "", "panel.upgrade_started", "panel", version.Version, req.Version)
 
-	// The undo command goes out with the response, before the panel stops. If
-	// the new version does not start there is nothing left here to ask.
-	writeJSON(w, http.StatusAccepted, map[string]string{
+	// The undo goes out with the response, before the panel stops. If the new
+	// version does not start there is nothing left here to ask. It is two
+	// steps, not one: the new version migrates the database when it starts,
+	// and the old one refuses a database a later version has migrated, so
+	// going back is the old image and the copy taken before.
+	deployment := "deploy/" + version.Binary + "-panel"
+	undo := fmt.Sprintf("The panel stops before the new version starts, and nothing rolls it back automatically. "+
+		"On the server: kubectl -n %[1]s scale %[2]s --replicas=0; "+
+		"%[3]s admin restore-db --yes %[4]s; "+
+		"kubectl -n %[1]s rollout undo %[2]s; kubectl -n %[1]s scale %[2]s --replicas=1",
+		s.cfg.Namespace, deployment, version.Binary, started.Snapshot)
+	answer := map[string]string{
 		"status":           "started",
-		"previous_image":   previous,
+		"previous_image":   started.Previous,
+		"snapshot":         started.Snapshot,
 		"note":             "The panel will restart. Your apps keep running while it does.",
-		"if_it_goes_wrong": "The panel stops before the new version starts, and nothing rolls it back automatically. On the server: kubectl -n " + s.cfg.Namespace + " rollout undo deploy/skifity-panel",
-	})
+		"if_it_goes_wrong": undo,
+	}
+	if started.OffSite != "" {
+		answer["off_site_copy"] = started.OffSite
+	}
+	writeJSON(w, http.StatusAccepted, answer)
 }

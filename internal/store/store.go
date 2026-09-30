@@ -23,6 +23,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"skifity/internal/errdoc"
 )
 
 //go:embed migrations/*.sql
@@ -142,6 +144,21 @@ func (db *DB) migrateUpTo(ctx context.Context, last int) error {
 	migrations, err := loadMigrations()
 	if err != nil {
 		return err
+	}
+	// A database a later version has migrated is not one this version can
+	// read correctly, let alone write: a column it does not know is a column
+	// it leaves empty, and a table rebuilt under it is one whose rules it
+	// does not keep. This is what rolling the panel's image back after an
+	// upgrade looks like, and the answer is the copy taken before it.
+	known, newest := 0, 0
+	for _, m := range migrations {
+		known = max(known, m.version)
+	}
+	for v := range applied {
+		newest = max(newest, v)
+	}
+	if newest > known {
+		return errdoc.SchemaNewer(newest, known)
 	}
 	for _, m := range migrations {
 		if applied[m.version] || m.version > last {

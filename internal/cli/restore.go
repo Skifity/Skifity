@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"skifity/internal/config"
@@ -59,28 +60,34 @@ func adminRestoreDatabase(ctx context.Context, args []string, out io.Writer) err
 	candidate := filepath.Join(filepath.Dir(target),
 		fmt.Sprintf(".restore-%s.db", time.Now().UTC().Format("20060102-150405")))
 	if err := unpackBackup(source, candidate); err != nil {
-		os.Remove(candidate)
+		removeCandidate(candidate)
 		return errdoc.New("admin.restore_unreadable", "That backup could not be read").
 			WithCause("%s", err.Error()).
 			WithImpact("Nothing was changed.").
 			WithFix("Give the file exactly as it came out of the bucket: a .db.gz, or a .db from `%s admin backup-db`.", version.Binary)
 	}
-	users, err := checkRestoreCandidate(ctx, candidate)
+	inspection, err := checkRestoreCandidate(ctx, candidate)
 	if err != nil {
-		os.Remove(candidate)
+		removeCandidate(candidate)
 		return errdoc.New("admin.restore_not_a_panel", "That is not a whole panel database").
 			WithCause("%s", err.Error()).
 			WithImpact("Nothing was changed.").
 			WithFix("Take a different backup. The newest one in the bucket's skifity/panel/ folder is usually the one to use.")
 	}
+	users := inspection.Users
 	keyPath := *masterKey
 	if keyPath == "" {
 		keyPath = masterKeyPathFor(*databasePath)
 	}
-	keyNote := masterKeyNote(ctx, candidate, keyPath)
+	keyNote := masterKeyNote(inspection, keyPath)
+	if inspection.SchemaVersion > inspection.Known {
+		keyNote = strings.TrimSpace(keyNote + "\n" + fmt.Sprintf("It was taken by a newer version of %s "+
+			"(schema %d; this one knows %d). The panel will only open it once it runs that version again.",
+			version.Name, inspection.SchemaVersion, inspection.Known))
+	}
 
 	if !*yes {
-		os.Remove(candidate)
+		removeCandidate(candidate)
 		if *asJSON {
 			return writeJSON(out, map[string]any{
 				"restored": false, "database": target, "from": source, "accounts": users, "master_key_note": keyNote,
@@ -115,16 +122,21 @@ func adminRestoreDatabase(ctx context.Context, args []string, out io.Writer) err
 			for _, done := range moved {
 				_ = os.Rename(kept+done, target+done)
 			}
-			os.Remove(candidate)
+			removeCandidate(candidate)
 			return fmt.Errorf("move the current database aside: %w", err)
 		}
 		moved = append(moved, suffix)
+	}
+	// Reading the candidate can leave a -wal and a -shm beside it with
+	// nothing in them; they are not the database, and must not follow it.
+	for _, suffix := range []string{"-wal", "-shm"} {
+		_ = os.Remove(candidate + suffix)
 	}
 	if err := os.Rename(candidate, target); err != nil {
 		for _, done := range moved {
 			_ = os.Rename(kept+done, target+done)
 		}
-		os.Remove(candidate)
+		removeCandidate(candidate)
 		return fmt.Errorf("put the backup in place: %w", err)
 	}
 
@@ -140,6 +152,14 @@ func adminRestoreDatabase(ctx context.Context, args []string, out io.Writer) err
 	}
 	fmt.Fprintf(out, "Start the panel again.\n\n")
 	return nil
+}
+
+// removeCandidate removes an unpacked backup and whatever reading it left
+// beside it.
+func removeCandidate(path string) {
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		_ = os.Remove(path + suffix)
+	}
 }
 
 // unpackBackup writes a backup to path, decompressing it if it is gzipped.
@@ -172,54 +192,37 @@ func unpackBackup(source, path string) error {
 	return out.Close()
 }
 
-// checkRestoreCandidate opens a candidate the way the panel will — which also
-// brings an older backup's schema up to date — and checks it is whole and has
-// somebody who can sign in.
-func checkRestoreCandidate(ctx context.Context, path string) (int, error) {
-	db, err := store.Open(ctx, path)
+// checkRestoreCandidate reads a candidate without changing it — a backup is
+// put back exactly as it was taken, and the panel that opens it brings it up
+// to date, or refuses it if it is from a later version — and checks it is
+// whole and has somebody who can sign in.
+func checkRestoreCandidate(ctx context.Context, path string) (store.Inspection, error) {
+	inspection, err := store.Inspect(ctx, path)
 	if err != nil {
-		return 0, fmt.Errorf("it does not open as a panel database: %w", err)
+		return inspection, err
 	}
-	defer db.Close()
-
-	var integrity string
-	if err := db.QueryRowContext(ctx, `PRAGMA integrity_check`).Scan(&integrity); err != nil {
-		return 0, fmt.Errorf("check it: %w", err)
+	if inspection.Integrity != "ok" {
+		return inspection, fmt.Errorf("SQLite says it is damaged: %s", inspection.Integrity)
 	}
-	if integrity != "ok" {
-		return 0, fmt.Errorf("SQLite says it is damaged: %s", integrity)
+	if inspection.Users == 0 {
+		return inspection, fmt.Errorf("it has no accounts, so nobody could sign in to it")
 	}
-	users, err := db.CountUsers(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("read its accounts: %w", err)
-	}
-	if users == 0 {
-		return 0, fmt.Errorf("it has no accounts, so nobody could sign in to it")
-	}
-	return users, nil
+	return inspection, nil
 }
 
 // masterKeyNote says whether the backup's secrets open with the master key on
 // this server. A backup never carries the key, and a panel started with the
 // wrong one comes up with every secret unreadable, which looks like a much
 // stranger failure than it is. Empty when they open or there is nothing sealed.
-func masterKeyNote(ctx context.Context, candidate, keyPath string) string {
+func masterKeyNote(inspection store.Inspection, keyPath string) string {
 	keyring, err := crypto.LoadKeyring(keyPath)
 	if err != nil {
 		return fmt.Sprintf("There is no master key at %s. The panel needs the one this backup was taken with.", keyPath)
 	}
-	db, err := store.Open(ctx, candidate)
-	if err != nil {
+	if inspection.SealedValue == "" {
 		return ""
 	}
-	defer db.Close()
-	var key, value string
-	err = db.QueryRowContext(ctx,
-		`SELECT key, value FROM settings WHERE encrypted = 1 AND value != '' LIMIT 1`).Scan(&key, &value)
-	if err != nil {
-		return ""
-	}
-	if _, err := keyring.Open(value, settings.Context(key)); err != nil {
+	if _, err := keyring.Open(inspection.SealedValue, settings.Context(inspection.SealedKey)); err != nil {
 		return fmt.Sprintf("Its secrets do not open with the master key at %s. Put the key this backup "+
 			"was taken with there before starting the panel, or every secret will be unreadable.", keyPath)
 	}

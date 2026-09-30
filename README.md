@@ -184,6 +184,7 @@ Skifity rather than running it, so they stay in the repository:
 | [Decisions](docs/decisions.md) | Why it is like this |
 | [Progress](docs/progress.md) | Where the work stands, including what has never run |
 | [Contributing](CONTRIBUTING.md) | The rules that are load-bearing |
+| [Security](SECURITY.md) | How to report a vulnerability, what is supported, where the lines of trust are |
 
 ## Building it yourself
 

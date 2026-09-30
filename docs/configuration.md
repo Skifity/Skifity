@@ -303,6 +303,48 @@ Two things, and they are not the same thing:
 Keep the key somewhere the database backup is not. Together they are everything;
 apart, neither is enough.
 
+## Upgrading
+
+The panel does not check for new versions: it contacts no server of its own,
+so a release is something you hear about from the releases page. Upgrading is
+one API call as a panel administrator — the panel changes the image of its own
+Deployment and Kubernetes rolls it out:
+
+```sh
+curl -X POST https://panel.example.com/api/upgrade \
+  -H "Authorization: Bearer skf_..." -d '{"version":"v1.2.0"}'
+```
+
+Your apps keep running throughout; the panel itself is down for the moment it
+takes the new version to start.
+
+**Before anything changes, the panel copies its database** beside itself, as
+`panel.db.before-upgrade-<time>-to-<version>`, and keeps the last three. If
+backup storage is set up it also puts a copy in the bucket. An upgrade that
+cannot take the local copy does not start.
+
+That copy is the other half of going back. The new version migrates the
+database when it starts, and a version refuses a database that a later one has
+migrated — reading columns it does not know and rules it does not keep is how
+data is lost quietly — so rolling the image back is not enough on its own. The
+answer to the upgrade request carries the exact commands, with the copy's path
+filled in:
+
+```sh
+kubectl -n skifity-system scale deploy/skifity-panel --replicas=0
+skifity admin restore-db --yes /var/lib/skifity/panel.db.before-upgrade-...
+kubectl -n skifity-system rollout undo deploy/skifity-panel
+kubectl -n skifity-system scale deploy/skifity-panel --replicas=1
+```
+
+`restore-db` puts a copy back exactly as it was taken; it never migrates it, so
+any version of the binary can restore a copy for any other. Anything you
+changed in the panel between the upgrade and going back is lost with it —
+which is another reason to go back soon or not at all.
+
+Migrations only go forward. A version skipped is fine: the one you upgrade to
+applies every migration it has that the database does not.
+
 ## Monitoring the panel
 
 The panel watches the cluster; this is how you watch the panel. `GET
