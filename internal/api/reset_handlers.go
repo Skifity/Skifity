@@ -27,7 +27,12 @@ var sendResetEmail = func(s *Server, ctx context.Context, to, subject, body stri
 // or the address the panel was started with. Never the request's Host, which
 // is whatever the asker sent — a link built from it would carry the token to
 // a server of the asker's choosing.
-func (s *Server) resetBase(ctx context.Context) string {
+func (s *Server) resetBase(ctx context.Context) string { return s.panelAddress(ctx) }
+
+// panelAddress is the address people reach the panel at: the Panel URL
+// setting, or the address the panel was started with. A reset link is built
+// from it, and a passkey belongs to its hostname.
+func (s *Server) panelAddress(ctx context.Context) string {
 	base, _, err := s.db.GetSetting(ctx, settings.KeyPanelURL)
 	if err != nil || strings.TrimSpace(base) == "" {
 		base = s.cfg.PublicURL

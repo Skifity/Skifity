@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { ArrowLeftIcon, KeyRoundIcon } from "lucide-react"
+import { ArrowLeftIcon, FingerprintIcon, KeyRoundIcon } from "lucide-react"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,8 +15,34 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Spinner } from "@/components/ui/spinner"
 import { Separator } from "@/components/ui/separator"
 import { api } from "@/lib/api"
+import {
+  autofillAvailable,
+  getPasskey,
+  passkeyFailure,
+  passkeysSupported,
+  type PasskeyFailure,
+  type PasskeyRequestOptions,
+} from "@/lib/passkeys"
 import type { Meta } from "@/lib/types"
 import { CenteredLayout } from "@/pages/setup"
+
+/**
+ * Signing in with a passkey, start to finish: a challenge from the panel, the
+ * browser's answer to it, and the panel checking the answer. The session
+ * cookie comes back on the last request, exactly as it does for a password.
+ */
+async function signInWithPasskey(how: {
+  mediation?: CredentialMediationRequirement
+  signal?: AbortSignal
+}) {
+  const options = await api.anonymous<PasskeyRequestOptions>("/api/auth/passkey/begin", {
+    method: "POST",
+    body: {},
+    signal: how.signal,
+  })
+  const answer = await getPasskey(options, how)
+  await api.anonymous("/api/auth/passkey/finish", { method: "POST", body: answer })
+}
 
 /**
  * Asking for a reset link, in place under "Lost your password?". The answer
@@ -81,6 +107,60 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
     if (ssoError) window.history.replaceState({}, "", window.location.pathname)
   }, [ssoError])
 
+  // Passkeys are offered when the panel's address can have them and this
+  // browser can use them. The panel's half is in /api/meta; the browser's is
+  // asked here, and neither is copied into state.
+  const passkeysOffered = meta.data?.passkeys?.available === true && passkeysSupported()
+  const [passkeyBusy, setPasskeyBusy] = useState(false)
+  const [passkeyTrouble, setPasskeyTrouble] = useState<PasskeyFailure | null>(null)
+  // The autofill request is started again after the button's one ends, since
+  // starting the button's stopped it.
+  const [autofillRound, setAutofillRound] = useState(0)
+  const autofill = useRef<AbortController | null>(null)
+  const signedInWithAutofill = useEffectEvent(() => onSignedIn())
+
+  // Offer passkeys in the email field's suggestions, the way password
+  // managers offer passwords: the browser waits, and a passkey picked there
+  // signs in without the button. Aborted when the page goes, or when the
+  // button starts a request of its own — the browser handles one at a time.
+  useEffect(() => {
+    if (!passkeysOffered || needsCode) return
+    const controller = new AbortController()
+    autofill.current = controller
+    void (async () => {
+      if (!(await autofillAvailable()) || controller.signal.aborted) return
+      try {
+        await signInWithPasskey({ mediation: "conditional", signal: controller.signal })
+        signedInWithAutofill()
+      } catch (caught) {
+        // Stopping it is how the page stops waiting, and the browser's own
+        // refusals while it waits are nothing the person did.
+        if (controller.signal.aborted || passkeyFailure(caught) !== null) return
+        setError(caught)
+      }
+    })()
+    return () => controller.abort()
+  }, [passkeysOffered, needsCode, autofillRound])
+
+  const startPasskey = async () => {
+    autofill.current?.abort()
+    setPasskeyBusy(true)
+    setError(null)
+    setPasskeyTrouble(null)
+    try {
+      await signInWithPasskey({})
+      onSignedIn()
+    } catch (caught) {
+      const trouble = passkeyFailure(caught)
+      if (trouble === null) setError(caught)
+      // Closing the browser's dialog is an answer, not a failure.
+      else if (trouble !== "cancelled") setPasskeyTrouble(trouble)
+      setAutofillRound((round) => round + 1)
+    } finally {
+      setPasskeyBusy(false)
+    }
+  }
+
   const signIn = async (totpCode: string) => {
     setSubmitting(true)
     setError(null)
@@ -128,6 +208,13 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
           >
             <FieldGroup>
               {error != null && <ErrorDisplay error={error} compact />}
+              {passkeyTrouble != null && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {t(`auth.passkeys.failure.${passkeyTrouble}`)}
+                  </AlertDescription>
+                </Alert>
+              )}
               {ssoError != null && (
                 <Alert variant="destructive">
                   <AlertDescription>
@@ -197,7 +284,9 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                       onChange={(event) => setEmail(event.target.value)}
                       required
                       autoFocus
-                      autoComplete="username"
+                      // "webauthn" is what lets the browser offer passkeys
+                      // among this field's suggestions.
+                      autoComplete={passkeysOffered ? "username webauthn" : "username"}
                     />
                   </Field>
 
@@ -219,25 +308,43 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                       {submitting ? t("auth.signingIn") : t("auth.signIn")}
                     </Button>
 
+                    {(passkeysOffered || meta.data?.sso.enabled) && (
+                      <div className="flex items-center gap-3 py-1">
+                        <Separator className="flex-1" />
+                        <span className="text-xs text-muted-foreground">{t("auth.or")}</span>
+                        <Separator className="flex-1" />
+                      </div>
+                    )}
+
+                    {/*
+                      No address first: the passkey says whose it is. Only
+                      offered where it can work — see passkeysOffered.
+                    */}
+                    {passkeysOffered && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        disabled={passkeyBusy || submitting}
+                        onClick={() => void startPasskey()}
+                      >
+                        {passkeyBusy ? <Spinner /> : <FingerprintIcon />}
+                        {passkeyBusy ? t("auth.passkeys.waiting") : t("auth.passkeys.signIn")}
+                      </Button>
+                    )}
+
                     {/*
                       The button is a link rather than a fetch: the provider
                       answers with a redirect to its own page, and following
                       that is the browser's job, not the API client's.
                     */}
                     {meta.data?.sso.enabled && (
-                      <>
-                        <div className="flex items-center gap-3 py-1">
-                          <Separator className="flex-1" />
-                          <span className="text-xs text-muted-foreground">{t("auth.or")}</span>
-                          <Separator className="flex-1" />
-                        </div>
-                        <Button variant="outline" className="w-full" asChild>
-                          <a href="/api/auth/sso/start">
-                            <KeyRoundIcon />
-                            {meta.data.sso.label ?? t("auth.signInWithSSO")}
-                          </a>
-                        </Button>
-                      </>
+                      <Button variant="outline" className="w-full" asChild>
+                        <a href="/api/auth/sso/start">
+                          <KeyRoundIcon />
+                          {meta.data.sso.label ?? t("auth.signInWithSSO")}
+                        </a>
+                      </Button>
                     )}
                     <FieldDescription className="text-center">
                       <Collapsible>

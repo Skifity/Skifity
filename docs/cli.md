@@ -409,7 +409,9 @@ sudo skifity admin reset-password you@example.com
 
 Resetting a password signs out every device that was signed in as that account.
 Two-factor authentication stays on, so you will still need your authenticator
-app.
+app. Passkeys stay too, and the command says how many the account has; add
+`--remove-passkeys` to remove them as well, when the reason for the reset is
+that somebody else got in. See [Passkeys](configuration.md#passkeys).
 
 Two more work on the database itself:
 

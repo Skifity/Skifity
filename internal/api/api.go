@@ -223,6 +223,12 @@ func (s *Server) routes() chi.Router {
 		// back, and the ID token's signature.
 		api.Get("/auth/sso/start", s.handleSSOStart)
 		api.Get("/auth/sso/callback", s.handleSSOCallback)
+		// Signing in with a passkey, open for the same reason. The challenge
+		// is issued here, held here, tied to this browser by a cookie and
+		// good once; the answer is a signature by a key this panel stored.
+		// See passkey_handlers.go.
+		api.Post("/auth/passkey/begin", s.handleBeginPasskeySignIn)
+		api.Post("/auth/passkey/finish", s.handleFinishPasskeySignIn)
 		// Open for the same reason as signing in: somebody holding an
 		// invitation has no account yet. The link's token is the credential,
 		// it is stored hashed, single-use and expiring, and everything wrong
@@ -249,6 +255,9 @@ func (s *Server) routes() chi.Router {
 			// obvious reason.
 			authed.Post("/me/reauth", s.handleReauth)
 			authed.Get("/me/sso", s.handleGetSSOLink)
+			authed.Get("/me/passkeys", s.handleListPasskeys)
+			// A name opens nothing, so renaming does not ask again.
+			authed.Patch("/me/passkeys/{passkeyID}", s.handleRenamePasskey)
 
 			// The three actions that turn a session somebody borrowed into
 			// access they keep: switching the second factor off, reading the
@@ -265,6 +274,11 @@ func (s *Server) routes() chi.Router {
 				// front door, so both ask for the password again.
 				sensitive.Post("/me/sso/link", s.handleStartSSOLink)
 				sensitive.Delete("/me/sso", s.handleUnlinkSSO)
+				// A passkey is a way into the account too, for the same
+				// reason: adding one and removing one ask again.
+				sensitive.Post("/me/passkeys/register", s.handleBeginPasskeyRegistration)
+				sensitive.Post("/me/passkeys", s.handleAddPasskey)
+				sensitive.Delete("/me/passkeys/{passkeyID}", s.handleRemovePasskey)
 			})
 
 			authed.Get("/teams", s.handleListTeams)
@@ -647,14 +661,19 @@ func (s *Server) membershipIn(r *http.Request, teamID string) (store.User, store
 // A browser session says how it was signed into. Somebody with two-factor on
 // needs it at every sign-in, so their sessions count whatever they say — one
 // from before they turned it on included, since turning it on took a step-up.
-// An API token was minted by somebody signed in, and cannot say how; it counts
-// when its owner has two-factor on, or signs in through the identity provider.
+// A session signed into with a passkey counts: the panel requires user
+// verification, so the passkey was something held, unlocked by something known
+// or something the person is, which is two factors. An API token was minted by
+// somebody signed in, and cannot say how; it counts when its owner has
+// two-factor on, or signs in through the identity provider. Having a passkey
+// does not make a token count, because the account's password still signs it
+// in as well.
 func (s *Server) strongAuth(r *http.Request, user store.User) bool {
 	if user.TOTPEnabled {
 		return true
 	}
 	if session, ok := sessionFrom(r.Context()); ok {
-		return session.Method == auth.MethodSSO
+		return session.Method == auth.MethodSSO || session.Method == auth.MethodPasskey
 	}
 	if _, ok := apiTokenFrom(r.Context()); ok {
 		identities, err := s.db.IdentitiesForUser(r.Context(), user.ID)
@@ -856,6 +875,9 @@ func (s *Server) Background(ctx context.Context) {
 				}
 				if err := s.db.PurgeOldLoginAttempts(ctx, time.Now().Add(-24*time.Hour)); err != nil {
 					s.log.Warn("purge login attempts", "error", err)
+				}
+				if err := s.db.PurgeExpiredPasskeyChallenges(ctx, time.Now()); err != nil {
+					s.log.Warn("purge passkey challenges", "error", err)
 				}
 				if err := s.db.PurgeOldAudit(ctx, time.Now().Add(-90*24*time.Hour)); err != nil {
 					s.log.Warn("purge audit events", "error", err)

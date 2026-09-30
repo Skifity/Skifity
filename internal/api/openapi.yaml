@@ -388,6 +388,59 @@ paths:
               schema: {type: string}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/auth/passkey/begin:
+    post:
+      operationId: beginPasskeySignIn
+      tags: [Auth]
+      summary: Start signing in with a passkey
+      description: >-
+        Open. Answers the options to pass to navigator.credentials.get: a
+        single-use challenge, good for five minutes, that asks for a
+        discoverable passkey with user verification. Sets a short-lived
+        HttpOnly cookie that ties the challenge to this browser. Only when
+        GET /api/meta says passkeys.available: the panel has to be on HTTPS at
+        a domain, or on localhost.
+      security: []
+      requestBody:
+        required: true
+        description: An empty object.
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false}
+      responses:
+        '200':
+          description: The request options, in the form the WebAuthn JSON serialisation uses.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PasskeyRequestOptions'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/auth/passkey/finish:
+    post:
+      operationId: finishPasskeySignIn
+      tags: [Auth]
+      summary: Finish signing in with a passkey
+      description: >-
+        Open, authenticated by the passkey's signature over the challenge this
+        browser was given. Sets the same session cookie as signing in with a
+        password. The signature, origin, relying party, challenge, user
+        verification and signature counter are all checked; a refusal says
+        auth.passkey_refused whatever the reason, and is limited like a wrong
+        password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasskeyAssertion'}
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SignedIn'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/invitations/{token}:
     parameters:
       - $ref: '#/components/parameters/invitationToken'
@@ -672,6 +725,96 @@ paths:
                 required: [url]
                 properties:
                   url: {type: string, format: uri}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/me/passkeys:
+    get:
+      operationId: listPasskeys
+      tags: [Account]
+      summary: Your passkeys
+      description: Listed even when the panel cannot use passkeys at the moment, so they can be removed.
+      responses:
+        '200':
+          description: Your passkeys, oldest first.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PasskeyList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: addPasskey
+      tags: [Account]
+      summary: Finish adding a passkey
+      description: >-
+        Sends the browser's answer to the options from
+        POST /api/me/passkeys/register, with a name to recognise the passkey
+        by. The challenge is bound to this session and works once. Wants a
+        recent sign-in.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddPasskeyRequest'}
+      responses:
+        '201':
+          description: The passkey as stored.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Passkey'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/me/passkeys/register:
+    post:
+      operationId: beginPasskeyRegistration
+      tags: [Account]
+      summary: Start adding a passkey
+      description: >-
+        Answers the options to pass to navigator.credentials.create: a
+        discoverable credential with user verification, no attestation, and
+        the account's passkeys excluded. Good for five minutes, in this
+        session. Wants a recent sign-in.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The creation options, in the form the WebAuthn JSON serialisation uses.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PasskeyCreationOptions'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/me/passkeys/{passkeyID}:
+    parameters:
+      - $ref: '#/components/parameters/passkeyID'
+    patch:
+      operationId: renamePasskey
+      tags: [Account]
+      summary: Rename a passkey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RenamePasskeyRequest'}
+      responses:
+        '200':
+          description: The passkey as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Passkey'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: removePasskey
+      tags: [Account]
+      summary: Remove a passkey
+      description: >-
+        Refused for the last passkey of an account with no password and no
+        single sign-on, which would have no way in left. Wants a recent
+        sign-in.
+      security:
+        - sessionCookie: []
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/me/totp:
@@ -4387,6 +4530,7 @@ components:
     invitationToken: {name: token, in: path, required: true, description: 'The token from the invitation link.', schema: {type: string, minLength: 20}}
     sessionID: {name: sessionID, in: path, required: true, description: 'A session''s id.', schema: {type: string}}
     tokenID: {name: tokenID, in: path, required: true, description: 'An API token''s id.', schema: {type: string}}
+    passkeyID: {name: passkeyID, in: path, required: true, description: 'A passkey''s id.', schema: {type: string}}
     projectID: {name: projectID, in: path, required: true, description: 'A project''s id.', schema: {type: string}}
     envID: {name: envID, in: path, required: true, description: 'An environment''s id.', schema: {type: string}}
     fileID: {name: fileID, in: path, required: true, description: 'A file''s id.', schema: {type: string}}
@@ -4532,7 +4676,7 @@ components:
 
     Meta:
       type: object
-      required: [product, version, commit, tagline, locales, dev_mode, sso, server_now, cli_platform, cli_platforms]
+      required: [product, version, commit, tagline, locales, dev_mode, sso, server_now, cli_platform, cli_platforms, passkeys]
       properties:
         product: {type: string}
         version: {type: string}
@@ -4555,6 +4699,11 @@ components:
           description: Every platform the CLI can be downloaded for from this panel, its own first.
           items: {type: string}
         password_reset: {type: boolean, description: 'Whether the sign-in page can offer a reset link by email.'}
+        passkeys:
+          type: object
+          required: [available]
+          properties:
+            available: {type: boolean, description: 'Whether a browser would offer passkeys at this panel''s address: HTTPS at a domain, or localhost.'}
 
     SetupStatus:
       type: object
@@ -4674,7 +4823,7 @@ components:
         created_at: {type: string, format: date-time}
         last_seen_at: {type: string, format: date-time}
         expires_at: {type: string, format: date-time}
-        method: {type: string, enum: [password, totp, sso], description: 'How it was signed into.'}
+        method: {type: string, enum: [password, totp, sso, passkey], description: 'How it was signed into.'}
         current: {type: boolean, description: 'This is the session making the request.'}
 
     SessionList:
@@ -4742,6 +4891,78 @@ components:
         token: {$ref: '#/components/schemas/APIToken'}
         secret: {type: string, description: 'The token itself, shown this once.'}
         note: {type: string}
+
+    Passkey:
+      type: object
+      required: [id, rp_id, backup_eligible, backup_state, name, created_at]
+      properties:
+        id: {type: string}
+        rp_id: {type: string, description: 'The hostname the passkey was made for.'}
+        backup_eligible: {type: boolean, description: 'A synced passkey: the platform or password manager may copy it to the person''s other devices.'}
+        backup_state: {type: boolean, description: 'Whether it has been copied.'}
+        name: {type: string}
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time}
+        elsewhere: {type: boolean, description: 'Made for an address the panel no longer answers on, so a browser will not offer it here.'}
+
+    PasskeyList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Passkey'}}
+        total: {type: integer}
+
+    AddPasskeyRequest:
+      type: object
+      required: [name, credential]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 64}
+        credential:
+          type: object
+          description: The PublicKeyCredential from navigator.credentials.create, in its JSON serialisation (RegistrationResponseJSON).
+
+    RenamePasskeyRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 64}
+
+    PasskeyCreationOptions:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey:
+          type: object
+          description: PublicKeyCredentialCreationOptions, with the challenge, the user id and credential ids in base64url.
+
+    PasskeyRequestOptions:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey:
+          type: object
+          description: PublicKeyCredentialRequestOptions, with the challenge in base64url and no allowCredentials.
+
+    PasskeyAssertion:
+      type: object
+      description: The PublicKeyCredential from navigator.credentials.get, in its JSON serialisation (AuthenticationResponseJSON).
+      required: [id, rawId, type, response]
+      properties:
+        id: {type: string}
+        rawId: {type: string}
+        type: {type: string, const: public-key}
+        authenticatorAttachment: {type: string}
+        clientExtensionResults: {type: object}
+        response:
+          type: object
+          required: [clientDataJSON, authenticatorData, signature]
+          properties:
+            clientDataJSON: {type: string}
+            authenticatorData: {type: string}
+            signature: {type: string}
+            userHandle: {type: string}
 
     Identity:
       type: object

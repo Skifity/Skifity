@@ -56,9 +56,9 @@ func SchemaNewer(have, know int) *Problem {
 // team that requires more.
 func StrongAuthRequired() *Problem {
 	return New("auth.strong_auth_required", "This team asks for two-factor authentication").
-		WithCause("Everybody in this team has to sign in with a second factor or with single sign-on, and this sign-in used neither.").
+		WithCause("Everybody in this team has to sign in with a second factor, a passkey or single sign-on, and this sign-in used none of them.").
 		WithImpact("Nothing in the team was shown or changed.").
-		WithFix("Turn on two-factor authentication under Account, or sign in with single sign-on.").
+		WithFix("Turn on two-factor authentication under Account, or sign in with a passkey or with single sign-on.").
 		WithDocs("/docs/configuration#signing-in").
 		WithStatus(http.StatusForbidden)
 }
@@ -585,6 +585,73 @@ func PasswordResetInvalid() *Problem {
 		WithFix("Ask for a new link from the sign-in page. Only the newest one works.").
 		WithStatus(http.StatusBadRequest).
 		WithDocs("/docs/troubleshooting#i-have-forgotten-my-password")
+}
+
+// PasskeysUnavailable is a passkey asked for on a panel a browser would not
+// offer one to: plain HTTP somewhere other than localhost, an IP address, or
+// no address at all. The default install is the first (ADR-0015).
+func PasskeysUnavailable(address string) *Problem {
+	p := New("auth.passkeys_unavailable", "Passkeys need the panel on HTTPS at a domain").
+		WithCause("A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.").
+		WithImpact("Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.").
+		WithFix("Put a domain on the panel and set Settings → General → Panel URL to its https:// address.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict)
+	if address != "" {
+		p = p.With("address", address)
+	}
+	return p
+}
+
+// PasskeyRefused is a passkey sign-in that did not check out. The caller is
+// anonymous, so which check failed is in the panel's log and not here.
+func PasskeyRefused() *Problem {
+	return New("auth.passkey_refused", "That passkey was not accepted").
+		WithCause("The passkey is not one this panel knows, or its answer did not check out.").
+		WithImpact("You are not signed in.").
+		WithFix("Try again, or sign in with your email address and password. After several failed attempts sign-in pauses for a while.").
+		WithStatus(http.StatusUnauthorized)
+}
+
+// PasskeyExpired is an answer to a passkey challenge that is not waiting any
+// more: it took longer than five minutes, it was answered already, or it was
+// started in another browser.
+func PasskeyExpired() *Problem {
+	return New("auth.passkey_expired", "That passkey request is no longer waiting").
+		WithCause("Each request works once, for five minutes, in the browser that started it. This one expired, was used already, or came from somewhere else.").
+		WithImpact("Nothing was changed.").
+		WithFix("Start again.").
+		WithStatus(http.StatusBadRequest)
+}
+
+// PasskeyNotAdded is a new passkey whose answer did not check out.
+func PasskeyNotAdded() *Problem {
+	return New("auth.passkey_not_added", "The passkey could not be added").
+		WithCause("The answer from your browser or security key did not check out, so it is not a passkey this panel can trust.").
+		WithImpact("No passkey was added.").
+		WithFix("Try again. If it keeps failing, open the panel at its Panel URL, or use another browser or security key.").
+		WithDocs("/docs/configuration#passkeys").
+		WithStatus(http.StatusBadRequest)
+}
+
+// PasskeyTaken is a credential already stored for an account.
+func PasskeyTaken() *Problem {
+	return New("auth.passkey_taken", "That passkey is already on an account").
+		WithCause("This panel already has the passkey your device offered.").
+		WithImpact("Nothing was added.").
+		WithFix("Use the passkey you have, or make a new one on another device or security key.").
+		WithStatus(http.StatusConflict)
+}
+
+// PasskeyLastWayIn is removing the passkey an account with no password and no
+// single sign-on cannot do without.
+func PasskeyLastWayIn() *Problem {
+	return New("auth.passkey_last_way_in", "This passkey is this account's only way in").
+		WithCause("The account has no password and no single sign-on, so without its last passkey nobody could sign in to it.").
+		WithImpact("Nothing was changed.").
+		WithFix("Add another passkey first. Whoever runs the server can also set a password with %s admin reset-password.", version.Binary).
+		WithDocs("/docs/configuration#passkeys").
+		WithStatus(http.StatusConflict)
 }
 
 // TunnelUnreachable is a tunnel to a database the panel cannot reach.

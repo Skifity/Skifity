@@ -205,7 +205,36 @@
     "setNewPassword": "Set the new password",
     "resetDone": "Your password has changed. Sign in with the new one.",
     "backToSignIn": "Back to sign-in",
-    "resetMissingToken": "This page needs the link from the email. Open it from there, or ask for a new one."
+    "resetMissingToken": "This page needs the link from the email. Open it from there, or ask for a new one.",
+    "passkeys": {
+      "title": "Passkeys",
+      "help": "Sign in with your fingerprint, your face or your device's PIN instead of a password. A passkey counts as two-factor authentication.",
+      "signIn": "Sign in with a passkey",
+      "waiting": "Waiting for your passkey…",
+      "unavailable": "Passkeys need the panel on HTTPS at a domain of its own.",
+      "unavailableLink": "Put a domain on the panel",
+      "unsupported": "This browser cannot use passkeys.",
+      "name": "Name",
+      "namePlaceholder": "Laptop, phone or security key",
+      "add": "Add a passkey",
+      "added": "Passkey added",
+      "none": "You have no passkeys yet.",
+      "lastUsed": "Last used",
+      "synced": "Synced",
+      "elsewhere": "Made for another address",
+      "rename": "Rename",
+      "renameTitle": "Rename passkey",
+      "renameHelp": "The name is only for you, to tell your passkeys apart.",
+      "remove": "Remove passkey",
+      "removeConfirm": "{{name}} will not sign you in any more.",
+      "removeConsequence": "Your device keeps its copy, but this panel will not accept it again. To sign in with that device, add a new passkey.",
+      "failure": {
+        "cancelled": "No passkey was used. Try again when you are ready.",
+        "exists": "This device already has a passkey for your account.",
+        "wrongAddress": "The browser only uses a passkey at the panel's own address. Open the panel at its Panel URL and try again.",
+        "failed": "The browser could not use a passkey. Try again, or use another browser or device."
+      }
+    }
   },
   "dashboard": {
     "title": "Overview",
@@ -368,7 +397,12 @@
       "secret_manager.created": "Secret manager connected",
       "secret_manager.updated": "Secret manager changed",
       "secret_manager.deleted": "Secret manager removed",
-      "variables.refreshed": "Variables refreshed from secret managers"
+      "variables.refreshed": "Variables refreshed from secret managers",
+      "auth.login_passkey": "Signed in with a passkey",
+      "auth.passkey_added": "Passkey added",
+      "auth.passkey_removed": "Passkey removed",
+      "auth.passkey_renamed": "Passkey renamed",
+      "auth.passkey_clone_suspected": "Passkey refused: it may have been copied"
     }
   },
   "projects": {
@@ -1615,9 +1649,9 @@
     "changeAccess": "Change access",
     "memberAdded": "They already had an account, so they were added to the team directly.",
     "requireStrongAuth": "Require two-factor or single sign-on",
-    "requireStrongAuthHelp": "Everybody in this team, owners included, has to sign in with a second factor or through single sign-on. A password alone sees nothing in the team, and neither does a token whose owner has neither.",
+    "requireStrongAuthHelp": "Everybody in this team, owners included, has to sign in with a second factor, a passkey or through single sign-on. A password alone sees nothing in the team, and neither does a token whose owner has neither two-factor nor single sign-on.",
     "strongAuthNeededTitle": "{{team}} asks for two-factor authentication",
-    "strongAuthNeeded": "You signed in with a password alone, so nothing in this team is shown to you. Turn on two-factor authentication, or sign in with single sign-on.",
+    "strongAuthNeeded": "You signed in with a password alone, so nothing in this team is shown to you. Turn on two-factor authentication, or sign in with a passkey or with single sign-on.",
     "strongAuthTurnOn": "Turn on two-factor",
     "componentUpgrade": "Upgrade to {{version}}",
     "componentUpgradeTitle": "Upgrade {{name}}?",
@@ -2613,9 +2647,9 @@
       },
       "auth_strong_auth_required": {
         "title": "This team asks for two-factor authentication",
-        "cause": "Everybody in this team has to sign in with a second factor or with single sign-on, and this sign-in used neither.",
+        "cause": "Everybody in this team has to sign in with a second factor, a passkey or single sign-on, and this sign-in used none of them.",
         "impact": "Nothing in the team was shown or changed.",
-        "fix": "Turn on two-factor authentication under Account, or sign in with single sign-on."
+        "fix": "Turn on two-factor authentication under Account, or sign in with a passkey or with single sign-on."
       },
       "team_strong_auth_self": {
         "title": "Turn on two-factor for yourself first",
@@ -3210,6 +3244,42 @@
         "cause": "{{0}} variables read {{1}}: {{2}}.",
         "impact": "Nothing was removed. Without the connection, the next deploy of those apps would fail.",
         "fix": "Give those variables a value of their own, or point them at another connection, then remove this one."
+      },
+      "auth_passkeys_unavailable": {
+        "title": "Passkeys need the panel on HTTPS at a domain",
+        "cause": "A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.",
+        "impact": "Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.",
+        "fix": "Put a domain on the panel and set Settings → General → Panel URL to its https:// address."
+      },
+      "auth_passkey_refused": {
+        "title": "That passkey was not accepted",
+        "cause": "The passkey is not one this panel knows, or its answer did not check out.",
+        "impact": "You are not signed in.",
+        "fix": "Try again, or sign in with your email address and password. After several failed attempts sign-in pauses for a while."
+      },
+      "auth_passkey_expired": {
+        "title": "That passkey request is no longer waiting",
+        "cause": "Each request works once, for five minutes, in the browser that started it. This one expired, was used already, or came from somewhere else.",
+        "impact": "Nothing was changed.",
+        "fix": "Start again."
+      },
+      "auth_passkey_not_added": {
+        "title": "The passkey could not be added",
+        "cause": "The answer from your browser or security key did not check out, so it is not a passkey this panel can trust.",
+        "impact": "No passkey was added.",
+        "fix": "Try again. If it keeps failing, open the panel at its Panel URL, or use another browser or security key."
+      },
+      "auth_passkey_taken": {
+        "title": "That passkey is already on an account",
+        "cause": "This panel already has the passkey your device offered.",
+        "impact": "Nothing was added.",
+        "fix": "Use the passkey you have, or make a new one on another device or security key."
+      },
+      "auth_passkey_last_way_in": {
+        "title": "This passkey is this account's only way in",
+        "cause": "The account has no password and no single sign-on, so without its last passkey nobody could sign in to it.",
+        "impact": "Nothing was changed.",
+        "fix": "Add another passkey first. Whoever runs the server can also set a password with {{0}} admin reset-password."
       }
     }
   },

@@ -5,7 +5,9 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   CopyIcon,
   DownloadIcon,
+  FingerprintIcon,
   KeyRoundIcon,
+  PencilIcon,
   PlusIcon,
   ShieldAlertIcon,
   ShieldCheckIcon,
@@ -20,6 +22,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,8 +53,14 @@ import {
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatDateTime, formatRelative } from "@/lib/format"
+import {
+  createPasskey,
+  passkeyFailure,
+  passkeysSupported,
+  type PasskeyCreationOptions,
+} from "@/lib/passkeys"
 import { queryClient } from "@/lib/query"
-import type { APIToken, Session } from "@/lib/types"
+import type { APIToken, Passkey, Session } from "@/lib/types"
 
 /** What /api/me/totp answers with when two-factor setup begins. */
 type TwoFactorSetup = {
@@ -69,6 +85,7 @@ export function AccountPage() {
       <ProfileCard />
       <PasswordCard />
       <TwoFactorCard />
+      <PasskeysCard />
       <SingleSignOnCard />
       <SessionsCard />
       <TokensCard />
@@ -375,6 +392,268 @@ function TwoFactorCard() {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Passkeys: signing in with a fingerprint, a face or a device PIN.
+ *
+ * Adding one and removing one ask for the password again; the API client opens
+ * that dialog by itself when the panel says so. The list is shown even where
+ * passkeys cannot be used at the moment, so one made for an old address can
+ * still be removed.
+ */
+function PasskeysCard() {
+  const { t } = useTranslation()
+  const { meta } = useSession()
+  const confirmRemove = useConfirm()
+  const [name, setName] = useState("")
+  const [renaming, setRenaming] = useState<Passkey | null>(null)
+
+  const available = meta?.passkeys?.available === true
+  const supported = passkeysSupported()
+
+  const passkeys = useQuery({
+    queryKey: ["passkeys"],
+    queryFn: () => api.get<List<Passkey>>("/api/me/passkeys"),
+  })
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const options = await api.post<PasskeyCreationOptions>("/api/me/passkeys/register")
+      const credential = await createPasskey(options)
+      return api.post<Passkey>("/api/me/passkeys", { name: name.trim(), credential })
+    },
+    onSuccess: () => {
+      setName("")
+      toast.success(t("auth.passkeys.added"))
+      void queryClient.invalidateQueries({ queryKey: ["passkeys"] })
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: (passkeyID: string) => api.delete(`/api/me/passkeys/${passkeyID}`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["passkeys"] }),
+  })
+
+  // When it was the browser that did not make one, it says why in its own
+  // terms rather than the panel's.
+  const addTrouble = add.error != null ? passkeyFailure(add.error) : null
+  const items = passkeys.data?.items ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FingerprintIcon className="size-4" />
+          {t("auth.passkeys.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t("auth.passkeys.help")}</p>
+
+        {passkeys.isLoading ? (
+          <Skeleton className="h-16" />
+        ) : passkeys.error ? (
+          <ErrorDisplay error={passkeys.error} onRetry={() => void passkeys.refetch()} />
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("auth.passkeys.none")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("auth.passkeys.name")}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t("common.created")}</TableHead>
+                <TableHead className="hidden md:table-cell">
+                  {t("auth.passkeys.lastUsed")}
+                </TableHead>
+                <TableHead className="w-20" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((passkey) => (
+                <TableRow key={passkey.id}>
+                  <TableCell>
+                    <div className="font-medium">{passkey.name}</div>
+                    {(passkey.backup_eligible || passkey.elsewhere) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {passkey.backup_eligible && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {t("auth.passkeys.synced")}
+                          </Badge>
+                        )}
+                        {passkey.elsewhere && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {t("auth.passkeys.elsewhere")}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden text-xs sm:table-cell">
+                    {formatDateTime(passkey.created_at)}
+                  </TableCell>
+                  <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                    {passkey.last_used_at
+                      ? formatRelative(passkey.last_used_at)
+                      : t("common.never")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("auth.passkeys.rename")}
+                        onClick={() => setRenaming(passkey)}
+                      >
+                        <PencilIcon className="size-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("auth.passkeys.remove")}
+                        disabled={remove.isPending}
+                        onClick={() =>
+                          void confirmRemove({
+                            title: t("auth.passkeys.remove"),
+                            description: t("auth.passkeys.removeConfirm", { name: passkey.name }),
+                            consequence: t("auth.passkeys.removeConsequence"),
+                            confirmLabel: t("auth.passkeys.remove"),
+                            destructive: true,
+                          }).then((yes) => {
+                            if (yes) remove.mutate(passkey.id)
+                          })
+                        }
+                      >
+                        <Trash2Icon className="size-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {!available ? (
+          <p className="text-sm text-muted-foreground">
+            {t("auth.passkeys.unavailable")}{" "}
+            <a
+              href="/docs/configuration#put-a-domain-on-the-panel"
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              {t("auth.passkeys.unavailableLink")}
+            </a>
+          </p>
+        ) : !supported ? (
+          <p className="text-sm text-muted-foreground">{t("auth.passkeys.unsupported")}</p>
+        ) : (
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              add.mutate()
+            }}
+          >
+            <div className="min-w-48 flex-1 space-y-2">
+              <Label htmlFor="passkey-name">{t("auth.passkeys.name")}</Label>
+              <Input
+                id="passkey-name"
+                value={name}
+                maxLength={64}
+                placeholder={t("auth.passkeys.namePlaceholder")}
+                onChange={(event) => setName(event.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={!name.trim() || add.isPending}>
+              {add.isPending ? <Spinner /> : <PlusIcon className="size-4" />}
+              {t("auth.passkeys.add")}
+            </Button>
+          </form>
+        )}
+
+        {add.error != null &&
+          (addTrouble === null ? (
+            <ErrorDisplay error={add.error} compact />
+          ) : (
+            <p
+              className={
+                addTrouble === "cancelled"
+                  ? "text-sm text-muted-foreground"
+                  : "text-sm text-destructive"
+              }
+            >
+              {t(`auth.passkeys.failure.${addTrouble}`)}
+            </p>
+          ))}
+        {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+      </CardContent>
+
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenaming(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          {/* Keyed, so the field starts from this passkey's name each time
+              rather than being copied into state by an effect. */}
+          {renaming && (
+            <RenamePasskey key={renaming.id} passkey={renaming} onDone={() => setRenaming(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+function RenamePasskey({ passkey, onDone }: { passkey: Passkey; onDone: () => void }) {
+  const { t } = useTranslation()
+  const [name, setName] = useState(passkey.name)
+
+  const rename = useMutation({
+    mutationFn: () => api.patch<Passkey>(`/api/me/passkeys/${passkey.id}`, { name: name.trim() }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["passkeys"] })
+      onDone()
+    },
+  })
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        rename.mutate()
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>{t("auth.passkeys.renameTitle")}</DialogTitle>
+        <DialogDescription>{t("auth.passkeys.renameHelp")}</DialogDescription>
+      </DialogHeader>
+      <Field>
+        <FieldLabel htmlFor="passkey-rename">{t("auth.passkeys.name")}</FieldLabel>
+        <Input
+          id="passkey-rename"
+          value={name}
+          maxLength={64}
+          onChange={(event) => setName(event.target.value)}
+          autoFocus
+          required
+        />
+      </Field>
+      {rename.error != null && <ErrorDisplay error={rename.error} compact />}
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          {t("common.cancel")}
+        </Button>
+        <Button type="submit" disabled={!name.trim() || rename.isPending}>
+          {rename.isPending && <Spinner />}
+          {t("common.save")}
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }
 

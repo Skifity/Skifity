@@ -197,7 +197,36 @@
     "setNewPassword": "Setel kata sandi baru",
     "resetDone": "Kata sandi Anda telah diubah. Masuk dengan yang baru.",
     "backToSignIn": "Kembali ke halaman masuk",
-    "resetMissingToken": "Halaman ini memerlukan tautan dari email. Buka dari sana, atau minta tautan baru."
+    "resetMissingToken": "Halaman ini memerlukan tautan dari email. Buka dari sana, atau minta tautan baru.",
+    "passkeys": {
+      "title": "Kunci sandi",
+      "help": "Masuk dengan sidik jari, wajah, atau PIN perangkat Anda, bukan dengan kata sandi. Kunci sandi dihitung sebagai autentikasi dua faktor.",
+      "signIn": "Masuk dengan kunci sandi",
+      "waiting": "Menunggu kunci sandi Anda…",
+      "unavailable": "Kunci sandi memerlukan panel di HTTPS dengan domainnya sendiri.",
+      "unavailableLink": "Pasang domain pada panel",
+      "unsupported": "Peramban ini tidak dapat memakai kunci sandi.",
+      "name": "Nama",
+      "namePlaceholder": "Laptop, ponsel, atau kunci keamanan",
+      "add": "Tambahkan kunci sandi",
+      "added": "Kunci sandi ditambahkan",
+      "none": "Anda belum punya kunci sandi.",
+      "lastUsed": "Terakhir dipakai",
+      "synced": "Tersinkron",
+      "elsewhere": "Dibuat untuk alamat lain",
+      "rename": "Ganti nama",
+      "renameTitle": "Ganti nama kunci sandi",
+      "renameHelp": "Nama ini hanya untuk Anda, agar kunci sandi Anda mudah dibedakan.",
+      "remove": "Hapus kunci sandi",
+      "removeConfirm": "{{name}} tidak akan bisa membuat Anda masuk lagi.",
+      "removeConsequence": "Perangkat Anda tetap menyimpan salinannya, tetapi panel ini tidak akan menerimanya lagi. Untuk masuk dengan perangkat itu, tambahkan kunci sandi baru.",
+      "failure": {
+        "cancelled": "Tidak ada kunci sandi yang dipakai. Coba lagi saat Anda siap.",
+        "exists": "Perangkat ini sudah punya kunci sandi untuk akun Anda.",
+        "wrongAddress": "Peramban hanya memakai kunci sandi di alamat panel itu sendiri. Buka panel di Panel URL-nya lalu coba lagi.",
+        "failed": "Peramban tidak dapat memakai kunci sandi. Coba lagi, atau gunakan peramban atau perangkat lain."
+      }
+    }
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -360,7 +389,12 @@
       "secret_manager.created": "Pengelola rahasia dihubungkan",
       "secret_manager.updated": "Pengelola rahasia diubah",
       "secret_manager.deleted": "Pengelola rahasia dihapus",
-      "variables.refreshed": "Variabel disegarkan dari pengelola rahasia"
+      "variables.refreshed": "Variabel disegarkan dari pengelola rahasia",
+      "auth.login_passkey": "Masuk dengan kunci sandi",
+      "auth.passkey_added": "Kunci sandi ditambahkan",
+      "auth.passkey_removed": "Kunci sandi dihapus",
+      "auth.passkey_renamed": "Nama kunci sandi diganti",
+      "auth.passkey_clone_suspected": "Kunci sandi ditolak: mungkin sudah disalin"
     }
   },
   "projects": {
@@ -1596,9 +1630,9 @@
     "changeAccess": "Ubah akses",
     "memberAdded": "Mereka sudah punya akun, jadi langsung ditambahkan ke tim.",
     "requireStrongAuth": "Wajibkan dua faktor atau single sign-on",
-    "requireStrongAuthHelp": "Semua orang di tim ini, termasuk pemilik, harus masuk dengan faktor kedua atau lewat single sign-on. Kata sandi saja tidak melihat apa pun di tim, begitu pula token yang pemiliknya tidak punya keduanya.",
+    "requireStrongAuthHelp": "Semua orang di tim ini, termasuk pemilik, harus masuk dengan faktor kedua, kunci sandi, atau lewat single sign-on. Kata sandi saja tidak melihat apa pun di tim, begitu pula token yang pemiliknya tidak punya dua faktor maupun single sign-on.",
     "strongAuthNeededTitle": "{{team}} meminta autentikasi dua faktor",
-    "strongAuthNeeded": "Anda masuk hanya dengan kata sandi, jadi tidak ada isi tim ini yang ditampilkan. Aktifkan autentikasi dua faktor, atau masuk dengan single sign-on.",
+    "strongAuthNeeded": "Anda masuk hanya dengan kata sandi, jadi tidak ada isi tim ini yang ditampilkan. Aktifkan autentikasi dua faktor, atau masuk dengan kunci sandi atau single sign-on.",
     "strongAuthTurnOn": "Aktifkan dua faktor",
     "componentUpgrade": "Tingkatkan ke {{version}}",
     "componentUpgradeTitle": "Tingkatkan {{name}}?",
@@ -2594,9 +2628,9 @@
       },
       "auth_strong_auth_required": {
         "title": "Tim ini meminta autentikasi dua faktor",
-        "cause": "Semua orang di tim ini harus masuk dengan faktor kedua atau single sign-on, dan proses masuk ini tidak memakai keduanya.",
+        "cause": "Semua orang di tim ini harus masuk dengan faktor kedua, kunci sandi, atau single sign-on, dan proses masuk ini tidak memakai satu pun dari ketiganya.",
         "impact": "Tidak ada isi tim yang ditampilkan atau diubah.",
-        "fix": "Aktifkan autentikasi dua faktor di Akun, atau masuk dengan single sign-on."
+        "fix": "Aktifkan autentikasi dua faktor di Akun, atau masuk dengan kunci sandi atau single sign-on."
       },
       "team_strong_auth_self": {
         "title": "Aktifkan dua faktor untuk diri Anda dulu",
@@ -3191,6 +3225,42 @@
         "cause": "{{0}} variabel membaca {{1}}: {{2}}.",
         "impact": "Tidak ada yang dihapus. Tanpa koneksi ini, deploy berikutnya dari aplikasi-aplikasi itu akan gagal.",
         "fix": "Beri variabel-variabel itu nilai sendiri, atau arahkan ke koneksi lain, lalu hapus yang ini."
+      },
+      "auth_passkeys_unavailable": {
+        "title": "Kunci sandi memerlukan panel di HTTPS dengan domain",
+        "cause": "Peramban hanya menawarkan kunci sandi pada halaman yang dibuka lewat HTTPS dengan nama domain, atau di localhost. Alamat panel ini, yaitu pengaturan Panel URL atau SKIFITY_PUBLIC_URL, bukan salah satunya.",
+        "impact": "Tidak ada yang bisa menambahkan kunci sandi atau masuk dengannya. Kata sandi, autentikasi dua faktor, dan single sign-on tetap berfungsi seperti biasa.",
+        "fix": "Pasang domain pada panel dan atur Pengaturan → Umum → Panel URL ke alamat https:// miliknya."
+      },
+      "auth_passkey_refused": {
+        "title": "Kunci sandi itu tidak diterima",
+        "cause": "Kunci sandi itu tidak dikenal panel ini, atau jawabannya tidak lolos pemeriksaan.",
+        "impact": "Anda belum masuk.",
+        "fix": "Coba lagi, atau masuk dengan alamat email dan kata sandi Anda. Setelah beberapa kali gagal, proses masuk dijeda sementara."
+      },
+      "auth_passkey_expired": {
+        "title": "Permintaan kunci sandi itu sudah tidak menunggu",
+        "cause": "Setiap permintaan hanya berlaku sekali, selama lima menit, di peramban yang memulainya. Permintaan ini sudah kedaluwarsa, sudah dipakai, atau datang dari tempat lain.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Mulai lagi."
+      },
+      "auth_passkey_not_added": {
+        "title": "Kunci sandi tidak dapat ditambahkan",
+        "cause": "Jawaban dari peramban atau kunci keamanan Anda tidak lolos pemeriksaan, sehingga panel ini tidak dapat memercayainya sebagai kunci sandi.",
+        "impact": "Tidak ada kunci sandi yang ditambahkan.",
+        "fix": "Coba lagi. Jika terus gagal, buka panel di Panel URL-nya, atau gunakan peramban atau kunci keamanan lain."
+      },
+      "auth_passkey_taken": {
+        "title": "Kunci sandi itu sudah terpasang di sebuah akun",
+        "cause": "Panel ini sudah memiliki kunci sandi yang ditawarkan perangkat Anda.",
+        "impact": "Tidak ada yang ditambahkan.",
+        "fix": "Gunakan kunci sandi yang sudah Anda punya, atau buat yang baru di perangkat atau kunci keamanan lain."
+      },
+      "auth_passkey_last_way_in": {
+        "title": "Kunci sandi ini satu-satunya jalan masuk akun ini",
+        "cause": "Akun ini tidak punya kata sandi dan tidak memakai single sign-on, jadi tanpa kunci sandi terakhirnya tidak ada yang bisa masuk ke akun ini.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tambahkan kunci sandi lain dulu. Pengelola server juga dapat mengatur kata sandi dengan {{0}} admin reset-password."
       }
     }
   },

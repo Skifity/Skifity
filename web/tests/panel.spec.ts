@@ -408,7 +408,7 @@ async function signIn(page: Page) {
   if (await email.isVisible()) {
     await email.fill(EMAIL)
     await page.getByLabel(/^password$/i).fill(PASSWORD)
-    await page.getByRole("button", { name: /sign in/i }).click()
+    await page.getByRole("button", { name: /^sign in$/i }).click()
   }
   await expect(accountMenu).toBeVisible()
 }

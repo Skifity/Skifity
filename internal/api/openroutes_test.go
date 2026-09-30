@@ -57,6 +57,14 @@ var openOnPurpose = map[string]string{
 	"GET /api/auth/sso/start":    "starting a sign-in is how credentials are obtained",
 	"GET /api/auth/sso/callback": "guarded by a single-use state and a verified ID token, not by a session",
 
+	// Both halves of signing in with a passkey, for the same reason again.
+	// The first hands out a challenge and says nothing about any account; the
+	// second is authenticated by a signature over that challenge, which is
+	// held by the panel, tied to the browser by a cookie, and good once.
+	// passkey_test.go covers every way an answer is refused.
+	"POST /api/auth/passkey/begin":  "starting a sign-in is how credentials are obtained; it names no account",
+	"POST /api/auth/passkey/finish": "authenticated by a passkey's signature over a single-use challenge, not by a session",
+
 	// An invitation link, for somebody who has no account yet — which is the
 	// whole point of one. The token in the URL is the credential: stored
 	// hashed, single-use, expiring, and everything wrong with one answers the

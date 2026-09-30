@@ -514,6 +514,9 @@ var sealedSources = []sealedSource{
 	{table: "git_sources", valueCol: "config_enc", ctxPrefix: "git_source"},
 	{table: "notification_channels", valueCol: "config_enc", ctxPrefix: "notification_channel"},
 	{table: "users", valueCol: "totp_secret_enc", ctxPrefix: "totp"},
+	// Sealed to the account and the credential id rather than to the row:
+	// "passkey:<user id>:<credential id>". A rewrap does not need the context.
+	{table: "passkeys", valueCol: "public_key_enc", ctxPrefix: "passkey"},
 	{table: "plugins", valueCol: "hmac_sealed", ctxPrefix: "plugin"},
 	{table: "settings", valueCol: "value", keyCol: "key", ctxPrefix: "setting", where: "encrypted = 1"},
 	{table: "plugin_settings", valueCol: "value", keyCol: "plugin_id", keyCol2: "key",

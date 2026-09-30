@@ -197,7 +197,36 @@
     "setNewPassword": "设置新密码",
     "resetDone": "你的密码已更改。请使用新密码登录。",
     "backToSignIn": "返回登录",
-    "resetMissingToken": "此页面需要邮件中的链接。请从邮件中打开，或申请新的链接。"
+    "resetMissingToken": "此页面需要邮件中的链接。请从邮件中打开，或申请新的链接。",
+    "passkeys": {
+      "title": "通行密钥",
+      "help": "用指纹、面容或设备 PIN 码代替密码登录。通行密钥算作双因素认证。",
+      "signIn": "使用通行密钥登录",
+      "waiting": "正在等待你的通行密钥…",
+      "unavailable": "通行密钥要求面板在自己的域名上通过 HTTPS 访问。",
+      "unavailableLink": "为面板配置域名",
+      "unsupported": "此浏览器无法使用通行密钥。",
+      "name": "名称",
+      "namePlaceholder": "笔记本电脑、手机或安全密钥",
+      "add": "添加通行密钥",
+      "added": "已添加通行密钥",
+      "none": "你还没有通行密钥。",
+      "lastUsed": "上次使用",
+      "synced": "已同步",
+      "elsewhere": "为其他地址创建",
+      "rename": "重命名",
+      "renameTitle": "重命名通行密钥",
+      "renameHelp": "名称只是给你自己看的，用来区分你的通行密钥。",
+      "remove": "移除通行密钥",
+      "removeConfirm": "{{name}} 将无法再用来登录。",
+      "removeConsequence": "你的设备仍保留它的副本，但此面板不会再接受它。如需用该设备登录，请添加新的通行密钥。",
+      "failure": {
+        "cancelled": "未使用通行密钥。准备好后再试一次。",
+        "exists": "此设备已经有你账户的通行密钥。",
+        "wrongAddress": "浏览器只会在面板自己的地址上使用通行密钥。请通过面板 URL 打开面板后重试。",
+        "failed": "浏览器无法使用通行密钥。请重试，或换用其他浏览器或设备。"
+      }
+    }
   },
   "dashboard": {
     "title": "总览",
@@ -360,7 +389,12 @@
       "secret_manager.created": "已连接密钥管理器",
       "secret_manager.updated": "已更改密钥管理器",
       "secret_manager.deleted": "已删除密钥管理器",
-      "variables.refreshed": "已从密钥管理器刷新变量"
+      "variables.refreshed": "已从密钥管理器刷新变量",
+      "auth.login_passkey": "使用通行密钥登录",
+      "auth.passkey_added": "已添加通行密钥",
+      "auth.passkey_removed": "已移除通行密钥",
+      "auth.passkey_renamed": "已重命名通行密钥",
+      "auth.passkey_clone_suspected": "通行密钥被拒绝：它可能已被复制"
     }
   },
   "projects": {
@@ -1596,9 +1630,9 @@
     "changeAccess": "更改访问权限",
     "memberAdded": "对方已有账号，因此已直接加入团队。",
     "requireStrongAuth": "要求双重验证或单点登录",
-    "requireStrongAuthHelp": "这个团队中的每个人（包括所有者）都必须使用第二重验证或通过单点登录登录。仅凭密码在团队中什么也看不到，所有者两者都没有的令牌也一样。",
+    "requireStrongAuthHelp": "这个团队中的每个人（包括所有者）都必须使用第二重验证、通行密钥或通过单点登录登录。仅凭密码在团队中什么也看不到，所有者既没有双重验证也没有单点登录的令牌也一样。",
     "strongAuthNeededTitle": "{{team}} 要求双重验证",
-    "strongAuthNeeded": "你仅用密码登录，因此这个团队的内容不会向你显示。请开启双重验证，或通过单点登录登录。",
+    "strongAuthNeeded": "你仅用密码登录，因此这个团队的内容不会向你显示。请开启双重验证，或使用通行密钥或单点登录登录。",
     "strongAuthTurnOn": "开启双重验证",
     "componentUpgrade": "升级到 {{version}}",
     "componentUpgradeTitle": "升级 {{name}}？",
@@ -2594,9 +2628,9 @@
       },
       "auth_strong_auth_required": {
         "title": "这个团队要求双重验证",
-        "cause": "这个团队中的每个人都必须使用第二重验证或单点登录登录，而这次登录两者都没有使用。",
+        "cause": "这个团队中的每个人都必须使用第二重验证、通行密钥或单点登录登录，而这次登录三者都没有使用。",
         "impact": "团队中的内容没有显示，也没有更改。",
-        "fix": "在“账户”中开启双重验证，或通过单点登录登录。"
+        "fix": "在“账户”中开启双重验证，或使用通行密钥或单点登录登录。"
       },
       "team_strong_auth_self": {
         "title": "请先为自己开启双重验证",
@@ -3191,6 +3225,42 @@
         "cause": "{{0}} 个变量读取 {{1}}：{{2}}。",
         "impact": "没有删除任何内容。没有这个连接，这些应用的下一次部署将会失败。",
         "fix": "为这些变量设置自己的值，或将它们指向另一个连接，然后再删除这个。"
+      },
+      "auth_passkeys_unavailable": {
+        "title": "通行密钥要求面板通过 HTTPS 以域名访问",
+        "cause": "浏览器只会向通过 HTTPS 以域名打开、或在 localhost 上打开的页面提供通行密钥。此面板的地址（面板 URL 设置或 SKIFITY_PUBLIC_URL）不属于这两种。",
+        "impact": "任何人都无法添加通行密钥或用它登录。密码、双重验证和单点登录照常可用。",
+        "fix": "为面板配置域名，并将 设置 → 通用 → 面板 URL 设为它的 https:// 地址。"
+      },
+      "auth_passkey_refused": {
+        "title": "该通行密钥未被接受",
+        "cause": "此面板不认识这个通行密钥，或它的应答未通过校验。",
+        "impact": "你尚未登录。",
+        "fix": "请重试，或使用邮箱地址和密码登录。多次失败后，登录会暂停一段时间。"
+      },
+      "auth_passkey_expired": {
+        "title": "该通行密钥请求已不再等待",
+        "cause": "每个请求只能在发起它的浏览器中使用一次，有效期五分钟。这个请求已过期、已被使用，或来自其他地方。",
+        "impact": "未做任何更改。",
+        "fix": "请重新开始。"
+      },
+      "auth_passkey_not_added": {
+        "title": "无法添加通行密钥",
+        "cause": "你的浏览器或安全密钥给出的应答未通过校验，因此此面板无法信任它是一个通行密钥。",
+        "impact": "未添加通行密钥。",
+        "fix": "请重试。如果仍然失败，请通过面板 URL 打开面板，或换用其他浏览器或安全密钥。"
+      },
+      "auth_passkey_taken": {
+        "title": "该通行密钥已属于某个账户",
+        "cause": "此面板已经有你的设备提供的这个通行密钥。",
+        "impact": "未添加任何内容。",
+        "fix": "使用你已有的通行密钥，或在其他设备或安全密钥上新建一个。"
+      },
+      "auth_passkey_last_way_in": {
+        "title": "这个通行密钥是此账户唯一的登录方式",
+        "cause": "此账户没有密码，也没有单点登录，一旦移除最后一个通行密钥，任何人都无法登录它。",
+        "impact": "未做任何更改。",
+        "fix": "请先添加另一个通行密钥。运行服务器的人也可以用 {{0}} admin reset-password 设置密码。"
       }
     }
   },

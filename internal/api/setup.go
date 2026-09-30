@@ -265,6 +265,9 @@ type metaResponse struct {
 	// PasswordReset is whether the sign-in page offers a reset by email:
 	// only when the panel has a mail server and an address to link to.
 	PasswordReset bool `json:"password_reset"`
+	// Passkeys is whether a browser would offer passkeys at this panel's
+	// address: HTTPS at a domain name, or localhost.
+	Passkeys passkeyStatus `json:"passkeys"`
 }
 
 // handleMeta gives the frontend everything it needs before a user signs in.
@@ -281,6 +284,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		CLIPlatforms:  s.cliPlatforms(),
 		ServerNow:     time.Now().UTC().Format(time.RFC3339),
 		PasswordReset: s.passwordResetAvailable(r.Context()),
+		Passkeys:      s.passkeyStatus(r.Context()),
 	})
 }
 

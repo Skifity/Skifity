@@ -742,6 +742,21 @@ export type Session = {
   current: boolean
 }
 
+/** One of the signed-in person's passkeys, as the account page lists it. */
+export type Passkey = {
+  id: string
+  name: string
+  /** The hostname the passkey was made for. */
+  rp_id: string
+  /** A synced passkey: the platform or password manager copies it to other devices. */
+  backup_eligible: boolean
+  backup_state: boolean
+  created_at: string
+  last_used_at?: string
+  /** Made for an address the panel no longer answers on. */
+  elsewhere: boolean
+}
+
 export type Meta = {
   product: string
   version: string
@@ -757,6 +772,8 @@ export type Meta = {
   cli_platforms: string[]
   /** Whether "Lost your password?" can send a reset link by email. */
   password_reset: boolean
+  /** Whether a browser would offer passkeys at this panel's address. */
+  passkeys: { available: boolean }
 }
 
 export type CanvasNode = {

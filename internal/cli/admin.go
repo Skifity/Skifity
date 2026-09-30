@@ -32,6 +32,7 @@ func cmdAdmin(ctx context.Context, args []string, out io.Writer) error {
 
 Usage:
   %s admin reset-password <email>   set a new password for an account
+                                    (--remove-passkeys also removes its passkeys)
   %s admin list-users               show the accounts on this panel
   %s admin backup-db <path>         write a consistent copy of the database
   %s admin restore-db <file>        put a backup of the database back
@@ -92,14 +93,23 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 	flags.SetOutput(out)
 	databasePath := flags.String("database", "", "the panel database to use")
 	password := flags.String("password", "", "the new password; read from the terminal when not given")
+	// Passkeys stay unless this is given. A reset replaces a forgotten
+	// password; a passkey is a separate way in that the password never
+	// unlocked, and removing it silently would take away the one credential
+	// that cannot be phished. When the reset is because somebody else got in,
+	// they may have added a passkey of their own, and this is how to be sure.
+	removePasskeys := flags.Bool("remove-passkeys", false, "also remove every passkey the account has")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	// The email may come first, as the usage line writes it, with a flag
+	// after it: `reset-password you@example.com --remove-passkeys`.
+	positional, err := parseInterspersed(flags, args)
+	if err != nil {
 		return err
 	}
-	if flags.NArg() != 1 {
+	if len(positional) != 1 {
 		return errdoc.BadRequest(fmt.Sprintf("Give the email address of the account to reset, for example `%s admin reset-password you@example.com`.", version.Binary))
 	}
-	email := strings.ToLower(strings.TrimSpace(flags.Arg(0)))
+	email := strings.ToLower(strings.TrimSpace(positional[0]))
 
 	db, err := openPanelDatabase(ctx, *databasePath)
 	if err != nil {
@@ -152,16 +162,35 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 		}
 	}
 
+	removed := 0
+	if *removePasskeys {
+		if removed, err = db.DeleteUserPasskeys(ctx, user.ID); err != nil {
+			return fmt.Errorf("the password was changed, but the passkeys could not be removed: %w", err)
+		}
+	}
+	left, err := db.CountPasskeys(ctx, user.ID)
+	if err != nil {
+		return fmt.Errorf("count the account's passkeys: %w", err)
+	}
+
 	if *asJSON {
 		return writeJSON(out, map[string]any{
 			"email": user.Email, "password_changed": true,
 			"sessions_ended": sessionsEnded, "totp_still_enabled": user.TOTPEnabled,
+			"passkeys_removed": removed, "passkeys_left": left,
 		})
 	}
 
 	fmt.Fprintf(out, "\nThe password for %s has been changed, and every signed-in device was signed out.\n", user.Email)
 	if user.TOTPEnabled {
 		fmt.Fprintln(out, "Two-factor authentication is still on for this account, so you will need your authenticator app.")
+	}
+	if removed > 0 {
+		fmt.Fprintf(out, "Removed %s.\n", plural(removed, "passkey"))
+	}
+	if left > 0 {
+		fmt.Fprintf(out, "Passkeys still sign in, and the account has %s. Remove any you do not recognise\n"+
+			"under Account, or run this again with --remove-passkeys.\n", plural(left, "passkey"))
 	}
 	fmt.Fprintln(out)
 	return nil

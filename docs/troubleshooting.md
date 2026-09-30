@@ -56,6 +56,9 @@ skip two-factor: an account that has it still needs its code afterwards.
 The page answers the same whether or not the address has an account, so it
 cannot be used to find out who does.
 
+If you added a passkey, **Sign in with a passkey** does not need the password,
+so you are not locked out while you reset it. A reset does not remove passkeys.
+
 Without a mail server, or when the mail does not arrive, reset it from the
 server instead:
 

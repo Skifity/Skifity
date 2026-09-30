@@ -228,7 +228,8 @@ turning two-factor off, reading the recovery codes, and creating an API token.
 Each of them turns a session somebody borrowed into access they keep. Signing in
 counts, so in practice this is one dialog a few minutes into a session. An API
 token cannot take these actions at all — there is nobody at the keyboard for it
-to ask.
+to ask. Adding or removing a passkey, and linking or unlinking single sign-on,
+ask the same way, because each adds or removes a way into the account.
 
 **A team can require more than a password.** Under **Settings → Members**, an
 admin or owner can require two-factor or single sign-on of everybody in the
@@ -236,19 +237,84 @@ team, themselves included. A sign-in with a password alone then sees nothing in
 the team — every page and every API request in it answers
 `auth.strong_auth_required` — while the account page stays reachable, which is
 where two-factor is turned on; the panel says so at the top of every page. A
-session counts when it was signed into through the identity provider, or its
-person has two-factor on. An API token cannot say how it was minted, so it
-counts when its owner has two-factor on or has linked the identity provider.
-Turning the requirement on from a sign-in that would not pass it is refused
-rather than locking out whoever did it.
+session counts when it was signed into through the identity provider or with a
+passkey, or its person has two-factor on. An API token cannot say how it was
+minted, so it counts when its owner has two-factor on or has linked the identity
+provider — not when its owner has a passkey, because the password still signs
+that account in too. Turning the requirement on from a sign-in that would not
+pass it is refused rather than locking out whoever did it.
 
-**Put a domain on the panel.** The panel's cookies carry the `__Host-` prefix,
-which a browser refuses to store if a cookie names a domain — so no page on a
-sibling subdomain can write them. That prefix requires HTTPS. The default
-install is plain HTTP on an sslip.io address (ADR-0015), and on plain HTTP the
-prefix cannot be used at all. This matters more here than on most products,
-because the applications this panel hosts can be on subdomains of the domain the
-panel answers on. Adding a domain in Settings is what closes it.
+### Passkeys
+
+A passkey signs you in with your fingerprint, your face or your device's PIN
+instead of a password: a key pair your phone, computer, password manager or
+security key makes for this panel. Add one under **Account → Passkeys** — the
+panel asks for your password again first, because a passkey is a new way into
+the account — and then choose **Sign in with a passkey** on the sign-in page,
+with nothing typed. A browser that can also offers your passkey in the email
+field's suggestions.
+
+**Where they work.** A browser offers passkeys only to a page it reached over
+HTTPS at a domain name, or at localhost, and a passkey belongs to that hostname.
+The panel's hostname is the one in the Panel URL setting, or in
+`SKIFITY_PUBLIC_URL` when that setting is empty. On the default install, plain
+HTTP on an sslip.io address, passkeys are unavailable until you put a domain on
+the panel (below): the API answers `auth.passkeys_unavailable`, the sign-in page
+does not offer them and the account page says why. Moving the Panel URL to
+another domain leaves the passkeys made for the old one behind; the account page
+marks them, and they can be removed and made again.
+
+**What is checked.** Every passkey is discoverable, so signing in needs no
+address first, and every use requires user verification — the fingerprint or
+the PIN. No attestation is asked for: which brand of authenticator somebody uses
+is not the panel's business. At every sign-in the panel checks the signature
+over a challenge it issued, holds in its own database, has tied to that browser
+with a cookie, and accepts once and for five minutes; the origin the browser
+signed; the hash of the hostname; the user verification flag; and the signature
+counter. On an authenticator that counts, a counter that does not go up means
+the key has been copied, so the sign-in is refused and the audit log records
+`auth.passkey_clone_suspected`. Synced passkeys do not count, and the account
+page shows them as **Synced**. The public key is sealed to the account it
+belongs to, so a row written into the database, or moved from another account,
+signs nobody in.
+
+**What it counts as.** A passkey sign-in makes the same session as a password
+does, and counts as having just given the password. It does not ask for the
+two-factor code: user verification makes a passkey two factors on its own,
+something you have unlocked by something you know or something you are. For the
+same reason a passkey session passes a team's requirement for two-factor or
+single sign-on. It skips nothing else. The sign-in limits above apply, counted
+together with wrong passwords, so an account that is paused is paused for
+passkeys too; and a disabled account cannot sign in with one.
+
+**Removing one** asks for the password again, like adding one. It does not sign
+out a session that passkey signed in; **Sign out everywhere** does that. An
+account with no password and no single sign-on linked cannot remove its last
+passkey, which would leave it with no way in.
+
+**Resetting a password**, with the emailed link or with `skifity admin
+reset-password` on the server, does not remove passkeys. A reset replaces a
+forgotten password, and a passkey is a separate way in that the password never
+opened; removing it without a word would take away the one credential that
+cannot be phished. When the reset is because somebody else got into the account,
+they may have added a passkey of their own: `skifity admin reset-password
+--remove-passkeys` removes every passkey the account has, and a reset without it
+says how many are left.
+
+Adding, renaming, removing and signing in with a passkey are in the audit log as
+`auth.passkey_added`, `auth.passkey_renamed`, `auth.passkey_removed` and
+`auth.login_passkey`.
+
+### Put a domain on the panel
+
+The panel's cookies carry the `__Host-` prefix, which a browser refuses to store
+if a cookie names a domain — so no page on a sibling subdomain can write them.
+That prefix requires HTTPS. The default install is plain HTTP on an sslip.io
+address (ADR-0015), and on plain HTTP the prefix cannot be used at all. This
+matters more here than on most products, because the applications this panel
+hosts can be on subdomains of the domain the panel answers on. Adding a domain
+in Settings is what closes it, and it is also what makes passkeys available:
+set the Panel URL to the new `https://` address once the domain is on.
 
 Whether cookies are marked `Secure` follows `SKIFITY_PUBLIC_URL` rather than the
 build, because a `Secure` cookie is never stored over plain HTTP: marking them

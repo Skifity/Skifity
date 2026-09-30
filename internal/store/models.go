@@ -633,8 +633,9 @@ type Session struct {
 	// ReauthAt is when the person last proved who they are with a password or
 	// a second factor, rather than by holding this cookie. Zero means never.
 	ReauthAt time.Time `json:"-"`
-	// Method is how it was signed into: "password", "totp" or "sso". Empty
-	// for a session from before it was recorded, which is a password alone.
+	// Method is how it was signed into: "password", "totp", "sso" or
+	// "passkey". Empty for a session from before it was recorded, which is a
+	// password alone.
 	Method string `json:"method,omitempty"`
 }
 
