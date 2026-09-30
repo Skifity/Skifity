@@ -905,7 +905,7 @@
       },
       "cluster_k3s_version": {
         "label": "Versi Kubernetes",
-        "help": "Versi k3s yang dipasang pada server yang ditambahkan dari sini. Kosongkan untuk mengikuti kanal stabil, yang dipakai cluster baru. Kunci versinya agar server yang Anda tambahkan bulan depan sama dengan yang sudah ada."
+        "help": "Versi k3s yang dipasang di server pertama sebuah cluster baru. Kosongkan untuk mengikuti kanal stable. Server yang ditambahkan kemudian bergabung dengan versi yang sedang dijalankan cluster, apa pun isi pengaturan ini, karena server yang lebih baru dari cluster-nya tidak didukung."
       },
       "cluster_preview_ttl_days": {
         "label": "Hapus environment pratinjau setelah",
@@ -2010,6 +2010,12 @@
         "cause": "{{0}} diatur untuk di-build dengan Nixpacks. Pembuatnya sudah menggantinya dengan Railpack, dan command line-nya tidak diterbitkan sebagai image yang bisa dijalankan build.",
         "impact": "Tidak ada yang di-build atau di-deploy.",
         "fix": "Ubah builder app ke Otomatis, yang memakai Railpack, atau ke Dockerfile, di Pengaturan app."
+      },
+      "provision_cluster_version_unknown": {
+        "title": "Tidak bisa mengetahui versi Kubernetes yang dijalankan cluster",
+        "cause": "{{0}}",
+        "impact": "Server tidak digabungkan. Server harus menjalankan versi yang sama dengan cluster yang digabunginya.",
+        "fix": "Pastikan panel bisa menjangkau API Kubernetes, lalu coba lagi."
       }
     }
   },

@@ -905,7 +905,7 @@
       },
       "cluster_k3s_version": {
         "label": "Kubernetes 版本",
-        "help": "从这里添加的服务器所安装的 k3s 版本。留空则跟随稳定通道，新集群用的就是它。固定版本可以让你下个月添加的服务器与现有的一致。"
+        "help": "新集群第一台服务器安装的 k3s 版本。留空则跟随 stable 通道。之后添加的服务器会以集群正在运行的版本加入，无论此处如何设置，因为不支持比所在集群更新的服务器。"
       },
       "cluster_preview_ttl_days": {
         "label": "多久后移除预览环境",
@@ -2010,6 +2010,12 @@
         "cause": "{{0}} 设置为使用 Nixpacks 构建。其作者已用 Railpack 取代它，且其命令行未以构建可运行的镜像形式发布。",
         "impact": "未构建或部署任何内容。",
         "fix": "在应用的设置中将构建器改为“自动”（使用 Railpack）或 Dockerfile。"
+      },
+      "provision_cluster_version_unknown": {
+        "title": "无法确定集群运行的 Kubernetes 版本",
+        "cause": "{{0}}",
+        "impact": "服务器未加入。服务器必须运行与所加入集群相同的版本。",
+        "fix": "确认面板可以访问 Kubernetes API，然后重试。"
       }
     }
   },

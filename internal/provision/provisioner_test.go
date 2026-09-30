@@ -1,6 +1,8 @@
 package provision
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"skifity/internal/api"
 	"skifity/internal/crypto"
 	"skifity/internal/events"
+	"skifity/internal/settings"
 	"skifity/internal/sshx"
 	"skifity/internal/store"
 )
@@ -599,5 +602,79 @@ has_wireguard=yes
 	}
 	if current.Role != "worker" {
 		t.Fatalf("the server is recorded as %q after a refused promotion", current.Role)
+	}
+}
+
+// A server added months after the first joins at the version the cluster runs,
+// not at whatever the stable channel has moved to — and not at a newer version
+// somebody pinned for new clusters. A kubelet newer than its API server is
+// outside Kubernetes' version skew policy.
+func TestASecondServerJoinsAtTheClustersVersion(t *testing.T) {
+	p, db, _, teamID := testHarness(t)
+	p.clusterVersion = func(context.Context) (string, error) { return "v1.33.4+k3s1", nil }
+	if err := db.SetSetting(t.Context(), settings.KeyK3sVersion, "v1.35.0+k3s1", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	first := store.Server{
+		TeamID: teamID, Name: "node-1", Host: "203.0.113.10", SSHPort: 22, SSHUser: "root",
+		Role: "control-plane", Status: store.ServerReady, ExternalIP: "203.0.113.10",
+	}
+	if err := db.CreateServer(t.Context(), &first); err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+
+	sshServer := healthyServer(t)
+	host, port := sshServer.Addr()
+	op, err := p.AddServer(t.Context(), api.AddServerRequest{
+		TeamID: teamID, Name: "node-2", Host: host, SSHPort: port, SSHUser: "root", Password: "hunter2",
+	})
+	if err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	if finished := waitForOperation(t, db, op.ID); finished.Status != store.OpSucceeded {
+		t.Fatalf("joining failed: %s %s", finished.ErrorCode, finished.ErrorMsg)
+	}
+
+	var install string
+	for _, command := range sshServer.Commands() {
+		if strings.Contains(command, "get.k3s.io") {
+			install = command
+		}
+	}
+	if !strings.Contains(install, `INSTALL_K3S_VERSION='v1.33.4+k3s1'`) {
+		t.Fatalf("the server did not join at the cluster's version:\n%s", install)
+	}
+	if strings.Contains(install, "v1.35.0") || strings.Contains(install, "INSTALL_K3S_CHANNEL") {
+		t.Fatalf("the server joined at a version the cluster is not running:\n%s", install)
+	}
+}
+
+// A cluster that will not say which version it runs is a reason to stop, not
+// to guess: nothing is installed, and the operation says why.
+func TestAJoinStopsWhenTheClusterWillNotSayItsVersion(t *testing.T) {
+	p, db, _, teamID := testHarness(t)
+	p.clusterVersion = func(context.Context) (string, error) { return "", errors.New("connection refused") }
+	first := store.Server{
+		TeamID: teamID, Name: "node-1", Host: "203.0.113.10", SSHPort: 22, SSHUser: "root",
+		Role: "control-plane", Status: store.ServerReady, ExternalIP: "203.0.113.10",
+	}
+	if err := db.CreateServer(t.Context(), &first); err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+
+	sshServer := healthyServer(t)
+	host, port := sshServer.Addr()
+	op, err := p.AddServer(t.Context(), api.AddServerRequest{
+		TeamID: teamID, Name: "node-2", Host: host, SSHPort: port, SSHUser: "root", Password: "hunter2",
+	})
+	if err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	finished := waitForOperation(t, db, op.ID)
+	if finished.Status != store.OpFailed || finished.ErrorCode != "provision.cluster_version_unknown" {
+		t.Fatalf("the join ended %s with %q", finished.Status, finished.ErrorCode)
+	}
+	if sshServer.Ran("get.k3s.io") {
+		t.Fatal("Kubernetes was installed at a guessed version")
 	}
 }

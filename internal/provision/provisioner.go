@@ -76,6 +76,11 @@ type Provisioner struct {
 	plugins          plugins.Dispatcher
 	clusterTokenPath string
 	log              *slog.Logger
+	// clusterVersion reports the Kubernetes version the running cluster is
+	// on, in k3s's own form (v1.34.1+k3s1). Nil when the panel has no cluster
+	// to ask. A field rather than a call on cluster, so a test can say what the
+	// cluster runs without standing one up.
+	clusterVersion func(context.Context) (string, error)
 
 	// running tracks in-flight operations so they can be cancelled.
 	mu      sync.Mutex
@@ -84,12 +89,18 @@ type Provisioner struct {
 
 // New builds a Provisioner.
 func New(opts Options) *Provisioner {
-	return &Provisioner{
+	p := &Provisioner{
 		db: opts.DB, keyring: opts.Keyring, hub: opts.Hub, cluster: opts.Cluster,
 		notifier: opts.Notifier, plugins: opts.Plugins,
 		clusterTokenPath: opts.ClusterTokenPath, log: opts.Logger,
 		running: map[string]context.CancelFunc{},
 	}
+	if opts.Cluster != nil {
+		p.clusterVersion = func(ctx context.Context) (string, error) {
+			return opts.Cluster.Client().Version(ctx)
+		}
+	}
+	return p
 }
 
 // AddServer registers a server and starts provisioning it.
@@ -600,6 +611,10 @@ func (p *Provisioner) stepInstallK3s(ctx context.Context, state *addState) error
 		if err != nil {
 			return err
 		}
+		joinVersion, err := p.joinVersion(ctx)
+		if err != nil {
+			return err
+		}
 		state.serverURL = fmt.Sprintf("https://%s:6443", primaryIP)
 		state.joinToken = token
 
@@ -611,9 +626,9 @@ func (p *Provisioner) stepInstallK3s(ctx context.Context, state *addState) error
 			labels[version.LabelKey("size")] = kube.Slugify(state.request.Size)
 		}
 		if state.request.ControlPlane {
-			script = JoinServerScript(p.k3sVersion(ctx), token, state.serverURL, publicIP, p.flannelBackend(ctx))
+			script = JoinServerScript(joinVersion, token, state.serverURL, publicIP, p.flannelBackend(ctx))
 		} else {
-			script = JoinAgentScript(p.k3sVersion(ctx), token, state.serverURL, publicIP, labels)
+			script = JoinAgentScript(joinVersion, token, state.serverURL, publicIP, labels)
 		}
 	}
 
@@ -823,6 +838,43 @@ func (p *Provisioner) flannelBackend(ctx context.Context) string {
 		return settings.FlannelWireGuard
 	}
 	return value
+}
+
+// joinVersion is the k3s version a server joining the cluster installs: the one
+// the cluster is running.
+//
+// It used to be the pinned setting, or the stable channel when nothing was
+// pinned — which by the time a second server is added months later can be a
+// newer Kubernetes than the control plane. A kubelet newer than its API server
+// is outside Kubernetes' version skew policy, and a second control plane on a
+// different version than the first is a cluster that is half upgraded. The
+// setting still chooses the first server's version; after that the cluster
+// is the answer.
+//
+// A cluster that will not say is a reason to stop, not to guess: the join is
+// what would be wrong, and it can be retried once the cluster answers.
+func (p *Provisioner) joinVersion(ctx context.Context) (string, error) {
+	if p.clusterVersion == nil {
+		// No cluster to ask, which is a panel run outside the cluster it
+		// manages. The setting, or the stable channel, as before.
+		return p.k3sVersion(ctx), nil
+	}
+	running, err := p.clusterVersion(ctx)
+	if err != nil {
+		return "", errdoc.New("provision.cluster_version_unknown", "Could not find out which Kubernetes version the cluster runs").
+			WithCause("%s", err.Error()).
+			WithImpact("The server was not joined. A server has to run the same version as the cluster it joins.").
+			WithFix("Check that the panel can reach the Kubernetes API, then retry.").
+			Retry()
+	}
+	if !settings.IsK3sVersion(running) {
+		// Not a k3s release, so not something the installer can be told to
+		// install. The setting is the best answer left.
+		p.log.Warn("the cluster does not report a k3s version; joining with the configured one",
+			"version", running)
+		return p.k3sVersion(ctx), nil
+	}
+	return running, nil
 }
 
 func (p *Provisioner) k3sVersion(ctx context.Context) string {

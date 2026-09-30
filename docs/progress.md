@@ -4346,6 +4346,25 @@ is only set for an app built from a repository, since an uploaded folder's
 deployment carries the upload's hash in the same field. Documented in
 `docs/concepts.md` and `llms.txt`.
 
+## Phase 82 — a server added later could be newer than its cluster
+
+Found by the Dokku research pass. A server joining an existing cluster installed
+the pinned version if there was one and followed k3s's stable channel if there
+was not — which by the time a second server is added months later can be a newer
+Kubernetes than the control plane. A kubelet newer than its API server is outside
+Kubernetes' version skew policy, and a second control plane on a different
+version from the first is a half-upgraded cluster. The setting's own help told
+operators to pin it to avoid exactly this, which is a workaround the panel
+could do itself.
+
+A join now installs the version the cluster reports, which k3s writes in the
+same form the installer takes (`v1.34.1+k3s1`). The setting only chooses the
+first server's version. A cluster that will not say which version it runs stops
+the join with `provision.cluster_version_unknown` rather than guessing, and a
+panel run outside the cluster it manages keeps the old behaviour. Both paths are
+tested against the in-process SSH server, including that the cluster's version
+wins over a newer pinned one.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -221,7 +221,7 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
-		Help: "The k3s version a server added from here is installed with. Leave empty to follow the stable channel, which is what a new cluster gets. Pin it to keep a server you add next month on the same version as the ones you have.",
+		Help: "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported.",
 		// A k3s release, which is a Kubernetes version with a k3s suffix.
 		Placeholder: "v1.34.1+k3s1",
 		Validate:    validateK3sVersion,
@@ -488,6 +488,10 @@ func LookupComponent(name string) (Component, bool) {
 
 // k3sVersionPattern is a k3s release tag: a Kubernetes version and a k3s build.
 var k3sVersionPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+\+k3s\d+$`)
+
+// IsK3sVersion reports whether a version is one the k3s installer can be told
+// to install, such as v1.34.1+k3s1.
+func IsK3sVersion(value string) bool { return k3sVersionPattern.MatchString(value) }
 
 // validateK3sVersion refuses anything the k3s installer would not recognise.
 //

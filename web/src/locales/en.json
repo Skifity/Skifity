@@ -917,7 +917,7 @@
       },
       "cluster_k3s_version": {
         "label": "Kubernetes version",
-        "help": "The k3s version a server added from here is installed with. Leave empty to follow the stable channel, which is what a new cluster gets. Pin it to keep a server you add next month on the same version as the ones you have."
+        "help": "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported."
       },
       "cluster_preview_ttl_days": {
         "label": "Remove preview environments after",
@@ -2022,6 +2022,12 @@
         "cause": "{{0}} is set to build with Nixpacks. Its makers replaced it with Railpack, and its command line is not published as an image a build can run.",
         "impact": "Nothing was built or deployed.",
         "fix": "Set the app's builder to Automatic, which uses Railpack, or to Dockerfile, under the app's Settings."
+      },
+      "provision_cluster_version_unknown": {
+        "title": "Could not find out which Kubernetes version the cluster runs",
+        "cause": "{{0}}",
+        "impact": "The server was not joined. A server has to run the same version as the cluster it joins.",
+        "fix": "Check that the panel can reach the Kubernetes API, then retry."
       }
     }
   },

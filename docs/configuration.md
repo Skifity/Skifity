@@ -58,7 +58,7 @@ to get started.
 | Group | What it is for |
 |---|---|
 | **General** | The panel's own URL, the default builder, and an explicit switch for usage reporting — which is off, and has always been off, and exists so that its absence is visible rather than assumed. |
-| **Cluster** | The k3s version new servers are installed with, the pod network they join on, how long a preview environment lives, and how much history — deployments per app, activity log in days — is kept. |
+| **Cluster** | The k3s version a new cluster's first server is installed with (later servers join at the version the cluster runs), the pod network they join on, how long a preview environment lives, and how much history — deployments per app, activity log in days — is kept. |
 | **Domains and HTTPS** | A wildcard domain so every app gets a free subdomain, the address domains should point at, the email Let's Encrypt sends expiry warnings to, a Cloudflare Tunnel token for a cluster with no public address, the proxies whose forwarded addresses are believed, and the country and network databases the firewall reads. |
 | **Backup storage** | S3 or anything that speaks S3, including MinIO. Credentials never leave the panel: a backup Job is handed a presigned URL that expires. |
 | **DNS** | A provider token, for wildcard certificates, which need a DNS challenge. |
