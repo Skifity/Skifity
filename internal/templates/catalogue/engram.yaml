@@ -1,0 +1,52 @@
+id: engram
+name: Engram
+description: A memory sync server for AI coding agents, so every machine's agent shares what it has learned.
+category: ai
+website: https://github.com/Gentleman-Programming/engram
+services:
+- name: engram
+  image: ghcr.io/gentleman-programming/engram:2.2.1
+  port: 8080
+  public: true
+  health_path: /health
+  variables:
+    ENGRAM_CLOUD_HOST: 0.0.0.0
+    ENGRAM_PORT: '8080'
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+databases:
+- name: engram-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - engram
+  var_name: ENGRAM_DATABASE_URL
+inputs:
+- key: ENGRAM_CLOUD_TOKEN
+  label: Sync token
+  help: The bearer token every engram client uses to sync with this server.
+  secret: true
+  generate: true
+- key: ENGRAM_CLOUD_ADMIN
+  label: Dashboard admin token
+  help: Signs you in to the dashboard at /dashboard.
+  secret: true
+  generate: true
+- key: ENGRAM_JWT_SECRET
+  label: Session signing secret
+  secret: true
+  generate: true
+- key: ENGRAM_CLOUD_TOKEN_PEPPER
+  label: Token pepper
+  help: Hashes the per-user tokens the server issues. Changing it invalidates all of them.
+  secret: true
+  generate: true
+- key: ENGRAM_CLOUD_ALLOWED_PROJECTS
+  label: Allowed projects
+  help: A comma-separated list of the project names this server accepts, or * for any.
+  default: '*'
+notes: On each machine, point engram at this server with ENGRAM_CLOUD_SERVER set to its https address and
+  ENGRAM_CLOUD_TOKEN set to the sync token, then run engram sync --cloud. The dashboard is at /dashboard
+  and takes the admin token.

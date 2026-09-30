@@ -1,0 +1,33 @@
+id: rustfs
+name: RustFS
+description: High-performance S3-compatible object storage written in Rust, with a built-in web console.
+category: storage
+website: https://rustfs.com
+services:
+- name: rustfs
+  image: rustfs/rustfs:1.0.0
+  port: 9000
+  public: true
+  health_path: /health
+  variables:
+    RUSTFS_ADDRESS: 0.0.0.0:9000
+    RUSTFS_CONSOLE_ENABLE: 'true'
+  volumes:
+  - name: rustfs-data
+    mount_path: /data
+    size_gb: 20
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+inputs:
+- key: RUSTFS_ACCESS_KEY
+  label: Root access key
+  default: rustfsadmin
+- key: RUSTFS_SECRET_KEY
+  label: Root secret key
+  secret: true
+  generate: true
+notes: The S3 API is at this app's https address, and the web console at /rustfs/console/ on the same
+  address; sign in to either with the root access key and secret key. Create a bucket and a less
+  privileged access key there before pointing applications, or Skifity's own backups, at it.

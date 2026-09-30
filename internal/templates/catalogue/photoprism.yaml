@@ -1,0 +1,44 @@
+id: photoprism
+name: PhotoPrism
+description: An AI-powered photo library that tags, organizes and finds your pictures, with faces and
+  places.
+category: media
+website: https://www.photoprism.app
+services:
+- name: photoprism
+  image: photoprism/photoprism:260919
+  port: 2342
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 4096
+  cpu_request_m: 250
+  cpu_limit_m: 2000
+  variables:
+    PHOTOPRISM_AUTH_MODE: password
+    PHOTOPRISM_DATABASE_DRIVER: sqlite
+    PHOTOPRISM_DISABLE_TLS: 'true'
+    PHOTOPRISM_ORIGINALS_LIMIT: '5000'
+    PHOTOPRISM_UPLOAD_LIMIT: '5000'
+  volumes:
+  - name: photoprism-originals
+    mount_path: /photoprism/originals
+    size_gb: 50
+  - name: photoprism-storage
+    mount_path: /photoprism/storage
+    size_gb: 20
+inputs:
+- key: PHOTOPRISM_SITE_URL
+  label: Public URL
+  help: The address PhotoPrism will be reached at, including https:// and a trailing slash.
+  required: true
+- key: PHOTOPRISM_ADMIN_USER
+  label: Admin user
+  default: admin
+- key: PHOTOPRISM_ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: Photos go on the originals disk, by upload in the web interface or over WebDAV; run an index from
+  the Library page to pick up anything added another way. The index, thumbnails and the SQLite database
+  are on the storage disk. Indexing is CPU and memory hungry, so give it room on a large library. The
+  image starts as root, so the environment needs the baseline pod security level.

@@ -1,0 +1,41 @@
+id: tandoor-recipes
+name: Tandoor Recipes
+description: A recipe manager with meal planning and shopping lists, for you and your household.
+category: productivity
+website: https://tandoor.dev
+services:
+- name: tandoor
+  image: vabene1111/recipes:2.6.15
+  port: 80
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    TZ: Etc/UTC
+    GUNICORN_WORKERS: '2'
+  volumes:
+  - name: tandoor-media
+    mount_path: /opt/recipes/mediafiles
+    size_gb: 5
+databases:
+- name: tandoor-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - tandoor
+  var_name: DATABASE_URL
+inputs:
+- key: ALLOWED_HOSTS
+  label: Domain
+  help: The domain Tandoor will be reached at, without https://, such as recipes.example.com.
+  required: true
+- key: SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+notes: The first visit asks you to create the administrator account. Sign-up stays closed; invite other
+  people from the space settings. The first start runs the database migrations and collects static files,
+  which takes a minute or two. The image starts as root, so the environment needs the baseline pod
+  security level.

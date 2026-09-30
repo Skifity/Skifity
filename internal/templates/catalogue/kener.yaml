@@ -1,0 +1,42 @@
+id: kener
+name: Kener
+description: A status page and uptime monitor with incident management and a clean public page.
+category: monitoring
+website: https://kener.ing
+services:
+- name: kener
+  image: rajnandan1/kener:4.1.5
+  port: 3000
+  public: true
+  health_path: /healthcheck
+  volumes:
+  - name: kener-uploads
+    mount_path: /app/uploads
+    size_gb: 1
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: kener-db
+  engine: postgres
+  storage_gb: 2
+  link_to:
+  - kener
+  var_name: DATABASE_URL
+- name: kener-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - kener
+  var_name: REDIS_URL
+inputs:
+- key: ORIGIN
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: KENER_SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+notes: Open /account/signin and sign up; the first account becomes the admin, and later sign-ups are refused. Monitors and pages are managed under /manage.

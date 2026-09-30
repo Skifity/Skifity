@@ -1,0 +1,25 @@
+id: seerr
+name: Seerr
+description: Media requests and discovery for Jellyfin, Emby and Plex; the successor to Jellyseerr and
+  Overseerr.
+category: media
+website: https://seerr.dev
+services:
+- name: seerr
+  image: ghcr.io/seerr-team/seerr:v3.5.0
+  port: 5055
+  public: true
+  health_path: /api/v1/settings/public
+  mem_request_mb: 192
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TZ: Etc/UTC
+  volumes:
+  - name: seerr-config
+    mount_path: /app/config
+    size_gb: 2
+notes: The first visit walks you through signing in with your Jellyfin, Emby or Plex account, which
+  becomes the administrator, and connecting Sonarr and Radarr. Settings and requests are kept in SQLite
+  on the app's disk.

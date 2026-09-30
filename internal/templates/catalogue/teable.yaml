@@ -1,0 +1,47 @@
+id: teable
+name: Teable
+description: A no-code database on PostgreSQL with a spreadsheet interface, forms, views and automations.
+category: productivity
+website: https://teable.io
+services:
+- name: teable
+  image: ghcr.io/teableio/teable:release.2026-09-30T04-47-05Z.3276
+  port: 3000
+  public: true
+  variables:
+    BACKEND_CACHE_PROVIDER: redis
+    NEXT_ENV_IMAGES_ALL_REMOTE: 'true'
+  volumes:
+  - name: teable-assets
+    mount_path: /app/.assets
+    size_gb: 10
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+databases:
+- name: teable-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - teable
+  var_name: PRISMA_DATABASE_URL
+- name: teable-cache
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - teable
+  var_name: BACKEND_CACHE_REDIS_URI
+inputs:
+- key: PUBLIC_ORIGIN
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+notes: Open the app and sign up; the first account becomes the instance admin. Teable names its releases by
+  build time rather than version number, so the tag here is the exact build. Attachments are stored on the
+  assets disk. Set the BACKEND_MAIL_ variables for invitations and password resets. The image starts as
+  root, so the environment needs the baseline pod security level.

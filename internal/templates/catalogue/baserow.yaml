@@ -1,0 +1,50 @@
+id: baserow
+name: Baserow
+description: An open source no-code database and Airtable alternative.
+category: productivity
+website: https://baserow.io
+services:
+- name: baserow
+  image: baserow/baserow:2.4.0
+  port: 80
+  public: true
+  mem_request_mb: 1024
+  mem_limit_mb: 3072
+  cpu_request_m: 250
+  cpu_limit_m: 2000
+  variables:
+    BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER: 'yes'
+    NITRO_PORT: '3000'
+  volumes:
+  - name: baserow-data
+    mount_path: /baserow/data
+    size_gb: 10
+databases:
+- name: baserow-db
+  engine: postgres
+  storage_gb: 10
+  link_to:
+  - baserow
+  var_name: DATABASE_URL
+- name: baserow-redis
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - baserow
+  var_name: REDIS_URL
+inputs:
+- key: BASEROW_PUBLIC_URL
+  label: Public URL
+  help: The address people will reach Baserow at, including https://.
+  required: true
+- key: SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+- key: BASEROW_JWT_SIGNING_KEY
+  label: JWT signing key
+  secret: true
+  generate: true
+notes: The first account created on the sign-up page becomes the instance administrator. The first start
+  runs the database migrations and can take a few minutes. The image starts as root, so the environment
+  needs the baseline pod security level.

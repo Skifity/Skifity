@@ -1,0 +1,30 @@
+id: rsshub
+name: RSSHub
+description: Generates RSS feeds for thousands of sites and services that do not publish one.
+category: media
+website: https://docs.rsshub.app
+services:
+- name: rsshub
+  image: diygod/rsshub:39ace33f1268e19714278d7dbc7eee2d58e985f1
+  port: 1200
+  public: true
+  health_path: /healthz
+  variables:
+    NODE_ENV: production
+    CACHE_TYPE: redis
+    TZ: UTC
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: rsshub-cache
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - rsshub
+  var_name: REDIS_URL
+notes: RSSHub publishes no numbered releases; every build of its main line is tagged with its commit, and
+  that is the build named here. A public instance is used by anyone who finds it; set ACCESS_KEY on the app
+  to require ?key= on every feed. Routes that render pages in a browser need Puppeteer, which this image
+  leaves out; set PUPPETEER_WS_ENDPOINT to a Browserless instance (in this catalogue) to enable them. The image starts as root, so the environment needs the baseline pod security level.

@@ -1,0 +1,16 @@
+id: drawio
+name: draw.io
+description: The diagram editor behind diagrams.net, self-hosted.
+category: productivity
+website: https://www.drawio.com
+services:
+- name: drawio
+  image: jgraph/drawio:31.5.3
+  port: 8080
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+notes: draw.io keeps no diagrams on the server. They are saved to the visitor's device or to a storage
+  service they connect in the editor.

@@ -1,0 +1,28 @@
+id: redisinsight
+name: Redis Insight
+description: Redis's own GUI for browsing keys, running commands, profiling and analysing memory in Redis databases.
+category: developer
+website: https://redis.io/insight/
+services:
+- name: redisinsight
+  image: redis/redisinsight:3.8.0
+  port: 5540
+  public: true
+  health_path: /api/health
+  volumes:
+  - name: redisinsight-data
+    mount_path: /data
+    size_gb: 1
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+inputs:
+- key: RI_ENCRYPTION_KEY
+  label: Encryption key
+  help: Encrypts the connection passwords Redis Insight saves on its disk.
+  secret: true
+  generate: true
+notes: Redis Insight has no sign-in of its own, so anyone who can open its address can use every database
+  added to it. Keep the address private or allow only your own addresses on the app's Firewall tab. A managed Redis in the
+  same environment is reachable at the host shown on that database's page.

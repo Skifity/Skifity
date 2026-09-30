@@ -1,0 +1,31 @@
+id: lidarr
+name: Lidarr
+description: A music collection manager that watches for new albums and grabs, sorts and renames them.
+category: media
+website: https://lidarr.audio
+beta: true
+services:
+- name: lidarr
+  image: linuxserver/lidarr:3.1.0
+  port: 8686
+  public: true
+  mem_request_mb: 192
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Etc/UTC
+  volumes:
+  - name: lidarr-config
+    mount_path: /config
+    size_gb: 2
+  - name: lidarr-music
+    mount_path: /music
+    size_gb: 50
+notes: Lidarr asks you to set up authentication on first visit. It imports finished downloads from the
+  folder your download client writes to, so the two have to see the same files. Skifity gives each app
+  storage of its own and does not share a volume between apps, so a download client in another app cannot
+  hand files to Lidarr here until both use storage they can both reach. The image starts as root, so the
+  environment needs the baseline pod security level.

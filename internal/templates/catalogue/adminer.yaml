@@ -1,0 +1,17 @@
+id: adminer
+name: Adminer
+description: Database management in a single PHP file, for MySQL, PostgreSQL, SQLite and more.
+category: developer
+website: https://www.adminer.org
+services:
+- name: adminer
+  image: adminer:6.1.1
+  port: 8080
+  public: true
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+notes: Adminer keeps no data of its own. Sign in with the host, user and password shown on a managed
+  database's page in Skifity. Anyone who can reach the address can try to log in to your databases, so
+  consider restricting it with the firewall.

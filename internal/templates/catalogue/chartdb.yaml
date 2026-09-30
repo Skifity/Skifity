@@ -1,0 +1,20 @@
+id: chartdb
+name: ChartDB
+description: Database diagram editor that visualizes and designs a schema from a single query.
+category: developer
+website: https://chartdb.io
+services:
+- name: chartdb
+  image: ghcr.io/chartdb/chartdb:1.20.1
+  port: 80
+  public: true
+  mem_request_mb: 32
+  mem_limit_mb: 128
+  cpu_request_m: 25
+  cpu_limit_m: 250
+  variables:
+    DISABLE_ANALYTICS: 'true'
+    HIDE_CHARTDB_CLOUD: 'true'
+notes: ChartDB keeps diagrams in each visitor's browser, not on the server, so export anything you want
+  to keep. To enable the AI features, add an OPENAI_API_KEY variable to the app. The image starts as
+  root, so the environment needs the baseline pod security level.

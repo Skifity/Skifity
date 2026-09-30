@@ -1,0 +1,67 @@
+id: keila
+name: Keila
+description: Open source newsletter tool, an alternative to Mailchimp and Sendinblue.
+category: communication
+website: https://www.keila.io
+services:
+- name: keila
+  image: pentacent/keila:0.30.3
+  port: 4000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    URL_SCHEMA: https
+    USER_CONTENT_DIR: /opt/app/uploads
+    DISABLE_REGISTRATION: 'true'
+  volumes:
+  - name: keila-uploads
+    mount_path: /opt/app/uploads
+    size_gb: 5
+databases:
+- name: keila-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - keila
+  var_name: DB_URL
+inputs:
+- key: URL_HOST
+  label: Domain
+  help: The domain Keila will be reached at, without https://, such as news.example.com.
+  required: true
+- key: SECRET_KEY_BASE
+  label: Secret key base
+  help: At least 64 characters. Create one with `head -c 48 /dev/urandom | base64`.
+  secret: true
+  required: true
+- key: KEILA_USER
+  label: Admin email
+  required: true
+- key: KEILA_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+- key: MAILER_SMTP_HOST
+  label: SMTP server
+  help: Keila refuses to start without a mailer for its own system emails.
+  required: true
+- key: MAILER_SMTP_PORT
+  label: SMTP port
+  default: '587'
+- key: MAILER_SMTP_FROM_EMAIL
+  label: Sender address
+  required: true
+- key: MAILER_SMTP_USER
+  label: SMTP user
+  required: true
+- key: MAILER_SMTP_PASSWORD
+  label: SMTP password
+  secret: true
+  required: true
+notes: Sign in with the admin email and password. Registration is closed; set DISABLE_REGISTRATION to
+  false if other people should be able to sign up. The SMTP server here is for Keila's own emails;
+  campaigns are sent through a sender you configure inside Keila. The image starts as root, so the
+  environment needs the baseline pod security level.

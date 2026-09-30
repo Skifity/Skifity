@@ -1,0 +1,26 @@
+id: kitchenowl
+name: KitchenOwl
+description: A shared grocery list, recipe manager and meal planner for households.
+category: productivity
+website: https://kitchenowl.org
+services:
+- name: kitchenowl
+  image: tombursch/kitchenowl:v0.7.10
+  port: 8080
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: kitchenowl-data
+    mount_path: /data
+    size_gb: 2
+inputs:
+- key: JWT_SECRET_KEY
+  label: JWT secret
+  secret: true
+  generate: true
+notes: The first visit creates the administrator account. KitchenOwl keeps its data in SQLite on the
+  app's disk. The mobile apps connect to the same address. The image starts as root, so the environment
+  needs the baseline pod security level.

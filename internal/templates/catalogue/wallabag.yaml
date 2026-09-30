@@ -1,0 +1,33 @@
+id: wallabag
+name: wallabag
+description: Save web articles to read later, without the clutter, on the web, mobile or an e-reader.
+category: productivity
+website: https://wallabag.org
+services:
+- name: wallabag
+  image: wallabag/wallabag:2.6.14
+  port: 80
+  public: true
+  health_path: /api/info
+  mem_request_mb: 192
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    SYMFONY__ENV__SERVER_NAME: wallabag
+  volumes:
+  - name: wallabag-data
+    mount_path: /var/www/wallabag/data
+    size_gb: 5
+inputs:
+- key: SYMFONY__ENV__DOMAIN_NAME
+  label: Public URL
+  help: The address wallabag will be reached at, including https://.
+  required: true
+- key: SYMFONY__ENV__SECRET
+  label: Secret
+  secret: true
+  generate: true
+notes: Sign in as wallabag with the password wallabag and change it straight away. Articles are kept in
+  SQLite on the app's disk. The image starts as root, so the environment needs the baseline pod security
+  level.

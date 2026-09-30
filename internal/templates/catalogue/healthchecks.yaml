@@ -1,0 +1,52 @@
+id: healthchecks
+name: Healthchecks
+description: Cron job monitoring that alerts you when a scheduled task does not check in on time.
+category: monitoring
+website: https://healthchecks.io
+services:
+- name: healthchecks
+  image: healthchecks/healthchecks:v4.4
+  port: 8000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB: sqlite
+    DB_NAME: /data/hc.sqlite
+    DEBUG: 'False'
+    SECURE_PROXY_SSL_HEADER: HTTP_X_FORWARDED_PROTO,https
+  volumes:
+  - name: healthchecks-data
+    mount_path: /data
+    size_gb: 2
+inputs:
+- key: SITE_ROOT
+  label: Public URL
+  help: The address Healthchecks will be reached at, including https:// and with no trailing slash.
+  required: true
+- key: SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+- key: DEFAULT_FROM_EMAIL
+  label: Sender address
+  help: The address sign-in links and alerts are sent from.
+  required: true
+- key: EMAIL_HOST
+  label: SMTP server
+  required: true
+- key: EMAIL_PORT
+  label: SMTP port
+  default: '587'
+- key: EMAIL_HOST_USER
+  label: SMTP user
+  required: true
+- key: EMAIL_HOST_PASSWORD
+  label: SMTP password
+  secret: true
+  required: true
+notes: Healthchecks signs people in with a link sent by email, which is why the SMTP settings are
+  required. Register the first account on the sign-up page, then set REGISTRATION_OPEN to False if nobody
+  else should be able to.

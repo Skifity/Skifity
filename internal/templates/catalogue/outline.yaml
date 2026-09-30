@@ -1,0 +1,56 @@
+id: outline
+name: Outline
+description: A fast, collaborative knowledge base and wiki for teams, with real-time editing and Markdown.
+category: productivity
+website: https://www.getoutline.com
+services:
+- name: outline
+  image: outlinewiki/outline:1.10.1
+  port: 3000
+  public: true
+  health_path: /_health
+  variables:
+    FILE_STORAGE: local
+    FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+    PGSSLMODE: disable
+  volumes:
+  - name: outline-data
+    mount_path: /var/lib/outline/data
+    size_gb: 10
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+databases:
+- name: outline-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - outline
+  var_name: DATABASE_URL
+- name: outline-redis
+  engine: redis
+  storage_gb: 1
+  link_to:
+  - outline
+  var_name: REDIS_URL
+inputs:
+- key: URL
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: SECRET_KEY
+  label: Secret key
+  help: Exactly 64 hexadecimal characters. Generate one with openssl rand -hex 32; Outline refuses to start
+    with anything else.
+  secret: true
+  required: true
+- key: UTILS_SECRET
+  label: Utilities secret
+  secret: true
+  generate: true
+notes: Outline has no password sign-in, so nobody can log in until an authentication provider is set. Add
+  the variables for one on the app before inviting anyone - OIDC_CLIENT_ID, OIDC_CLIENT_SECRET,
+  OIDC_AUTH_URI, OIDC_TOKEN_URI and OIDC_USERINFO_URI for any OpenID Connect provider, or GOOGLE_CLIENT_ID
+  and GOOGLE_CLIENT_SECRET, or SLACK_CLIENT_ID and SLACK_CLIENT_SECRET, or the SMTP_ variables for email
+  sign-in links - and redeploy. The first person to sign in creates the workspace and becomes its admin.

@@ -1,0 +1,46 @@
+id: 9router
+name: 9Router
+description: An AI coding gateway that routes Claude Code, Codex, Cursor and Cline requests to many LLM providers with fallback.
+category: ai
+website: https://github.com/decolua/9router
+services:
+- name: ninerouter
+  image: decolua/9router:0.5.91
+  port: 20128
+  public: true
+  variables:
+    NODE_ENV: production
+    HOSTNAME: 0.0.0.0
+    DATA_DIR: /app/data
+    AUTH_COOKIE_SECURE: 'true'
+    REQUIRE_API_KEY: 'true'
+  volumes:
+  - name: ninerouter-data
+    mount_path: /app/data
+    size_gb: 2
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+inputs:
+- key: INITIAL_PASSWORD
+  label: Dashboard password
+  help: The password for the first sign-in to the dashboard.
+  secret: true
+  generate: true
+- key: JWT_SECRET
+  label: Session signing secret
+  secret: true
+  generate: true
+- key: API_KEY_SECRET
+  label: API key secret
+  help: Signs the API keys the dashboard hands out. Changing it invalidates every key.
+  secret: true
+  generate: true
+- key: MACHINE_ID_SALT
+  label: Machine ID salt
+  secret: true
+  generate: true
+notes: Sign in with the dashboard password, add your providers, then create an API key. Every /v1 request
+  needs that key, because this address is on the internet; point your coding tool at https://your-domain/v1
+  with it. The image starts as root, so the environment needs the baseline pod security level.

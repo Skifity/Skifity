@@ -1,0 +1,22 @@
+id: verdaccio
+name: Verdaccio
+description: A lightweight private npm registry that caches and proxies the public one.
+category: developer
+website: https://www.verdaccio.org
+services:
+- name: verdaccio
+  image: verdaccio/verdaccio:6.10.4
+  port: 4873
+  public: true
+  health_path: /-/ping
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  volumes:
+  - name: verdaccio-storage
+    mount_path: /verdaccio/storage
+    size_gb: 20
+notes: Packages and accounts are kept on the storage disk. With the image's default configuration anyone
+  who can reach the registry can install packages and create an account with npm adduser, and any account
+  can publish; restrict it with the firewall if that is not what you want.

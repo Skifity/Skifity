@@ -1,0 +1,37 @@
+id: label-studio
+name: Label Studio
+description: Data labeling for text, images, audio and video, to build training data for machine learning.
+category: ai
+website: https://labelstud.io
+services:
+- name: label-studio
+  image: heartexlabs/label-studio:1.23.2
+  port: 8080
+  public: true
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  variables:
+    DJANGO_DB: sqlite
+    SECURE_PROXY_SSL_HEADER: HTTP_X_FORWARDED_PROTO,https
+    LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK: 'true'
+  volumes:
+  - name: label-studio-data
+    mount_path: /label-studio/data
+    size_gb: 10
+inputs:
+- key: LABEL_STUDIO_HOST
+  label: Public URL
+  help: The address Label Studio will be reached at, including https://.
+  required: true
+- key: LABEL_STUDIO_USERNAME
+  label: Admin email
+  required: true
+- key: LABEL_STUDIO_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: Sign in with the admin email and password. Sign-up is limited to people you invite from the
+  Organization page. Data, uploads and the SQLite database are on the app's disk. The first start runs
+  the database migrations before the port opens, which can take a few minutes.

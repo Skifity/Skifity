@@ -1,0 +1,31 @@
+id: obsidian-livesync
+name: Obsidian LiveSync
+description: A CouchDB server set up for the Self-hosted LiveSync plugin, to sync Obsidian vaults across devices.
+category: productivity
+website: https://github.com/vrtmrz/obsidian-livesync
+services:
+- name: obsidian-livesync
+  image: oleduc/docker-obsidian-livesync-couchdb:1.0.3
+  port: 5984
+  public: true
+  volumes:
+  - name: couchdb-data
+    mount_path: /opt/couchdb/data
+    size_gb: 10
+  mem_request_mb: 128
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+inputs:
+- key: COUCHDB_USER
+  label: CouchDB user
+  default: obsidian
+- key: COUCHDB_PASSWORD
+  label: CouchDB password
+  secret: true
+  generate: true
+notes: In Obsidian, install Self-hosted LiveSync and choose CouchDB as the remote, with this app's https
+  address, the user and password above, and a database name of your choice; the plugin creates it. The
+  image is CouchDB 3.5.1 with the settings from the plugin's own couchdb-init script (CORS for the Obsidian
+  apps, required sign-in, larger request limits) built in, since a template cannot mount a local.ini.
+  Turn on end-to-end encryption in the plugin so the server only ever sees ciphertext. The image starts as root, so the environment needs the baseline pod security level.

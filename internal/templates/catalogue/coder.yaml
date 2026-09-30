@@ -1,0 +1,33 @@
+id: coder
+name: Coder
+description: Self-hosted cloud development environments, provisioned from Terraform templates.
+category: developer
+website: https://coder.com/docs
+services:
+- name: coder
+  image: ghcr.io/coder/coder:v2.37.3
+  port: 7080
+  public: true
+  health_path: /healthz
+  variables:
+    CODER_HTTP_ADDRESS: 0.0.0.0:7080
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+databases:
+- name: coder-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - coder
+  var_name: CODER_PG_CONNECTION_URL
+inputs:
+- key: CODER_ACCESS_URL
+  label: Public URL
+  help: The address people and workspace agents will reach this at, including https://.
+  required: true
+notes: Open the app and create the first user, who becomes the owner. Workspaces come from templates;
+  this install has no Docker daemon and no access to the cluster's API, so the Docker and Kubernetes
+  starter templates will not work from here. Use a template for a cloud provider or a remote host you
+  control, or run an external provisioner.

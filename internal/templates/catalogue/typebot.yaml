@@ -1,0 +1,78 @@
+id: typebot
+name: Typebot
+description: Build chatbots visually and embed them on any website; the builder and the viewer that serves
+  the bots.
+category: automation
+website: https://typebot.io
+services:
+- name: typebot-builder
+  image: baptistearno/typebot-builder:3.19.0
+  port: 3000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+- name: typebot-viewer
+  image: baptistearno/typebot-viewer:3.19.0
+  port: 3000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+databases:
+- name: typebot-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - typebot-builder
+  - typebot-viewer
+  var_name: DATABASE_URL
+- name: typebot-redis
+  engine: redis
+  storage_gb: 5
+  link_to:
+  - typebot-builder
+  - typebot-viewer
+  var_name: REDIS_URL
+inputs:
+- key: NEXTAUTH_URL
+  label: Builder URL
+  help: The address of the builder, where you design bots, including https://.
+  required: true
+- key: NEXT_PUBLIC_VIEWER_URL
+  label: Viewer URL
+  help: The address people chat with your bots at, including https://. It must be a different domain
+    from the builder's.
+  required: true
+- key: ENCRYPTION_SECRET
+  label: Encryption secret
+  help: 32 characters; the generated one is.
+  secret: true
+  generate: true
+- key: ADMIN_EMAIL
+  label: Admin email
+  help: This address gets the unlimited plan when it signs in.
+  required: true
+- key: SMTP_HOST
+  label: SMTP server
+  help: Typebot signs people in with a link sent by email.
+  required: true
+- key: SMTP_PORT
+  label: SMTP port
+  default: '587'
+- key: SMTP_USERNAME
+  label: SMTP user
+  required: true
+- key: SMTP_PASSWORD
+  label: SMTP password
+  secret: true
+  required: true
+- key: NEXT_PUBLIC_SMTP_FROM
+  label: Sender
+  help: Name and address emails come from, such as Typebot <bots@example.com>.
+  required: true
+notes: This template installs 2 apps. Give typebot-builder the domain you entered as the builder URL and
+  typebot-viewer the one you entered as the viewer URL. Sign in to the builder with the admin email; set
+  DISABLE_SIGNUP to true afterwards if nobody else should be able to.

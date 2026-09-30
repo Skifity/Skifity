@@ -1,0 +1,37 @@
+id: geoserver
+name: GeoServer
+description: Share, process and edit geospatial data over open standards such as WMS, WFS and WCS.
+category: developer
+website: https://geoserver.org
+services:
+- name: geoserver
+  image: docker.osgeo.org/geoserver:3.0.1
+  port: 8080
+  public: true
+  mem_request_mb: 768
+  mem_limit_mb: 2048
+  cpu_request_m: 200
+  cpu_limit_m: 2000
+  variables:
+    ROOT_WEBAPP_REDIRECT: 'true'
+    EXTRA_JAVA_OPTS: -Xms256m -Xmx1536m
+  volumes:
+  - name: geoserver-data
+    mount_path: /opt/geoserver_data
+    size_gb: 10
+inputs:
+- key: PROXY_BASE_URL
+  label: Public URL
+  help: The address GeoServer will be reached at, ending in /geoserver, such as https://maps.example.com/geoserver.
+  required: true
+- key: GEOSERVER_ADMIN_USER
+  label: Admin user
+  default: admin
+- key: GEOSERVER_ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: The web interface is at /geoserver. Once signed in, remove the GEOSERVER_ADMIN_USER and
+  GEOSERVER_ADMIN_PASSWORD variables, because GeoServer re-applies them on every start and they can
+  overwrite users and roles you have changed since. The image starts as root, so the environment needs
+  the baseline pod security level.

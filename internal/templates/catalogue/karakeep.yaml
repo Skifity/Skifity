@@ -1,0 +1,45 @@
+id: karakeep
+name: Karakeep
+description: A bookmark-everything app for links, notes and images, with automatic tagging and full-page archiving.
+category: media
+website: https://karakeep.app
+services:
+- name: karakeep
+  image: ghcr.io/karakeep-app/karakeep:0.33.2
+  port: 3000
+  public: true
+  health_path: /api/health
+  variables:
+    DATA_DIR: /data
+    BROWSER_WEB_URL: http://karakeep-chrome:9222
+  volumes:
+  - name: karakeep-data
+    mount_path: /data
+    size_gb: 10
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+- name: karakeep-chrome
+  image: ghcr.io/karakeep-app/karakeep-chrome:151.0.7922.47-r1
+  port: 9222
+  public: false
+  mem_request_mb: 256
+  mem_limit_mb: 1536
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+inputs:
+- key: NEXTAUTH_URL
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: NEXTAUTH_SECRET
+  label: Session secret
+  secret: true
+  generate: true
+notes: The first account you register becomes the admin. Set DISABLE_SIGNUPS to true on the karakeep app
+  afterwards if nobody else should sign up. This template installs 2 apps, the web app and the headless
+  Chrome it crawls pages with; they reach each other by name, so keep them together. Full-text search needs
+  Meilisearch, which is in this catalogue; install it in the same environment and set MEILI_ADDR and
+  MEILI_MASTER_KEY on the karakeep app. AI tagging needs OPENAI_API_KEY or an Ollama address. The web image
+  starts as root, so the environment needs the baseline pod security level.

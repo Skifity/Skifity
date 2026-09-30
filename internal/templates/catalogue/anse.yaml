@@ -1,0 +1,16 @@
+id: anse
+name: Anse
+description: A chat interface for OpenAI-compatible and other AI models, with several conversation modes.
+category: ai
+website: https://github.com/anse-app/anse
+services:
+- name: anse
+  image: ddiu8081/anse:v1.1.11
+  port: 3000
+  public: true
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+notes: Anse keeps nothing on the server. Each visitor enters their own provider API key in the settings
+  panel, and it is stored in that browser only. The project has not published a release since 1.1.11. The image starts as root, so the environment needs the baseline pod security level.

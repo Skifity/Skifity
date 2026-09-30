@@ -1,0 +1,21 @@
+id: homer
+name: Homer
+description: A dead simple static homepage for your server, configured from one YAML file.
+category: productivity
+website: https://github.com/bastienwirtz/homer
+services:
+- name: homer
+  image: b4bz/homer:v26.08.3
+  port: 8080
+  public: true
+  mem_request_mb: 32
+  mem_limit_mb: 128
+  cpu_request_m: 25
+  cpu_limit_m: 250
+  volumes:
+  - name: homer-assets
+    mount_path: /www/assets
+    size_gb: 1
+notes: On the first start Homer writes an example config.yml and its icons into the assets disk, and
+  the page shows that example until you change it. Homer has no editor; edit /www/assets/config.yml on
+  the disk, for example with a one-off command in the app, and reload the page.

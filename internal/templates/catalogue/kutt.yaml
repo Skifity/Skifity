@@ -1,0 +1,34 @@
+id: kutt
+name: Kutt
+description: A modern URL shortener with custom domains, statistics and an API.
+category: productivity
+website: https://github.com/thedevs-network/kutt
+services:
+- name: kutt
+  image: kutt/kutt:v3.2.6
+  port: 3000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    DB_CLIENT: better-sqlite3
+    DB_FILENAME: /var/lib/kutt/data.sqlite
+    TRUST_PROXY: 'true'
+  volumes:
+  - name: kutt-data
+    mount_path: /var/lib/kutt
+    size_gb: 2
+inputs:
+- key: DEFAULT_DOMAIN
+  label: Domain
+  help: The domain Kutt will be reached at, without https://, such as s.example.com.
+  required: true
+- key: JWT_SECRET
+  label: JWT secret
+  secret: true
+  generate: true
+notes: The first visit asks you to create the administrator account. Sign-ups and anonymous links are off
+  by default; set DISALLOW_REGISTRATION or DISALLOW_ANONYMOUS_LINKS to false to change that. The image
+  starts as root, so the environment needs the baseline pod security level.

@@ -1,0 +1,25 @@
+id: kanboard
+name: Kanboard
+description: Minimalist project management built around a Kanban board.
+category: productivity
+website: https://kanboard.org
+services:
+- name: kanboard
+  image: kanboard/kanboard:v1.2.54
+  port: 80
+  public: true
+  health_path: /healthcheck.php
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  volumes:
+  - name: kanboard-data
+    mount_path: /var/www/app/data
+    size_gb: 2
+  - name: kanboard-plugins
+    mount_path: /var/www/app/plugins
+    size_gb: 1
+notes: Sign in as admin with the password admin and change it straight away. Kanboard keeps its data in
+  SQLite on the app's disk. The image starts as root, so the environment needs the baseline pod security
+  level.

@@ -1,0 +1,21 @@
+id: languagetool
+name: LanguageTool
+description: A grammar, style and spell checker for more than 25 languages, with an HTTP API the browser add-ons can use.
+category: productivity
+website: https://languagetool.org
+services:
+- name: languagetool
+  image: erikvl87/languagetool:6.8
+  port: 8010
+  public: true
+  health_path: /v2/languages
+  variables:
+    Java_Xms: 256m
+    Java_Xmx: 1g
+  mem_request_mb: 512
+  mem_limit_mb: 1536
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+notes: Point the LanguageTool browser extension or editor plugin at https://your-domain/v2 as a custom
+  server. The API has no login, so anyone who knows the address can use it. The optional n-gram data for
+  better English, German, French and Spanish checks is several gigabytes and is not included.

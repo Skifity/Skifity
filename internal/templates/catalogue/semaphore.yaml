@@ -1,0 +1,40 @@
+id: semaphore
+name: Semaphore UI
+description: A web interface for running Ansible playbooks, Terraform, OpenTofu and scripts.
+category: automation
+website: https://semaphoreui.com
+services:
+- name: semaphore
+  image: semaphoreui/semaphore:v2.19.14
+  port: 3000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    SEMAPHORE_DB_DIALECT: sqlite
+  volumes:
+  - name: semaphore-data
+    mount_path: /var/lib/semaphore
+    size_gb: 2
+  - name: semaphore-config
+    mount_path: /etc/semaphore
+    size_gb: 1
+inputs:
+- key: SEMAPHORE_ADMIN
+  label: Admin username
+  default: admin
+- key: SEMAPHORE_ADMIN_NAME
+  label: Admin name
+  default: Admin
+- key: SEMAPHORE_ADMIN_EMAIL
+  label: Admin email
+  required: true
+- key: SEMAPHORE_ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: The first start writes config.json, including the key that encrypts stored credentials, to the
+  config disk; keep that disk with the data disk. Playbooks run inside this app's container, so they
+  reach hosts over SSH from there.

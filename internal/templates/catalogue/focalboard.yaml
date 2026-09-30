@@ -1,0 +1,37 @@
+id: focalboard
+name: Focalboard
+description: Project management with boards, tables and calendars; an open source alternative to Trello
+  and Notion.
+category: productivity
+website: https://github.com/mattermost-community/focalboard
+beta: true
+services:
+- name: focalboard
+  image: mattermost/focalboard:7.11.4
+  port: 8000
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    FOCALBOARD_DBTYPE: postgres
+    FOCALBOARD_TELEMETRY: 'false'
+  volumes:
+  - name: focalboard-data
+    mount_path: /opt/focalboard/data
+    size_gb: 5
+databases:
+- name: focalboard-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - focalboard
+  var_name: FOCALBOARD_DBCONFIG
+inputs:
+- key: FOCALBOARD_SERVERROOT
+  label: Public URL
+  help: The address people will reach Focalboard at, including https://.
+  required: true
+notes: Register the first account on the sign-in page. Mattermost no longer develops the standalone
+  Focalboard server, so 7.11 is its last release and it will not receive fixes.

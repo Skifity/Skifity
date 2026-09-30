@@ -1,0 +1,35 @@
+id: etherpad
+name: Etherpad
+description: A real-time collaborative text editor, with pads anyone you invite can write in at once.
+category: productivity
+website: https://etherpad.org
+services:
+- name: etherpad
+  image: etherpad/etherpad:3.3.6
+  port: 9001
+  public: true
+  health_path: /health
+  variables:
+    DB_TYPE: redis
+    TRUST_PROXY: 'true'
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: etherpad-db
+  engine: redis
+  storage_gb: 2
+  link_to:
+  - etherpad
+  var_name: DB_URL
+inputs:
+- key: ADMIN_PASSWORD
+  label: Admin password
+  help: For the admin user at /admin, where plugins and settings are managed.
+  secret: true
+  generate: true
+notes: Pads are stored in the managed Redis, which Etherpad supports as its database and which keeps an
+  append-only file on disk. Anyone who can open the address can create a pad; restrict it with a plugin
+  or the app's Firewall tab if that is not what you want. Plugins installed from /admin live in the
+  container and are lost on redeploy; add them to a custom image to keep them.

@@ -1,0 +1,28 @@
+id: bazarr
+name: Bazarr
+description: Manages and downloads subtitles for the shows and movies in Sonarr and Radarr.
+category: media
+website: https://www.bazarr.media
+beta: true
+services:
+- name: bazarr
+  image: linuxserver/bazarr:1.6.2
+  port: 6767
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    TZ: Etc/UTC
+  volumes:
+  - name: bazarr-config
+    mount_path: /config
+    size_gb: 2
+notes: Bazarr starts without a login; set one under Settings > General straight away. It writes subtitles
+  next to the video files Sonarr and Radarr manage, so it has to see the same files they do. Skifity
+  gives each app storage of its own and does not share a volume between apps, so until the media is on
+  storage all three can reach, Bazarr can search for subtitles but not save them next to the files. The
+  image starts as root, so the environment needs the baseline pod security level.

@@ -1,0 +1,38 @@
+id: flagsmith
+name: Flagsmith
+description: Open source feature flags and remote configuration.
+category: developer
+website: https://www.flagsmith.com
+services:
+- name: flagsmith
+  image: flagsmith/flagsmith:2.278.0
+  port: 8000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  variables:
+    ENVIRONMENT: production
+    DJANGO_ALLOWED_HOSTS: '*'
+    USE_POSTGRES_FOR_ANALYTICS: 'true'
+    TASK_RUN_METHOD: SEPARATE_THREAD
+databases:
+- name: flagsmith-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - flagsmith
+  var_name: DATABASE_URL
+inputs:
+- key: DJANGO_SECRET_KEY
+  label: Secret key
+  secret: true
+  generate: true
+- key: FLAGSMITH_DOMAIN
+  label: Domain
+  help: The domain Flagsmith will be reached at, without https://, such as flags.example.com.
+  required: true
+notes: The first start runs the database migrations. Then sign up on the front page to create the first
+  organisation; set PREVENT_SIGNUP to true afterwards if nobody else should be able to. Flagsmith sends
+  invitations and password resets by email only once the EMAIL_ variables are set.

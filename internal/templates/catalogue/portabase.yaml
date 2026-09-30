@@ -1,0 +1,43 @@
+id: portabase
+name: Portabase
+description: A dashboard for scheduling, storing and restoring database backups, with agents that run next to each database.
+category: developer
+website: https://portabase.io
+services:
+- name: portabase
+  image: portabase/portabase:1.31.0
+  port: 80
+  public: true
+  health_path: /api/health
+  variables:
+    HOSTNAME: 0.0.0.0
+    PROJECT_NAME: Portabase
+    TUSD_BEHIND_PROXY: 'true'
+  volumes:
+  - name: portabase-data
+    mount_path: /data
+    size_gb: 10
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: portabase-db
+  engine: postgres
+  storage_gb: 2
+  link_to:
+  - portabase
+  var_name: DATABASE_URL
+inputs:
+- key: PROJECT_URL
+  label: Public URL
+  help: The address people and agents will reach this at, including https://.
+  required: true
+- key: PROJECT_SECRET
+  label: Project secret
+  secret: true
+  generate: true
+notes: Open the app and follow the onboarding to create the admin account. Backups are taken by Portabase
+  agents, which run next to the databases they back up and connect to this dashboard; add one from the
+  dashboard to get its install command. Backup files are kept on the data disk unless you add object
+  storage. The image starts as root, so the environment needs the baseline pod security level.

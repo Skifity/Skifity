@@ -1,0 +1,26 @@
+id: kavita
+name: Kavita
+description: A reading server for manga, comics and books, with a web reader.
+category: media
+website: https://www.kavitareader.com
+services:
+- name: kavita
+  image: jvmilazz0/kavita:0.9.1
+  port: 5000
+  public: true
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    TZ: Etc/UTC
+  volumes:
+  - name: kavita-config
+    mount_path: /kavita/config
+    size_gb: 2
+  - name: kavita-library
+    mount_path: /library
+    size_gb: 20
+notes: The first visit creates the administrator account. Put your books and comics on the library disk
+  and add /library as a library in Kavita's settings. The image starts as root, so the environment needs
+  the baseline pod security level.

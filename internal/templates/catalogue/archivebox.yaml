@@ -1,0 +1,42 @@
+id: archivebox
+name: ArchiveBox
+description: Save web pages, media and articles as local, self-contained archives you can browse later.
+category: media
+website: https://archivebox.io
+services:
+- name: archivebox
+  image: archivebox/archivebox:0.9.71
+  port: 5797
+  public: true
+  variables:
+    SERVER_SECURITY_MODE: safe-onedomain-nojsreplay
+    ALLOWED_HOSTS: '*'
+    PUBLIC_INDEX: 'false'
+    PUBLIC_SNAPSHOTS: 'false'
+    PUBLIC_ADD_VIEW: 'false'
+  volumes:
+  - name: archivebox-data
+    mount_path: /data
+    size_gb: 20
+  mem_request_mb: 512
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+inputs:
+- key: BASE_URL
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: ADMIN_USERNAME
+  label: Admin username
+  default: admin
+- key: ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: The admin account is created on first start from the username and password above. Everything
+  archived lives on the data disk, so size it for what you plan to keep. Archived pages are served from
+  this one domain with their scripts turned off, which is the safe mode for a single address; ArchiveBox's
+  full-fidelity replay needs a wildcard subdomain per snapshot, which this template does not set up.
+  The image starts as root and drops to its own user, so the environment needs the baseline pod security
+  level.

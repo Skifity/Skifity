@@ -1,0 +1,23 @@
+id: beszel
+name: Beszel
+description: A lightweight server monitoring hub with historical data, Docker stats and alerts.
+category: monitoring
+website: https://beszel.dev
+services:
+- name: beszel
+  image: henrygd/beszel:0.20.0
+  port: 8090
+  public: true
+  health_path: /api/health
+  volumes:
+  - name: beszel-data
+    mount_path: /beszel_data
+    size_gb: 2
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+notes: Open the app and create the admin account; the first visitor gets it, so do this straight away.
+  This installs the hub only. Install the Beszel agent on each machine you want to watch (the hub's
+  Add System dialog prints the command), and give it this hub's https address as HUB_URL together with
+  the token from that dialog, so the agent connects out to the hub rather than the hub dialing in. The image starts as root, so the environment needs the baseline pod security level.

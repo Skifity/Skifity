@@ -1,0 +1,39 @@
+id: statping-ng
+name: Statping-ng
+description: A status page and uptime monitor for websites and services, with notifications and a public dashboard.
+category: monitoring
+website: https://statping-ng.github.io
+services:
+- name: statping-ng
+  image: adamboutcher/statping-ng:v0.90.78
+  port: 8080
+  public: true
+  health_path: /health
+  variables:
+    DB_CONN: sqlite
+    SAMPLE_DATA: 'false'
+    NAME: Status
+    DESCRIPTION: Service status
+  volumes:
+  - name: statping-data
+    mount_path: /app
+    size_gb: 2
+  mem_request_mb: 64
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+inputs:
+- key: ADMIN_USER
+  label: Admin username
+  default: admin
+- key: ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+- key: DOMAIN
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+notes: The first start sets Statping up with SQLite and the admin account above, so there is no setup
+  wizard. Statping-ng's last release is 0.90.78 from 2021; Kener and Uptime Kuma in this catalogue are
+  maintained alternatives. The image starts as root, so the environment needs the baseline pod security level.

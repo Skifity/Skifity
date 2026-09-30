@@ -1,0 +1,37 @@
+id: libredb-studio
+name: LibreDB Studio
+description: A browser-based SQL IDE for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis, with an optional AI assistant.
+category: developer
+website: https://libredb.org
+services:
+- name: libredb-studio
+  image: ghcr.io/libredb/libredb-studio:0.17.0
+  port: 3000
+  public: true
+  variables:
+    HOSTNAME: 0.0.0.0
+    STORAGE_PROVIDER: sqlite
+    STORAGE_SQLITE_PATH: /app/data/libredb-storage.db
+  volumes:
+  - name: libredb-data
+    mount_path: /app/data
+    size_gb: 1
+  mem_request_mb: 256
+  mem_limit_mb: 768
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+inputs:
+- key: ADMIN_EMAIL
+  label: Admin email
+  required: true
+- key: ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+- key: JWT_SECRET
+  label: Session signing secret
+  help: Also derives the key that encrypts saved connection passwords, so keep it.
+  secret: true
+  generate: true
+notes: Sign in with the admin email and password. Further accounts are added under Admin, then Accounts.
+  Set LLM_PROVIDER, LLM_API_KEY and LLM_MODEL on the app to turn on the AI assistant. The image starts as root, so the environment needs the baseline pod security level.

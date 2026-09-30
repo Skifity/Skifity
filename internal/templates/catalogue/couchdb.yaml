@@ -1,0 +1,36 @@
+id: couchdb
+name: CouchDB
+description: A document database with an HTTP API, built for sync and replication.
+category: developer
+website: https://couchdb.apache.org
+services:
+- name: couchdb
+  image: couchdb:3.5.2
+  port: 5984
+  public: true
+  health_path: /_up
+  mem_request_mb: 256
+  mem_limit_mb: 1024
+  cpu_request_m: 100
+  cpu_limit_m: 1000
+  volumes:
+  - name: couchdb-data
+    mount_path: /opt/couchdb/data
+    size_gb: 10
+inputs:
+- key: COUCHDB_USER
+  label: Admin user
+  default: admin
+- key: COUCHDB_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+- key: COUCHDB_SECRET
+  label: Cookie authentication secret
+  help: Signs session cookies, so sign-ins survive a restart.
+  secret: true
+  generate: true
+notes: This runs CouchDB as a single node. Open /_utils, sign in with the admin user, and choose Setup >
+  Configure a Single Node once, which creates the _users, _replicator and _global_changes system
+  databases; until then CouchDB logs that they are missing. The image starts as root, so the environment
+  needs the baseline pod security level.

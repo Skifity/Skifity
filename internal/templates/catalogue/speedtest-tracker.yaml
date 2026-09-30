@@ -1,0 +1,37 @@
+id: speedtest-tracker
+name: Speedtest Tracker
+description: Runs scheduled Ookla speed tests and charts your connection's download, upload and latency over time.
+category: monitoring
+website: https://docs.speedtest-tracker.dev
+services:
+- name: speedtest-tracker
+  image: linuxserver/speedtest-tracker:1.15.0
+  port: 80
+  public: true
+  variables:
+    PUID: '1000'
+    PGID: '1000'
+    APP_TIMEZONE: UTC
+    SPEEDTEST_SCHEDULE: 0 */6 * * *
+  volumes:
+  - name: speedtest-config
+    mount_path: /config
+    size_gb: 2
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address people will reach this at, including https://.
+  required: true
+- key: APP_KEY
+  label: Application key
+  help: Encrypts sessions and stored settings. Losing it signs everybody out.
+  secret: true
+  generate: true
+notes: Sign in with admin@example.com and the password password, then change both under your profile
+  straight away. Results are stored in SQLite on the config disk. A test measures the connection of the
+  server this app runs on, not of your own device. The image starts as root, so the environment needs
+  the baseline pod security level.

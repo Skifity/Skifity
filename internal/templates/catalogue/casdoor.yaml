@@ -1,0 +1,31 @@
+id: casdoor
+name: Casdoor
+description: An identity and single sign-on platform with OAuth 2.0, OIDC, SAML, CAS and LDAP.
+category: security
+website: https://casdoor.org
+services:
+- name: casdoor
+  image: casbin/casdoor:4.13.0
+  port: 8000
+  public: true
+  variables:
+    driverName: postgres
+    runmode: prod
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+databases:
+- name: casdoor-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - casdoor
+  var_name: dataSourceName
+inputs:
+- key: origin
+  label: Public URL
+  help: The address people will reach this at, including https://. It becomes the OIDC issuer.
+  required: true
+notes: Sign in with the built-in account admin and the password 123, then change that password
+  immediately under the built-in organization's users.

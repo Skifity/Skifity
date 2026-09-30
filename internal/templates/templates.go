@@ -38,7 +38,7 @@ var files embed.FS
 
 // The logos, one per template, named after the template they belong to.
 //
-// A catalogue of 282 grey squares with a letter in them is a catalogue nobody
+// A catalogue of three hundred grey squares with a letter in them is a catalogue nobody
 // wants to look through, and every product in this category shows logos. They
 // are vendored rather than loaded from a CDN because the panel's own
 // Content-Security-Policy says `img-src 'self'`: pointing at somebody else's

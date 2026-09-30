@@ -1,0 +1,41 @@
+id: hedgedoc
+name: HedgeDoc
+description: Real-time collaborative markdown notes, formerly known as CodiMD.
+category: productivity
+website: https://hedgedoc.org
+services:
+- name: hedgedoc
+  image: quay.io/hedgedoc/hedgedoc:1.12.0
+  port: 3000
+  public: true
+  health_path: /_health
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    CMD_PROTOCOL_USESSL: 'true'
+    CMD_URL_ADDPORT: 'false'
+  volumes:
+  - name: hedgedoc-uploads
+    mount_path: /hedgedoc/public/uploads
+    size_gb: 5
+databases:
+- name: hedgedoc-db
+  engine: postgres
+  storage_gb: 5
+  link_to:
+  - hedgedoc
+  var_name: CMD_DB_URL
+inputs:
+- key: CMD_DOMAIN
+  label: Domain
+  help: The domain HedgeDoc will be reached at, without https://, such as notes.example.com.
+  required: true
+- key: CMD_SESSION_SECRET
+  label: Session secret
+  secret: true
+  generate: true
+notes: Anyone can register with an email address and anyone can create notes without signing in. Once
+  your accounts exist, set CMD_ALLOW_EMAIL_REGISTER and CMD_ALLOW_ANONYMOUS to false to close that. The
+  image starts as root, so the environment needs the baseline pod security level.

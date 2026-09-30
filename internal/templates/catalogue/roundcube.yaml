@@ -1,0 +1,42 @@
+id: roundcube
+name: Roundcube
+description: A browser-based IMAP email client with a desktop-like interface.
+category: communication
+website: https://roundcube.net
+services:
+- name: roundcube
+  image: roundcube/roundcubemail:1.7.4-apache
+  port: 80
+  public: true
+  mem_request_mb: 128
+  mem_limit_mb: 512
+  cpu_request_m: 50
+  cpu_limit_m: 1000
+  variables:
+    ROUNDCUBEMAIL_DB_TYPE: sqlite
+    ROUNDCUBEMAIL_DB_DIR: /var/roundcube/db
+    ROUNDCUBEMAIL_SKIN: elastic
+    ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+  volumes:
+  - name: roundcube-db
+    mount_path: /var/roundcube/db
+    size_gb: 1
+inputs:
+- key: ROUNDCUBEMAIL_DEFAULT_HOST
+  label: IMAP server
+  help: Your mail server, with ssl:// for implicit TLS, such as ssl://mail.example.com.
+  required: true
+- key: ROUNDCUBEMAIL_DEFAULT_PORT
+  label: IMAP port
+  default: '993'
+- key: ROUNDCUBEMAIL_SMTP_SERVER
+  label: SMTP server
+  help: The server mail is sent through, with tls:// for STARTTLS, such as tls://mail.example.com.
+  required: true
+- key: ROUNDCUBEMAIL_SMTP_PORT
+  label: SMTP port
+  default: '587'
+notes: Roundcube is a client for a mail server you already have; people sign in with their mailbox
+  address and password. Contacts, identities and settings are kept in SQLite on the app's disk. The image
+  makes a new session encryption key each time it starts, so people sign in again after a restart. The
+  image starts as root, so the environment needs the baseline pod security level.

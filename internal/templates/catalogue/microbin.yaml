@@ -1,0 +1,38 @@
+id: microbin
+name: MicroBin
+description: A tiny pastebin and file sharing server with encryption, expiry and QR codes.
+category: productivity
+website: https://github.com/szabodanika/microbin
+services:
+- name: microbin
+  image: danielszabo99/microbin:2.1.4
+  port: 8080
+  public: true
+  mem_request_mb: 32
+  mem_limit_mb: 256
+  cpu_request_m: 25
+  cpu_limit_m: 500
+  variables:
+    MICROBIN_PRIVATE: 'true'
+    MICROBIN_ENCRYPTION_CLIENT_SIDE: 'true'
+    MICROBIN_ENCRYPTION_SERVER_SIDE: 'true'
+    MICROBIN_QR: 'true'
+    MICROBIN_DISABLE_TELEMETRY: 'true'
+  volumes:
+  - name: microbin-data
+    mount_path: /app/microbin_data
+    size_gb: 5
+inputs:
+- key: MICROBIN_PUBLIC_PATH
+  label: Public URL
+  help: The address MicroBin will be reached at, including https:// and a trailing slash.
+  required: true
+- key: MICROBIN_ADMIN_USERNAME
+  label: Admin user
+  default: admin
+- key: MICROBIN_ADMIN_PASSWORD
+  label: Admin password
+  secret: true
+  generate: true
+notes: Anyone who can reach MicroBin can create pastes. Set MICROBIN_READONLY to true and a
+  MICROBIN_UPLOADER_PASSWORD if only you should. The admin page is at /admin.

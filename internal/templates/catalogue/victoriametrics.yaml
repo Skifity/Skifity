@@ -1,0 +1,27 @@
+id: victoriametrics
+name: VictoriaMetrics
+description: A fast, cost-effective time series database, compatible with Prometheus queries and remote
+  write.
+category: monitoring
+website: https://victoriametrics.com
+services:
+- name: victoriametrics
+  image: victoriametrics/victoria-metrics:v1.153.0
+  port: 8428
+  public: true
+  health_path: /health
+  mem_request_mb: 256
+  mem_limit_mb: 2048
+  cpu_request_m: 100
+  cpu_limit_m: 2000
+  volumes:
+  - name: victoriametrics-data
+    mount_path: /victoria-metrics-data
+    size_gb: 20
+notes: VictoriaMetrics has no authentication of its own, so anyone who can reach its address can write,
+  query and delete data. Turn on the app's password, which Prometheus remote write, vmagent and Grafana
+  can all send, or make it internal only so that just the apps in its environment reach it, at
+  victoriametrics:8428. It keeps one month of data by default and has no scrape targets of its own; push
+  metrics to it with remote write, vmagent or any protocol it accepts, and add it to Grafana as a
+  Prometheus data source. The image starts as root, so the environment needs the baseline pod security
+  level.

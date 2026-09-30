@@ -1,0 +1,27 @@
+id: shiori
+name: Shiori
+description: A simple bookmark manager that saves a readable offline copy of every page.
+category: media
+website: https://github.com/go-shiori/shiori
+services:
+- name: shiori
+  image: ghcr.io/go-shiori/shiori:v1.8.0
+  port: 8080
+  public: true
+  variables:
+    SHIORI_DIR: /srv/shiori
+  volumes:
+  - name: shiori-data
+    mount_path: /srv/shiori
+    size_gb: 5
+  mem_request_mb: 64
+  mem_limit_mb: 512
+  cpu_request_m: 25
+  cpu_limit_m: 1000
+inputs:
+- key: SHIORI_HTTP_SECRET_KEY
+  label: Session secret
+  secret: true
+  generate: true
+notes: Sign in with the default login shiori and the password gopher, then add your own owner account under
+  Settings and sign in with that. The default login only works while no account exists in the database. The image starts as root, so the environment needs the baseline pod security level.
