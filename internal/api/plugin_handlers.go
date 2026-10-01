@@ -412,6 +412,9 @@ func (s *Server) fetchManifest(r *http.Request, req inspectPluginRequest) (plugi
 // metadata address, loopback and the unspecified address, on the resolved
 // address at the moment of connecting.
 func (s *Server) fetchPluginURL(r *http.Request, url string) ([]byte, error) {
+	if !netguard.Address.MatchString(url) {
+		return nil, errdoc.BadRequest("That is not an address this panel can fetch.")
+	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errdoc.BadRequest("That is not an address this panel can fetch.")

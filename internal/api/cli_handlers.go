@@ -47,11 +47,14 @@ func (s *Server) handleDownloadCLI(w http.ResponseWriter, r *http.Request) {
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
-	// A closed list, checked before either becomes part of a file name.
-	if !cliOS[goos] || !cliArch[arch] {
+	// A closed list, and what becomes part of a file name is the list's own
+	// spelling, never the request's.
+	knownOS, knownArch, ok := knownCLIPlatform(goos, arch)
+	if !ok {
 		writeError(w, r, errdoc.CLIPlatformUnknown(goos+"/"+arch))
 		return
 	}
+	goos, arch = knownOS, knownArch
 	if goos == runtime.GOOS && arch == runtime.GOARCH {
 		s.serveOwnBinary(w, r)
 		return
@@ -122,6 +125,23 @@ var (
 	cliOS   = map[string]bool{"linux": true, "darwin": true, "windows": true}
 	cliArch = map[string]bool{"amd64": true, "arm64": true}
 )
+
+// knownCLIPlatform is the platform as cliOS and cliArch spell it, when the
+// request names one of theirs.
+func knownCLIPlatform(goos, arch string) (string, string, bool) {
+	var knownOS, knownArch string
+	for name := range cliOS {
+		if name == goos {
+			knownOS = name
+		}
+	}
+	for name := range cliArch {
+		if name == arch {
+			knownArch = name
+		}
+	}
+	return knownOS, knownArch, knownOS != "" && knownArch != ""
+}
 
 // cliFileName is what a platform's CLI is called: skifity-darwin-arm64, or
 // skifity-windows-amd64.exe, which Windows needs to run it at all.

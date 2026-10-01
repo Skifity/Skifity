@@ -104,3 +104,32 @@ func TestARefusalNamesTheAddress(t *testing.T) {
 		}
 	}
 }
+
+// The shape of an address, separately from where it points.
+func TestAddressAcceptsAddressesAndNothingElse(t *testing.T) {
+	for _, ok := range []string{
+		"https://catalogue.example.com/index.yaml",
+		"https://git.example.com:8443/api/v4/projects?per_page=100&page=2",
+		"http://127.0.0.1:43211/manifest.json",
+		"https://[2001:db8::1]/plugin.yaml",
+		"https://example.com",
+	} {
+		if !Address.MatchString(ok) {
+			t.Errorf("%s was refused", ok)
+		}
+	}
+	for _, bad := range []string{
+		"file:///etc/passwd",
+		"https://user:pass@example.com/",
+		"https://example.com/a b",
+		"https://example.com/#fragment",
+		"gopher://example.com/",
+		"https:///nohost",
+		"https://-example.com/",
+		"https://example.com\n.evil/",
+	} {
+		if Address.MatchString(bad) {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

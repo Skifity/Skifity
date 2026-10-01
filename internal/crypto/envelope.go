@@ -224,7 +224,10 @@ func (k *Keyring) Open(stored, context string) ([]byte, error) {
 	defer k.mu.RUnlock()
 	master, ok := k.keys[env.KeyID]
 	if !ok {
-		return nil, fmt.Errorf("%w: key id %q", ErrUnknownKey, env.KeyID)
+		// Without the key's id: it comes from the stored value, and every
+		// caller logs this error. Which master key a value needs is a question
+		// for the keyring file, not for a log line.
+		return nil, ErrUnknownKey
 	}
 	dek, err := openWith(master, env.WrappedDEK, []byte(env.KeyID))
 	if err != nil {

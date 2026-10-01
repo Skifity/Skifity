@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"skifity/internal/netguard"
 	"skifity/internal/version"
 )
 
@@ -284,6 +285,9 @@ func (e *HostError) Error() string { return e.msg }
 // what a single repository's lookup says: a 404 here is an address that is
 // not a Git host's API, not a repository that is missing.
 func getList(ctx context.Context, endpoint, token, scheme string, into any) error {
+	if !netguard.Address.MatchString(endpoint) {
+		return &HostError{msg: "the Git host's address is not one the panel can ask"}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err

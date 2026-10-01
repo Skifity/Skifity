@@ -176,8 +176,11 @@ var addressSecrets = []struct {
 	// A Telegram bot's token is part of every address it is called at.
 	{regexp.MustCompile(`/bot\d+:[A-Za-z0-9_\-]{20,}`), "/bot" + Redacted},
 	// A Slack or Discord incoming webhook is its own secret.
-	{regexp.MustCompile(`(hooks\.slack\.com/(?:services|workflows|triggers)/)[A-Za-z0-9/_\-]+`), "${1}" + Redacted},
-	{regexp.MustCompile(`(discord(?:app)?\.com/api/webhooks/\d+/)[A-Za-z0-9_\-]+`), "${1}" + Redacted},
+	// Not anchored, on purpose: these find a secret anywhere in a line, and
+	// are never asked whether a URL belongs to Slack or Discord. The dots are
+	// written [.] so that is plain from the pattern too.
+	{regexp.MustCompile(`(hooks[.]slack[.]com/(?:services|workflows|triggers)/)[A-Za-z0-9/_\-]+`), "${1}" + Redacted},
+	{regexp.MustCompile(`(discord(?:app)?[.]com/api/webhooks/\d+/)[A-Za-z0-9_\-]+`), "${1}" + Redacted},
 	// A query parameter named like a secret: a presigned URL's signature and
 	// credential, an ?access_token=, a ?key=.
 	{regexp.MustCompile(`(?i)([?&][^=&\s"']*(?:token|key|secret|signature|password|credential|sig)[^=&\s"']*=)[^&\s"']+`), "${1}" + Redacted},

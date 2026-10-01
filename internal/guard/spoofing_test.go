@@ -1,9 +1,11 @@
 package guard
 
 import (
+	"bufio"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"skifity/internal/edgerules"
@@ -68,6 +70,29 @@ func TestASecondForwardedHostLineDoesNotWin(t *testing.T) {
 	}
 	if decision.Action != edgerules.ActionBlock {
 		t.Error("the client's own header line won over the proxy's")
+	}
+}
+
+// The guard reads the forwarded headers by indexing the map with their
+// canonical names. A proxy that writes them in lower case must still be
+// heard: the server canonicalises what it parses, and this holds it to that.
+func TestForwardedHeadersAreReadWhateverTheirCase(t *testing.T) {
+	g := guardFor(t, "shop.example.test")
+
+	raw := "GET / HTTP/1.1\r\n" +
+		"Host: ingress.internal\r\n" +
+		"x-forwarded-host: shop.example.test\r\n" +
+		"x-forwarded-uri: /admin?next=/\r\n" +
+		"x-forwarded-method: POST\r\n\r\n"
+	r, err := http.ReadRequest(bufio.NewReader(strings.NewReader(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.RemoteAddr = "10.42.0.7:40000" // the ingress, which we trust
+
+	_, judged, _ := g.Decide(r)
+	if judged.Host != "shop.example.test" || judged.Path != "/admin" || judged.Method != http.MethodPost {
+		t.Errorf("judged %s %s%s; want what the proxy wrote in lower case", judged.Method, judged.Host, judged.Path)
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"skifity/internal/errdoc"
@@ -118,7 +120,7 @@ func (s *Server) snapshotBeforeUpgrade(r *http.Request, target string) (string, 
 	// Named for the upgrade and not only for the time, so a copy that
 	// `restore-db` kept aside is never one this clears out.
 	stamp := time.Now().UTC().Format("20060102-150405.000000")
-	path := fmt.Sprintf("%s.before-upgrade-%s-to-%s", current, stamp, target)
+	path := fmt.Sprintf("%s.before-upgrade-%s-to-%s", current, stamp, versionForFileName(target))
 	if err := s.db.Snapshot(r.Context(), path); err != nil {
 		return "", errdoc.New("upgrade.no_snapshot", "The database could not be copied before upgrading").
 			WithCause("%s", err.Error()).
@@ -135,4 +137,21 @@ func (s *Server) snapshotBeforeUpgrade(r *http.Request, target string) (string, 
 		older = older[1:]
 	}
 	return path, nil
+}
+
+// versionForFileName is the version a snapshot is named for, rebuilt from its
+// numbers. The name ends up inside SQL, since VACUUM INTO takes no bound
+// parameter, and a name made of digits needs no argument about what
+// versionPattern let through. A pre-release is marked, not spelled out.
+func versionForFileName(target string) string {
+	core, pre, _ := strings.Cut(strings.TrimPrefix(target, "v"), "-")
+	var numbers [3]int
+	for i, part := range strings.SplitN(core, ".", 3) {
+		numbers[i], _ = strconv.Atoi(part)
+	}
+	name := fmt.Sprintf("v%d.%d.%d", numbers[0], numbers[1], numbers[2])
+	if pre != "" {
+		name += "-pre"
+	}
+	return name
 }

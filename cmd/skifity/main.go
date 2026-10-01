@@ -149,7 +149,7 @@ func runGuard(ctx context.Context) error {
 		DataDir:     data,
 		PodCIDR:     envOr("SKIFITY_POD_CIDR", kube.PodCIDR),
 		ServiceCIDR: envOr("SKIFITY_SERVICE_CIDR", kube.ServiceCIDR),
-		Log:         logging.New(os.Stdout, os.Getenv("SKIFITY_LOG_FORMAT"), os.Getenv("SKIFITY_LOG_LEVEL")),
+		Log:         logging.New(os.Stdout, os.Getenv("SKIFITY_LOG_LEVEL"), os.Getenv("SKIFITY_LOG_FORMAT")),
 	})
 	defer g.Close()
 	return g.Run(ctx, address)

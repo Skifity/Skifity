@@ -223,3 +223,26 @@ func TestKnownSecretsAreRedactedFromText(t *testing.T) {
 		t.Fatalf("a short value was redacted as though it were a secret: %s", got)
 	}
 }
+
+// A value somebody else chose cannot forge a log line. Every log line the
+// panel and the guard write goes through this package, and both of its
+// formats escape a newline inside a value or the message, so a request that
+// smuggles one in gets a single line with the newline spelled out. This is
+// why the CodeQL configuration (.github/codeql/codeql-config.yml) leaves out
+// go/log-injection, which cannot see the handlers.
+func TestAValueCannotForgeALogLine(t *testing.T) {
+	forged := "harmless\ntime=2026-10-01T00:00:00Z level=ERROR msg=\"forged\" admin=true\r\n{\"level\":\"ERROR\",\"msg\":\"forged\"}"
+	for _, format := range []string{"text", "json"} {
+		var out bytes.Buffer
+		log := New(&out, "debug", format)
+		log.Warn(forged, "path", forged, "host", forged)
+		log.With("request", forged).Info("one more", slog.Group("g", "v", forged))
+		lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+		if len(lines) != 2 {
+			t.Errorf("%s: two calls wrote %d lines:\n%s", format, len(lines), out.String())
+		}
+		if strings.Contains(out.String(), "\r") {
+			t.Errorf("%s: a carriage return reached the output", format)
+		}
+	}
+}

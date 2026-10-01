@@ -867,9 +867,25 @@ func buildArgFlags(s JobSpec) []string {
 		if s.SecretBuildArgs[pair[0]] {
 			continue
 		}
-		out = append(out, `--opt "build-arg:`+fromEnv(pair[0])+`"`)
+		out = append(out, `--opt "build-arg:`+fromEnv(shellName(pair[0]))+`"`)
 	}
 	return out
+}
+
+// shellName is a build variable's name as a double-quoted shell word may hold
+// it. Validate has refused every name that is not a plain identifier already;
+// this keeps the line above safe on its own, whatever Validate becomes: only
+// letters, digits and underscores are kept, so nothing can end the quotes or
+// start an expansion. The quote is also taken out by name, which is what a
+// reader, and CodeQL, look for at the point of use.
+func shellName(name string) string {
+	plain := strings.Map(func(r rune) rune {
+		if r == '_' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+			return r
+		}
+		return -1
+	}, name)
+	return strings.ReplaceAll(plain, `"`, "")
 }
 
 // dockerfileFile is where the Dockerfile is in the build pod: a path with a

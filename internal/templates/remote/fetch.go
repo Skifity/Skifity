@@ -95,6 +95,9 @@ func (e *RedirectError) Error() string { return "refusing to follow a redirect: 
 
 // Fetch downloads an address, with the team's header, up to limit bytes.
 func (f *Fetcher) Fetch(ctx context.Context, address string, header Header, limit int64) ([]byte, error) {
+	if !netguard.Address.MatchString(address) {
+		return nil, fmt.Errorf("%s is not an https address", redact(address))
+	}
 	target, err := url.Parse(address)
 	if err != nil || target.Scheme != "https" || target.Host == "" {
 		return nil, fmt.Errorf("%s is not an https address", redact(address))

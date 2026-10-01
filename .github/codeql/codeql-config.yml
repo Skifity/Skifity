@@ -1,0 +1,14 @@
+# CodeQL's configuration, read by .github/workflows/codeql.yml, which runs the
+# security-extended queries for Go and for the TypeScript of the interface.
+name: Skifity
+
+query-filters:
+  # Log injection: a value from a request reaching a log call. Every log line
+  # the panel and the guard write goes through internal/logging, whose two
+  # formats are slog's text and JSON handlers, and both escape a newline inside
+  # a message or a value, so a value cannot start a line of its own.
+  # internal/logging's TestAValueCannotForgeALogLine holds that true for both,
+  # on every change; this query cannot see the handlers, and reported every
+  # log call with a request's value in it.
+  - exclude:
+      id: go/log-injection

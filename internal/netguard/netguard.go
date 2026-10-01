@@ -38,9 +38,21 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"syscall"
 	"time"
 )
+
+// Address is the shape of an address the panel is asked to fetch: http or
+// https, a host name or a bracketed IPv6 address, a port, and a path and query.
+// No user information, no whitespace, no fragment.
+//
+// It says nothing about where the host is. That is decided when the
+// connection is made, by Client and Dialer, on the address the name resolved
+// to; checking a name beforehand is what a DNS answer that changes in between
+// gets past. What this does is refuse, before anything is sent, an address
+// that is not one, and say so in a sentence rather than in a dial error.
+var Address = regexp.MustCompile(`^https?://(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?(?:[/?][^\s#]*)?$`)
 
 // Blocked says which address was refused, so an operator who meant it can see
 // what happened rather than a timeout.

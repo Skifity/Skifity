@@ -207,7 +207,7 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 	// there are no rules to fail. ClientIP has always asked whether the hop is
 	// trusted before believing what it says; every other forwarded header now
 	// asks the same question.
-	host := hostname(firstNonEmpty(forwardedByAProxy(r, "X-Forwarded-Host", peer, trust), r.Host))
+	host := hostname(firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Host"], peer, trust), r.Host))
 	protected, found := config.Sets[host]
 	if !loaded {
 		// Nothing has ever been loaded, so nothing can be said about this
@@ -229,7 +229,7 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 		Country:   edgerules.ClientCountry(peer, r.Header, trust),
 		Host:      host,
 		Path:      pathOf(r, peer, trust),
-		Method:    firstNonEmpty(forwardedByAProxy(r, "X-Forwarded-Method", peer, trust), r.Method),
+		Method:    firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Method"], peer, trust), r.Method),
 		UserAgent: r.Header.Get("User-Agent"),
 		Header:    r.Header.Get,
 	}
@@ -390,7 +390,7 @@ func hostname(value string) string {
 // written about the path, and a rule on "/admin" that a "?next=/admin" could
 // satisfy would be a rule that means nothing.
 func pathOf(r *http.Request, peer netip.Addr, trust edgerules.Trust) string {
-	uri := firstNonEmpty(forwardedByAProxy(r, "X-Forwarded-Uri", peer, trust), r.URL.Path)
+	uri := firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Uri"], peer, trust), r.URL.Path)
 	if i := strings.IndexByte(uri, '?'); i >= 0 {
 		uri = uri[:i]
 	}
@@ -408,11 +408,17 @@ func pathOf(r *http.Request, peer netip.Addr, trust edgerules.Trust) string {
 // describe its own request however it likes and be judged on the description.
 // And when the header arrived more than once it is the last line that the
 // nearest hop added; the first is whatever the client sent.
-func forwardedByAProxy(r *http.Request, name string, peer netip.Addr, trust edgerules.Trust) string {
-	if !trust.Contains(peer) {
+//
+// The caller reads the header by its name, so which header is believed is
+// written where it is used rather than passed around. It indexes the map
+// rather than calling Values: the server stores every name it received in
+// canonical form, the three names are written that way, and a read by a
+// constant name is what CodeQL can tell apart from a read of Authorization.
+func forwardedByAProxy(lines []string, peer netip.Addr, trust edgerules.Trust) string {
+	if !trust.Contains(peer) || len(lines) == 0 {
 		return ""
 	}
-	return edgerules.LastHeaderValue(r.Header, name)
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 func firstNonEmpty(values ...string) string {

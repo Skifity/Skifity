@@ -5794,6 +5794,37 @@ and the scanner reads what it can (`5dd150e`, `e75987c`). The API tests had
 grown to the edge of the ten minutes the race detector's run allows a package;
 each now starts from a copy of one migrated database (`cb1d6e4`).
 
+**What CodeQL found.** Run locally with the same `security-extended` suite,
+it reported 83 findings: 47 of `go/log-injection` and 36 others. The 36:
+
+* 25 findings had one cause. The error for an unknown master key carried
+  the key's id, read from the sealed value, into every log line that
+  printed it.
+* Three addresses the panel fetches (a template catalogue, a Git host's API,
+  a plugin) were dialled through netguard, but their shape was never checked
+  first. Now `netguard.Address` checks it.
+* The CLI download's file name used the platform as the request spelled it.
+  It now uses the allow-list's own spelling.
+* The snapshot taken before an upgrade was named with the requested
+  version, and that name goes into `VACUUM INTO`. The name is now rebuilt
+  from the version's numbers.
+* A build argument's name was quoted into the build's shell without being
+  reduced to the characters a variable name can hold.
+* The Slack and Discord redaction patterns are unanchored on purpose. They
+  now say so, so they no longer look like host checks.
+* The guard read its forwarded headers in a form CodeQL could not tell
+  apart from reading `Authorization`.
+
+Each one is fixed, so the remaining 47 are `go/log-injection` and nothing
+else. That query does not see that both log handlers escape control
+characters, so it is left out in `.github/codeql/codeql-config.yml`, and
+`TestAValueCannotForgeALogLine` checks the escaping for both formats.
+
+Two more problems turned up while fixing these. The guard was started with
+its log level and format swapped, so it ignored both settings. And a 66 MB
+build of the binary had been committed by mistake; it is untracked and
+ignored now, but it stays in the history, which is not rewritten.
+
 Not executed, as everywhere in this file: nothing here has run against a
 cluster, a real Bitbucket, a real secret manager, a real DNS or log provider,
 Hetzner, a GPU, or a browser with a real authenticator. Each part below says
