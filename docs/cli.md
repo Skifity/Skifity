@@ -206,6 +206,9 @@ skifity run -- npm run migrate    # run a one-off command in the app's image
 skifity open                      # print the URLs
 skifity apps                      # everything in this environment
 skifity servers                   # the machines
+skifity servers create web-2 --provider hetzner --location fsn1 --type cx22  # order one at Hetzner Cloud and join it
+skifity cloud providers add --token-file hcloud.token  # connect a Hetzner Cloud project; `-` reads stdin
+skifity cloud providers           # the team's cloud connections; test NAME, remove NAME
 skifity certs                     # the team's own TLS certificates, and what uses each
 skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version
 skifity certs remove wildcard     # its hostnames go back to Let's Encrypt

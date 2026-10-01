@@ -118,6 +118,56 @@ export type Server = {
   adopted: boolean
   created_at: string
   last_seen_at?: string
+  /** Set on one server's own page when the panel created it at a provider. */
+  cloud?: CloudServer
+}
+
+/** A server the panel ordered from a cloud provider. */
+export type CloudServer = {
+  server_id: string
+  provider_id: string
+  provider_kind: string
+  provider_name: string
+  machine_id: string
+  location: string
+  server_type: string
+  image: string
+  ssh_access: "anywhere" | "cluster"
+  host_key_rotated: boolean
+}
+
+/** A team's connection to a cloud provider. The token is never sent. */
+export type CloudProvider = {
+  id: string
+  kind: string
+  title: string
+  name: string
+  token_hint: string
+  checked_at?: string
+  created_at: string
+  servers: number
+}
+
+export type CloudPrice = { location: string; monthly: string; hourly: string; currency: string }
+
+export type CloudServerType = {
+  name: string
+  description: string
+  cores: number
+  memory_gb: number
+  disk_gb: number
+  arch: "amd64" | "arm64"
+  cpu_type: string
+  locations: string[]
+  prices: CloudPrice[]
+}
+
+/** What can be ordered with a connection. */
+export type CloudOptions = {
+  default_image: string
+  locations: { name: string; description: string; city: string; country: string }[]
+  server_types: CloudServerType[]
+  images: { name: string; description: string; arch: "amd64" | "arm64" }[]
 }
 
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped"

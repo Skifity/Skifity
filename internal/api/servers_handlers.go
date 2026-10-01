@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -114,10 +115,16 @@ func (s *Server) handleGetServer(w http.ResponseWriter, r *http.Request) {
 	type serverDetail struct {
 		store.Server
 		Operation *store.Operation `json:"operation,omitempty"`
+		// Cloud is set for a server the panel created at a provider, which
+		// is the only kind whose machine the panel offers to delete.
+		Cloud *store.CloudServer `json:"cloud,omitempty"`
 	}
 	detail := serverDetail{Server: server}
 	if op, err := s.db.LatestOperation(r.Context(), "server", server.ID); err == nil {
 		detail.Operation = &op
+	}
+	if created, err := s.db.GetCloudServer(r.Context(), server.ID); err == nil {
+		detail.Cloud = &created
 	}
 	writeJSON(w, http.StatusOK, detail)
 }
@@ -198,16 +205,38 @@ func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	opts := RemoveServerOptions{Wipe: queryBool(r, "wipe"), DeleteMachine: queryBool(r, "delete_machine")}
+	if opts.DeleteMachine {
+		// Deleting a machine is the one part of this nothing can undo, so it
+		// takes the server's name typed out, from the API and the CLI as from
+		// the panel's dialog — and only for a machine this panel ordered.
+		if strings.TrimSpace(r.URL.Query().Get("confirm")) != server.Name {
+			writeError(w, r, errdoc.BadRequest("Deleting the machine as well needs the server's name, exactly, as confirm."))
+			return
+		}
+		if _, err := s.db.GetCloudServer(r.Context(), server.ID); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				err = errdoc.CloudNotCreated(server.Name)
+			}
+			writeError(w, r, err)
+			return
+		}
+	}
+
 	if s.provisioner == nil {
 		writeError(w, r, errdoc.NotConfigured("Server management", "the panel's cluster connection"))
 		return
 	}
-	op, err := s.provisioner.RemoveServer(r.Context(), server.ID, queryBool(r, "wipe"))
+	op, err := s.provisioner.RemoveServer(r.Context(), server.ID, opts)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.audit(r, server.TeamID, "server.remove_started", "server", server.ID, server.Host)
+	action := "server.remove_started"
+	if opts.DeleteMachine {
+		action = "server.delete_started"
+	}
+	s.audit(r, server.TeamID, action, "server", server.ID, server.Host)
 	writeJSON(w, http.StatusAccepted, op)
 }
 

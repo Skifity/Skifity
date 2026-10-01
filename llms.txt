@@ -66,6 +66,8 @@ skifity db password <name>        A new password, and every linked app the new c
 skifity db import <name> <file|->  Load a dump; a backup is taken first
 skifity apps                      List apps
 skifity servers                   List servers
+skifity servers create <name> --provider hetzner --location fsn1 --type cx22  Create a server at Hetzner Cloud and join it (a panel administrator's; it costs money)
+skifity cloud providers add --token-file <file>  Connect a Hetzner Cloud project; `cloud providers`, `test <name>`, `remove <name>`
 skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
 skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity domains add <hostname>    Put the app on a domain; --manage-dns creates its record at the team's DNS provider
@@ -190,6 +192,8 @@ GET    /api/teams/{team}/projects             projects
 POST   /api/teams/{team}/projects             create one
 GET    /api/teams/{team}/servers              servers
 POST   /api/teams/{team}/servers              add one (returns an operation)
+POST   /api/teams/{team}/servers/cloud        create one at a cloud provider and join it (returns an operation)
+GET    /api/teams/{team}/cloud-providers      the team's cloud connections; never a token
 GET    /api/teams/{team}/cluster              cluster summary
 GET    /api/projects/{project}/environments   environments
 GET    /api/environments/{env}/apps           apps

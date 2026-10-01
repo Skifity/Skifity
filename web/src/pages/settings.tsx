@@ -22,6 +22,7 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/confirm-dialog"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
+import { CloudProvidersCard } from "@/components/settings/cloud-providers"
 import { CertificatesCard } from "@/components/settings/certificates"
 import { DNSProvidersCard } from "@/components/settings/dns-providers"
 import { ErrorDisplay } from "@/components/error-display"
@@ -144,6 +145,7 @@ export function SettingsPage() {
           <TabsTrigger value="git">{t("settings.git")}</TabsTrigger>
           <TabsTrigger value="certificates">{t("settings.certificates")}</TabsTrigger>
           <TabsTrigger value="dns">{t("settings.dnsProviders")}</TabsTrigger>
+          <TabsTrigger value="cloud">{t("settings.cloudProviders")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
           <TabsTrigger value="secrets">{t("settings.secretManagers")}</TabsTrigger>
           <TabsTrigger value="logs">{t("settings.logDrains")}</TabsTrigger>
@@ -171,6 +173,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="dns" className="pt-4">
           <DNSProvidersCard />
+        </TabsContent>
+        <TabsContent value="cloud" className="pt-4">
+          <CloudProvidersCard />
         </TabsContent>
         <TabsContent value="notifications" className="pt-4">
           <NotificationChannels />

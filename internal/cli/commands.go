@@ -75,6 +75,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdApps(ctx, rest, stdout)
 	case "servers":
 		err = cmdServers(ctx, rest, stdout)
+	case "cloud":
+		err = cmdCloud(ctx, rest, stdout)
 	case "git":
 		err = cmdGit(ctx, rest, stdout)
 	case "db":
@@ -286,6 +288,8 @@ Databases:
 
 Cluster:
   servers               List the servers in a team
+  servers create        Create a server at Hetzner Cloud and join it to the cluster
+  cloud providers       List, add, test or remove the team's cloud connections
   certs                 List, upload or remove the team's own TLS certificates
   dns providers         List, connect, test or remove the team's DNS providers
   drains                List, add, test or remove where the team's logs are shipped
@@ -644,6 +648,9 @@ func cmdOpen(ctx context.Context, args []string, out io.Writer) error {
 }
 
 func cmdServers(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "create" {
+		return cmdServersCreate(ctx, args[1:], out)
+	}
 	flags := flag.NewFlagSet("servers", flag.ContinueOnError)
 	flags.SetOutput(out)
 	asJSON := flags.Bool("json", false, "print the result as JSON")

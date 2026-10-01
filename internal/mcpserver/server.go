@@ -487,6 +487,16 @@ func (s *Server) register() {
 		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed.",
 	}, s.getHistory)
 
+	// Servers are read here and changed nowhere in this server, deliberately.
+	// Creating one at a cloud provider (POST /api/teams/{team}/servers/cloud)
+	// orders a machine that is billed by the hour, and deleting one
+	// (DELETE /api/servers/{id}?delete_machine=true) destroys a disk nothing
+	// brings back: both cost money or data on one tool call that a prompt
+	// injection could make. Neither is a tool; a person does them in the panel
+	// or with `skifity servers create`. The team's cloud connections are not
+	// listed either: their names and token hints are nothing an assistant can
+	// act on without the tools above, and get_cluster_status already says what
+	// the servers are.
 	addTool(s, &mcp.Tool{
 		Name:        "get_cluster_status",
 		Annotations: reads("Get the cluster's status"),

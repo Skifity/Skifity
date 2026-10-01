@@ -1126,6 +1126,119 @@ paths:
         '202': {$ref: '#/components/responses/OperationStarted'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/servers/cloud:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    post:
+      operationId: createCloudServer
+      tags: [Servers]
+      summary: Create a server at a cloud provider and join it
+      description: >-
+        Panel administrators only. Orders a machine with one of the team's
+        cloud connections — Hetzner Cloud — behind a firewall that lets in
+        HTTP, HTTPS, SSH and the cluster's own servers, with an SSH host key
+        the panel generated and pins before the machine exists. The panel then
+        has the machine replace that key with its own, and joins it exactly as
+        it joins any server. The type, location and image are checked against
+        what the provider sells. It answers at once with the operation to
+        follow. Not offered to the MCP server: it costs money.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCloudServerRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationStarted'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/cloud-providers:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listCloudProviders
+      tags: [Servers]
+      summary: The team's connections to cloud providers
+      description: Viewer, not limited to projects. Never a token; its last four characters.
+      responses:
+        '200':
+          description: The connections, by name.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudProviderList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: addCloudProvider
+      tags: [Servers]
+      summary: Connect a cloud provider project
+      description: >-
+        Admin. The token is asked for a list of locations and whether it may
+        write before anything is saved, and a token that can only read is
+        refused. It is sealed under the connection and never shown again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddCloudProviderRequest'}
+      responses:
+        '201':
+          description: The connection.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudProvider'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/cloud-providers/{providerID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    delete:
+      operationId: deleteCloudProvider
+      tags: [Servers]
+      summary: Remove a cloud connection
+      description: >-
+        Admin. Refused while a server created with it is still in the panel,
+        because deleting that server's machine needs it.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/cloud-providers/{providerID}/test:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    post:
+      operationId: testCloudProvider
+      tags: [Servers]
+      summary: Ask the provider whether the token still works
+      description: Admin. Nothing is created.
+      responses:
+        '200':
+          description: The connection, with when it was checked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudProvider'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/cloud-providers/{providerID}/options:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    get:
+      operationId: cloudProviderOptions
+      tags: [Servers]
+      summary: What can be ordered with a connection
+      description: >-
+        Admin, since it is read with the team's token. Locations, the server
+        types still sold with their architecture and monthly price in each
+        location, and the images the panel installs on.
+      responses:
+        '200':
+          description: The catalogue.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudOptions'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/cluster:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -2000,8 +2113,13 @@ paths:
         Panel administrators only. A control plane server is removed only
         when three remain after it, since fewer cannot keep the cluster's
         quorum. A server the panel did not install cannot be removed this way.
+        With delete_machine, a server the panel created at a cloud provider
+        also has its machine deleted there once it has left the cluster; the
+        machine must still carry the label the panel gave it.
       parameters:
         - {name: wipe, in: query, description: 'Also uninstall k3s from the machine.', schema: {type: boolean}}
+        - {name: delete_machine, in: query, description: 'Delete the machine at the cloud provider. Only for a server the panel created.', schema: {type: boolean}}
+        - {name: confirm, in: query, description: 'The server''s name, exactly. Needed with delete_machine.', schema: {type: string}}
       responses:
         '202': {$ref: '#/components/responses/OperationStarted'}
         default: {$ref: '#/components/responses/Error'}
@@ -4962,6 +5080,7 @@ components:
     envID: {name: envID, in: path, required: true, description: 'An environment''s id.', schema: {type: string}}
     fileID: {name: fileID, in: path, required: true, description: 'A file''s id.', schema: {type: string}}
     registryID: {name: registryID, in: path, required: true, description: 'A registry credential''s id.', schema: {type: string}}
+    providerID: {name: providerID, in: path, required: true, description: 'A cloud connection''s id.', schema: {type: string}}
     certificateID: {name: certificateID, in: path, required: true, description: 'A team certificate''s id.', schema: {type: string}}
     providerID: {name: providerID, in: path, required: true, description: 'A DNS provider connection''s id.', schema: {type: string}}
     portID: {name: portID, in: path, required: true, description: 'A public port''s id.', schema: {type: string}}
@@ -5819,6 +5938,125 @@ components:
         - type: object
           properties:
             operation: {$ref: '#/components/schemas/Operation'}
+            cloud: {$ref: '#/components/schemas/CloudServer'}
+
+    CloudServer:
+      type: object
+      description: A server the panel created at a cloud provider. Only these can have their machine deleted.
+      required: [server_id, provider_id, provider_kind, provider_name, machine_id, location, server_type, image,
+                 ssh_access, firewall_id, host_key_rotated, created_at, updated_at]
+      properties:
+        server_id: {type: string}
+        provider_id: {type: string}
+        provider_kind: {type: string, enum: [hetzner]}
+        provider_name: {type: string}
+        machine_id: {type: string, description: 'The provider''s id for the machine. Empty until it is ordered.'}
+        location: {type: string}
+        server_type: {type: string}
+        image: {type: string}
+        ssh_access: {type: string, enum: [anywhere, cluster]}
+        firewall_id: {type: string}
+        host_key_rotated: {type: boolean, description: 'The host key the machine was created with has been replaced by one it generated.'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    CreateCloudServerRequest:
+      type: object
+      required: [provider_id, name, location, server_type]
+      additionalProperties: false
+      properties:
+        provider_id: {type: string, description: 'One of the team''s cloud connections.'}
+        name: {type: string, description: 'The hostname, the machine''s name and the node''s: lower-case letters, digits and hyphens.'}
+        location: {type: string, description: 'As the options list it, such as fsn1.'}
+        server_type: {type: string, description: 'As the options list it, such as cx22, or cax11 for arm64.'}
+        image: {type: string, enum: [ubuntu-24.04, debian-12], default: ubuntu-24.04}
+        ssh_access:
+          type: string
+          enum: [anywhere, cluster]
+          default: anywhere
+          description: 'Where port 22 is open to. cluster is the cluster''s own servers, which is where the panel''s requests leave from when it runs in the cluster.'
+        control_plane: {type: boolean, description: 'Join as a control plane member, for high availability.'}
+
+    CloudProvider:
+      type: object
+      required: [id, team_id, kind, name, title, token_hint, created_by, created_at, updated_at, servers]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        kind: {type: string, enum: [hetzner]}
+        title: {type: string, description: 'The provider''s name, such as Hetzner Cloud.'}
+        name: {type: string}
+        token_hint: {type: string, description: 'The token''s last four characters.'}
+        checked_at: {type: string, format: date-time}
+        created_by: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        servers: {type: integer, description: 'How many servers the panel created with it and still has.'}
+
+    CloudProviderList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/CloudProvider'}}
+        total: {type: integer}
+
+    AddCloudProviderRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        kind: {type: string, enum: [hetzner], default: hetzner}
+        name: {type: string, description: 'The provider''s name when left empty.'}
+        token: {type: string, format: password, description: 'A Read & Write API token for one project.'}
+
+    CloudOptions:
+      type: object
+      required: [locations, server_types, images, default_image]
+      properties:
+        default_image: {type: string}
+        locations:
+          type: array
+          items:
+            type: object
+            required: [name, description, city, country]
+            properties:
+              name: {type: string}
+              description: {type: string}
+              city: {type: string}
+              country: {type: string}
+        server_types:
+          type: array
+          items:
+            type: object
+            required: [name, description, cores, memory_gb, disk_gb, arch, cpu_type, locations, prices]
+            properties:
+              name: {type: string}
+              description: {type: string}
+              cores: {type: integer}
+              memory_gb: {type: number}
+              disk_gb: {type: integer}
+              arch: {type: string, enum: [amd64, arm64]}
+              cpu_type: {type: string}
+              locations: {type: array, items: {type: string}, description: 'Where it can be ordered now.'}
+              prices:
+                type: array
+                items:
+                  type: object
+                  required: [location, monthly, hourly, currency]
+                  properties:
+                    location: {type: string}
+                    monthly: {type: string, description: 'VAT included, as the provider writes it.'}
+                    hourly: {type: string}
+                    currency: {type: string}
+        images:
+          type: array
+          items:
+            type: object
+            required: [name, description, arch]
+            properties:
+              name: {type: string}
+              description: {type: string}
+              arch: {type: string, enum: [amd64, arm64]}
 
     AddServerRequest:
       type: object

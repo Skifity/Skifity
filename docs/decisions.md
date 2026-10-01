@@ -714,3 +714,83 @@ kube-system instead. A static PersistentVolume over the same directories would
 keep baseline enforced; it was not chosen because binding without a provisioner
 is exactly the kind of behaviour that cannot be checked without a cluster, and
 the point of this change is to stop shipping what has not been seen to work.
+
+## ADR-0025 - A server created at a cloud provider is pinned before it exists
+
+**Context.** The panel can order a machine at Hetzner Cloud and join it in one
+step. Adding an existing machine pins its SSH host key on first use: the first
+connection learns the key, every later one must match it. For a machine the
+panel creates itself, that first connection is the most exposed one there is —
+a fresh address, a root login, and the cluster's join token on its way — and
+trust on first use would accept whatever answered at it. Coolify, which
+creates Hetzner servers too, connects to them with `StrictHostKeyChecking=no`
+and never checks at all. Three ways to know the key before trusting it were
+weighed.
+
+* **Read it from the machine's console output.** cloud-init prints the host
+  keys' fingerprints there, and that is the textbook answer — but Hetzner's API
+  does not return console output, only an interactive VNC console. Not
+  available.
+* **Have the machine report its key.** A `phone_home` from cloud-init to the
+  panel. It needs the panel reachable from the machine, a new unauthenticated
+  endpoint, and a secret in the user data to tell the real report from a forged
+  one — and that secret is exactly as exposed as a host key in the same place,
+  with a race attached.
+* **Generate the key in the panel and give it to the machine.** cloud-init's
+  `ssh_keys` writes a host key from the user data, `ssh_deletekeys` removes the
+  image's own, and an empty `ssh_genkeytypes` stops it generating others. The
+  panel pins the fingerprint before the order is placed.
+
+**Decision.** The third, followed by a rotation. The panel generates an ed25519
+host key, pins its fingerprint, and orders the machine with it in the user data
+(`internal/cloud/cloudinit.go`, which writes nothing else: no packages, no
+scripts — k3s is installed by the same SSH join as every other server). It
+connects accepting only that key. A different key is never trusted however
+long it is presented — the client checks the host key before it authenticates,
+so nothing is sent to an impostor — and if it is still different when the wait
+ends, the step fails as `cloud.host_key_mismatch`. Over that checked connection
+the machine generates a host key of its own (`ssh-keygen`, on the machine; the
+private half never leaves it), the panel pins the new fingerprint, and a fresh
+connection must present it before anything else runs.
+
+The rotation is the point of the second half. User data is not private:
+Hetzner stores it, and anything on the machine can read it back from the
+metadata service at 169.254.169.254 for as long as the machine exists —
+including, once k3s runs there, any pod. A host key that stayed would be one
+every workload on the node could read. Anyone holding the project's API token
+can already rebuild or rescue the machine, so the provider's copy adds nothing
+for them; the metadata service is the exposure, and after the rotation what it
+hands out opens nothing.
+
+The rest follows the same line:
+
+* **Per-server keys, as before.** The panel's own SSH key is generated per
+  server, sealed under it, and given to Hetzner as an SSH key object — which is
+  also what stops Hetzner setting a root password and emailing it. The object
+  is deleted from the project once the machine has it.
+* **A provider firewall from the first boot.** HTTP and HTTPS from anywhere;
+  SSH from anywhere or, on request, only from the cluster's addresses; and
+  `provision.ClusterPorts` — the same list the server's own firewall opens —
+  from the cluster's addresses only. Every machine the panel created has its
+  firewall's sources rewritten when a server joins or leaves.
+* **Only its own machines are deleted.** A machine id is recorded when it is
+  ordered (`cloud_servers`, migration 0060), deleting is only offered for a
+  server with that row, the name must be typed, and the machine must still
+  carry the label `skifity.com/server-id=<the server>` the panel gave it.
+* **The address is not a setting.** The client talks to
+  `https://api.hetzner.cloud/v1` through `internal/netguard`; only a test can
+  point it elsewhere, with a client of its own.
+* **Nothing cost-bearing in the MCP server.** Creating and deleting machines
+  are not tools.
+
+**Consequences.** The first connection to a created machine is checked, and the
+key it ends up pinned to was never outside it. The private bootstrap key sits
+in Hetzner's copy of the user data for the life of the machine, valid for
+nothing once rotated. An image whose cloud-init ignored `ssh_keys` would fail at
+the identity step rather than be trusted — a failure, never a hole. The
+provider interface (`Provider`, in `internal/cloud`) is five nouns — token check,
+catalogue, SSH key, firewall, machine — which DigitalOcean and Vultr both have
+under other names; only Hetzner is implemented. None of this has run against
+Hetzner itself or on a real machine: it is tested against a fake of the API
+built from Hetzner's published reference, with the in-process SSH server as the
+machine (ADR-0010).

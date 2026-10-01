@@ -19,9 +19,17 @@ import (
 // the package rather than a _test file so the provision package can use it too.
 type TestServer struct {
 	listener net.Listener
-	config   *ssh.ServerConfig
+	opts     TestServerOptions
 
 	mu sync.Mutex
+	// config is read under mu: SetHostKey replaces it while connections are
+	// being accepted.
+	config *ssh.ServerConfig
+	// hooks run after a command containing their match has been answered, so
+	// a test can have the server change the way a real one would: a command
+	// that replaces the host key makes the next connection present the new
+	// one.
+	hooks []commandHook
 	// Commands records every command the server was asked to run, in order.
 	commands []string
 	// responses map a substring of a command to the reply it gets. The first
@@ -41,6 +49,11 @@ type TestServer struct {
 // internal/shellsafe. A pattern matching the double-quoted form would keep
 // passing while the real script had changed shape.
 var installedKeyPattern = regexp.MustCompile(`KEY='(ssh-[^']+)'`)
+
+type commandHook struct {
+	match string
+	run   func()
+}
 
 type responseRule struct {
 	match    string
@@ -80,7 +93,23 @@ func NewTestServer(opts TestServerOptions) (*TestServer, error) {
 		return nil, fmt.Errorf("parse the test host key: %w", err)
 	}
 
-	server := &TestServer{}
+	server := &TestServer{opts: opts}
+	server.config = server.newConfig(signer)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("listen: %w", err)
+	}
+	server.listener = listener
+	testServers.Store(listener.Addr().String(), true)
+
+	go server.accept()
+	return server, nil
+}
+
+// newConfig builds the server's configuration around one host key.
+func (s *TestServer) newConfig(signer ssh.Signer) *ssh.ServerConfig {
+	server, opts := s, s.opts
 	config := &ssh.ServerConfig{
 		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			server.recordAuth("password")
@@ -107,17 +136,42 @@ func NewTestServer(opts TestServerOptions) (*TestServer, error) {
 		},
 	}
 	config.AddHostKey(signer)
+	return config
+}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+// SetHostKey makes the server present another host key, an OpenSSH PEM
+// private key, from its next connection on: a machine whose key was replaced.
+func (s *TestServer) SetHostKey(privateKey string) error {
+	signer, err := ssh.ParsePrivateKey([]byte(privateKey))
 	if err != nil {
-		return nil, fmt.Errorf("listen: %w", err)
+		return fmt.Errorf("parse the host key: %w", err)
 	}
-	server.listener = listener
-	server.config = config
-	testServers.Store(listener.Addr().String(), true)
+	config := s.newConfig(signer)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.config = config
+	return nil
+}
 
-	go server.accept()
-	return server, nil
+// Authorize makes a public key work from the next connection on, as a key a
+// provider puts on a new machine does.
+func (s *TestServer) Authorize(publicKey string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.installedKeys = append(s.installedKeys, strings.TrimSpace(publicKey))
+}
+
+// OnCommand runs fn after every command containing match has been answered.
+func (s *TestServer) OnCommand(match string, fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hooks = append(s.hooks, commandHook{match: match, run: fn})
+}
+
+func (s *TestServer) currentConfig() *ssh.ServerConfig {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.config
 }
 
 // Addr is the host and port the server is listening on.
@@ -225,7 +279,7 @@ func (s *TestServer) accept() {
 
 func (s *TestServer) handle(conn net.Conn) {
 	defer conn.Close()
-	sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.config)
+	sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.currentConfig())
 	if err != nil {
 		return
 	}
@@ -278,7 +332,18 @@ func (s *TestServer) runCommand(channel ssh.Channel, command string) {
 			break
 		}
 	}
+	var after []func()
+	for _, hook := range s.hooks {
+		if strings.Contains(command, hook.match) {
+			after = append(after, hook.run)
+		}
+	}
 	s.mu.Unlock()
+	defer func() {
+		for _, run := range after {
+			run()
+		}
+	}()
 
 	stdout, stderr, exitCode := "", "", 0
 	if rule != nil {

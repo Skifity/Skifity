@@ -363,6 +363,34 @@ cannot be added (**Another team's certificate names this hostname**). A
 wildcard is refused only when another team has the same wildcard, because an
 exact name always wins over one.
 
+## Creating a server at Hetzner Cloud fails
+
+Every failure says which step it stopped at; the machine is billed from the
+moment the first step ordered it, so either press **Retry** or remove the
+server with **Also delete the machine at Hetzner Cloud** ticked.
+
+**That token can only read.** The project's token was made read-only. Generate
+one with **Read & Write** permission under **Security → API tokens** and add it
+as a new connection.
+
+**The new machine did not answer over SSH.** If **SSH from the cluster's servers
+only** was ticked, the panel has to run inside the cluster to reach the machine.
+Otherwise it is usually a machine that is still booting: Retry waits again.
+
+**The new machine did not present the host key the panel gave it.** The panel
+refused the connection before signing in and sent nothing. Something other than
+the new machine answered at its address, or its image ignored cloud-init. Delete
+it with its machine and create it again; if it happens twice, find out what is
+answering before going further.
+
+**That machine was not created by this panel.** The machine at the id the panel
+recorded no longer carries the panel's label, so it was not deleted. Look at it
+in the Hetzner Console and delete it there if it should go.
+
+**The cloud provider asked the panel to slow down.** Hetzner allows a number of
+requests an hour for each project, shared by every tool using it. Wait a few
+minutes.
+
 ## The cluster is unreachable
 
 The panel keeps working and says so on every page. Your apps keep running: they

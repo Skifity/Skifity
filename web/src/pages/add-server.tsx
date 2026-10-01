@@ -2,8 +2,17 @@ import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { ArrowLeftIcon, ChevronRightIcon, InfoIcon, KeyRoundIcon, LockIcon } from "lucide-react"
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  CloudIcon,
+  InfoIcon,
+  KeyRoundIcon,
+  LockIcon,
+  ServerIcon,
+} from "lucide-react"
 
+import { CloudServerForm } from "@/components/cloud-server-form"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress } from "@/components/operation-progress"
@@ -53,6 +62,8 @@ export function AddServerPage() {
   const [controlPlane, setControlPlane] = useState(false)
   const [operationId, setOperationId] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
+  const [mode, setMode] = useState<"existing" | "cloud">("existing")
+  const [cloudName, setCloudName] = useState("")
 
   const add = useMutation({
     mutationFn: () =>
@@ -81,7 +92,7 @@ export function AddServerPage() {
     return (
       <ProvisioningView
         operationId={operationId}
-        serverName={name || host}
+        serverName={mode === "cloud" ? cloudName : name || host}
         logLines={logLines}
         onLogLine={(line) => setLogLines((previous) => [...previous.slice(-400), line])}
         onDone={(targetId) => navigate(`/servers/${targetId}`)}
@@ -104,171 +115,201 @@ export function AddServerPage() {
         description={t("servers.addServerIntro", { product: "Skifity" })}
       />
 
-      <Card>
-        <CardContent className="pt-6">
-          <form
-            className="space-y-5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              add.mutate()
-            }}
-          >
-            {add.error && <ErrorDisplay error={add.error} />}
+      <Tabs
+        value={mode}
+        onValueChange={(value) => setMode(value as "existing" | "cloud")}
+        className="gap-4"
+      >
+        <TabsList className="w-full">
+          <TabsTrigger value="existing" className="flex-1">
+            <ServerIcon className="size-3.5" />
+            {t("servers.cloud.tabExisting")}
+          </TabsTrigger>
+          <TabsTrigger value="cloud" className="flex-1">
+            <CloudIcon className="size-3.5" />
+            {t("servers.cloud.tabCreate")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="cloud">
+          <Card>
+            <CardContent className="pt-6">
+              <CloudServerForm
+                onStarted={(operation, created) => {
+                  setCloudName(created)
+                  setOperationId(operation.id)
+                }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="existing">
+          <Card>
+            <CardContent className="pt-6">
+              <form
+                className="space-y-5"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  add.mutate()
+                }}
+              >
+                {add.error && <ErrorDisplay error={add.error} />}
 
-            <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-              <Field>
-                <FieldLabel htmlFor="host">{t("servers.host")}</FieldLabel>
-                <Input
-                  id="host"
-                  value={host}
-                  onChange={(event) => setHost(event.target.value)}
-                  placeholder={t("servers.hostPlaceholder")}
-                  required
-                  autoFocus
-                  className="font-mono"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="port">{t("servers.sshPort")}</FieldLabel>
-                <Input
-                  id="port"
-                  value={sshPort}
-                  onChange={(event) => setSSHPort(event.target.value)}
-                  inputMode="numeric"
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="user">{t("servers.sshUser")}</FieldLabel>
-                <Input
-                  id="user"
-                  value={sshUser}
-                  onChange={(event) => setSSHUser(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="name">
-                  {t("servers.serverName")}{" "}
-                  <span className="text-muted-foreground">({t("common.optional")})</span>
-                </FieldLabel>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder={host || t("servers.serverNameExample")}
-                />
-              </Field>
-            </div>
-
-            <Tabs
-              value={authMethod}
-              onValueChange={(value) => setAuthMethod(value as "password" | "key")}
-            >
-              <TabsList className="w-full">
-                <TabsTrigger value="password" className="flex-1">
-                  <LockIcon className="size-3.5" />
-                  {t("servers.authPassword")}
-                </TabsTrigger>
-                <TabsTrigger value="key" className="flex-1">
-                  <KeyRoundIcon className="size-3.5" />
-                  {t("servers.authKey")}
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="password" className="pt-4">
-                <Field>
-                  <FieldLabel htmlFor="password">{t("servers.authPassword")}</FieldLabel>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="off"
-                    required={authMethod === "password"}
-                  />
-                  <FieldDescription className="flex items-start gap-1.5">
-                    <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
-                    {t("servers.passwordNotStored", { product: "Skifity" })}
-                  </FieldDescription>
-                </Field>
-              </TabsContent>
-
-              <TabsContent value="key" className="space-y-4 pt-4">
-                <Field>
-                  <FieldLabel htmlFor="key">{t("servers.authKey")}</FieldLabel>
-                  <Textarea
-                    id="key"
-                    value={privateKey}
-                    onChange={(event) => setPrivateKey(event.target.value)}
-                    placeholder={t("servers.authKeyPlaceholder")}
-                    rows={6}
-                    className="font-mono text-xs"
-                    required={authMethod === "key"}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="passphrase">
-                    {t("servers.passphrase")}{" "}
-                    <span className="text-muted-foreground">({t("common.optional")})</span>
-                  </FieldLabel>
-                  <Input
-                    id="passphrase"
-                    type="password"
-                    value={passphrase}
-                    onChange={(event) => setPassphrase(event.target.value)}
-                    autoComplete="off"
-                  />
-                </Field>
-              </TabsContent>
-            </Tabs>
-
-            <Collapsible className="rounded-md border">
-              <CollapsibleTrigger className="group/advanced flex w-full items-center gap-2 p-3 text-sm font-medium">
-                <ChevronRightIcon className="size-4 transition-transform group-data-[state=open]/advanced:rotate-90" />
-                {t("common.showAdvanced")}
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <FieldGroup className="gap-4 border-t p-4">
+                <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
                   <Field>
-                    <FieldLabel htmlFor="location">{t("servers.location")}</FieldLabel>
+                    <FieldLabel htmlFor="host">{t("servers.host")}</FieldLabel>
                     <Input
-                      id="location"
-                      value={location}
-                      onChange={(event) => setLocation(event.target.value)}
-                      placeholder={t("servers.locationExample")}
-                    />
-                    <FieldDescription>{t("servers.locationHelp")}</FieldDescription>
-                  </Field>
-                  <Field orientation="horizontal">
-                    <FieldContent>
-                      <FieldTitle>{t("servers.controlPlane")}</FieldTitle>
-                      <FieldDescription>{t("servers.controlPlaneHelp")}</FieldDescription>
-                    </FieldContent>
-                    <Switch
-                      id="control-plane"
-                      checked={controlPlane}
-                      onCheckedChange={setControlPlane}
+                      id="host"
+                      value={host}
+                      onChange={(event) => setHost(event.target.value)}
+                      placeholder={t("servers.hostPlaceholder")}
+                      required
+                      autoFocus
+                      className="font-mono"
                     />
                   </Field>
-                </FieldGroup>
-              </CollapsibleContent>
-            </Collapsible>
+                  <Field>
+                    <FieldLabel htmlFor="port">{t("servers.sshPort")}</FieldLabel>
+                    <Input
+                      id="port"
+                      value={sshPort}
+                      onChange={(event) => setSSHPort(event.target.value)}
+                      inputMode="numeric"
+                    />
+                  </Field>
+                </div>
 
-            <Alert>
-              <InfoIcon />
-              <AlertTitle>{t("servers.requirements")}</AlertTitle>
-              <AlertDescription>{t("servers.requirementsList")}</AlertDescription>
-            </Alert>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="user">{t("servers.sshUser")}</FieldLabel>
+                    <Input
+                      id="user"
+                      value={sshUser}
+                      onChange={(event) => setSSHUser(event.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="name">
+                      {t("servers.serverName")}{" "}
+                      <span className="text-muted-foreground">({t("common.optional")})</span>
+                    </FieldLabel>
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder={host || t("servers.serverNameExample")}
+                    />
+                  </Field>
+                </div>
 
-            <Button type="submit" className="w-full" disabled={add.isPending}>
-              {add.isPending && <Spinner />}
-              {add.isPending ? t("common.loading") : t("servers.addServer")}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                <Tabs
+                  value={authMethod}
+                  onValueChange={(value) => setAuthMethod(value as "password" | "key")}
+                >
+                  <TabsList className="w-full">
+                    <TabsTrigger value="password" className="flex-1">
+                      <LockIcon className="size-3.5" />
+                      {t("servers.authPassword")}
+                    </TabsTrigger>
+                    <TabsTrigger value="key" className="flex-1">
+                      <KeyRoundIcon className="size-3.5" />
+                      {t("servers.authKey")}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="password" className="pt-4">
+                    <Field>
+                      <FieldLabel htmlFor="password">{t("servers.authPassword")}</FieldLabel>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        autoComplete="off"
+                        required={authMethod === "password"}
+                      />
+                      <FieldDescription className="flex items-start gap-1.5">
+                        <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+                        {t("servers.passwordNotStored", { product: "Skifity" })}
+                      </FieldDescription>
+                    </Field>
+                  </TabsContent>
+
+                  <TabsContent value="key" className="space-y-4 pt-4">
+                    <Field>
+                      <FieldLabel htmlFor="key">{t("servers.authKey")}</FieldLabel>
+                      <Textarea
+                        id="key"
+                        value={privateKey}
+                        onChange={(event) => setPrivateKey(event.target.value)}
+                        placeholder={t("servers.authKeyPlaceholder")}
+                        rows={6}
+                        className="font-mono text-xs"
+                        required={authMethod === "key"}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="passphrase">
+                        {t("servers.passphrase")}{" "}
+                        <span className="text-muted-foreground">({t("common.optional")})</span>
+                      </FieldLabel>
+                      <Input
+                        id="passphrase"
+                        type="password"
+                        value={passphrase}
+                        onChange={(event) => setPassphrase(event.target.value)}
+                        autoComplete="off"
+                      />
+                    </Field>
+                  </TabsContent>
+                </Tabs>
+
+                <Collapsible className="rounded-md border">
+                  <CollapsibleTrigger className="group/advanced flex w-full items-center gap-2 p-3 text-sm font-medium">
+                    <ChevronRightIcon className="size-4 transition-transform group-data-[state=open]/advanced:rotate-90" />
+                    {t("common.showAdvanced")}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <FieldGroup className="gap-4 border-t p-4">
+                      <Field>
+                        <FieldLabel htmlFor="location">{t("servers.location")}</FieldLabel>
+                        <Input
+                          id="location"
+                          value={location}
+                          onChange={(event) => setLocation(event.target.value)}
+                          placeholder={t("servers.locationExample")}
+                        />
+                        <FieldDescription>{t("servers.locationHelp")}</FieldDescription>
+                      </Field>
+                      <Field orientation="horizontal">
+                        <FieldContent>
+                          <FieldTitle>{t("servers.controlPlane")}</FieldTitle>
+                          <FieldDescription>{t("servers.controlPlaneHelp")}</FieldDescription>
+                        </FieldContent>
+                        <Switch
+                          id="control-plane"
+                          checked={controlPlane}
+                          onCheckedChange={setControlPlane}
+                        />
+                      </Field>
+                    </FieldGroup>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Alert>
+                  <InfoIcon />
+                  <AlertTitle>{t("servers.requirements")}</AlertTitle>
+                  <AlertDescription>{t("servers.requirementsList")}</AlertDescription>
+                </Alert>
+
+                <Button type="submit" className="w-full" disabled={add.isPending}>
+                  {add.isPending && <Spinner />}
+                  {add.isPending ? t("common.loading") : t("servers.addServer")}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </Page>
   )
 }

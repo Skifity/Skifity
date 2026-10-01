@@ -53,6 +53,17 @@ func GenerateKeyPair(comment string) (KeyPair, error) {
 	}, nil
 }
 
+// PublicKeyFingerprint reads an authorized_keys-format public key — what
+// ssh-keygen writes to a .pub file — and returns its SHA-256 fingerprint, in
+// the form a pinned host key is stored in, and its type.
+func PublicKeyFingerprint(line string) (fingerprint, keyType string, err error) {
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		return "", "", fmt.Errorf("read the public key: %w", err)
+	}
+	return Fingerprint(key), key.Type(), nil
+}
+
 // PublicKeyOf derives the authorized_keys line from a private key.
 func PublicKeyOf(privateKey, passphrase string) (string, error) {
 	var signer ssh.Signer

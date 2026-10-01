@@ -34,6 +34,8 @@ var viewerMayNotRead = map[string]string{
 		"administrator's request does",
 	"GET /api/teams/{teamID}/dns-providers/{providerID}/zones": "it signs in to the DNS provider with the team's " +
 		"credentials; the list of connections already carries the zones as last seen",
+	"GET /api/teams/{teamID}/cloud-providers/{providerID}/options": "read with the team's cloud token for the form " +
+		"that orders a server, which a viewer cannot",
 }
 
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team

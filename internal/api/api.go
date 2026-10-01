@@ -11,6 +11,7 @@ import (
 
 	"skifity/docs"
 	"skifity/internal/auth"
+	"skifity/internal/cloud"
 	"skifity/internal/config"
 	"skifity/internal/crypto"
 	"skifity/internal/dnsprov"
@@ -94,6 +95,9 @@ type Server struct {
 	// drainTester sends a drain's test line, through internal/netguard; a
 	// test points it at a server of its own.
 	drainTester *logdrain.Tester
+	// openCloud opens a team's connection to a cloud provider: the real APIs,
+	// through internal/netguard, unless a test gives a fake's.
+	openCloud cloud.Opener
 
 	// catalogueFetcher downloads teams' own template catalogues, through
 	// internal/netguard; a test points it at a server of its own.
@@ -147,6 +151,9 @@ type Options struct {
 	// Resolver is what a domain's DNS is checked through. Nil is the
 	// system's own resolver, which is what a panel wants.
 	Resolver Resolver
+	// Cloud opens a team's connection to a cloud provider. Nil is
+	// cloud.Open, the providers' real APIs.
+	Cloud cloud.Opener
 	// Metrics is shared with the orchestrators, so a deployment counted there
 	// appears on the same page as a request counted here. Nil is fine and
 	// means the panel keeps its own.
@@ -180,6 +187,7 @@ func New(opts Options) *Server {
 		frontend:    opts.Frontend,
 		setup:       newSetupState(opts.SetupToken),
 		metrics:     opts.Metrics,
+		openCloud:   opts.Cloud,
 
 		catalogueFetcher: &remote.Fetcher{},
 		catalogues:       &catalogueCache{},
@@ -195,6 +203,9 @@ func New(opts Options) *Server {
 	}
 	if s.resolver == nil {
 		s.resolver = systemResolver
+	}
+	if s.openCloud == nil {
+		s.openCloud = cloud.Open
 	}
 	s.describeMetrics()
 	if s.log == nil {
@@ -326,6 +337,14 @@ func (s *Server) routes() chi.Router {
 
 				team.Get("/servers", s.handleListServers)
 				team.Post("/servers", s.handleAddServer)
+				// Ordering a machine from one of the team's cloud connections,
+				// and joining it. See cloud_handlers.go.
+				team.Post("/servers/cloud", s.handleCreateCloudServer)
+				team.Get("/cloud-providers", s.handleListCloudProviders)
+				team.Post("/cloud-providers", s.handleAddCloudProvider)
+				team.Delete("/cloud-providers/{providerID}", s.handleDeleteCloudProvider)
+				team.Post("/cloud-providers/{providerID}/test", s.handleTestCloudProvider)
+				team.Get("/cloud-providers/{providerID}/options", s.handleCloudProviderOptions)
 				team.Get("/cluster", s.handleClusterSummary)
 
 				// Looking at a repository before creating anything from it.

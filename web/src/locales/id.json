@@ -412,7 +412,11 @@
       "dns_record.abandoned": "Record DNS diubah di luar panel, diserahkan kepada pengubahnya",
       "log_drain.created": "Saluran log ditambahkan",
       "log_drain.updated": "Saluran log diubah",
-      "log_drain.deleted": "Saluran log dihapus"
+      "log_drain.deleted": "Saluran log dihapus",
+      "cloud_provider.added": "Penyedia cloud dihubungkan",
+      "cloud_provider.removed": "Penyedia cloud dihapus",
+      "server.create_started": "Membuat server di penyedia cloud",
+      "server.delete_started": "Menghapus server beserta mesinnya"
     }
   },
   "projects": {
@@ -1083,7 +1087,11 @@
       "finish": "Menyelesaikan",
       "upload": "Menerima berkas",
       "backup": "Mencadangkan dulu",
-      "import": "Mengimpor"
+      "import": "Mengimpor",
+      "cloud-create": "Memesan mesin",
+      "cloud-boot": "Menunggu mesin menyala",
+      "cloud-ssh": "Memeriksa identitasnya",
+      "cloud-delete": "Menghapus mesin"
     },
     "status": {
       "pending": "Menunggu",
@@ -1156,11 +1164,21 @@
       "oldPasswordNotDiscarded": "Kata sandi lama masih berlaku; ganti kata sandi lagi untuk mencabutnya",
       "dumpReceived": "Diterima {{0}} MB {{1}}",
       "backedUpFirst": "Dicadangkan dulu, pada {{0}}: pulihkan cadangan itu untuk membatalkan impor ini",
-      "dumpLoaded": "Dump {{0}} dimuat ke {{1}}"
+      "dumpLoaded": "Dump {{0}} dimuat ke {{1}}",
+      "cloudAlreadyCreated": "{{0}} sudah dipesan di {{1}}",
+      "cloudCreated": "Memesan {{0}} di {{1}}: {{2}} di {{3}}",
+      "cloudRunning": "{{0}} berjalan di {{1}}",
+      "cloudSignedIn": "Masuk ke {{0}} dengan kunci host yang diberikan kepadanya",
+      "cloudHostKeyReplaced": "Masuk dengan kunci host yang diberikan panel ke mesin, lalu meminta mesin menggantinya dengan kuncinya sendiri",
+      "cloudNothingToDelete": "Tidak ada yang dipesan di {{0}} untuk {{1}}, jadi tidak ada mesin yang perlu dihapus",
+      "cloudAlreadyDeleted": "{{0}} sudah dihapus di {{1}}",
+      "cloudDeleted": "{{0}} dihapus di {{1}}",
+      "uninstallNotNeeded": "Dilewati: mesinnya akan dihapus"
     },
     "stepNote": {
       "fingerprint": "Sidik jari {{0}}",
-      "hostKey": "Host key {{0}}"
+      "hostKey": "Host key {{0}}",
+      "cloudFirewallsNotUpdated": "Firewall penyedia cloud tidak dapat diperbarui: {{0}}"
     },
     "diskUsed": "Disk terpakai",
     "usageDisk": "Disk",
@@ -1303,6 +1321,34 @@
       "docs": "Cara menyiapkan server",
       "idleTitle": "Kartu NVIDIA belum ditawarkan kepada aplikasi",
       "idleHelp": "Beberapa server memiliki kartu NVIDIA tanpa device plugin yang menawarkannya. Mengaktifkan GPU akan memasangnya; halaman setiap server menyebutkan apa lagi yang dibutuhkan."
+    },
+    "cloud": {
+      "tabExisting": "Server yang sudah Anda miliki",
+      "tabCreate": "Buat di Hetzner Cloud",
+      "intro": "Skifity memesan mesinnya, memasang firewall di depannya, dan menggabungkannya ke klaster. Mesin diberi kunci host SSH sebelum mesin itu ada, sehingga koneksi pertama pun diperiksa, bukan dipercaya begitu saja.",
+      "connection": "Koneksi",
+      "noConnection": "Hubungkan proyek Hetzner Cloud terlebih dahulu. Tokennya disimpan terenkripsi di panel dan tidak pernah ditampilkan lagi.",
+      "location": "Lokasi",
+      "arch": "Prosesor",
+      "archAmd64": "x86 (Intel, AMD)",
+      "archArm64": "Arm (Ampere)",
+      "serverType": "Jenis server",
+      "typeSpec": "{{cores}} vCPU · memori {{memory}} GB · disk {{disk}} GB",
+      "perMonth": "{{price}} per bulan",
+      "dedicated": "vCPU khusus",
+      "noTypes": "Tidak ada yang bisa dipesan dengan prosesor ini di lokasi ini. Pilih lokasi atau prosesor lain.",
+      "image": "Sistem operasi",
+      "name": "Nama",
+      "nameHelp": "Nama host-nya, sekaligus namanya di Hetzner dan di klaster: huruf kecil, angka, dan tanda hubung.",
+      "sshCluster": "SSH hanya dari server klaster",
+      "sshClusterHelp": "Jika tidak, port 22 terbuka untuk siapa saja dengan kata sandi dimatikan. Batasi jika panel berjalan di dalam klaster, karena dari sanalah koneksinya berasal.",
+      "firewall": "Firewall Hetzner mengizinkan HTTP dan HTTPS dari mana saja, SSH, dan port milik klaster hanya dari server klaster.",
+      "cost": "Ini memesan server yang ditagih {{provider}} sebesar {{price}} per bulan sampai dihapus.",
+      "create": "Buat dan gabungkan",
+      "createdAt": "Dibuat di {{provider}}",
+      "deleteMachine": "Hapus juga mesinnya di {{provider}}",
+      "deleteMachineConsequence": "Mesin dihapus di {{provider}} beserta seluruh isi disknya. Ini tidak bisa dibatalkan.",
+      "keepsRunning": "Mesin tetap berjalan di {{provider}} dan tetap ditagih sampai Anda menghapusnya di sana."
     }
   },
   "databases": {
@@ -1845,7 +1891,8 @@
     "certificates": "Sertifikat",
     "secretManagers": "Pengelola rahasia",
     "dnsProviders": "Penyedia DNS",
-    "logDrains": "Saluran log"
+    "logDrains": "Saluran log",
+    "cloudProviders": "Penyedia cloud"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -3730,6 +3777,108 @@
         "cause": "{{0}}",
         "impact": "Saluran tetap tersimpan. Kolektor di setiap server mempertahankan konfigurasi sebelumnya, atau tidak berjalan jika belum pernah dimulai.",
         "fix": "Periksa bahwa klaster dapat dijangkau di halaman Server. Panel mencoba lagi setiap lima menit, dan setiap kali saluran disimpan."
+      },
+      "cloud_token_invalid": {
+        "title": "Penyedia cloud tidak menerima token itu",
+        "cause": "{{0}} menjawab bahwa token tidak valid atau tidak dikenal.",
+        "impact": "Tidak ada yang disimpan atau dibuat.",
+        "fix": "Buat token API dengan izin Read & Write di konsol penyedia — untuk Hetzner Cloud, buka halaman Security proyek, lalu API tokens — dan gunakan token itu."
+      },
+      "cloud_token_read_only": {
+        "title": "Token itu hanya bisa membaca",
+        "cause": "{{0}} menerima token ini hanya untuk membaca, padahal membuat server adalah operasi tulis.",
+        "impact": "Tidak ada yang disimpan atau dibuat.",
+        "fix": "Buat token dengan izin Read & Write di proyek tempat server akan dibuat, lalu gunakan token itu."
+      },
+      "cloud_rate_limited": {
+        "title": "Penyedia cloud meminta panel memperlambat permintaan",
+        "cause": "{{0}} membatasi jumlah permintaan per jam untuk setiap proyek, dan proyek ini sudah menghabiskannya.",
+        "impact": "Permintaan tidak dikirim.",
+        "fix": "Tunggu beberapa menit lalu coba lagi. Alat lain yang memakai token proyek yang sama ikut menghabiskan batas yang sama."
+      },
+      "cloud_unreachable": {
+        "title": "Penyedia cloud tidak dapat dihubungi",
+        "cause": "Panel tidak dapat menghubungi API {{0}}: {{1}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Pastikan server panel memiliki akses HTTPS keluar, lalu coba lagi."
+      },
+      "cloud_request_failed": {
+        "title": "Penyedia cloud menolak permintaan",
+        "cause": "{{0}} menjawab {{1}}: {{2}}",
+        "impact": "Permintaan ini tidak mengubah apa pun.",
+        "fix": "Pesan dari penyedia menjelaskan apa yang ditolaknya. Perbaiki hal itu lalu coba lagi."
+      },
+      "cloud_limit_reached": {
+        "title": "Akun cloud telah mencapai batas",
+        "cause": "{{0}} menolak: {{1}}",
+        "impact": "Tidak ada server yang dibuat.",
+        "fix": "Minta penyedia menaikkan batasnya — Hetzner Cloud menerima permintaan di bagian Limits proyek — atau hapus server yang tidak diperlukan lagi."
+      },
+      "cloud_unavailable": {
+        "title": "Jenis server itu sedang tidak tersedia di sana",
+        "cause": "{{0}} menjawab: {{1}}",
+        "impact": "Tidak ada server yang dibuat.",
+        "fix": "Pilih lokasi atau jenis server lain, lalu coba lagi."
+      },
+      "cloud_provider_in_use": {
+        "title": "Ada server yang dibuat dengan koneksi ini",
+        "cause": "{{0}} server di panel dibuat dengan koneksi ini, dan menghapus mesinnya memerlukan koneksi ini.",
+        "impact": "Koneksi tidak dihapus.",
+        "fix": "Hapus server-server itu terlebih dahulu, dengan atau tanpa menghapus mesinnya. Untuk memakai token baru, tambahkan koneksi kedua."
+      },
+      "cloud_name_taken": {
+        "title": "Sudah ada server dengan nama itu",
+        "cause": "{{0}} sudah menjadi nama server atau node di klaster ini. Node diberi nama sesuai mesinnya, dan dua node tidak boleh bernama sama.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Pilih nama lain."
+      },
+      "cloud_machine_gone": {
+        "title": "Mesin sudah tidak ada di penyedia cloud",
+        "cause": "{{0}} tidak memiliki mesin dengan id {{1}}, yaitu mesin yang dibuat panel untuk {{2}}.",
+        "impact": "Server tidak dapat disiapkan. Panel tidak memesan mesin kedua dengan sendirinya.",
+        "fix": "Hapus server ini di panel, lalu buat lagi."
+      },
+      "cloud_machine_not_ours": {
+        "title": "Mesin itu tidak dibuat oleh panel ini",
+        "cause": "Mesin {{0}} di {{1}} tidak memiliki label yang dipasang panel pada mesin yang dibuatnya untuk {{2}}.",
+        "impact": "Tidak ada yang dihapus. Server sudah keluar dari klaster; mesinnya masih berjalan dan masih ditagih.",
+        "fix": "Periksa mesin itu di konsol penyedia, dan hapus di sana jika memang harus dihapus."
+      },
+      "cloud_not_created": {
+        "title": "Skifity tidak membuat mesin server ini",
+        "cause": "{{0}} ditambahkan dengan alamat dan akses SSH, bukan dibuat oleh panel di penyedia cloud.",
+        "impact": "Tidak ada yang dihapus.",
+        "fix": "Hapus server tanpa menghapus mesinnya, lalu hapus sendiri mesinnya di penyedia Anda jika sudah tidak diperlukan."
+      },
+      "cloud_boot_timeout": {
+        "title": "Mesin baru tidak menyala",
+        "cause": "{{0}} tidak melaporkan {{1}} berjalan dengan alamat dalam waktu {{2}}.",
+        "impact": "Mesin sudah ada di penyedia dan ditagih, tetapi belum bergabung ke klaster.",
+        "fix": "Tekan Coba lagi untuk terus menunggu. Jika tetap tidak menyala, periksa di konsol penyedia, lalu hapus server di sini beserta mesinnya."
+      },
+      "cloud_ssh_timeout": {
+        "title": "Mesin baru tidak menjawab lewat SSH",
+        "cause": "{{0}} sudah berjalan, tetapi tidak menerima kunci panel di port 22 dalam waktu {{1}}: {{2}}",
+        "impact": "Mesin sudah ada dan ditagih, tetapi belum ada yang dipasang di dalamnya.",
+        "fix": "Tekan Coba lagi. Jika SSH hanya terbuka untuk server klaster, panel harus berjalan di dalam klaster untuk menjangkaunya; jika tidak, hapus server beserta mesinnya dan buat lagi dengan SSH terbuka."
+      },
+      "cloud_host_key_mismatch": {
+        "title": "Mesin baru tidak menunjukkan kunci host yang diberikan panel",
+        "cause": "Panel membuat kunci host SSH untuk {{0}} dan memberikannya ke mesin saat dibuat, tetapi mesin justru menunjukkan {{1}}.",
+        "impact": "Panel menolak koneksi sebelum masuk dan tidak mengirim kredensial apa pun. Tidak ada yang dipasang.",
+        "fix": "Mungkin ada pihak lain yang menjawab di alamat ini, atau image mengabaikan kunci itu. Hapus server beserta mesinnya lalu buat lagi; jika terjadi lagi, hentikan dan cari tahu apa yang menjawab."
+      },
+      "cloud_host_key_not_replaced": {
+        "title": "Kunci host mesin tidak dapat diganti",
+        "cause": "Penggantian kunci host SSH di {{0}} gagal: {{1}}",
+        "impact": "Mesin masih menjawab dengan kunci yang diberikan panel saat dibuat, yang juga disimpan penyedia. Tidak ada hal lain yang dipasang.",
+        "fix": "Tekan Coba lagi; langkah ini aman diulang."
+      },
+      "cloud_create_failed": {
+        "title": "Server baru tidak bergabung ke klaster",
+        "cause": "Pembuatan {{0}} berhenti: {{1}}",
+        "impact": "Mesin mungkin sudah ada di penyedia dan ditagih, tanpa berada di klaster.",
+        "fix": "Buka server di panel lalu tekan Coba lagi, atau hapus server di sana beserta mesinnya."
       }
     }
   },
@@ -4741,5 +4890,24 @@
         "portHelp": "6514 adalah port umum syslog melalui TLS."
       }
     }
+  },
+  "cloud": {
+    "title": "Penyedia cloud",
+    "help": "Proyek di penyedia cloud tempat panel dapat membuat server. Untuk saat ini Hetzner Cloud.",
+    "empty": "Belum ada. Hubungkan proyek Hetzner Cloud untuk membuat server dari panel.",
+    "add": "Hubungkan Hetzner Cloud",
+    "name": "Nama",
+    "namePlaceholder": "Hetzner Cloud",
+    "token": "Token API",
+    "tokenHelp": "Di Hetzner Console, buka proyeknya, lalu Security, lalu API tokens, dan buat token dengan izin Read & Write. Panel memeriksanya sebelum menyimpan, menyimpannya terenkripsi, dan tidak pernah menampilkannya lagi.",
+    "save": "Periksa dan simpan",
+    "saved": "{{name}} terhubung, dan tokennya dapat membuat server.",
+    "test": "Uji",
+    "tested": "{{name}} masih menerima tokennya.",
+    "remove": "Hapus {{name}}",
+    "removeConfirm": "Token dihapus dari panel. Cabut juga token itu di konsol penyedia.",
+    "tokenHint": "token …{{hint}}",
+    "serverCount": "Server yang dibuat dengannya: {{servers}}",
+    "checked": "diperiksa {{when}}"
   }
 }

@@ -44,6 +44,7 @@ export function ServerDetailPage() {
   const canChangeServers = user?.is_admin === true
   const confirm = useConfirm()
   const [wipe, setWipe] = useState(true)
+  const [deleteMachine, setDeleteMachine] = useState(true)
   const [name, setName] = useState<string | null>(null)
   const [operationId, setOperationId] = useState<string | null>(null)
 
@@ -90,7 +91,14 @@ export function ServerDetailPage() {
   })
 
   const remove = useMutation({
-    mutationFn: () => api.delete<Operation>(`/api/servers/${serverId}?wipe=${wipe}`),
+    // A machine the panel created can go with it; the name typed into the
+    // dialog is sent as the confirmation the API asks for.
+    mutationFn: (machine: { name: string } | null) =>
+      api.delete<Operation>(
+        machine
+          ? `/api/servers/${serverId}?delete_machine=true&confirm=${encodeURIComponent(machine.name)}`
+          : `/api/servers/${serverId}?wipe=${wipe}`,
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] })
       navigate("/servers")
@@ -102,6 +110,10 @@ export function ServerDetailPage() {
   if (server.isLoading || !server.data) return <Skeleton className="h-96" />
 
   const current = server.data
+  // Only a server the panel created at a provider has a machine it may delete.
+  const cloud = current.cloud
+  const cloudTitle = cloud ? cloudProviderTitle(cloud.provider_kind) : ""
+  const deletingMachine = Boolean(cloud) && deleteMachine
 
   return (
     <Page>
@@ -232,6 +244,13 @@ export function ServerDetailPage() {
             value={current.last_seen_at ? formatRelative(current.last_seen_at) : t("common.never")}
           />
           <Fact label={t("common.created")} value={formatDateTime(current.created_at)} />
+          {cloud && (
+            <Fact
+              label={t("servers.cloud.createdAt", { provider: cloudTitle })}
+              value={`${cloud.server_type} · ${cloud.location} · ${cloud.image}`}
+              mono
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -310,10 +329,26 @@ export function ServerDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{t("servers.removeServerWarning")}</p>
-            <label className="flex items-center gap-2.5 text-sm">
-              <Checkbox checked={wipe} onCheckedChange={(checked) => setWipe(checked === true)} />
-              {t("servers.wipeServer")}
-            </label>
+            {cloud && (
+              <label className="flex items-center gap-2.5 text-sm">
+                <Checkbox
+                  checked={deleteMachine}
+                  onCheckedChange={(checked) => setDeleteMachine(checked === true)}
+                />
+                {t("servers.cloud.deleteMachine", { provider: cloudTitle })}
+              </label>
+            )}
+            {cloud && !deleteMachine && (
+              <p className="text-sm text-muted-foreground">
+                {t("servers.cloud.keepsRunning", { provider: cloudTitle })}
+              </p>
+            )}
+            {!deletingMachine && (
+              <label className="flex items-center gap-2.5 text-sm">
+                <Checkbox checked={wipe} onCheckedChange={(checked) => setWipe(checked === true)} />
+                {t("servers.wipeServer")}
+              </label>
+            )}
             {remove.error != null && <ErrorDisplay error={remove.error} compact />}
             <Button
               variant="destructive"
@@ -322,12 +357,16 @@ export function ServerDetailPage() {
                 void confirm({
                   title: t("servers.removeServer"),
                   description: t("servers.removeServerWarning"),
-                  consequence: wipe ? t("servers.wipeServer") : undefined,
+                  consequence: deletingMachine
+                    ? t("servers.cloud.deleteMachineConsequence", { provider: cloudTitle })
+                    : wipe
+                      ? t("servers.wipeServer")
+                      : undefined,
                   confirmLabel: t("servers.removeServer"),
                   destructive: true,
                   typeToConfirm: current.name,
                 }).then((yes) => {
-                  if (yes) remove.mutate()
+                  if (yes) remove.mutate(deletingMachine ? { name: current.name } : null)
                 })
               }}
             >
@@ -397,4 +436,9 @@ function Usage({
       <Progress value={percent} />
     </div>
   )
+}
+
+/** A provider's name as people write it. A brand, so not translated. */
+function cloudProviderTitle(kind: string) {
+  return kind === "hetzner" ? "Hetzner Cloud" : kind
 }

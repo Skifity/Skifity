@@ -261,8 +261,12 @@ type Provisioner interface {
 	AddServer(ctx context.Context, req AddServerRequest) (store.Operation, error)
 	// RetryServer resumes a failed provision from the step that failed.
 	RetryServer(ctx context.Context, serverID string) (store.Operation, error)
-	// RemoveServer cordons, drains and removes a node, then cleans the machine.
-	RemoveServer(ctx context.Context, serverID string, wipe bool) (store.Operation, error)
+	// CreateCloudServer orders a machine from a cloud provider and joins it,
+	// as one operation.
+	CreateCloudServer(ctx context.Context, req CreateCloudServerRequest) (store.Operation, error)
+	// RemoveServer cordons, drains and removes a node, then cleans the machine
+	// or, for one the panel created, deletes it at the provider.
+	RemoveServer(ctx context.Context, serverID string, opts RemoveServerOptions) (store.Operation, error)
 	// PromoteServer makes a worker a control plane node.
 	PromoteServer(ctx context.Context, serverID string) (store.Operation, error)
 	// Cancel stops a running operation.
@@ -317,6 +321,38 @@ type AddServerRequest struct {
 	Size     string `json:"size,omitempty"`
 	// ControlPlane joins the node as a control plane member for HA.
 	ControlPlane bool `json:"control_plane,omitempty"`
+}
+
+// CreateCloudServerRequest orders a server from one of the team's cloud
+// connections. Everything after the order is the add-server join.
+type CreateCloudServerRequest struct {
+	TeamID    string `json:"-"`
+	CreatedBy string `json:"-"`
+	// ProviderID is the team's connection to order with.
+	ProviderID string `json:"provider_id"`
+	// Name is the machine's name at the provider, its hostname, and the
+	// node's name in the cluster.
+	Name       string `json:"name"`
+	Location   string `json:"location"`
+	ServerType string `json:"server_type"`
+	// Image is the operating system; empty is Ubuntu 24.04.
+	Image string `json:"image,omitempty"`
+	// SSHAccess is anywhere, the default, or cluster.
+	SSHAccess    string `json:"ssh_access,omitempty"`
+	ControlPlane bool   `json:"control_plane,omitempty"`
+	// Arch is the server type's, amd64 or arm64, which the API reads from
+	// the provider's catalogue.
+	Arch string `json:"-"`
+}
+
+// RemoveServerOptions say what happens to the machine once it has left the
+// cluster.
+type RemoveServerOptions struct {
+	// Wipe uninstalls k3s from a machine that stays.
+	Wipe bool
+	// DeleteMachine deletes the machine at the provider it was created at.
+	// Only a server the panel created can have it; see handleRemoveServer.
+	DeleteMachine bool
 }
 
 // DeployRequest starts a deployment.

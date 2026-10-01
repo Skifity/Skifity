@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"skifity/internal/api"
+	"skifity/internal/cloud"
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
@@ -64,6 +66,9 @@ type Options struct {
 	// token. See clusterToken.
 	ClusterTokenPath string
 	Logger           *slog.Logger
+	// Cloud opens a team's connection to a cloud provider. Nil is cloud.Open,
+	// the providers' real APIs; a test passes a fake's.
+	Cloud cloud.Opener
 }
 
 // Provisioner implements api.Provisioner.
@@ -82,6 +87,12 @@ type Provisioner struct {
 	// cluster runs without standing one up.
 	clusterVersion func(context.Context) (string, error)
 
+	// cloud opens a provider; see Options.Cloud.
+	cloud cloud.Opener
+	// cloudTiming is how a created machine is waited for. Fields rather than
+	// constants, so a test waits milliseconds instead of minutes.
+	cloudTiming cloudTiming
+
 	// running tracks in-flight operations so they can be cancelled.
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -93,7 +104,12 @@ func New(opts Options) *Provisioner {
 		db: opts.DB, keyring: opts.Keyring, hub: opts.Hub, cluster: opts.Cluster,
 		notifier: opts.Notifier, plugins: opts.Plugins,
 		clusterTokenPath: opts.ClusterTokenPath, log: opts.Logger,
-		running: map[string]context.CancelFunc{},
+		running:     map[string]context.CancelFunc{},
+		cloud:       opts.Cloud,
+		cloudTiming: defaultCloudTiming,
+	}
+	if p.cloud == nil {
+		p.cloud = cloud.Open
 	}
 	if opts.Cluster != nil {
 		p.clusterVersion = func(ctx context.Context) (string, error) {
@@ -205,10 +221,17 @@ func (p *Provisioner) RetryServer(ctx context.Context, serverID string) (store.O
 	}
 
 	// Retrying uses the stored key: the password was deliberately never kept.
-	req := api.AddServerRequest{
-		TeamID: server.TeamID, Name: server.Name, Host: server.Host,
-		SSHPort: server.SSHPort, SSHUser: server.SSHUser,
-		ControlPlane: server.Role == "control-plane",
+	req := requestFromServer(server)
+	if op.Kind == opCreateCloudServer {
+		// A server the panel ordered picks up where it stopped, ordering
+		// included: every cloud step checks what already exists first.
+		if created, err := p.db.GetCloudServer(ctx, server.ID); err == nil {
+			req.Location, req.Size = created.Location, created.ServerType
+		}
+		p.start(op, func(runCtx context.Context) {
+			p.runCreateCloudServer(runCtx, op, server.ID, req)
+		})
+		return p.db.GetOperation(ctx, op.ID)
 	}
 	p.start(op, func(runCtx context.Context) {
 		p.runAddServer(runCtx, op, server.ID, req)
@@ -216,9 +239,23 @@ func (p *Provisioner) RetryServer(ctx context.Context, serverID string) (store.O
 	return p.db.GetOperation(ctx, op.ID)
 }
 
+// joinStep is one step of adding a server.
+type joinStep struct {
+	key string
+	run func(context.Context, *addState) error
+}
+
 // runAddServer is the state machine. Every step is idempotent, so a retry can
 // start from any point without undoing what came before.
 func (p *Provisioner) runAddServer(ctx context.Context, op store.Operation, serverID string, req api.AddServerRequest) {
+	p.runJoin(ctx, op, serverID, req, nil)
+}
+
+// runJoin runs the steps that join a machine to the cluster, after the ones
+// in before: nothing for a machine somebody already has, ordering it for one
+// the panel creates. It is one list so that a server the panel ordered is
+// joined by exactly the same steps as any other.
+func (p *Provisioner) runJoin(ctx context.Context, op store.Operation, serverID string, req api.AddServerRequest, before []joinStep) {
 	defer p.finish(op.ID)
 
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpRunning, "", "")
@@ -233,10 +270,7 @@ func (p *Provisioner) runAddServer(ctx context.Context, op store.Operation, serv
 
 	state := &addState{operationID: op.ID, serverID: serverID, request: req}
 
-	steps := []struct {
-		key string
-		run func(context.Context, *addState) error
-	}{
+	steps := slices.Concat(before, []joinStep{
 		{StepConnect, p.stepConnect},
 		{StepPreflight, p.stepPreflight},
 		{StepInstallKey, p.stepInstallKey},
@@ -244,7 +278,7 @@ func (p *Provisioner) runAddServer(ctx context.Context, op store.Operation, serv
 		{StepConnectivity, p.stepConnectivity},
 		{StepInstallK3s, p.stepInstallK3s},
 		{StepWaitReady, p.stepWaitReady},
-	}
+	})
 
 	for _, step := range steps {
 		if done[step.key] {
@@ -273,6 +307,9 @@ func (p *Provisioner) runAddServer(ctx context.Context, op store.Operation, serv
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
 	_ = p.db.SetServerStatus(ctx, serverID, store.ServerReady, "")
 	p.publishOperation(ctx, op.ID)
+	// The steps may have learned the address: a machine the panel ordered has
+	// none until the provider gives it one.
+	req = state.request
 	p.log.Info("server added", "server", serverID, "host", req.Host)
 
 	if p.notifier != nil {
@@ -533,6 +570,23 @@ func (p *Provisioner) stepFirewall(ctx context.Context, state *addState) error {
 		state.lastNote = store.StepNote{Message: "Opened the cluster ports to the other servers only, using ufw", Key: "firewallUfw"}
 	} else {
 		state.lastNote = store.StepNote{Message: "Opened the cluster ports to the other servers only, using iptables", Key: "firewallIptables"}
+	}
+
+	// The other half: the servers the panel created at a provider sit behind
+	// the provider's firewall, which lets in the cluster's own addresses and
+	// nobody else — and this server's address is new. Without this, a server
+	// added after one the panel created cannot reach it on 6443.
+	//
+	// Not a reason to stop: a provider token revoked since is somebody else's
+	// problem than this server's, and the network check that follows finds
+	// the case where it matters.
+	if err := p.refreshCloudFirewalls(ctx, ""); err != nil {
+		p.log.Warn("could not update the cloud firewalls for a new server", "server", state.serverID, "error", err)
+		state.lastNote.Details = append(state.lastNote.Details, store.StepDetail{
+			Text: "The cloud providers' firewalls could not be updated: " + errdoc.From(err).Title,
+			Key:  "cloudFirewallsNotUpdated",
+			Args: []string{errdoc.From(err).Title},
+		})
 	}
 	return nil
 }

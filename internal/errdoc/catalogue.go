@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"skifity/internal/version"
 )
@@ -915,6 +916,214 @@ func ClusterTokenMissing(path string) *Problem {
 		WithDocs("/docs/adding-servers#when-a-step-fails").
 		WithStatus(http.StatusPreconditionFailed).
 		With("path", path)
+}
+
+// --- servers created at a cloud provider ---
+
+// cloudDocs is where every cloud problem points: the section on creating a
+// server at a provider, which covers the token, the host key and deleting.
+const cloudDocs = "/docs/adding-servers#creating-a-server-at-hetzner-cloud"
+
+// CloudTokenInvalid is a provider refusing a token outright.
+func CloudTokenInvalid(provider string) *Problem {
+	return New("cloud.token_invalid", "The cloud provider does not accept that token").
+		WithCause("%s answered that the token is invalid or unknown.", provider).
+		WithImpact("Nothing was saved or created.").
+		WithFix("Create an API token with Read & Write permission in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens — and use that one.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// CloudTokenReadOnly is a token that can list what a provider sells and
+// cannot order any of it.
+func CloudTokenReadOnly(provider string) *Problem {
+	return New("cloud.token_read_only", "That token can only read").
+		WithCause("%s accepts the token for reading only, and creating a server is a write.", provider).
+		WithImpact("Nothing was saved or created.").
+		WithFix("Create a token with Read & Write permission in the project the servers should go in, and use that one instead.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// CloudRateLimited is a provider asking the panel to slow down.
+func CloudRateLimited(provider string) *Problem {
+	return New("cloud.rate_limited", "The cloud provider asked the panel to slow down").
+		WithCause("%s allows a limited number of requests an hour for each project, and this one has used them.", provider).
+		WithImpact("The request was not made.").
+		WithFix("Wait a few minutes and try again. Other tools that use the same project's token count against the same limit.").
+		WithStatus(http.StatusTooManyRequests).
+		Retry().
+		With("provider", provider)
+}
+
+// CloudUnreachable is a provider's API that did not answer.
+func CloudUnreachable(provider string, err error) *Problem {
+	return New("cloud.unreachable", "The cloud provider could not be reached").
+		WithCause("The panel could not reach %s's API: %s", provider, err.Error()).
+		WithImpact("Nothing was changed.").
+		WithFix("Check that the panel's server has outbound HTTPS access, then try again.").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err).
+		With("provider", provider)
+}
+
+// CloudRequestFailed is a provider refusing a request, in its own words.
+func CloudRequestFailed(provider, code, message string, theirFault bool) *Problem {
+	status := http.StatusBadRequest
+	if theirFault {
+		status = http.StatusBadGateway
+	}
+	p := New("cloud.request_failed", "The cloud provider refused the request").
+		WithCause("%s answered %s: %s", provider, code, message).
+		WithImpact("Nothing was changed by this request.").
+		WithFix("The provider's own message says what it objected to. Correct that and try again.").
+		WithStatus(status).
+		With("provider", provider).
+		With("provider_code", code)
+	// Their fault is worth trying again; a refusal of what was sent is not.
+	p.Retryable = theirFault
+	return p
+}
+
+// CloudLimitReached is a provider account at one of its limits.
+func CloudLimitReached(provider, message string) *Problem {
+	return New("cloud.limit_reached", "The cloud account has reached a limit").
+		WithCause("%s refused: %s", provider, message).
+		WithImpact("No server was created.").
+		WithFix("Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits — or delete a server that is no longer needed.").
+		WithStatus(http.StatusConflict).
+		With("provider", provider)
+}
+
+// CloudUnavailable is a server type a location cannot supply right now.
+func CloudUnavailable(provider, message string) *Problem {
+	return New("cloud.unavailable", "That server type is not available there right now").
+		WithCause("%s answered: %s", provider, message).
+		WithImpact("No server was created.").
+		WithFix("Pick another location or another server type, and try again.").
+		WithStatus(http.StatusConflict).
+		With("provider", provider)
+}
+
+// CloudProviderInUse is a connection with servers the panel created through it.
+func CloudProviderInUse(count int) *Problem {
+	return New("cloud.provider_in_use", "Servers were created with this connection").
+		WithCause("%d server(s) in the panel were created with this connection, and deleting one of their machines needs it.", count).
+		WithImpact("The connection was not removed.").
+		WithFix("Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusConflict)
+}
+
+// CloudNameTaken is a name the cluster already has a node or a server under.
+func CloudNameTaken(name string) *Problem {
+	return New("cloud.name_taken", "There is already a server with that name").
+		WithCause("%s is already the name of a server or a node in this cluster. A node is named after its machine, and two nodes cannot share a name.", name).
+		WithImpact("Nothing was created.").
+		WithFix("Choose another name.").
+		WithStatus(http.StatusConflict).
+		With("name", name)
+}
+
+// CloudMachineGone is a machine the panel created that the provider no
+// longer has.
+func CloudMachineGone(provider, id, server string) *Problem {
+	return New("cloud.machine_gone", "The machine is no longer at the cloud provider").
+		WithCause("%s has no machine with the id %s, which is the one the panel created for %s.", provider, id, server).
+		WithImpact("The server cannot be set up. The panel does not order a second machine on its own.").
+		WithFix("Remove this server in the panel, then create it again.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusConflict).
+		With("machine_id", id)
+}
+
+// CloudMachineNotOurs is a machine that does not carry the label the panel
+// put on the one it created, which is the check before anything is deleted.
+func CloudMachineNotOurs(provider, id, server string) *Problem {
+	return New("cloud.machine_not_ours", "That machine was not created by this panel").
+		WithCause("The machine %s at %s does not carry the label the panel put on the one it created for %s.", id, provider, server).
+		WithImpact("Nothing was deleted. The server left the cluster; the machine is still running, and still billed.").
+		WithFix("Look at the machine in the provider's console, and delete it there if it should go.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusConflict).
+		With("machine_id", id)
+}
+
+// CloudNotCreated is a request to delete the machine of a server the panel
+// did not create.
+func CloudNotCreated(server string) *Problem {
+	return New("cloud.not_created", "Skifity did not create this server's machine").
+		WithCause("%s was added with an address and SSH access, not created at a cloud provider by the panel.", server).
+		WithImpact("Nothing was removed.").
+		WithFix("Remove it without deleting the machine, then delete the machine yourself at your provider if it is no longer needed.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusConflict).
+		With("server", server)
+}
+
+// CloudBootTimeout is a machine that did not come up.
+func CloudBootTimeout(provider, server string, waited time.Duration) *Problem {
+	return New("cloud.boot_timeout", "The new machine did not start").
+		WithCause("%s did not report %s as running with an address within %s.", provider, server, waited).
+		WithImpact("The machine exists at the provider and is billed, but it has not joined the cluster.").
+		WithFix("Press Retry to keep waiting. If it still does not start, look at it in the provider's console, and remove the server here with its machine.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusGatewayTimeout).
+		Retry()
+}
+
+// CloudSSHTimeout is a running machine that never let the panel in.
+func CloudSSHTimeout(server string, waited time.Duration, err error) *Problem {
+	reason := "it did not answer"
+	if err != nil {
+		reason = err.Error()
+	}
+	return New("cloud.ssh_timeout", "The new machine did not answer over SSH").
+		WithCause("%s is running, but did not accept the panel's key on port 22 within %s: %s", server, waited, reason).
+		WithImpact("The machine exists and is billed, but nothing was installed on it.").
+		WithFix("Press Retry. When SSH is open to the cluster's servers only, the panel has to run inside the cluster to reach it; otherwise remove the server with its machine and create it again with SSH open.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusGatewayTimeout).
+		Retry()
+}
+
+// CloudHostKeyMismatch is a new machine presenting a host key other than the
+// one the panel generated for it. No credentials were sent: the host key is
+// checked before the panel authenticates.
+func CloudHostKeyMismatch(server, expected, presented string) *Problem {
+	return New("cloud.host_key_mismatch", "The new machine did not present the host key the panel gave it").
+		WithCause("The panel generated %s's SSH host key and passed it to the machine when it was created, and the machine presented %s instead.", server, presented).
+		WithImpact("The panel refused the connection before signing in, and sent no credentials. Nothing was installed.").
+		WithFix("Something may be answering for this address, or the image ignored the key. Remove the server with its machine and create it again; if it happens again, stop and find out what is answering.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusConflict).
+		With("expected_fingerprint", expected).
+		With("presented_fingerprint", presented)
+}
+
+// CloudHostKeyNotReplaced is the step after the first connection failing:
+// the bootstrap host key could not be swapped for one the machine made.
+func CloudHostKeyNotReplaced(server, reason string) *Problem {
+	return New("cloud.host_key_not_replaced", "The machine's host key could not be replaced").
+		WithCause("Replacing the SSH host key on %s failed: %s", server, reason).
+		WithImpact("The machine still answers with the key the panel gave it at creation, which the provider also stores. Nothing else was installed.").
+		WithFix("Press Retry; this step is safe to repeat.").
+		WithDocs(cloudDocs).
+		WithStatus(http.StatusBadGateway).
+		Retry()
+}
+
+// CloudCreateFailed is the CLI following a created server to a failure.
+func CloudCreateFailed(server, reason string) *Problem {
+	return New("cloud.create_failed", "The new server did not join the cluster").
+		WithCause("Creating %s stopped: %s", server, reason).
+		WithImpact("The machine may exist at the provider, and be billed, without being in the cluster.").
+		WithFix("Open the server in the panel and press Retry, or remove it there and delete its machine too.").
+		WithDocs(cloudDocs).
+		Retry()
 }
 
 // --- builds and deploys ---

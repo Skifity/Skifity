@@ -420,7 +420,11 @@
       "dns_record.abandoned": "DNS record changed outside the panel, left to its editor",
       "log_drain.created": "Log drain added",
       "log_drain.updated": "Log drain changed",
-      "log_drain.deleted": "Log drain removed"
+      "log_drain.deleted": "Log drain removed",
+      "cloud_provider.added": "Cloud provider connected",
+      "cloud_provider.removed": "Cloud provider removed",
+      "server.create_started": "Creating a server at a cloud provider",
+      "server.delete_started": "Removing a server and deleting its machine"
     }
   },
   "projects": {
@@ -1093,7 +1097,11 @@
       "finish": "Finishing",
       "upload": "Receiving the file",
       "backup": "Backing up first",
-      "import": "Importing"
+      "import": "Importing",
+      "cloud-create": "Ordering the machine",
+      "cloud-boot": "Waiting for it to start",
+      "cloud-ssh": "Checking its identity",
+      "cloud-delete": "Deleting the machine"
     },
     "status": {
       "pending": "Waiting",
@@ -1167,11 +1175,21 @@
       "oldPasswordNotDiscarded": "The old password still works; change the password again to take it away",
       "dumpReceived": "Received {{0}} MB of {{1}}",
       "backedUpFirst": "Backed up first, on {{0}}: restore that backup to undo this import",
-      "dumpLoaded": "Loaded the {{0}} dump into {{1}}"
+      "dumpLoaded": "Loaded the {{0}} dump into {{1}}",
+      "cloudAlreadyCreated": "{{0}} was already ordered at {{1}}",
+      "cloudCreated": "Ordered {{0}} at {{1}}: {{2}} in {{3}}",
+      "cloudRunning": "{{0}} is running at {{1}}",
+      "cloudSignedIn": "Signed in to {{0}} with the host key it was given",
+      "cloudHostKeyReplaced": "Signed in with the host key the panel gave the machine, then had the machine replace it with its own",
+      "cloudNothingToDelete": "Nothing was ordered at {{0}} for {{1}}, so there was no machine to delete",
+      "cloudAlreadyDeleted": "{{0}} had already been deleted at {{1}}",
+      "cloudDeleted": "Deleted {{0}} at {{1}}",
+      "uninstallNotNeeded": "Skipped: the machine is being deleted"
     },
     "stepNote": {
       "fingerprint": "Fingerprint {{0}}",
-      "hostKey": "Host key {{0}}"
+      "hostKey": "Host key {{0}}",
+      "cloudFirewallsNotUpdated": "The cloud providers' firewalls could not be updated: {{0}}"
     },
     "diskUsed": "Disk in use",
     "usageDisk": "Disk",
@@ -1314,6 +1332,34 @@
       "docs": "How to set up a server",
       "idleTitle": "An NVIDIA card is not offered to apps yet",
       "idleHelp": "Some servers have an NVIDIA card and no device plugin to offer it. Enabling GPUs installs one; each server's page says what else it needs."
+    },
+    "cloud": {
+      "tabExisting": "A server you have",
+      "tabCreate": "Create at Hetzner Cloud",
+      "intro": "Skifity orders the machine, puts a firewall in front of it and joins it to the cluster. It gives the machine an SSH host key before the machine exists, so even the first connection is checked rather than trusted.",
+      "connection": "Connection",
+      "noConnection": "Connect a Hetzner Cloud project first. Its token stays in the panel, sealed, and is never shown again.",
+      "location": "Location",
+      "arch": "Processor",
+      "archAmd64": "x86 (Intel, AMD)",
+      "archArm64": "Arm (Ampere)",
+      "serverType": "Server type",
+      "typeSpec": "{{cores}} vCPU · {{memory}} GB memory · {{disk}} GB disk",
+      "perMonth": "{{price}} a month",
+      "dedicated": "dedicated vCPU",
+      "noTypes": "Nothing with this processor can be ordered in this location. Pick another location or processor.",
+      "image": "Operating system",
+      "name": "Name",
+      "nameHelp": "Its hostname, and its name at Hetzner and in the cluster: lower-case letters, digits and hyphens.",
+      "sshCluster": "SSH from the cluster's servers only",
+      "sshClusterHelp": "Otherwise port 22 is open to anywhere, with passwords off. Limit it when the panel runs inside the cluster, which is where its connections come from.",
+      "firewall": "A Hetzner firewall lets in HTTP and HTTPS from anywhere, SSH, and the cluster's own ports from the cluster's servers only.",
+      "cost": "This orders a server that {{provider}} bills at {{price}} a month until it is deleted.",
+      "create": "Create and join",
+      "createdAt": "Created at {{provider}}",
+      "deleteMachine": "Also delete the machine at {{provider}}",
+      "deleteMachineConsequence": "The machine is deleted at {{provider}}, with everything on its disk. This cannot be undone.",
+      "keepsRunning": "The machine keeps running at {{provider}}, and is still billed, until you delete it there."
     }
   },
   "databases": {
@@ -1864,7 +1910,8 @@
     "certificates": "Certificates",
     "secretManagers": "Secret managers",
     "dnsProviders": "DNS providers",
-    "logDrains": "Log drains"
+    "logDrains": "Log drains",
+    "cloudProviders": "Cloud providers"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -3749,6 +3796,108 @@
         "cause": "{{0}}",
         "impact": "The drains are saved. The collector on each server keeps the configuration it had, or does not run if it never started.",
         "fix": "Check that the cluster is reachable under Servers. The panel tries again every five minutes, and every time a drain is saved."
+      },
+      "cloud_token_invalid": {
+        "title": "The cloud provider does not accept that token",
+        "cause": "{{0}} answered that the token is invalid or unknown.",
+        "impact": "Nothing was saved or created.",
+        "fix": "Create an API token with Read & Write permission in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens — and use that one."
+      },
+      "cloud_token_read_only": {
+        "title": "That token can only read",
+        "cause": "{{0}} accepts the token for reading only, and creating a server is a write.",
+        "impact": "Nothing was saved or created.",
+        "fix": "Create a token with Read & Write permission in the project the servers should go in, and use that one instead."
+      },
+      "cloud_rate_limited": {
+        "title": "The cloud provider asked the panel to slow down",
+        "cause": "{{0}} allows a limited number of requests an hour for each project, and this one has used them.",
+        "impact": "The request was not made.",
+        "fix": "Wait a few minutes and try again. Other tools that use the same project's token count against the same limit."
+      },
+      "cloud_unreachable": {
+        "title": "The cloud provider could not be reached",
+        "cause": "The panel could not reach {{0}}'s API: {{1}}",
+        "impact": "Nothing was changed.",
+        "fix": "Check that the panel's server has outbound HTTPS access, then try again."
+      },
+      "cloud_request_failed": {
+        "title": "The cloud provider refused the request",
+        "cause": "{{0}} answered {{1}}: {{2}}",
+        "impact": "Nothing was changed by this request.",
+        "fix": "The provider's own message says what it objected to. Correct that and try again."
+      },
+      "cloud_limit_reached": {
+        "title": "The cloud account has reached a limit",
+        "cause": "{{0}} refused: {{1}}",
+        "impact": "No server was created.",
+        "fix": "Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits — or delete a server that is no longer needed."
+      },
+      "cloud_unavailable": {
+        "title": "That server type is not available there right now",
+        "cause": "{{0}} answered: {{1}}",
+        "impact": "No server was created.",
+        "fix": "Pick another location or another server type, and try again."
+      },
+      "cloud_provider_in_use": {
+        "title": "Servers were created with this connection",
+        "cause": "{{0}} server(s) in the panel were created with this connection, and deleting one of their machines needs it.",
+        "impact": "The connection was not removed.",
+        "fix": "Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection."
+      },
+      "cloud_name_taken": {
+        "title": "There is already a server with that name",
+        "cause": "{{0}} is already the name of a server or a node in this cluster. A node is named after its machine, and two nodes cannot share a name.",
+        "impact": "Nothing was created.",
+        "fix": "Choose another name."
+      },
+      "cloud_machine_gone": {
+        "title": "The machine is no longer at the cloud provider",
+        "cause": "{{0}} has no machine with the id {{1}}, which is the one the panel created for {{2}}.",
+        "impact": "The server cannot be set up. The panel does not order a second machine on its own.",
+        "fix": "Remove this server in the panel, then create it again."
+      },
+      "cloud_machine_not_ours": {
+        "title": "That machine was not created by this panel",
+        "cause": "The machine {{0}} at {{1}} does not carry the label the panel put on the one it created for {{2}}.",
+        "impact": "Nothing was deleted. The server left the cluster; the machine is still running, and still billed.",
+        "fix": "Look at the machine in the provider's console, and delete it there if it should go."
+      },
+      "cloud_not_created": {
+        "title": "Skifity did not create this server's machine",
+        "cause": "{{0}} was added with an address and SSH access, not created at a cloud provider by the panel.",
+        "impact": "Nothing was removed.",
+        "fix": "Remove it without deleting the machine, then delete the machine yourself at your provider if it is no longer needed."
+      },
+      "cloud_boot_timeout": {
+        "title": "The new machine did not start",
+        "cause": "{{0}} did not report {{1}} as running with an address within {{2}}.",
+        "impact": "The machine exists at the provider and is billed, but it has not joined the cluster.",
+        "fix": "Press Retry to keep waiting. If it still does not start, look at it in the provider's console, and remove the server here with its machine."
+      },
+      "cloud_ssh_timeout": {
+        "title": "The new machine did not answer over SSH",
+        "cause": "{{0}} is running, but did not accept the panel's key on port 22 within {{1}}: {{2}}",
+        "impact": "The machine exists and is billed, but nothing was installed on it.",
+        "fix": "Press Retry. When SSH is open to the cluster's servers only, the panel has to run inside the cluster to reach it; otherwise remove the server with its machine and create it again with SSH open."
+      },
+      "cloud_host_key_mismatch": {
+        "title": "The new machine did not present the host key the panel gave it",
+        "cause": "The panel generated {{0}}'s SSH host key and passed it to the machine when it was created, and the machine presented {{1}} instead.",
+        "impact": "The panel refused the connection before signing in, and sent no credentials. Nothing was installed.",
+        "fix": "Something may be answering for this address, or the image ignored the key. Remove the server with its machine and create it again; if it happens again, stop and find out what is answering."
+      },
+      "cloud_host_key_not_replaced": {
+        "title": "The machine's host key could not be replaced",
+        "cause": "Replacing the SSH host key on {{0}} failed: {{1}}",
+        "impact": "The machine still answers with the key the panel gave it at creation, which the provider also stores. Nothing else was installed.",
+        "fix": "Press Retry; this step is safe to repeat."
+      },
+      "cloud_create_failed": {
+        "title": "The new server did not join the cluster",
+        "cause": "Creating {{0}} stopped: {{1}}",
+        "impact": "The machine may exist at the provider, and be billed, without being in the cluster.",
+        "fix": "Open the server in the panel and press Retry, or remove it there and delete its machine too."
       }
     }
   },
@@ -4765,5 +4914,24 @@
         "portHelp": "6514 is syslog over TLS's usual port."
       }
     }
+  },
+  "cloud": {
+    "title": "Cloud providers",
+    "help": "Projects at a cloud provider that the panel can create servers in. Hetzner Cloud, for now.",
+    "empty": "None yet. Connect a Hetzner Cloud project to create servers from the panel.",
+    "add": "Connect Hetzner Cloud",
+    "name": "Name",
+    "namePlaceholder": "Hetzner Cloud",
+    "token": "API token",
+    "tokenHelp": "In the Hetzner Console, open the project, then Security, then API tokens, and generate one with Read & Write permission. The panel checks it before saving it, keeps it sealed, and never shows it again.",
+    "save": "Check and save",
+    "saved": "{{name}} is connected, and its token can create servers.",
+    "test": "Test",
+    "tested": "{{name}} still accepts its token.",
+    "remove": "Remove {{name}}",
+    "removeConfirm": "The token is deleted from the panel. Revoke it in the provider's console too.",
+    "tokenHint": "token …{{hint}}",
+    "serverCount": "Servers created with it: {{servers}}",
+    "checked": "checked {{when}}"
   }
 }

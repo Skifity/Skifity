@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,28 +25,41 @@ import (
 // off it, then take it out of the cluster, and only then touch the machine.
 // Doing it the other way round drops traffic.
 
-// RemoveServer takes a node out of the cluster and optionally wipes it.
-func (p *Provisioner) RemoveServer(ctx context.Context, serverID string, wipe bool) (store.Operation, error) {
+// RemoveServer takes a node out of the cluster, then wipes the machine, or
+// deletes it at the provider the panel created it at.
+func (p *Provisioner) RemoveServer(ctx context.Context, serverID string, opts api.RemoveServerOptions) (store.Operation, error) {
 	server, err := p.db.GetServer(ctx, serverID)
 	if err != nil {
 		return store.Operation{}, err
+	}
+	steps := removeServerSteps
+	if opts.DeleteMachine {
+		// Asked again here rather than trusted from the caller: the machine
+		// that is deleted is only ever one this panel recorded ordering.
+		if _, err := p.db.GetCloudServer(ctx, serverID); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return store.Operation{}, errdoc.CloudNotCreated(server.Name)
+			}
+			return store.Operation{}, err
+		}
+		steps = append(slices.Clone(removeServerSteps), StepCloudDelete)
 	}
 
 	op := store.Operation{
 		TeamID: server.TeamID, Kind: "server.remove",
 		TargetType: "server", TargetID: serverID,
 	}
-	if err := p.db.CreateOperation(ctx, &op, removeServerSteps); err != nil {
+	if err := p.db.CreateOperation(ctx, &op, steps); err != nil {
 		return store.Operation{}, err
 	}
 
 	p.start(op, func(runCtx context.Context) {
-		p.runRemoveServer(runCtx, op, server, wipe)
+		p.runRemoveServer(runCtx, op, server, opts)
 	})
 	return p.db.GetOperation(ctx, op.ID)
 }
 
-func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, server store.Server, wipe bool) {
+func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, server store.Server, opts api.RemoveServerOptions) {
 	defer p.finish(op.ID)
 
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpRunning, "", "")
@@ -79,9 +93,20 @@ func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, s
 	}
 	p.setStep(ctx, op, "delete-node", store.StepSucceeded, store.StepNote{Message: "Removed from the cluster", Key: "nodeDeleted"}, "")
 
+	// The machines the panel created let this one's address in through
+	// their provider's firewall; it is not a member any more.
+	if err := p.refreshCloudFirewalls(ctx, server.ID); err != nil {
+		p.log.Warn("could not update the cloud firewalls after a server left", "server", server.ID, "error", err)
+	}
+
 	// Clean the machine, so it can be reused.
 	p.setStep(ctx, op, "uninstall", store.StepRunning, store.StepNote{}, "")
-	if wipe {
+	switch {
+	case opts.DeleteMachine:
+		// Nothing to clean on a machine that is about to stop existing.
+		p.setStep(ctx, op, "uninstall", store.StepSkipped,
+			store.StepNote{Message: "Skipped: the machine is being deleted", Key: "uninstallNotNeeded"}, "")
+	case opts.Wipe:
 		if err := p.uninstall(ctx, server); err != nil {
 			// A machine that cannot be reached is not a reason to keep a dead
 			// node in the cluster; report it and finish.
@@ -92,9 +117,22 @@ func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, s
 		} else {
 			p.setStep(ctx, op, "uninstall", store.StepSucceeded, store.StepNote{Message: "Kubernetes was removed from the machine", Key: "uninstalled"}, "")
 		}
-	} else {
+	default:
 		p.setStep(ctx, op, "uninstall", store.StepSkipped,
 			store.StepNote{Message: "Kubernetes was left installed on the machine", Key: "uninstallSkipped"}, "")
+	}
+
+	// Delete the machine at the provider, last: the server is out of the
+	// cluster by now, so nothing is lost if this fails, and the server's row
+	// stays so that removing it again, with the box ticked, tries again.
+	if opts.DeleteMachine {
+		p.setStep(ctx, op, StepCloudDelete, store.StepRunning, store.StepNote{}, "")
+		note, err := p.deleteCloudMachine(ctx, server)
+		if err != nil {
+			p.failStep(ctx, op, server.ID, StepCloudDelete, err)
+			return
+		}
+		p.setStep(ctx, op, StepCloudDelete, store.StepSucceeded, note, "")
 	}
 
 	if err := p.db.DeleteServer(ctx, server.ID); err != nil {

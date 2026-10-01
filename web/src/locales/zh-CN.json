@@ -412,7 +412,11 @@
       "dns_record.abandoned": "DNS 记录在面板外被修改，交由修改者管理",
       "log_drain.created": "已添加日志投递",
       "log_drain.updated": "已修改日志投递",
-      "log_drain.deleted": "已移除日志投递"
+      "log_drain.deleted": "已移除日志投递",
+      "cloud_provider.added": "已连接云服务商",
+      "cloud_provider.removed": "已移除云服务商",
+      "server.create_started": "正在云服务商处创建服务器",
+      "server.delete_started": "正在移除服务器并删除其机器"
     }
   },
   "projects": {
@@ -1083,7 +1087,11 @@
       "finish": "收尾",
       "upload": "接收文件",
       "backup": "先做备份",
-      "import": "导入中"
+      "import": "导入中",
+      "cloud-create": "订购机器",
+      "cloud-boot": "等待启动",
+      "cloud-ssh": "核对身份",
+      "cloud-delete": "删除机器"
     },
     "status": {
       "pending": "等待中",
@@ -1156,11 +1164,21 @@
       "oldPasswordNotDiscarded": "旧密码仍然有效；再更换一次密码即可移除它",
       "dumpReceived": "已收到 {{0}} MB 的 {{1}}",
       "backedUpFirst": "已先在 {{0}} 做了备份：恢复那份备份即可撤销这次导入",
-      "dumpLoaded": "已将 {{0}} 转储加载到 {{1}}"
+      "dumpLoaded": "已将 {{0}} 转储加载到 {{1}}",
+      "cloudAlreadyCreated": "{{0}} 已经在 {{1}} 订购过了",
+      "cloudCreated": "已在 {{1}} 订购 {{0}}：{{3}} 的 {{2}}",
+      "cloudRunning": "{{0}} 正在 {{1}} 运行",
+      "cloudSignedIn": "已用给 {{0}} 的主机密钥登录",
+      "cloudHostKeyReplaced": "已用面板给机器的主机密钥登录，然后让机器换成了它自己的密钥",
+      "cloudNothingToDelete": "没有在 {{0}} 为 {{1}} 订购过任何东西，所以没有机器需要删除",
+      "cloudAlreadyDeleted": "{{0}} 已经在 {{1}} 被删除",
+      "cloudDeleted": "已在 {{1}} 删除 {{0}}",
+      "uninstallNotNeeded": "已跳过：机器将被删除"
     },
     "stepNote": {
       "fingerprint": "指纹 {{0}}",
-      "hostKey": "主机密钥 {{0}}"
+      "hostKey": "主机密钥 {{0}}",
+      "cloudFirewallsNotUpdated": "无法更新云服务商的防火墙：{{0}}"
     },
     "diskUsed": "已用磁盘",
     "usageDisk": "磁盘",
@@ -1303,6 +1321,34 @@
       "docs": "如何配置服务器",
       "idleTitle": "有 NVIDIA 显卡尚未提供给应用",
       "idleHelp": "一些服务器有 NVIDIA 显卡，但没有 device plugin 来提供它。启用 GPU 会安装一个；每台服务器的页面会说明它还缺什么。"
+    },
+    "cloud": {
+      "tabExisting": "已有的服务器",
+      "tabCreate": "在 Hetzner Cloud 创建",
+      "intro": "Skifity 会订购机器，在它前面放一道防火墙，并让它加入集群。机器在存在之前就会拿到一把 SSH 主机密钥，所以连第一次连接也是经过核对的，而不是盲目信任。",
+      "connection": "连接",
+      "noConnection": "请先连接一个 Hetzner Cloud 项目。它的令牌会加密保存在面板中，不会再显示。",
+      "location": "位置",
+      "arch": "处理器",
+      "archAmd64": "x86（Intel、AMD）",
+      "archArm64": "Arm（Ampere）",
+      "serverType": "服务器类型",
+      "typeSpec": "{{cores}} vCPU · {{memory}} GB 内存 · {{disk}} GB 磁盘",
+      "perMonth": "每月 {{price}}",
+      "dedicated": "专用 vCPU",
+      "noTypes": "这个位置无法订购这种处理器的服务器。请换一个位置或处理器。",
+      "image": "操作系统",
+      "name": "名称",
+      "nameHelp": "它的主机名，也是它在 Hetzner 和集群中的名字：小写字母、数字和连字符。",
+      "sshCluster": "只允许集群的服务器通过 SSH 连接",
+      "sshClusterHelp": "否则 22 端口对所有地址开放，并关闭密码登录。如果面板运行在集群内部，就可以限制它，因为面板的连接正是从那里发出的。",
+      "firewall": "Hetzner 防火墙允许来自任何地址的 HTTP 和 HTTPS、SSH，而集群自己的端口只对集群的服务器开放。",
+      "cost": "这会订购一台服务器，{{provider}} 按每月 {{price}} 计费，直到它被删除。",
+      "create": "创建并加入",
+      "createdAt": "创建于 {{provider}}",
+      "deleteMachine": "同时删除 {{provider}} 上的机器",
+      "deleteMachineConsequence": "{{provider}} 上的机器会连同磁盘上的所有内容一起被删除，无法撤销。",
+      "keepsRunning": "机器会在 {{provider}} 继续运行并计费，直到你在那里删除它。"
     }
   },
   "databases": {
@@ -1845,7 +1891,8 @@
     "certificates": "证书",
     "secretManagers": "密钥管理器",
     "dnsProviders": "DNS 服务商",
-    "logDrains": "日志投递"
+    "logDrains": "日志投递",
+    "cloudProviders": "云服务商"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -3730,6 +3777,108 @@
         "cause": "{{0}}",
         "impact": "投递已保存。每台服务器上的采集器保留原有配置；如果从未启动过，则不会运行。",
         "fix": "在“服务器”中检查集群是否可以访问。面板每五分钟以及每次保存投递时都会重试。"
+      },
+      "cloud_token_invalid": {
+        "title": "云服务商不接受这个令牌",
+        "cause": "{{0}} 回复说令牌无效或不存在。",
+        "impact": "没有保存或创建任何东西。",
+        "fix": "在服务商的控制台里创建一个有 Read & Write 权限的 API 令牌——Hetzner Cloud 在项目的 Security 页面，再进 API tokens——然后用它。"
+      },
+      "cloud_token_read_only": {
+        "title": "这个令牌只能读",
+        "cause": "{{0}} 只把这个令牌当作只读令牌，而创建服务器是写操作。",
+        "impact": "没有保存或创建任何东西。",
+        "fix": "在要放服务器的项目里创建一个有 Read & Write 权限的令牌，改用它。"
+      },
+      "cloud_rate_limited": {
+        "title": "云服务商要求面板放慢请求",
+        "cause": "{{0}} 对每个项目每小时的请求数有限制，这个项目已经用完了。",
+        "impact": "请求没有发出。",
+        "fix": "等几分钟再试。使用同一项目令牌的其他工具也计入同一个限额。"
+      },
+      "cloud_unreachable": {
+        "title": "无法连接云服务商",
+        "cause": "面板无法访问 {{0}} 的 API：{{1}}",
+        "impact": "没有做任何更改。",
+        "fix": "确认面板所在的服务器可以向外发起 HTTPS 连接，然后再试。"
+      },
+      "cloud_request_failed": {
+        "title": "云服务商拒绝了请求",
+        "cause": "{{0}} 回复 {{1}}：{{2}}",
+        "impact": "这次请求没有改变任何东西。",
+        "fix": "服务商自己的消息说明了它反对什么。改正后再试。"
+      },
+      "cloud_limit_reached": {
+        "title": "云账户已经达到某个上限",
+        "cause": "{{0}} 拒绝了：{{1}}",
+        "impact": "没有创建服务器。",
+        "fix": "请服务商提高上限——Hetzner Cloud 在项目的 Limits 里提交申请——或者删掉不再需要的服务器。"
+      },
+      "cloud_unavailable": {
+        "title": "这个服务器类型目前在那里不可用",
+        "cause": "{{0}} 回复：{{1}}",
+        "impact": "没有创建服务器。",
+        "fix": "换一个位置或服务器类型，再试一次。"
+      },
+      "cloud_provider_in_use": {
+        "title": "已经有服务器是用这个连接创建的",
+        "cause": "面板中有 {{0}} 台服务器是用这个连接创建的，删除它们的机器时需要它。",
+        "impact": "连接没有被移除。",
+        "fix": "先移除这些服务器，删除或保留它们的机器都可以。要换新令牌，就再添加一个连接。"
+      },
+      "cloud_name_taken": {
+        "title": "已经有同名的服务器",
+        "cause": "{{0}} 已经是这个集群中某台服务器或某个节点的名字。节点以机器命名，两个节点不能同名。",
+        "impact": "没有创建任何东西。",
+        "fix": "换一个名字。"
+      },
+      "cloud_machine_gone": {
+        "title": "云服务商那里已经没有这台机器了",
+        "cause": "{{0}} 没有 id 为 {{1}} 的机器，而那正是面板为 {{2}} 创建的机器。",
+        "impact": "这台服务器无法完成设置。面板不会自行再订购一台机器。",
+        "fix": "在面板中移除这台服务器，然后重新创建。"
+      },
+      "cloud_machine_not_ours": {
+        "title": "那台机器不是这个面板创建的",
+        "cause": "{{1}} 上的机器 {{0}} 没有面板为 {{2}} 创建机器时打上的标签。",
+        "impact": "没有删除任何东西。服务器已经离开集群；机器仍在运行，仍在计费。",
+        "fix": "在服务商的控制台里查看这台机器，如果应该删除，就在那里删除。"
+      },
+      "cloud_not_created": {
+        "title": "这台服务器的机器不是 Skifity 创建的",
+        "cause": "{{0}} 是通过地址和 SSH 访问添加的，不是面板在云服务商那里创建的。",
+        "impact": "没有移除任何东西。",
+        "fix": "移除服务器时不要删除机器；如果不再需要，再到你的服务商那里自己删除机器。"
+      },
+      "cloud_boot_timeout": {
+        "title": "新机器没有启动",
+        "cause": "{{0}} 在 {{2}} 内没有报告 {{1}} 已运行并获得地址。",
+        "impact": "机器已在服务商那里存在并计费，但还没有加入集群。",
+        "fix": "点“重试”继续等待。如果仍然起不来，到服务商的控制台查看，并在这里连同机器一起移除这台服务器。"
+      },
+      "cloud_ssh_timeout": {
+        "title": "新机器没有通过 SSH 应答",
+        "cause": "{{0}} 已经运行，但在 {{1}} 内没有在 22 端口接受面板的密钥：{{2}}",
+        "impact": "机器已存在并计费，但上面还没有安装任何东西。",
+        "fix": "点“重试”。如果 SSH 只对集群的服务器开放，面板必须运行在集群内部才能连上；否则请连同机器一起移除服务器，再以开放 SSH 的方式重新创建。"
+      },
+      "cloud_host_key_mismatch": {
+        "title": "新机器出示的不是面板给它的主机密钥",
+        "cause": "面板为 {{0}} 生成了 SSH 主机密钥，并在创建时交给了机器，但机器出示的却是 {{1}}。",
+        "impact": "面板在登录之前就拒绝了连接，没有发送任何凭据。没有安装任何东西。",
+        "fix": "可能有别的东西在这个地址上应答，或者镜像忽略了这个密钥。连同机器一起移除服务器后重新创建；如果再次发生，请停下来查清是谁在应答。"
+      },
+      "cloud_host_key_not_replaced": {
+        "title": "无法替换机器的主机密钥",
+        "cause": "替换 {{0}} 上的 SSH 主机密钥失败：{{1}}",
+        "impact": "机器仍然用面板创建时给它的密钥应答，服务商那里也保存着这个密钥。没有安装其他东西。",
+        "fix": "点“重试”；这一步可以安全地重复。"
+      },
+      "cloud_create_failed": {
+        "title": "新服务器没有加入集群",
+        "cause": "创建 {{0}} 时停止了：{{1}}",
+        "impact": "机器可能已在服务商那里存在并计费，却不在集群中。",
+        "fix": "在面板中打开这台服务器并点“重试”，或者在那里移除它并同时删除它的机器。"
       }
     }
   },
@@ -4741,5 +4890,24 @@
         "portHelp": "6514 是基于 TLS 的 syslog 的常用端口。"
       }
     }
+  },
+  "cloud": {
+    "title": "云服务商",
+    "help": "面板可以在其中创建服务器的云服务商项目。目前支持 Hetzner Cloud。",
+    "empty": "还没有。连接一个 Hetzner Cloud 项目，就可以从面板创建服务器。",
+    "add": "连接 Hetzner Cloud",
+    "name": "名称",
+    "namePlaceholder": "Hetzner Cloud",
+    "token": "API 令牌",
+    "tokenHelp": "在 Hetzner Console 中打开项目，进入 Security，再进入 API tokens，生成一个有 Read & Write 权限的令牌。面板会在保存前检查它，加密保存，并且不会再显示。",
+    "save": "检查并保存",
+    "saved": "{{name}} 已连接，它的令牌可以创建服务器。",
+    "test": "测试",
+    "tested": "{{name}} 仍然接受它的令牌。",
+    "remove": "移除 {{name}}",
+    "removeConfirm": "令牌会从面板中删除。也请在服务商的控制台里吊销它。",
+    "tokenHint": "令牌 …{{hint}}",
+    "serverCount": "用它创建的服务器：{{servers}}",
+    "checked": "{{when}} 检查过"
   }
 }
