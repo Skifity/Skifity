@@ -958,6 +958,84 @@ export type NotificationChannel = {
   created_at: string
 }
 
+/** The kinds of log drain, as internal/logdrain names them. */
+export type LogDrainKindName =
+  "http" | "loki" | "elasticsearch" | "datadog" | "axiom" | "betterstack" | "newrelic" | "syslog"
+
+/** One field of a drain's form. Its words are the panel's, by kind and key. */
+export type LogDrainField = {
+  key: string
+  secret?: boolean
+  required?: boolean
+  options?: string[]
+  default?: string
+  placeholder?: string
+}
+
+export type LogDrainKind = {
+  kind: LogDrainKindName
+  fields: LogDrainField[]
+}
+
+/**
+ * How far a drain has got: in the collector's configuration, waiting for it,
+ * the collector not brought up to date, switched off, limited to projects
+ * that are all gone, no cluster to run on, or credentials that do not open.
+ */
+export type LogDrainStatus =
+  "applied" | "pending" | "failed" | "paused" | "idle" | "no_cluster" | "unreadable"
+
+/**
+ * A team's log drain. A secret's value is never here; an administrator gets
+ * the settings that are not secret and the names of the secrets stored.
+ */
+export type LogDrain = {
+  id: string
+  team_id: string
+  name: string
+  kind: LogDrainKindName
+  enabled: boolean
+  scoped: boolean
+  projects: string[]
+  include_builds: boolean
+  destination: string
+  status: LogDrainStatus
+  settings?: Record<string, string>
+  secrets?: string[]
+  tested_at?: string
+  test_error?: string
+  created_at: string
+  updated_at: string
+}
+
+export type LogCollectorProblem = {
+  server?: string
+  reason: string
+  message?: string
+  at?: string
+}
+
+export type LogDrainList = {
+  items: LogDrain[]
+  total: number
+  kinds: LogDrainKind[]
+  limit: number
+  collector: {
+    /** The panel's side: installed, failed, removed, absent or no_cluster. */
+    configuration: string
+    applied_at?: string
+    error?: string
+    /** The cluster's side, for a team with a drain switched on. */
+    live?: {
+      state: "running" | "starting" | "failing" | "absent"
+      version?: string
+      desired: number
+      ready: number
+      problems: LogCollectorProblem[]
+    }
+  }
+}
+
 /**
  * A channel as the form that changes it reads it: the settings that are not
  * secret, and the names of the secrets that are stored — never their values.

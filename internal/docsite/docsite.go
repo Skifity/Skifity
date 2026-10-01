@@ -56,6 +56,7 @@ var order = []string{
 	"adding-servers",
 	"gpus",
 	"firewall",
+	"log-drains",
 	"plugins",
 	"databases",
 	"backups",

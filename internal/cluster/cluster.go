@@ -43,6 +43,13 @@ type Cluster struct {
 	// because deleting a blob while a push is in flight is the one thing the
 	// registry's own documentation says will corrupt an image.
 	registryMu sync.RWMutex
+
+	// logsMu serialises rendering and applying the log collector, so a
+	// drain saved while the periodic refresh runs is not applied under it;
+	// logsApplied is the configuration last applied, so the refresh applies
+	// nothing when nothing changed.
+	logsMu      sync.Mutex
+	logsApplied string
 }
 
 // New builds a Cluster.

@@ -17,6 +17,7 @@ import (
 	"skifity/internal/docsite"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/logdrain"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
 	"skifity/internal/plugins"
@@ -87,6 +88,13 @@ type Server struct {
 	// is a panel with no watcher, which reads nothing.
 	traffic TrafficSource
 
+	// logs is the collector that ships teams' logs to their drains. Nil is
+	// a panel with no cluster, where a drain is saved and nothing runs.
+	logs LogCollector
+	// drainTester sends a drain's test line, through internal/netguard; a
+	// test points it at a server of its own.
+	drainTester *logdrain.Tester
+
 	// catalogueFetcher downloads teams' own template catalogues, through
 	// internal/netguard; a test points it at a server of its own.
 	catalogueFetcher *remote.Fetcher
@@ -130,9 +138,12 @@ type Options struct {
 	Uploads *upload.Store
 	// Traffic is the watcher, which reads the ingress's request counters and
 	// knows whether it could.
-	Traffic    TrafficSource
-	Frontend   http.Handler
-	SetupToken string
+	Traffic TrafficSource
+	// LogCollector ships teams' logs to their drains. Nil is a panel with no
+	// cluster.
+	LogCollector LogCollector
+	Frontend     http.Handler
+	SetupToken   string
 	// Resolver is what a domain's DNS is checked through. Nil is the
 	// system's own resolver, which is what a panel wants.
 	Resolver Resolver
@@ -173,6 +184,8 @@ func New(opts Options) *Server {
 		catalogueFetcher: &remote.Fetcher{},
 		catalogues:       &catalogueCache{},
 		secrets:          opts.SecretManagers,
+		logs:             opts.LogCollector,
+		drainTester:      &logdrain.Tester{},
 	}
 	if s.metrics == nil {
 		s.metrics = metrics.New()
@@ -365,6 +378,13 @@ func (s *Server) routes() chi.Router {
 				team.Patch("/secret-managers/{connectionID}", s.handleUpdateSecretManager)
 				team.Delete("/secret-managers/{connectionID}", s.handleDeleteSecretManager)
 				team.Post("/secret-managers/{connectionID}/test", s.handleTestSecretManager)
+				// Where the team's apps' logs are shipped. See
+				// logdrains_handlers.go.
+				team.Get("/log-drains", s.handleListLogDrains)
+				team.Post("/log-drains", s.handleCreateLogDrain)
+				team.Patch("/log-drains/{drainID}", s.handleUpdateLogDrain)
+				team.Delete("/log-drains/{drainID}", s.handleDeleteLogDrain)
+				team.Post("/log-drains/{drainID}/test", s.handleTestLogDrain)
 			})
 
 			authed.Route("/servers/{serverID}", func(server chi.Router) {

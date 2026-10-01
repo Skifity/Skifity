@@ -56,6 +56,7 @@ skifity files set /etc/app.conf ./app.conf  A file the app reads, mounted at tha
 skifity ports open 25565          Open a port that is not HTTP on every server
 skifity templates                 What the team can install, built in and its own
 skifity templates catalogues add <name> <https url>  Add a catalogue of the team's own templates
+skifity drains add <name> --kind axiom --set dataset=apps  Ship the team's logs somewhere; the token is asked for
 skifity plan                      What skifity.yaml would change in the environment
 skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
@@ -157,6 +158,7 @@ Tools, in the order they are usually needed:
 | `unlock_deploys` | Lifts that. |
 | `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
+| `list_log_drains` | Where the team's apps' logs are shipped — Loki, Elasticsearch, Datadog, Axiom, Better Stack, New Relic, syslog or HTTPS — and whether the collector is running. Read-only: adding one takes a credential, so it is done in the panel or with `skifity drains add`. |
 
 Three things are deliberately not tools. A database's password: an app gets its
 connection string from `link_database`, and a password that has been in an
@@ -259,6 +261,10 @@ POST   /api/teams/{team}/dns-providers        connect one (kind, name, token or 
 GET    /api/teams/{team}/dns-providers/{provider}/zones  its zones, asked now
 POST   /api/teams/{team}/certificates         upload one (name, certificate, private_key); a name that exists is replaced
 DELETE /api/teams/{team}/certificates/{certificate}  remove one; its hostnames go back to Let's Encrypt
+GET    /api/teams/{team}/log-drains           where the team's logs are shipped, the kinds and their fields, the collector's state
+POST   /api/teams/{team}/log-drains           add one (name, kind, settings, projects, include_builds); a test line is sent first
+PATCH  /api/teams/{team}/log-drains/{drain}   change one; a new address forgets the stored credentials
+POST   /api/teams/{team}/log-drains/{drain}/test  send its test line again
 GET    /api/plugins                           installed plugins
 POST   /api/plugins/inspect                   read a manifest, and say what it would be allowed to do
 POST   /api/plugins                           install one, with the permissions that were shown

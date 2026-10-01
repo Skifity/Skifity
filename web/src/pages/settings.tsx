@@ -36,6 +36,7 @@ import {
   canLimit,
   limitFor,
 } from "@/components/settings/member-access"
+import { LogDrains } from "@/components/settings/log-drains"
 import { NotificationChannels } from "@/components/settings/notification-channels"
 import { SecretManagersCard } from "@/components/settings/secret-managers"
 import { StatusBadge } from "@/components/status-badge"
@@ -145,6 +146,7 @@ export function SettingsPage() {
           <TabsTrigger value="dns">{t("settings.dnsProviders")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
           <TabsTrigger value="secrets">{t("settings.secretManagers")}</TabsTrigger>
+          <TabsTrigger value="logs">{t("settings.logDrains")}</TabsTrigger>
           <TabsTrigger value="components">{t("settings.components")}</TabsTrigger>
           <TabsTrigger value="plugins">{t("settings.plugins")}</TabsTrigger>
           <TabsTrigger value="members">{t("settings.members")}</TabsTrigger>
@@ -175,6 +177,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="secrets" className="pt-4">
           <SecretManagersCard />
+        </TabsContent>
+        <TabsContent value="logs" className="pt-4">
+          <LogDrains />
         </TabsContent>
         <TabsContent value="components" className="pt-4">
           <ComponentsPanel />

@@ -437,6 +437,47 @@ It costs roughly 900 MB of memory. The panel lists it under **Settings →
 Components** so the cost is visible when you are deciding, and says there that
 it does not install it.
 
+## Logs do not reach a drain
+
+**Settings → Log drains** says how far each drain has got, and how the
+collector on the servers is doing. Go by the drain's status:
+
+* **Waiting for the collector** — saved, and not yet given to the collector.
+  It takes a few seconds; the panel tries again every five minutes.
+* **The collector could not be updated** — the panel could not write the
+  collector's configuration to the cluster. The reason is beside it; usually
+  the cluster is not answering, which **Servers** shows.
+* **Credentials unreadable** — the drain's stored token does not open, because
+  its row was changed by hand or the key that sealed it is gone. Edit the
+  drain and enter the token again. Every other drain keeps working.
+* **No projects left** — the drain is limited to projects that have all been
+  deleted, so it sends nothing. Pick projects again, or send every project.
+
+Then the collector's own line:
+
+* **Not running on every server** — a server is still starting it, or cannot.
+  `ImagePullBackOff` is a server that cannot reach Docker Hub for
+  `timberio/vector`; mirror the image if your servers have no way out.
+* **The collector refused its configuration** (`ConfigurationRefused`, exit
+  code 78) — Vector would not start with what it was given. That is a bug in
+  the panel, not something you did: run
+  `kubectl -n skifity-logs logs daemonset/skifity-log-collector` and report
+  what it says.
+
+If the drain is in place and the collector is running, the panel and the
+collector disagree about the network: **Send a test line** proves the panel
+reaches the service, not that every server does. A firewall that lets the
+panel's server out and not the others is the usual cause. The collector's
+own log says what each service answered:
+
+```
+kubectl -n skifity-logs logs daemonset/skifity-log-collector | grep -i error
+```
+
+A service that refuses some lines — Elasticsearch over a field's type, Loki
+over a line it thinks too old — keeps the rest; its own page lists what it
+refused. Lines from before the drain was added are not sent at all.
+
 ## Everything is fine but I want to look underneath
 
 Every app's **Advanced** tab shows the exact Kubernetes objects the panel

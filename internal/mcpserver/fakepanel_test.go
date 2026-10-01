@@ -40,9 +40,15 @@ const (
 	// plantedDNSToken is a DNS provider's token, which the real panel never
 	// sends back.
 	plantedDNSToken = "planted-dns-token"
+	// plantedDrainSetting is in a log drain's settings, which the real panel
+	// answers to administrators and the tool has no reason to pass on.
+	plantedDrainSetting = "planted-drain-setting"
 )
 
-var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader, plantedReference, plantedDNSToken}
+var planted = []string{
+	plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader,
+	plantedReference, plantedDNSToken, plantedDrainSetting,
+}
 
 type fakePanel struct {
 	t      *testing.T
@@ -256,6 +262,18 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/databases/{db}/credentials":                 map[string]any{"engine": "postgres", "password": plantedPassword, "url": "postgres://app:" + plantedPassword + "@db:5432/app"},
 		"POST /api/databases/{db}/restore/{backup}":           map[string]any{"id": "op_1"},
 		"POST /api/apps/{app}/volumes/{volume}/restore/{bak}": map[string]any{"id": "op_1"},
+
+		"GET /api/teams/{team}/log-drains": map[string]any{
+			"items": []any{map[string]any{
+				"id": "ldr_1", "name": "Grafana", "kind": "loki", "destination": "https://logs.example.test/loki/api/v1/push",
+				"status": "applied", "enabled": true, "scoped": true, "projects": []string{"prj_1"}, "include_builds": false,
+				"settings": map[string]string{"url": "https://logs.example.test", "username": plantedDrainSetting},
+				"secrets":  []string{"password"},
+			}},
+			"total": 1, "kinds": []any{}, "limit": 10,
+			"collector": map[string]any{"configuration": "installed",
+				"live": map[string]any{"state": "running", "desired": 2, "ready": 2, "problems": []any{}}},
+		},
 
 		"GET /api/templates":              items(builtIn...),
 		"GET /api/teams/{team}/templates": items(append([]any{teamOwn}, builtIn...)...),

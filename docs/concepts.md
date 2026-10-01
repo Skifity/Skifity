@@ -1474,5 +1474,6 @@ installed the first time you need them.
 | Cross-node storage | You turn it on | 700 MB per server |
 | NVIDIA GPUs | You enable GPUs on the Servers page | 30 MB per GPU server |
 | Full monitoring | You turn it on | 900 MB |
+| Log collector | You add a [log drain](log-drains.md) | 100 MB per server |
 
 Settings shows what is installed and what each one costs before you agree to it.

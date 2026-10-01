@@ -509,6 +509,7 @@ func (s *Server) register() {
 	s.registerGPUs()
 	s.registerVulnerabilities()
 	s.registerEvents()
+	s.registerLogDrains()
 }
 
 // --- handlers ---

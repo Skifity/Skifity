@@ -220,5 +220,6 @@ kubeconfigs.
 | Scale-to-zero enabled | KEDA + http-add-on |
 | Cross-node volumes enabled | Longhorn (with a RAM warning) |
 | Full monitoring enabled | kube-prometheus-stack (optional; a built-in lightweight view exists without it) |
+| First log drain | Vector as a DaemonSet in `skifity-logs`, reading `/var/log/pods` read-only; removed with the last drain. See `docs/log-drains.md` |
 
 This is what keeps a fresh install small enough for a 2 GB VPS.

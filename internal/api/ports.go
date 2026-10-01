@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"skifity/internal/kube"
+	"skifity/internal/logdrain"
 	"skifity/internal/plugins"
 	"skifity/internal/store"
 )
@@ -221,6 +222,17 @@ type Cluster interface {
 	// SetNodeGPULabel marks a server as having an NVIDIA card, or unmarks
 	// it, which decides whether the device plugin runs there.
 	SetNodeGPULabel(ctx context.Context, node string, nvidia bool) error
+}
+
+// LogCollector is the collector that ships the teams' logs to their drains:
+// one on every server, rendered from every team's drains at once.
+type LogCollector interface {
+	// RefreshLogDrains renders every enabled drain into the collector and
+	// applies it, or takes the collector away when nothing is to be sent.
+	RefreshLogDrains(ctx context.Context) error
+	// LogCollectorStatus is how the collector is doing, from the DaemonSet,
+	// its pods and its events.
+	LogCollectorStatus(ctx context.Context) (logdrain.CollectorStatus, error)
 }
 
 // EnvironmentQuota is how much of an environment's ceiling is in use.

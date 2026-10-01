@@ -515,6 +515,7 @@ var sealedSources = []sealedSource{
 	{table: "databases", valueCol: "credentials_next_enc", ctxPrefix: "database_credentials_next"},
 	{table: "git_sources", valueCol: "config_enc", ctxPrefix: "git_source"},
 	{table: "notification_channels", valueCol: "config_enc", ctxPrefix: "notification_channel"},
+	{table: "log_drains", valueCol: "secrets_enc", ctxPrefix: "log_drain"},
 	{table: "users", valueCol: "totp_secret_enc", ctxPrefix: "totp"},
 	// Sealed to the account and the credential id rather than to the row:
 	// "passkey:<user id>:<credential id>". A rewrap does not need the context.

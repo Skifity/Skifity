@@ -409,7 +409,10 @@
       "dns_record.created": "已创建 DNS 记录",
       "dns_record.updated": "DNS 记录已指向新地址",
       "dns_record.removed": "已删除 DNS 记录",
-      "dns_record.abandoned": "DNS 记录在面板外被修改，交由修改者管理"
+      "dns_record.abandoned": "DNS 记录在面板外被修改，交由修改者管理",
+      "log_drain.created": "已添加日志投递",
+      "log_drain.updated": "已修改日志投递",
+      "log_drain.deleted": "已移除日志投递"
     }
   },
   "projects": {
@@ -1841,7 +1844,8 @@
     "scanning": "镜像扫描",
     "certificates": "证书",
     "secretManagers": "密钥管理器",
-    "dnsProviders": "DNS 服务商"
+    "dnsProviders": "DNS 服务商",
+    "logDrains": "日志投递"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -3696,6 +3700,36 @@
         "cause": "{{0}} 就是区域本身，要把它指向 {{1}} 需要 CNAME，而 {{2}} 不允许在那里使用 CNAME。",
         "impact": "未创建任何记录。",
         "fix": "请使用区域内的名称，例如 www.{{0}}，并把裸域名重定向过去；或者请管理员在“设置”“域名”中把“集群公网 IP”设为一个 IP 地址。"
+      },
+      "drain_invalid": {
+        "title": "这些设置无法构成日志投递",
+        "cause": "{{0}}",
+        "impact": "未保存任何内容，也未发送任何内容。",
+        "fix": "更正其指出的设置。每种类型的设置以及在服务中的位置，见文档中的日志投递页面。"
+      },
+      "drain_test_failed": {
+        "title": "服务未接收测试日志行",
+        "cause": "面板向 {{0}} 发送了一行测试日志，与采集器发送每一行的方式相同，但未被接收：{{1}}",
+        "impact": "未做任何更改：只有测试日志行送达服务后，投递才会被保存，对它的修改才会生效。",
+        "fix": "对照该服务自己的日志接入页面检查地址以及令牌或密钥，并确认此服务器能访问它。指向本机、集群内部或云元数据服务的地址会被有意拒绝。"
+      },
+      "drain_limit": {
+        "title": "此团队的日志投递已达上限",
+        "cause": "一个团队最多可以有 {{0}} 个日志投递。",
+        "impact": "未保存任何内容。",
+        "fix": "移除不再使用的投递，或让一个投递覆盖多个项目，而不是每个项目一个。"
+      },
+      "drain_unreadable": {
+        "title": "无法读取此投递的凭据",
+        "cause": "为 {{0}} 保存的凭据无法用此面板的密钥针对其发送地址打开。",
+        "impact": "此投递已被排除在采集器之外，因此收不到任何内容。其他投递不受影响。",
+        "fix": "编辑此投递并重新输入令牌或密码，或者将其移除后重新添加。"
+      },
+      "drain_collector_failed": {
+        "title": "无法更新日志采集器",
+        "cause": "{{0}}",
+        "impact": "投递已保存。每台服务器上的采集器保留原有配置；如果从未启动过，则不会运行。",
+        "fix": "在“服务器”中检查集群是否可以访问。面板每五分钟以及每次保存投递时都会重试。"
       }
     }
   },
@@ -4560,5 +4594,152 @@
     "removeConsequence": "面板通过它创建的记录会留在服务商处，此后归你管理：{{number}} 条。",
     "recordsKept": "由面板维护的记录：{{number}}",
     "zonesListed": "截至 {{when}}"
+  },
+  "logDrains": {
+    "help": "把应用输出的所有内容发送到集群外的服务，在那里保存、搜索并设置告警。每台服务器上的采集器会把每一行发送到其所属团队的投递目标。",
+    "docs": "日志投递的工作方式",
+    "empty": "团队的日志没有发送到任何地方",
+    "emptyHelp": "添加一个投递，把每个应用的输出发送到 Loki、Elasticsearch、Datadog、Axiom、Better Stack、New Relic、syslog 或某个 HTTPS 端点。",
+    "add": "添加日志投递",
+    "limitReached": "一个团队最多可以有 {{limit}} 个日志投递。",
+    "collector": {
+      "title": "采集器",
+      "state": {
+        "running": "运行中",
+        "starting": "正在启动",
+        "failing": "出错",
+        "absent": "未运行"
+      },
+      "noCluster": "此面板未连接到集群，因此目前没有任何组件采集日志。投递已保存。",
+      "servers": "在 {{desired}} 台服务器中的 {{ready}} 台上运行。Vector {{version}}。",
+      "notRead": "暂时无法从集群读取其状态。",
+      "updateFailed": "无法更新采集器",
+      "refused": "拒绝了自己的配置"
+    },
+    "everyProject": "所有项目",
+    "onlyProjects": "仅 {{projects}}",
+    "noProjectsLeft": "限定的项目已全部不存在，因此不发送任何内容",
+    "withBuilds": "包括构建",
+    "testedAt": "{{when}}测试过",
+    "test": "发送测试日志行",
+    "testSent": "{{name}} 已接收测试日志行。",
+    "lastTestFailed": "上次测试失败：{{reason}}",
+    "removeTitle": "移除 {{name}}？",
+    "removeConfirm": "之后不会再向它发送任何内容。已发送的日志行仍保留在那里。移除最后一个投递时，每台服务器上的采集器都会停止。",
+    "saved": "测试日志行已送达，投递已保存。",
+    "kindLabel": "发送到",
+    "name": "名称",
+    "secretStored": "已保存。输入新值即可替换。",
+    "forgetSecret": "清除已保存的值",
+    "whichLogs": "哪些日志",
+    "limitToProjects": "仅部分项目",
+    "limitToProjectsHelp": "关闭时发送所有项目的日志，包括之后新增的项目。",
+    "chooseProject": "至少选择一个项目。",
+    "includeBuilds": "同时发送构建日志",
+    "includeBuildsHelp": "除应用输出外，还发送每次构建的输出。默认关闭：构建输出可能很长，而且本来就随部署一起保存。",
+    "enabled": "正在发送",
+    "enabledHelp": "关闭后保留投递及其设置，但停止向其发送。",
+    "testFirst": "保存时会用这些凭据发送一行明确标注的测试日志，只有服务接收后才会保存投递。这能证明地址和凭据有效；采集器是否运行显示在上方。",
+    "testing": "正在发送测试日志行…",
+    "testAndSave": "测试并保存",
+    "kind": {
+      "http": "HTTPS 端点",
+      "loki": "Grafana Loki",
+      "elasticsearch": "Elasticsearch / OpenSearch",
+      "datadog": "Datadog",
+      "axiom": "Axiom",
+      "betterstack": "Better Stack",
+      "newrelic": "New Relic",
+      "syslog": "基于 TLS 的 Syslog"
+    },
+    "kindHelp": {
+      "http": "JSON 行格式，每行一条，以 POST 发送到你的地址。仅当接收端不需要凭据时才允许使用普通 http。",
+      "loki": "Grafana Cloud 或你自己的 Loki。日志行会带上团队、项目、环境和应用标签。",
+      "elasticsearch": "使用 Bulk API 写入你选择的索引。OpenSearch 请选择版本 7。",
+      "datadog": "你所在站点的 Datadog 日志接入。每一行以其应用作为 service 归档。",
+      "axiom": "写入你的某个 Axiom 数据集。",
+      "betterstack": "Better Stack Telemetry 中的 HTTP 数据源。",
+      "newrelic": "New Relic 的 Log API。",
+      "syslog": "基于 TLS 的 RFC 5424，例如 Papertrail 或你自己的 rsyslog。会校验证书。"
+    },
+    "status": {
+      "applied": "正在发送",
+      "pending": "等待采集器",
+      "failed": "无法更新采集器",
+      "paused": "已暂停",
+      "idle": "已无项目",
+      "no_cluster": "没有集群",
+      "unreadable": "凭据无法读取"
+    },
+    "field": {
+      "http": {
+        "url": "地址",
+        "urlHelp": "每批日志行发送到的地址。",
+        "header_name": "请求头",
+        "header_nameHelp": "接收端读取凭据的那个请求头，通常是 Authorization。不需要时留空。",
+        "header_value": "请求头的值",
+        "header_valueHelp": "例如 Bearer 加令牌。会被加密，且不再显示。"
+      },
+      "loki": {
+        "url": "Loki 地址",
+        "urlHelp": "不带 /loki/api/v1/push 的地址，该路径会自动添加。",
+        "username": "用户名",
+        "usernameHelp": "对于 Grafana Cloud，是 stack 的 Loki 页面上的用户编号。留空则以 bearer 令牌方式发送令牌。",
+        "password": "密码或令牌",
+        "passwordHelp": "对于 Grafana Cloud，是带 logs:write 权限的 access policy 令牌。会被加密，且不再显示。",
+        "tenant_id": "租户",
+        "tenant_idHelp": "以 X-Scope-OrgID 发送，用于多租户的 Loki。通常留空。"
+      },
+      "elasticsearch": {
+        "url": "集群地址",
+        "urlHelp": "例如 https://search.example.com:9200。",
+        "index": "索引",
+        "indexHelp": "%Y、%m 和 %d 为日志行的日期：默认每天一个索引。",
+        "api": "API 版本",
+        "apiHelp": "Elasticsearch 8 及以上选 8；Elasticsearch 7 和 OpenSearch 选 7。",
+        "username": "用户名",
+        "usernameHelp": "与密码一起填写，或两者都留空并提供 API 密钥。",
+        "password": "密码",
+        "passwordHelp": "会被加密，且不再显示。",
+        "api_key": "API 密钥",
+        "api_keyHelp": "编码后的密钥，以 ApiKey 方式发送。会被加密，且不再显示。"
+      },
+      "datadog": {
+        "site": "站点",
+        "siteHelp": "你的 Datadog 地址中的站点，例如 datadoghq.eu。",
+        "api_key": "API 密钥",
+        "api_keyHelp": "在 Organization settings 中的 API keys 下。会被加密，且不再显示。"
+      },
+      "axiom": {
+        "dataset": "数据集",
+        "datasetHelp": "需先在 Axiom 中创建。",
+        "region": "区域",
+        "regionHelp": "你所在组织的边缘域名，例如 eu-central-1.aws.edge.axiom.co。留空使用 Axiom 默认值。",
+        "org_id": "组织 ID",
+        "org_idHelp": "仅个人令牌需要。",
+        "token": "API 令牌",
+        "tokenHelp": "需对该数据集有 ingest 权限。会被加密，且不再显示。"
+      },
+      "betterstack": {
+        "host": "接入主机",
+        "hostHelp": "在 Better Stack 的数据源页面上。",
+        "source_token": "数据源令牌",
+        "source_tokenHelp": "在同一页面上。会被加密，且不再显示。"
+      },
+      "newrelic": {
+        "region": "区域",
+        "regionHelp": "us 或 eu，与你的 New Relic 账户一致。",
+        "account_id": "账户 ID",
+        "account_idHelp": "账户中任意页面地址里的数字。",
+        "license_key": "许可证密钥",
+        "license_keyHelp": "Ingest - License 类型的密钥。会被加密，且不再显示。"
+      },
+      "syslog": {
+        "host": "主机",
+        "hostHelp": "例如 logs5.papertrailapp.com。其证书必须签发给该名称。",
+        "port": "端口",
+        "portHelp": "6514 是基于 TLS 的 syslog 的常用端口。"
+      }
+    }
   }
 }

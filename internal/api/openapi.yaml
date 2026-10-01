@@ -71,6 +71,8 @@ tags:
     description: Git connections, reading a repository before creating an app, and push webhooks.
   - name: Notifications
     description: Where a team's alerts are sent.
+  - name: Logs
+    description: Log drains, which ship a team's apps' logs to a service outside the cluster.
   - name: Apps
     description: Creating, configuring, watching and protecting apps.
   - name: Deployments
@@ -1854,6 +1856,107 @@ paths:
         details, or AWS's GetCallerIdentity: nothing is read.
       responses:
         '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  # --- log drains ---
+
+  /api/teams/{teamID}/log-drains:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listLogDrains
+      tags: [Logs]
+      summary: Where the team's logs are shipped
+      description: >-
+        Viewer, not limited to projects. Each drain with where it sends and how
+        far it has got, the kinds of drain and what each asks for, and the
+        collector's state. An administrator also gets each drain's settings and
+        the names of the secrets it has; a secret's value is never answered.
+      responses:
+        '200':
+          description: The drains, by name.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogDrainList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createLogDrain
+      tags: [Logs]
+      summary: Add a log drain
+      description: >-
+        Admin. The settings are checked, and the panel sends one clearly
+        labelled test line to the drain, with its credentials, as the collector
+        will send every line. Nothing is kept unless the service takes it. The
+        secrets are sealed and never answered. Then the collector on every
+        server is brought up to date.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateLogDrainRequest'}
+      responses:
+        '201':
+          description: The drain as it was saved.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogDrain'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/log-drains/{drainID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/drainID'
+    patch:
+      operationId: updateLogDrain
+      tags: [Logs]
+      summary: Change a log drain
+      description: >-
+        Admin. A change to where it sends or what it sends with is tested again
+        before it is kept, and so is switching it back on. A new address forgets
+        the stored secrets, which have to be given again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateLogDrainRequest'}
+      responses:
+        '200':
+          description: The drain as it now reads.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogDrain'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: removeLogDrain
+      tags: [Logs]
+      summary: Remove a log drain
+      description: Admin. The collector stops sending to it; the last drain going takes the collector away.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/log-drains/{drainID}/test:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/drainID'
+    post:
+      operationId: testLogDrain
+      tags: [Logs]
+      summary: Send a drain's test line again
+      description: >-
+        Admin. Proves the address and the credentials from this panel, not the
+        collector on each server; the collector's state is in the list.
+      responses:
+        '200':
+          description: The service took the line.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, tested_at]
+                properties:
+                  ok: {type: boolean}
+                  tested_at: {type: string, format: date-time}
         default: {$ref: '#/components/responses/Error'}
 
   # --- servers ---
@@ -4885,6 +4988,7 @@ components:
     pluginID: {name: pluginID, in: path, required: true, description: 'A plugin''s id, reverse-DNS, such as com.example.backup.', schema: {type: string}}
     templateID: {name: templateID, in: path, required: true, description: 'A template''s id, such as uptime-kuma.', schema: {type: string}}
     catalogueID: {name: catalogueID, in: path, required: true, description: 'A team template catalogue''s id.', schema: {type: string}}
+    drainID: {name: drainID, in: path, required: true, description: 'A log drain''s id.', schema: {type: string}}
     componentName: {name: name, in: path, required: true, description: 'A component''s name, such as keda.', schema: {type: string}}
     metricsRange:
       name: range
@@ -8068,6 +8172,122 @@ components:
         id: {type: string}
         name: {type: string}
         errors: {type: array, items: {type: string}}
+
+    LogDrain:
+      type: object
+      required: [id, team_id, name, kind, enabled, scoped, projects, include_builds, destination, status, created_at, updated_at]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [http, loki, elasticsearch, datadog, axiom, betterstack, newrelic, syslog]}
+        enabled: {type: boolean}
+        scoped: {type: boolean, description: 'Limited to projects. A scoped drain whose projects are all gone sends nothing.'}
+        projects: {type: array, items: {type: string}}
+        include_builds: {type: boolean}
+        destination: {type: string, description: 'Where it sends, without a query string.'}
+        status:
+          type: string
+          enum: [applied, pending, failed, paused, idle, no_cluster, unreadable]
+          description: >-
+            applied is in the configuration the collector runs; pending is saved
+            and not yet given to it; failed is the collector not brought up to
+            date; idle is limited to projects that are all gone; unreadable is
+            credentials that do not open.
+        settings:
+          type: object
+          additionalProperties: {type: string}
+          description: The drain's form without its secrets. Administrators only.
+        secrets: {type: array, items: {type: string}, description: 'The names of the secrets it has. Administrators only.'}
+        tested_at: {type: string, format: date-time}
+        test_error: {type: string}
+        created_by: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    LogDrainKind:
+      type: object
+      required: [kind, fields]
+      properties:
+        kind: {type: string}
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key]
+            properties:
+              key: {type: string}
+              secret: {type: boolean}
+              required: {type: boolean}
+              options: {type: array, items: {type: string}}
+              default: {type: string}
+              placeholder: {type: string}
+
+    LogCollectorProblem:
+      type: object
+      required: [reason]
+      properties:
+        server: {type: string}
+        reason: {type: string}
+        message: {type: string}
+        at: {type: string, format: date-time}
+
+    LogDrainList:
+      type: object
+      required: [items, total, kinds, limit, collector]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/LogDrain'}}
+        total: {type: integer}
+        kinds: {type: array, items: {$ref: '#/components/schemas/LogDrainKind'}}
+        limit: {type: integer, description: 'How many drains a team may have.'}
+        collector:
+          type: object
+          required: [configuration]
+          properties:
+            configuration:
+              type: string
+              description: The panel's side, installed, failed, removed, absent or no_cluster.
+            applied_at: {type: string, format: date-time}
+            error: {type: string}
+            live:
+              type: object
+              description: The cluster's side, read from the DaemonSet, its pods and its events, for a team with a drain switched on.
+              required: [state, desired, ready, problems]
+              properties:
+                state: {type: string, enum: [running, starting, failing, absent]}
+                version: {type: string}
+                desired: {type: integer}
+                ready: {type: integer}
+                problems: {type: array, items: {$ref: '#/components/schemas/LogCollectorProblem'}}
+
+    CreateLogDrainRequest:
+      type: object
+      required: [kind, settings]
+      additionalProperties: false
+      properties:
+        name: {type: string, maxLength: 60, description: 'The kind when left out.'}
+        kind: {type: string, enum: [http, loki, elasticsearch, datadog, axiom, betterstack, newrelic, syslog]}
+        settings:
+          type: object
+          additionalProperties: {type: string}
+          description: Every field of the kind's form, its secrets included. The list's kinds say which fields each kind has.
+        projects: {type: array, items: {type: string}, description: 'Limits the drain to these projects. Left out is every project.'}
+        include_builds: {type: boolean, description: 'Send the build logs of the team''s apps too.'}
+
+    UpdateLogDrainRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string, maxLength: 60}
+        settings:
+          type: object
+          additionalProperties: {type: string}
+          description: Fields to replace. A secret sent empty is kept, unless the address changes.
+        clear: {type: array, items: {type: string}, description: 'Secrets to forget.'}
+        enabled: {type: boolean}
+        scoped: {type: boolean, description: 'false sends every project''s logs again.'}
+        projects: {type: array, items: {type: string}, description: 'Limits the drain to these projects.'}
+        include_builds: {type: boolean}
 
     TemplateCatalogueList:
       type: object

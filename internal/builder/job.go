@@ -38,6 +38,11 @@ type JobSpec struct {
 	Namespace    string
 	AppID        string
 	DeploymentID string
+	// TeamID and ProjectID are whose build it is. Builds share a namespace,
+	// so they are on the pod as labels: they are how a team's log drain
+	// that includes builds is sent this build's output and no other team's.
+	TeamID    string
+	ProjectID string
 
 	// Source
 	RepoURL   string
@@ -267,6 +272,10 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 		"app.kubernetes.io/component":     "build",
 		version.LabelKey("app-id"):        s.AppID,
 		version.LabelKey("deployment-id"): s.DeploymentID,
+	}
+	if s.TeamID != "" {
+		labels[version.LabelKey("team-id")] = s.TeamID
+		labels[version.LabelKey("project-id")] = s.ProjectID
 	}
 
 	volumes := []corev1.Volume{

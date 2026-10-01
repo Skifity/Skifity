@@ -21,7 +21,7 @@ import (
 //
 //go:embed quick-start.md concepts.md templates.md tour.md adding-servers.md cli.md backups.md
 //go:embed databases.md
-//go:embed configuration.md troubleshooting.md faq.md performance.md firewall.md
+//go:embed configuration.md troubleshooting.md faq.md performance.md firewall.md log-drains.md
 //go:embed plugins.md gpus.md
 //go:embed images/*.png images/*.svg
 var Pages embed.FS

@@ -150,9 +150,13 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	// Every few minutes each app is compared with what the deployer would
 	// apply, which only means something with a cluster to compare with.
 	var drift api.DriftDetector
+	// The collector that ships teams' logs to their drains runs on the
+	// cluster; without one, a drain is saved and nothing runs.
+	var logs api.LogCollector
 	if clusterAdapter != nil {
 		watcher.WithDrift(deployer)
 		drift = deployer
+		logs = clusterAdapter
 	}
 
 	setupToken, err := readSetupToken(cfg, db, log)
@@ -166,7 +170,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		Cluster: nilIfNil(clusterAdapter), Provisioner: provisioner, Deployer: deployer,
 		Databases: databases, Backups: backups, Scanner: deployer, Plugins: pluginEvents, Drift: drift,
 		Frontend: frontend, SetupToken: setupToken, Metrics: registry,
-		Uploads: uploads, Traffic: watcher,
+		Uploads: uploads, Traffic: watcher, LogCollector: logs,
 		// One reader of the teams' secret managers for the API and the
 		// deployer, dialling through internal/netguard.
 		SecretManagers: deployer.Secrets,
@@ -520,6 +524,13 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 					defer runsafe.Recover(log, "the registry sweep", nil)
 					c.MaintainRegistry(ctx)
 				}()
+				// The log collector's names and drains, every five minutes:
+				// an app renamed or added, a project or a team gone. Nothing
+				// is applied when nothing changed. Beside the tick, as a
+				// cluster that does not answer takes its timeout to say so.
+				if now.Minute()%5 == 0 {
+					runsafe.Go(log, "bringing the log collector up to date", func() { c.MaintainLogDrains(ctx) })
+				}
 			}
 			// A team's template catalogues are downloaded once a day each,
 			// beside the tick for the same reason as the sweep: a slow host

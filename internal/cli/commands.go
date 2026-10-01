@@ -95,6 +95,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdDomains(ctx, rest, stdout)
 	case "dns":
 		err = cmdDNS(ctx, rest, stdout)
+	case "drains":
+		err = cmdDrains(ctx, rest, stdout)
 	case "templates":
 		err = cmdTemplates(ctx, rest, stdout)
 	case "plan", "apply":
@@ -286,6 +288,7 @@ Cluster:
   servers               List the servers in a team
   certs                 List, upload or remove the team's own TLS certificates
   dns providers         List, connect, test or remove the team's DNS providers
+  drains                List, add, test or remove where the team's logs are shipped
 
 Secret managers:
   secrets connections   List, add, test or remove the Vault, Infisical, Doppler or

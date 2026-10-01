@@ -2109,6 +2109,67 @@ func ImportFailed(reason string) *Problem {
 		With("reason", reason)
 }
 
+// --- log drains ---
+
+// LogDrainInvalid is a drain's settings being refused before anything is
+// sent or kept.
+func LogDrainInvalid(reason string) *Problem {
+	return New("drain.invalid", "Those settings cannot be a log drain").
+		WithCause("%s", reason).
+		WithImpact("Nothing was saved, and nothing was sent.").
+		WithFix("Correct the setting it names. Each kind's settings, and where to find them in the service, are on the log drains page of the documentation.").
+		WithDocs("/docs/log-drains#the-kinds").
+		WithStatus(http.StatusBadRequest)
+}
+
+// LogDrainTestFailed is the test line not being taken by the service. A drain
+// is not saved until one is.
+func LogDrainTestFailed(drain, reason string) *Problem {
+	return New("drain.test_failed", "The service did not take the test line").
+		WithCause("The panel sent %s one test line, as the collector will send every line, and it was not taken: %s", drain, reason).
+		WithImpact("Nothing was changed: a drain is saved, and a change to one is kept, only once a test line reaches the service.").
+		WithFix("Check the address, and the token or key, against the service's own page for sending logs, and that this server can reach it. "+
+			"An address on this machine, inside the cluster or at the cloud's metadata service is refused on purpose.").
+		WithDocs("/docs/log-drains#the-test").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("drain", drain)
+}
+
+// TooManyLogDrains is a team adding a drain past the limit.
+func TooManyLogDrains(limit int) *Problem {
+	return New("drain.limit", "This team has as many log drains as it can").
+		WithCause("A team can have %d log drains.", limit).
+		WithImpact("Nothing was saved.").
+		WithFix("Remove one it no longer sends to, or limit one drain to several projects instead of having one per project.").
+		WithDocs("/docs/log-drains#limits").
+		WithStatus(http.StatusConflict)
+}
+
+// LogDrainUnreadable is a stored drain whose credentials do not open: the row
+// was changed by hand, or the key that sealed them is gone.
+func LogDrainUnreadable(drain string) *Problem {
+	return New("drain.unreadable", "This drain's credentials cannot be read").
+		WithCause("The credentials stored for %s do not open with this panel's key for the address it sends to.", drain).
+		WithImpact("The drain is left out of the collector, so it receives nothing. Every other drain is unaffected.").
+		WithFix("Edit the drain and enter its token or password again, or remove it and add it again.").
+		WithDocs("/docs/troubleshooting#logs-do-not-reach-a-drain").
+		WithStatus(http.StatusConflict).
+		With("drain", drain)
+}
+
+// LogCollectorFailed is the collector's configuration not reaching the
+// cluster.
+func LogCollectorFailed(reason string) *Problem {
+	return New("drain.collector_failed", "The log collector could not be brought up to date").
+		WithCause("%s", reason).
+		WithImpact("The drains are saved. The collector on each server keeps the configuration it had, or does not run if it never started.").
+		WithFix("Check that the cluster is reachable under Servers. The panel tries again every five minutes, and every time a drain is saved.").
+		WithDocs("/docs/troubleshooting#logs-do-not-reach-a-drain").
+		WithStatus(http.StatusBadGateway).
+		Retry()
+}
+
 // --- configuration ---
 
 // NotConfigured reports a feature used before its settings were filled in.

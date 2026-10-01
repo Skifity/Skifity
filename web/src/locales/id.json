@@ -409,7 +409,10 @@
       "dns_record.created": "Record DNS dibuat",
       "dns_record.updated": "Record DNS diarahkan ke alamat baru",
       "dns_record.removed": "Record DNS dihapus",
-      "dns_record.abandoned": "Record DNS diubah di luar panel, diserahkan kepada pengubahnya"
+      "dns_record.abandoned": "Record DNS diubah di luar panel, diserahkan kepada pengubahnya",
+      "log_drain.created": "Saluran log ditambahkan",
+      "log_drain.updated": "Saluran log diubah",
+      "log_drain.deleted": "Saluran log dihapus"
     }
   },
   "projects": {
@@ -1841,7 +1844,8 @@
     "scanning": "Pemindaian image",
     "certificates": "Sertifikat",
     "secretManagers": "Pengelola rahasia",
-    "dnsProviders": "Penyedia DNS"
+    "dnsProviders": "Penyedia DNS",
+    "logDrains": "Saluran log"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -3696,6 +3700,36 @@
         "cause": "{{0}} adalah zona itu sendiri, dan mengarahkannya ke {{1}} memerlukan CNAME, yang tidak diizinkan {{2}} di sana.",
         "impact": "Tidak ada record yang dibuat.",
         "fix": "Gunakan nama di dalam zona, misalnya www.{{0}}, dan alihkan nama polosnya ke sana; atau minta administrator mengatur IP publik kluster di Pengaturan, Domain menjadi alamat IP."
+      },
+      "drain_invalid": {
+        "title": "Pengaturan itu tidak bisa menjadi saluran log",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang disimpan, dan tidak ada yang dikirim.",
+        "fix": "Perbaiki pengaturan yang disebutkan. Pengaturan setiap jenis, dan tempat menemukannya di layanan, ada di halaman saluran log dalam dokumentasi."
+      },
+      "drain_test_failed": {
+        "title": "Layanan tidak menerima baris uji",
+        "cause": "Panel mengirim satu baris uji ke {{0}}, sama seperti kolektor akan mengirim setiap baris, dan baris itu tidak diterima: {{1}}",
+        "impact": "Tidak ada yang diubah: saluran disimpan, dan perubahan padanya dipertahankan, hanya setelah baris uji sampai ke layanan.",
+        "fix": "Periksa alamat serta token atau kunci dengan halaman pengiriman log milik layanan itu sendiri, dan pastikan server ini dapat menjangkaunya. Alamat di mesin ini, di dalam klaster, atau layanan metadata cloud sengaja ditolak."
+      },
+      "drain_limit": {
+        "title": "Tim ini sudah memiliki saluran log sebanyak yang diizinkan",
+        "cause": "Sebuah tim dapat memiliki {{0}} saluran log.",
+        "impact": "Tidak ada yang disimpan.",
+        "fix": "Hapus saluran yang tidak lagi dipakai, atau batasi satu saluran ke beberapa proyek alih-alih satu saluran per proyek."
+      },
+      "drain_unreadable": {
+        "title": "Kredensial saluran ini tidak dapat dibaca",
+        "cause": "Kredensial yang disimpan untuk {{0}} tidak dapat dibuka dengan kunci panel ini untuk alamat tujuannya.",
+        "impact": "Saluran ini tidak dimasukkan ke kolektor, jadi tidak menerima apa pun. Saluran lain tidak terpengaruh.",
+        "fix": "Ubah saluran dan masukkan lagi token atau kata sandinya, atau hapus lalu tambahkan lagi."
+      },
+      "drain_collector_failed": {
+        "title": "Kolektor log tidak dapat diperbarui",
+        "cause": "{{0}}",
+        "impact": "Saluran tetap tersimpan. Kolektor di setiap server mempertahankan konfigurasi sebelumnya, atau tidak berjalan jika belum pernah dimulai.",
+        "fix": "Periksa bahwa klaster dapat dijangkau di halaman Server. Panel mencoba lagi setiap lima menit, dan setiap kali saluran disimpan."
       }
     }
   },
@@ -4560,5 +4594,152 @@
     "removeConsequence": "Record yang dibuat panel melaluinya tetap ada di penyedia, dan sejak itu menjadi milik Anda: {{number}}.",
     "recordsKept": "Record yang dikelola: {{number}}",
     "zonesListed": "per {{when}}"
+  },
+  "logDrains": {
+    "help": "Kirim semua yang dicetak aplikasi Anda ke layanan di luar klaster, tempat log disimpan, dicari, dan dipakai untuk peringatan. Kolektor di setiap server mengirim setiap baris ke saluran milik tim yang memilikinya.",
+    "docs": "Cara kerja saluran log",
+    "empty": "Log tim ini belum dikirim ke mana pun",
+    "emptyHelp": "Tambahkan saluran untuk mengirim keluaran setiap aplikasi ke Loki, Elasticsearch, Datadog, Axiom, Better Stack, New Relic, syslog, atau endpoint HTTPS.",
+    "add": "Tambah saluran log",
+    "limitReached": "Sebuah tim dapat memiliki {{limit}} saluran log.",
+    "collector": {
+      "title": "Kolektor",
+      "state": {
+        "running": "Berjalan",
+        "starting": "Sedang dimulai",
+        "failing": "Gagal",
+        "absent": "Tidak berjalan"
+      },
+      "noCluster": "Panel ini belum terhubung ke klaster, jadi belum ada yang mengumpulkan log. Salurannya tetap tersimpan.",
+      "servers": "Berjalan di {{ready}} dari {{desired}} server. Vector {{version}}.",
+      "notRead": "Statusnya tidak dapat dibaca dari klaster saat ini.",
+      "updateFailed": "Kolektor tidak dapat diperbarui",
+      "refused": "Menolak konfigurasinya"
+    },
+    "everyProject": "Semua proyek",
+    "onlyProjects": "Hanya {{projects}}",
+    "noProjectsLeft": "Dibatasi ke proyek yang sudah tidak ada, jadi tidak ada yang dikirim",
+    "withBuilds": "dengan build",
+    "testedAt": "diuji {{when}}",
+    "test": "Kirim baris uji",
+    "testSent": "{{name}} menerima baris uji.",
+    "lastTestFailed": "Uji terakhir gagal: {{reason}}",
+    "removeTitle": "Hapus {{name}}?",
+    "removeConfirm": "Tidak ada lagi yang dikirim ke sana. Baris yang sudah terkirim tetap di tempatnya. Jika ini saluran terakhir, kolektor di setiap server ikut dihentikan.",
+    "saved": "Baris uji berhasil dikirim, dan saluran disimpan.",
+    "kindLabel": "Kirim ke",
+    "name": "Nama",
+    "secretStored": "Tersimpan. Ketik nilai baru untuk menggantinya.",
+    "forgetSecret": "Lupakan nilai yang tersimpan",
+    "whichLogs": "Log yang mana",
+    "limitToProjects": "Hanya beberapa proyek",
+    "limitToProjectsHelp": "Jika mati, log semua proyek dikirim, termasuk proyek yang ditambahkan kemudian.",
+    "chooseProject": "Pilih setidaknya satu proyek.",
+    "includeBuilds": "Juga log build",
+    "includeBuildsHelp": "Keluaran setiap build, selain keluaran aplikasi. Mati secara bawaan: bisa panjang, dan tetap disimpan bersama deployment-nya.",
+    "enabled": "Mengirim",
+    "enabledHelp": "Jika mati, saluran dan pengaturannya tetap ada tetapi tidak ada yang dikirim.",
+    "testFirst": "Menyimpan akan mengirim satu baris uji yang jelas bertanda dengan kredensial ini, dan saluran hanya disimpan jika layanan menerimanya. Itu membuktikan alamat dan kredensial; apakah kolektor berjalan ditampilkan di atas.",
+    "testing": "Mengirim baris uji…",
+    "testAndSave": "Uji dan simpan",
+    "kind": {
+      "http": "Endpoint HTTPS",
+      "loki": "Grafana Loki",
+      "elasticsearch": "Elasticsearch / OpenSearch",
+      "datadog": "Datadog",
+      "axiom": "Axiom",
+      "betterstack": "Better Stack",
+      "newrelic": "New Relic",
+      "syslog": "Syslog melalui TLS"
+    },
+    "kindHelp": {
+      "http": "Baris JSON, satu per baris, dikirim dengan POST ke alamat Anda. HTTP biasa hanya untuk penerima yang tidak meminta kredensial.",
+      "loki": "Grafana Cloud atau Loki Anda sendiri. Baris diberi label tim, proyek, lingkungan, dan aplikasi.",
+      "elasticsearch": "Bulk API, ke indeks pilihan Anda. Pilih versi 7 untuk OpenSearch.",
+      "datadog": "Penerima log Datadog untuk situs Anda. Setiap baris dicatat dengan aplikasinya sebagai service.",
+      "axiom": "Ke salah satu dataset Axiom Anda.",
+      "betterstack": "Sumber HTTP di Better Stack Telemetry.",
+      "newrelic": "Log API New Relic.",
+      "syslog": "RFC 5424 melalui TLS, seperti Papertrail atau rsyslog Anda sendiri. Sertifikatnya diperiksa."
+    },
+    "status": {
+      "applied": "Mengirim",
+      "pending": "Menunggu kolektor",
+      "failed": "Kolektor tidak dapat diperbarui",
+      "paused": "Dijeda",
+      "idle": "Tidak ada proyek tersisa",
+      "no_cluster": "Tidak ada klaster",
+      "unreadable": "Kredensial tidak terbaca"
+    },
+    "field": {
+      "http": {
+        "url": "Alamat",
+        "urlHelp": "Tempat setiap kumpulan baris dikirim.",
+        "header_name": "Header",
+        "header_nameHelp": "Satu header tempat penerima membaca kredensial, biasanya Authorization. Kosongkan jika tidak ada.",
+        "header_value": "Nilai header",
+        "header_valueHelp": "Misalnya Bearer diikuti token. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "loki": {
+        "url": "Alamat Loki",
+        "urlHelp": "Alamat tanpa /loki/api/v1/push, yang akan ditambahkan.",
+        "username": "Nama pengguna",
+        "usernameHelp": "Untuk Grafana Cloud, nomor pengguna di halaman Loki milik stack. Kosongkan untuk mengirim token sebagai bearer token.",
+        "password": "Kata sandi atau token",
+        "passwordHelp": "Untuk Grafana Cloud, token access policy dengan logs:write. Dienkripsi, dan tidak pernah ditampilkan lagi.",
+        "tenant_id": "Tenant",
+        "tenant_idHelp": "Dikirim sebagai X-Scope-OrgID, untuk Loki dengan lebih dari satu tenant. Biasanya kosong."
+      },
+      "elasticsearch": {
+        "url": "Alamat klaster",
+        "urlHelp": "Misalnya https://search.example.com:9200.",
+        "index": "Indeks",
+        "indexHelp": "%Y, %m, dan %d adalah tanggal baris: bawaannya satu indeks per hari.",
+        "api": "Versi API",
+        "apiHelp": "8 untuk Elasticsearch 8 ke atas; 7 untuk Elasticsearch 7 dan OpenSearch.",
+        "username": "Nama pengguna",
+        "usernameHelp": "Bersama kata sandi, atau kosongkan keduanya dan berikan kunci API.",
+        "password": "Kata sandi",
+        "passwordHelp": "Dienkripsi, dan tidak pernah ditampilkan lagi.",
+        "api_key": "Kunci API",
+        "api_keyHelp": "Kunci yang sudah dienkode, dikirim sebagai ApiKey. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "datadog": {
+        "site": "Situs",
+        "siteHelp": "Yang ada di alamat Datadog Anda, misalnya datadoghq.eu.",
+        "api_key": "Kunci API",
+        "api_keyHelp": "Organization settings, lalu API keys. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "axiom": {
+        "dataset": "Dataset",
+        "datasetHelp": "Buat dulu di Axiom.",
+        "region": "Wilayah",
+        "regionHelp": "Domain edge organisasi Anda, misalnya eu-central-1.aws.edge.axiom.co. Kosong berarti bawaan Axiom.",
+        "org_id": "ID organisasi",
+        "org_idHelp": "Hanya untuk token pribadi.",
+        "token": "Token API",
+        "tokenHelp": "Dengan hak ingest pada dataset. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "betterstack": {
+        "host": "Host penerima",
+        "hostHelp": "Di halaman sumber di Better Stack.",
+        "source_token": "Token sumber",
+        "source_tokenHelp": "Di halaman yang sama. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "newrelic": {
+        "region": "Wilayah",
+        "regionHelp": "us atau eu, sesuai akun New Relic Anda.",
+        "account_id": "ID akun",
+        "account_idHelp": "Angka di alamat halaman mana pun di akun Anda.",
+        "license_key": "License key",
+        "license_keyHelp": "Kunci jenis Ingest - License. Dienkripsi, dan tidak pernah ditampilkan lagi."
+      },
+      "syslog": {
+        "host": "Host",
+        "hostHelp": "Misalnya logs5.papertrailapp.com. Sertifikatnya harus untuk nama ini.",
+        "port": "Port",
+        "portHelp": "6514 adalah port umum syslog melalui TLS."
+      }
+    }
   }
 }

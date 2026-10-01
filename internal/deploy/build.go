@@ -48,6 +48,12 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 
 	image := builder.ImageName(registry, env.Namespace, app.Slug, imageTag(*deployment))
 
+	// Whose build it is, for the labels a team's log drain finds it by.
+	project, err := d.db.GetProject(ctx, env.ProjectID)
+	if err != nil {
+		return "", err
+	}
+
 	chosen, err := d.chooseBuilder(ctx, app)
 	if err != nil {
 		return "", err
@@ -68,6 +74,8 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		Namespace:      d.cluster.Client().BuildNamespace(),
 		AppID:          app.ID,
 		DeploymentID:   deployment.ID,
+		TeamID:         project.TeamID,
+		ProjectID:      project.ID,
 		RepoURL:        app.RepoURL,
 		CommitSHA:      deployment.CommitSHA,
 		Branch:         app.Branch,

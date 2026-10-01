@@ -218,6 +218,11 @@ skifity dns providers add --kind cloudflare --credentials token.txt  # or --cred
 skifity dns providers add --kind route53 --credentials ~/.aws/credentials
 skifity dns providers test Cloudflare  # sign in again and list its zones
 skifity dns providers remove Cloudflare  # the records it made stay at the provider
+skifity drains                    # where the team's logs are shipped, and the collector
+skifity drains add Axiom --kind axiom --set dataset=apps  # asks for the token; a test line is sent first
+skifity drains add Loki --kind loki --set url=https://logs.example.com --secret-file password=./token  # from a file
+skifity drains test Axiom         # send its test line again
+skifity drains remove Axiom       # nothing more is sent to it
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches
