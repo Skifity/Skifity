@@ -245,7 +245,25 @@ func SanitiseEnvKey(key string) (string, error) {
 			return "", fmt.Errorf("a variable name can only contain letters, digits and underscores: %q", key)
 		}
 	}
+	if IsGPUDeviceVariable(key) {
+		return "", fmt.Errorf("%s is set by the GPU device plugin to the cards an instance was given, "+
+			"and setting it yourself would hand the app every card on its server; "+
+			"ask for GPUs in the app's settings instead", key)
+	}
 	return key, nil
+}
+
+// IsGPUDeviceVariable reports whether a variable is the one the NVIDIA
+// container runtime reads to decide which cards a container sees.
+//
+// The device plugin sets it to the cards it allocated, and a variable of the
+// app's own comes after the plugin's in what the kubelet hands the runtime,
+// so it wins: NVIDIA_VISIBLE_DEVICES=all in an app's settings would give it
+// every GPU on the server, counted as one — another team's included. So it
+// is refused where a variable is set and left out of the Secret an app reads
+// them from, for one stored before this was refused.
+func IsGPUDeviceVariable(key string) bool {
+	return strings.EqualFold(key, "NVIDIA_VISIBLE_DEVICES")
 }
 
 // The in-cluster registry.

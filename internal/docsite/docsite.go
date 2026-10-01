@@ -54,6 +54,7 @@ var order = []string{
 	"concepts",
 	"templates",
 	"adding-servers",
+	"gpus",
 	"firewall",
 	"plugins",
 	"databases",

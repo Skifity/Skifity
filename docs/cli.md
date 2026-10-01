@@ -189,6 +189,7 @@ skifity secrets connections list  # the team's secret managers; add, limit, test
 skifity secrets connections limit company-vault --allow-path shop --allow-project shop  # what it may be used for
 skifity scale --instances 3       # a fixed number
 skifity scale --auto --max 5      # or automatically
+skifity gpus --count 1            # an NVIDIA GPU for each instance; see gpus.md
 skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, same build
 skifity logs --process worker     # and its output
 skifity plan                      # what skifity.yaml would change; see below

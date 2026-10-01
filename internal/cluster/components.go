@@ -68,6 +68,8 @@ func (c *Cluster) installComponent(ctx context.Context, name string) error {
 		return c.installUpgradeController(ctx)
 	case GuardComponent:
 		return c.installEdgeGuard(ctx)
+	case NVIDIAComponent:
+		return c.installNVIDIADevicePlugin(ctx)
 	case "monitoring":
 		// Refused earlier, in the API, with a message that says where to look.
 		// This is the second lock on the same door.

@@ -549,6 +549,8 @@ var Components = []Component{
 		Description: "Puts your apps on the internet with no public IP and no port open, through Cloudflare. Needs a tunnel token in Settings, under Domains and HTTPS.", MemoryMB: 64},
 	{Name: "system-upgrade", Title: "Kubernetes upgrades", Optional: true,
 		Description: "Upgrades k3s on every server, one at a time, when you ask for it under Settings. Installed with the first upgrade.", MemoryMB: 30},
+	{Name: "nvidia-device-plugin", Title: "NVIDIA GPUs", Optional: true,
+		Description: "Lets apps use the NVIDIA cards in your servers, by running NVIDIA's device plugin on each server that has one. The driver and the NVIDIA container toolkit on the server are yours to install; the GPU documentation has the commands.", MemoryMB: 30},
 	{Name: "monitoring", Title: "Full monitoring", Optional: true, External: true,
 		Description: "Prometheus and Grafana, installed with Helm rather than by the panel. Skifity shows CPU and memory for every server and every instance without it.",
 		Docs:        "/docs/troubleshooting#full-monitoring", MemoryMB: 900},

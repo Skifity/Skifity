@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { useMutation } from "@tanstack/react-query"
 import { BookOpenIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 
+import { GPUCard } from "@/components/app/gpu-card"
 import { MaintenanceCard } from "@/components/app/maintenance"
 import { TemplateCard } from "@/components/app/template-card"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
@@ -488,6 +489,10 @@ export function SettingsTab({ app }: { app: App }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Its own card and its own save: which cards an instance gets is not
+          a setting of the build, and saving it is a rollout. */}
+      <GPUCard app={app} />
 
       {/* A folder sent with `skifity up` or an image can be in maintenance
           as much as a repository can: it is about visitors, not the source. */}

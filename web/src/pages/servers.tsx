@@ -2,12 +2,14 @@ import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
-import { PlusIcon, SearchIcon, ServerIcon } from "lucide-react"
+import { CpuIcon, PlusIcon, SearchIcon, ServerIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
+import { EnableGPUsButton, GPUSummary, useGPUComponent } from "@/components/server-gpus"
 import { StatusBadge } from "@/components/status-badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -27,7 +29,7 @@ import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { Server } from "@/lib/types"
+import type { ClusterSummary, Server } from "@/lib/types"
 
 type Filter = "all" | "ready" | "attention"
 
@@ -54,6 +56,31 @@ export function ServersPage() {
     },
     Boolean(team),
   )
+
+  // The live side of each server — its GPUs — keyed by node. The same
+  // question the dashboard asks, so the answer is shared.
+  const cluster = useQuery({
+    queryKey: ["cluster", team?.id],
+    queryFn: () => api.get<ClusterSummary>(`/api/teams/${team!.id}/cluster`),
+    // A member limited to some projects is refused the cluster.
+    enabled: Boolean(team) && !team?.scoped,
+    refetchInterval: 15_000,
+  })
+  const nodes = new Map((cluster.data?.nodes ?? []).map((node) => [node.name, node]))
+  const anyGPU = (cluster.data?.nodes ?? []).some(
+    (node) => (node.gpus ?? []).length > 0 || node.gpu_hardware != null,
+  )
+  // A card Kubernetes cannot use, and no plugin: the one thing an
+  // administrator can fix from here.
+  const idleCards = (cluster.data?.nodes ?? []).filter(
+    (node) => (node.gpus ?? []).length === 0 && node.gpu_hardware != null,
+  )
+  const gpuComponent = useGPUComponent(user?.is_admin === true && idleCards.length > 0)
+  const offerEnable =
+    user?.is_admin === true &&
+    idleCards.length > 0 &&
+    gpuComponent.isSuccess &&
+    gpuComponent.data?.status !== "installed"
 
   const items = useMemo(() => servers.data?.items ?? [], [servers.data])
 
@@ -115,6 +142,17 @@ export function ServersPage() {
         />
       ) : (
         <>
+          {offerEnable && (
+            <Alert variant="warning">
+              <CpuIcon />
+              <AlertTitle>{t("servers.gpu.idleTitle")}</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{t("servers.gpu.idleHelp")}</p>
+                <EnableGPUsButton />
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <InputGroup className="max-w-xs">
               <InputGroupAddon>
@@ -161,13 +199,18 @@ export function ServersPage() {
                     <TableHead className="hidden md:table-cell">{t("servers.cpu")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("servers.memory")}</TableHead>
                     <TableHead className="hidden lg:table-cell">{t("servers.disk")}</TableHead>
+                    {anyGPU && (
+                      <TableHead className="hidden md:table-cell">
+                        {t("servers.gpu.title")}
+                      </TableHead>
+                    )}
                     <TableHead className="hidden lg:table-cell">{t("servers.lastSeen")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {shown.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={7} className="p-0">
+                      <TableCell colSpan={anyGPU ? 8 : 7} className="p-0">
                         <EmptyState
                           bordered={false}
                           icon={SearchIcon}
@@ -215,6 +258,11 @@ export function ServersPage() {
                         <TableCell className="hidden tabular-nums lg:table-cell">
                           {server.disk_gb ? `${server.disk_gb} GB` : "—"}
                         </TableCell>
+                        {anyGPU && (
+                          <TableCell className="hidden text-sm md:table-cell">
+                            <GPUSummary node={nodes.get(server.node_name)} />
+                          </TableCell>
+                        )}
                         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                           {server.last_seen_at
                             ? formatRelative(server.last_seen_at)

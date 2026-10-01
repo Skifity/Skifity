@@ -45,6 +45,7 @@ skifity env set KEY=value         Set a variable (several at once roll out once)
 skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
 skifity scale --instances 3       Change how many copies run
+skifity gpus --count 1            Give each instance an NVIDIA GPU (--vendor amd|intel, --on web,worker)
 skifity rollback                  Go back to the previous version
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
@@ -137,6 +138,7 @@ Tools, in the order they are usually needed:
 | `open_port` | Opens a TCP or UDP port on every server. |
 | `close_port` | Closes one. |
 | `scale_app` | Changes the instance count or turns on autoscaling. |
+| `set_gpus` | Gives each instance of an app GPUs, or takes them away, and says what the cluster offers. |
 | `set_process` | Runs a worker or other process beside an app, on its image, or changes one. |
 | `check_scaling_readiness` | What would break if this app ran more than one instance. |
 | `rollback_app` | Restores a previous version's image and settings. |

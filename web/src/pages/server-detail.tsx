@@ -16,6 +16,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress } from "@/components/operation-progress"
+import { ServerGPUCard } from "@/components/server-gpus"
 import { ServerHardening } from "@/components/server-hardening"
 import { ServerUsageCard } from "@/components/server-usage-card"
 import { StatusBadge } from "@/components/status-badge"
@@ -264,6 +265,12 @@ export function ServerDetailPage() {
             <Fact label="Kubelet" value={metrics.data.kubelet_version} mono />
           </CardContent>
         </Card>
+      )}
+
+      {/* What its GPUs are doing, or what is missing for a card Kubernetes
+          cannot use yet. Live, like the card above. */}
+      {metrics.data && (
+        <ServerGPUCard serverId={serverId} node={metrics.data} isAdmin={canChangeServers} />
       )}
 
       {/* History outlives the node: a server that stopped answering is the

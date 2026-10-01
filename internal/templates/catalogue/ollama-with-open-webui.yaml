@@ -12,6 +12,11 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+  # Used when a server offers an NVIDIA card; installed without one, Ollama
+  # runs its models on the CPU.
+  gpu:
+    vendor: nvidia
+    count: 1
   volumes:
   - name: ollama
     mount_path: /root/.ollama

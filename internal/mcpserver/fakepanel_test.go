@@ -174,8 +174,15 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"POST /api/apps/{app}/run":                   map[string]any{"run": "run_1"},
 		"GET /api/apps/{app}/runs/{run}/logs":        map[string]any{"lines": []string{"migrated"}},
 		"PUT /api/apps/{app}/scaling":                map[string]any{"scaling": map[string]any{"replicas": 2}},
-		"GET /api/apps/{app}/scaling/readiness":      items(),
-		"PUT /api/apps/{app}/processes/{process}":    map[string]any{"app_id": "app_1", "name": "worker", "command": "bin/work", "instances": 1},
+		"PUT /api/apps/{app}/gpu": map[string]any{
+			"gpu": map[string]any{"count": 1, "vendor": "nvidia", "product": "", "workloads": []any{}},
+			"cluster": map[string]any{"known": true, "vendors": []any{
+				map[string]any{"vendor": "nvidia", "allocatable": 2, "in_use": 1, "most_on_one_server": 2, "products": []any{"NVIDIA-A10"}},
+			}},
+			"warnings": []any{},
+		},
+		"GET /api/apps/{app}/scaling/readiness":   items(),
+		"PUT /api/apps/{app}/processes/{process}": map[string]any{"app_id": "app_1", "name": "worker", "command": "bin/work", "instances": 1},
 
 		"GET /api/apps/{app}/variables": items(
 			map[string]any{"key": "GREETING", "value": "hello", "is_secret": false},

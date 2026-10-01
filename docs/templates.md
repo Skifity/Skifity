@@ -173,6 +173,11 @@ Each template is exactly what a file in the built-in catalogue holds; the
 README beside those files, `internal/templates/catalogue/README.md`, describes
 every field. One more field is read here: `icon`, the address of its logo.
 
+A service that can use a GPU says so with `gpu: {vendor: nvidia, count: 1}`. It
+is only ever a preference: installed on a cluster that offers such a card it is
+given one, and on any other it is installed without, and the install says so.
+See [GPUs](gpus.md).
+
 ```yaml
 templates:
   - id: wiki

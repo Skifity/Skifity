@@ -30,6 +30,9 @@ type AppSpec struct {
 	// Name is its own Deployment's. The app reads it as SKIFITY_APP either
 	// way: a worker keying a queue on its app's name must see the web's.
 	ProcessOf string
+	// Process is the process's own name, such as worker, and empty for the
+	// app itself.
+	Process string
 	// CommitSHA is the commit the running image was built from, when there is
 	// one. The app reads it as SKIFITY_COMMIT_SHA.
 	CommitSHA string
@@ -133,6 +136,10 @@ type AppSpec struct {
 
 	// PublicPorts take connections that are not HTTP. See ports.go.
 	PublicPorts []PublicPort
+
+	// GPU is what the app asked for and which of its workloads get it; a
+	// Deployment reads its own share through GPUs(). See gpu.go.
+	GPU GPURequest
 }
 
 // Confinement is how a pod's security context is written for this app.
@@ -217,6 +224,15 @@ func (s AppSpec) Validate() error {
 	}
 	if err := validateFiles(s); err != nil {
 		return err
+	}
+	if err := ValidateGPURequest(s.GPU); err != nil {
+		return err
+	}
+	// Refused where it is set, and refused here as well: a sleeping app
+	// gives its card back, and the one that takes it is not asked to return
+	// it when a request comes in to wake this one.
+	if s.GPUs().Count > 0 && ScaleToZeroEnabled(s) {
+		return fmt.Errorf("an app with a GPU cannot scale to zero")
 	}
 	seenPorts := map[string]bool{}
 	for _, p := range s.PublicPorts {

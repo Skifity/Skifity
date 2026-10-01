@@ -395,7 +395,9 @@
       "auth.passkey_removed": "已移除通行密钥",
       "auth.passkey_renamed": "已重命名通行密钥",
       "auth.passkey_clone_suspected": "通行密钥被拒绝：它可能已被复制",
-      "secret_manager.limited": "已限制密钥管理器"
+      "secret_manager.limited": "已限制密钥管理器",
+      "app.gpus_changed": "已更改 GPU",
+      "server.gpu_marked": "已更改服务器的 NVIDIA GPU 标记"
     }
   },
   "projects": {
@@ -696,7 +698,39 @@
     },
     "alertsErrorsHelp": "只有在三分钟内总共至少有 20 个请求时才会判断服务器错误，所以访问量很小的应用偶尔失败一次不会触发警告。",
     "security": "安全",
-    "criticalBadge": "严重：{{number}}"
+    "criticalBadge": "严重：{{number}}",
+    "gpu": {
+      "title": "GPU",
+      "help": "为每个实例分配一块专属显卡，用于模型服务、图像生成或转录任务。更改会重启应用，但不会重新构建。",
+      "enabled": "使用 GPU",
+      "enabledHelp": "每个实例都有自己的显卡；一块显卡从不共享。",
+      "vendor": "显卡厂商",
+      "vendorOffer": "集群中共 {{total}} 块，已用 {{used}} 块",
+      "vendorNone": "集群中没有",
+      "count": "每个实例的 GPU 数",
+      "countHelp": "最多 {{most}}：这是单台服务器拥有的最多数量，一个实例的所有显卡都在同一台服务器上。",
+      "product": "优先使用的型号",
+      "productAny": "任意",
+      "productHelp": "只是偏好：若该型号没有空闲显卡，应用会使用同一厂商的其他显卡，而不是等待。",
+      "workloads": "分配给",
+      "workloadWeb": "应用本身",
+      "workloadsHelp": "执行推理的 worker 可以获得显卡，而它前面的 Web 则不需要。",
+      "rollout": "部署时会先停止旧实例再启动新实例，因为新实例需要它的显卡。只有一个实例的应用在新版本启动期间不可用。",
+      "scaleToZero": "此应用会缩容到零，而带 GPU 的应用不能这样做：请只把 GPU 分配给它的进程，或在“扩缩容”中关闭缩容到零。",
+      "remove": "移除 GPU",
+      "removeConfirm": "应用将在没有 GPU 的情况下重启。离不开 GPU 的应用会停止工作，直到再次为它分配 GPU。",
+      "unknown": "无法向集群查询它有哪些 GPU。",
+      "noneOffered": "还没有服务器提供 GPU",
+      "noneOfferedHelp": "服务器需要安装驱动和 NVIDIA container toolkit，然后在“服务器”页面启用 GPU。",
+      "setUp": "如何配置服务器",
+      "warning": {
+        "process_missing": "{{name}} 还不是此应用的进程；成为进程后才会获得 GPU。",
+        "unchecked": "无法向集群查询是否有这些 GPU，因此未根据集群进行检查。",
+        "capacity": "此应用最多需要 {{needed}} 块 {{vendor}} GPU，而集群只有 {{allocatable}} 块：超出的实例会等待显卡空出。",
+        "product_missing": "没有服务器声明拥有 {{product}}，因此应用会运行在任意 {{vendor}} 显卡上。",
+        "previews": "此应用的预览不使用 GPU，因此预览永远不会占用生产环境需要的显卡。"
+      }
+    }
   },
   "deploy": {
     "title": "部署记录",
@@ -1186,6 +1220,41 @@
           }
         }
       }
+    },
+    "gpu": {
+      "title": "GPU",
+      "help": "这台服务器提供给应用的显卡，以及其上的应用正在使用多少。",
+      "vendors": {
+        "nvidia": "NVIDIA",
+        "amd": "AMD",
+        "intel": "Intel"
+      },
+      "count": "{{n}} × {{name}}",
+      "inUse": "已用 {{used}} / {{total}}",
+      "memory": "每块 {{memory}}",
+      "unhealthy": "另有 {{n}} 块未提供：device plugin 报告其状态异常。",
+      "needsSetup": "未配置",
+      "hardware": {
+        "nfd": "Node Feature Discovery 在这台服务器上发现了 NVIDIA 显卡，但 Kubernetes 还不能使用它",
+        "gpu-feature-discovery": "GPU feature discovery 表示这台服务器有 NVIDIA 显卡，但 Kubernetes 还不能使用它",
+        "label": "这台服务器被标记为有 NVIDIA 显卡，但 Kubernetes 还不能使用它"
+      },
+      "missingPlugin": "尚未安装向 Kubernetes 报告显卡的 device plugin。",
+      "pluginStarting": "Device plugin 已在这台服务器上运行，但尚未提供显卡。这需要几秒钟。",
+      "pluginFailing": "Device plugin 无法在这台服务器上启动：{{reason}}",
+      "pluginRuntime": "这台服务器没有 NVIDIA container runtime。请在其上安装 NVIDIA container toolkit，然后重启该服务器上的 k3s。",
+      "pluginNotHere": "Device plugin 尚未部署到这台服务器。",
+      "driverNote": "面板不会在服务器上安装驱动和 NVIDIA container toolkit。",
+      "nfdNone": "Node Feature Discovery 未在这台服务器上发现 NVIDIA 显卡。",
+      "undetectable": "没有提供 GPU。没有 device plugin，Kubernetes 无法看到服务器是否有 GPU：如果这台服务器有 NVIDIA 显卡，请在下方标记。",
+      "mark": "这台服务器有 NVIDIA GPU",
+      "markHelp": "将 device plugin 部署到这台服务器。仅用于其他方式都看不到的显卡；必须先安装驱动和 container toolkit。",
+      "enable": "启用 GPU",
+      "enableConfirmTitle": "启用 GPU？",
+      "enableConfirm": "这会在每台有 NVIDIA 显卡的服务器上安装 NVIDIA 的 device plugin，让应用可以申请显卡。它不会在服务器上安装驱动或 NVIDIA container toolkit：这些需要你事先安装。",
+      "docs": "如何配置服务器",
+      "idleTitle": "有 NVIDIA 显卡尚未提供给应用",
+      "idleHelp": "一些服务器有 NVIDIA 显卡，但没有 device plugin 来提供它。启用 GPU 会安装一个；每台服务器的页面会说明它还缺什么。"
     }
   },
   "databases": {
@@ -3276,6 +3345,30 @@
         "cause": "通过 {{1}} 读取的 {{0}} 个变量将超出其新限制：{{2}}。",
         "impact": "没有更改任何内容。使用新限制后，这些应用的下一次部署、同步或刷新会在任何内容到达集群前停止。",
         "fix": "请先将这些变量指向允许的路径或其他连接。如果目的就是切断它们，请仍然保存限制：在面板中点“仍然保存”，在命令行中使用 --force，在 API 中使用 force: true。"
+      },
+      "app_gpu_unavailable": {
+        "title": "没有服务器提供这种 GPU",
+        "cause": "集群中没有服务器声明 {{0}}，这是 Kubernetes 统计 {{1}} 显卡的方式。",
+        "impact": "未做任何更改。申请它的应用将永远无法启动。",
+        "fix": "在有显卡的服务器上安装驱动和 container toolkit，然后在“服务器”页面启用 GPU。“服务器”页面会说明每台服务器缺少什么。"
+      },
+      "app_gpu_too_many": {
+        "title": "没有服务器有这么多 GPU",
+        "cause": "每个实例将申请 {{0}} 个 {{1}}，而单台服务器最多只有 {{2}} 个。一个实例的所有显卡都必须在它运行的服务器上。",
+        "impact": "未做任何更改。",
+        "fix": "每个实例申请 {{0}} 个或更少；如果应用可以分担工作，就运行更多实例；或者添加一台显卡更多的服务器。"
+      },
+      "app_gpu_scale_to_zero": {
+        "title": "带 GPU 的应用不能缩容到零",
+        "cause": "休眠的应用会交还显卡，而占用它的应用在有请求唤醒此应用时并不会被要求归还：该请求会一直等待一块不会空出的显卡。",
+        "impact": "未做任何更改。",
+        "fix": "在为应用分配 GPU 之前关闭缩容到零。或者只把 GPU 分配给它的进程（进程从不休眠），让应用本身缩容到零。"
+      },
+      "gpu_device_plugin_exists": {
+        "title": "此集群已在运行 NVIDIA device plugin",
+        "cause": "{{0}} 已经在向 Kubernetes 提供集群的 NVIDIA 显卡，而同一块显卡的两个插件会轮流成为 Kubernetes 所监听的那个。",
+        "impact": "未安装任何内容。应用无需面板的插件即可使用该插件提供的显卡。",
+        "fix": "保留它，并在应用设置中申请 GPU：显卡将来自该插件。只有当你希望由面板管理插件时，才先将它移除。"
       }
     }
   },
@@ -3819,6 +3912,10 @@
     "monitoring": {
       "title": "完整监控",
       "description": "Prometheus 和 Grafana，用 Helm 安装而不是由面板安装。即使没有它们，Skifity 也会显示每台服务器和每个实例的 CPU 与内存。"
+    },
+    "nvidia-device-plugin": {
+      "title": "NVIDIA GPU",
+      "description": "在每台有 NVIDIA 显卡的服务器上运行 NVIDIA 的 device plugin，让应用可以使用这些显卡。服务器上的驱动和 NVIDIA container toolkit 需要你自己安装；GPU 文档中有相应命令。"
     }
   },
   "files": {
@@ -3987,7 +4084,9 @@
       "attach_failed": "无法把磁盘背后的存储挂接到这台服务器。它通常仍挂接在另一台服务器上，等那台服务器释放后就会解除。",
       "sandbox_failed": "服务器无法为这个实例准备网络或容器。这是服务器的问题，而不是应用的问题：如果一直出现，请在那台服务器上重启 k3s，或移除该服务器后重新添加。",
       "oom": "应用使用的内存超过了上限，被停止了。请在“伸缩”中提高内存上限，或找出占用内存的原因。",
-      "evicted": "服务器资源不足，为了保护自身停止了这个实例：{{0}} 它会在有空余资源的服务器上重新启动。"
+      "evicted": "服务器资源不足，为了保护自身停止了这个实例：{{0}} 它会在有空余资源的服务器上重新启动。",
+      "scheduling_gpu": "没有服务器有空闲的 GPU 给这个实例（{{0}}）。所有显卡都被其他实例占用，或者没有服务器的 device plugin 提供显卡：“服务器”页面显示每台服务器的 GPU 及缺少的内容。停止其他使用 GPU 的程序、添加带 GPU 的服务器，或在应用设置中减少申请数量。",
+      "gpu_runtime_missing": "这个实例所在的服务器没有 NVIDIA container runtime，而带 NVIDIA GPU 的应用需要用它启动。请按 GPU 文档所述，在该服务器上安装 NVIDIA container toolkit 并重启其上的 k3s。"
     }
   },
   "certificates": {

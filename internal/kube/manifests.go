@@ -28,6 +28,7 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 	labels := s.Labels()
 
 	confinement := s.Confinement()
+	gpus := s.GPUs()
 
 	container := corev1.Container{
 		Name:            s.Name,
@@ -172,6 +173,10 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 		}
 	}
 
+	// After the spread, which it adds a node preference beside. The build
+	// never comes here, and neither does a one-off command: see gpu.go.
+	applyGPUs(&podSpec, &podSpec.Containers[0], gpus)
+
 	// A volume means the app keeps state on disk, so two instances writing at
 	// once would corrupt it. Recreate stops the old instance before the new one
 	// starts; RollingUpdate would run both.
@@ -182,8 +187,12 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 			MaxSurge:       intOrString(1),
 		},
 	}
-	if len(s.Volumes) > 0 {
+	switch {
+	case len(s.Volumes) > 0:
 		strategy = appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType}
+	case gpus.Count > 0:
+		// The new instance needs the card the old one holds. See gpuStrategy.
+		strategy = gpuStrategy()
 	}
 
 	// Not written at all when an autoscaler owns it: server-side apply removes
@@ -556,6 +565,9 @@ func BuildEnvSecret(s AppSpec, values map[string]string) *corev1.Secret {
 	// every pod started after — for good.
 	data := make(map[string][]byte, len(values))
 	for k, v := range values {
+		if IsGPUDeviceVariable(k) {
+			continue
+		}
 		data[k] = []byte(v)
 	}
 	return &corev1.Secret{

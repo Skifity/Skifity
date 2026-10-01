@@ -37,6 +37,10 @@ func ExplainUnschedulable(message string) string { return unschedulable(message)
 func unschedulable(message string) Explanation {
 	lower := strings.ToLower(message)
 	switch {
+	// First: a server with a free card and no free CPU is not what somebody
+	// waiting for a GPU needs to hear about.
+	case gpuShortage(lower) != "":
+		return explained("scheduling_gpu", gpuShortage(lower))
 	case strings.Contains(lower, "insufficient cpu") && strings.Contains(lower, "insufficient memory"):
 		return explained("scheduling_cpu_memory")
 	case strings.Contains(lower, "insufficient cpu"):
@@ -63,6 +67,17 @@ func unschedulable(message string) Explanation {
 	default:
 		return explained("scheduling_waiting")
 	}
+}
+
+// gpuShortage is the GPU resource the scheduler found too few of, as
+// "Insufficient nvidia.com/gpu" says it, or empty.
+func gpuShortage(lower string) string {
+	for _, v := range gpuVendors {
+		if strings.Contains(lower, "insufficient "+string(v.resource)) {
+			return string(v.resource)
+		}
+	}
+	return ""
 }
 
 // ExplainReplicaFailure turns a ReplicaSet's refusal into a sentence with a fix.
@@ -193,6 +208,10 @@ var explanations = map[string]string{
 		"A control-plane server does not run apps unless you allow it, " +
 		"and a server being drained accepts nothing.",
 	"scheduling_node_affinity": "No server matches where this app is allowed to run.",
+	"scheduling_gpu": "No server has a free GPU for this instance (%s). " +
+		"Every card is in use by other instances, or no server's device plugin offers one: " +
+		"the Servers page shows each server's GPUs and what is missing. " +
+		"Stop something else that uses one, add a server with a GPU, or ask for fewer under the app's settings.",
 	"scheduling_anti_affinity": "Every server already runs an instance of this app. " +
 		"Add a server, or run fewer instances.",
 	"scheduling_unexplained": "No server can take this instance: %s",
@@ -234,6 +253,9 @@ var explanations = map[string]string{
 		"if an instance on another server still holds it, this one waits until that instance stops.",
 	"attach_failed": "The storage behind a volume could not be attached to this server. " +
 		"It is usually still attached to another server, and is released once that server lets it go.",
+	"gpu_runtime_missing": "The server this instance was placed on has no NVIDIA container runtime, " +
+		"which an app with an NVIDIA GPU is started with. Install the NVIDIA container toolkit on that server " +
+		"and restart k3s there, as the GPU documentation says.",
 	"sandbox_failed": "The server could not set up this instance's network or container. " +
 		"That is a problem on the server rather than in the app: if it goes on, restart k3s on that server, " +
 		"or remove the server and add it again.",
@@ -302,6 +324,9 @@ func ExplainEvent(reason, message string) Explanation {
 	case "FailedAttachVolume":
 		return explained("attach_failed")
 	case "FailedCreatePodSandBox":
+		if NVIDIARuntimeMissing(message) {
+			return explained("gpu_runtime_missing")
+		}
 		return explained("sandbox_failed")
 	case "OOMKilling", "OOMKilled":
 		return explained("oom")
@@ -313,6 +338,17 @@ func ExplainEvent(reason, message string) Explanation {
 		return explained("evicted", detail)
 	}
 	return Explanation{}
+}
+
+// NVIDIARuntimeMissing reports whether a sandbox failed because the server
+// has no handler for the "nvidia" RuntimeClass: containerd's `no runtime for
+// "nvidia" is configured`, which is a server without the NVIDIA container
+// toolkit, or one whose k3s was started before it was installed.
+func NVIDIARuntimeMissing(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, `runtime for "nvidia"`) ||
+		strings.Contains(lower, `runtimehandler "nvidia"`) ||
+		strings.Contains(lower, "runtime handler \"nvidia\"")
 }
 
 // missingObject is the name in the kubelet's `secret "web-env" not found`, or

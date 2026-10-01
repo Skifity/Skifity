@@ -84,6 +84,8 @@ func (c *Cluster) Summary(ctx context.Context) (api.ClusterSummary, error) {
 			CPUCapacityM: n.CPUCapacityM, MemCapacityMB: n.MemCapacityMB,
 			CPUUsedM: n.CPUUsedM, MemUsedMB: n.MemUsedMB, UsageKnown: n.UsageKnown, PodCount: n.PodCount,
 			Labels: n.Labels, Schedulable: n.Schedulable,
+			GPUs: nodeGPUs(n.GPUs), GPUHardware: n.GPUHardware, NFD: n.NFD, GPULabelled: n.GPULabelled,
+			GPUPlugin: pluginState(n.GPUPlugin),
 		})
 	}
 	return out, nil
@@ -484,6 +486,13 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		ImageBuiltHere: app.SourceType == "git" || app.SourceType == "upload",
 		RunAsUser:      app.RunAsUser,
 	}
+	// The app's GPUs, and which of its workloads get them. A runtime setting
+	// like the ones below: it reaches the pod and never the build (ADR-0007).
+	gpu, err := c.db.GetAppGPU(ctx, app.ID)
+	if err != nil {
+		return kube.AppSpec{}, err
+	}
+	spec.GPU = kube.GPURequest{Count: gpu.Count, Vendor: gpu.Vendor, Product: gpu.Product, Workloads: gpu.Workloads}
 	// How the app's instances are checked. Runtime settings: they reach the
 	// probes and never the build fingerprint, so changing one is a rollout
 	// (ADR-0007).

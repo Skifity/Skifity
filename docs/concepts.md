@@ -1286,6 +1286,10 @@ minimum every time you changed a variable.
 Instances are spread across servers where possible, so losing a server does not
 take an app down.
 
+An app, or any of its processes, can also be given GPUs: a card each for every
+instance, on servers that have one. [GPUs](gpus.md) has how a server is set up
+for them and what an app with one cannot do.
+
 ## Processes
 
 An app is usually more than its web server: a worker taking jobs off a queue, a
@@ -1385,6 +1389,7 @@ installed the first time you need them.
 | PostgreSQL operator | You create a PostgreSQL database | 150 MB |
 | Scale to zero | You turn it on | 180 MB |
 | Cross-node storage | You turn it on | 700 MB per server |
+| NVIDIA GPUs | You enable GPUs on the Servers page | 30 MB per GPU server |
 | Full monitoring | You turn it on | 900 MB |
 
 Settings shows what is installed and what each one costs before you agree to it.

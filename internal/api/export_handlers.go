@@ -59,6 +59,8 @@ type exportApp struct {
 	Volumes   []store.Volume     `json:"volumes"`
 	Schedules []store.AppJob     `json:"schedules"`
 	Processes []store.AppProcess `json:"processes"`
+	// GPU is what its instances are given; Count 0 is none.
+	GPU store.AppGPU `json:"gpu"`
 	// Files carry their content unless secret, like variables.
 	Files []store.AppFile `json:"files"`
 	// Manifests is the app as Kubernetes YAML: apply it anywhere.
@@ -224,6 +226,10 @@ func (s *Server) exportApp(r *http.Request, app store.App, env store.Environment
 		return exportApp{}, err
 	}
 	out.Processes = processes
+
+	if out.GPU, err = s.db.GetAppGPU(ctx, app.ID); err != nil {
+		return exportApp{}, err
+	}
 
 	files, err := s.db.ListFiles(ctx, app.ID)
 	if err != nil {

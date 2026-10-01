@@ -102,6 +102,8 @@ var exampleCalls = map[string]map[string]any{
 	"lock_deploys":   {"app_id": "app_1", "reason": "launch day"},
 	"unlock_deploys": {"app_id": "app_1"},
 
+	"set_gpus": {"app_id": "app_1", "count": 1, "vendor": "nvidia"},
+
 	"get_vulnerabilities": {"app_id": "app_1"},
 	"get_events":          {"app_id": "app_1", "warnings_only": true},
 }
@@ -195,6 +197,9 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		"close_port":     {"app_id", "port_id"},
 		"lock_deploys":   {"app_id", "reason"},
 		"unlock_deploys": {"app_id"},
+		// Nothing else: a vendor, a model and the workloads default to
+		// what the app has, and the count is the whole question.
+		"set_gpus": {"app_id", "count"},
 	}
 	for name, required := range want {
 		tool := byName[name]
@@ -275,6 +280,9 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		"remove_domain", "close_port",
 		// Can delete the oldest backup, and lifts somebody's freeze.
 		"run_backup", "unlock_deploys",
+		// Restarts every instance, and can take a card away from an app
+		// that cannot run without one.
+		"set_gpus",
 	}
 	additive := []string{
 		"create_app", "install_template", "create_database", "add_domain", "open_port", "lock_deploys",

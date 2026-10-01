@@ -200,6 +200,31 @@ type Service struct {
 	// prom/prometheus's nobody — so it runs at the strict confinement
 	// level, where the kubelet refuses a user it cannot see is not root.
 	RunAsUser int `json:"run_as_user,omitempty"`
+	// GPU is a card the service uses when the cluster has one: Ollama,
+	// ComfyUI. Only ever a preference. On a cluster with none it is
+	// installed without, and runs on the CPU the way these do, so no
+	// template needs a GPU to be installed.
+	GPU *ServiceGPU `json:"gpu,omitempty"`
+}
+
+// ServiceGPU is the cards a template's service uses when there are some.
+type ServiceGPU struct {
+	// Vendor is nvidia when left out, or amd or intel.
+	Vendor string `json:"vendor,omitempty"`
+	// Count is how many each instance gets; 1 when left out.
+	Count int `json:"count,omitempty"`
+}
+
+// Wants is the vendor and count with the defaults filled in.
+func (g ServiceGPU) Wants() (vendor string, count int) {
+	vendor, count = g.Vendor, g.Count
+	if vendor == "" {
+		vendor = "nvidia"
+	}
+	if count == 0 {
+		count = 1
+	}
+	return vendor, count
 }
 
 // PortSpec is a port a template's service takes connections on that is not

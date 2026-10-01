@@ -53,6 +53,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdSecrets(ctx, rest, stdout)
 	case "scale":
 		err = cmdScale(ctx, rest, stdout)
+	case "gpus", "gpu":
+		err = cmdGPUs(ctx, rest, stdout)
 	case "rollback":
 		err = cmdRollback(ctx, rest, stdout)
 	case "lock":
@@ -245,6 +247,7 @@ Working with apps:
   env                   List, set, import or remove environment variables, or refresh
                         the ones read from a secret manager
   scale                 Change the number of instances or turn on autoscaling
+  gpus                  Show or change the GPUs the app's instances are given
   processes             List, add or stop the app's workers and other processes
   files                 List, save or remove files the app reads, such as an nginx.conf
   ports                 Open or close a port that is not HTTP, such as a game server's

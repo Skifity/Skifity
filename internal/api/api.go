@@ -362,6 +362,8 @@ func (s *Server) routes() chi.Router {
 				server.Put("/alerts", s.handleSetServerAlerts)
 				server.Get("/hardening", s.handleServerHardening)
 				server.Post("/hardening/ssh-passwords-off", s.handleTurnOffSSHPasswords)
+				// Saying it has an NVIDIA card, where nothing else can tell.
+				server.Put("/gpu", s.handleSetServerGPU)
 			})
 
 			authed.Route("/projects/{projectID}", func(project chi.Router) {
@@ -459,6 +461,9 @@ func (s *Server) routes() chi.Router {
 				app.Post("/domains/{domainID}/check", s.handleCheckDomainDNS)
 				app.Get("/scaling", s.handleGetScaling)
 				app.Put("/scaling", s.handleSetScaling)
+				// The GPUs its instances are given; see gpu_handlers.go.
+				app.Get("/gpu", s.handleGetAppGPU)
+				app.Put("/gpu", s.handleSetAppGPU)
 				app.Get("/processes", s.handleListProcesses)
 				app.Put("/processes/{process}", s.handleSetProcess)
 				app.Delete("/processes/{process}", s.handleDeleteProcess)

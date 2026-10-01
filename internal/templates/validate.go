@@ -198,6 +198,12 @@ func CheckServices(template Template) []string {
 		if svc.RunAsUser < 0 || svc.RunAsUser > 1<<31-1 {
 			add("%s/%s runs as %d, which is not a uid", template.ID, svc.Name, svc.RunAsUser)
 		}
+		if svc.GPU != nil {
+			vendor, count := svc.GPU.Wants()
+			if err := kube.ValidateGPURequest(kube.GPURequest{Count: count, Vendor: vendor}); err != nil || count < 1 {
+				add("%s/%s asks for %d GPUs of %q, which is not something to ask for: %v", template.ID, svc.Name, count, vendor, err)
+			}
+		}
 		if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
 			add("%s/%s has the health path %q, which is not a path", template.ID, svc.Name, svc.HealthPath)
 		}

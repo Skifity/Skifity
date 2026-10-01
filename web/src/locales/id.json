@@ -395,7 +395,9 @@
       "auth.passkey_removed": "Kunci sandi dihapus",
       "auth.passkey_renamed": "Nama kunci sandi diganti",
       "auth.passkey_clone_suspected": "Kunci sandi ditolak: mungkin sudah disalin",
-      "secret_manager.limited": "Pengelola rahasia dibatasi"
+      "secret_manager.limited": "Pengelola rahasia dibatasi",
+      "app.gpus_changed": "GPU diubah",
+      "server.gpu_marked": "Tanda GPU NVIDIA server diubah"
     }
   },
   "projects": {
@@ -696,7 +698,39 @@
     },
     "alertsErrorsHelp": "Error server hanya dinilai selama tiga menit yang berisi setidaknya 20 permintaan, jadi satu permintaan gagal di app yang sepi tidak menjadi peringatan.",
     "security": "Keamanan",
-    "criticalBadge": "Kritis: {{number}}"
+    "criticalBadge": "Kritis: {{number}}",
+    "gpu": {
+      "title": "GPU",
+      "help": "Beri setiap instans kartu grafisnya sendiri, untuk server model, pembuat gambar, atau worker transkripsi. Perubahan akan memulai ulang aplikasi dan tidak pernah membangunnya ulang.",
+      "enabled": "Gunakan GPU",
+      "enabledHelp": "Setiap instans mendapat kartunya sendiri; satu kartu tidak pernah dipakai bersama.",
+      "vendor": "Kartu dari",
+      "vendorOffer": "{{total}} di kluster, {{used}} sedang dipakai",
+      "vendorNone": "tidak ada di kluster",
+      "count": "GPU untuk setiap instans",
+      "countHelp": "Paling banyak {{most}}: jumlah terbanyak yang dimiliki satu server, dan semua kartu sebuah instans ada di satu server.",
+      "product": "Model yang diutamakan",
+      "productAny": "Apa saja",
+      "productHelp": "Hanya preferensi: jika tidak ada model itu yang kosong, aplikasi memakai kartu lain dari vendor yang sama alih-alih menunggu.",
+      "workloads": "Yang mendapatkannya",
+      "workloadWeb": "Aplikasinya sendiri",
+      "workloadsHelp": "Worker yang menjalankan inferensi bisa mendapat kartu, sementara web di depannya tidak.",
+      "rollout": "Deploy menghentikan instans lama sebelum memulai yang baru, karena instans baru membutuhkan kartunya. Aplikasi dengan satu instans tidak tersedia selama versi baru dimulai.",
+      "scaleToZero": "Aplikasi ini diskalakan ke nol, dan aplikasi dengan GPU tidak bisa: berikan GPU hanya ke prosesnya, atau matikan skala ke nol di Penskalaan.",
+      "remove": "Cabut GPU-nya",
+      "removeConfirm": "Aplikasi dimulai ulang tanpa GPU. Aplikasi yang tidak bisa berjalan tanpa GPU akan berhenti bekerja sampai diberi GPU lagi.",
+      "unknown": "Kluster tidak dapat ditanya GPU apa saja yang dimilikinya.",
+      "noneOffered": "Belum ada server yang menawarkan GPU",
+      "noneOfferedHelp": "Server membutuhkan driver dan NVIDIA container toolkit, lalu GPU diaktifkan di halaman Server.",
+      "setUp": "Cara menyiapkan server",
+      "warning": {
+        "process_missing": "{{name}} belum menjadi salah satu proses aplikasi ini; proses itu mendapat GPU setelah ada.",
+        "unchecked": "Kluster tidak dapat ditanya apakah memiliki GPU ini, jadi pengaturan ini tidak diperiksa terhadapnya.",
+        "capacity": "Paling banyak aplikasi ini meminta {{needed}} GPU {{vendor}}, sedangkan kluster memiliki {{allocatable}}: instans selebihnya menunggu sampai ada kartu yang kosong.",
+        "product_missing": "Tidak ada server yang menyatakan memiliki {{product}}, jadi aplikasi berjalan di kartu {{vendor}} mana pun.",
+        "previews": "Pratinjau aplikasi ini berjalan tanpa GPU, sehingga pratinjau tidak pernah memegang kartu yang dibutuhkan produksi."
+      }
+    }
   },
   "deploy": {
     "title": "Deployment",
@@ -1186,6 +1220,41 @@
           }
         }
       }
+    },
+    "gpu": {
+      "title": "GPU",
+      "help": "Kartu yang ditawarkan server ini kepada aplikasi, dan berapa banyak yang sedang dipakai aplikasi di dalamnya.",
+      "vendors": {
+        "nvidia": "NVIDIA",
+        "amd": "AMD",
+        "intel": "Intel"
+      },
+      "count": "{{n}} × {{name}}",
+      "inUse": "{{used}} dari {{total}} dipakai",
+      "memory": "{{memory}} per kartu",
+      "unhealthy": "{{n}} lagi tidak ditawarkan: device plugin melaporkannya tidak sehat.",
+      "needsSetup": "Belum disiapkan",
+      "hardware": {
+        "nfd": "Node Feature Discovery menemukan kartu NVIDIA di server ini, dan Kubernetes belum bisa memakainya",
+        "gpu-feature-discovery": "GPU feature discovery menyatakan server ini memiliki kartu NVIDIA, dan Kubernetes belum bisa memakainya",
+        "label": "Server ini ditandai memiliki kartu NVIDIA, dan Kubernetes belum bisa memakainya"
+      },
+      "missingPlugin": "Device plugin, yang memberi tahu Kubernetes tentang kartu itu, belum dipasang.",
+      "pluginStarting": "Device plugin berjalan di server ini dan belum menawarkan kartunya. Ini butuh beberapa detik.",
+      "pluginFailing": "Device plugin tidak dapat berjalan di server ini: {{reason}}",
+      "pluginRuntime": "Server ini tidak memiliki NVIDIA container runtime. Pasang NVIDIA container toolkit di sana, lalu mulai ulang k3s di server itu.",
+      "pluginNotHere": "Device plugin belum ditempatkan di server ini.",
+      "driverNote": "Driver dan NVIDIA container toolkit di server tidak dipasang oleh panel.",
+      "nfdNone": "Node Feature Discovery tidak menemukan kartu NVIDIA di server ini.",
+      "undetectable": "Tidak ada GPU yang ditawarkan. Tanpa device plugin, Kubernetes tidak dapat melihat apakah sebuah server memiliki GPU: jika server ini memiliki kartu NVIDIA, tandai di bawah.",
+      "mark": "Server ini memiliki GPU NVIDIA",
+      "markHelp": "Menempatkan device plugin di server ini. Hanya untuk kartu yang tidak terlihat oleh hal lain; driver dan container toolkit harus dipasang lebih dulu.",
+      "enable": "Aktifkan GPU",
+      "enableConfirmTitle": "Aktifkan GPU?",
+      "enableConfirm": "Ini memasang device plugin NVIDIA di setiap server yang memiliki kartu NVIDIA, agar aplikasi dapat memintanya. Ini tidak memasang driver atau NVIDIA container toolkit di server: keduanya harus Anda pasang lebih dulu.",
+      "docs": "Cara menyiapkan server",
+      "idleTitle": "Kartu NVIDIA belum ditawarkan kepada aplikasi",
+      "idleHelp": "Beberapa server memiliki kartu NVIDIA tanpa device plugin yang menawarkannya. Mengaktifkan GPU akan memasangnya; halaman setiap server menyebutkan apa lagi yang dibutuhkan."
     }
   },
   "databases": {
@@ -3276,6 +3345,30 @@
         "cause": "{{0}} variabel yang membaca lewat {{1}} akan berada di luar batasan barunya: {{2}}.",
         "impact": "Tidak ada yang diubah. Dengan batasan baru, deploy, sinkronisasi, atau penyegaran berikutnya dari aplikasi-aplikasi itu akan berhenti sebelum apa pun sampai ke cluster.",
         "fix": "Arahkan dulu variabel-variabel itu ke path yang diizinkan atau ke koneksi lain. Jika memutusnya memang tujuannya, tetap simpan batasannya: Tetap simpan di panel, --force di baris perintah, force: true di API."
+      },
+      "app_gpu_unavailable": {
+        "title": "Tidak ada server yang menawarkan GPU jenis itu",
+        "cause": "Tidak ada server di kluster yang mengiklankan {{0}}, yaitu cara Kubernetes menghitung kartu {{1}}.",
+        "impact": "Tidak ada yang diubah. Aplikasi yang memintanya tidak akan pernah berjalan.",
+        "fix": "Di server yang memiliki kartu itu, pasang driver dan container toolkit, lalu aktifkan GPU di halaman Server. Halaman Server menyebutkan apa yang kurang untuk setiap server."
+      },
+      "app_gpu_too_many": {
+        "title": "Tidak ada server yang memiliki GPU sebanyak itu",
+        "cause": "Setiap instans akan meminta {{0}} {{1}}, dan paling banyak yang ditawarkan satu server adalah {{2}}. Semua kartu sebuah instans harus berada di server tempat ia berjalan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Minta {{0}} atau kurang untuk setiap instans, dan jalankan lebih banyak instans jika aplikasi dapat membagi pekerjaannya; atau tambahkan server dengan lebih banyak kartu."
+      },
+      "app_gpu_scale_to_zero": {
+        "title": "Aplikasi dengan GPU tidak dapat diskalakan ke nol",
+        "cause": "Aplikasi yang tidur mengembalikan kartunya, dan aplikasi mana pun yang mengambilnya tidak pernah diminta mengembalikannya saat ada permintaan yang membangunkan aplikasi ini: permintaan itu akan menunggu kartu yang tidak kunjung kosong.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Matikan skala ke nol sebelum memberi aplikasi GPU. Atau berikan GPU hanya ke proses-prosesnya, yang tidak pernah tidur, dan biarkan aplikasinya sendiri diskalakan ke nol."
+      },
+      "gpu_device_plugin_exists": {
+        "title": "Kluster ini sudah menjalankan device plugin NVIDIA",
+        "cause": "{{0}} sudah menawarkan kartu NVIDIA kluster ini kepada Kubernetes, dan dua plugin untuk satu kartu bergantian menjadi yang didengarkan Kubernetes.",
+        "impact": "Tidak ada yang dipasang. Aplikasi dapat memakai kartu yang ditawarkan plugin itu tanpa plugin dari panel.",
+        "fix": "Biarkan saja, dan minta GPU di pengaturan aplikasi: GPU itu datang dari plugin tersebut. Hapus plugin itu lebih dulu hanya jika Anda ingin panel yang mengurus plugin."
       }
     }
   },
@@ -3819,6 +3912,10 @@
     "monitoring": {
       "title": "Pemantauan lengkap",
       "description": "Prometheus dan Grafana, dipasang dengan Helm, bukan oleh panel. Skifity menampilkan CPU dan memori setiap server dan setiap instans tanpa itu."
+    },
+    "nvidia-device-plugin": {
+      "title": "GPU NVIDIA",
+      "description": "Memungkinkan aplikasi memakai kartu NVIDIA di server Anda, dengan menjalankan device plugin NVIDIA di setiap server yang memilikinya. Driver dan NVIDIA container toolkit di server Anda pasang sendiri; dokumentasi GPU berisi perintahnya."
     }
   },
   "files": {
@@ -3987,7 +4084,9 @@
       "attach_failed": "Penyimpanan di balik sebuah disk tidak bisa dipasang ke server ini. Biasanya masih terpasang di server lain, dan dilepas begitu server itu melepaskannya.",
       "sandbox_failed": "Server tidak bisa menyiapkan jaringan atau container untuk instance ini. Itu masalah di server, bukan di aplikasi: kalau terus terjadi, mulai ulang k3s di server itu, atau hapus server lalu tambahkan lagi.",
       "oom": "Aplikasi memakai memori melebihi batasnya dan dihentikan. Naikkan batas memori di Penskalaan, atau cari apa yang memakai memori itu.",
-      "evicted": "Server kekurangan sumber daya dan menghentikan instance ini untuk melindungi dirinya: {{0}} Instance dijalankan lagi di server yang punya ruang."
+      "evicted": "Server kekurangan sumber daya dan menghentikan instance ini untuk melindungi dirinya: {{0}} Instance dijalankan lagi di server yang punya ruang.",
+      "scheduling_gpu": "Tidak ada server dengan GPU kosong untuk instans ini ({{0}}). Semua kartu sedang dipakai instans lain, atau tidak ada device plugin server yang menawarkannya: halaman Server menunjukkan GPU setiap server dan apa yang kurang. Hentikan hal lain yang memakainya, tambahkan server dengan GPU, atau minta lebih sedikit di pengaturan aplikasi.",
+      "gpu_runtime_missing": "Server tempat instans ini ditempatkan tidak memiliki NVIDIA container runtime, yang dipakai untuk memulai aplikasi dengan GPU NVIDIA. Pasang NVIDIA container toolkit di server itu dan mulai ulang k3s di sana, seperti dijelaskan dokumentasi GPU."
     }
   },
   "certificates": {

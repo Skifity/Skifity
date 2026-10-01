@@ -27,6 +27,9 @@ services:
     cpu_request_m: 50
     cpu_limit_m: 1000
     command: example serve --port 8080   # optional; replaces how the image starts
+    gpu:                         # optional; a card it uses when a server has one
+      vendor: nvidia             # nvidia, the default, amd or intel
+      count: 1                   # installed without it on a cluster with none
     ports:                       # optional; connections that are not HTTP
       - port: 25565              # opened on every server at the same number
         protocol: tcp            # tcp, the default, or udp

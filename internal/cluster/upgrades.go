@@ -58,6 +58,8 @@ func (c *Cluster) ComponentVersion(ctx context.Context, name string) string {
 		return imageTag(TunnelImage)
 	case UpgradeComponent:
 		return strings.TrimPrefix(upgradeControllerVersion, "v")
+	case NVIDIAComponent:
+		return strings.TrimPrefix(kube.NVIDIADevicePluginVersion, "v")
 	}
 	url, err := c.manifestURL(ctx, name)
 	if err != nil {

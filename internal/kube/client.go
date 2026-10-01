@@ -244,6 +244,7 @@ func (c *Client) Summary(ctx context.Context) (Summary, error) {
 			}
 		}
 	}
+	c.describeGPUs(ctx, out.Nodes)
 	sort.Slice(out.Nodes, func(i, j int) bool { return out.Nodes[i].Name < out.Nodes[j].Name })
 	// Embedded etcd needs three members to survive losing one.
 	out.HighAvailability = controlPlanes >= 3
@@ -286,6 +287,20 @@ type Node struct {
 	PodCount    int
 	Labels      map[string]string
 	Schedulable bool
+
+	// The server's GPUs; see gpunodes.go.
+	GPUs []NodeGPU
+	// GPUHardware says how an NVIDIA card is known to be here when no
+	// device plugin advertises it, and is empty otherwise. See NVIDIAHardware.
+	GPUHardware string
+	// NFD is true when Node Feature Discovery has labelled the server.
+	NFD bool
+	// GPULabelled is true when an administrator marked the server as having
+	// an NVIDIA card.
+	GPULabelled bool
+	// GPUPlugin is the panel's device plugin on this server, when one has
+	// been placed here.
+	GPUPlugin *GPUPluginState
 }
 
 func describeNode(node corev1.Node) Node {
@@ -296,6 +311,12 @@ func describeNode(node corev1.Node) Node {
 		KubeletVer:   node.Status.NodeInfo.KubeletVersion,
 		Labels:       node.Labels,
 		Schedulable:  !node.Spec.Unschedulable,
+		GPUs:         NodeGPUs(node),
+		NFD:          HasNFD(node.Labels),
+		GPULabelled:  node.Labels[LabelGPU] == GPUVendorNVIDIA,
+	}
+	if !advertises(info.GPUs, GPUVendorNVIDIA) {
+		info.GPUHardware = NVIDIAHardware(node.Labels)
 	}
 	if cpu := node.Status.Allocatable.Cpu(); cpu != nil {
 		info.CPUCapacityM = cpu.MilliValue()

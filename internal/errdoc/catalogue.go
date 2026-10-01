@@ -3,6 +3,7 @@ package errdoc
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"skifity/internal/version"
 )
@@ -1496,6 +1497,60 @@ func ControlPlaneUnverifiable() *Problem {
 		WithFix("Wait for the cluster to be reachable and try again. A worker server can be " +
 			"removed either way.").
 		WithDocs("/docs/troubleshooting#the-cluster-is-unreachable").
+		WithStatus(http.StatusConflict)
+}
+
+// --- GPUs ---
+
+// GPUUnavailable refuses GPUs of a kind no server advertises: an app asking
+// for them would sit waiting for a server for ever.
+func GPUUnavailable(vendor, resource string) *Problem {
+	return New("app.gpu_unavailable", "No server offers that kind of GPU").
+		WithCause("No server in the cluster advertises %s, which is how Kubernetes counts %s cards.", resource, vendor).
+		WithImpact("Nothing was changed. An app asking for one would never start.").
+		WithFix("On the server with the card, install the driver and the container toolkit, then enable GPUs "+
+			"on the Servers page. The Servers page says for each server what is missing.").
+		WithDocs("/docs/gpus#setting-up-a-server").
+		WithStatus(http.StatusConflict).
+		With("resource", resource)
+}
+
+// GPUTooMany refuses more GPUs for one instance than any one server has: an
+// instance's cards all have to be on the server it runs on.
+func GPUTooMany(count int, resource string, most int64) *Problem {
+	return New("app.gpu_too_many", "No server has that many GPUs").
+		WithCause("Each instance would ask for %d of %s, and the most any one server offers is %d. "+
+			"An instance's cards all have to be in the server it runs on.", count, resource, most).
+		WithImpact("Nothing was changed.").
+		WithFix("Ask for %d or fewer for each instance, and run more instances if the app can share the work; "+
+			"or add a server with more cards.", most).
+		WithDocs("/docs/gpus#asking-for-gpus").
+		WithStatus(http.StatusConflict).
+		With("resource", resource)
+}
+
+// GPUScaleToZero refuses a GPU on an app that sleeps, from either side.
+func GPUScaleToZero() *Problem {
+	return New("app.gpu_scale_to_zero", "An app with a GPU cannot scale to zero").
+		WithCause("A sleeping app gives its card back, and whichever app takes it is never asked to return it " +
+			"when a request comes in to wake this one: that request would wait for a card that does not come free.").
+		WithImpact("Nothing was changed.").
+		WithFix("Turn scale to zero off before giving the app a GPU. Or give the GPU to its processes " +
+			"alone, which never sleep, and let the app itself scale to zero.").
+		WithDocs("/docs/gpus#what-an-app-with-a-gpu-cannot-do").
+		WithStatus(http.StatusConflict)
+}
+
+// GPUDevicePluginExists refuses to install NVIDIA's device plugin beside one
+// that is already there.
+func GPUDevicePluginExists(foreign []string) *Problem {
+	return New("gpu.device_plugin_exists", "This cluster already runs an NVIDIA device plugin").
+		WithCause("%s already offers the cluster's NVIDIA cards to Kubernetes, and two plugins for one card "+
+			"take turns being the one Kubernetes listens to.", strings.Join(foreign, ", ")).
+		WithImpact("Nothing was installed. Apps can use the cards that plugin offers without the panel's.").
+		WithFix("Leave it, and ask for GPUs in an app's settings: they come from that plugin. " +
+			"Remove it first only if you want the panel to look after the plugin instead.").
+		WithDocs("/docs/gpus#a-device-plugin-is-already-installed").
 		WithStatus(http.StatusConflict)
 }
 

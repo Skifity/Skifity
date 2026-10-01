@@ -1929,6 +1929,43 @@ paths:
               schema: {$ref: '#/components/schemas/HardeningReport'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/servers/{serverID}/gpu:
+    parameters:
+      - $ref: '#/components/parameters/serverID'
+    put:
+      operationId: setServerGPU
+      tags: [Servers]
+      summary: Say whether a server has an NVIDIA GPU
+      description: >-
+        Panel administrator. Labels the server's node so NVIDIA's device
+        plugin runs there, for a cluster without Node Feature Discovery, where
+        nothing else can tell before the plugin runs. false takes the label
+        away. The driver and the NVIDIA container toolkit on the server are
+        installed by hand; see /docs/gpus.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [nvidia]
+              properties:
+                nvidia: {type: boolean}
+      responses:
+        '200':
+          description: The server's node, marked or not.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [server_id, node, nvidia]
+                properties:
+                  server_id: {type: string}
+                  node: {type: string}
+                  nvidia: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+
   # --- projects and environments ---
 
   /api/projects/{projectID}:
@@ -3228,6 +3265,46 @@ paths:
                   warnings:
                     type: [array, 'null']
                     items: {$ref: '#/components/schemas/ScalingFinding'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/gpu:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    get:
+      operationId: getAppGPU
+      tags: [Scaling]
+      summary: The GPUs an app's instances are given
+      description: >-
+        With what the cluster's servers offer, added up by vendor, and what is
+        worth knowing about the setting.
+      responses:
+        '200':
+          description: The setting, the cluster, and the warnings.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AppGPUSettings'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: setAppGPU
+      tags: [Scaling]
+      summary: Change the GPUs an app's instances are given
+      description: >-
+        Member. Only the fields sent change; count 0 takes them away. A
+        rollout, never a build. Refused when no server offers that vendor's
+        GPUs (app.gpu_unavailable), when one instance would need more than
+        any one server has (app.gpu_too_many), and while the app scales to
+        zero (app.gpu_scale_to_zero). The rest is a warning.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetAppGPURequest'}
+      responses:
+        '200':
+          description: The setting as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AppGPUSettings'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/scaling/readiness:
@@ -5207,6 +5284,7 @@ components:
             processes:
               type: [array, 'null']
               items: {$ref: '#/components/schemas/AppProcess'}
+            gpu: {$ref: '#/components/schemas/AppGPU'}
             manifests: {type: string, description: 'The app''s Kubernetes objects, as multi-document YAML.'}
             manifest_error: {type: string, description: 'Why the manifests could not be rendered.'}
 
@@ -5448,6 +5526,37 @@ components:
         schedulable: {type: boolean}
         disk_used_mb: {type: integer}
         disk_capacity_mb: {type: integer}
+        gpus:
+          type: [array, 'null']
+          description: The cards the server's device plugins offer, one entry a vendor.
+          items: {$ref: '#/components/schemas/NodeGPU'}
+        gpu_hardware:
+          type: string
+          enum: [nfd, gpu-feature-discovery, label]
+          description: >-
+            How an NVIDIA card is known to be in the server while no device
+            plugin offers one. Absent when none is, or when nothing can tell.
+        nfd: {type: boolean, description: 'Node Feature Discovery labels this server.'}
+        gpu_labelled: {type: boolean, description: 'An administrator marked it as having an NVIDIA card.'}
+        gpu_plugin:
+          type: object
+          description: The panel's NVIDIA device plugin on this server, when it has been placed here.
+          required: [ready]
+          properties:
+            ready: {type: boolean}
+            reason: {type: string, description: 'Why it is not running, in the kubelet''s words.'}
+
+    NodeGPU:
+      type: object
+      required: [vendor, resource, capacity, allocatable, in_use]
+      properties:
+        vendor: {type: string, enum: [nvidia, amd, intel]}
+        resource: {type: string, description: 'nvidia.com/gpu, amd.com/gpu or gpu.intel.com/i915.'}
+        capacity: {type: integer}
+        allocatable: {type: integer}
+        in_use: {type: integer, description: 'What the pods placed on the server asked for.'}
+        product: {type: string, description: 'From GPU feature discovery, such as NVIDIA-A10.'}
+        memory_mb: {type: integer}
 
     ClusterSummary:
       type: object
@@ -7022,6 +7131,62 @@ components:
             detail: {type: array, items: {type: string}}
             fix: {type: array, items: {type: string}}
 
+    AppGPU:
+      type: object
+      required: [count, vendor, product, workloads]
+      properties:
+        count: {type: integer, minimum: 0, maximum: 16, description: 'Cards for each instance; 0 is none.'}
+        vendor: {type: string, description: 'nvidia, amd or intel; empty with no GPU.'}
+        product: {type: string, description: 'An NVIDIA model to prefer; empty is any.'}
+        workloads:
+          type: array
+          items: {type: string}
+          description: 'What gets them: web is the app itself, anything else one of its processes. Empty is the app alone.'
+
+    SetAppGPURequest:
+      type: object
+      additionalProperties: false
+      description: Only the fields sent change.
+      properties:
+        count: {type: integer, minimum: 0, maximum: 16}
+        vendor: {type: string, enum: [nvidia, amd, intel]}
+        product: {type: string, description: 'Empty for any.'}
+        workloads: {type: array, items: {type: string}}
+
+    AppGPUSettings:
+      type: object
+      required: [gpu, processes, cluster, warnings]
+      properties:
+        gpu: {$ref: '#/components/schemas/AppGPU'}
+        processes: {type: array, items: {type: string}, description: 'The app''s processes, which can be given the GPUs too.'}
+        cluster:
+          type: object
+          required: [known, vendors]
+          properties:
+            known: {type: boolean, description: 'False when the cluster could not be asked.'}
+            vendors:
+              type: array
+              items:
+                type: object
+                required: [vendor, resource, allocatable, in_use, most_on_one_server, servers, products]
+                properties:
+                  vendor: {type: string}
+                  resource: {type: string}
+                  allocatable: {type: integer}
+                  in_use: {type: integer}
+                  most_on_one_server: {type: integer}
+                  servers: {type: integer}
+                  products: {type: array, items: {type: string}}
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, text]
+            properties:
+              code: {type: string, enum: [process_missing, unchecked, capacity, product_missing, previews]}
+              params: {type: object, additionalProperties: {type: string}}
+              text: {type: string}
+
     ScalingFindingList:
       type: object
       required: [items, total]
@@ -7433,6 +7598,12 @@ components:
               cpu_request_m: {type: integer}
               cpu_limit_m: {type: integer}
               public: {type: boolean, description: 'Gets a domain. A worker does not.'}
+              gpu:
+                type: object
+                description: A card it uses when a server offers one; installed without on a cluster with none.
+                properties:
+                  vendor: {type: string, enum: [nvidia, amd, intel]}
+                  count: {type: integer, minimum: 1, maximum: 16}
         databases:
           type: [array, 'null']
           items:
@@ -7547,6 +7718,10 @@ components:
           type: [array, 'null']
           items: {$ref: '#/components/schemas/Database'}
         notes: {type: string, description: 'The steps that could not be done for you.'}
+        without_gpu:
+          type: array
+          items: {type: string}
+          description: The services that use a GPU when there is one and were installed without, because no server offers one.
 
     # --- plugins ---
 

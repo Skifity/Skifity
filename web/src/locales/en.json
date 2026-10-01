@@ -403,7 +403,9 @@
       "auth.passkey_removed": "Passkey removed",
       "auth.passkey_renamed": "Passkey renamed",
       "auth.passkey_clone_suspected": "Passkey refused: it may have been copied",
-      "secret_manager.limited": "Secret manager limited"
+      "secret_manager.limited": "Secret manager limited",
+      "app.gpus_changed": "GPUs changed",
+      "server.gpu_marked": "Server's NVIDIA GPU marked"
     }
   },
   "projects": {
@@ -706,7 +708,39 @@
     },
     "alertsErrorsHelp": "Server errors are only judged over three minutes with at least 20 requests between them, so one failed request on a quiet app is not a warning.",
     "security": "Security",
-    "criticalBadge": "Critical: {{number}}"
+    "criticalBadge": "Critical: {{number}}",
+    "gpu": {
+      "title": "GPUs",
+      "help": "Give each instance a graphics card of its own, for a model server, an image generator or a transcription worker. A change restarts the app and never rebuilds it.",
+      "enabled": "Use GPUs",
+      "enabledHelp": "Every instance gets cards of its own; a card is never shared.",
+      "vendor": "Whose cards",
+      "vendorOffer": "{{total}} in the cluster, {{used}} in use",
+      "vendorNone": "none in the cluster",
+      "count": "GPUs for each instance",
+      "countHelp": "At most {{most}}: the most any one server has, and all of an instance's cards are in one server.",
+      "product": "Model to prefer",
+      "productAny": "Any",
+      "productHelp": "Only a preference: with none of that model free, the app goes to another card of the same vendor's rather than waiting.",
+      "workloads": "Which get them",
+      "workloadWeb": "The app itself",
+      "workloadsHelp": "A worker doing the inference can have the card while the web in front of it does not.",
+      "rollout": "A deploy stops an old instance before it starts the new one, because the new one needs its card. An app with one instance is unavailable while the new version starts.",
+      "scaleToZero": "This app scales to zero, and an app with a GPU cannot: give the GPUs to its processes only, or turn scale to zero off under Scaling.",
+      "remove": "Take the GPUs away",
+      "removeConfirm": "The app restarts without its GPUs. An app that cannot run without one stops working until it is given one again.",
+      "unknown": "The cluster could not be asked which GPUs it has.",
+      "noneOffered": "No server offers a GPU yet",
+      "noneOfferedHelp": "A server needs the driver and the NVIDIA container toolkit, and then GPUs enabled on the Servers page.",
+      "setUp": "How to set up a server",
+      "warning": {
+        "process_missing": "{{name}} is not one of this app's processes yet; it is given GPUs once it is.",
+        "unchecked": "The cluster could not be asked whether it has these GPUs, so this was not checked against it.",
+        "capacity": "At its most this app asks for {{needed}} {{vendor}} GPUs, and the cluster has {{allocatable}}: the instances past that wait for a card to come free.",
+        "product_missing": "No server says it has a {{product}}, so the app runs on any {{vendor}} card.",
+        "previews": "The app's previews run without a GPU, so a preview never holds the card production needs."
+      }
+    }
   },
   "deploy": {
     "title": "Deployments",
@@ -1197,6 +1231,41 @@
           }
         }
       }
+    },
+    "gpu": {
+      "title": "GPUs",
+      "help": "The cards this server offers apps, and how many the apps on it are using.",
+      "vendors": {
+        "nvidia": "NVIDIA",
+        "amd": "AMD",
+        "intel": "Intel"
+      },
+      "count": "{{n}} × {{name}}",
+      "inUse": "{{used}} of {{total}} in use",
+      "memory": "{{memory}} each",
+      "unhealthy": "{{n}} more is not offered: the device plugin reports it unhealthy.",
+      "needsSetup": "Not set up",
+      "hardware": {
+        "nfd": "Node Feature Discovery found an NVIDIA card in this server, and Kubernetes cannot use it yet",
+        "gpu-feature-discovery": "GPU feature discovery says this server has an NVIDIA card, and Kubernetes cannot use it yet",
+        "label": "This server is marked as having an NVIDIA card, and Kubernetes cannot use it yet"
+      },
+      "missingPlugin": "The device plugin, which tells Kubernetes about the card, is not installed.",
+      "pluginStarting": "The device plugin is running on this server and has not offered the card yet. It takes a few seconds.",
+      "pluginFailing": "The device plugin cannot start on this server: {{reason}}",
+      "pluginRuntime": "This server has no NVIDIA container runtime. Install the NVIDIA container toolkit on it, then restart k3s there.",
+      "pluginNotHere": "The device plugin has not been placed on this server yet.",
+      "driverNote": "The driver and the NVIDIA container toolkit on the server are not installed by the panel.",
+      "nfdNone": "Node Feature Discovery found no NVIDIA card in this server.",
+      "undetectable": "No GPU is offered. Without the device plugin, Kubernetes cannot see whether a server has one: if this one has an NVIDIA card, mark it below.",
+      "mark": "This server has an NVIDIA GPU",
+      "markHelp": "Puts the device plugin on this server. Only for a card nothing else can see; the driver and the container toolkit have to be installed first.",
+      "enable": "Enable GPUs",
+      "enableConfirmTitle": "Enable GPUs?",
+      "enableConfirm": "This installs NVIDIA's device plugin on every server with an NVIDIA card, so apps can ask for one. It does not install the driver or the NVIDIA container toolkit on the servers: those are yours to install first.",
+      "docs": "How to set up a server",
+      "idleTitle": "An NVIDIA card is not offered to apps yet",
+      "idleHelp": "Some servers have an NVIDIA card and no device plugin to offer it. Enabling GPUs installs one; each server's page says what else it needs."
     }
   },
   "databases": {
@@ -3295,6 +3364,30 @@
         "cause": "{{0}} variables read through {{1}} would be outside its new limits: {{2}}.",
         "impact": "Nothing was changed. With the new limits, the next deploy, sync or refresh of those apps would stop before anything reaches the cluster.",
         "fix": "Point those variables at an allowed path or another connection first. If cutting them off is the point, save the limits anyway: Save anyway in the panel, --force on the command line, force: true in the API."
+      },
+      "app_gpu_unavailable": {
+        "title": "No server offers that kind of GPU",
+        "cause": "No server in the cluster advertises {{0}}, which is how Kubernetes counts {{1}} cards.",
+        "impact": "Nothing was changed. An app asking for one would never start.",
+        "fix": "On the server with the card, install the driver and the container toolkit, then enable GPUs on the Servers page. The Servers page says for each server what is missing."
+      },
+      "app_gpu_too_many": {
+        "title": "No server has that many GPUs",
+        "cause": "Each instance would ask for {{0}} of {{1}}, and the most any one server offers is {{2}}. An instance's cards all have to be in the server it runs on.",
+        "impact": "Nothing was changed.",
+        "fix": "Ask for {{0}} or fewer for each instance, and run more instances if the app can share the work; or add a server with more cards."
+      },
+      "app_gpu_scale_to_zero": {
+        "title": "An app with a GPU cannot scale to zero",
+        "cause": "A sleeping app gives its card back, and whichever app takes it is never asked to return it when a request comes in to wake this one: that request would wait for a card that does not come free.",
+        "impact": "Nothing was changed.",
+        "fix": "Turn scale to zero off before giving the app a GPU. Or give the GPU to its processes alone, which never sleep, and let the app itself scale to zero."
+      },
+      "gpu_device_plugin_exists": {
+        "title": "This cluster already runs an NVIDIA device plugin",
+        "cause": "{{0}} already offers the cluster's NVIDIA cards to Kubernetes, and two plugins for one card take turns being the one Kubernetes listens to.",
+        "impact": "Nothing was installed. Apps can use the cards that plugin offers without the panel's.",
+        "fix": "Leave it, and ask for GPUs in an app's settings: they come from that plugin. Remove it first only if you want the panel to look after the plugin instead."
       }
     }
   },
@@ -3840,6 +3933,10 @@
     "monitoring": {
       "title": "Full monitoring",
       "description": "Prometheus and Grafana, installed with Helm rather than by the panel. Skifity shows CPU and memory for every server and every instance without it."
+    },
+    "nvidia-device-plugin": {
+      "title": "NVIDIA GPUs",
+      "description": "Lets apps use the NVIDIA cards in your servers, by running NVIDIA's device plugin on each server that has one. The driver and the NVIDIA container toolkit on the server are yours to install; the GPU documentation has the commands."
     }
   },
   "files": {
@@ -4008,7 +4105,9 @@
       "attach_failed": "The storage behind a volume could not be attached to this server. It is usually still attached to another server, and is released once that server lets it go.",
       "sandbox_failed": "The server could not set up this instance's network or container. That is a problem on the server rather than in the app: if it goes on, restart k3s on that server, or remove the server and add it again.",
       "oom": "The app used more memory than its limit and was stopped. Raise the memory limit under Scaling, or find what is using the memory.",
-      "evicted": "The server ran short and stopped this instance to protect itself: {{0}} It is started again on a server with room."
+      "evicted": "The server ran short and stopped this instance to protect itself: {{0}} It is started again on a server with room.",
+      "scheduling_gpu": "No server has a free GPU for this instance ({{0}}). Every card is in use by other instances, or no server's device plugin offers one: the Servers page shows each server's GPUs and what is missing. Stop something else that uses one, add a server with a GPU, or ask for fewer under the app's settings.",
+      "gpu_runtime_missing": "The server this instance was placed on has no NVIDIA container runtime, which an app with an NVIDIA GPU is started with. Install the NVIDIA container toolkit on that server and restart k3s there, as the GPU documentation says."
     }
   },
   "certificates": {

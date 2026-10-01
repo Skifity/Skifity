@@ -35,6 +35,7 @@ var gvrFor = map[string]schema.GroupVersionResource{
 	"ServiceAccount":          {Version: "v1", Resource: "serviceaccounts"},
 	"Deployment":              {Group: "apps", Version: "v1", Resource: "deployments"},
 	"StatefulSet":             {Group: "apps", Version: "v1", Resource: "statefulsets"},
+	"DaemonSet":               {Group: "apps", Version: "v1", Resource: "daemonsets"},
 	"Ingress":                 {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
 	"NetworkPolicy":           {Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
 	"HorizontalPodAutoscaler": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},

@@ -140,6 +140,28 @@ An app with no instances at all and a message about a limit never got as far as
 creating one: the environment's quota refused it, and there is nothing to look
 at on the instances tab because nothing was made.
 
+## An app with a GPU does not start
+
+An instance that asks for a GPU waits until a server has one free, and the app's
+page says so: *No server has a free GPU for this instance*. Either every card is
+in use — another app holds it, or this app's own instances hold them all — or no
+server offers one. The **Servers** page shows each server's GPUs, how many are in
+use, and for a server whose card is not offered yet, what is missing.
+
+The other common one is *The server this instance was placed on has no NVIDIA
+container runtime*: the NVIDIA container toolkit is not installed on that
+server, or k3s was started before it was. Install it and restart k3s there, as
+[the GPU page](gpus.md#setting-up-a-server) says.
+
+A deploy of an app with a GPU stops its old instance before it starts the new
+one, because the new one needs the old one's card. An app with one instance is
+unavailable for as long as the new version takes to start; that is expected, and
+[the GPU page](gpus.md#what-an-app-with-a-gpu-cannot-do) says why.
+
+If the app starts and does not see the card — CUDA says there is no device — the
+image is looking for a driver version newer than the server's. `nvidia-smi` on
+the server shows the highest CUDA version its driver supports.
+
 ## An app is crashing
 
 Open the app: the instance list shows the restart count and the last reason.

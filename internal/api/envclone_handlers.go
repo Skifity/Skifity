@@ -293,6 +293,20 @@ func (s *Server) cloneApp(r *http.Request, from, to store.App, notes *[]cloneNot
 		*notes = append(*notes, cloneNote{Name: to.Name, Code: "volumes_empty"})
 	}
 
+	// A copy of the environment asks for the same cards. Whether the cluster
+	// has them twice over is what the copy's own GPU card says; the copy is
+	// not deployed unless that was asked for.
+	gpu, err := s.db.GetAppGPU(ctx, from.ID)
+	if err != nil {
+		return err
+	}
+	if gpu.Count > 0 {
+		gpu.AppID = to.ID
+		if err := s.db.SetAppGPU(ctx, gpu); err != nil {
+			return err
+		}
+	}
+
 	if password, ok, err := s.db.GetAppPassword(ctx, from.ID); err != nil {
 		return err
 	} else if ok {

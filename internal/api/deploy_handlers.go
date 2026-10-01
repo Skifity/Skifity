@@ -9,6 +9,7 @@ import (
 
 	"skifity/internal/cron"
 	"skifity/internal/errdoc"
+	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/registry"
 	"skifity/internal/store"
@@ -325,6 +326,19 @@ func (s *Server) handleSetScaling(w http.ResponseWriter, r *http.Request) {
 	if err := validateScaling(&app); err != nil {
 		writeError(w, r, err)
 		return
+	}
+	// A sleeping app gives its card back and may never get it again; see
+	// errdoc.GPUScaleToZero. Its processes do not sleep, so theirs is fine.
+	if app.ScaleToZero {
+		gpu, err := s.db.GetAppGPU(r.Context(), app.ID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if gpuRequest(gpu).Covers(kube.GPUWeb) {
+			writeError(w, r, errdoc.GPUScaleToZero())
+			return
+		}
 	}
 
 	// Scale-to-zero needs KEDA, which is not installed until it is first used.

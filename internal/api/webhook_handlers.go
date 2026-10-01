@@ -573,6 +573,9 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	previewApp.AutoDeploy = false
 	previewApp.SeededAt = ""
 	// A preview is throwaway, so it never autoscales and asks for little.
+	// Its GPUs are left behind with the rest (they are not on the app's row):
+	// a preview holding the cluster's only card would leave production's next
+	// rollout waiting for it.
 	previewApp.Autoscale = false
 	previewApp.Replicas = 1
 	if err := s.db.CreateApp(r.Context(), &previewApp); err != nil {

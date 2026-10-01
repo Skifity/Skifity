@@ -40,6 +40,43 @@ type NodeInfo struct {
 	// every page. Zero capacity is not known yet.
 	DiskUsedMB     int64 `json:"disk_used_mb,omitempty"`
 	DiskCapacityMB int64 `json:"disk_capacity_mb,omitempty"`
+
+	// GPUs are the cards the server's device plugins advertise, one entry a
+	// vendor, with how many the pods placed there hold.
+	GPUs []NodeGPU `json:"gpus"`
+	// GPUHardware is how an NVIDIA card is known to be in the server while no
+	// device plugin advertises one: "nfd" (Node Feature Discovery saw it),
+	// "gpu-feature-discovery", "label" (an administrator marked it), or empty
+	// when nothing can tell.
+	GPUHardware string `json:"gpu_hardware,omitempty"`
+	// NFD is true when Node Feature Discovery labels the server, which is
+	// what makes "it found no NVIDIA card" mean something.
+	NFD bool `json:"nfd"`
+	// GPULabelled is true when an administrator marked it as having an NVIDIA
+	// card, which is what puts the panel's device plugin there without NFD.
+	GPULabelled bool `json:"gpu_labelled"`
+	// GPUPlugin is the panel's NVIDIA device plugin on this server, when it
+	// has been placed here.
+	GPUPlugin *GPUPluginState `json:"gpu_plugin,omitempty"`
+}
+
+// NodeGPU is one vendor's cards on a server.
+type NodeGPU struct {
+	Vendor      string `json:"vendor"`
+	Resource    string `json:"resource"`
+	Capacity    int64  `json:"capacity"`
+	Allocatable int64  `json:"allocatable"`
+	InUse       int64  `json:"in_use"`
+	// Product and MemoryMB are GPU feature discovery's, when it runs.
+	Product  string `json:"product,omitempty"`
+	MemoryMB int64  `json:"memory_mb,omitempty"`
+}
+
+// GPUPluginState is whether the device plugin is up on a server, and why
+// not in the kubelet's words when it is not.
+type GPUPluginState struct {
+	Ready  bool   `json:"ready"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // K3sRelease is the latest k3s release of one minor version.
@@ -181,6 +218,9 @@ type Cluster interface {
 	// ControlPlaneCount is how many nodes actually run the cluster, which is
 	// not the same as how many rows the panel has for one team.
 	ControlPlaneCount(ctx context.Context) (int, error)
+	// SetNodeGPULabel marks a server as having an NVIDIA card, or unmarks
+	// it, which decides whether the device plugin runs there.
+	SetNodeGPULabel(ctx context.Context, node string, nvidia bool) error
 }
 
 // EnvironmentQuota is how much of an environment's ceiling is in use.

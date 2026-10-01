@@ -557,6 +557,57 @@ export type NodeInfo = {
   /** From the watcher's last reading, at most a minute old; absent until then. */
   disk_used_mb?: number
   disk_capacity_mb?: number
+  /** The cards the server's device plugins offer, one entry a vendor. */
+  gpus?: NodeGPU[] | null
+  /** How an NVIDIA card is known to be here while no device plugin offers it. */
+  gpu_hardware?: "nfd" | "gpu-feature-discovery" | "label"
+  /** Node Feature Discovery labels this server. */
+  nfd?: boolean
+  /** An administrator marked it as having an NVIDIA card. */
+  gpu_labelled?: boolean
+  /** The panel's NVIDIA device plugin on this server, once placed here. */
+  gpu_plugin?: { ready: boolean; reason?: string }
+}
+
+export type GPUVendor = "nvidia" | "amd" | "intel"
+
+export type NodeGPU = {
+  vendor: GPUVendor
+  resource: string
+  capacity: number
+  allocatable: number
+  in_use: number
+  product?: string
+  memory_mb?: number
+}
+
+/** An app's GPUs, what the cluster offers, and what is worth knowing. */
+export type AppGPUSettings = {
+  gpu: {
+    count: number
+    vendor: GPUVendor | ""
+    product: string
+    /** "web" is the app itself; anything else one of its processes. Empty is the app alone. */
+    workloads: string[]
+  }
+  processes: string[]
+  cluster: {
+    known: boolean
+    vendors: {
+      vendor: GPUVendor
+      resource: string
+      allocatable: number
+      in_use: number
+      most_on_one_server: number
+      servers: number
+      products: string[]
+    }[]
+  }
+  warnings: {
+    code: "process_missing" | "unchecked" | "capacity" | "product_missing" | "previews"
+    params?: Record<string, string>
+    text: string
+  }[]
 }
 
 export type ClusterSummary = {

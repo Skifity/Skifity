@@ -52,6 +52,9 @@ func ProcessSpec(app AppSpec, process, command string, instances int) AppSpec {
 	s := app
 	s.Name = ProcessDeploymentName(app.Name, process)
 	s.ProcessOf = app.Name
+	// Which is what decides whether it gets the app's GPUs: a worker doing
+	// the inference may want the card the web in front of it does not.
+	s.Process = process
 	s.Command = []string{"/bin/sh", "-c"}
 	s.Args = []string{command}
 	s.Port, s.HealthPath = 0, ""

@@ -18,6 +18,10 @@ type installedTemplate struct {
 	Apps      []store.App      `json:"apps"`
 	Databases []store.Database `json:"databases"`
 	Notes     string           `json:"notes,omitempty"`
+	// WithoutGPU names the services that use a GPU when the cluster has one
+	// and were installed without, because no server offers one. Each can be
+	// given one under its settings once a server does.
+	WithoutGPU []string `json:"without_gpu,omitempty"`
 }
 
 // installTemplate turns a template into ordinary Skifity resources.
@@ -64,6 +68,10 @@ func (s *Server) installTemplate(
 
 	// Map service name to the created app, so links can be made afterwards.
 	created := map[string]store.App{}
+	// What the cluster's servers offer, asked once and only when a service
+	// could use a GPU.
+	var gpus []gpuVendorView
+	gpusRead := false
 
 	for _, svc := range tpl.Services {
 		name := svc.Name
@@ -106,6 +114,18 @@ func (s *Server) installTemplate(
 		}
 		created[svc.Name] = app
 		result.Apps = append(result.Apps, app)
+
+		if svc.GPU != nil {
+			if !gpusRead {
+				gpus, gpusRead = s.clusterGPUsNow(r), true
+			}
+			vendor, count := svc.GPU.Wants()
+			if err := gpuFits(store.AppGPU{Count: count, Vendor: vendor}, gpus); gpus == nil || err != nil {
+				result.WithoutGPU = append(result.WithoutGPU, svc.Name)
+			} else if err := s.db.SetAppGPU(r.Context(), store.AppGPU{AppID: app.ID, Count: count, Vendor: vendor}); err != nil {
+				return result, err
+			}
+		}
 
 		for key, value := range svc.Variables {
 			if err := s.setTemplateVariable(r, app.ID, key, value, false); err != nil {
