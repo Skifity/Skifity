@@ -35,6 +35,10 @@ type JobSpec struct {
 	URLSecret string
 	// Restore inverts the direction.
 	Restore bool
+	// Format, on a restore, is the format of a dump somebody imported (one
+	// of engine.Format*), which is loaded with the tool that format needs.
+	// Empty is a backup the panel took itself.
+	Format string
 	// BackupID ties the job back to the panel's record.
 	BackupID string
 	// Image runs the database's own client tools.
@@ -70,33 +74,10 @@ func (s *JobSpec) Defaults() {
 }
 
 // ClientImage is the image a backup of this engine and version runs its
-// client tools from: the database's own image, pinned as the database is, so
-// the dump tool is the server's own version.
-//
-// PostgreSQL is the exception. The operator's images carry no pg_dump, so the
-// client is the official image of the same major: at least the server's, as
-// pg_dump requires, and not newer, because pg_dump 17's output sets
-// transaction_timeout, which a PostgreSQL 16 refuses on the way back in.
+// client tools from. dbsvc.ClientImage says which and why; the password change
+// runs the same one.
 func ClientImage(name, version string) string {
-	e, ok := engine.Lookup(name)
-	if !ok {
-		return "alpine:3"
-	}
-	if version == "" {
-		version = e.DefaultVersion
-	}
-	if name == engine.Postgres {
-		major, _, _ := strings.Cut(version, ".")
-		if _, err := strconv.Atoi(major); err != nil {
-			major = e.DefaultVersion
-		}
-		return "postgres:" + major + "-alpine"
-	}
-	image, err := e.Image(version)
-	if err != nil {
-		image, _ = e.Image(e.DefaultVersion)
-	}
-	return image
+	return dbsvc.ClientImage(name, version)
 }
 
 // DefaultTransferImage is the image that talks to the storage service.
@@ -112,22 +93,10 @@ const DefaultTransferImage = "curlimages/curl:8.11.1"
 // privileges in their entrypoint, which a backup job never reaches, so the uid
 // is named here instead.
 func runAsUserFor(image, name string) int64 {
-	switch {
-	case strings.HasPrefix(image, "curlimages/curl"):
+	if strings.HasPrefix(image, "curlimages/curl") {
 		return 100 // curl_user
-	case name == dbsvc.EnginePostgres:
-		return 70 // postgres, in the Alpine image
-	case name == dbsvc.EngineMySQL, name == dbsvc.EngineMariaDB:
-		return 999 // mysql
-	case name == dbsvc.EngineMongoDB:
-		return 999 // mongodb
-	case name == dbsvc.EngineRedis:
-		return 999 // redis
-	case name == dbsvc.EngineValkey:
-		return 999 // valkey
-	default:
-		return 65532
 	}
+	return dbsvc.ClientUser(name)
 }
 
 // Validate reports a job that could not work.
@@ -451,20 +420,22 @@ echo "==> Downloaded $(wc -c < %s) bytes"
 func restoreScript(s JobSpec) string {
 	unpacked := dumpFile + ".sql"
 	var load string
-	switch s.Engine {
-	case dbsvc.EnginePostgres:
+	switch {
+	case s.Format != "":
+		load = importLoad(s, unpacked)
+	case s.Engine == dbsvc.EnginePostgres:
 		load = `PGPASSWORD="$DB_PASSWORD" psql --host="$DB_HOST" --port="$DB_PORT" ` +
 			`--username="$DB_USER" --dbname="$DB_NAME" --quiet --set ON_ERROR_STOP=on < ` + unpacked
-	case dbsvc.EngineMySQL:
+	case s.Engine == dbsvc.EngineMySQL:
 		load = `MYSQL_PWD="$DB_PASSWORD" mysql --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME" < ` + unpacked
-	case dbsvc.EngineMariaDB:
+	case s.Engine == dbsvc.EngineMariaDB:
 		load = `MYSQL_PWD="$DB_PASSWORD" mariadb --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" "$DB_NAME" < ` + unpacked
-	case dbsvc.EngineMongoDB:
+	case s.Engine == dbsvc.EngineMongoDB:
 		// --drop replaces each collection in the backup rather than adding
 		// its documents to what is there, and --nsInclude keeps the restore
 		// to the app's database, whatever else the archive might hold.
 		load = mongoConfig + `mongorestore ` + mongoFlags + ` --nsInclude="$DB_NAME.*" --drop --archive < ` + unpacked
-	case dbsvc.EngineRedis, dbsvc.EngineValkey:
+	case redisFamily(s.Engine):
 		load = redisRestore(s.Engine, unpacked)
 	}
 

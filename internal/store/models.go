@@ -545,21 +545,29 @@ type Volume struct {
 
 // Database is a managed data store.
 type Database struct {
-	ID             string    `json:"id"`
-	EnvironmentID  string    `json:"environment_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
-	Engine         string    `json:"engine"`
-	EngineVersion  string    `json:"engine_version"`
-	Status         string    `json:"status"`
-	StatusDetail   string    `json:"status_detail,omitempty"`
-	Instances      int       `json:"instances"`
-	StorageGB      int       `json:"storage_gb"`
-	CPURequestM    int       `json:"cpu_request_m"`
-	MemRequestMB   int       `json:"mem_request_mb"`
-	CredentialsEnc string    `json:"-"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID            string `json:"id"`
+	EnvironmentID string `json:"environment_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	Engine        string `json:"engine"`
+	EngineVersion string `json:"engine_version"`
+	Status        string `json:"status"`
+	StatusDetail  string `json:"status_detail,omitempty"`
+	Instances     int    `json:"instances"`
+	StorageGB     int    `json:"storage_gb"`
+	CPURequestM   int    `json:"cpu_request_m"`
+	MemRequestMB  int    `json:"mem_request_mb"`
+	// CPULimitM is 0 for no limit, which is how every database ran before
+	// it could be changed. MemLimitMB is what it may use, and never 0 for a
+	// database recorded since migration 0056.
+	CPULimitM      int    `json:"cpu_limit_m"`
+	MemLimitMB     int    `json:"mem_limit_mb"`
+	CredentialsEnc string `json:"-"`
+	// CredentialsNextEnc holds the new credentials while a password change
+	// is under way, and is empty otherwise. See dbsvc.ChangePassword.
+	CredentialsNextEnc string    `json:"-"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // DatabaseLink injects a database's connection string into an app.

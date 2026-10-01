@@ -405,7 +405,12 @@
       "auth.passkey_clone_suspected": "Passkey refused: it may have been copied",
       "secret_manager.limited": "Secret manager limited",
       "app.gpus_changed": "GPUs changed",
-      "server.gpu_marked": "Server's NVIDIA GPU marked"
+      "server.gpu_marked": "Server's NVIDIA GPU marked",
+      "database.stopped": "Database stopped",
+      "database.started": "Database started",
+      "database.resized": "Database resized",
+      "database.password_changed": "Database password changed",
+      "database.import_started": "Dump imported into a database"
     }
   },
   "projects": {
@@ -1054,7 +1059,14 @@
       "leave": "Leaving the cluster",
       "prepare": "Preparing",
       "restore": "Restoring",
-      "verify": "Checking"
+      "verify": "Checking",
+      "change": "Changing it",
+      "apply": "Saving it",
+      "sync": "Updating the apps",
+      "finish": "Finishing",
+      "upload": "Receiving the file",
+      "backup": "Backing up first",
+      "import": "Importing"
     },
     "status": {
       "pending": "Waiting",
@@ -1119,7 +1131,16 @@
       "uninstalled": "Kubernetes was removed from the machine",
       "appStopped": "The app is stopped",
       "archiveUnpacked": "The archive is unpacked",
-      "appRunningAgain": "{{0}} is running again"
+      "appRunningAgain": "{{0}} is running again",
+      "passwordTaken": "{{0}} takes the new password",
+      "appsResynced": "{{0}} app(s) given the new connection string",
+      "appsResyncedWithFailures": "{{0}} app(s) given the new connection string; {{1}} could not be rolled out",
+      "oldPasswordGone": "The old password no longer works",
+      "oldPasswordKept": "The old password still works, for the apps that were not rolled out",
+      "oldPasswordNotDiscarded": "The old password still works; change the password again to take it away",
+      "dumpReceived": "Received {{0}} MB of {{1}}",
+      "backedUpFirst": "Backed up first, on {{0}}: restore that backup to undo this import",
+      "dumpLoaded": "Loaded the {{0}} dump into {{1}}"
     },
     "stepNote": {
       "fingerprint": "Fingerprint {{0}}",
@@ -1306,7 +1327,8 @@
     "backupStatus": {
       "running": "Running",
       "succeeded": "Succeeded",
-      "failed": "Failed"
+      "failed": "Failed",
+      "skipped": "Skipped"
     },
     "status": {
       "creating": "Creating",
@@ -1315,7 +1337,8 @@
       "degraded": "Degraded",
       "failed": "Failed",
       "missing": "Missing",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "stopped": "Stopped"
     },
     "restoreStarted": "Restore started. The database is unavailable until it finishes.",
     "deleteWarning": "Every table, row and backup schedule goes with it. Existing backups in your storage are kept, but the panel will no longer know about them.",
@@ -1352,7 +1375,84 @@
     },
     "nativeConnectionString": "Native protocol",
     "nativeConnectionStringHint": "For clients that speak ClickHouse's own protocol, such as clickhouse-client and clickhouse-go. The connection string above is HTTP, which most client libraries take.",
-    "noCredentials": "Memcached has no user and no password. Only the apps in this environment can reach it."
+    "noCredentials": "Memcached has no user and no password. Only the apps in this environment can reach it.",
+    "backupSkipped": "Skipped: the database was stopped, so there was nothing new to back up.",
+    "backupKind": {
+      "before_import": "Before an import",
+      "before_update": "Before an update"
+    },
+    "life": {
+      "manage": "Manage",
+      "history": "History",
+      "power": "Stop and start",
+      "powerHelp": "A stopped database keeps its disk and its data, and uses no memory or CPU. Its scheduled backups are skipped while it is stopped.",
+      "stop": "Stop",
+      "start": "Start",
+      "stopTitle": "Stop {{name}}?",
+      "stopLinked": "These apps will lose their database until it is started again: {{apps}}.",
+      "stopUnlinked": "No app is linked to it. Its disk and its data are kept.",
+      "stopConsequence": "Scheduled backups are skipped while it is stopped.",
+      "stopped": "{{name}} is stopped.",
+      "started": "{{name}} is starting.",
+      "size": "Size",
+      "sizeHelp": "What it reserves and may use, and its disk. A change of CPU or memory restarts it.",
+      "cpuRequest": "CPU reserved (millicores)",
+      "cpuLimit": "CPU limit (millicores)",
+      "cpuLimitHelp": "0 for no limit.",
+      "memRequest": "Memory reserved (MB)",
+      "memLimit": "Memory limit (MB)",
+      "memLimitHelp": "At least {{min}} MB for {{engine}}.",
+      "storage": "Disk (GB)",
+      "storageHelp": "A disk can only grow. Growing it needs storage that allows it, and k3s's own local-path does not.",
+      "resize": "Save size",
+      "resizeTitle": "Resize {{name}}?",
+      "resizeRestarts": "Its instance is replaced with one of the new size, so it restarts and its apps lose it for a moment.",
+      "resizeGrowForever": "A disk that has grown cannot be made smaller again.",
+      "resized": "{{name}} is being resized.",
+      "password": "Password",
+      "passwordHelp": "The database takes the new password first, then every linked app is rolled out with the new connection string. If anything fails on the way, the old password is put back.",
+      "newPassword": "New password",
+      "newPasswordHelp": "Leave it empty to have a strong one generated. 16 to 128 letters, digits, dots, dashes, underscores or tildes.",
+      "changePassword": "Change password",
+      "passwordTitle": "Change the password of {{name}}?",
+      "passwordConfirm": "Linked apps rolled out with the new connection string: {{apps}}. Anything that signs in with the old password by hand stops working.",
+      "passwordRestarts": "{{engine}} reads its password only as it starts, so it restarts.",
+      "passwordStarted": "The password is being changed. History shows each step.",
+      "import": "Import a dump",
+      "importHelp": "Load a dump you already have. It is read and checked first, then a backup of the database is taken, so the import can be undone by restoring that backup.",
+      "importFile": "Dump file",
+      "importFileHelp": "As it is or gzipped: {{formats}}. At most 5 GB.",
+      "importFormat": "Format",
+      "importFormatAuto": "Detect it",
+      "importTooLarge": "This file is larger than 5 GB. Load it with the engine's own client through skifity db connect.",
+      "importButton": "Import",
+      "importTitle": "Import into {{name}}?",
+      "importConfirm": "What is in the dump replaces the tables, collections or keys of the same name in this database.",
+      "importBackupFirst": "A backup is taken first; restore it to undo the import.",
+      "importing": "Uploading…",
+      "importStarted": "The dump was received. History shows the backup and the import.",
+      "format": {
+        "sql": "SQL",
+        "custom": "pg_dump custom archive",
+        "archive": "mongodump archive",
+        "archive-gzip": "mongodump archive made with --gzip",
+        "rdb": "Redis snapshot (RDB)"
+      },
+      "historyHelp": "Restores, imports and password changes, newest first.",
+      "historyEmpty": "Nothing has been done to this database yet",
+      "kind": {
+        "restore": "Restore",
+        "import": "Import",
+        "password": "Password change"
+      },
+      "opStatus": {
+        "pending": "Waiting",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    }
   },
   "templates": {
     "title": "Templates",
@@ -3388,6 +3488,138 @@
         "cause": "{{0}} already offers the cluster's NVIDIA cards to Kubernetes, and two plugins for one card take turns being the one Kubernetes listens to.",
         "impact": "Nothing was installed. Apps can use the cards that plugin offers without the panel's.",
         "fix": "Leave it, and ask for GPUs in an app's settings: they come from that plugin. Remove it first only if you want the panel to look after the plugin instead."
+      },
+      "database_stop_linked": {
+        "title": "Apps use this database",
+        "cause": "{{0}} is linked to {{1}}.",
+        "impact": "Nothing was changed. Stopped, it would answer none of them until it is started again.",
+        "fix": "Confirm that these apps may lose their database while it is stopped, or unlink them first."
+      },
+      "database_not_running": {
+        "title": "This database is not running",
+        "cause": "{{0}} is {{1}}, and this needs it running.",
+        "impact": "Nothing was changed.",
+        "fix": "Start it, or wait until it is running, then try again."
+      },
+      "database_busy": {
+        "title": "Something is already being done to this database",
+        "cause": "{{0}} is being created, restored, imported into or given a new password.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for that to finish, then try again. The database's History says how it is going."
+      },
+      "database_storage_shrink": {
+        "title": "A database's disk cannot be made smaller",
+        "cause": "{{0}} has {{1}} GB, and {{2}} GB is less.",
+        "impact": "Nothing was changed.",
+        "fix": "A disk can only grow. To use less, create a smaller database, import a backup of this one into it, and link your apps to that."
+      },
+      "database_storage_not_expandable": {
+        "title": "This database's disk cannot grow",
+        "cause": "{{0}} keeps its data on the storage class {{1}}, which does not allow a volume to grow.",
+        "impact": "Nothing was changed, its CPU and memory included.",
+        "fix": "k3s's own local-path storage never allows it. Set allowVolumeExpansion: true on this storage class if its driver can grow a volume, or make a bigger database and import a backup of this one into it."
+      },
+      "database_over_quota": {
+        "title": "That is more than this environment is allowed",
+        "cause": "Its {{0}} would come to {{1}}, and the environment is allowed {{2}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Ask for less, or make room: resize or stop something else in this environment."
+      },
+      "database_memory_too_small": {
+        "title": "That is too little memory for this database",
+        "cause": "{{0}} needs a memory limit of at least {{1}} MB.",
+        "impact": "Nothing was changed.",
+        "fix": "Give it at least {{0}} MB."
+      },
+      "database_password_not_offered": {
+        "title": "This database has no password",
+        "cause": "{{0}} runs {{1}}, which has no password to change.",
+        "impact": "Nothing was changed.",
+        "fix": "Only the apps in its own environment can reach it; that is what keeps it private."
+      },
+      "database_password_rejected": {
+        "title": "That password cannot be used",
+        "cause": "A database password here is 16 to 128 letters, digits, dots, dashes, underscores or tildes, and this one is not.",
+        "impact": "Nothing was changed.",
+        "fix": "Leave the password out to have a strong one generated, or choose one of those characters: each ends up in a connection string, where anything else would need escaping."
+      },
+      "database_password_change_running": {
+        "title": "A password change is already under way",
+        "cause": "{{0}} is being given a new password.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for it to finish; the database's History shows how it is going."
+      },
+      "database_password_change_interrupted": {
+        "title": "An earlier password change was not finished",
+        "cause": "A change of {{0}}'s password stopped halfway, and the panel kept the password it was giving it.",
+        "impact": "Nothing was changed.",
+        "fix": "Change the password again without choosing one: the panel finishes the earlier change first. Then choose yours."
+      },
+      "database_password_failed": {
+        "title": "The password could not be changed",
+        "cause": "{{0}}",
+        "impact": "The old password still works, and the apps still use it.",
+        "fix": "Read the reason above; the usual ones are a database that stopped answering and a server with no room for the short job that makes the change. Then try again."
+      },
+      "database_password_stranded": {
+        "title": "The new password was taken and could not be passed on",
+        "cause": "The database accepted the new password, and then {{0}}. Putting the old one back failed too.",
+        "impact": "Apps may fail to connect until this is finished. The panel kept the new password, sealed, beside the old one.",
+        "fix": "Change the password again without choosing one, once the cluster answers: the panel finishes this change with the password it kept."
+      },
+      "import_not_offered": {
+        "title": "Skifity does not import into this kind of database",
+        "cause": "{{0}} runs {{1}}, and Skifity has no way to load a dump into it.",
+        "impact": "Nothing was changed.",
+        "fix": "Load your data with the engine's own client through `{{0}} db connect`."
+      },
+      "import_wrong_kind": {
+        "title": "This dump is for another kind of database",
+        "cause": "The file is {{0}}, which {{1}} does not load.",
+        "impact": "Nothing was changed.",
+        "fix": "Import it into a database of the kind it was dumped from, or dump it again in a format this one takes: {{0}}."
+      },
+      "import_unrecognised": {
+        "title": "Skifity could not tell what this file is",
+        "cause": "It is not a dump {{0}} can load: {{1}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Make the dump with the engine's own tool, as docs/databases.md shows, and send that file as it is or gzipped."
+      },
+      "import_format_invalid": {
+        "title": "That is not a format this database imports",
+        "cause": "{{0}} is not one of the formats {{1}} imports: {{2}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Leave the format out to have it detected, or name one of those."
+      },
+      "import_empty": {
+        "title": "The file is empty",
+        "cause": "Nothing arrived, or it decompressed to nothing.",
+        "impact": "Nothing was changed.",
+        "fix": "Check that the dump was written completely, then send it again."
+      },
+      "import_damaged": {
+        "title": "The file is damaged",
+        "cause": "It is gzipped and does not decompress to its end: {{0}}.",
+        "impact": "Nothing was changed.",
+        "fix": "Send it again. If it fails the same way, the file was cut short when it was made or copied; make the dump again."
+      },
+      "import_too_large": {
+        "title": "The file is too large to import here",
+        "cause": "It is more than {{0}} MB, which is as much as the panel takes in one import.",
+        "impact": "Nothing was changed.",
+        "fix": "Load it with the engine's own client through `{{0}} db connect`, which has no limit."
+      },
+      "import_backup_failed": {
+        "title": "The backup before the import failed",
+        "cause": "{{0}}",
+        "impact": "Nothing was imported, so the database is as it was.",
+        "fix": "Fix what stopped the backup — the database's Backups list says the same — then import again."
+      },
+      "import_failed": {
+        "title": "The dump could not be loaded",
+        "cause": "{{0}}",
+        "impact": "PostgreSQL loads a dump in one transaction, so nothing of it is left behind; the other engines may have loaded part of it. A backup was taken just before.",
+        "fix": "Read the reason above and fix the dump. To put the database back as it was, restore the backup taken just before the import from its Backups."
       }
     }
   },

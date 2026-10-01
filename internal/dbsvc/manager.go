@@ -36,6 +36,18 @@ type Manager struct {
 	deployer interface {
 		Sync(ctx context.Context, appID string) error
 	}
+	// poll is how often the cluster is asked whether something has finished:
+	// a database becoming ready, a job ending. Zero is five seconds; a test
+	// sets less.
+	poll time.Duration
+}
+
+// every is the polling interval.
+func (m *Manager) every() time.Duration {
+	if m.poll > 0 {
+		return m.poll
+	}
+	return 5 * time.Second
 }
 
 // New builds a Manager.
@@ -52,13 +64,10 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		return store.Database{}, errdoc.ClusterUnreachable(nil)
 	}
 
-	password, err := crypto.RandomToken(24)
+	password, err := GeneratePassword()
 	if err != nil {
 		return store.Database{}, err
 	}
-	// The generated password ends up in connection strings and shell commands,
-	// so restrict it to characters that never need escaping.
-	password = strings.NewReplacer("-", "x", "_", "y").Replace(password)
 
 	// The same reason as on the app side: an app and a database in one
 	// environment share a namespace and both render a Service under their slug,
@@ -93,6 +102,7 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		StorageGB:     storageGB,
 		CPURequestM:   kind.CPURequestM,
 		MemRequestMB:  kind.MemRequestMB,
+		MemLimitMB:    kind.MemLimitMB,
 	}
 	if record.EngineVersion == "" {
 		record.EngineVersion = kind.DefaultVersion
@@ -110,7 +120,7 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		DatabaseName: "app",
 		CPURequestM:  record.CPURequestM,
 		MemRequestMB: record.MemRequestMB,
-		MemLimitMB:   kind.MemLimitMB,
+		MemLimitMB:   record.MemLimitMB,
 	}
 	spec.Defaults()
 	if err := spec.Validate(); err != nil {
@@ -219,7 +229,7 @@ func (m *Manager) waitReady(ctx context.Context, record store.Database, spec Spe
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-time.After(m.every()):
 		}
 	}
 }
@@ -282,6 +292,11 @@ func (m *Manager) postgresStatus(ctx context.Context, spec Spec) (string, string
 // paid two extra instances to avoid. It has to be visibly different from
 // healthy, and it is not "failed", because the database is up.
 func interpretCNPGStatus(object *unstructured.Unstructured) (string, string) {
+	// Hibernated on purpose: no instance is meant to be running, and none
+	// being ready is not a failure.
+	if object.GetAnnotations()[hibernationAnnotation] == "on" {
+		return StatusStopped, ""
+	}
 	phase, _, _ := unstructured.NestedString(object.Object, "status", "phase")
 	ready, _, _ := unstructured.NestedInt64(object.Object, "status", "readyInstances")
 	wanted, found, _ := unstructured.NestedInt64(object.Object, "spec", "instances")
@@ -311,6 +326,11 @@ func (m *Manager) statefulSetStatus(ctx context.Context, spec Spec) (string, str
 			return "missing", "The database's Kubernetes object is gone.", nil
 		}
 		return "unknown", err.Error(), nil
+	}
+	// Scaled to nothing on purpose, by Stop: its volume is kept, and nothing
+	// is meant to be answering.
+	if statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas == 0 {
+		return StatusStopped, "", nil
 	}
 	wanted := int32(1)
 	if statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas > 0 {

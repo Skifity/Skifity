@@ -29,6 +29,22 @@ const (
 	Memcached  = "memcached"
 )
 
+// The dump formats a file can be imported in.
+const (
+	// FormatSQL is statements, as pg_dump, mysqldump and mariadb-dump write
+	// them by default.
+	FormatSQL = "sql"
+	// FormatCustom is pg_dump --format=custom, which pg_restore loads.
+	FormatCustom = "custom"
+	// FormatArchive is mongodump --archive.
+	FormatArchive = "archive"
+	// FormatArchiveGzip is mongodump --archive --gzip, whose collections are
+	// compressed inside the archive; the archive itself is not.
+	FormatArchiveGzip = "archive-gzip"
+	// FormatRDB is a Redis snapshot: dump.rdb, or redis-cli --rdb.
+	FormatRDB = "rdb"
+)
+
 // Engine is one kind of database.
 type Engine struct {
 	Name string `json:"name"`
@@ -58,6 +74,17 @@ type Engine struct {
 	Variable string `json:"variable"`
 	// StorageGB is the disk a new database gets when the request names none.
 	StorageGB int `json:"storage_gb"`
+	// MinMemoryMB is the least memory limit a resize may give it: below it
+	// the engine refuses to start, or starts and is killed for memory.
+	MinMemoryMB int `json:"min_memory_mb"`
+	// PasswordRestarts is true for an engine that reads its password only as
+	// it starts, so changing it restarts the database: Dragonfly and
+	// ClickHouse. The others take a new one while they run.
+	PasswordRestarts bool `json:"password_restarts"`
+	// Imports are the dump formats a file can be imported into it in, empty
+	// for an engine that cannot import one. internal/backup detects which a
+	// file is and runs the engine's own tool to load it.
+	Imports []string `json:"imports"`
 
 	// What a new database reserves and may use. Not in the API: the panel
 	// decides them.
@@ -90,6 +117,7 @@ var catalogue = []Engine{
 		DefaultVersion: "17", Versions: []string{"18", "17", "16"},
 		Backups: true, Replicated: true, Storage: true, Password: true, Variable: "DATABASE_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		MinMemoryMB: 256, Imports: []string{FormatSQL, FormatCustom},
 		// CloudNativePG's own images, which it keeps patched under the
 		// major's tag; the operator decides minor upgrades.
 		open: func(version string) string { return "ghcr.io/cloudnative-pg/postgresql:" + version },
@@ -99,6 +127,7 @@ var catalogue = []Engine{
 		DefaultVersion: "8.4", Versions: []string{"9.7", "8.4"},
 		Backups: true, Storage: true, Password: true, Variable: "MYSQL_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		MinMemoryMB: 512, Imports: []string{FormatSQL},
 		// Both are long-term releases: 8.4 is what most software is tested
 		// against, 9.7 the newest.
 		images: map[string]string{
@@ -116,6 +145,7 @@ var catalogue = []Engine{
 		// default must keep finding the same name.
 		Variable:  "MYSQL_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		MinMemoryMB: 256, Imports: []string{FormatSQL},
 		// Long-term releases only.
 		images: map[string]string{
 			"12.3":  "mariadb:12.3.3",
@@ -130,6 +160,8 @@ var catalogue = []Engine{
 		DefaultVersion: "8.0", Versions: []string{"8.0", "7.0"},
 		Backups: true, Storage: true, Password: true, Variable: "MONGODB_URI",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		// WiredTiger's smallest cache is 256 MB, a quarter of the limit.
+		MinMemoryMB: 1024, Imports: []string{FormatArchive, FormatArchiveGzip},
 		images: map[string]string{
 			"8.0": "mongo:8.0.32",
 			"7.0": "mongo:7.0.43",
@@ -140,6 +172,7 @@ var catalogue = []Engine{
 		DefaultVersion: "7", Versions: []string{"7"},
 		Backups: true, Storage: true, Password: true, Variable: "REDIS_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		MinMemoryMB: 64, Imports: []string{FormatRDB},
 		open: func(version string) string { return "redis:" + version + "-alpine" },
 	},
 	{
@@ -149,6 +182,7 @@ var catalogue = []Engine{
 		// name the software that uses it reads.
 		Backups: true, Storage: true, Password: true, Variable: "REDIS_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		MinMemoryMB: 64, Imports: []string{FormatRDB},
 		images: map[string]string{
 			"9.1": "valkey/valkey:9.1.2-alpine",
 			"9.0": "valkey/valkey:9.0.6-alpine",
@@ -163,6 +197,12 @@ var catalogue = []Engine{
 		// snapshots stay on its own disk. See docs/backups.md.
 		Backups: false, Storage: true, Password: true, Variable: "REDIS_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
+		// It refuses to start with less than 256 MB for data, which is three
+		// quarters of the limit (BuildDragonfly).
+		MinMemoryMB: 384,
+		// Its password is a flag, not one CONFIG SET changes while it runs
+		// (the mutable flags are registered in src/server/server_family.cc).
+		PasswordRestarts: true,
 		images: map[string]string{
 			"1.40": "docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2",
 		},
@@ -177,6 +217,11 @@ var catalogue = []Engine{
 		// Analytical queries want memory; a gigabyte is the least ClickHouse
 		// is comfortable with, two leaves room for a query.
 		StorageGB: 10, CPURequestM: 250, MemRequestMB: 512, MemLimitMB: 2048,
+		MinMemoryMB: 1024,
+		// Its user is written into users.d by the image's entrypoint from
+		// CLICKHOUSE_PASSWORD every time it starts, and a user defined in a
+		// configuration file cannot be changed with ALTER USER.
+		PasswordRestarts: true,
 		// Long-term releases.
 		images: map[string]string{
 			"26.8": "clickhouse/clickhouse-server:26.8.15.10",
@@ -191,6 +236,7 @@ var catalogue = []Engine{
 		// The environment's network policy is what keeps it private.
 		Backups: false, Storage: false, Password: false, Variable: "MEMCACHED_URL",
 		StorageGB: 0, CPURequestM: 50, MemRequestMB: 64, MemLimitMB: 256,
+		MinMemoryMB: 64,
 		images: map[string]string{
 			"1.6": "memcached:1.6.45-alpine",
 		},
@@ -202,6 +248,7 @@ func All() []Engine {
 	out := make([]Engine, len(catalogue))
 	for i, e := range catalogue {
 		e.Versions = slices.Clone(e.Versions)
+		e.Imports = append([]string{}, e.Imports...)
 		out[i] = e
 	}
 	return out
@@ -221,6 +268,7 @@ func Lookup(name string) (Engine, bool) {
 	for _, e := range catalogue {
 		if e.Name == name {
 			e.Versions = slices.Clone(e.Versions)
+			e.Imports = append([]string{}, e.Imports...)
 			return e, true
 		}
 	}

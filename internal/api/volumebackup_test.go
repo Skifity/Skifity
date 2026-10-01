@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,6 +27,9 @@ type recordingBackups struct {
 	restoredVolume string
 	overwrite      bool
 	verified       string
+	// imported is the body an import was handed, read to its end.
+	imported     string
+	importFormat string
 }
 
 func (r *recordingBackups) Run(context.Context, string, string, string) (store.Backup, error) {
@@ -46,6 +50,15 @@ func (r *recordingBackups) Verify(context.Context) error { return nil }
 func (r *recordingBackups) VerifyBackup(_ context.Context, backupID string) error {
 	r.verified = backupID
 	return nil
+}
+
+func (r *recordingBackups) Import(_ context.Context, req ImportRequest) (store.Operation, error) {
+	body, err := io.ReadAll(req.Dump)
+	if err != nil {
+		return store.Operation{}, err
+	}
+	r.imported, r.importFormat = string(body), req.Format
+	return store.Operation{ID: "op_import", Kind: "database.import", TargetType: "database", TargetID: req.DatabaseID}, nil
 }
 
 func (r *recordingBackups) BackupPanel(context.Context, string) (store.Backup, error) {

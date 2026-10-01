@@ -279,6 +279,33 @@ command the port is gone.
   that has not been tried. Run the command from somewhere that reaches the
   panel's own address instead.
 
+## Managing a database
+
+The rest of a database's life is under `db` too, each naming the database as
+`db connect` does:
+
+```sh
+skifity db stop orders                 # refused while apps use it, unless --force
+skifity db start orders --wait
+skifity db resize orders --memory-limit 2048 --storage 20
+skifity db password orders             # a generated one; --password-stdin to choose
+skifity db import orders ./shop.dump   # or - for standard input
+pg_dump --format=custom shop | skifity db import orders - --wait
+```
+
+* `resize` takes `--cpu-request` and `--cpu-limit` in millicores,
+  `--memory-request` and `--memory-limit` in MB and `--storage` in GB, and
+  changes only what is given. A disk only grows.
+* `password` never prints the new password unless `--show-password` is given,
+  which waits for the change to finish and then reads it, audited as any read of
+  it is. A password you choose comes from standard input, never from an argument
+  that the shell's history would keep.
+* `import` detects the format; `--format archive-gzip` is the one it cannot, for
+  `mongodump --archive --gzip`. A backup is taken before anything is loaded.
+* `--wait` waits for a start, a password change or an import to finish, and a
+  failure is the panel's own explanation. [Databases](databases.md) says what
+  each does.
+
 ## Describing an environment in a file
 
 The settings that make an app work — its start command, its variables, the

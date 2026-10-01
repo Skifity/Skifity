@@ -272,6 +272,10 @@ Templates:
 Databases:
   db                    List the managed databases in an environment
   db connect            Reach one from this computer, on a local port
+  db stop, db start     Stop one and keep its disk, and start it again
+  db resize             Change its CPU and memory, or grow its disk
+  db password           Give it a new password, and its apps the new connection string
+  db import             Load a dump file, or - for standard input, into it
 
 Cluster:
   servers               List the servers in a team

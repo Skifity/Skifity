@@ -3816,6 +3816,130 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: resizeDatabase
+      tags: [Databases]
+      summary: Change what a database reserves and may use, and grow its disk
+      description: >-
+        Member. A change of CPU or memory replaces its instance, so it restarts; PostgreSQL's instances are
+        replaced one at a time, the primary last. A disk only grows: a smaller size is refused with
+        database.storage_shrink, and a disk whose storage class does not allow a volume to grow (k3s's own
+        local-path) with database.storage_not_expandable, before anything changes. A change that would take the
+        environment past its quota is refused with database.over_quota.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ResizeDatabaseRequest'}
+      responses:
+        '200':
+          description: The database as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Database'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/stop:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    post:
+      operationId: stopDatabase
+      tags: [Databases]
+      summary: Stop a database and keep its disk
+      description: >-
+        Member. Its instances go and its volume stays; its status is stopped, and a scheduled backup of it is
+        recorded as skipped. Refused with database.stop_linked, naming the apps, while apps are linked to it,
+        unless force.
+      parameters:
+        - {name: force, in: query, description: 'Stop it even though the apps linked to it lose it.', schema: {type: boolean}}
+      responses:
+        '200':
+          description: The database, stopped.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Database'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/start:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    post:
+      operationId: startDatabase
+      tags: [Databases]
+      summary: Start a stopped database
+      description: Member. It comes back on the disk it kept; its status is starting until it accepts connections.
+      responses:
+        '202':
+          description: The database, starting.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Database'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/password:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    post:
+      operationId: changeDatabasePassword
+      tags: [Databases]
+      summary: Give a database a new password, and its apps the new connection string
+      description: >-
+        Admin. Audited. The database takes the new password first, then its Secret and the panel's copy change,
+        then every linked app is rolled out with the new connection string; MySQL, Redis and Valkey keep the old
+        password working until then. A failure part way puts the old one back. Dragonfly and ClickHouse read
+        theirs only as they start, so they restart. Refused with database.password_not_offered for Memcached.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeDatabasePasswordRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/OperationStarted'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/import:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    post:
+      operationId: importDatabase
+      tags: [Databases]
+      summary: Load a dump file into a database
+      description: >-
+        Admin. The body is the file, as it is or gzipped: SQL or a pg_dump custom archive for PostgreSQL, SQL
+        for MySQL and MariaDB, a mongodump archive for MongoDB, a Redis snapshot for Redis and Valkey. It is read
+        to its end and its format detected before anything changes; then a backup of the database is taken,
+        and the dump is loaded with the engine's own tool. Needs backup storage. At most 5 GB.
+      parameters:
+        - name: format
+          in: query
+          description: 'The format, when detecting it is not enough: archive-gzip for mongodump --archive --gzip.'
+          schema: {type: string, enum: [sql, custom, archive, archive-gzip, rdb]}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, contentMediaType: application/octet-stream}
+      responses:
+        '202': {$ref: '#/components/responses/OperationStarted'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/databases/{databaseID}/operations:
+    parameters:
+      - $ref: '#/components/parameters/databaseID'
+    get:
+      operationId: listDatabaseOperations
+      tags: [Databases]
+      summary: A database's history
+      description: Its restores, imports and password changes, newest first, each with its steps.
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: The operations.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationList'}
+        default: {$ref: '#/components/responses/Error'}
 
   /api/databases/{databaseID}/credentials:
     parameters:
@@ -7436,6 +7560,8 @@ components:
         storage_gb: {type: integer}
         cpu_request_m: {type: integer}
         mem_request_mb: {type: integer}
+        cpu_limit_m: {type: integer, description: 'The CPU it may use, in millicores; 0 is no limit.'}
+        mem_limit_mb: {type: integer, description: 'The memory it may use.'}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
 
@@ -7444,6 +7570,33 @@ components:
       required: [items, total]
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/Database'}}
+        total: {type: integer}
+
+    ResizeDatabaseRequest:
+      type: object
+      additionalProperties: false
+      description: A field left out is left as it is.
+      properties:
+        cpu_request_m: {type: integer, minimum: 10, maximum: 64000}
+        cpu_limit_m: {type: integer, minimum: 0, maximum: 64000, description: '0 is no limit.'}
+        mem_request_mb: {type: integer, minimum: 32}
+        mem_limit_mb: {type: integer, description: 'At least the engine''s min_memory_mb, and not below the request.'}
+        storage_gb: {type: integer, description: 'Only larger than it is: a disk cannot shrink.'}
+
+    ChangeDatabasePasswordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        password:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{16,128}$'
+          description: 'The password to give it. Left out, one is generated. It is never returned: read it from the credentials.'
+
+    OperationList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Operation'}}
         total: {type: integer}
 
     CreateDatabaseRequest:
@@ -7504,6 +7657,12 @@ components:
         password: {type: boolean, description: 'False for an engine with no authentication, which only its own environment can reach.'}
         variable: {type: string, description: 'The variable a linked app reads the connection string from, when none is named.'}
         storage_gb: {type: integer, description: 'The disk a new database gets when none is asked for.'}
+        min_memory_mb: {type: integer, description: 'The least memory limit a resize may give it.'}
+        password_restarts: {type: boolean, description: 'True when changing its password restarts it: Dragonfly and ClickHouse read theirs only as they start.'}
+        imports:
+          type: array
+          items: {type: string, enum: [sql, custom, archive, archive-gzip, rdb]}
+          description: 'The dump formats a file can be imported in. Empty for an engine that imports none.'
 
     DatabaseEngineList:
       type: object

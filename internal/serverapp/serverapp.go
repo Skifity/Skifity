@@ -376,6 +376,11 @@ func markInterruptedWork(ctx context.Context, db *store.DB, log *slog.Logger) er
 		return err
 	}
 	for _, d := range databases {
+		// Started again after a stop, not being created: its data is all
+		// there, and the next look at it reads its state from the cluster.
+		if d.StatusDetail == dbsvc.StartingAgain {
+			continue
+		}
 		log.Info("marking an interrupted database as failed", "database", d.ID, "name", d.Name)
 		// Not deleted: whatever was created in the cluster is still there, and
 		// removing it from underneath somebody is not this function's call.

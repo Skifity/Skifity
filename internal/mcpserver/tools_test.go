@@ -91,6 +91,9 @@ var exampleCalls = map[string]map[string]any{
 	"get_database_status": {"database_id": "db_1"},
 	"list_backups":        {"database_id": "db_1"},
 	"run_backup":          {"database_id": "db_1"},
+	"stop_database":       {"database_id": "db_1", "force": true},
+	"start_database":      {"database_id": "db_1"},
+	"resize_database":     {"database_id": "db_1", "mem_limit_mb": 2048, "storage_gb": 20},
 
 	"list_domains":  {"app_id": "app_1"},
 	"add_domain":    {"app_id": "app_1", "hostname": "shop.example.com"},
@@ -185,6 +188,9 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		"create_database":     {"engine", "environment_id", "name"},
 		"link_database":       {"app_id", "database_id"},
 		"get_database_status": {"database_id"},
+		"stop_database":       {"database_id"},
+		"start_database":      {"database_id"},
+		"resize_database":     {"database_id"},
 		// A database, or an app and its volume: the tool says which it
 		// needs when it has neither, because a schema cannot say "one of".
 		"list_backups":   nil,
@@ -283,9 +289,13 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		// Restarts every instance, and can take a card away from an app
 		// that cannot run without one.
 		"set_gpus",
+		// Takes a database from its apps; restarts one, and grows a disk
+		// that cannot shrink again.
+		"stop_database", "resize_database",
 	}
 	additive := []string{
 		"create_app", "install_template", "create_database", "add_domain", "open_port", "lock_deploys",
+		"start_database",
 	}
 
 	for _, tool := range listTools(t, New(cli.Config{PanelURL: "https://panel.example", Token: "skf_test"})) {

@@ -71,6 +71,10 @@ type Server struct {
 	// panel does not accept uploaded folders.
 	uploads *upload.Store
 
+	// importLimit is the largest dump one import takes; zero is
+	// defaultImportLimit. See database_life_handlers.go.
+	importLimit int64
+
 	// resolver is what a domain's DNS is checked through; see domain_dns.go.
 	resolver Resolver
 
@@ -493,6 +497,13 @@ func (s *Server) routes() chi.Router {
 			authed.Route("/databases/{databaseID}", func(dbr chi.Router) {
 				dbr.Get("/", s.handleGetDatabase)
 				dbr.Delete("/", s.handleDeleteDatabase)
+				// Its life after it is made: see database_life_handlers.go.
+				dbr.Patch("/", s.handleResizeDatabase)
+				dbr.Post("/stop", s.handleStopDatabase)
+				dbr.Post("/start", s.handleStartDatabase)
+				dbr.Post("/password", s.handleChangeDatabasePassword)
+				dbr.Post("/import", s.handleImportDatabase)
+				dbr.Get("/operations", s.handleListDatabaseOperations)
 				dbr.With(refuseScopedTokens).Get("/credentials", s.handleDatabaseCredentials)
 				dbr.Post("/tunnel", s.handleDatabaseTunnel)
 				dbr.Post("/link", s.handleLinkDatabase)

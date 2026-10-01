@@ -10,14 +10,15 @@ import (
 // --- databases ---
 
 const databaseColumns = `id, environment_id, name, slug, engine, engine_version, status, status_detail,
-	instances, storage_gb, cpu_request_m, mem_request_mb, credentials_enc, created_at, updated_at`
+	instances, storage_gb, cpu_request_m, mem_request_mb, cpu_limit_m, mem_limit_mb, credentials_enc,
+	credentials_next_enc, created_at, updated_at`
 
 func scanDatabase(row interface{ Scan(...any) error }) (Database, error) {
 	var d Database
 	var created, updated string
 	err := row.Scan(&d.ID, &d.EnvironmentID, &d.Name, &d.Slug, &d.Engine, &d.EngineVersion, &d.Status,
-		&d.StatusDetail, &d.Instances, &d.StorageGB, &d.CPURequestM, &d.MemRequestMB, &d.CredentialsEnc,
-		&created, &updated)
+		&d.StatusDetail, &d.Instances, &d.StorageGB, &d.CPURequestM, &d.MemRequestMB, &d.CPULimitM,
+		&d.MemLimitMB, &d.CredentialsEnc, &d.CredentialsNextEnc, &created, &updated)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return d, ErrNotFound
@@ -37,11 +38,11 @@ func (db *DB) CreateDatabase(ctx context.Context, d *Database) error {
 	now := Now()
 	_, err := db.Exec(ctx, `INSERT INTO databases
 		(id, environment_id, name, slug, engine, engine_version, status, status_detail, instances,
-		 storage_gb, cpu_request_m, mem_request_mb, credentials_enc, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 storage_gb, cpu_request_m, mem_request_mb, cpu_limit_m, mem_limit_mb, credentials_enc, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		d.ID, d.EnvironmentID, d.Name, d.Slug, d.Engine, d.EngineVersion, defaultStr(d.Status, "creating"),
 		d.StatusDetail, max(d.Instances, 1), max(d.StorageGB, 1), d.CPURequestM, d.MemRequestMB,
-		d.CredentialsEnc, now, now)
+		d.CPULimitM, d.MemLimitMB, d.CredentialsEnc, now, now)
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this environment already has a database named %s", ErrConflict, d.Name)
@@ -89,9 +90,10 @@ func (db *DB) queryDatabases(ctx context.Context, query string, args ...any) ([]
 func (db *DB) UpdateDatabase(ctx context.Context, d *Database) error {
 	now := Now()
 	res, err := db.Exec(ctx, `UPDATE databases SET name=?, engine_version=?, status=?, status_detail=?,
-		instances=?, storage_gb=?, cpu_request_m=?, mem_request_mb=?, credentials_enc=?, updated_at=? WHERE id=?`,
+		instances=?, storage_gb=?, cpu_request_m=?, mem_request_mb=?, cpu_limit_m=?, mem_limit_mb=?,
+		credentials_enc=?, updated_at=? WHERE id=?`,
 		d.Name, d.EngineVersion, d.Status, d.StatusDetail, d.Instances, d.StorageGB, d.CPURequestM,
-		d.MemRequestMB, d.CredentialsEnc, now, d.ID)
+		d.MemRequestMB, d.CPULimitM, d.MemLimitMB, d.CredentialsEnc, now, d.ID)
 	if err != nil {
 		return fmt.Errorf("update database: %w", err)
 	}
@@ -110,6 +112,80 @@ func (db *DB) SetDatabaseStatus(ctx context.Context, id, status, detail string) 
 		return fmt.Errorf("set database status: %w", err)
 	}
 	return nil
+}
+
+// SetDatabaseResources records what a database reserves, may use and has on
+// its disk, and nothing else of its row.
+//
+// Not UpdateDatabase, which writes every mutable field from the copy it is
+// given: a resize reads the row, spends a while with the cluster, and would
+// then write back the credentials it read — over a password change that
+// finished in the meantime.
+func (db *DB) SetDatabaseResources(ctx context.Context, id string, cpuRequestM, cpuLimitM, memRequestMB, memLimitMB, storageGB int) error {
+	res, err := db.Exec(ctx, `UPDATE databases SET cpu_request_m = ?, cpu_limit_m = ?, mem_request_mb = ?,
+		mem_limit_mb = ?, storage_gb = ?, updated_at = ? WHERE id = ?`,
+		cpuRequestM, cpuLimitM, memRequestMB, memLimitMB, storageGB, Now(), id)
+	if err != nil {
+		return fmt.Errorf("set database resources: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// BeginDatabaseCredentials records the credentials a password change is about
+// to give a database, sealed, before the database is asked to take them.
+//
+// Only one change at a time: a database that already has credentials waiting
+// answers ErrConflict, so the column that keeps the new password safe is also
+// what stops a second change from starting over the first.
+func (db *DB) BeginDatabaseCredentials(ctx context.Context, id, sealed string) error {
+	res, err := db.Exec(ctx, `UPDATE databases SET credentials_next_enc = ?, updated_at = ?
+		WHERE id = ? AND credentials_next_enc = ''`, sealed, Now(), id)
+	if err != nil {
+		return fmt.Errorf("begin a password change: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := db.GetDatabase(ctx, id); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: a password change is already under way", ErrConflict)
+	}
+	return nil
+}
+
+// CommitDatabaseCredentials makes the new credentials the database's own and
+// forgets the waiting copy, in one statement. sealed is the same credentials
+// sealed for credentials_enc: each column is sealed to its own context, so a
+// value cannot simply move from one to the other.
+func (db *DB) CommitDatabaseCredentials(ctx context.Context, id, sealed string) error {
+	res, err := db.Exec(ctx, `UPDATE databases SET credentials_enc = ?, credentials_next_enc = '',
+		updated_at = ? WHERE id = ?`, sealed, Now(), id)
+	if err != nil {
+		return fmt.Errorf("commit the new credentials: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// AbandonDatabaseCredentials forgets credentials a password change did not
+// give the database after all.
+func (db *DB) AbandonDatabaseCredentials(ctx context.Context, id string) error {
+	if _, err := db.Exec(ctx, `UPDATE databases SET credentials_next_enc = '', updated_at = ? WHERE id = ?`,
+		Now(), id); err != nil {
+		return fmt.Errorf("abandon the new credentials: %w", err)
+	}
+	return nil
+}
+
+// ListDatabasesChangingPassword finds databases a restart caught in the middle
+// of a password change.
+func (db *DB) ListDatabasesChangingPassword(ctx context.Context) ([]Database, error) {
+	return db.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases
+		WHERE credentials_next_enc != '' ORDER BY created_at`)
 }
 
 // DeleteDatabase removes a database record.
@@ -258,6 +334,38 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 		return fmt.Errorf("create backup: %w", err)
 	}
 	b.CreatedAt, _ = ParseTime(now)
+	return nil
+}
+
+// RecordSkippedBackup notes that a scheduled backup did not run, and why:
+// the database was stopped, so there was nothing to copy. Only the newest
+// skip is kept for a target, because a database stopped for a month would
+// otherwise fill its list with thirty rows saying the same thing.
+func (db *DB) RecordSkippedBackup(ctx context.Context, b *Backup) error {
+	if b.ID == "" {
+		b.ID = NewID("bak")
+	}
+	now := Now()
+	err := db.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM backups WHERE target_type = ? AND target_id = ?
+			AND status = 'skipped'`, b.TargetType, b.TargetID); err != nil {
+			return fmt.Errorf("forget the earlier skipped backup: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO backups
+			(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted,
+			 created_at, finished_at)
+			VALUES (?,?,?,'skipped',?,'',0,?,0,?,?)`,
+			b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, now, now); err != nil {
+			return fmt.Errorf("record a skipped backup: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	b.Status = "skipped"
+	b.CreatedAt, _ = ParseTime(now)
+	b.FinishedAt = b.CreatedAt
 	return nil
 }
 

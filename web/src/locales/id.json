@@ -397,7 +397,12 @@
       "auth.passkey_clone_suspected": "Kunci sandi ditolak: mungkin sudah disalin",
       "secret_manager.limited": "Pengelola rahasia dibatasi",
       "app.gpus_changed": "GPU diubah",
-      "server.gpu_marked": "Tanda GPU NVIDIA server diubah"
+      "server.gpu_marked": "Tanda GPU NVIDIA server diubah",
+      "database.stopped": "Database dihentikan",
+      "database.started": "Database dijalankan",
+      "database.resized": "Ukuran database diubah",
+      "database.password_changed": "Kata sandi database diganti",
+      "database.import_started": "Dump diimpor ke database"
     }
   },
   "projects": {
@@ -1044,7 +1049,14 @@
       "leave": "Keluar dari cluster",
       "prepare": "Menyiapkan",
       "restore": "Memulihkan",
-      "verify": "Memeriksa"
+      "verify": "Memeriksa",
+      "change": "Mengganti",
+      "apply": "Menyimpan",
+      "sync": "Memperbarui aplikasi",
+      "finish": "Menyelesaikan",
+      "upload": "Menerima berkas",
+      "backup": "Mencadangkan dulu",
+      "import": "Mengimpor"
     },
     "status": {
       "pending": "Menunggu",
@@ -1108,7 +1120,16 @@
       "uninstalled": "Kubernetes dihapus dari mesinnya",
       "appStopped": "Aplikasi dihentikan",
       "archiveUnpacked": "Arsip sudah diekstrak",
-      "appRunningAgain": "{{0}} berjalan kembali"
+      "appRunningAgain": "{{0}} berjalan kembali",
+      "passwordTaken": "{{0}} menerima kata sandi baru",
+      "appsResynced": "{{0}} aplikasi diberi connection string baru",
+      "appsResyncedWithFailures": "{{0}} aplikasi diberi connection string baru; {{1}} tidak bisa di-rollout",
+      "oldPasswordGone": "Kata sandi lama tidak berlaku lagi",
+      "oldPasswordKept": "Kata sandi lama masih berlaku, untuk aplikasi yang belum di-rollout",
+      "oldPasswordNotDiscarded": "Kata sandi lama masih berlaku; ganti kata sandi lagi untuk mencabutnya",
+      "dumpReceived": "Diterima {{0}} MB {{1}}",
+      "backedUpFirst": "Dicadangkan dulu, pada {{0}}: pulihkan cadangan itu untuk membatalkan impor ini",
+      "dumpLoaded": "Dump {{0}} dimuat ke {{1}}"
     },
     "stepNote": {
       "fingerprint": "Sidik jari {{0}}",
@@ -1295,7 +1316,8 @@
     "backupStatus": {
       "running": "Berjalan",
       "succeeded": "Berhasil",
-      "failed": "Gagal"
+      "failed": "Gagal",
+      "skipped": "Dilewati"
     },
     "status": {
       "creating": "Membuat",
@@ -1304,7 +1326,8 @@
       "degraded": "Berkurang",
       "failed": "Gagal",
       "missing": "Hilang",
-      "unknown": "Tidak diketahui"
+      "unknown": "Tidak diketahui",
+      "stopped": "Dihentikan"
     },
     "restoreStarted": "Pemulihan dimulai. Basis data tidak tersedia sampai proses selesai.",
     "deleteWarning": "Semua tabel, baris, dan jadwal pencadangan ikut terhapus. Cadangan yang sudah ada di penyimpanan tetap tersimpan, tetapi panel tidak akan mengenalinya lagi.",
@@ -1341,7 +1364,84 @@
     },
     "nativeConnectionString": "Protokol native",
     "nativeConnectionStringHint": "Untuk klien yang memakai protokol ClickHouse sendiri, seperti clickhouse-client dan clickhouse-go. String koneksi di atas memakai HTTP, yang diterima sebagian besar pustaka klien.",
-    "noCredentials": "Memcached tidak punya pengguna maupun kata sandi. Hanya aplikasi di environment ini yang bisa menjangkaunya."
+    "noCredentials": "Memcached tidak punya pengguna maupun kata sandi. Hanya aplikasi di environment ini yang bisa menjangkaunya.",
+    "backupSkipped": "Dilewati: database sedang dihentikan, jadi tidak ada yang baru untuk dicadangkan.",
+    "backupKind": {
+      "before_import": "Sebelum impor",
+      "before_update": "Sebelum pembaruan"
+    },
+    "life": {
+      "manage": "Kelola",
+      "history": "Riwayat",
+      "power": "Hentikan dan jalankan",
+      "powerHelp": "Database yang dihentikan tetap menyimpan disk dan datanya, dan tidak memakai memori atau CPU. Pencadangan terjadwalnya dilewati selama dihentikan.",
+      "stop": "Hentikan",
+      "start": "Jalankan",
+      "stopTitle": "Hentikan {{name}}?",
+      "stopLinked": "Aplikasi-aplikasi ini kehilangan database-nya sampai dijalankan lagi: {{apps}}.",
+      "stopUnlinked": "Tidak ada aplikasi yang terhubung. Disk dan datanya tetap disimpan.",
+      "stopConsequence": "Pencadangan terjadwal dilewati selama database dihentikan.",
+      "stopped": "{{name}} dihentikan.",
+      "started": "{{name}} sedang dijalankan.",
+      "size": "Ukuran",
+      "sizeHelp": "Yang dipesan dan boleh dipakai, serta disknya. Mengubah CPU atau memori membuatnya dimulai ulang.",
+      "cpuRequest": "CPU dipesan (milicore)",
+      "cpuLimit": "Batas CPU (milicore)",
+      "cpuLimitHelp": "0 berarti tanpa batas.",
+      "memRequest": "Memori dipesan (MB)",
+      "memLimit": "Batas memori (MB)",
+      "memLimitHelp": "Paling sedikit {{min}} MB untuk {{engine}}.",
+      "storage": "Disk (GB)",
+      "storageHelp": "Disk hanya bisa diperbesar. Untuk memperbesarnya dibutuhkan penyimpanan yang mengizinkan, dan local-path bawaan k3s tidak.",
+      "resize": "Simpan ukuran",
+      "resizeTitle": "Ubah ukuran {{name}}?",
+      "resizeRestarts": "Instansinya diganti dengan yang berukuran baru, jadi database dimulai ulang dan aplikasinya kehilangan database sesaat.",
+      "resizeGrowForever": "Disk yang sudah diperbesar tidak bisa diperkecil lagi.",
+      "resized": "Ukuran {{name}} sedang diubah.",
+      "password": "Kata sandi",
+      "passwordHelp": "Database menerima kata sandi baru lebih dulu, lalu setiap aplikasi yang terhubung di-rollout dengan connection string baru. Jika ada yang gagal di tengah jalan, kata sandi lama dikembalikan.",
+      "newPassword": "Kata sandi baru",
+      "newPasswordHelp": "Kosongkan agar dibuatkan yang kuat. 16 sampai 128 huruf, angka, titik, tanda hubung, garis bawah, atau tilde.",
+      "changePassword": "Ganti kata sandi",
+      "passwordTitle": "Ganti kata sandi {{name}}?",
+      "passwordConfirm": "Aplikasi terhubung yang di-rollout dengan connection string baru: {{apps}}. Apa pun yang masuk dengan kata sandi lama secara manual akan berhenti bekerja.",
+      "passwordRestarts": "{{engine}} hanya membaca kata sandinya saat dijalankan, jadi database dimulai ulang.",
+      "passwordStarted": "Kata sandi sedang diganti. Riwayat menunjukkan setiap langkahnya.",
+      "import": "Impor dump",
+      "importHelp": "Muat dump yang sudah Anda punya. Berkas dibaca dan diperiksa dulu, lalu database dicadangkan, sehingga impor bisa dibatalkan dengan memulihkan cadangan itu.",
+      "importFile": "Berkas dump",
+      "importFileHelp": "Apa adanya atau di-gzip: {{formats}}. Paling besar 5 GB.",
+      "importFormat": "Format",
+      "importFormatAuto": "Deteksi otomatis",
+      "importTooLarge": "Berkas ini lebih dari 5 GB. Muat dengan klien milik engine itu sendiri melalui skifity db connect.",
+      "importButton": "Impor",
+      "importTitle": "Impor ke {{name}}?",
+      "importConfirm": "Isi dump menggantikan tabel, koleksi, atau key dengan nama yang sama di database ini.",
+      "importBackupFirst": "Database dicadangkan dulu; pulihkan cadangan itu untuk membatalkan impor.",
+      "importing": "Mengunggah…",
+      "importStarted": "Dump sudah diterima. Riwayat menunjukkan pencadangan dan impornya.",
+      "format": {
+        "sql": "SQL",
+        "custom": "Arsip custom pg_dump",
+        "archive": "Arsip mongodump",
+        "archive-gzip": "Arsip mongodump yang dibuat dengan --gzip",
+        "rdb": "Snapshot Redis (RDB)"
+      },
+      "historyHelp": "Pemulihan, impor, dan penggantian kata sandi, yang terbaru di atas.",
+      "historyEmpty": "Belum ada yang dilakukan pada database ini",
+      "kind": {
+        "restore": "Pemulihan",
+        "import": "Impor",
+        "password": "Penggantian kata sandi"
+      },
+      "opStatus": {
+        "pending": "Menunggu",
+        "running": "Berjalan",
+        "succeeded": "Berhasil",
+        "failed": "Gagal",
+        "cancelled": "Dibatalkan"
+      }
+    }
   },
   "templates": {
     "title": "Template",
@@ -3369,6 +3469,138 @@
         "cause": "{{0}} sudah menawarkan kartu NVIDIA kluster ini kepada Kubernetes, dan dua plugin untuk satu kartu bergantian menjadi yang didengarkan Kubernetes.",
         "impact": "Tidak ada yang dipasang. Aplikasi dapat memakai kartu yang ditawarkan plugin itu tanpa plugin dari panel.",
         "fix": "Biarkan saja, dan minta GPU di pengaturan aplikasi: GPU itu datang dari plugin tersebut. Hapus plugin itu lebih dulu hanya jika Anda ingin panel yang mengurus plugin."
+      },
+      "database_stop_linked": {
+        "title": "Aplikasi memakai database ini",
+        "cause": "{{0}} terhubung ke {{1}}.",
+        "impact": "Tidak ada yang diubah. Jika dihentikan, database ini tidak akan melayani satu pun dari aplikasi itu sampai dijalankan lagi.",
+        "fix": "Konfirmasi bahwa aplikasi-aplikasi ini boleh kehilangan database-nya selama dihentikan, atau putuskan dulu sambungannya."
+      },
+      "database_not_running": {
+        "title": "Database ini tidak berjalan",
+        "cause": "{{0}} sedang {{1}}, sedangkan tindakan ini butuh database yang berjalan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jalankan database-nya, atau tunggu sampai berjalan, lalu coba lagi."
+      },
+      "database_busy": {
+        "title": "Database ini sedang dikerjakan",
+        "cause": "{{0}} sedang dibuat, dipulihkan, diimpor, atau diberi kata sandi baru.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tunggu sampai selesai, lalu coba lagi. Riwayat database menunjukkan perkembangannya."
+      },
+      "database_storage_shrink": {
+        "title": "Disk database tidak bisa diperkecil",
+        "cause": "{{0}} punya {{1}} GB, dan {{2}} GB lebih kecil dari itu.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Disk hanya bisa diperbesar. Untuk memakai lebih sedikit, buat database yang lebih kecil, impor cadangan database ini ke sana, lalu hubungkan aplikasi Anda ke database baru itu."
+      },
+      "database_storage_not_expandable": {
+        "title": "Disk database ini tidak bisa diperbesar",
+        "cause": "{{0}} menyimpan datanya di storage class {{1}}, yang tidak mengizinkan volume diperbesar.",
+        "impact": "Tidak ada yang diubah, termasuk CPU dan memorinya.",
+        "fix": "Storage local-path bawaan k3s tidak pernah mengizinkannya. Setel allowVolumeExpansion: true pada storage class ini jika driver-nya bisa memperbesar volume, atau buat database yang lebih besar dan impor cadangan database ini ke sana."
+      },
+      "database_over_quota": {
+        "title": "Itu melebihi batas lingkungan ini",
+        "cause": "{{0}} akan menjadi {{1}}, sedangkan lingkungan ini dibatasi {{2}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Minta lebih sedikit, atau beri ruang: perkecil atau hentikan hal lain di lingkungan ini."
+      },
+      "database_memory_too_small": {
+        "title": "Memori itu terlalu kecil untuk database ini",
+        "cause": "{{0}} butuh batas memori paling sedikit {{1}} MB.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Beri paling sedikit {{0}} MB."
+      },
+      "database_password_not_offered": {
+        "title": "Database ini tidak punya kata sandi",
+        "cause": "{{0}} menjalankan {{1}}, yang tidak punya kata sandi untuk diubah.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Hanya aplikasi di lingkungannya sendiri yang bisa menjangkaunya; itulah yang menjaganya tetap privat."
+      },
+      "database_password_rejected": {
+        "title": "Kata sandi itu tidak bisa dipakai",
+        "cause": "Kata sandi database di sini terdiri dari 16 sampai 128 huruf, angka, titik, tanda hubung, garis bawah, atau tilde, dan yang ini tidak.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Kosongkan kata sandi agar dibuatkan yang kuat, atau pilih yang hanya memakai karakter-karakter itu: setiap kata sandi masuk ke connection string, dan karakter lain perlu di-escape di sana."
+      },
+      "database_password_change_running": {
+        "title": "Penggantian kata sandi sedang berjalan",
+        "cause": "{{0}} sedang diberi kata sandi baru.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tunggu sampai selesai; Riwayat database menunjukkan perkembangannya."
+      },
+      "database_password_change_interrupted": {
+        "title": "Penggantian kata sandi sebelumnya belum selesai",
+        "cause": "Penggantian kata sandi {{0}} berhenti di tengah jalan, dan panel menyimpan kata sandi yang sedang diberikan.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Ganti kata sandi lagi tanpa memilihnya: panel menyelesaikan penggantian sebelumnya dulu. Setelah itu pilih kata sandi Anda."
+      },
+      "database_password_failed": {
+        "title": "Kata sandi tidak bisa diganti",
+        "cause": "{{0}}",
+        "impact": "Kata sandi lama masih berlaku, dan aplikasi masih memakainya.",
+        "fix": "Baca alasannya di atas; yang paling umum adalah database yang berhenti menjawab dan server yang tidak punya ruang untuk job singkat yang melakukan penggantian. Lalu coba lagi."
+      },
+      "database_password_stranded": {
+        "title": "Kata sandi baru sudah diterima tetapi tidak bisa diteruskan",
+        "cause": "Database menerima kata sandi baru, lalu {{0}}. Mengembalikan kata sandi lama juga gagal.",
+        "impact": "Aplikasi mungkin gagal tersambung sampai ini selesai. Panel menyimpan kata sandi baru, tersegel, di samping yang lama.",
+        "fix": "Ganti kata sandi lagi tanpa memilihnya, begitu cluster menjawab: panel menyelesaikan penggantian ini dengan kata sandi yang disimpannya."
+      },
+      "import_not_offered": {
+        "title": "Skifity tidak mengimpor ke jenis database ini",
+        "cause": "{{0}} menjalankan {{1}}, dan Skifity tidak punya cara untuk memuat dump ke dalamnya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Muat data Anda dengan klien milik engine itu sendiri melalui `{{0}} db connect`."
+      },
+      "import_wrong_kind": {
+        "title": "Dump ini untuk jenis database lain",
+        "cause": "Berkas ini adalah {{0}}, yang tidak bisa dimuat oleh {{1}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Impor ke database dari jenis asal dump-nya, atau buat dump lagi dalam format yang diterima database ini: {{0}}."
+      },
+      "import_unrecognised": {
+        "title": "Skifity tidak bisa mengenali berkas ini",
+        "cause": "Ini bukan dump yang bisa dimuat oleh {{0}}: {{1}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Buat dump dengan alat milik engine itu sendiri, seperti yang ditunjukkan docs/databases.md, lalu kirim berkasnya apa adanya atau di-gzip."
+      },
+      "import_format_invalid": {
+        "title": "Itu bukan format yang diimpor database ini",
+        "cause": "{{0}} bukan salah satu format yang diimpor {{1}}: {{2}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Kosongkan format agar dideteksi otomatis, atau sebutkan salah satu dari format itu."
+      },
+      "import_empty": {
+        "title": "Berkasnya kosong",
+        "cause": "Tidak ada yang diterima, atau isinya kosong setelah didekompresi.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Periksa bahwa dump ditulis sampai selesai, lalu kirim lagi."
+      },
+      "import_damaged": {
+        "title": "Berkasnya rusak",
+        "cause": "Berkas ini di-gzip dan tidak bisa didekompresi sampai akhir: {{0}}.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Kirim lagi. Jika gagal dengan cara yang sama, berkasnya terpotong saat dibuat atau disalin; buat dump-nya lagi."
+      },
+      "import_too_large": {
+        "title": "Berkasnya terlalu besar untuk diimpor di sini",
+        "cause": "Ukurannya lebih dari {{0}} MB, batas yang diterima panel dalam satu impor.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Muat dengan klien milik engine itu sendiri melalui `{{0}} db connect`, yang tidak punya batas."
+      },
+      "import_backup_failed": {
+        "title": "Pencadangan sebelum impor gagal",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diimpor, jadi database tetap seperti semula.",
+        "fix": "Perbaiki penyebab pencadangan gagal — daftar Cadangan database menyebutkan hal yang sama — lalu impor lagi."
+      },
+      "import_failed": {
+        "title": "Dump tidak bisa dimuat",
+        "cause": "{{0}}",
+        "impact": "PostgreSQL memuat dump dalam satu transaksi, jadi tidak ada yang tertinggal; engine lain mungkin sudah memuat sebagian. Sebuah cadangan diambil tepat sebelumnya.",
+        "fix": "Baca alasannya di atas dan perbaiki dump-nya. Untuk mengembalikan database seperti semula, pulihkan cadangan yang diambil tepat sebelum impor dari daftar Cadangan-nya."
       }
     }
   },

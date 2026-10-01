@@ -35,6 +35,16 @@ import (
 // honours the hint, and the assistant deciding to restore may be acting on a
 // log line or a file somebody else wrote. So an assistant can find the backup
 // and say which one; the person restores it.
+//
+// Two more are left out for the same two reasons. POST .../password changes
+// who can sign in to the database: the useful half of it for an assistant —
+// the apps getting the new connection string — happens by itself, and the
+// other half is a password it should never see. POST .../import replaces
+// what is in a database with a file, which is a restore of something the
+// panel did not even make; and the file is on the person's computer, where
+// `skifity db import` already reads it. Stopping, starting and resizing are
+// here: each is put back with its opposite, except a disk that has grown,
+// which the tool says.
 
 type databaseSummary struct {
 	ID        string `json:"id"`
@@ -88,6 +98,25 @@ type linkDatabaseOutput struct {
 
 type databaseIDInput struct {
 	DatabaseID string `json:"database_id" jsonschema:"the database, as returned by list_databases"`
+}
+
+type stopDatabaseInput struct {
+	DatabaseID string `json:"database_id" jsonschema:"the database, as returned by list_databases"`
+	Force      bool   `json:"force,omitempty" jsonschema:"stop it although apps are linked to it; they cannot reach it until it is started again. Only once the person has agreed to that, having been told which apps"`
+}
+
+type resizeDatabaseInput struct {
+	DatabaseID   string `json:"database_id" jsonschema:"the database, as returned by list_databases"`
+	CPURequestM  *int   `json:"cpu_request_m,omitempty" jsonschema:"the CPU to reserve, in millicores, 10 to 64000"`
+	CPULimitM    *int   `json:"cpu_limit_m,omitempty" jsonschema:"the CPU it may use, in millicores; 0 for no limit"`
+	MemRequestMB *int   `json:"mem_request_mb,omitempty" jsonschema:"the memory to reserve, in MB"`
+	MemLimitMB   *int   `json:"mem_limit_mb,omitempty" jsonschema:"the memory it may use, in MB; at least what the engine needs"`
+	StorageGB    *int   `json:"storage_gb,omitempty" jsonschema:"the disk, in GB. It can only grow, never shrink, and not every cluster can grow one"`
+}
+
+type databaseChangeOutput struct {
+	Database databaseSummary `json:"database"`
+	Note     string          `json:"note"`
 }
 
 type databaseStatusOutput struct {
@@ -178,6 +207,32 @@ func (s *Server) registerDatabases() {
 		Description: "Describe a database: whether it is running, why not if it is not, its size, and which apps are linked to it under which variable. " +
 			"It never returns the password or the connection string; an app gets those with link_database.",
 	}, s.getDatabaseStatus)
+
+	addTool(s, &mcp.Tool{
+		Name: "stop_database",
+		// Destructive: the apps linked to it lose it until somebody starts
+		// it again.
+		Annotations: changes("Stop a database", true, true),
+		Description: "Stop a database: its instances go and its disk and data stay, so it costs no memory or CPU while nothing needs it. " +
+			"Apps linked to it cannot reach it until it is started again, so the panel refuses while any are linked, naming them; " +
+			"tell the person which, and pass force only once they agree. Scheduled backups are skipped while it is stopped. start_database brings it back.",
+	}, s.stopDatabase)
+
+	addTool(s, &mcp.Tool{
+		Name:        "start_database",
+		Annotations: changes("Start a database", false, true),
+		Description: "Start a stopped database on the disk it kept. It answers at once and takes a moment to accept connections; get_database_status says when it is running.",
+	}, s.startDatabase)
+
+	addTool(s, &mcp.Tool{
+		Name: "resize_database",
+		// Destructive: a change of CPU or memory restarts the database, and
+		// a disk that has grown cannot be made smaller again.
+		Annotations: changes("Resize a database", true, true),
+		Description: "Change what a database reserves and may use — CPU in millicores, memory in MB — and grow its disk, in GB. Give only what changes. " +
+			"A change of CPU or memory restarts it, so its apps lose it for a moment. A disk only grows: it cannot be made smaller afterwards, " +
+			"and on a cluster whose storage cannot grow a volume (k3s's own) the panel refuses and says why. The environment's limits are checked first.",
+	}, s.resizeDatabase)
 
 	addTool(s, &mcp.Tool{
 		Name:        "list_backups",
@@ -305,6 +360,60 @@ func (s *Server) getDatabaseStatus(ctx context.Context, _ *mcp.CallToolRequest, 
 		text += " " + response.Database.StatusDetail
 	}
 	return textResult(text), out, nil
+}
+
+func (s *Server) stopDatabase(ctx context.Context, _ *mcp.CallToolRequest, in stopDatabaseInput) (*mcp.CallToolResult, databaseChangeOutput, error) {
+	route := databasePath(in.DatabaseID, "/stop")
+	if in.Force {
+		route += "?force=true"
+	}
+	var database store.Database
+	if err := s.client.Do(ctx, "POST", route, map[string]any{}, &database); err != nil {
+		return errorResult(err), databaseChangeOutput{}, nil
+	}
+	out := databaseChangeOutput{
+		Database: summariseDatabase(database),
+		Note:     "It is stopped and its data is kept. start_database brings it back; its apps reach it again once it is running.",
+	}
+	return textResult(fmt.Sprintf("%s is stopped. %s", database.Name, out.Note)), out, nil
+}
+
+func (s *Server) startDatabase(ctx context.Context, _ *mcp.CallToolRequest, in databaseIDInput) (*mcp.CallToolResult, databaseChangeOutput, error) {
+	var database store.Database
+	if err := s.client.Do(ctx, "POST", databasePath(in.DatabaseID, "/start"), map[string]any{}, &database); err != nil {
+		return errorResult(err), databaseChangeOutput{}, nil
+	}
+	out := databaseChangeOutput{
+		Database: summariseDatabase(database),
+		Note:     "It is starting. Call get_database_status to see when it is running.",
+	}
+	return textResult(fmt.Sprintf("%s is starting. %s", database.Name, out.Note)), out, nil
+}
+
+func (s *Server) resizeDatabase(ctx context.Context, _ *mcp.CallToolRequest, in resizeDatabaseInput) (*mcp.CallToolResult, databaseChangeOutput, error) {
+	body := map[string]int{}
+	for key, value := range map[string]*int{
+		"cpu_request_m": in.CPURequestM, "cpu_limit_m": in.CPULimitM,
+		"mem_request_mb": in.MemRequestMB, "mem_limit_mb": in.MemLimitMB, "storage_gb": in.StorageGB,
+	} {
+		if value != nil {
+			body[key] = *value
+		}
+	}
+	if len(body) == 0 {
+		return errorResult(errdoc.BadRequest("Give at least one of cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb or storage_gb.")),
+			databaseChangeOutput{}, nil
+	}
+	var database store.Database
+	if err := s.client.Do(ctx, "PATCH", databasePath(in.DatabaseID, ""), body, &database); err != nil {
+		return errorResult(err), databaseChangeOutput{}, nil
+	}
+	out := databaseChangeOutput{
+		Database: summariseDatabase(database),
+		Note:     "A change of CPU or memory restarts it; get_database_status says when it is running again.",
+	}
+	return textResult(fmt.Sprintf("%s now reserves %dm CPU and %d MB of memory, with a limit of %d MB, on %d GB of disk. %s",
+		database.Name, database.CPURequestM, database.MemRequestMB, database.MemLimitMB, database.StorageGB, out.Note)), out, nil
 }
 
 // backupRoute is where a target's backups are, or why the input names none.

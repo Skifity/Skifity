@@ -424,6 +424,40 @@ type DatabaseManager interface {
 	Unlink(ctx context.Context, databaseID, appID string) error
 	// Status refreshes a database's state from the cluster.
 	Status(ctx context.Context, databaseID string) (string, string, error)
+	// Stop scales a database to nothing and keeps its disk.
+	Stop(ctx context.Context, databaseID string) (store.Database, error)
+	// Start brings a stopped database back, and waits for it in the
+	// background.
+	Start(ctx context.Context, databaseID string) (store.Database, error)
+	// Resize changes what a database reserves and may use, and grows its
+	// disk. The manager checks the request against the engine, the
+	// environment's quota and the storage class.
+	Resize(ctx context.Context, databaseID string, req ResizeDatabaseRequest) (store.Database, error)
+	// ChangePassword gives a database a new password, generated when
+	// password is empty, and every linked app the new connection string.
+	ChangePassword(ctx context.Context, databaseID, password, userID string) (store.Operation, error)
+}
+
+// ResizeDatabaseRequest is what PATCH /api/databases/{id} changes. A field
+// left out is left as it is.
+type ResizeDatabaseRequest struct {
+	CPURequestM  *int `json:"cpu_request_m,omitempty"`
+	CPULimitM    *int `json:"cpu_limit_m,omitempty"`
+	MemRequestMB *int `json:"mem_request_mb,omitempty"`
+	MemLimitMB   *int `json:"mem_limit_mb,omitempty"`
+	StorageGB    *int `json:"storage_gb,omitempty"`
+}
+
+// ImportRequest is a dump on its way into a database.
+type ImportRequest struct {
+	DatabaseID string
+	// Dump is the file, read once and to the end, and never more than Limit
+	// bytes of it.
+	Dump  io.Reader
+	Limit int64
+	// Format is the one somebody named, or empty to detect it.
+	Format string
+	UserID string
 }
 
 // CreateDatabaseRequest is the Create Database form.
@@ -468,6 +502,10 @@ type BackupManager interface {
 	// VerifyBackup downloads a backup, opens it and reads it through, in the
 	// background, and records the outcome on it.
 	VerifyBackup(ctx context.Context, backupID string) error
+	// Import loads a dump into a database, after a backup of what it holds.
+	// The dump is read and staged before this returns; the rest is the
+	// operation's.
+	Import(ctx context.Context, req ImportRequest) (store.Operation, error)
 }
 
 // RunResult is how a one-off command ended: its exit status, once it has.

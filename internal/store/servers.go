@@ -251,6 +251,53 @@ func (db *DB) LatestOperation(ctx context.Context, targetType, targetID string) 
 	return db.GetOperation(ctx, id)
 }
 
+// OperationRunningFor reports whether anything is being done to a target
+// right now: an operation about it that has not finished.
+func (db *DB) OperationRunningFor(ctx context.Context, targetType, targetID string) (bool, error) {
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE target_type = ? AND target_id = ?
+		AND status IN ('pending','running')`, targetType, targetID).Scan(&n); err != nil {
+		return false, fmt.Errorf("check for running operations: %w", err)
+	}
+	return n > 0, nil
+}
+
+// ListOperationsForTarget returns a target's operations, newest first, each
+// with its steps: a database's restores, imports and password changes are its
+// history.
+func (db *DB) ListOperationsForTarget(ctx context.Context, targetType, targetID string, limit int) ([]Operation, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id FROM operations WHERE target_type = ? AND target_id = ?
+		ORDER BY created_at DESC LIMIT ?`, targetType, targetID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list operations: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan operation id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]Operation, 0, len(ids))
+	for _, id := range ids {
+		op, err := db.GetOperation(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, op)
+	}
+	return out, nil
+}
+
 // ListOperationSteps returns an operation's steps in sequence order.
 func (db *DB) ListOperationSteps(ctx context.Context, opID string) ([]OperationStep, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, operation_id, seq, key, status, message, message_key,

@@ -397,7 +397,12 @@
       "auth.passkey_clone_suspected": "通行密钥被拒绝：它可能已被复制",
       "secret_manager.limited": "已限制密钥管理器",
       "app.gpus_changed": "已更改 GPU",
-      "server.gpu_marked": "已更改服务器的 NVIDIA GPU 标记"
+      "server.gpu_marked": "已更改服务器的 NVIDIA GPU 标记",
+      "database.stopped": "数据库已停止",
+      "database.started": "数据库已启动",
+      "database.resized": "数据库已调整大小",
+      "database.password_changed": "数据库密码已更换",
+      "database.import_started": "已向数据库导入转储"
     }
   },
   "projects": {
@@ -1044,7 +1049,14 @@
       "leave": "退出集群",
       "prepare": "准备",
       "restore": "恢复",
-      "verify": "校验"
+      "verify": "校验",
+      "change": "更换中",
+      "apply": "保存中",
+      "sync": "更新应用",
+      "finish": "收尾",
+      "upload": "接收文件",
+      "backup": "先做备份",
+      "import": "导入中"
     },
     "status": {
       "pending": "等待中",
@@ -1108,7 +1120,16 @@
       "uninstalled": "已从这台机器上卸载 Kubernetes",
       "appStopped": "应用已停止",
       "archiveUnpacked": "归档已解包",
-      "appRunningAgain": "{{0}} 已重新运行"
+      "appRunningAgain": "{{0}} 已重新运行",
+      "passwordTaken": "{{0}} 已接受新密码",
+      "appsResynced": "已为 {{0}} 个应用提供新的连接字符串",
+      "appsResyncedWithFailures": "已为 {{0}} 个应用提供新的连接字符串；{{1}} 个无法发布",
+      "oldPasswordGone": "旧密码已失效",
+      "oldPasswordKept": "旧密码仍然有效，供未能发布的应用使用",
+      "oldPasswordNotDiscarded": "旧密码仍然有效；再更换一次密码即可移除它",
+      "dumpReceived": "已收到 {{0}} MB 的 {{1}}",
+      "backedUpFirst": "已先在 {{0}} 做了备份：恢复那份备份即可撤销这次导入",
+      "dumpLoaded": "已将 {{0}} 转储加载到 {{1}}"
     },
     "stepNote": {
       "fingerprint": "指纹 {{0}}",
@@ -1295,7 +1316,8 @@
     "backupStatus": {
       "running": "进行中",
       "succeeded": "成功",
-      "failed": "失败"
+      "failed": "失败",
+      "skipped": "已跳过"
     },
     "status": {
       "creating": "创建中",
@@ -1304,7 +1326,8 @@
       "degraded": "已降级",
       "failed": "失败",
       "missing": "已不存在",
-      "unknown": "未知"
+      "unknown": "未知",
+      "stopped": "已停止"
     },
     "restoreStarted": "恢复已开始。完成之前数据库不可用。",
     "deleteWarning": "所有表、数据行和备份计划都会一并消失。存储中已有的备份会保留，但面板将不再知道它们。",
@@ -1341,7 +1364,84 @@
     },
     "nativeConnectionString": "原生协议",
     "nativeConnectionStringHint": "适用于使用 ClickHouse 原生协议的客户端，例如 clickhouse-client 和 clickhouse-go。上面的连接字符串使用 HTTP，大多数客户端库都接受它。",
-    "noCredentials": "Memcached 没有用户也没有密码。只有此环境中的应用能访问它。"
+    "noCredentials": "Memcached 没有用户也没有密码。只有此环境中的应用能访问它。",
+    "backupSkipped": "已跳过：数据库处于停止状态，没有新内容需要备份。",
+    "backupKind": {
+      "before_import": "导入之前",
+      "before_update": "更新之前"
+    },
+    "life": {
+      "manage": "管理",
+      "history": "历史记录",
+      "power": "停止与启动",
+      "powerHelp": "停止的数据库会保留磁盘和数据，不占用内存和 CPU。停止期间，计划备份会被跳过。",
+      "stop": "停止",
+      "start": "启动",
+      "stopTitle": "停止 {{name}}？",
+      "stopLinked": "在重新启动之前，这些应用将失去数据库：{{apps}}。",
+      "stopUnlinked": "没有应用关联到它。它的磁盘和数据会保留。",
+      "stopConsequence": "停止期间计划备份会被跳过。",
+      "stopped": "{{name}} 已停止。",
+      "started": "{{name}} 正在启动。",
+      "size": "大小",
+      "sizeHelp": "它预留和可使用的资源，以及它的磁盘。更改 CPU 或内存会让它重启。",
+      "cpuRequest": "预留 CPU（毫核）",
+      "cpuLimit": "CPU 上限（毫核）",
+      "cpuLimitHelp": "0 表示不限制。",
+      "memRequest": "预留内存（MB）",
+      "memLimit": "内存上限（MB）",
+      "memLimitHelp": "{{engine}} 至少需要 {{min}} MB。",
+      "storage": "磁盘（GB）",
+      "storageHelp": "磁盘只能扩大。扩大需要允许扩容的存储，而 k3s 自带的 local-path 不允许。",
+      "resize": "保存大小",
+      "resizeTitle": "调整 {{name}} 的大小？",
+      "resizeRestarts": "它的实例会被替换为新大小的实例，所以它会重启，应用会短暂失去它。",
+      "resizeGrowForever": "扩大后的磁盘无法再缩小。",
+      "resized": "正在调整 {{name}} 的大小。",
+      "password": "密码",
+      "passwordHelp": "数据库先接受新密码，然后每个关联的应用都会用新的连接字符串发布。如果中途有任何失败，会恢复旧密码。",
+      "newPassword": "新密码",
+      "newPasswordHelp": "留空即可生成一个强密码。由 16 到 128 个字母、数字、点、短横线、下划线或波浪号组成。",
+      "changePassword": "更换密码",
+      "passwordTitle": "更换 {{name}} 的密码？",
+      "passwordConfirm": "将用新连接字符串发布的关联应用：{{apps}} 个。任何手动用旧密码登录的地方都将失效。",
+      "passwordRestarts": "{{engine}} 只在启动时读取密码，所以它会重启。",
+      "passwordStarted": "正在更换密码。历史记录会显示每一步。",
+      "import": "导入转储",
+      "importHelp": "加载你已有的转储。先读取并检查文件，再对数据库做一次备份，这样恢复那份备份就能撤销导入。",
+      "importFile": "转储文件",
+      "importFileHelp": "原样或 gzip 压缩：{{formats}}。最大 5 GB。",
+      "importFormat": "格式",
+      "importFormatAuto": "自动识别",
+      "importTooLarge": "这个文件超过 5 GB。请通过 skifity db connect 用该引擎自己的客户端加载。",
+      "importButton": "导入",
+      "importTitle": "导入到 {{name}}？",
+      "importConfirm": "转储中的内容会替换这个数据库中同名的表、集合或键。",
+      "importBackupFirst": "会先做一次备份；恢复它即可撤销导入。",
+      "importing": "正在上传…",
+      "importStarted": "已收到转储。历史记录会显示备份和导入。",
+      "format": {
+        "sql": "SQL",
+        "custom": "pg_dump 自定义格式归档",
+        "archive": "mongodump 归档",
+        "archive-gzip": "使用 --gzip 生成的 mongodump 归档",
+        "rdb": "Redis 快照（RDB）"
+      },
+      "historyHelp": "恢复、导入和密码更换，最新的在前。",
+      "historyEmpty": "这个数据库还没有进行过任何操作",
+      "kind": {
+        "restore": "恢复",
+        "import": "导入",
+        "password": "更换密码"
+      },
+      "opStatus": {
+        "pending": "等待中",
+        "running": "进行中",
+        "succeeded": "成功",
+        "failed": "失败",
+        "cancelled": "已取消"
+      }
+    }
   },
   "templates": {
     "title": "模板",
@@ -3369,6 +3469,138 @@
         "cause": "{{0}} 已经在向 Kubernetes 提供集群的 NVIDIA 显卡，而同一块显卡的两个插件会轮流成为 Kubernetes 所监听的那个。",
         "impact": "未安装任何内容。应用无需面板的插件即可使用该插件提供的显卡。",
         "fix": "保留它，并在应用设置中申请 GPU：显卡将来自该插件。只有当你希望由面板管理插件时，才先将它移除。"
+      },
+      "database_stop_linked": {
+        "title": "有应用在使用这个数据库",
+        "cause": "{{0}} 已关联到：{{1}}。",
+        "impact": "没有做任何改动。停止后，在重新启动之前它不会响应其中任何一个应用。",
+        "fix": "确认这些应用可以在它停止期间失去数据库，或者先取消关联。"
+      },
+      "database_not_running": {
+        "title": "这个数据库没有在运行",
+        "cause": "{{0}} 当前状态为 {{1}}，而这个操作需要它在运行。",
+        "impact": "没有做任何改动。",
+        "fix": "启动它，或等它运行起来，然后再试一次。"
+      },
+      "database_busy": {
+        "title": "这个数据库正在进行其他操作",
+        "cause": "{{0}} 正在创建、恢复、导入或更换密码。",
+        "impact": "没有做任何改动。",
+        "fix": "等它完成后再试一次。数据库的历史记录会显示进展。"
+      },
+      "database_storage_shrink": {
+        "title": "数据库的磁盘不能缩小",
+        "cause": "{{0}} 有 {{1}} GB，而 {{2}} GB 更小。",
+        "impact": "没有做任何改动。",
+        "fix": "磁盘只能扩大。想用更少，请新建一个更小的数据库，把这个数据库的备份导入进去，再把应用关联到它。"
+      },
+      "database_storage_not_expandable": {
+        "title": "这个数据库的磁盘无法扩大",
+        "cause": "{{0}} 的数据保存在存储类 {{1}} 上，它不允许扩大卷。",
+        "impact": "没有做任何改动，CPU 和内存也没有改。",
+        "fix": "k3s 自带的 local-path 存储从不允许扩大。如果这个存储类的驱动能扩大卷，就在它上面设置 allowVolumeExpansion: true；或者新建一个更大的数据库，把这个数据库的备份导入进去。"
+      },
+      "database_over_quota": {
+        "title": "超出了这个环境允许的上限",
+        "cause": "它的 {{0}} 将达到 {{1}}，而环境只允许 {{2}}。",
+        "impact": "没有做任何改动。",
+        "fix": "少申请一些，或腾出空间：缩小或停止这个环境里的其他资源。"
+      },
+      "database_memory_too_small": {
+        "title": "这点内存对这个数据库来说太少了",
+        "cause": "{{0}} 至少需要 {{1}} MB 的内存上限。",
+        "impact": "没有做任何改动。",
+        "fix": "至少给它 {{0}} MB。"
+      },
+      "database_password_not_offered": {
+        "title": "这个数据库没有密码",
+        "cause": "{{0}} 运行的是 {{1}}，没有可以更换的密码。",
+        "impact": "没有做任何改动。",
+        "fix": "只有它所在环境中的应用能访问它，正是这一点让它保持私密。"
+      },
+      "database_password_rejected": {
+        "title": "这个密码不能使用",
+        "cause": "这里的数据库密码由 16 到 128 个字母、数字、点、短横线、下划线或波浪号组成，而这个不是。",
+        "impact": "没有做任何改动。",
+        "fix": "留空即可生成一个强密码，或只用这些字符来选择密码：每个密码都会写进连接字符串，其他字符在那里需要转义。"
+      },
+      "database_password_change_running": {
+        "title": "已经在更换密码",
+        "cause": "{{0}} 正在获得新密码。",
+        "impact": "没有做任何改动。",
+        "fix": "等它完成；数据库的历史记录会显示进展。"
+      },
+      "database_password_change_interrupted": {
+        "title": "上一次更换密码没有完成",
+        "cause": "{{0}} 的密码更换中途停止了，面板保留了正在设置的那个密码。",
+        "impact": "没有做任何改动。",
+        "fix": "不指定密码再更换一次：面板会先完成上一次更换，之后再设置你自己的密码。"
+      },
+      "database_password_failed": {
+        "title": "无法更换密码",
+        "cause": "{{0}}",
+        "impact": "旧密码仍然有效，应用也仍在使用它。",
+        "fix": "阅读上面的原因；常见的是数据库不再响应，或服务器没有空间运行执行更换的短任务。然后再试一次。"
+      },
+      "database_password_stranded": {
+        "title": "新密码已被接受，但无法继续传递",
+        "cause": "数据库接受了新密码，随后 {{0}}。恢复旧密码也失败了。",
+        "impact": "在完成之前，应用可能无法连接。面板已把新密码加密保存在旧密码旁边。",
+        "fix": "等集群恢复响应后，不指定密码再更换一次：面板会用保存的密码完成这次更换。"
+      },
+      "import_not_offered": {
+        "title": "Skifity 不向这类数据库导入",
+        "cause": "{{0}} 运行的是 {{1}}，Skifity 没有办法把转储加载进去。",
+        "impact": "没有做任何改动。",
+        "fix": "通过 `{{0}} db connect` 用该引擎自己的客户端加载数据。"
+      },
+      "import_wrong_kind": {
+        "title": "这个转储属于另一种数据库",
+        "cause": "这个文件是 {{0}}，{{1}} 无法加载。",
+        "impact": "没有做任何改动。",
+        "fix": "把它导入到与转储来源同类的数据库，或者用这个数据库接受的格式重新转储：{{0}}。"
+      },
+      "import_unrecognised": {
+        "title": "Skifity 无法识别这个文件",
+        "cause": "它不是 {{0}} 能加载的转储：{{1}}。",
+        "impact": "没有做任何改动。",
+        "fix": "按 docs/databases.md 所示，用该引擎自己的工具生成转储，然后原样或 gzip 压缩后发送。"
+      },
+      "import_format_invalid": {
+        "title": "这个数据库不导入该格式",
+        "cause": "{{0}} 不在 {{1}} 可导入的格式之中：{{2}}。",
+        "impact": "没有做任何改动。",
+        "fix": "不填格式让它自动识别，或填写其中之一。"
+      },
+      "import_empty": {
+        "title": "文件是空的",
+        "cause": "什么也没收到，或者解压后什么也没有。",
+        "impact": "没有做任何改动。",
+        "fix": "检查转储是否完整写出，然后再发送一次。"
+      },
+      "import_damaged": {
+        "title": "文件已损坏",
+        "cause": "它是 gzip 压缩的，但无法解压到结尾：{{0}}。",
+        "impact": "没有做任何改动。",
+        "fix": "再发送一次。如果以同样方式失败，说明文件在生成或复制时被截断了；请重新生成转储。"
+      },
+      "import_too_large": {
+        "title": "文件太大，无法在这里导入",
+        "cause": "它超过了 {{0}} MB，这是面板单次导入接受的上限。",
+        "impact": "没有做任何改动。",
+        "fix": "通过 `{{0}} db connect` 用该引擎自己的客户端加载，那里没有上限。"
+      },
+      "import_backup_failed": {
+        "title": "导入前的备份失败了",
+        "cause": "{{0}}",
+        "impact": "什么也没有导入，数据库保持原样。",
+        "fix": "解决阻止备份的问题——数据库的备份列表也会显示同样的原因——然后再导入一次。"
+      },
+      "import_failed": {
+        "title": "转储无法加载",
+        "cause": "{{0}}",
+        "impact": "PostgreSQL 在一个事务中加载转储，所以不会留下任何部分；其他引擎可能已经加载了一部分。导入前刚刚做过一次备份。",
+        "fix": "阅读上面的原因并修正转储。要把数据库恢复原样，请从它的备份列表中恢复导入前刚做的那份备份。"
       }
     }
   },

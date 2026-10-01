@@ -1715,6 +1715,262 @@ func SecretManagerLimitsBreakReferences(name string, count int, uses string) *Pr
 		With("connection", name)
 }
 
+// --- a database's life: stopping, resizing, passwords and imports ---
+
+// DatabaseStopLinked is a stop asked of a database apps still read, without
+// saying that is meant.
+func DatabaseStopLinked(database, apps string) *Problem {
+	return New("database.stop_linked", "Apps use this database").
+		WithCause("%s is linked to %s.", database, apps).
+		WithImpact("Nothing was changed. Stopped, it would answer none of them until it is started again.").
+		WithFix("Confirm that these apps may lose their database while it is stopped, or unlink them first.").
+		WithDocs("/docs/databases#stopping-and-starting").
+		WithStatus(http.StatusConflict).
+		With("database", database)
+}
+
+// DatabaseNotRunning is a change that needs a database answering, asked of
+// one that is not.
+func DatabaseNotRunning(database, status string) *Problem {
+	return New("database.not_running", "This database is not running").
+		WithCause("%s is %s, and this needs it running.", database, status).
+		WithImpact("Nothing was changed.").
+		WithFix("Start it, or wait until it is running, then try again.").
+		WithStatus(http.StatusConflict).
+		With("database", database)
+}
+
+// DatabaseBusy is a change asked of a database something else is already
+// changing: being created, restored, given a dump or a new password.
+func DatabaseBusy(database string) *Problem {
+	return New("database.busy", "Something is already being done to this database").
+		WithCause("%s is being created, restored, imported into or given a new password.", database).
+		WithImpact("Nothing was changed.").
+		WithFix("Wait for that to finish, then try again. The database's History says how it is going.").
+		WithStatus(http.StatusConflict).
+		With("database", database)
+}
+
+// DatabaseStorageShrink is a disk asked to be smaller than it is. A volume
+// cannot shrink: Kubernetes refuses the request, and no storage driver takes
+// it.
+func DatabaseStorageShrink(database string, haveGB, askedGB int) *Problem {
+	return New("database.storage_shrink", "A database's disk cannot be made smaller").
+		WithCause("%s has %d GB, and %d GB is less.", database, haveGB, askedGB).
+		WithImpact("Nothing was changed.").
+		WithFix("A disk can only grow. To use less, create a smaller database, import a backup of this one into it, and link your apps to that.").
+		WithDocs("/docs/troubleshooting#a-database-disk-cannot-shrink").
+		WithStatus(http.StatusBadRequest).
+		With("database", database)
+}
+
+// DatabaseStorageNotExpandable is a disk whose storage class does not let a
+// volume grow. k3s's own local-path is one.
+func DatabaseStorageNotExpandable(database, class string) *Problem {
+	return New("database.storage_not_expandable", "This database's disk cannot grow").
+		WithCause("%s keeps its data on the storage class %s, which does not allow a volume to grow.", database, class).
+		WithImpact("Nothing was changed, its CPU and memory included.").
+		WithFix("k3s's own local-path storage never allows it. Set allowVolumeExpansion: true on this storage class if its driver can grow a volume, or make a bigger database and import a backup of this one into it.").
+		WithDocs("/docs/troubleshooting#a-database-disk-cannot-grow").
+		WithStatus(http.StatusConflict).
+		With("database", database).With("class", class)
+}
+
+// DatabaseOverQuota is a resize that would take an environment past what it
+// is allowed. Kubernetes would refuse the database's new instance and leave
+// the old one stopped, so it is refused here instead.
+func DatabaseOverQuota(resource, wouldBe, hard string) *Problem {
+	return New("database.over_quota", "That is more than this environment is allowed").
+		WithCause("Its %s would come to %s, and the environment is allowed %s.", resource, wouldBe, hard).
+		WithImpact("Nothing was changed.").
+		WithFix("Ask for less, or make room: resize or stop something else in this environment.").
+		WithDocs("/docs/troubleshooting#a-database-resize-is-over-the-limit").
+		WithStatus(http.StatusConflict).
+		With("resource", resource)
+}
+
+// DatabaseMemoryTooSmall is a memory limit below what an engine starts with.
+func DatabaseMemoryTooSmall(engine string, minimumMB int) *Problem {
+	return New("database.memory_too_small", "That is too little memory for this database").
+		WithCause("%s needs a memory limit of at least %d MB.", engine, minimumMB).
+		WithImpact("Nothing was changed.").
+		WithFix("Give it at least %d MB.", minimumMB).
+		WithStatus(http.StatusBadRequest).
+		With("engine", engine)
+}
+
+// DatabasePasswordNotOffered is a new password asked of an engine that has
+// none.
+func DatabasePasswordNotOffered(database, engine string) *Problem {
+	return New("database.password_not_offered", "This database has no password").
+		WithCause("%s runs %s, which has no password to change.", database, engine).
+		WithImpact("Nothing was changed.").
+		WithFix("Only the apps in its own environment can reach it; that is what keeps it private.").
+		WithDocs("/docs/databases#changing-the-password").
+		WithStatus(http.StatusConflict).
+		With("database", database).With("engine", engine)
+}
+
+// DatabasePasswordRejected is a password somebody chose that would break a
+// connection string or a statement.
+func DatabasePasswordRejected() *Problem {
+	return New("database.password_rejected", "That password cannot be used").
+		WithCause("A database password here is 16 to 128 letters, digits, dots, dashes, underscores or tildes, and this one is not.").
+		WithImpact("Nothing was changed.").
+		WithFix("Leave the password out to have a strong one generated, or choose one of those characters: each ends up in a connection string, where anything else would need escaping.").
+		WithDocs("/docs/databases#changing-the-password").
+		WithStatus(http.StatusBadRequest)
+}
+
+// DatabasePasswordChangeRunning is a second password change while one is
+// under way.
+func DatabasePasswordChangeRunning(database string) *Problem {
+	return New("database.password_change_running", "A password change is already under way").
+		WithCause("%s is being given a new password.", database).
+		WithImpact("Nothing was changed.").
+		WithFix("Wait for it to finish; the database's History shows how it is going.").
+		WithStatus(http.StatusConflict).
+		With("database", database)
+}
+
+// DatabasePasswordChangeInterrupted is a new password asked for while an
+// earlier change, interrupted, still holds the one it was giving.
+func DatabasePasswordChangeInterrupted(database string) *Problem {
+	return New("database.password_change_interrupted", "An earlier password change was not finished").
+		WithCause("A change of %s's password stopped halfway, and the panel kept the password it was giving it.", database).
+		WithImpact("Nothing was changed.").
+		WithFix("Change the password again without choosing one: the panel finishes the earlier change first. Then choose yours.").
+		WithDocs("/docs/databases#changing-the-password").
+		WithStatus(http.StatusConflict).
+		With("database", database)
+}
+
+// DatabasePasswordFailed is a password change that did not happen, and left
+// the old password in place.
+func DatabasePasswordFailed(reason string) *Problem {
+	return New("database.password_failed", "The password could not be changed").
+		WithCause("%s", reason).
+		WithImpact("The old password still works, and the apps still use it.").
+		WithFix("Read the reason above; the usual ones are a database that stopped answering and a server with no room for the short job that makes the change. Then try again.").
+		WithDocs("/docs/databases#changing-the-password").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("reason", reason)
+}
+
+// DatabasePasswordStranded is a change the database took and the panel could
+// neither finish nor undo. The new password is kept, sealed, so it is not
+// lost with the panel's memory.
+func DatabasePasswordStranded(reason string) *Problem {
+	return New("database.password_stranded", "The new password was taken and could not be passed on").
+		WithCause("The database accepted the new password, and then %s. Putting the old one back failed too.", reason).
+		WithImpact("Apps may fail to connect until this is finished. The panel kept the new password, sealed, beside the old one.").
+		WithFix("Change the password again without choosing one, once the cluster answers: the panel finishes this change with the password it kept.").
+		WithDocs("/docs/databases#changing-the-password").
+		WithStatus(http.StatusBadGateway).
+		With("reason", reason)
+}
+
+// ImportNotOffered is a dump sent to an engine the panel cannot load one
+// into.
+func ImportNotOffered(database, engine string) *Problem {
+	return New("import.not_offered", "Skifity does not import into this kind of database").
+		WithCause("%s runs %s, and Skifity has no way to load a dump into it.", database, engine).
+		WithImpact("Nothing was changed.").
+		WithFix("Load your data with the engine's own client through `%s db connect`.", version.Binary).
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusConflict).
+		With("database", database).With("engine", engine)
+}
+
+// ImportWrongKind is a dump made by one engine's tool sent to another's
+// database.
+func ImportWrongKind(found, engine, formats string) *Problem {
+	return New("import.wrong_kind", "This dump is for another kind of database").
+		WithCause("The file is %s, which %s does not load.", found, engine).
+		WithImpact("Nothing was changed.").
+		WithFix("Import it into a database of the kind it was dumped from, or dump it again in a format this one takes: %s.", formats).
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusBadRequest).
+		With("engine", engine)
+}
+
+// ImportUnrecognised is a file that is none of the formats an engine takes.
+func ImportUnrecognised(engine, formats string) *Problem {
+	return New("import.unrecognised", "Skifity could not tell what this file is").
+		WithCause("It is not a dump %s can load: %s.", engine, formats).
+		WithImpact("Nothing was changed.").
+		WithFix("Make the dump with the engine's own tool, as docs/databases.md shows, and send that file as it is or gzipped.").
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusBadRequest).
+		With("engine", engine)
+}
+
+// ImportFormatInvalid is a format somebody named that the engine does not
+// take.
+func ImportFormatInvalid(format, engine, formats string) *Problem {
+	return New("import.format_invalid", "That is not a format this database imports").
+		WithCause("%s is not one of the formats %s imports: %s.", format, engine, formats).
+		WithImpact("Nothing was changed.").
+		WithFix("Leave the format out to have it detected, or name one of those.").
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusBadRequest).
+		With("engine", engine)
+}
+
+// ImportEmpty is a file with nothing in it.
+func ImportEmpty() *Problem {
+	return New("import.empty", "The file is empty").
+		WithCause("Nothing arrived, or it decompressed to nothing.").
+		WithImpact("Nothing was changed.").
+		WithFix("Check that the dump was written completely, then send it again.").
+		WithStatus(http.StatusBadRequest)
+}
+
+// ImportDamaged is a compressed file that does not decompress to its end: a
+// truncated download, most often.
+func ImportDamaged(reason string) *Problem {
+	return New("import.damaged", "The file is damaged").
+		WithCause("It is gzipped and does not decompress to its end: %s.", reason).
+		WithImpact("Nothing was changed.").
+		WithFix("Send it again. If it fails the same way, the file was cut short when it was made or copied; make the dump again.").
+		WithStatus(http.StatusBadRequest)
+}
+
+// ImportTooLarge is a file over the size the panel stages.
+func ImportTooLarge(limitMB int64) *Problem {
+	return New("import.too_large", "The file is too large to import here").
+		WithCause("It is more than %d MB, which is as much as the panel takes in one import.", limitMB).
+		WithImpact("Nothing was changed.").
+		WithFix("Load it with the engine's own client through `%s db connect`, which has no limit.", version.Binary).
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusRequestEntityTooLarge)
+}
+
+// ImportBackupFailed is an import that stopped because the backup taken
+// before it failed.
+func ImportBackupFailed(reason string) *Problem {
+	return New("import.backup_failed", "The backup before the import failed").
+		WithCause("%s", reason).
+		WithImpact("Nothing was imported, so the database is as it was.").
+		WithFix("Fix what stopped the backup — the database's Backups list says the same — then import again.").
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("reason", reason)
+}
+
+// ImportFailed is a dump the engine's own tool could not load.
+func ImportFailed(reason string) *Problem {
+	return New("import.failed", "The dump could not be loaded").
+		WithCause("%s", reason).
+		WithImpact("PostgreSQL loads a dump in one transaction, so nothing of it is left behind; the other engines may have loaded part of it. A backup was taken just before.").
+		WithFix("Read the reason above and fix the dump. To put the database back as it was, restore the backup taken just before the import from its Backups.").
+		WithDocs("/docs/databases#importing-a-dump").
+		WithStatus(http.StatusBadGateway).
+		With("reason", reason)
+}
+
 // --- configuration ---
 
 // NotConfigured reports a feature used before its settings were filled in.

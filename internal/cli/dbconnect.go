@@ -43,12 +43,14 @@ type databaseCredentials struct {
 //	skifity db connect                 a local port that reaches the only one
 //	skifity db connect orders          ...or the one called orders
 //	skifity db connect orders --port 6543
+//	skifity db stop|start|resize|password|import orders ...   see dblife.go
 func cmdDB(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("db", flag.ContinueOnError)
 	flags.SetOutput(out)
 	envID := flags.String("env", "", "the environment id")
 	port := flags.Int("port", 0, "the local port to listen on; by default the database's own, or any free one")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
+	life := lifeFlags(flags)
 	positional, err := parseInterspersed(flags, args)
 	if err != nil {
 		return err
@@ -102,9 +104,20 @@ func cmdDB(ctx context.Context, args []string, out io.Writer) error {
 			return err
 		}
 		return connectDatabase(ctx, client, database, *port, *asJSON, out)
+	case "stop", "start", "resize", "password", "import":
+		named := ""
+		if len(positional) > 0 {
+			named, positional = positional[0], positional[1:]
+		}
+		database, err := findDatabase(ctx, client, environment, named)
+		if err != nil {
+			return err
+		}
+		return runDatabaseLife(ctx, client, action, database, positional, life, *asJSON, out)
 	default:
 		return errdoc.BadRequest(fmt.Sprintf(
-			"Say list, or connect and a database's name: `%s db connect orders`.", version.Binary))
+			"Say list, connect, stop, start, resize, password or import, and a database's name: `%s db connect orders`.",
+			version.Binary))
 	}
 }
 

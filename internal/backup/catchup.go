@@ -85,9 +85,11 @@ func lastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
 func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due time.Time) {
 	m.log.Info("taking a scheduled backup that was missed",
 		"target", policy.TargetID, "due", due.Format(time.RFC3339))
-	_, runErr := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled")
+	taken, runErr := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled")
 
-	if m.notifier == nil {
+	// A stopped database's backup was skipped, not missed: there was nothing
+	// new to copy then, and there is nothing now.
+	if m.notifier == nil || (runErr == nil && taken.Status == "skipped") {
 		return
 	}
 	probe := store.Backup{TargetType: policy.TargetType, TargetID: policy.TargetID}

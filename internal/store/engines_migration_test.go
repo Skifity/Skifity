@@ -43,16 +43,25 @@ func TestTheMySQLDatabasesThatWereMariaDBAreCalledThat(t *testing.T) {
 	mariadb := Database{EnvironmentID: env.ID, Name: "blog", Slug: "blog", Engine: "mysql", EngineVersion: "11.4",
 		CredentialsEnc: "SKF1.sealed"}
 	cache := Database{EnvironmentID: env.ID, Name: "cache", Slug: "cache", Engine: "redis", EngineVersion: "7"}
+	// Written the way the schema of the time takes them: CreateDatabase
+	// speaks today's, which has the columns 0056 added.
+	insertEarly := func(d *Database) error {
+		d.ID = NewID("db")
+		_, err := db.Exec(ctx, `INSERT INTO databases (id, environment_id, name, slug, engine, engine_version,
+			credentials_enc, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+			d.ID, d.EnvironmentID, d.Name, d.Slug, d.Engine, d.EngineVersion, d.CredentialsEnc, Now(), Now())
+		return err
+	}
 	for _, d := range []*Database{&mariadb, &cache} {
-		if err := db.CreateDatabase(ctx, d); err != nil {
-			t.Fatalf("CreateDatabase: %v", err)
+		if err := insertEarly(d); err != nil {
+			t.Fatalf("insert a database: %v", err)
 		}
 	}
 	if err := db.LinkDatabase(ctx, mariadb.ID, app.ID, "MYSQL_URL"); err != nil {
 		t.Fatal(err)
 	}
 	early := Database{EnvironmentID: env.ID, Name: "docs", Slug: "docs", Engine: "mongodb"}
-	if err := db.CreateDatabase(ctx, &early); err == nil {
+	if err := insertEarly(&early); err == nil {
 		t.Fatal("the schema before 0047 already takes mongodb, so this test is not testing the rebuild")
 	}
 

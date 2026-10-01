@@ -59,6 +59,10 @@ skifity templates catalogues add <name> <https url>  Add a catalogue of the team
 skifity plan                      What skifity.yaml would change in the environment
 skifity apply                     Make the environment what skifity.yaml says
 skifity db connect <name>         A local port that reaches a managed database
+skifity db stop|start <name>      Stop one and keep its disk (--force while apps use it), and start it again
+skifity db resize <name> --memory-limit 2048 --storage 20  Its CPU and memory, and a bigger disk (never smaller)
+skifity db password <name>        A new password, and every linked app the new connection string
+skifity db import <name> <file|->  Load a dump; a backup is taken first
 skifity apps                      List apps
 skifity servers                   List servers
 skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
@@ -131,6 +135,9 @@ Tools, in the order they are usually needed:
 | `get_database_status` | Whether a database is running, and which apps use it. Never the password. |
 | `list_backups` | A database's or an app's volumes' backups, newest first. |
 | `run_backup` | Backs one up now. Counts against the retention, so the oldest may go. |
+| `stop_database` | Stops a database and keeps its disk. Refused while apps are linked, unless the person agreed. |
+| `start_database` | Starts a stopped database on the disk it kept. |
+| `resize_database` | Changes its CPU and memory (it restarts), or grows its disk, which cannot shrink again. |
 | `list_domains` | The hostnames an app answers on, and the DNS record each of your own needs. |
 | `add_domain` | Puts an app on a hostname, with HTTPS. Returns the DNS record to create. |
 | `remove_domain` | Takes one off. |
@@ -226,6 +233,11 @@ GET    /api/environments/{env}/databases      databases
 GET    /api/database-engines                  the engines, their versions, and which are backed up
 GET    /api/databases/{db}/backups            backups
 POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
+POST   /api/databases/{db}/stop?force=true    stop it and keep its disk; start brings it back
+PATCH  /api/databases/{db}                    cpu_request_m, cpu_limit_m, mem_request_mb, mem_limit_mb, storage_gb
+POST   /api/databases/{db}/password           a new password (generated, or {"password"}); an operation
+POST   /api/databases/{db}/import?format=     a dump as the body; backed up first; an operation
+GET    /api/databases/{db}/operations         its history: restores, imports, password changes
 GET    /api/events?topics=team:{team}         everything happening, as events
 GET    /api/teams/{team}/templates            the templates the team can install: its own catalogues', then the built-in ones
 GET    /api/teams/{team}/template-catalogues  the team's own template catalogues, and why any of their templates is refused

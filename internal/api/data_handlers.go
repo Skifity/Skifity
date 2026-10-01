@@ -443,6 +443,12 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest("That backup did not finish successfully, so it cannot be restored."))
 		return
 	}
+	// A restore over an import, or over a password change, leaves neither
+	// knowing what the database holds.
+	if err := s.refuseBusyDatabase(r, record); err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	op, err := s.backups.Restore(r.Context(), backupID, queryBool(r, "overwrite"))
 	if err != nil {

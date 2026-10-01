@@ -123,3 +123,113 @@ at start; ClickHouse's database is created without the image's own start-up
 step, which would have passed the password to `clickhouse-client` as an
 argument; the backup jobs give each client its password through its own
 environment variable, or, for MongoDB's tools, a file.
+
+## Stopping and starting
+
+**Stop**, on a database's **Manage** tab or `skifity db stop orders`, takes its
+instances away and keeps its disk: the data stays where it is, and the database
+uses no memory and no CPU until **Start** (`skifity db start orders`) brings it
+back on the same disk. PostgreSQL is hibernated the way CloudNativePG does it;
+every other engine's StatefulSet is scaled to nothing.
+
+* The apps linked to it lose it until it is started again, so they are named
+  first. The API refuses with `database.stop_linked` until the stop says it
+  means it (`?force=true`, `skifity db stop --force`); the panel asks and lists
+  them.
+* While it is stopped its scheduled backups are recorded as **Skipped**, with
+  the reason, rather than as failures: there is nothing new to copy. Only the
+  newest skip is kept. A backup asked for by hand is refused, as for any
+  database that is not running.
+* Starting waits for it to accept connections with the same check a new
+  database is waited for with; its status is *Starting* until then.
+
+## Resizing
+
+The **Size** card, `skifity db resize orders --memory-limit 2048 --storage 20`
+or `PATCH /api/databases/{id}` changes what a database reserves (CPU in
+millicores, memory in MB), what it may use (its limits; a CPU limit of 0 is
+none, which is the default) and how big its disk is. Give only what changes.
+
+* A change of CPU or memory replaces its instance, so it restarts. PostgreSQL's
+  instances are replaced one at a time, the primary last. Dragonfly, MongoDB and
+  Memcached size their caches to the memory limit, and are given the new sizes
+  with it.
+* Each engine has a least memory limit it starts with — ClickHouse and MongoDB
+  1 GB, Dragonfly 384 MB, MySQL 512 MB — and a smaller one is refused.
+* **A disk only grows.** A smaller size is refused (`database.storage_shrink`):
+  a volume cannot shrink. Growing one needs a storage class that allows it, and
+  that is checked before anything changes; the k3s default, `local-path`, does
+  not ([more](troubleshooting.md#a-database-disk-cannot-grow)).
+* The environment's quota is checked first. A resize the quota would refuse is
+  refused here instead (`database.over_quota`), because Kubernetes would refuse
+  the new instance only after the old one had gone.
+
+## Changing the password
+
+**Change password**, on the Manage tab, `skifity db password orders` or
+`POST /api/databases/{id}/password`, gives a database a new password — a
+generated one, or one you choose of 16 to 128 letters, digits, dots, dashes,
+underscores or tildes — and every linked app the new connection string. It is
+an administrator's, like reading the password, and it is in the activity log.
+
+It runs in an order that leaves a working password whatever stops it:
+
+1. The new credentials are stored, encrypted, beside the old ones.
+2. The database is given the new password by a short job that signs in with
+   the old one and checks the new one works before it ends. MySQL keeps the old
+   one working beside it (`RETAIN CURRENT PASSWORD`), and so do Redis and Valkey
+   (their default user can have two passwords), so nothing connected notices.
+3. The database's Secret and the panel's copy are changed. If either fails, the
+   job runs the other way and the old password is back.
+4. Every linked app is rolled out with the new connection string.
+5. Only then is the old password taken away, where there were two — and not at
+   all if an app could not be rolled out.
+
+The passwords reach the job through a Secret of its own and the clients'
+environment variables, as the backup jobs' do: never a command line, and never
+a log. Dragonfly and ClickHouse read their password only as they start, so
+changing it restarts them, and the restart's own readiness check is the proof
+it works. Memcached has no password to change.
+
+`skifity db password orders --password-stdin` reads the one you choose from
+standard input; `--show-password` prints the new one once it is changed, which
+is a read of the password and is audited as one. The **History** tab shows each
+step. If a change is interrupted after the database took the new password, the
+panel keeps it; changing the password again without choosing one finishes that
+change first.
+
+## Importing a dump
+
+**Import a dump**, on the Manage tab, or `skifity db import orders ./dump.sql.gz`
+(`-` reads standard input), loads a dump you already have:
+
+| Engine | What it takes | Made with |
+| --- | --- | --- |
+| PostgreSQL | SQL, or a custom-format archive | `pg_dump`, or `pg_dump --format=custom` |
+| MySQL, MariaDB | SQL | `mysqldump` or `mariadb-dump` of one database |
+| MongoDB | an archive | `mongodump --archive`; with `--gzip`, say `--format archive-gzip` |
+| Redis, Valkey | a snapshot | `dump.rdb`, or `redis-cli --rdb` |
+
+Each may be sent as it is or gzipped, up to 5 GB; larger ones are loaded with the
+engine's own client through `skifity db connect`. It is an administrator's, like
+a restore, and needs backup storage.
+
+* The file is read to its end before anything changes: what it is comes from
+  its first bytes, a gzipped one is decompressed to its end, and a dump for
+  another engine — a MySQL dump sent to PostgreSQL, a pg_dumpall of a whole
+  server, a tar archive — is refused with what it was.
+* Then a backup of the database is taken and waited for. The import stops if it
+  fails, and the backup, marked *Before an import*, is how an import is undone.
+* The dump is loaded with the engine's own tool, in a job in the database's
+  namespace, by the same machinery as a restore. PostgreSQL loads it in one
+  transaction, stopping at the first error, so a dump that fails leaves nothing
+  behind; a custom archive is loaded without its owners and privileges, since
+  the roles of the server it came from do not exist here. A plain SQL dump made
+  without `--no-owner --no-privileges` may name such roles and fail; make it
+  with them, or use the custom format. A MongoDB archive's collections are put
+  in this database whatever database they came from, and its `admin`, `config`
+  and `local` are left out. A Redis snapshot goes through the same temporary
+  server a restore replicates from.
+* The file waits in the backup bucket, sealed when backups are, and is deleted
+  when the import ends. The linked apps are restarted afterwards so their
+  connections see what is there now.

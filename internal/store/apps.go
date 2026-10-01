@@ -511,6 +511,7 @@ var sealedSources = []sealedSource{
 	{table: "template_catalogues", valueCol: "auth_value_enc", ctxPrefix: "template_catalogue"},
 	{table: "servers", valueCol: "ssh_key_enc", ctxPrefix: "server_key"},
 	{table: "databases", valueCol: "credentials_enc", ctxPrefix: "database_credentials"},
+	{table: "databases", valueCol: "credentials_next_enc", ctxPrefix: "database_credentials_next"},
 	{table: "git_sources", valueCol: "config_enc", ctxPrefix: "git_source"},
 	{table: "notification_channels", valueCol: "config_enc", ctxPrefix: "notification_channel"},
 	{table: "users", valueCol: "totp_secret_enc", ctxPrefix: "totp"},

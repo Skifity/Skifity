@@ -14,6 +14,7 @@ import (
 
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
+	"skifity/internal/dbsvc"
 	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
@@ -71,12 +72,12 @@ func (m *Manager) Verify(ctx context.Context) error {
 
 // Run takes a backup now.
 func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (store.Backup, error) {
-	if m.cluster == nil {
-		return store.Backup{}, errdoc.ClusterUnreachable(nil)
-	}
 	switch targetType {
 	case "database":
 	case "volume":
+		if m.cluster == nil {
+			return store.Backup{}, errdoc.ClusterUnreachable(nil)
+		}
 		return m.runVolumeBackup(ctx, targetID, kind)
 	default:
 		return store.Backup{}, errdoc.BadRequest("Only databases and volumes can be backed up.")
@@ -88,6 +89,25 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	}
 	if !offersBackups(record.Engine) {
 		return store.Backup{}, errdoc.BackupNotOffered(record.Name, engineTitle(record.Engine))
+	}
+	// A database somebody stopped has nothing new to copy, and its schedule
+	// coming round is not a failure to tell anybody about at three in the
+	// morning. It is written down as skipped, with the reason, so the list
+	// of backups says why there is none for tonight.
+	if record.Status == dbsvc.StatusStopped && kind == "scheduled" {
+		skipped := store.Backup{TargetType: targetType, TargetID: targetID, Kind: kind,
+			ErrorMessage: "The database was stopped, so there was nothing new to back up."}
+		if err := m.db.RecordSkippedBackup(ctx, &skipped); err != nil {
+			return store.Backup{}, err
+		}
+		m.log.Info("skipped the scheduled backup of a stopped database", "database", record.ID)
+		m.publish(ctx, record.ID)
+		return skipped, nil
+	}
+	// After the skip, which asks nothing of the cluster: a stopped database
+	// is skipped whether or not the cluster answers tonight.
+	if m.cluster == nil {
+		return store.Backup{}, errdoc.ClusterUnreachable(nil)
 	}
 	if record.Status != "running" {
 		return store.Backup{}, errdoc.New("backup.database_not_running", "This database is not running").

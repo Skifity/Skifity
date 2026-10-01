@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/empty-state"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
 import { BackupVerification } from "@/components/backup-verification"
+import { DatabaseHistory, DatabaseLife } from "@/components/database-life"
 import { ErrorDisplay } from "@/components/error-display"
 import { EventsCard } from "@/components/events-card"
 import { ScheduleField } from "@/components/schedule-field"
@@ -80,7 +81,10 @@ export function DatabaseDetailPage() {
     {
       database: () => void queryClient.invalidateQueries({ queryKey: ["database", databaseId] }),
       backups: () => void queryClient.invalidateQueries({ queryKey: ["backups", databaseId] }),
-      operation: () => void queryClient.invalidateQueries({ queryKey: ["database", databaseId] }),
+      operation: () => {
+        void queryClient.invalidateQueries({ queryKey: ["database", databaseId] })
+        void queryClient.invalidateQueries({ queryKey: ["database-operations", databaseId] })
+      },
     },
     // Refused to a member limited to projects, who is polled instead.
     Boolean(team) && !team?.scoped,
@@ -90,7 +94,10 @@ export function DatabaseDetailPage() {
     queryKey: ["database", databaseId],
     queryFn: () =>
       api.get<{ database: Database; links: DatabaseLink[] }>(`/api/databases/${databaseId}`),
-    refetchInterval: (query) => (query.state.data?.database.status === "running" ? false : 5_000),
+    // Settled is running, or stopped on purpose; anything else is on its way
+    // to one of them.
+    refetchInterval: (query) =>
+      ["running", "stopped"].includes(query.state.data?.database.status ?? "") ? false : 5_000,
   })
 
   const remove = useMutation({
@@ -139,6 +146,8 @@ export function DatabaseDetailPage() {
           <TabsTrigger value="connection">{t("databases.connectionDetails")}</TabsTrigger>
           <TabsTrigger value="apps">{t("databases.linkedApps")}</TabsTrigger>
           <TabsTrigger value="backups">{t("databases.backups")}</TabsTrigger>
+          <TabsTrigger value="manage">{t("databases.life.manage")}</TabsTrigger>
+          <TabsTrigger value="history">{t("databases.life.history")}</TabsTrigger>
           <TabsTrigger value="advanced">{t("apps.advanced")}</TabsTrigger>
         </TabsList>
 
@@ -152,6 +161,14 @@ export function DatabaseDetailPage() {
 
         <TabsContent value="backups" className="pt-4">
           <BackupsPanel databaseId={databaseId} engine={record.engine} />
+        </TabsContent>
+
+        <TabsContent value="manage" className="pt-4">
+          <DatabaseLife database={record} links={links} />
+        </TabsContent>
+
+        <TabsContent value="history" className="pt-4">
+          <DatabaseHistory databaseId={databaseId} />
         </TabsContent>
 
         {/* Kubernetes' own words about the database's objects, which is why
@@ -666,8 +683,20 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
                           defaultValue: backup.status,
                         })}
                       />
-                      {backup.error_message && (
-                        <p className="mt-1 text-xs text-destructive">{backup.error_message}</p>
+                      {/* Before an import or an update: the copy that undoes it. */}
+                      {(backup.kind === "before_import" || backup.kind === "before_update") && (
+                        <Badge variant="secondary" className="ml-2">
+                          {t(`databases.backupKind.${backup.kind}`)}
+                        </Badge>
+                      )}
+                      {backup.status === "skipped" ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("databases.backupSkipped")}
+                        </p>
+                      ) : (
+                        backup.error_message && (
+                          <p className="mt-1 text-xs text-destructive">{backup.error_message}</p>
+                        )
                       )}
                       <BackupVerification
                         backup={backup}

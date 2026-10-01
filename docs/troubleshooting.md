@@ -444,3 +444,38 @@ repeats one of the app's secret variables is taken out. Objects applied by a
 panel older than this check carry no fingerprint, so until their next deploy
 only changes with a named owner and deleted objects are reported. Scheduled
 commands and a database's objects are not compared yet.
+
+## A database disk cannot grow
+
+Growing a database's disk is refused with `database.storage_not_expandable`
+when its storage class does not let a volume grow. That is checked before
+anything changes, so the CPU and memory asked for in the same request are not
+changed either.
+
+k3s's own storage, `local-path`, never allows it: its volumes are directories
+on one server's disk, with no size to change. So on a panel installed with the
+defaults, a database's disk is the size it was made with. A database's volume
+is on the cluster's default storage class, and the error names the class. Two
+ways on:
+
+* If the class's driver can grow a volume — Longhorn's can, and so can most
+  cloud providers' — set `allowVolumeExpansion: true` on it
+  (`kubectl edit storageclass NAME`) and resize again.
+* Make a bigger database, import a backup of this one into it, and link the
+  apps to the new one.
+
+## A database disk cannot shrink
+
+A volume can grow and never shrink: Kubernetes refuses a smaller size, and so
+does every storage driver. A smaller size is refused with
+`database.storage_shrink`. To use less, make a smaller database, import a
+backup of the big one into it, link the apps to the new one, and delete the old.
+
+## A database resize is over the limit
+
+Every environment has a quota. A resize that would take the environment past
+it is refused with `database.over_quota`, naming the limit: Kubernetes would
+otherwise refuse the database's new instance after removing the old one, and
+the database would simply stop. Ask for less, or make room by resizing or
+stopping something else in the environment; its page shows how much of each
+limit is used.

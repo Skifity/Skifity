@@ -216,6 +216,33 @@ func (a *Applier) DeleteAndWait(ctx context.Context, apiVersion, kind, namespace
 	}
 }
 
+// MergePatch changes some fields of an object that exists, and leaves the
+// rest as they are.
+//
+// For a change to an object the panel applied: an apply names every field its
+// manager owns, and one that named only the fields changing would give the
+// others up, which removes them. A merge patch changes what it names; a null
+// in it removes that one field.
+func (a *Applier) MergePatch(ctx context.Context, apiVersion, kind, namespace, name string, patch []byte) error {
+	probe := &unstructured.Unstructured{Object: map[string]any{"apiVersion": apiVersion, "kind": kind}}
+	gvr, err := a.resourceFor(probe)
+	if err != nil {
+		return err
+	}
+	if namespace != "" {
+		_, err = a.dynamic.Resource(gvr).Namespace(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{FieldManager: FieldManager})
+	} else {
+		_, err = a.dynamic.Resource(gvr).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{FieldManager: FieldManager})
+	}
+	if err != nil {
+		if IsNotFound(err) {
+			return err
+		}
+		return fmt.Errorf("change %s/%s: %w", kind, name, err)
+	}
+	return nil
+}
+
 // Get fetches an object in its generic form.
 func (a *Applier) Get(ctx context.Context, apiVersion, kind, namespace, name string) (*unstructured.Unstructured, error) {
 	probe := &unstructured.Unstructured{Object: map[string]any{"apiVersion": apiVersion, "kind": kind}}

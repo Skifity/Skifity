@@ -71,6 +71,29 @@ func (f *fakeDatabases) Status(context.Context, string) (string, string, error) 
 	return "", "", nil
 }
 
+// The lifecycle below is noted and answered with the record as it is: what
+// the tests of it look at is who may ask and what is refused before a
+// manager is, and database_life_test.go checks both.
+func (f *fakeDatabases) Stop(ctx context.Context, id string) (store.Database, error) {
+	f.log.note("stop " + id)
+	return f.db.GetDatabase(ctx, id)
+}
+
+func (f *fakeDatabases) Start(ctx context.Context, id string) (store.Database, error) {
+	f.log.note("start " + id)
+	return f.db.GetDatabase(ctx, id)
+}
+
+func (f *fakeDatabases) Resize(ctx context.Context, id string, _ ResizeDatabaseRequest) (store.Database, error) {
+	f.log.note("resize " + id)
+	return f.db.GetDatabase(ctx, id)
+}
+
+func (f *fakeDatabases) ChangePassword(_ context.Context, id, password, _ string) (store.Operation, error) {
+	f.log.note("password " + id + " " + password)
+	return store.Operation{ID: "op_password", Kind: "database.password", TargetType: "database", TargetID: id}, nil
+}
+
 // fakeDeployer records when the first deploy starts.
 type fakeDeployer struct{ log *recorder }
 

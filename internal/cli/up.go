@@ -755,12 +755,19 @@ func isInteractive() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
 // a few megabytes on a slow line take longer than the minute ordinary requests
 // get.
 func (c *Client) Upload(ctx context.Context, path string, body io.Reader, size int64, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+path, body)
+	return c.UploadWith(ctx, http.MethodPut, path, "application/gzip", body, size, out)
+}
+
+// UploadWith sends a file as a request's body, with no deadline but the
+// context's. A size of -1 is one not known, as for standard input, which is
+// then sent in chunks.
+func (c *Client) UploadWith(ctx context.Context, method, path, contentType string, body io.Reader, size int64, out any) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return fmt.Errorf("build the request: %w", err)
 	}
 	req.ContentLength = size
-	req.Header.Set("Content-Type", "application/gzip")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
 	if c.token != "" {

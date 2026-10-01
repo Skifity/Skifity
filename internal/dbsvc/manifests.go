@@ -74,6 +74,9 @@ type Spec struct {
 	CPURequestM  int
 	MemRequestMB int
 	MemLimitMB   int
+	// CPULimitM is 0 for no limit: a database that is throttled answers
+	// slowly, and one that is not shares the node's spare cycles.
+	CPULimitM int
 	// StorageClass is set when cross-node storage is enabled.
 	StorageClass string
 }
@@ -327,27 +330,40 @@ func BuildPostgres(s Spec) *unstructured.Unstructured {
 				"size":         fmt.Sprintf("%dGi", s.StorageGB),
 				"storageClass": s.StorageClass,
 			},
-			"resources": map[string]any{
-				"requests": map[string]any{
-					"cpu":    fmt.Sprintf("%dm", s.CPURequestM),
-					"memory": fmt.Sprintf("%dMi", s.MemRequestMB),
-				},
-				"limits": map[string]any{
-					"memory": fmt.Sprintf("%dMi", s.MemLimitMB),
-				},
-			},
+			"resources": postgresResources(s),
 			"postgresql": map[string]any{
-				"parameters": map[string]any{
-					// Sized for the container rather than the host: the
-					// defaults assume a dedicated machine.
-					"shared_buffers":       fmt.Sprintf("%dMB", max(s.MemRequestMB/4, 32)),
-					"effective_cache_size": fmt.Sprintf("%dMB", max(s.MemLimitMB/2, 64)),
-					"max_connections":      "100",
-				},
+				"parameters": postgresParameters(s),
 			},
 			"enableSuperuserAccess": false,
 		},
 	}}
+}
+
+// postgresResources is what a PostgreSQL cluster's instances reserve and may
+// use. A resize patches exactly this, so it is rendered in one place.
+func postgresResources(s Spec) map[string]any {
+	limits := map[string]any{"memory": fmt.Sprintf("%dMi", s.MemLimitMB)}
+	if s.CPULimitM > 0 {
+		limits["cpu"] = fmt.Sprintf("%dm", s.CPULimitM)
+	}
+	return map[string]any{
+		"requests": map[string]any{
+			"cpu":    fmt.Sprintf("%dm", s.CPURequestM),
+			"memory": fmt.Sprintf("%dMi", s.MemRequestMB),
+		},
+		"limits": limits,
+	}
+}
+
+// postgresParameters are sized for the container rather than the host: the
+// defaults assume a dedicated machine. They follow the memory, so a resize
+// changes them with it.
+func postgresParameters(s Spec) map[string]any {
+	return map[string]any{
+		"shared_buffers":       fmt.Sprintf("%dMB", max(s.MemRequestMB/4, 32)),
+		"effective_cache_size": fmt.Sprintf("%dMB", max(s.MemLimitMB/2, 64)),
+		"max_connections":      "100",
+	}
 }
 
 // A password in a Redis-family server's arguments is in /proc/1/cmdline for
@@ -701,7 +717,7 @@ func claimSpec(s Spec) corev1.PersistentVolumeClaimSpec {
 }
 
 func resources(s Spec) corev1.ResourceRequirements {
-	return corev1.ResourceRequirements{
+	out := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%dm", s.CPURequestM)),
 			corev1.ResourceMemory: resource.MustParse(fmt.Sprintf("%dMi", s.MemRequestMB)),
@@ -710,6 +726,10 @@ func resources(s Spec) corev1.ResourceRequirements {
 			corev1.ResourceMemory: resource.MustParse(fmt.Sprintf("%dMi", s.MemLimitMB)),
 		},
 	}
+	if s.CPULimitM > 0 {
+		out.Limits[corev1.ResourceCPU] = resource.MustParse(fmt.Sprintf("%dm", s.CPULimitM))
+	}
+	return out
 }
 
 func secretEnv(name, secret, key string) corev1.EnvVar {

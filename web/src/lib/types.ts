@@ -480,7 +480,16 @@ export type DatabaseEngine = {
   /** What a linked app reads the connection string from by default. */
   variable: string
   storage_gb: number
+  /** The least memory limit a resize may give it, in MB. */
+  min_memory_mb: number
+  /** True when a new password restarts it: Dragonfly and ClickHouse. */
+  password_restarts: boolean
+  /** The dump formats it imports; empty for none. */
+  imports: DumpFormat[]
 }
+
+/** A dump format an import takes. */
+export type DumpFormat = "sql" | "custom" | "archive" | "archive-gzip" | "rdb"
 
 export type Database = {
   id: string
@@ -493,6 +502,11 @@ export type Database = {
   status_detail?: string
   instances: number
   storage_gb: number
+  cpu_request_m: number
+  /** 0 is no limit. */
+  cpu_limit_m: number
+  mem_request_mb: number
+  mem_limit_mb: number
   created_at: string
 }
 
@@ -513,7 +527,8 @@ export type Backup = {
   id: string
   target_type: string
   target_id: string
-  status: "running" | "succeeded" | "failed"
+  /** Skipped is a scheduled backup of a stopped database. */
+  status: "running" | "succeeded" | "failed" | "skipped"
   kind: string
   location: string
   size_bytes: number

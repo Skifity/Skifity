@@ -144,10 +144,11 @@ func codesIn(t *testing.T, file, field, variable string) []string {
 // stepMessageKeys reads every store.StepNote's Key in this package.
 func stepMessageKeys(t *testing.T) []string {
 	t.Helper()
-	// Two packages write step notes: adding and removing a server, and
-	// restoring a backup. Both fill the same list on the same screen.
+	// Three packages write step notes: adding and removing a server,
+	// restoring a backup or importing a dump, and changing a database's
+	// password. All fill the same list on the same screen.
 	var files []string
-	for _, dir := range []string{".", filepath.Join("..", "backup")} {
+	for _, dir := range []string{".", filepath.Join("..", "backup"), filepath.Join("..", "dbsvc")} {
 		found, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatalf("list %s: %v", dir, err)
