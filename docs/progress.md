@@ -5772,8 +5772,11 @@ tokens limited to networks (`977b982`); a preview started by hand (`a114e05`);
 nine database engines (`f4f9d09`); image vulnerability scanning (`ca539aa`);
 drift detection and the events feed (`080fa91`); a team's own certificates
 (`b16f93f`); Bitbucket (`505b79d`); a team's own template catalogues
-(`75ff954`); variables read from secret managers (`25e2a18`); passkeys
-(`6c3eee5`).
+(`75ff954`); variables read from secret managers (`25e2a18`), limited to
+paths and projects (`43ff267`); passkeys (`6c3eee5`); GPUs (`5dd56cf`);
+stopping, resizing and re-passwording a database and importing a dump
+(`6920a57`); DNS records kept at the provider (`680449c`); log drains
+(`3731416`); servers ordered at Hetzner Cloud (`2f8ef92`).
 
 **Built because the audit showed the need, though none of the three has it.**
 Run as user (`6f50d5d`, `1c2310f`): Skifity is the only one of the four that
@@ -5782,9 +5785,19 @@ numbering it. Scheduled backups counted apart from those taken by hand
 (`e215a65`). `check:destructive` in CI (`bed041f`): the check existed, failed,
 and nothing ran it — the gap `make check` warns about, again.
 
+**Found on the way.** The panel's own namespace enforced a Pod Security
+profile that refuses the host paths the panel mounts, so the first install
+would have had no panel (`6a181d9`, ADR-0024). The Security tab showed about
+1,600 Codacy findings, every one from a tool reading a file in a language it
+does not speak; the real ones in the maintainer scripts and shell are fixed
+and the scanner reads what it can (`5dd150e`, `e75987c`). The API tests had
+grown to the edge of the ten minutes the race detector's run allows a package;
+each now starts from a copy of one migrated database (`cb1d6e4`).
+
 Not executed, as everywhere in this file: nothing here has run against a
-cluster, a real Bitbucket, a real secret manager, or a browser with a real
-authenticator. Each part below says what its tests stand in for.
+cluster, a real Bitbucket, a real secret manager, a real DNS or log provider,
+Hetzner, a GPU, or a browser with a real authenticator. Each part below says
+what its tests stand in for.
 
 ### Nine database engines
 
@@ -5999,6 +6012,56 @@ failures share the password lockout. The tests use a software authenticator
 written from the specification rather than the library. Not executed: a real
 browser and a real authenticator; conditional UI and Safari's user-gesture rule
 in particular.
+
+### GPUs
+
+The Servers page reads each node's GPUs by vendor and how many are given out,
+and says what is missing for a card Kubernetes cannot use yet. "Enable GPUs"
+installs NVIDIA's device plugin, pinned by digest, in kube-system. An app asks
+for cards for itself or its processes; builds, commands and previews never get
+one, scale to zero is refused, and `NVIDIA_VISIBLE_DEVICES` is refused as a
+variable because set by hand it hands an app every card. Not executed: a real
+GPU, the plugin under the default seccomp profile, AMD and Intel beyond their
+resource names, the install commands in `docs/gpus.md`.
+
+### A database's life
+
+Stop and start (CloudNativePG's hibernation for PostgreSQL), resize with the
+engine's minimum, the quota and the storage class's expansion checked first,
+a password change ordered so a failure leaves the old one working and the old
+one kept until every linked app has rolled out, and a dump import of up to
+5 GB with its format read from its first bytes and a backup taken first. Not
+executed: any of it against a real engine, CloudNativePG or CSI driver; the
+engines' two-password statements and mongosh's scripting in particular.
+
+### DNS records at the provider
+
+Cloudflare, Hetzner (its Cloud API), DigitalOcean and Route 53. A domain in a
+connected zone gets its record, kept pointing at the cluster, and the panel
+only ever touches a record in its own books with the same id and value and its
+own note; somebody else's is left alone or refused by name. Route 53 and AWS
+Secrets Manager now sign with one SigV4 package (`80be61f`). Not executed: any
+real provider; Cloudflare's exact-name filter and Hetzner's rrset API in
+particular. Wildcards through DNS-01 are left out.
+
+### Log drains
+
+Eight kinds of drain, sealed credentials dropped when the address changes, a
+test line sent the way the collector sends. One Vector DaemonSet in its own
+namespace routes by the namespace label only the panel writes, reads
+`/var/log/pods` and nothing else of the host, and drops a dead drain's lines
+rather than holding up another team's. `vector validate` passed on the rendered
+pipeline outside the suite. Not executed: the DaemonSet on k3s, reading the
+pods' log files as group 0, any real provider.
+
+### Servers at Hetzner Cloud
+
+A team's token, checked with a write probe that creates nothing; a key per
+server so no password is set; a firewall per server with the cluster's ports
+open to members only; the host key generated and pinned before the machine is
+ordered, then replaced by the machine's own (ADR-0025); and the machine deleted
+on removal only if the panel made it. Not executed: Hetzner itself, cloud-init
+honouring the host key on its images, the key rotation on a real distribution.
 
 ## Idle resource usage
 

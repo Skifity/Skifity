@@ -33,6 +33,7 @@ Each was fixed before anything else was built.
 | Kubero | k3s's Traefik refuses ExternalName backends unless told otherwise, and an app that scales to zero is reached through one: every such app would have answered 404 | `784fa9f` |
 | Reading 390 images' configuration | Homebox's 0.15 image is gone from ghcr.io, MinIO no longer publishes images at all, and the MinIO template never said how to start its server | `66f305f` |
 | Reading 390 images' configuration | A release, one-off or scheduled command pinned the group to the app's uid where the app itself leaves it to the image | `1c2310f` |
+| Adding GPUs | The panel's own namespace enforced the baseline Pod Security profile, which refuses the host paths the panel keeps its database and master key on: the first install would have had no panel | `6a181d9` |
 
 ## What they had that Skifity did not, and the commit that closed it
 
@@ -65,9 +66,15 @@ of it.
 | Drift detection, and a Kubernetes events feed | | | ✓ | `080fa91` |
 | Private template catalogues | | ✓ | ✓ | `75ff954` |
 | Your own TLS certificate | ◐ | ✓ | | `b16f93f` |
-| External secret managers (Vault, Infisical, Doppler, AWS) | ✓ | ✓ | | `25e2a18` |
+| External secret managers (Vault, Infisical, Doppler, AWS), limited to paths and projects | ✓ | ✓ | | `25e2a18`, `43ff267` |
 | Bitbucket Cloud as a Git connection | ✓ | ✓ | ◐ | `505b79d` |
 | Passkeys | | ✓ | | `6c3eee5` |
+| Stop, start and resize a database, and change its password | ✓ | ✓ | ◐ | `6920a57` |
+| Import an existing dump, with a backup taken first | ✓ | | | `6920a57` |
+| GPU workloads | ✓ | ✓ | | `5dd56cf` |
+| Log drains to an outside service | ✓ | | | `3731416` |
+| DNS records created and kept at the provider | ✓ | ✓ | | `680449c` |
+| Ordering a server at a cloud provider and joining it | ✓ | | | `2f8ef92` |
 
 Two things were built that none of the three has, because the audit showed the
 need: **Run as user** (`6f50d5d`, `1c2310f`), since Skifity is the only one of
@@ -189,8 +196,8 @@ and nothing more.
 | A backup missed while the panel was down is taken late | ✓ | ✗ | ✗ | ✓ |
 | Volume backups | ✓ | ✓ | ✗ | ✓ |
 | The panel backs itself up | ✓ | ✓ | ✗ | ✓ |
-| Import an existing dump | ✓ | ✗ | ✗ | ✗ |
-| Stop, resize or change the password of a database | ✓ | ✓ | ◐ | ✗ |
+| Import an existing dump | ✓ | ✗ | ✗ | ✓ |
+| Stop, resize or change the password of a database | ✓ | ✓ | ◐ | ✓ |
 | Reach a private database from a laptop | ◐ | ◐ | ✗ | ✓ |
 | High-availability PostgreSQL | ✗ | ✗ | ✓ | ✓ |
 | **Domains and the edge** | | | | |
@@ -235,39 +242,37 @@ and nothing more.
 | Private catalogues | ✗ | ✓ | ✓ | ✓ |
 | **Where they lead** | | | | |
 | An interactive terminal into a running container | ✓ | ✓ | ◐ | ◐ |
-| GPU workloads | ✓ | ✓ | ✗ | ✗ |
-| Log drains to an outside service | ✓ | ✗ | ✗ | ✗ |
+| GPU workloads | ✓ | ✓ | ✗ | ✓ |
+| Log drains to an outside service | ✓ | ✗ | ✗ | ✓ |
 | Passkeys | ✗ | ✓ | ✗ | ✓ |
-| DNS records created at the provider | ✓ | ✓ | ✗ | ✗ |
+| DNS records created at the provider | ✓ | ✓ | ✗ | ✓ |
 | **Servers** | | | | |
 | Installs and joins the servers itself | ✓ | ✓ | ✗ | ✓ |
-| Creates servers at a cloud provider | ✓ | ✗ | ✗ | ✗ |
+| Creates servers at a cloud provider | ✓ | ✗ | ✗ | ✓ |
 | Survives losing a server (HA control plane) | ✗ | ◐ | ✓ | ✓ |
 
 | | Coolify | Dokploy | Kubero | Skifity |
 |---|---|---|---|---|
-| Of 80 | 51 | 52 | 32 | 73 |
+| Of 80 | 51 | 52 | 32 | 79 |
 
-The three average 45. Of the rows where Skifity is not ✓, five are being built
-as this is written and are listed below.
+The three average 45. The one row where Skifity falls short of the best of
+them by its own choice is the terminal, below; the other is the size of the
+catalogue.
 
 ## Still open
 
-* **Databases:** stopping, starting and resizing one, changing its password,
-  and importing an existing dump. Coolify has all of it; Dokploy all but the
-  import.
-* **GPU workloads** (Coolify, Dokploy): on Kubernetes, the device plugin and a
-  resource limit on the app.
-* **Log drains** (Coolify): a collector on each server shipping apps' logs out.
-* **DNS records created at the provider** (Coolify, Dokploy).
-* **Creating servers at a cloud provider** (Coolify, at Hetzner).
 * **An interactive terminal.** Skifity runs a command in an app's image and
   shows its output; it has no shell into a running container, and Dokploy's
   shows why that is a decision and not an oversight. It stays half.
 * **Catalogue size:** 374 templates against Dokploy's 532. Every one of
   Skifity's is on a named release, which 242 of Dokploy's are not.
-* **A secret manager connection is team-wide:** anyone who may set a variable
-  can point it at any path the connection can read. The manager's own policy
-  is the real boundary; limits in the panel are being added.
+* **Wildcard certificates.** DNS records are created at the provider, but a
+  wildcard through DNS-01 needs a per-team issuer and checks across teams, and
+  was left out rather than half-built.
+* **One cloud provider.** Servers are ordered at Hetzner only; the provider
+  interface is there for others.
 * The three shared items above: the panel's `cluster-admin`, the volume
   backup's uid, and a deploy interrupted by a restart.
+* Everything built in this pass is tested against fakes of the services and
+  clusters it talks to, and none of it has run against a real one
+  (ADR-0010). `docs/progress.md` says, part by part, what that leaves unseen.
