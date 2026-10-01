@@ -11,9 +11,12 @@ Eight templates were written by hand before any of this existed and are still
 the reference for what a good one looks like. They are never overwritten: an
 importer that quietly replaced them would be losing work, not doing it.
 """
-import os, re, sys, yaml
-
+import os
+import re
+import sys
 from collections import Counter
+
+import yaml
 
 import workdir
 

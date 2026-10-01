@@ -8,7 +8,13 @@ this asks the registry for the newest exact semver release.
 
 Run: python3 hack/resolve_tags.py < images.json > resolved.json
 """
-import json, re, sys, time, urllib.error, urllib.parse, urllib.request
+import json
+import re
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 TIMEOUT = 25
 SKIP = re.compile(r'(nightly|beta|alpha|rc|dev|edge|canary|test|snapshot|unstable|insiders|preview)', re.I)
@@ -364,7 +370,7 @@ def exists(image):
             hub = hub or "auth.docker.io" in challenge
             token = token_for(challenge, repo)
             if not token:
-                raise Undetermined(f"{host} would not hand out an anonymous token")
+                raise Undetermined(f"{host} would not hand out an anonymous token") from err
             headers["Authorization"] = "Bearer " + token
         except urllib.error.URLError as err:
             raise Undetermined(f"{host} unreachable: {err.reason}") from err

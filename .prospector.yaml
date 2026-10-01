@@ -1,0 +1,10 @@
+# Prospector's settings, for the Codacy workflow. It runs pylint with the
+# repository's .pylintrc and pycodestyle at the same line length; see
+# .pylintrc for why the rest is off.
+strictness: medium
+pylint:
+  options:
+    rcfile: .pylintrc
+pep8:
+  options:
+    max-line-length: 140

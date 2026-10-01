@@ -19,10 +19,14 @@ What it refuses matters more than what it converts:
     It is dropped and named in the notes, because the step is usually still
     needed and silently skipping it is how a template half-works.
 """
-import base64, re, sys, yaml
-
+import base64
+import re
+import sys
 from collections import Counter
 
+import yaml
+
+import resolve_tags
 import workdir
 
 DB_IMAGE = re.compile(r'\b(postgres|postgis|pgvector|mysql|mariadb|redis|valkey|keydb|mongo)\b', re.I)
@@ -204,7 +208,7 @@ def declared_port(body, image_is_unique=True):
             # game server's, and giving Palworld an ingress on 8211 produces a
             # domain that will never answer.
             continue
-        parts = text.split("/")[0].split(":")
+        parts = text.split("/", maxsplit=1)[0].split(":")
         if parts and parts[-1].isdigit():
             return int(parts[-1])
     # The table is about an image, so it can only answer for a service that is
@@ -359,8 +363,8 @@ def convert(key, template, compose, pinned):
         return None, "nothing in it listens on a port"
     if not any(s["public"] for s in out_services):
         # Nothing was marked, so the one carrying the template's own port is it.
-        main = max(listening, key=lambda s: s["port"] == template.get("port"))
-        main["public"] = True
+        primary = max(listening, key=lambda s: s["port"] == template.get("port"))
+        primary["public"] = True
 
     out = {
         "id": slug(key),
@@ -445,8 +449,6 @@ def align_versions(key, compose, pinned):
     resolved to and use it for all of them, but only after the registry confirms
     every repository has it.
     """
-    import resolve_tags
-
     groups = {}
     for name, body in (compose.get("services") or {}).items():
         ref = str(body.get("image") or "")

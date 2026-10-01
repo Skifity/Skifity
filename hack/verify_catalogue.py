@@ -12,10 +12,11 @@ It prints one line per image it could not confirm and exits after writing
 verify.json in the work directory (see hack/workdir.py). "GONE" means the registry said no; "UNKN" means it never
 answered, usually a rate limit, and is worth re-running rather than acting on.
 """
-import os, sys, yaml
-sys.path.insert(0, "hack")
-import resolve_tags as R
+import os
 
+import yaml
+
+import resolve_tags as R
 import workdir
 
 CAT = "internal/templates/catalogue"

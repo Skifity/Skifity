@@ -1,0 +1,31 @@
+# Pylint's settings for the Python in this repository, which is only the
+# maintainer scripts in hack/: they import and check the template catalogue
+# and never ship in the binary. Read by pylint itself and by the Codacy
+# workflow, which runs it with the repository's own configuration.
+#
+# What is off is a choice about scripts, not a blind spot. Everything about
+# correctness (unused names, files left open, encodings, exceptions swallowed
+# without a word) stays on, and bandit reads the same files for security.
+
+[FORMAT]
+# A regular expression of alternatives reads best on one line.
+max-line-length=140
+
+[MESSAGES CONTROL]
+disable=
+    # Each script's module docstring says what it is for, and a function's
+    # name and comments say what it does; a docstring on every helper would
+    # repeat the name.
+    missing-function-docstring,
+    # Converting a template is one long decision with many outcomes. Split for
+    # the sake of a count, it reads worse, not better.
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    # The importers share a few lines of compose parsing on purpose: each runs
+    # on its own, and a shared module for three lines is more to follow.
+    duplicate-code,
+    # Each is commented: a registry that fails in any way means the template
+    # is dropped and named, never that the run stops.
+    broad-exception-caught

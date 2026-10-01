@@ -105,10 +105,10 @@ def candidates(tid: str, name: str) -> list[str]:
             out.append(seed[:cut] + "-" + seed[cut:])
 
     seen, unique = set(), []
-    for name in out:
-        if name not in seen:
-            seen.add(name)
-            unique.append(name)
+    for candidate in out:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
     return unique
 
 

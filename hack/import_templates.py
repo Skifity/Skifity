@@ -9,14 +9,15 @@ Nothing here runs at build time. It is a one-off that produced the files in
 internal/templates/catalogue, kept so the next batch is a re-run rather than an
 afternoon of copying.
 """
-import base64, re, sys, yaml
-
-sys.path.insert(0, "hack")
-from import_multi import declared_port, fqdn_marker, known_port, self_check_port
-
+import base64
+import re
+import sys
 from collections import Counter
 
+import yaml
+
 import workdir
+from import_multi import declared_port, fqdn_marker, known_port, self_check_port
 
 DB_IMAGE = re.compile(r'\b(postgres|postgis|pgvector|mysql|mariadb|redis|valkey|keydb|mongo)\b', re.I)
 ENGINE = [("postgres", ("postgres", "postgis", "pgvector")),
