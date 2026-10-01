@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 
 	"skifity/internal/kube"
@@ -259,5 +260,81 @@ func TestInstallerAndPanelAgreeOnTheRegistry(t *testing.T) {
 	}
 	if !strings.Contains(yaml, "http://127.0.0.1:"+strconv.Itoa(kube.RegistryNodePort)) {
 		t.Errorf("the mirror configuration does not point at the node port:\n%s", yaml)
+	}
+}
+
+// Every pod the panel's own manifests create has to be admitted by the Pod
+// Security level of the namespace it is created in. The panel's namespace once
+// enforced baseline while the panel mounted host paths, which baseline
+// refuses: the first install would have had no panel, and rendering the YAML
+// never showed it. This checks the rules of baseline that the panel's own pods
+// come anywhere near; restricted only adds to them.
+func TestEveryPodIsAdmittedWhereItRuns(t *testing.T) {
+	enforced := map[string]string{}
+	type workload struct {
+		kind, name, namespace string
+		pod                   corev1.PodSpec
+	}
+	var workloads []workload
+	for _, name := range manifestNames(t) {
+		rendered, err := Render(read(t, name), values)
+		if err != nil {
+			t.Fatalf("render %s: %v", name, err)
+		}
+		for _, doc := range strings.Split(rendered, "\n---\n") {
+			var head struct {
+				Kind     string `json:"kind"`
+				Metadata struct {
+					Name      string            `json:"name"`
+					Namespace string            `json:"namespace"`
+					Labels    map[string]string `json:"labels"`
+				} `json:"metadata"`
+			}
+			if err := yaml.Unmarshal([]byte(doc), &head); err != nil {
+				continue
+			}
+			switch head.Kind {
+			case "Namespace":
+				enforced[head.Metadata.Name] = head.Metadata.Labels["pod-security.kubernetes.io/enforce"]
+			case "Deployment", "StatefulSet", "DaemonSet":
+				var object struct {
+					Spec struct {
+						Template corev1.PodTemplateSpec `json:"template"`
+					} `json:"spec"`
+				}
+				if err := yaml.Unmarshal([]byte(doc), &object); err != nil {
+					t.Fatalf("parse %s %s: %v", head.Kind, head.Metadata.Name, err)
+				}
+				workloads = append(workloads, workload{head.Kind, head.Metadata.Name, head.Metadata.Namespace, object.Spec.Template.Spec})
+			}
+		}
+	}
+	if len(workloads) == 0 {
+		t.Fatal("no workloads found; the test is not reading the manifests")
+	}
+	for _, w := range workloads {
+		level, ok := enforced[w.namespace]
+		if !ok || level == "" || level == "privileged" {
+			continue
+		}
+		what := w.kind + " " + w.name + " in " + w.namespace + " (enforces " + level + ")"
+		for _, volume := range w.pod.Volumes {
+			if volume.HostPath != nil {
+				t.Errorf("%s mounts the host path %s, which %s refuses", what, volume.HostPath.Path, level)
+			}
+		}
+		if w.pod.HostNetwork || w.pod.HostPID || w.pod.HostIPC {
+			t.Errorf("%s shares a host namespace, which %s refuses", what, level)
+		}
+		for _, container := range append(append([]corev1.Container{}, w.pod.InitContainers...), w.pod.Containers...) {
+			if sc := container.SecurityContext; sc != nil && sc.Privileged != nil && *sc.Privileged {
+				t.Errorf("%s runs %s privileged, which %s refuses", what, container.Name, level)
+			}
+			for _, port := range container.Ports {
+				if port.HostPort != 0 {
+					t.Errorf("%s binds host port %d, which %s refuses", what, port.HostPort, level)
+				}
+			}
+		}
 	}
 }

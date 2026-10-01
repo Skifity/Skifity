@@ -20,9 +20,12 @@ metadata:
   labels:
     app.kubernetes.io/name: skifity
     app.kubernetes.io/part-of: skifity
-    # The panel needs host paths, so it cannot run under the restricted
-    # profile that every tenant namespace is held to.
-    pod-security.kubernetes.io/enforce: baseline
+    # The panel keeps its database and master key on the node's disk through
+    # host paths, and only the privileged profile admits a host path: baseline
+    # refuses them as surely as restricted does, and with it this namespace
+    # refused the panel's own pod. Audited at restricted, so anything else that
+    # lands here is recorded. See ADR-0024.
+    pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/audit: restricted
 ---
 apiVersion: v1

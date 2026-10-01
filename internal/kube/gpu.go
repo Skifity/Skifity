@@ -434,9 +434,10 @@ const NVIDIADevicePluginName = "skifity-nvidia-device-plugin"
 // node agents, as NVIDIA's static manifest has it.
 //
 // Not the panel's namespace. The plugin talks to the kubelet through a socket
-// under /var/lib/kubelet/device-plugins on the host, which is a hostPath
-// volume, and the baseline Pod Security level the panel's namespace enforces
-// refuses every hostPath. kube-system carries no Pod Security label.
+// under /var/lib/kubelet/device-plugins on the host, a hostPath volume, and
+// the panel's namespace holds the database and the master key: nothing that
+// does not have to be there goes there (ADR-0024). kube-system carries no Pod
+// Security label.
 const GPUNamespace = "kube-system"
 
 // kubeletDevicePlugins is where the kubelet listens for device plugins. k3s

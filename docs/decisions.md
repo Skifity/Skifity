@@ -329,7 +329,7 @@ profile — and rootless BuildKit needs exactly that to use user namespaces, so 
 builder was rejected by admission and never started.
 
 **Decision.** A separate `skifity-builds` namespace holds the builder, the
-registry and every build Job. It is the only namespace in Skifity that enforces
+registry and every build Job. It is the only namespace Skifity creates for work that enforces
 the privileged Pod Security profile, and it is audited and warned at restricted so
 anything else placed there is noticed. It carries the same default-deny
 NetworkPolicy every environment gets: out to the internet for the repository and
@@ -687,3 +687,30 @@ None of the new manifests or backup jobs has run against a cluster (ADR-0010):
 every image was read from its registry and every behaviour relied on — the
 entrypoints' environment variables, the tools' flags, the password variables,
 Dragonfly's missing `SYNC` — from the image's or the tool's own source.
+
+## ADR-0024 - The panel's namespace enforces the privileged profile
+
+**Context.** The panel's own namespace was labelled to enforce the baseline Pod
+Security profile, with a comment saying the panel needs host paths and so cannot
+run at restricted. Baseline refuses host paths too: `spec.volumes[*].hostPath`
+is on its list, and only the privileged profile admits one. The panel mounts two,
+for its configuration (the master key among it) and its database, so admission
+would have refused the panel's own pod on the first install. Nothing in this
+repository could show it: no test runs a cluster (ADR-0010), and the manifests
+were only ever rendered.
+
+**Decision.** The namespace enforces privileged, the one profile that admits the
+panel as it is, and is audited at restricted so anything else placed there is
+recorded. Host paths stay, for the reason the manifest gives: the panel has to
+come up before any storage provisioner does, because a broken provisioner is
+something people fix from the panel.
+
+**Consequences.** Admission no longer stands between this namespace and a
+privileged pod. Little is lost: the only workload there is the panel, and the
+panel holds cluster-admin (ADR-0014), so a pod it chose to make privileged it
+could make anywhere. What the namespace needs is that nothing else is put in it,
+and that is why the GPU device plugin, which also needs a host path, runs in
+kube-system instead. A static PersistentVolume over the same directories would
+keep baseline enforced; it was not chosen because binding without a provisioner
+is exactly the kind of behaviour that cannot be checked without a cluster, and
+the point of this change is to stop shipping what has not been seen to work.
