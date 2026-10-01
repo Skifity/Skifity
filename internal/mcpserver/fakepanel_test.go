@@ -37,9 +37,12 @@ const (
 	// plantedReference is a value read from a secret manager, sent by a panel
 	// that should not have: under a variable not even marked secret.
 	plantedReference = "planted-secret-manager-value"
+	// plantedDNSToken is a DNS provider's token, which the real panel never
+	// sends back.
+	plantedDNSToken = "planted-dns-token"
 )
 
-var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader, plantedReference}
+var planted = []string{plantedVariable, plantedFile, plantedPassword, plantedCatalogueHeader, plantedReference, plantedDNSToken}
 
 type fakePanel struct {
 	t      *testing.T
@@ -213,6 +216,15 @@ func newFakePanel(t *testing.T) *fakePanel {
 		// panel does.
 		"POST /api/apps/{app}/domains":            map[string]any{"id": "dom_2", "hostname": "shop.example.com", "path": "/", "tls": true, "status": "pending"},
 		"DELETE /api/apps/{app}/domains/{domain}": ok,
+
+		"GET /api/teams/{team}/dns-providers": items(map[string]any{
+			"id": "dnsp_1", "kind": "cloudflare", "name": "Cloudflare", "title": "Cloudflare", "records": 1,
+			"zones": []any{map[string]any{"id": "z1", "name": "example.com"}},
+			// What the panel never answers, handed over here so that a tool
+			// passing a connection on whole is caught doing it.
+			"token": plantedDNSToken,
+		}),
+		"GET /api/teams/{team}/dns-providers/{provider}/zones": items(map[string]any{"id": "z1", "name": "example.com"}),
 
 		"GET /api/apps/{app}/ports":           items(port),
 		"POST /api/apps/{app}/ports":          port,

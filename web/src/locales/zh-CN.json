@@ -402,7 +402,14 @@
       "database.started": "数据库已启动",
       "database.resized": "数据库已调整大小",
       "database.password_changed": "数据库密码已更换",
-      "database.import_started": "已向数据库导入转储"
+      "database.import_started": "已向数据库导入转储",
+      "dns_provider.connected": "已连接 DNS 服务商",
+      "dns_provider.removed": "已移除 DNS 服务商",
+      "domain.dns_changed": "已更改域名的 DNS 记录设置",
+      "dns_record.created": "已创建 DNS 记录",
+      "dns_record.updated": "DNS 记录已指向新地址",
+      "dns_record.removed": "已删除 DNS 记录",
+      "dns_record.abandoned": "DNS 记录在面板外被修改，交由修改者管理"
     }
   },
   "projects": {
@@ -914,7 +921,24 @@
     "ownCertificateExpiring": "你的证书 {{name}} 将于 {{date}} 过期",
     "ownCertificateExpired": "你的证书 {{name}} 已于 {{date}} 过期",
     "ownCertificateRenew": "你自带的证书不会自动续期。请向签发它的机构续期，并以相同名称上传：所有使用它的应用都会随之更新。",
-    "manageCertificates": "在设置中管理证书"
+    "manageCertificates": "在设置中管理证书",
+    "manageDNS": "在 {{provider}} 创建 DNS 记录",
+    "manageDNSHelp": "{{zone}} 已在 {{provider}} 连接。面板会创建记录、让它始终指向本集群，并在删除域名时一并删除。面板绝不修改别人创建的记录。",
+    "stopKeeping": "不再维护此记录",
+    "keepRecord": "在 {{provider}} 创建记录",
+    "tryAgain": "再试一次",
+    "dnsCreated": "已在 {{provider}} 创建记录",
+    "dnsCreatedHelp": "面板会让它始终指向本集群，并在删除域名时一并删除。",
+    "dnsProxied": "经 Cloudflare 代理",
+    "dnsManagedElsewhere": "记录由他处管理",
+    "dnsManagedElsewhereHelp": "{{provider}} 上 {{zone}} 中别人创建的记录已指向这里。面板不会动它。",
+    "dnsCreating": "正在 {{provider}} 创建记录…",
+    "dnsNotCreated": "未能在 {{provider}} 创建记录",
+    "dnsLeftToYou": "{{zone}} 已在 {{provider}} 连接，这条记录由你自行管理。",
+    "dnsNotAsked": "{{zone}} 已在 {{provider}} 连接：面板可以替你创建这条记录。",
+    "dnsStatusProxied": "位于 Cloudflare 之后",
+    "dnsProxiedHelp": "该名称解析到 Cloudflare 的地址，访客去向由 Cloudflare 上的记录决定。那条记录必须指向 {{expected}}。",
+    "dnsProxiedConfirmed": "面板在 Cloudflare 维护的记录指向这里，访客会经由 Cloudflare 访问此应用。"
   },
   "scaling": {
     "title": "伸缩",
@@ -1780,6 +1804,10 @@
       "scanning_block_fixable_critical": {
         "label": "阻止含有已提供修复的严重漏洞的部署",
         "help": "默认关闭。开启后，部署会等待其镜像扫描完成；如果其中某个严重漏洞已有修复版本，部署会停止，并列出相关软件包和需要升级到的版本。仍可以通过接受这些漏洞来部署，这会记录在活动日志中。无法运行的扫描会放行部署，回滚也永远不会被阻止。"
+      },
+      "domains_cluster_ipv6": {
+        "label": "集群公网 IPv6 地址",
+        "help": "集群拥有 IPv6 地址时，你的域名也应指向的地址。面板创建 DNS 记录时，会在 A 记录旁加一条指向它的 AAAA 记录，DNS 检查也会把它算作本集群的地址。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -1812,7 +1840,8 @@
     "componentVersionUnknown": "开始记录版本之前安装的版本",
     "scanning": "镜像扫描",
     "certificates": "证书",
-    "secretManagers": "密钥管理器"
+    "secretManagers": "密钥管理器",
+    "dnsProviders": "DNS 服务商"
   },
   "errors": {
     "whatHappened": "发生了什么",
@@ -3601,6 +3630,72 @@
         "cause": "{{0}}",
         "impact": "PostgreSQL 在一个事务中加载转储，所以不会留下任何部分；其他引擎可能已经加载了一部分。导入前刚刚做过一次备份。",
         "fix": "阅读上面的原因并修正转储。要把数据库恢复原样，请从它的备份列表中恢复导入前刚做的那份备份。"
+      },
+      "dns_provider_refused": {
+        "title": "DNS 服务商拒绝了凭据",
+        "cause": "{{0}} 回复：{{1}}",
+        "impact": "未保存任何内容，也未修改任何记录。",
+        "fix": "请检查令牌是否完整、是否已过期，以及是否有权修改 DNS：Cloudflare 需要 Zone、DNS、Edit 和 Zone、Zone、Read；Hetzner 需要 Read & Write；DigitalOcean 需要域名权限范围；Route 53 需要 route53:ListHostedZones、route53:ListResourceRecordSets 和 route53:ChangeResourceRecordSets。"
+      },
+      "dns_provider_failed": {
+        "title": "DNS 服务商未完成请求",
+        "cause": "向 {{0}} 发出的请求失败：{{1}}",
+        "impact": "服务商处没有任何改动。面板维护的记录每隔几分钟会重试一次。",
+        "fix": "查看服务商的状态页，然后在“设置”“DNS 服务商”中测试连接。域名的记录可以在它的“域名”选项卡中重试。"
+      },
+      "dns_no_zones": {
+        "title": "这些凭据看不到任何区域",
+        "cause": "{{0}} 接受了凭据，但没有列出任何区域。",
+        "impact": "未保存任何内容：没有区域的连接永远不会被用到。",
+        "fix": "给令牌授予它应管理的区域——在 Cloudflare 的 Zone Resources 中包含这些区域或账户的所有区域——然后重新连接。"
+      },
+      "dns_cloudflare_global_key": {
+        "title": "这是 Cloudflare 的 Global API Key",
+        "cause": "该值的格式是 Global API Key，它能在 Cloudflare 账户中做任何事：删除区域、更改套餐、读取所有设置。",
+        "impact": "它没有被发送到任何地方，也没有保存任何内容。",
+        "fix": "请改为创建 API 令牌：My Profile、API Tokens、Create Token，选 Edit zone DNS 模板，范围为本面板要管理的区域。然后粘贴该令牌。"
+      },
+      "dns_record_conflict": {
+        "title": "有另一条记录挡住了",
+        "cause": "{{0}} 在 {{2}} 上已有 {{1}}，它并非 Skifity 创建。",
+        "impact": "没有创建或修改任何内容。Skifity 绝不修改不是它创建的记录，所以这个名称仍会把访客送到那条记录指向的地方。",
+        "fix": "如果那条记录已不再需要，请在 {{0}} 删除它并点击“再试一次”。或者自行把它改为 {{1}}：已是该值的记录留给你管理，域名两种情况下都能工作。"
+      },
+      "dns_record_extra": {
+        "title": "旧地址仍会收到部分访客",
+        "cause": "{{0}} 在 {{2}} 上还有 {{1}}，它不是 Skifity 创建的，也不属于本集群。",
+        "impact": "没有创建任何记录。有那条记录在，部分访客会到达此应用，另一部分会被送到那里。",
+        "fix": "如果它是遗留的，请在 {{0}} 删除它并点击“再试一次”。如果它是本集群自己的 IPv6 地址，请管理员在“设置”“域名”“集群公网 IPv6 地址”中设置，面板会自行维护 AAAA 记录。"
+      },
+      "dns_record_changed": {
+        "title": "有人修改了 Skifity 创建的记录",
+        "cause": "Skifity 在 {{2}} 为 {{1}} 创建的 {{0}} 记录现在指向 {{3}}。",
+        "impact": "它在面板之外被修改，因此不再属于面板：Skifity 已停止维护它，不会修改也不会删除它。",
+        "fix": "如果这次修改是误操作，请在 {{0}} 删除该记录并点击“再试一次”，面板会重新创建它。如果是有意为之，请在该域名上点击“不再维护此记录”。"
+      },
+      "dns_no_zone": {
+        "title": "没有已连接的 DNS 区域包含此域名",
+        "cause": "团队的 DNS 服务商中没有任何一个拥有包含 {{0}} 的区域。",
+        "impact": "没有任何改动。",
+        "fix": "在“设置”“DNS 服务商”中连接托管 {{0}} 的服务商，或自行创建记录：“域名”选项卡会说明记录应填什么。"
+      },
+      "dns_no_address": {
+        "title": "面板不知道此域名应指向哪里",
+        "cause": "本集群没有设置公网地址，面板也不知道任何服务器的地址，因此 {{0}} 的记录无内容可填。",
+        "impact": "未创建任何记录。",
+        "fix": "管理员在“设置”“域名”“集群公网 IP”中设置地址后，记录会在几分钟内创建。"
+      },
+      "dns_tunnel_needs_cloudflare": {
+        "title": "Cloudflare 隧道只能通过 Cloudflare 的 DNS 访问",
+        "cause": "本集群通过 Cloudflare 隧道访问，而 {{0}} 位于 {{1}} 的区域中。指向隧道的记录只在托管于 Cloudflare 的区域中有效。",
+        "impact": "未创建任何记录。",
+        "fix": "把该区域的 DNS 迁到 Cloudflare 并在这里连接，或在 Cloudflare 控制台中把 {{0}} 添加为隧道的 public hostname。"
+      },
+      "dns_apex_cname": {
+        "title": "区域本身的名称不能是 CNAME",
+        "cause": "{{0}} 就是区域本身，要把它指向 {{1}} 需要 CNAME，而 {{2}} 不允许在那里使用 CNAME。",
+        "impact": "未创建任何记录。",
+        "fix": "请使用区域内的名称，例如 www.{{0}}，并把裸域名重定向过去；或者请管理员在“设置”“域名”中把“集群公网 IP”设为一个 IP 地址。"
       }
     }
   },
@@ -4438,5 +4533,32 @@
     "saveAnyway": "仍然保存",
     "limitsSaved": "已保存 {{name}} 的限制。",
     "limitsSavedCutOff": "已保存 {{name}} 的限制。以下变量将无法再读取：{{variables}}。"
+  },
+  "dnsProviders": {
+    "title": "DNS 服务商",
+    "help": "你的域名 DNS 所在之处。连接区域后，添加域名会在那里创建它的记录，集群地址变化时记录随之更新，删除域名时记录也会被删除。面板只会修改它自己创建的记录。",
+    "empty": "暂无。每个域名的记录需手动创建，“域名”选项卡会说明记录应填什么。",
+    "add": "连接服务商",
+    "kind": "服务商",
+    "name": "名称",
+    "token": "API 令牌",
+    "accessKeyID": "访问密钥 ID",
+    "secretAccessKey": "秘密访问密钥",
+    "formHelp": {
+      "cloudflare": "在 My Profile、API Tokens 中创建的 API 令牌：使用 Edit zone DNS 模板（Zone、DNS、Edit），再加上 Zone、Zone、Read，范围为面板要管理的区域。切勿使用 Global API Key——它能在账户中做任何事，会被拒绝。",
+      "hetzner": "来自包含该区域的项目的 Hetzner Console API 令牌，权限为 Read & Write：Security、API tokens。",
+      "digitalocean": "具有域名权限范围的个人访问令牌：read、create、update 和 delete。",
+      "route53": "一个 IAM 用户的访问密钥，需允许 route53:ListHostedZones、route53:ListResourceRecordSets 和 route53:ChangeResourceRecordSets。私有托管区域不计入。"
+    },
+    "proxiedHelp": "面板在 Cloudflare 创建的记录不经代理：证书由 Let's Encrypt 通过 HTTP 签发，签发时必须能访问你的服务器。之后如需代理，可在 Cloudflare 打开；面板不会把它关掉。",
+    "connect": "检查并连接",
+    "connected": "{{name}} 已连接：{{zones}}",
+    "test": "测试",
+    "tested": "{{name}} 有响应，区域：{{zones}}",
+    "remove": "移除 {{name}}",
+    "removeConfirm": "面板将不再通过 {{name}} 创建和删除记录。",
+    "removeConsequence": "面板通过它创建的记录会留在服务商处，此后归你管理：{{number}} 条。",
+    "recordsKept": "由面板维护的记录：{{number}}",
+    "zonesListed": "截至 {{when}}"
   }
 }

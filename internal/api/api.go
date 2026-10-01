@@ -13,6 +13,7 @@ import (
 	"skifity/internal/auth"
 	"skifity/internal/config"
 	"skifity/internal/crypto"
+	"skifity/internal/dnsprov"
 	"skifity/internal/docsite"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
@@ -77,6 +78,10 @@ type Server struct {
 
 	// resolver is what a domain's DNS is checked through; see domain_dns.go.
 	resolver Resolver
+
+	// dns keeps the records of the team's domains at its DNS providers; see
+	// dns_providers.go. A test points its Open at an in-memory provider.
+	dns *dnsprov.Manager
 
 	// traffic says whether the ingress's request counters could be read. Nil
 	// is a panel with no watcher, which reads nothing.
@@ -182,6 +187,7 @@ func New(opts Options) *Server {
 	if s.log == nil {
 		s.log = slog.Default()
 	}
+	s.dns = &dnsprov.Manager{DB: s.db, Keyring: s.keyring, Log: s.log, Address: s.publicAddress}
 	s.router = s.routes()
 	s.mcp = s.mcpHandler()
 	return s
@@ -329,6 +335,13 @@ func (s *Server) routes() chi.Router {
 				team.Get("/certificates", s.handleListCertificates)
 				team.Post("/certificates", s.handleSaveCertificate)
 				team.Delete("/certificates/{certificateID}", s.handleDeleteCertificate)
+				// The team's DNS providers, where the panel keeps its
+				// domains' records. See dns_providers.go.
+				team.Get("/dns-providers", s.handleListDNSProviders)
+				team.Post("/dns-providers", s.handleConnectDNSProvider)
+				team.Delete("/dns-providers/{providerID}", s.handleDeleteDNSProvider)
+				team.Post("/dns-providers/{providerID}/test", s.handleTestDNSProvider)
+				team.Get("/dns-providers/{providerID}/zones", s.handleListDNSZones)
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)

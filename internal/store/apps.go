@@ -509,6 +509,7 @@ var sealedSources = []sealedSource{
 	{table: "registry_credentials", valueCol: "password_enc", ctxPrefix: "registry"},
 	{table: "certificates", valueCol: "key_enc", ctxPrefix: "certificate"},
 	{table: "template_catalogues", valueCol: "auth_value_enc", ctxPrefix: "template_catalogue"},
+	{table: "dns_providers", valueCol: "credentials_enc", ctxPrefix: "dns_provider"},
 	{table: "servers", valueCol: "ssh_key_enc", ctxPrefix: "server_key"},
 	{table: "databases", valueCol: "credentials_enc", ctxPrefix: "database_credentials"},
 	{table: "databases", valueCol: "credentials_next_enc", ctxPrefix: "database_credentials_next"},

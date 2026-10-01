@@ -188,7 +188,8 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	defer stopBackground()
 	go server.Background(background)
 	sweepUploads(ctx, db, uploads, log)
-	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, server.RefreshTemplateCatalogues, deployer.RefreshDue, log)
+	go runScheduler(background, db, backups, deployer, clusterAdapter, uploads, dispatcher, server.RefreshTemplateCatalogues,
+		deployer.RefreshDue, server.SyncDNS, log)
 	go watcher.Run(background)
 
 	httpServer := &http.Server{
@@ -457,7 +458,8 @@ type rescanner interface {
 // managers, for the connections that have it switched on; see
 // Deployer.RefreshDue for how it is bounded.
 func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, scans rescanner, c *cluster.Cluster, uploads *upload.Store,
-	notifier notify.Notifier, refreshCatalogues, refreshSecrets func(context.Context, time.Time), log *slog.Logger) {
+	notifier notify.Notifier, refreshCatalogues, refreshSecrets func(context.Context, time.Time), syncDNS func(context.Context),
+	log *slog.Logger) {
 	// Align to the start of the next minute so a schedule of "0 3 * * *" fires
 	// at 03:00 rather than at whatever second the panel happened to start.
 	timer := time.NewTimer(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
@@ -533,6 +535,14 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 			if refreshSecrets != nil {
 				runsafe.Go(log, "refreshing variables from secret managers", func() { refreshSecrets(ctx, now) })
 			}
+			// The DNS records the panel keeps at the teams' providers, every
+			// five minutes: one not made yet, one whose address moved, one
+			// of a domain that is gone. Beside the tick, because a provider
+			// that is slow to answer is not a reason for a backup to wait.
+			// The sync itself only asks a provider about what is due.
+			if syncDNS != nil && now.Minute()%dnsSyncEvery == 0 {
+				runsafe.Go(log, "keeping DNS records at the teams' providers", func() { syncDNS(ctx) })
+			}
 		}()
 		select {
 		case <-ctx.Done():
@@ -541,6 +551,9 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 		}
 	}
 }
+
+// dnsSyncEvery is how many minutes apart the DNS sync runs.
+const dnsSyncEvery = 5
 
 // sweepUploads removes the code of apps that no longer exist.
 //

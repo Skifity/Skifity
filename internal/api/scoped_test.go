@@ -29,6 +29,8 @@ var limitedMemberMayUse = map[string]string{
 	"POST /api/teams/{teamID}/detect-upload":                      "the same, for uploaded code",
 	"GET /api/teams/{teamID}/templates":                           "the templates they install into their own projects, the team's own among them",
 	"GET /api/teams/{teamID}/secret-managers":                     "picking the secret manager a variable in one of their projects is read from; names and addresses, never credentials",
+	"GET /api/teams/{teamID}/dns-providers": "adding a domain to an app in their project offers to create its record " +
+		"in a zone the team connected; names and zones, never a credential",
 }
 
 // otherProject makes a second project in a tenant's team, with an environment,

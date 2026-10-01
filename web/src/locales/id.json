@@ -402,7 +402,14 @@
       "database.started": "Database dijalankan",
       "database.resized": "Ukuran database diubah",
       "database.password_changed": "Kata sandi database diganti",
-      "database.import_started": "Dump diimpor ke database"
+      "database.import_started": "Dump diimpor ke database",
+      "dns_provider.connected": "Penyedia DNS dihubungkan",
+      "dns_provider.removed": "Penyedia DNS dihapus",
+      "domain.dns_changed": "Pengaturan record DNS domain diubah",
+      "dns_record.created": "Record DNS dibuat",
+      "dns_record.updated": "Record DNS diarahkan ke alamat baru",
+      "dns_record.removed": "Record DNS dihapus",
+      "dns_record.abandoned": "Record DNS diubah di luar panel, diserahkan kepada pengubahnya"
     }
   },
   "projects": {
@@ -914,7 +921,24 @@
     "ownCertificateExpiring": "Sertifikat Anda {{name}} kedaluwarsa pada {{date}}",
     "ownCertificateExpired": "Sertifikat Anda {{name}} kedaluwarsa pada {{date}}",
     "ownCertificateRenew": "Tidak ada yang memperbarui sertifikat yang Anda bawa. Perbarui di otoritas yang menerbitkannya lalu unggah dengan nama yang sama: setiap aplikasi yang memakainya ikut diperbarui.",
-    "manageCertificates": "Sertifikat di Pengaturan"
+    "manageCertificates": "Sertifikat di Pengaturan",
+    "manageDNS": "Buat record DNS di {{provider}}",
+    "manageDNSHelp": "{{zone}} terhubung di {{provider}}. Panel membuat record, menjaganya tetap mengarah ke kluster ini, dan menghapusnya bersama domain. Panel tidak pernah mengubah record yang dibuat orang lain.",
+    "stopKeeping": "Berhenti mengelola record",
+    "keepRecord": "Buat record di {{provider}}",
+    "tryAgain": "Coba lagi",
+    "dnsCreated": "Record dibuat di {{provider}}",
+    "dnsCreatedHelp": "Panel menjaganya tetap mengarah ke kluster ini, dan menghapusnya bersama domain.",
+    "dnsProxied": "Di-proxy oleh Cloudflare",
+    "dnsManagedElsewhere": "Record dikelola di tempat lain",
+    "dnsManagedElsewhereHelp": "Record yang dibuat orang lain di {{zone}} pada {{provider}} sudah mengarah ke sini. Panel menyerahkannya kepada mereka.",
+    "dnsCreating": "Membuat record di {{provider}}…",
+    "dnsNotCreated": "Record tidak dibuat di {{provider}}",
+    "dnsLeftToYou": "{{zone}} terhubung di {{provider}}, dan record ini diserahkan kepada Anda.",
+    "dnsNotAsked": "{{zone}} terhubung di {{provider}}: panel dapat membuat record ini untuk Anda.",
+    "dnsStatusProxied": "Di balik Cloudflare",
+    "dnsProxiedHelp": "Nama ini menjawab dengan alamat Cloudflare, jadi tujuan pengunjung ditentukan oleh record di Cloudflare. Record itu harus mengarah ke {{expected}}.",
+    "dnsProxiedConfirmed": "Record yang dikelola panel di Cloudflare mengarah ke sini, jadi pengunjung mencapai aplikasi ini melalui Cloudflare."
   },
   "scaling": {
     "title": "Penskalaan",
@@ -1780,6 +1804,10 @@
       "scanning_block_fixable_critical": {
         "label": "Hentikan deploy dengan kerentanan kritis yang punya perbaikan",
         "help": "Mati secara bawaan. Jika menyala, deploy menunggu image-nya dipindai dan berhenti bila ada kerentanan kritis yang punya versi perbaikan, dengan menyebut paket dan versi tujuannya. Seseorang tetap bisa men-deploy-nya dengan menerima kerentanan tersebut, dan itu dicatat di log aktivitas. Pemindaian yang tidak bisa berjalan membiarkan deploy lewat, dan rollback tidak pernah dihentikan."
+      },
+      "domains_cluster_ipv6": {
+        "label": "Alamat IPv6 publik kluster",
+        "help": "Alamat IPv6 yang juga harus dituju domain Anda, jika kluster memilikinya. Record DNS yang dibuat panel mendapat record AAAA dengan alamat ini di samping record A, dan pemeriksaan DNS menganggapnya milik kluster ini."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -1812,7 +1840,8 @@
     "componentVersionUnknown": "versi yang dipasang sebelum versi mulai dicatat",
     "scanning": "Pemindaian image",
     "certificates": "Sertifikat",
-    "secretManagers": "Pengelola rahasia"
+    "secretManagers": "Pengelola rahasia",
+    "dnsProviders": "Penyedia DNS"
   },
   "errors": {
     "whatHappened": "Apa yang terjadi",
@@ -3601,6 +3630,72 @@
         "cause": "{{0}}",
         "impact": "PostgreSQL memuat dump dalam satu transaksi, jadi tidak ada yang tertinggal; engine lain mungkin sudah memuat sebagian. Sebuah cadangan diambil tepat sebelumnya.",
         "fix": "Baca alasannya di atas dan perbaiki dump-nya. Untuk mengembalikan database seperti semula, pulihkan cadangan yang diambil tepat sebelum impor dari daftar Cadangan-nya."
+      },
+      "dns_provider_refused": {
+        "title": "Penyedia DNS menolak kredensial",
+        "cause": "{{0}} menjawab: {{1}}",
+        "impact": "Tidak ada yang disimpan dan tidak ada record yang diubah.",
+        "fix": "Pastikan itu token yang utuh, belum kedaluwarsa, dan boleh mengubah DNS: Zone, DNS, Edit dan Zone, Zone, Read di Cloudflare; Read & Write di Hetzner; cakupan domain di DigitalOcean; route53:ListHostedZones, route53:ListResourceRecordSets, dan route53:ChangeResourceRecordSets di Route 53."
+      },
+      "dns_provider_failed": {
+        "title": "Penyedia DNS tidak melakukan yang diminta",
+        "cause": "Permintaan ke {{0}} gagal: {{1}}",
+        "impact": "Tidak ada yang diubah di penyedia. Record yang dikelola panel dicoba lagi setiap beberapa menit.",
+        "fix": "Periksa halaman status penyedia, lalu uji koneksi di Pengaturan, Penyedia DNS. Record domain dapat dicoba lagi dari tab Domain-nya."
+      },
+      "dns_no_zones": {
+        "title": "Kredensial ini tidak bisa melihat zona apa pun",
+        "cause": "{{0}} menerimanya dan tidak mencantumkan zona apa pun.",
+        "impact": "Tidak ada yang disimpan: koneksi tanpa zona tidak akan pernah dipakai.",
+        "fix": "Beri token zona yang harus dikelolanya — di Cloudflare, pada Zone Resources, sertakan zona tersebut atau semua zona akun — lalu hubungkan lagi."
+      },
+      "dns_cloudflare_global_key": {
+        "title": "Itu adalah Global API Key Cloudflare",
+        "cause": "Nilai ini berbentuk Global API Key, yang bisa melakukan apa saja di akun Cloudflare: menghapus zona, mengubah paket, membaca setiap pengaturan.",
+        "impact": "Nilai itu tidak dikirim ke mana pun dan tidak ada yang disimpan.",
+        "fix": "Buat token API sebagai gantinya: My Profile, API Tokens, Create Token, templat Edit zone DNS, dengan zona yang harus dikelola panel ini. Tempelkan token itu."
+      },
+      "dns_record_conflict": {
+        "title": "Ada record lain yang menghalangi",
+        "cause": "{{0}} sudah memiliki {{1}} di {{2}}, yang tidak dibuat oleh Skifity.",
+        "impact": "Tidak ada yang dibuat atau diubah. Skifity tidak pernah mengubah record yang tidak dibuatnya, jadi nama ini tetap mengirim pengunjung ke tujuan record tersebut.",
+        "fix": "Jika record itu tidak dibutuhkan lagi, hapus di {{0}} lalu tekan Coba lagi. Atau ubah sendiri menjadi {{1}}: record yang sudah berisi itu diserahkan kepada Anda, dan domain tetap berfungsi."
+      },
+      "dns_record_extra": {
+        "title": "Alamat lama masih akan menerima sebagian pengunjung",
+        "cause": "{{0}} juga memiliki {{1}} di {{2}}, yang tidak dibuat Skifity dan bukan milik kluster ini.",
+        "impact": "Tidak ada yang dibuat. Dengan record itu, sebagian pengunjung akan mencapai aplikasi ini dan sebagian lagi akan dikirim ke sana.",
+        "fix": "Hapus record itu di {{0}} jika itu sisa lama, lalu tekan Coba lagi. Jika itu alamat IPv6 milik kluster ini, administrator mengaturnya di Pengaturan, Domain, Alamat IPv6 publik kluster, dan panel akan mengelola record AAAA sendiri."
+      },
+      "dns_record_changed": {
+        "title": "Seseorang mengubah record yang dibuat Skifity",
+        "cause": "Record {{0}} yang dibuat Skifity untuk {{1}} di {{2}} kini berisi {{3}}.",
+        "impact": "Record itu diubah di luar panel, jadi bukan milik panel lagi: Skifity berhenti mengelolanya, dan tidak akan mengubah maupun menghapusnya.",
+        "fix": "Jika perubahan itu keliru, hapus record di {{0}} lalu tekan Coba lagi, dan panel akan membuatnya kembali. Jika memang disengaja, tekan Berhenti mengelola record pada domain."
+      },
+      "dns_no_zone": {
+        "title": "Tidak ada zona DNS terhubung yang mencakup domain ini",
+        "cause": "Tidak ada penyedia DNS tim yang memiliki zona tempat {{0}} berada.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Hubungkan penyedia yang melayani {{0}} di Pengaturan, Penyedia DNS, atau buat record sendiri: tab Domain menunjukkan isinya."
+      },
+      "dns_no_address": {
+        "title": "Panel tidak tahu ke mana domain ini harus mengarah",
+        "cause": "Tidak ada alamat publik yang diatur untuk kluster ini dan tidak ada servernya yang memiliki alamat yang diketahui panel, jadi tidak ada yang bisa diisikan ke record untuk {{0}}.",
+        "impact": "Tidak ada record yang dibuat.",
+        "fix": "Administrator mengatur alamat di Pengaturan, Domain, IP publik kluster, dan record dibuat dalam beberapa menit."
+      },
+      "dns_tunnel_needs_cloudflare": {
+        "title": "Tunnel Cloudflare hanya bisa dijangkau melalui DNS Cloudflare",
+        "cause": "Kluster ini dijangkau melalui tunnel Cloudflare, dan {{0}} berada di zona di {{1}}. Record yang mengarah ke tunnel hanya berfungsi di zona yang ada di Cloudflare.",
+        "impact": "Tidak ada record yang dibuat.",
+        "fix": "Pindahkan DNS zona ke Cloudflare dan hubungkan di sini, atau tambahkan {{0}} sebagai public hostname pada tunnel di dasbor Cloudflare."
+      },
+      "dns_apex_cname": {
+        "title": "Nama zona itu sendiri tidak bisa berupa CNAME",
+        "cause": "{{0}} adalah zona itu sendiri, dan mengarahkannya ke {{1}} memerlukan CNAME, yang tidak diizinkan {{2}} di sana.",
+        "impact": "Tidak ada record yang dibuat.",
+        "fix": "Gunakan nama di dalam zona, misalnya www.{{0}}, dan alihkan nama polosnya ke sana; atau minta administrator mengatur IP publik kluster di Pengaturan, Domain menjadi alamat IP."
       }
     }
   },
@@ -4438,5 +4533,32 @@
     "saveAnyway": "Tetap simpan",
     "limitsSaved": "Batasan {{name}} disimpan.",
     "limitsSavedCutOff": "Batasan {{name}} disimpan. Variabel ini tidak bisa dibaca lagi: {{variables}}."
+  },
+  "dnsProviders": {
+    "title": "Penyedia DNS",
+    "help": "Tempat DNS domain Anda berada. Dengan zona yang terhubung, menambahkan domain akan membuat record-nya di sana, record mengikuti kluster saat alamatnya berubah, dan menghapus domain akan menghapusnya. Panel hanya pernah mengubah record yang dibuatnya sendiri.",
+    "empty": "Belum ada. Record setiap domain dibuat secara manual, dan tab Domain menunjukkan isinya.",
+    "add": "Hubungkan penyedia",
+    "kind": "Penyedia",
+    "name": "Nama",
+    "token": "Token API",
+    "accessKeyID": "ID kunci akses",
+    "secretAccessKey": "Kunci akses rahasia",
+    "formHelp": {
+      "cloudflare": "Token API dari My Profile, API Tokens: templat Edit zone DNS (Zone, DNS, Edit) ditambah Zone, Zone, Read, pada zona yang harus dikelola panel. Jangan pernah Global API Key, yang bisa melakukan apa saja di akun dan akan ditolak.",
+      "hetzner": "Token API Hetzner Console dengan Read & Write, dari proyek yang memuat zona: Security, API tokens.",
+      "digitalocean": "Token akses pribadi dengan cakupan domain: read, create, update, dan delete.",
+      "route53": "Kunci akses pengguna IAM yang diizinkan route53:ListHostedZones, route53:ListResourceRecordSets, dan route53:ChangeResourceRecordSets. Zona privat tidak disertakan."
+    },
+    "proxiedHelp": "Record yang dibuat panel di Cloudflare tidak di-proxy: sertifikat berasal dari Let's Encrypt melalui HTTP, dan ia harus menjangkau server Anda untuk menerbitkannya. Nyalakan proxy di Cloudflare setelahnya jika Anda mau; panel akan membiarkannya menyala.",
+    "connect": "Periksa dan hubungkan",
+    "connected": "{{name}} terhubung: {{zones}}",
+    "test": "Uji",
+    "tested": "{{name}} merespons, dengan zona: {{zones}}",
+    "remove": "Hapus {{name}}",
+    "removeConfirm": "Panel berhenti membuat dan menghapus record melalui {{name}}.",
+    "removeConsequence": "Record yang dibuat panel melaluinya tetap ada di penyedia, dan sejak itu menjadi milik Anda: {{number}}.",
+    "recordsKept": "Record yang dikelola: {{number}}",
+    "zonesListed": "per {{when}}"
   }
 }

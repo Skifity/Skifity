@@ -91,6 +91,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdScan(ctx, rest, stdout)
 	case "certs":
 		err = cmdCerts(ctx, rest, stdout)
+	case "domains":
+		err = cmdDomains(ctx, rest, stdout)
+	case "dns":
+		err = cmdDNS(ctx, rest, stdout)
 	case "templates":
 		err = cmdTemplates(ctx, rest, stdout)
 	case "plan", "apply":
@@ -259,6 +263,7 @@ Working with apps:
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
   open                  Print an app's URLs
+  domains               List, add or remove an app's domains; --manage-dns creates the record
   git                   List Git connections, and the repositories and branches they read
 
 Described in a file:
@@ -280,6 +285,7 @@ Databases:
 Cluster:
   servers               List the servers in a team
   certs                 List, upload or remove the team's own TLS certificates
+  dns providers         List, connect, test or remove the team's DNS providers
 
 Secret managers:
   secrets connections   List, add, test or remove the Vault, Infisical, Doppler or

@@ -504,6 +504,7 @@ func (s *Server) register() {
 	s.registerFiles()
 	s.registerDatabases()
 	s.registerDomains()
+	s.registerDNS()
 	s.registerLocks()
 	s.registerGPUs()
 	s.registerVulnerabilities()

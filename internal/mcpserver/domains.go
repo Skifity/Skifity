@@ -37,8 +37,12 @@ type domainSummary struct {
 	Status    string `json:"status"`
 	Detail    string `json:"detail,omitempty"`
 	// DNSRecord is the record the person creates at their DNS provider for
-	// a domain of their own, when the panel knows where it has to point.
+	// a domain of their own, when the panel knows where it has to point and
+	// does not keep the record itself.
 	DNSRecord *dnsRecord `json:"dns_record,omitempty"`
+	// DNSManaged says what the panel does about the record at the team's
+	// DNS provider, when a connected zone covers the hostname.
+	DNSManaged string `json:"dns_managed,omitempty"`
 	// Certificate is the team's own certificate the hostname is served
 	// with, when one covers it: its name, until when, and whether it is
 	// valid, expiring or expired. Absent is Let's Encrypt.
@@ -119,7 +123,8 @@ func (s *Server) registerDomains() {
 		Name:        "add_domain",
 		Annotations: changes("Add a domain", false, false),
 		Description: "Put an app on a hostname of the person's own, with HTTPS. " +
-			"Returns the DNS record they have to create at their DNS provider — its type, name and value — which you cannot create for them: give it to them exactly. " +
+			"When the team has connected the DNS provider whose zone covers it (list_dns_providers), the panel creates the record there itself and says so; " +
+			"otherwise it returns the DNS record they have to create — its type, name and value — which you cannot create for them: give it to them exactly. " +
 			"The certificate is issued once the record points here, which can take minutes to hours. The panel's own hostname is refused.",
 	}, s.addDomain)
 
@@ -182,7 +187,12 @@ func summariseDomain(domain store.Domain) domainSummary {
 	summary := domainSummary{
 		ID: domain.ID, Hostname: domain.Hostname, Path: domain.Path, HTTPS: domain.TLS,
 		Automatic: domain.Auto, Status: domain.Status, Detail: domain.StatusDetail,
-		DNSRecord: recordFor(domain),
+		DNSRecord: recordFor(domain), DNSManaged: managedSummary(domain.ManagedDNS),
+	}
+	// A record the panel keeps, or one that already points here, is not one
+	// for the person to create.
+	if m := domain.ManagedDNS; m != nil && (m.State == store.DNSStateCreated || m.State == store.DNSStateElsewhere) {
+		summary.DNSRecord = nil
 	}
 	if c := domain.Certificate; c != nil {
 		summary.Certificate = fmt.Sprintf("%s, until %s (%s)", c.Name, c.NotAfter.UTC().Format(time.DateOnly), c.State)
@@ -238,6 +248,12 @@ func (s *Server) addDomain(ctx context.Context, _ *mcp.CallToolRequest, in addDo
 
 	out := addDomainOutput{Domain: summariseDomain(added)}
 	switch record := out.Domain.DNSRecord; {
+	case out.Domain.DNSRecord == nil && out.Domain.DNSManaged != "":
+		out.Note = "The DNS record is " + out.Domain.DNSManaged + ". Nothing for the person to create. " +
+			"The certificate is issued once the record is live; list_domains shows when the domain is serving."
+	case record != nil && out.Domain.DNSManaged != "":
+		out.Note = fmt.Sprintf("The DNS record was %s. Until that is sorted out, the record the domain needs is: type %s, name %s, value %s.",
+			out.Domain.DNSManaged, record.Type, record.Name, record.Value)
 	case record != nil:
 		out.Note = fmt.Sprintf("Ask the person to create a DNS record at their DNS provider: type %s, name %s, value %s. "+
 			"Some providers want only the part before their domain as the name. "+

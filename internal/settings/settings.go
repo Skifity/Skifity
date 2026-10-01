@@ -127,6 +127,7 @@ const (
 	KeyPreviewTTLDays        = "cluster.preview_ttl_days"
 	KeyWildcardDomain        = "domains.wildcard"
 	KeyClusterIP             = "domains.cluster_ip"
+	KeyClusterIPv6           = "domains.cluster_ipv6"
 	KeyACMEEmail             = "domains.acme_email"
 	KeyACMEServer            = "domains.acme_server"
 	KeyCloudflareTunnelToken = "domains.cloudflare_tunnel_token"
@@ -181,6 +182,9 @@ const (
 	KeyCertificatesCheckedAt = "maintenance.certificates_checked_at"
 	KeyDeploymentHistory     = "maintenance.deployment_history"
 	KeyAuditHistoryDays      = "maintenance.audit_history_days"
+	// KeyPanelID is this panel's own name for itself, made once by migration
+	// 0057, which a DNS record it creates carries in its note.
+	KeyPanelID = "maintenance.panel_id"
 )
 
 // Definitions is the whole catalogue, in display order.
@@ -342,6 +346,13 @@ var Definitions = []Definition{
 		Help:        "The address your domains should point at. Detected automatically; override it if your cluster sits behind a load balancer.",
 		Placeholder: "203.0.113.10",
 		Validate:    validateIPOrHost,
+	},
+	{
+		Key: KeyClusterIPv6, Label: "Cluster public IPv6 address", Group: GroupDomains,
+		Help: "The IPv6 address your domains should point at as well, when the cluster has one. " +
+			"A DNS record the panel creates gets an AAAA record with it beside the A record, and the DNS check counts it as this cluster's.",
+		Placeholder: "2001:db8::10",
+		Validate:    validateIPv6,
 	},
 	{
 		Key: KeyACMEEmail, Label: "Let's Encrypt email", Group: GroupDomains,
@@ -621,6 +632,36 @@ func validateK3sVersion(value string) error {
 	return nil
 }
 
+// TunnelID is the tunnel a Cloudflare tunnel token belongs to, read out of
+// the token, or "" when the value is not a token. A hostname reaches the
+// tunnel through a CNAME to <tunnel id>.cfargotunnel.com, which is how the
+// panel knows where to point a record when the tunnel is the way in.
+func TunnelID(token string) string {
+	claims, err := tunnelClaims(token)
+	if err != nil {
+		return ""
+	}
+	return claims.Tunnel
+}
+
+type tunnelTokenClaims struct {
+	Account string `json:"a"`
+	Tunnel  string `json:"t"`
+	Secret  string `json:"s"`
+}
+
+func tunnelClaims(value string) (tunnelTokenClaims, error) {
+	decoded, err := base64.StdEncoding.WithPadding(base64.NoPadding).DecodeString(strings.TrimRight(value, "="))
+	if err != nil {
+		return tunnelTokenClaims{}, errors.New("that is not a Cloudflare tunnel token; they are one long line of letters, digits and + or /")
+	}
+	var claims tunnelTokenClaims
+	if err := json.Unmarshal(decoded, &claims); err != nil || claims.Account == "" || claims.Tunnel == "" || claims.Secret == "" {
+		return tunnelTokenClaims{}, errors.New("that token is not one Cloudflare issued; copy it again from Zero Trust, Networks, Tunnels")
+	}
+	return claims, nil
+}
+
 // validateCloudflareTunnelToken refuses what people paste instead of the token.
 //
 // The token is base64 of a small JSON object with three keys: the account, the
@@ -639,19 +680,8 @@ func validateCloudflareTunnelToken(value string) error {
 	if tunnelIDPattern.MatchString(value) {
 		return errors.New("that is the tunnel's ID, not its token; the token is the long string under \"Install and run a connector\"")
 	}
-	decoded, err := base64.StdEncoding.WithPadding(base64.NoPadding).DecodeString(strings.TrimRight(value, "="))
-	if err != nil {
-		return errors.New("that is not a Cloudflare tunnel token; they are one long line of letters, digits and + or /")
-	}
-	var claims struct {
-		Account string `json:"a"`
-		Tunnel  string `json:"t"`
-		Secret  string `json:"s"`
-	}
-	if err := json.Unmarshal(decoded, &claims); err != nil || claims.Account == "" || claims.Tunnel == "" || claims.Secret == "" {
-		return errors.New("that token is not one Cloudflare issued; copy it again from Zero Trust, Networks, Tunnels")
-	}
-	return nil
+	_, err := tunnelClaims(value)
+	return err
 }
 
 // tunnelIDPattern is a UUID, which is what the dashboard's own URL contains.
@@ -749,6 +779,20 @@ func validateIPOrHost(value string) error {
 	}
 	if strings.ContainsAny(value, " /:") {
 		return errors.New("enter just an IP address or hostname")
+	}
+	return nil
+}
+
+// validateIPv6 takes an IPv6 address and nothing else: an IPv4 address here
+// would be an AAAA record nobody can create.
+func validateIPv6(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	ip := net.ParseIP(value)
+	if ip == nil || ip.To4() != nil {
+		return errors.New("enter an IPv6 address, such as 2001:db8::10; the IPv4 address goes in Cluster public IP")
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"skifity/internal/dnsprov"
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
@@ -61,6 +62,11 @@ const (
 	// DNSUnknown is addresses found and nothing to compare them with: the
 	// panel does not know its own public address.
 	DNSUnknown = "unknown"
+	// DNSProxied is every address being Cloudflare's: the hostname is behind
+	// Cloudflare's proxy, or a Cloudflare tunnel, and DNS cannot say where
+	// Cloudflare sends it. When the panel keeps the record at Cloudflare it
+	// can, from its own record, and says so in OriginConfirmed.
+	DNSProxied = "proxied"
 )
 
 // DNSRecord is one record a hostname was found to have.
@@ -71,6 +77,9 @@ type DNSRecord struct {
 	// Here says the address is one of the cluster's. Always false for a
 	// CNAME, whose name is followed to the addresses listed after it.
 	Here bool `json:"here"`
+	// Cloudflare says the address is one of Cloudflare's own, which a
+	// proxied hostname resolves to.
+	Cloudflare bool `json:"cloudflare,omitempty"`
 }
 
 // DNSCheck is what a hostname's DNS says, against where it has to point.
@@ -83,6 +92,10 @@ type DNSCheck struct {
 	// people to use first, then each ready server's own.
 	Expected  []string  `json:"expected"`
 	CheckedAt time.Time `json:"checked_at"`
+	// OriginConfirmed is a proxied hostname whose record at Cloudflare the
+	// panel keeps and says where the cluster is: DNS cannot see past the
+	// proxy, and the panel's own record can.
+	OriginConfirmed bool `json:"origin_confirmed,omitempty"`
 }
 
 // checkDNS looks a hostname up and compares what it finds with the addresses
@@ -137,7 +150,7 @@ func checkDNS(ctx context.Context, resolver Resolver, hostname string, expected 
 		}
 	}
 
-	here, seen := 0, map[string]bool{}
+	here, cloudflare, seen := 0, 0, map[string]bool{}
 	for _, address := range addresses {
 		value := address.IP.String()
 		if seen[value] {
@@ -150,11 +163,19 @@ func checkDNS(ctx context.Context, resolver Resolver, hostname string, expected 
 		}
 		if record.Here {
 			here++
+		} else if dnsprov.CloudflareAddress(value) {
+			record.Cloudflare = true
+			cloudflare++
 		}
 		check.Found = append(check.Found, record)
 	}
 
 	switch {
+	// Behind Cloudflare: its addresses and none of the cluster's. Not
+	// "elsewhere", which is what a working domain behind the orange cloud
+	// used to be called.
+	case here == 0 && cloudflare == len(seen):
+		check.Status = DNSProxied
 	case len(ours) == 0 && len(names) == 0:
 		check.Status = DNSUnknown
 	case here == len(seen):
@@ -193,9 +214,8 @@ func (s *Server) dnsTargets(ctx context.Context, teamID string) []string {
 			out = append(out, value)
 		}
 	}
-	if s.cluster != nil {
-		add(s.cluster.PublicAddress(ctx, teamID))
-	}
+	add(s.publicAddress(ctx, teamID))
+	add(s.clusterIPv6(ctx))
 	if servers, err := s.db.ListServers(ctx, teamID); err == nil {
 		for _, server := range servers {
 			if server.Status == store.ServerReady {
@@ -207,14 +227,59 @@ func (s *Server) dnsTargets(ctx context.Context, teamID string) []string {
 }
 
 // checkDomainDNS is the check for one of an app's domains.
-func (s *Server) checkDomainDNS(ctx context.Context, app store.App, hostname string, timeout time.Duration) (DNSCheck, error) {
+func (s *Server) checkDomainDNS(ctx context.Context, app store.App, domain store.Domain, timeout time.Duration) (DNSCheck, error) {
 	teamID, err := s.db.TeamIDForApp(ctx, app.ID)
 	if err != nil {
 		return DNSCheck{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	return checkDNS(ctx, s.resolver, hostname, s.dnsTargets(ctx, teamID))
+	check, err := checkDNS(ctx, s.resolver, domain.Hostname, s.dnsTargets(ctx, teamID))
+	if err != nil || check.Status != DNSProxied {
+		return check, err
+	}
+	check.OriginConfirmed = s.originConfirmed(ctx, teamID, domain)
+	check.PointsHere = check.OriginConfirmed
+	return check, nil
+}
+
+// originConfirmed reports whether the records the panel keeps for a domain at
+// Cloudflare say what they should now. Its books are checked against the
+// provider every hour and whenever the address changes, so they are what is
+// at Cloudflare.
+func (s *Server) originConfirmed(ctx context.Context, teamID string, domain store.Domain) bool {
+	rows, err := s.db.DomainDNSForApp(ctx, domain.AppID)
+	if err != nil || rows[domain.ID].State != store.DNSStateCreated {
+		return false
+	}
+	providers, err := s.db.ListDNSProviders(ctx, teamID)
+	if err != nil {
+		return false
+	}
+	provider, zone, ok := dnsprov.ZoneFor(providers, domain.Hostname)
+	if !ok || provider.Kind != dnsprov.Cloudflare {
+		return false
+	}
+	want, err := dnsprov.Wants(s.dns.Target(ctx, teamID), provider.Kind, domain.Hostname, zone.Name)
+	if err != nil {
+		return false
+	}
+	records, err := s.db.DNSRecordsForDomain(ctx, domain.ID)
+	if err != nil || len(records) != len(want) {
+		return false
+	}
+	for _, w := range want {
+		found := false
+		for _, record := range records {
+			if record.Keep && record.Type == w.Type && dnsprov.Canonical(record.Content) == dnsprov.Canonical(w.Content) {
+				found = true
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // handleCheckDomainDNS answers whether a domain's DNS points at the cluster.
@@ -239,7 +304,7 @@ func (s *Server) handleCheckDomainDNS(w http.ResponseWriter, r *http.Request) {
 		if domain.ID != domainID {
 			continue
 		}
-		check, err := s.checkDomainDNS(r.Context(), app, domain.Hostname, dnsCheckTimeout)
+		check, err := s.checkDomainDNS(r.Context(), app, domain, dnsCheckTimeout)
 		if err != nil {
 			writeError(w, r, err)
 			return

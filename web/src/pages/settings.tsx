@@ -23,6 +23,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
 import { CertificatesCard } from "@/components/settings/certificates"
+import { DNSProvidersCard } from "@/components/settings/dns-providers"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
@@ -141,6 +142,7 @@ export function SettingsPage() {
           <TabsTrigger value="panel">{t("settings.general")}</TabsTrigger>
           <TabsTrigger value="git">{t("settings.git")}</TabsTrigger>
           <TabsTrigger value="certificates">{t("settings.certificates")}</TabsTrigger>
+          <TabsTrigger value="dns">{t("settings.dnsProviders")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
           <TabsTrigger value="secrets">{t("settings.secretManagers")}</TabsTrigger>
           <TabsTrigger value="components">{t("settings.components")}</TabsTrigger>
@@ -164,6 +166,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="certificates" className="pt-4">
           <CertificatesCard />
+        </TabsContent>
+        <TabsContent value="dns" className="pt-4">
+          <DNSProvidersCard />
         </TabsContent>
         <TabsContent value="notifications" className="pt-4">
           <NotificationChannels />

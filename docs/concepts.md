@@ -342,6 +342,89 @@ registry host, and an administrator adds them:
 * Removing one takes effect at each app's next deploy, which is when the
   credentials in its environment are written again.
 
+## Connecting a DNS provider
+
+A domain of your own works once its DNS record points at the cluster, and the
+Domains tab says what that record has to be. Connect the provider your zone is
+at and the panel creates the record itself: **Settings → DNS providers**, or
+`skifity dns providers add`. An administrator connects one; it belongs to the
+team.
+
+| Provider | What to give it |
+|---|---|
+| Cloudflare | An API token: My Profile → API Tokens → Create Token, the **Edit zone DNS** template (Zone → DNS → Edit), plus Zone → Zone → Read so the panel can list the zones, on the zones it should manage. **Never the Global API Key**, which can do anything in the account; the panel refuses it before sending it anywhere. |
+| Hetzner | A Hetzner Console API token with Read & Write, from the project that holds the zone (Security → API tokens). The old DNS Console at dns.hetzner.com was switched off in 2026 and is not used. |
+| DigitalOcean | A personal access token with the domain scopes: read, create, update, delete. |
+| Amazon Route 53 | An access key of an IAM user allowed `route53:ListHostedZones`, `route53:ListResourceRecordSets` and `route53:ChangeResourceRecordSets`. Private hosted zones are left out. |
+
+The provider is asked for its zones before anything is kept: credentials it
+refuses, or that can see no zone, are not saved. The credentials are stored
+encrypted under the connection, never shown again, and rotated with the master
+key. Every request goes to the provider's own address, through the same guard
+as the panel's other outgoing requests; there is no address to change.
+
+### What the panel does with it
+
+* **Adding a domain creates its record** when a connected zone covers the
+  hostname — the longest one, so `www.shop.example.co.uk` goes in
+  `shop.example.co.uk` when both are connected. A switch on the form says so
+  and is on by default; turn it off to make the record yourself. An app's
+  automatic address under a connected zone gets one too, unless a wildcard
+  record there already points here.
+* **What it creates**: an A record with the cluster's address, and an AAAA
+  record when **Settings → Domains → Cluster public IPv6 address** is set. When
+  the address is a load balancer's name, a CNAME to it. Each record the panel
+  creates is noted **managed by Skifity** and this panel's id, where the
+  provider keeps notes (Cloudflare and Hetzner); for the others the panel's own
+  list of what it created is the record.
+* **It only ever changes or deletes a record it created**, and only while that
+  record is as it left it. A record somebody else made that already points here
+  is left to them, and the domain says **Record managed elsewhere**. One that
+  points somewhere else is in the way, and the panel refuses rather than
+  overwriting it: the domain says which record it is, and
+  [Troubleshooting](troubleshooting.md#the-panel-did-not-create-a-dns-record)
+  says what to do. A record the panel made and somebody then changed is theirs
+  from then on.
+* **Removing the domain removes its record**, the one the panel created. With
+  the switch turned off, the record stays where it is and the panel stops
+  changing it; removing the domain then leaves it too. Removing the connection
+  leaves every record it made where it is.
+* **When the cluster's address changes**, the records follow: at once when the
+  address is changed in Settings, and otherwise within five minutes. Every
+  record is also looked at once an hour, which is how a record deleted at the
+  provider is made again and one somebody changed is let go.
+
+### Cloudflare's proxy and tunnels
+
+A record the panel creates at Cloudflare is **not proxied** (the grey cloud).
+The certificate comes from Let's Encrypt over HTTP: cert-manager answers a
+challenge on the server, and Let's Encrypt has to reach the server to read it.
+Behind the proxy that works only with Cloudflare's settings just so, and fails
+in ways that look like the panel's fault. Turn the proxy on at Cloudflare once
+the certificate is issued if you want it; the panel leaves it on, and keeps
+pointing the record at the right address.
+
+A proxied name answers DNS with Cloudflare's addresses, so **Check DNS** says
+**Behind Cloudflare** rather than "points elsewhere". When the panel keeps the
+record, it can say where Cloudflare sends visitors, from its own record;
+otherwise the record at Cloudflare is the place to look.
+
+With the [Cloudflare tunnel](adding-servers.md#cloudflare-tunnel--automatic-free-and-needs-no-public-ip-at-all)
+installed, the way in is the tunnel, and a record the panel creates in a
+Cloudflare zone is a proxied CNAME to the tunnel: `<tunnel id>.cfargotunnel.com`,
+read from the tunnel's token. The tunnel also has to route the hostname to
+`traefik.kube-system.svc.cluster.local:80`: a public hostname for it on the
+tunnel, or a wildcard one that covers it. A zone at another provider cannot
+point at a tunnel; there the record gets the cluster's address if it has one,
+and is refused if it does not.
+
+### What is not here
+
+Wildcard certificates. A certificate for `*.example.com` needs the DNS-01
+challenge, which means cert-manager writing records at the provider with a
+credential of its own, per team, in the cluster. That is not built. A wildcard
+certificate you bring yourself works today, under **Settings → Certificates**.
+
 ## Deployments and rollback
 
 Each deployment records the image it produced *and* the settings it ran with:

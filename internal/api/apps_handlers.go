@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"skifity/internal/builder"
+	"skifity/internal/dnsprov"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/gitsrc"
@@ -1544,29 +1545,40 @@ func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
 	// there were settings — it is the same address it gives an app's automatic
 	// subdomain — and the one screen that asks somebody to create a DNS record
 	// never said it, so the record read "pointing to Unknown".
-	if s.cluster != nil {
-		env, err := s.db.GetEnvironment(r.Context(), app.EnvironmentID)
-		if err == nil {
-			if teamID, err := s.db.TeamIDForEnvironment(r.Context(), env.ID); err == nil {
-				if target := s.cluster.PublicAddress(r.Context(), teamID); target != "" {
-					for i := range domains {
-						// An automatic subdomain already points here.
-						if !domains[i].Auto {
-							domains[i].DNSTarget = target
-						}
-					}
-				}
-			}
-		}
+	teamID, err := s.db.TeamIDForApp(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
 	}
+	s.describeTargets(r.Context(), teamID, domains)
 	// Which of the team's own certificates a hostname is served with, when
 	// one covers it. An internal app serves none of its domains.
 	if !app.Internal {
-		if teamID, err := s.db.TeamIDForApp(r.Context(), app.ID); err == nil {
-			s.describeCertificates(r.Context(), teamID, domains)
+		s.describeCertificates(r.Context(), teamID, domains)
+	}
+	// And whether the panel keeps its record at one of the team's DNS
+	// providers. See dns_providers.go.
+	s.describeManagedDNS(r.Context(), teamID, app, domains)
+	writeList(w, domains)
+}
+
+// describeTargets fills in where each domain of the team's own has to point:
+// the address the panel gives its own apps, and the IPv6 address beside it
+// when the cluster has one. An automatic subdomain already points here.
+func (s *Server) describeTargets(ctx context.Context, teamID string, domains []store.Domain) {
+	target, ipv6 := s.publicAddress(ctx, teamID), s.clusterIPv6(ctx)
+	if target == ipv6 {
+		ipv6 = ""
+	}
+	for i := range domains {
+		if domains[i].Auto {
+			continue
+		}
+		domains[i].DNSTarget = target
+		if target != "" {
+			domains[i].DNSTargetIPv6 = ipv6
 		}
 	}
-	writeList(w, domains)
 }
 
 type addDomainRequest struct {
@@ -1576,6 +1588,10 @@ type addDomainRequest struct {
 	// RedirectTo is another of the app's hostnames this one sends its
 	// visitors to, permanently: www.example.com to example.com.
 	RedirectTo string `json:"redirect_to,omitempty"`
+	// ManageDNS is whether the panel creates and keeps the hostname's record
+	// at the team's DNS provider. Left out, it does whenever a connected zone
+	// covers the hostname; true where none does is refused.
+	ManageDNS *bool `json:"manage_dns,omitempty"`
 }
 
 func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
@@ -1626,6 +1642,24 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 		Status:     "pending",
 		RedirectTo: kube.CleanHostname(req.RedirectTo),
 	}
+	// Asked for by name and not possible is refused before anything is
+	// added, rather than added and then not doing what was asked.
+	providers, err := s.db.ListDNSProviders(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	_, _, covered := dnsprov.ZoneFor(providers, hostname)
+	if req.ManageDNS != nil && *req.ManageDNS {
+		if app.Internal {
+			writeError(w, r, errdoc.BadRequest("An internal app is not reached from outside, so its domains have no DNS record to create."))
+			return
+		}
+		if !covered {
+			writeError(w, r, errdoc.DNSNoZone(hostname))
+			return
+		}
+	}
 	if domain.RedirectTo != "" {
 		existing, err := s.db.ListDomains(r.Context(), app.ID)
 		if err != nil {
@@ -1654,16 +1688,32 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, teamID, "domain.added", "app", app.ID, hostname)
 
+	// Its record, at the team's DNS provider, when a connected zone covers
+	// it and nobody said not to. A refusal — somebody else's record in the
+	// way — does not undo adding the domain: it is kept on the domain, with
+	// what to do about it, and the answer carries it.
+	if covered && !app.Internal {
+		if req.ManageDNS == nil || *req.ManageDNS {
+			if err := s.startManagingDNS(r.Context(), teamID, app, domain); err != nil {
+				s.log.Debug("a new domain's DNS record was not created", "app", app.ID, "error", errdoc.From(err).Title)
+			}
+		} else if err := s.db.SetDomainDNS(r.Context(), store.DomainDNS{DomainID: domain.ID, State: store.DNSStateOff}); err != nil {
+			s.log.Warn("could not record that a domain's DNS is left to its owner", "app", app.ID, "error", err)
+		}
+	}
+
 	// What its DNS says now, so the answer to adding a domain is also the
 	// answer to "is it pointing here yet". A lookup that fails says nothing
 	// rather than failing what already succeeded: the domain is added, and
 	// the check can be asked for again.
 	added := []store.Domain{domain}
+	s.describeTargets(r.Context(), teamID, added)
 	if !app.Internal {
 		s.describeCertificates(r.Context(), teamID, added)
 	}
+	s.describeManagedDNS(r.Context(), teamID, app, added)
 	answer := addedDomain{Domain: added[0]}
-	if check, err := s.checkDomainDNS(r.Context(), app, hostname, dnsCheckOnAddTimeout); err == nil {
+	if check, err := s.checkDomainDNS(r.Context(), app, domain, dnsCheckOnAddTimeout); err == nil {
 		answer.DNS = &check
 	} else {
 		s.log.Debug("could not check a new domain's DNS", "app", app.ID, "error", err)
@@ -1731,6 +1781,13 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 		if d.Auto {
 			writeError(w, r, errdoc.BadRequest("The automatic domain cannot be removed. It is how the app stays reachable while you set up your own domain."))
 			return
+		}
+		// Its record goes with it — the one the panel created, and only if
+		// it is still as the panel left it. One the provider did not answer
+		// about stays in the books, and the sync removes it later.
+		if err := s.dns.Release(r.Context(), d.ID); err != nil {
+			s.log.Warn("could not remove a domain's DNS record yet; the sync tries again",
+				"app", app.ID, "error", errdoc.From(err).Title)
 		}
 		if err := s.db.DeleteDomain(r.Context(), domainID); err != nil {
 			writeError(w, r, err)

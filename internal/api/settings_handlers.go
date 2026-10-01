@@ -114,6 +114,16 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, "", "settings.updated", "setting", key, def.Label)
 	}
 
+	// Where the team's domains point has moved: the records the panel keeps
+	// at DNS providers follow it now, beside the answer, rather than at the
+	// next sync.
+	for _, key := range addressSettings {
+		if _, changed := req.Values[key]; changed {
+			s.syncDNSSoon(true)
+			break
+		}
+	}
+
 	// A setting that something in the cluster is already running on has to
 	// reach the cluster too, or saving it does nothing a user can see.
 	if _, changed := req.Values[settings.KeyCloudflareTunnelToken]; changed && s.cluster != nil {

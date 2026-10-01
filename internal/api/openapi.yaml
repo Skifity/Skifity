@@ -1421,6 +1421,110 @@ paths:
                   updating: {type: integer}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/dns-providers:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listDNSProviders
+      tags: [Domains]
+      summary: The team's DNS providers, with their zones as last seen
+      description: >-
+        Viewer, members limited to projects included: adding a domain is where
+        the panel offers to create its record, and the zones say whether it can.
+        Names, kinds and zones. Never a credential. Nothing is asked of any
+        provider.
+      responses:
+        '200':
+          description: The connections, oldest first.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSProviderList'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: connectDNSProvider
+      tags: [Domains]
+      summary: Connect a DNS provider
+      description: >-
+        Admin. Cloudflare, Hetzner and DigitalOcean take an API token; Route 53
+        an access key. Cloudflare's Global API Key is refused before it is sent
+        anywhere (dns.cloudflare_global_key). The provider is asked for its
+        zones first: credentials it refuses (dns.provider_refused) or that see
+        no zone (dns.no_zones) are not saved. The credentials are sealed and
+        never sent back. The provider's address is its own and cannot be set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConnectDNSProviderRequest'}
+      responses:
+        '201':
+          description: The connection, with the zones it can see.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSProvider'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/dns-providers/{providerID}:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    delete:
+      operationId: deleteDNSProvider
+      tags: [Domains]
+      summary: Remove a DNS provider
+      description: >-
+        Admin. The records the panel created through it stay at the provider,
+        and the panel stops keeping them; left says how many.
+      responses:
+        '200':
+          description: Removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, left]
+                properties:
+                  ok: {type: boolean}
+                  left: {type: integer, description: 'Records the panel created that stay at the provider.'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/dns-providers/{providerID}/test:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    post:
+      operationId: testDNSProvider
+      tags: [Domains]
+      summary: Sign in to a DNS provider again and list its zones
+      description: >-
+        Admin. Credentials revoked since answer dns.provider_refused. The zones
+        found are kept, which is how a zone added at the provider reaches the
+        panel.
+      responses:
+        '200':
+          description: The connection as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSProvider'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/dns-providers/{providerID}/zones:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+      - $ref: '#/components/parameters/providerID'
+    get:
+      operationId: listDNSZones
+      tags: [Domains]
+      summary: The zones a DNS provider serves, asked now
+      description: Member, not limited to projects. Asks the provider, and keeps what it answers.
+      responses:
+        '200':
+          description: The zones, by name.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSZoneList'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/git-sources:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -3102,6 +3206,10 @@ paths:
       description: >-
         Member. A certificate is requested once its DNS points here. The panel's own hostname is refused.
         A domain whose DNS does not point here yet is still added: the answer says what its DNS said.
+        When one of the team's DNS providers has a zone that covers the hostname, the panel creates its
+        record there unless manage_dns is false; a record somebody else made in the way is refused, not
+        overwritten, and the refusal is in managed_dns.problem while the domain is still added.
+        manage_dns true where no connected zone covers the hostname is dns.no_zone, and nothing is added.
       requestBody:
         required: true
         content:
@@ -3125,29 +3233,35 @@ paths:
       summary: Remove a domain
       description: >-
         Member. The automatic domain cannot be removed. A domain that
-        redirected to this one serves the app again.
+        redirected to this one serves the app again. The DNS record the panel
+        created for it is deleted at the provider, if it is still as the panel
+        left it; one somebody changed is left where it is.
       responses:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
     patch:
       operationId: setDomainRedirect
       tags: [Domains]
-      summary: Redirect a domain to another of the app's, or stop
+      summary: Change a domain's redirect, or whether the panel keeps its DNS record
       description: >-
-        Member. A permanent (308) redirect, path and query kept, to another
-        hostname of the same app that serves it; empty serves the app on this
-        hostname again. A redirect to a redirect, or redirecting a hostname
-        others redirect to, is refused.
+        Member. redirect_to is a permanent (308) redirect, path and query kept,
+        to another hostname of the same app that serves it; empty serves the app
+        on this hostname again. A redirect to a redirect, or redirecting a
+        hostname others redirect to, is refused. manage_dns true creates the
+        domain's record at the team's DNS provider now, or tries again after a
+        refusal, and answers the refusal when there still is one; false leaves
+        the record where it is and stops changing it. Either may be left out,
+        not both.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [redirect_to]
               additionalProperties: false
               properties:
                 redirect_to: {type: string, description: 'Another of the app''s hostnames, or empty.'}
+                manage_dns: {type: boolean, description: 'Keep the hostname''s record at the team''s DNS provider.'}
       responses:
         '200':
           description: The domain as it is now.
@@ -4746,6 +4860,7 @@ components:
     fileID: {name: fileID, in: path, required: true, description: 'A file''s id.', schema: {type: string}}
     registryID: {name: registryID, in: path, required: true, description: 'A registry credential''s id.', schema: {type: string}}
     certificateID: {name: certificateID, in: path, required: true, description: 'A team certificate''s id.', schema: {type: string}}
+    providerID: {name: providerID, in: path, required: true, description: 'A DNS provider connection''s id.', schema: {type: string}}
     portID: {name: portID, in: path, required: true, description: 'A public port''s id.', schema: {type: string}}
     appID: {name: appID, in: path, required: true, description: 'An app''s id.', schema: {type: string}}
     deploymentID: {name: deploymentID, in: path, required: true, description: 'A deployment''s id.', schema: {type: string}}
@@ -7135,6 +7250,8 @@ components:
         status_detail: {type: string}
         created_at: {type: string, format: date-time}
         dns_target: {type: string, description: 'Where a domain of your own has to point.'}
+        dns_target_ipv6: {type: string, description: 'The IPv6 address it points at as well, when the cluster has one.'}
+        managed_dns: {$ref: '#/components/schemas/ManagedDNS'}
         redirect_to: {type: string, description: 'Another of the app''s hostnames this one permanently redirects to. Absent when it serves the app.'}
         certificate:
           description: >-
@@ -7165,11 +7282,16 @@ components:
         hostname: {type: string}
         status:
           type: string
-          enum: [here, partly, elsewhere, missing, unknown]
+          enum: [here, partly, elsewhere, missing, unknown, proxied]
           description: >-
             here is every address being the cluster's; partly is some of them; elsewhere is none; missing is no
-            address at all yet; unknown is addresses found while the panel does not know its own.
-        points_here: {type: boolean, description: 'status is here.'}
+            address at all yet; unknown is addresses found while the panel does not know its own; proxied is
+            every address being Cloudflare's, behind its proxy or a tunnel, where DNS cannot see the origin.
+        points_here: {type: boolean, description: 'status is here, or proxied with origin_confirmed.'}
+        origin_confirmed:
+          type: boolean
+          description: >-
+            Proxied, and the record the panel keeps at Cloudflare for this domain says where the cluster is.
         found:
           type: array
           description: The records found, a CNAME first when there is one.
@@ -7187,6 +7309,7 @@ components:
         type: {type: string, enum: [A, AAAA, CNAME]}
         value: {type: string}
         here: {type: boolean, description: 'The address is one of the cluster''s. Always false for a CNAME.'}
+        cloudflare: {type: boolean, description: 'The address is one of Cloudflare''s own.'}
 
     DomainList:
       type: object
@@ -7211,6 +7334,103 @@ components:
         tls: {type: boolean, default: true}
         path: {type: string, default: /}
         redirect_to: {type: string, description: 'Another of the app''s hostnames to send this one''s visitors to, permanently.'}
+        manage_dns:
+          type: boolean
+          description: >-
+            Create and keep the hostname's record at the team's DNS provider. Left out, it is whenever a
+            connected zone covers the hostname.
+
+    ManagedDNS:
+      type: object
+      description: >-
+        What the panel does about a domain's record at one of the team's DNS providers, when a connected zone
+        covers it.
+      required: [provider_id, provider, provider_name, zone, manage, state, records]
+      properties:
+        provider_id: {type: string}
+        provider: {type: string, enum: [cloudflare, hetzner, digitalocean, route53]}
+        provider_name: {type: string}
+        zone: {type: string}
+        manage: {type: boolean, description: 'Whether the panel keeps the record.'}
+        state:
+          type: string
+          enum: ['', pending, created, elsewhere, refused, failed, off]
+          description: >-
+            created is a record the panel made and keeps; elsewhere is a record somebody else made that already
+            points here, or a wildcard that does; refused is a record somebody else made in the way, named in
+            problem; failed is the provider not answering, tried again; off is the switch turned off; empty is
+            nobody having asked yet.
+        records:
+          type: array
+          items: {$ref: '#/components/schemas/ManagedDNSRecord'}
+        problem: {description: 'Why it is refused or failed: an error as every route answers one.', type: object}
+        updated_at: {type: string, format: date-time}
+
+    ManagedDNSRecord:
+      type: object
+      required: [provider_id, zone, hostname, type, content, proxied, created_at, updated_at]
+      properties:
+        provider_id: {type: string}
+        zone: {type: string}
+        hostname: {type: string}
+        type: {type: string, enum: [A, AAAA, CNAME]}
+        content: {type: string}
+        proxied: {type: boolean, description: 'Behind Cloudflare''s proxy: only the CNAME to a Cloudflare tunnel.'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    DNSZone:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string}
+        name: {type: string}
+
+    DNSZoneList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DNSZone'}}
+        total: {type: integer}
+
+    DNSProvider:
+      type: object
+      required: [id, team_id, kind, name, zones, created_at, updated_at, title, keeps_notes, records]
+      properties:
+        id: {type: string}
+        team_id: {type: string}
+        kind: {type: string, enum: [cloudflare, hetzner, digitalocean, route53]}
+        name: {type: string}
+        title: {type: string, description: 'The provider''s own name, such as Amazon Route 53.'}
+        zones: {type: array, items: {$ref: '#/components/schemas/DNSZone'}}
+        zones_listed_at: {type: string, format: date-time}
+        keeps_notes: {type: boolean, description: 'A record the panel creates there carries the note "managed by Skifity".'}
+        records: {type: integer, description: 'Records the panel keeps through it.'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    DNSProviderList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DNSProvider'}}
+        total: {type: integer}
+
+    ConnectDNSProviderRequest:
+      type: object
+      required: [kind]
+      additionalProperties: false
+      properties:
+        kind: {type: string, enum: [cloudflare, hetzner, digitalocean, route53]}
+        name: {type: string, maxLength: 64, description: 'Left out, the provider''s own name.'}
+        token:
+          type: string
+          description: >-
+            Cloudflare: an API token with Zone, DNS, Edit (and Zone, Zone, Read, to list zones), never the
+            Global API Key. Hetzner: a Hetzner Console API token with Read & Write. DigitalOcean: a personal
+            access token with the domain scopes.
+        access_key_id: {type: string, description: 'Route 53.'}
+        secret_access_key: {type: string, description: 'Route 53.'}
 
     # --- scaling and processes ---
 

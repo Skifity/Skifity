@@ -1,3 +1,5 @@
+import type { Problem } from "@/lib/api"
+
 /** The shapes the API returns. These mirror the Go types in internal/store. */
 
 export type Role = "owner" | "admin" | "member" | "viewer"
@@ -374,7 +376,69 @@ export type Domain = {
    * it. Absent means Let's Encrypt. Worked out per request, like dns_target.
    */
   certificate?: DomainCertificate
+  /** The IPv6 address it points at as well, when the cluster has one. */
+  dns_target_ipv6?: string
+  /**
+   * What the panel does about its record at the team's DNS provider, when a
+   * connected zone covers the hostname. Absent means none does.
+   */
+  managed_dns?: ManagedDNS
   created_at: string
+}
+
+/** The DNS providers a team can connect. */
+export type DNSProviderKind = "cloudflare" | "hetzner" | "digitalocean" | "route53"
+
+/**
+ * Where a domain's record stands: created and kept by the panel; somebody
+ * else's that already points here; refused because somebody else's is in the
+ * way; failed, tried again; off, left to the person; "" nobody asked yet.
+ */
+export type ManagedDNSState =
+  "" | "pending" | "created" | "elsewhere" | "refused" | "failed" | "off"
+
+export type ManagedDNSRecord = {
+  provider_id: string
+  zone: string
+  hostname: string
+  type: "A" | "AAAA" | "CNAME"
+  content: string
+  proxied: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ManagedDNS = {
+  provider_id: string
+  provider: DNSProviderKind
+  provider_name: string
+  zone: string
+  manage: boolean
+  state: ManagedDNSState
+  records: ManagedDNSRecord[]
+  /** Why it was refused or failed, as the panel explains any failure. */
+  problem?: Problem
+  updated_at?: string
+}
+
+export type DNSZone = { id: string; name: string }
+
+/** A team's connection to a DNS provider. Never its credentials. */
+export type DNSProvider = {
+  id: string
+  team_id: string
+  kind: DNSProviderKind
+  name: string
+  /** The provider's own name, such as Amazon Route 53. */
+  title: string
+  zones: DNSZone[]
+  zones_listed_at?: string
+  /** A record the panel creates there carries the "managed by Skifity" note. */
+  keeps_notes: boolean
+  /** Records the panel keeps through it; they stay if it is removed. */
+  records: number
+  created_at: string
+  updated_at: string
 }
 
 /** Whether a certificate is still good: expiring is within 21 days. */
@@ -428,9 +492,11 @@ export type HealthCheck = "http" | "tcp" | "none"
 /** What a domain's DNS said when it was last asked, against where it has to point. */
 export type DNSCheck = {
   hostname: string
-  status: "here" | "partly" | "elsewhere" | "missing" | "unknown"
+  status: "here" | "partly" | "elsewhere" | "missing" | "unknown" | "proxied"
   points_here: boolean
-  found: { type: "A" | "AAAA" | "CNAME"; value: string; here: boolean }[]
+  /** Proxied, and the record the panel keeps at Cloudflare points here. */
+  origin_confirmed?: boolean
+  found: { type: "A" | "AAAA" | "CNAME"; value: string; here: boolean; cloudflare?: boolean }[]
   /** Every address that counts as here, the one to use first. */
   expected: string[]
   checked_at: string

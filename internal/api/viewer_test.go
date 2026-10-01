@@ -32,6 +32,8 @@ var viewerMayNotRead = map[string]string{
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches": "the same, for one repository's branches",
 	"GET /api/servers/{serverID}/hardening": "it signs in to the machine over SSH, which only a panel " +
 		"administrator's request does",
+	"GET /api/teams/{teamID}/dns-providers/{providerID}/zones": "it signs in to the DNS provider with the team's " +
+		"credentials; the list of connections already carries the zones as last seen",
 }
 
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team

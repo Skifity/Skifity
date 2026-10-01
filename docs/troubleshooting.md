@@ -223,7 +223,9 @@ dig +short app.example.com
 ```
 
 That has to return your server's IP address. If it returns nothing, DNS has not
-propagated yet, which can take up to an hour. The certificate is only issued
+propagated yet, which can take up to an hour. If it returns Cloudflare's
+addresses, the name is behind Cloudflare's proxy and the check says so: where
+Cloudflare sends visitors is in the record at Cloudflare. The certificate is only issued
 once the name points here, so a domain whose DNS is wrong stays waiting.
 
 If DNS is right but the certificate is not issued, cert-manager is still
@@ -242,6 +244,53 @@ tab, and cert-manager has nothing to do with it. If browsers refuse it, look at
 the certificate itself: `openssl s_client -connect app.example.com:443
 -servername app.example.com </dev/null | openssl x509 -noout -subject -dates`
 shows which one is being sent and until when.
+
+## The panel did not create a DNS record
+
+With the zone's provider connected (see
+[Connecting a DNS provider](concepts.md#connecting-a-dns-provider)), the
+Domains tab says on each domain what happened to its record, and **Try again**
+asks once more. These are the reasons it was not created; none of them changed
+anything at the provider.
+
+**Another record is in the way.** The name already has a record somebody else
+made, pointing somewhere else — the old host, usually. The panel never changes
+a record it did not create. If nothing needs it, delete it at the provider and
+press **Try again**. Or change it yourself to the value the domain shows: a
+record that already points here is left to you, and the domain works either
+way.
+
+**An old address would still get some visitors.** An AAAA record left from the
+old host beside the new A record is the common one: visitors with IPv6 go
+there. Delete it at the provider. If it is this cluster's own IPv6 address, set
+**Settings → Domains → Cluster public IPv6 address** and the panel keeps the
+AAAA record itself.
+
+**Somebody changed the record Skifity created.** It was edited at the provider,
+so it is not the panel's any more and is left alone. Delete it and press **Try
+again** if the edit was a mistake; turn the domain's switch off if it was meant.
+
+**The DNS provider refused the credentials.** The token was revoked, expired, or
+cannot edit DNS in that zone. Make a new one with the permissions
+[Connecting a DNS provider](concepts.md#connecting-a-dns-provider) lists, remove
+the connection and connect it again.
+
+**The DNS provider did not do what it was asked.** It could not be reached, or
+answered with a failure of its own. The panel tries again every five minutes;
+the provider's status page says whether it is them.
+
+**The panel does not know where this domain should point.** Nobody set
+**Settings → Domains → Cluster public IP**, and no server has an address the
+panel knows. Set it, and the record is created within five minutes.
+
+**A zone's own name cannot be a CNAME.** The cluster's address is a load
+balancer's name, and `example.com` itself cannot be a CNAME anywhere but
+Cloudflare. Use `www.example.com` and redirect the bare name to it, or set the
+cluster's address to an IP.
+
+**A Cloudflare tunnel is reached only through Cloudflare's DNS.** The zone is at
+another provider and the tunnel is the only way in. Move the zone to Cloudflare,
+or add the hostname to the tunnel in Cloudflare's dashboard.
 
 ## Your own certificate is refused
 

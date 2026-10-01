@@ -453,6 +453,13 @@ type Domain struct {
 	// as DNSTarget: it follows from the team's certificates, and a stored copy
 	// would be wrong the moment one is uploaded or removed.
 	Certificate *DomainCertificate `json:"certificate,omitempty"`
+	// DNSTargetIPv6 is the IPv6 address a domain of your own points at as
+	// well, when the cluster has one; worked out like DNSTarget.
+	DNSTargetIPv6 string `json:"dns_target_ipv6,omitempty"`
+	// ManagedDNS is what the panel does about this hostname's record at one
+	// of the team's DNS providers, when a connected zone covers it. Filled
+	// in when a list is built. See store/dns.go.
+	ManagedDNS *ManagedDNS `json:"managed_dns,omitempty"`
 }
 
 // DomainCertificate is which of the team's certificates a domain uses, and

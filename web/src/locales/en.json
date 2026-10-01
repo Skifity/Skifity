@@ -410,7 +410,14 @@
       "database.started": "Database started",
       "database.resized": "Database resized",
       "database.password_changed": "Database password changed",
-      "database.import_started": "Dump imported into a database"
+      "database.import_started": "Dump imported into a database",
+      "dns_provider.connected": "DNS provider connected",
+      "dns_provider.removed": "DNS provider removed",
+      "domain.dns_changed": "Domain's DNS record switch changed",
+      "dns_record.created": "DNS record created",
+      "dns_record.updated": "DNS record pointed at the new address",
+      "dns_record.removed": "DNS record removed",
+      "dns_record.abandoned": "DNS record changed outside the panel, left to its editor"
     }
   },
   "projects": {
@@ -924,7 +931,24 @@
     "ownCertificateExpiring": "Your certificate {{name}} expires on {{date}}",
     "ownCertificateExpired": "Your certificate {{name}} expired on {{date}}",
     "ownCertificateRenew": "Nothing renews a certificate you brought. Renew it with the authority that issued it and upload it under the same name: every app using it is updated.",
-    "manageCertificates": "Certificates in Settings"
+    "manageCertificates": "Certificates in Settings",
+    "manageDNS": "Create the DNS record at {{provider}}",
+    "manageDNSHelp": "{{zone}} is connected at {{provider}}. The panel creates the record, keeps it pointing at this cluster and removes it with the domain. It never changes a record somebody else made.",
+    "stopKeeping": "Stop keeping the record",
+    "keepRecord": "Create the record at {{provider}}",
+    "tryAgain": "Try again",
+    "dnsCreated": "Record created at {{provider}}",
+    "dnsCreatedHelp": "The panel keeps it pointing at this cluster, and removes it with the domain.",
+    "dnsProxied": "Proxied by Cloudflare",
+    "dnsManagedElsewhere": "Record managed elsewhere",
+    "dnsManagedElsewhereHelp": "A record somebody else made in {{zone}} at {{provider}} already points here. The panel leaves it to them.",
+    "dnsCreating": "Creating the record at {{provider}}…",
+    "dnsNotCreated": "The record was not created at {{provider}}",
+    "dnsLeftToYou": "{{zone}} is connected at {{provider}}, and this record is left to you.",
+    "dnsNotAsked": "{{zone}} is connected at {{provider}}: the panel can create this record for you.",
+    "dnsStatusProxied": "Behind Cloudflare",
+    "dnsProxiedHelp": "The name answers with Cloudflare's addresses, so where visitors go is set in the record at Cloudflare. It has to point at {{expected}}.",
+    "dnsProxiedConfirmed": "The record the panel keeps at Cloudflare points here, so visitors reach this app through Cloudflare."
   },
   "scaling": {
     "title": "Scaling",
@@ -1799,6 +1823,10 @@
       "scanning_block_fixable_critical": {
         "label": "Stop deploys with a critical vulnerability that has a fix",
         "help": "Off by default. When on, a deploy waits for its image to be scanned and stops if a critical vulnerability in it has a fixed version, naming the packages and the versions to move to. Somebody can still deploy it by accepting the vulnerabilities, which is recorded in the activity log. A scan that cannot run lets the deploy through, and a rollback is never stopped."
+      },
+      "domains_cluster_ipv6": {
+        "label": "Cluster public IPv6 address",
+        "help": "The IPv6 address your domains should point at as well, when the cluster has one. A DNS record the panel creates gets an AAAA record with it beside the A record, and the DNS check counts it as this cluster's."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -1831,7 +1859,8 @@
     "componentVersionUnknown": "the version installed before versions were recorded",
     "scanning": "Image scanning",
     "certificates": "Certificates",
-    "secretManagers": "Secret managers"
+    "secretManagers": "Secret managers",
+    "dnsProviders": "DNS providers"
   },
   "errors": {
     "whatHappened": "What happened",
@@ -3620,6 +3649,72 @@
         "cause": "{{0}}",
         "impact": "PostgreSQL loads a dump in one transaction, so nothing of it is left behind; the other engines may have loaded part of it. A backup was taken just before.",
         "fix": "Read the reason above and fix the dump. To put the database back as it was, restore the backup taken just before the import from its Backups."
+      },
+      "dns_provider_refused": {
+        "title": "The DNS provider refused the credentials",
+        "cause": "{{0}} answered: {{1}}",
+        "impact": "Nothing was saved and no record was changed.",
+        "fix": "Check that it is the whole token, that it has not expired, and that it may edit DNS: Zone, DNS, Edit and Zone, Zone, Read at Cloudflare; Read & Write at Hetzner; the domain scopes at DigitalOcean; route53:ListHostedZones, route53:ListResourceRecordSets and route53:ChangeResourceRecordSets at Route 53."
+      },
+      "dns_provider_failed": {
+        "title": "The DNS provider did not do what it was asked",
+        "cause": "Asking {{0}} failed: {{1}}",
+        "impact": "Nothing was changed at the provider. A record the panel keeps is tried again every few minutes.",
+        "fix": "Check the provider's status page, then test the connection under Settings, DNS providers. A domain's record can be tried again from its Domains tab."
+      },
+      "dns_no_zones": {
+        "title": "These credentials can see no zones",
+        "cause": "{{0}} accepted them and listed no zones.",
+        "impact": "Nothing was saved: a connection with no zones would never be used.",
+        "fix": "Give the token the zones it should manage — at Cloudflare, under Zone Resources, include the zones or every zone of the account — and connect it again."
+      },
+      "dns_cloudflare_global_key": {
+        "title": "That is Cloudflare's Global API Key",
+        "cause": "The value has the shape of the Global API Key, which can do anything in the Cloudflare account: delete zones, change the plan, read every setting.",
+        "impact": "It was not sent anywhere and nothing was saved.",
+        "fix": "Create an API token instead: My Profile, API Tokens, Create Token, the Edit zone DNS template, with the zones this panel should manage. Paste that token."
+      },
+      "dns_record_conflict": {
+        "title": "Another record is in the way",
+        "cause": "{{0}} already has {{1}} at {{2}}, which Skifity did not create.",
+        "impact": "Nothing was created or changed. Skifity never changes a record it did not create, so the name keeps sending visitors where that record says.",
+        "fix": "If nothing needs that record any more, delete it at {{0}} and press Try again. Or change it yourself to {{1}}: a record that already says that is left to you, and the domain works either way."
+      },
+      "dns_record_extra": {
+        "title": "An old address would still get some visitors",
+        "cause": "{{0}} also has {{1}} at {{2}}, which Skifity did not create and is not this cluster's.",
+        "impact": "Nothing was created. With that record there, some visitors would reach this app and some would be sent there instead.",
+        "fix": "Delete that record at {{0}} if it is left over, and press Try again. If it is this cluster's own IPv6 address, an administrator sets it under Settings, Domains, Cluster public IPv6 address, and the panel keeps the AAAA record itself."
+      },
+      "dns_record_changed": {
+        "title": "Somebody changed the record Skifity created",
+        "cause": "The {{0}} record Skifity created for {{1}} at {{2}} now says {{3}}.",
+        "impact": "It was changed outside the panel, so it is not the panel's any more: Skifity stopped keeping it, and will neither change nor delete it.",
+        "fix": "If the change was a mistake, delete the record at {{0}} and press Try again, and the panel creates it afresh. If it was meant, press Stop keeping the record on the domain."
+      },
+      "dns_no_zone": {
+        "title": "No connected DNS zone covers this domain",
+        "cause": "None of the team's DNS providers has a zone that {{0}} is in.",
+        "impact": "Nothing was changed.",
+        "fix": "Connect the provider that serves {{0}} under Settings, DNS providers, or create the record yourself: the Domains tab shows what it has to say."
+      },
+      "dns_no_address": {
+        "title": "The panel does not know where this domain should point",
+        "cause": "No public address is set for this cluster and none of its servers has one the panel knows, so there is nothing to put in the record for {{0}}.",
+        "impact": "No record was created.",
+        "fix": "An administrator sets the address under Settings, Domains, Cluster public IP, and the record is created within a few minutes."
+      },
+      "dns_tunnel_needs_cloudflare": {
+        "title": "A Cloudflare tunnel is reached only through Cloudflare's DNS",
+        "cause": "This cluster is reached through a Cloudflare tunnel, and {{0}} is in a zone at {{1}}. A record pointing at a tunnel only works in a zone that is on Cloudflare.",
+        "impact": "No record was created.",
+        "fix": "Move the zone's DNS to Cloudflare and connect it here, or add {{0}} as a public hostname on the tunnel in the Cloudflare dashboard."
+      },
+      "dns_apex_cname": {
+        "title": "A zone's own name cannot be a CNAME",
+        "cause": "{{0}} is the zone itself, and pointing it at {{1}} needs a CNAME, which {{2}} does not allow there.",
+        "impact": "No record was created.",
+        "fix": "Use a name inside the zone, such as www.{{0}}, and redirect the bare name to it; or have an administrator set Cluster public IP under Settings, Domains to an IP address."
       }
     }
   },
@@ -4462,5 +4557,32 @@
     "saveAnyway": "Save anyway",
     "limitsSaved": "{{name}}'s limits are saved.",
     "limitsSavedCutOff": "{{name}}'s limits are saved. These no longer resolve: {{variables}}."
+  },
+  "dnsProviders": {
+    "title": "DNS providers",
+    "help": "Where your domains' DNS lives. With a zone connected, adding a domain creates its record there, the record follows the cluster when its address changes, and removing the domain removes it. The panel only ever changes a record it created.",
+    "empty": "None. Each domain's record is created by hand, and the Domains tab says what it has to be.",
+    "add": "Connect a provider",
+    "kind": "Provider",
+    "name": "Name",
+    "token": "API token",
+    "accessKeyID": "Access key ID",
+    "secretAccessKey": "Secret access key",
+    "formHelp": {
+      "cloudflare": "An API token from My Profile, API Tokens: the Edit zone DNS template (Zone, DNS, Edit) plus Zone, Zone, Read, on the zones the panel should manage. Never the Global API Key, which can do anything in the account and is refused.",
+      "hetzner": "A Hetzner Console API token with Read & Write, from the project that holds the zone: Security, API tokens.",
+      "digitalocean": "A personal access token with the domain scopes: read, create, update and delete.",
+      "route53": "An access key of an IAM user allowed route53:ListHostedZones, route53:ListResourceRecordSets and route53:ChangeResourceRecordSets. Private hosted zones are left out."
+    },
+    "proxiedHelp": "Records the panel creates at Cloudflare are not proxied: the certificate comes from Let's Encrypt over HTTP, and it has to reach your server to issue it. Turn the proxy on at Cloudflare afterwards if you want it; the panel leaves it on.",
+    "connect": "Check and connect",
+    "connected": "{{name}} is connected: {{zones}}",
+    "test": "Test",
+    "tested": "{{name}} answers, with these zones: {{zones}}",
+    "remove": "Remove {{name}}",
+    "removeConfirm": "The panel stops creating and removing records through {{name}}.",
+    "removeConsequence": "Records the panel created through it stay at the provider, and are yours from then on: {{number}}.",
+    "recordsKept": "Records kept: {{number}}",
+    "zonesListed": "as of {{when}}"
   }
 }

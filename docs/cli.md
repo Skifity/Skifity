@@ -209,6 +209,15 @@ skifity servers                   # the machines
 skifity certs                     # the team's own TLS certificates, and what uses each
 skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version
 skifity certs remove wildcard     # its hostnames go back to Let's Encrypt
+skifity domains                   # the app's domains, and where each one's DNS record stands
+skifity domains add shop.example.com  # its record is created when the team connected the zone
+skifity domains add shop.example.com --manage-dns=false  # make the record yourself
+skifity domains remove shop.example.com  # and the record the panel created with it
+skifity dns providers             # the team's DNS providers and their zones
+skifity dns providers add --kind cloudflare --credentials token.txt  # or --credentials - from standard input
+skifity dns providers add --kind route53 --credentials ~/.aws/credentials
+skifity dns providers test Cloudflare  # sign in again and list its zones
+skifity dns providers remove Cloudflare  # the records it made stay at the provider
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches

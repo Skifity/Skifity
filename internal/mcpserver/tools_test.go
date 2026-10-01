@@ -95,6 +95,9 @@ var exampleCalls = map[string]map[string]any{
 	"start_database":      {"database_id": "db_1"},
 	"resize_database":     {"database_id": "db_1", "mem_limit_mb": 2048, "storage_gb": 20},
 
+	"list_dns_providers": {},
+	"list_dns_zones":     {"provider_id": "dnsp_1"},
+
 	"list_domains":  {"app_id": "app_1"},
 	"add_domain":    {"app_id": "app_1", "hostname": "shop.example.com"},
 	"remove_domain": {"app_id": "app_1", "domain_id": "dom_2"},
@@ -193,16 +196,18 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		"resize_database":     {"database_id"},
 		// A database, or an app and its volume: the tool says which it
 		// needs when it has neither, because a schema cannot say "one of".
-		"list_backups":   nil,
-		"run_backup":     nil,
-		"list_domains":   {"app_id"},
-		"add_domain":     {"app_id", "hostname"},
-		"remove_domain":  {"app_id", "domain_id"},
-		"list_ports":     {"app_id"},
-		"open_port":      {"app_id", "port"},
-		"close_port":     {"app_id", "port_id"},
-		"lock_deploys":   {"app_id", "reason"},
-		"unlock_deploys": {"app_id"},
+		"list_backups":       nil,
+		"run_backup":         nil,
+		"list_dns_providers": nil,
+		"list_dns_zones":     {"provider_id"},
+		"list_domains":       {"app_id"},
+		"add_domain":         {"app_id", "hostname"},
+		"remove_domain":      {"app_id", "domain_id"},
+		"list_ports":         {"app_id"},
+		"open_port":          {"app_id", "port"},
+		"close_port":         {"app_id", "port_id"},
+		"lock_deploys":       {"app_id", "reason"},
+		"unlock_deploys":     {"app_id"},
 		// Nothing else: a vendor, a model and the workloads default to
 		// what the app has, and the count is the whole question.
 		"set_gpus": {"app_id", "count"},

@@ -14,11 +14,20 @@ import (
 // example.com, the bare domain to www, an old name to the new one. Coolify
 // has the www and bare-domain pair; this is any hostname to any other, with
 // the certificate shared. See kube/hostredirect.go.
+//
+// The same request turns the panel's keeping of the domain's DNS record on
+// and off; see dns_providers.go.
 
-type domainRedirectRequest struct {
+// updateDomainRequest changes one of a domain's two settings, or both.
+// Either left out is left as it is.
+type updateDomainRequest struct {
 	// RedirectTo is the hostname to send visitors to, or empty to serve the
 	// app on this one again.
-	RedirectTo string `json:"redirect_to"`
+	RedirectTo *string `json:"redirect_to,omitempty"`
+	// ManageDNS turns the panel's keeping of the hostname's record at the
+	// team's DNS provider on — which creates it now, or tries again — or
+	// off, which leaves the record where it is.
+	ManageDNS *bool `json:"manage_dns,omitempty"`
 }
 
 func (s *Server) handleSetDomainRedirect(w http.ResponseWriter, r *http.Request) {
@@ -27,9 +36,13 @@ func (s *Server) handleSetDomainRedirect(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	var req domainRedirectRequest
+	var req updateDomainRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, r, err)
+		return
+	}
+	if req.RedirectTo == nil && req.ManageDNS == nil {
+		writeError(w, r, errdoc.BadRequest("Send redirect_to, manage_dns, or both."))
 		return
 	}
 	domains, err := s.db.ListDomains(r.Context(), app.ID)
@@ -49,28 +62,55 @@ func (s *Server) handleSetDomainRedirect(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, errdoc.NotFound("domain", domainID))
 		return
 	}
-	target := kube.CleanHostname(req.RedirectTo)
-	if err := checkRedirect(domains, *domain, target); err != nil {
+	teamID, err := s.db.TeamIDForApp(r.Context(), app.ID)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.db.SetDomainRedirect(r.Context(), domain.ID, target); err != nil {
-		writeError(w, r, err)
-		return
+	if req.RedirectTo != nil {
+		target := kube.CleanHostname(*req.RedirectTo)
+		if err := checkRedirect(domains, *domain, target); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if err := s.db.SetDomainRedirect(r.Context(), domain.ID, target); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		domain.RedirectTo = target
+		if s.deployer != nil {
+			if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
+				s.log.Warn("could not apply the domain's redirect", "app", app.ID, "error", err)
+			}
+		}
+		detail := domain.Hostname + " serves the app"
+		if target != "" {
+			detail = domain.Hostname + " → " + target
+		}
+		s.audit(r, teamID, "domain.redirect_changed", "app", app.ID, detail)
 	}
-	domain.RedirectTo = target
-	if s.deployer != nil {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply the domain's redirect", "app", app.ID, "error", err)
+	if req.ManageDNS != nil {
+		// On is also Try again: a refusal whose cause somebody has removed
+		// at the provider is created now.
+		if *req.ManageDNS {
+			err = s.startManagingDNS(r.Context(), teamID, app, *domain)
+		} else {
+			err = s.dns.Stop(r.Context(), domain.ID)
+		}
+		detail := domain.Hostname + ": the panel keeps its DNS record"
+		if !*req.ManageDNS {
+			detail = domain.Hostname + ": its DNS record is left where it is"
+		}
+		s.audit(r, teamID, "domain.dns_changed", "app", app.ID, detail)
+		if err != nil {
+			writeError(w, r, err)
+			return
 		}
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	detail := domain.Hostname + " serves the app"
-	if target != "" {
-		detail = domain.Hostname + " → " + target
-	}
-	s.audit(r, teamID, "domain.redirect_changed", "app", app.ID, detail)
-	writeJSON(w, http.StatusOK, domain)
+	answer := []store.Domain{*domain}
+	s.describeTargets(r.Context(), teamID, answer)
+	s.describeManagedDNS(r.Context(), teamID, app, answer)
+	writeJSON(w, http.StatusOK, answer[0])
 }
 
 // checkRedirect says whether a domain may redirect to target: another of

@@ -167,7 +167,9 @@ With a floating IP, a load balancer or a tunnel, put the address people will
 reach in **Settings → Domains → Cluster public IP**. That is the address the
 panel uses for the free `sslip.io` names it hands out, instead of one server's
 own. With round-robin DNS there is nothing to set: the name is yours and points
-at all of them.
+at all of them. A change here moves the DNS records the panel keeps at a
+connected DNS provider too (see
+[Connecting a DNS provider](concepts.md#connecting-a-dns-provider)).
 
 ## Control plane servers
 

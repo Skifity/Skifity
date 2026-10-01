@@ -21,12 +21,13 @@ import {
 import { useConfirm } from "@/components/confirm-dialog"
 import { CopyButton } from "@/components/copy-button"
 import { ErrorDisplay } from "@/components/error-display"
+import { dnsProviderTitles, useDNSProviders } from "@/components/settings/dns-providers"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -45,10 +46,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
-import { api, type List } from "@/lib/api"
+import { Switch } from "@/components/ui/switch"
+import { ApiError, api, type List } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { AddedDomain, App, DNSCheck, Domain } from "@/lib/types"
+import type { AddedDomain, App, DNSCheck, DNSProvider, Domain } from "@/lib/types"
 
 export function DomainsTab({ app }: { app: App }) {
   const { t } = useTranslation()
@@ -58,20 +60,29 @@ export function DomainsTab({ app }: { app: App }) {
   // its DNS, so the first thing somebody sees after adding a domain is
   // whether it already points here, without pressing anything.
   const [dnsWhenAdded, setDNSWhenAdded] = useState<Record<string, DNSCheck>>({})
+  // The switch for creating the record, on by default. Whether it is shown
+  // follows from the hostname typed and the zones the team connected.
+  const [manageDNS, setManageDNS] = useState(true)
 
   const domains = useQuery({
     queryKey: ["domains", app.id],
     queryFn: () => api.get<List<Domain>>(`/api/apps/${app.id}/domains`),
   })
+  const providers = useDNSProviders()
+  const zone = app.internal ? null : zoneFor(hostname, providers.data?.items ?? [])
 
   const add = useMutation({
     mutationFn: () =>
-      api.post<AddedDomain>(`/api/apps/${app.id}/domains`, { hostname: hostname.trim() }),
+      api.post<AddedDomain>(`/api/apps/${app.id}/domains`, {
+        hostname: hostname.trim(),
+        ...(zone ? { manage_dns: manageDNS } : {}),
+      }),
     onSuccess: (added) => {
       void queryClient.invalidateQueries({ queryKey: ["domains", app.id] })
       const dns = added.dns
       if (dns) setDNSWhenAdded((current) => ({ ...current, [added.id]: dns }))
       setHostname("")
+      setManageDNS(true)
       setAdding(false)
     },
   })
@@ -144,6 +155,22 @@ export function DomainsTab({ app }: { app: App }) {
                   required
                 />
               </Field>
+              {zone && (
+                <Field orientation="horizontal">
+                  <Switch id="manage-dns" checked={manageDNS} onCheckedChange={setManageDNS} />
+                  <div className="space-y-1">
+                    <FieldLabel htmlFor="manage-dns">
+                      {t("domains.manageDNS", { provider: zone.provider.name })}
+                    </FieldLabel>
+                    <FieldDescription>
+                      {t("domains.manageDNSHelp", {
+                        zone: zone.zone,
+                        provider: dnsProviderTitles[zone.provider.kind],
+                      })}
+                    </FieldDescription>
+                  </div>
+                </Field>
+              )}
               {add.error != null && <ErrorDisplay error={add.error} compact />}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
@@ -246,6 +273,7 @@ export function DomainsTab({ app }: { app: App }) {
 
               {/* A redirecting hostname is answered here too, so its DNS has
                   to point here like any other's. */}
+              {domain.managed_dns && <ManagedRecord app={app} domain={domain} />}
               {!domain.auto && (
                 <DomainDNS app={app} domain={domain} whenAdded={dnsWhenAdded[domain.id]} />
               )}
@@ -307,9 +335,13 @@ function DomainDNS({ app, domain, whenAdded }: { app: App; domain: Domain; whenA
     </Button>
   )
 
+  // A record the panel keeps, or one that already points here, is not one
+  // to create by hand: the card above says where it stands.
+  const kept = ["created", "elsewhere", "pending"].includes(domain.managed_dns?.state ?? "")
+
   return (
     <>
-      {domain.status === "pending" ? (
+      {domain.status === "pending" && !kept ? (
         <DNSInstructions domain={domain} action={button} />
       ) : (
         <div>{button}</div>
@@ -373,6 +405,17 @@ function DNSResult({ check, domain }: { check: DNSCheck; domain: Domain }) {
       title: t("domains.dnsStatusUnknown", { addresses: found }),
       help: t("domains.dnsUnknownHelp"),
     },
+    // Cloudflare's addresses, and none of the cluster's: behind its proxy
+    // or a tunnel. Where it sends visitors is in the record at Cloudflare,
+    // which the panel can vouch for only when it keeps that record.
+    proxied: {
+      variant: check.origin_confirmed ? ("success" as const) : ("info" as const),
+      icon: check.origin_confirmed ? <CircleCheckIcon /> : <InfoIcon />,
+      title: t("domains.dnsStatusProxied"),
+      help: check.origin_confirmed
+        ? t("domains.dnsProxiedConfirmed")
+        : t("domains.dnsProxiedHelp", { expected }),
+    },
   }[check.status]
 
   return (
@@ -381,7 +424,7 @@ function DNSResult({ check, domain }: { check: DNSCheck; domain: Domain }) {
       <AlertTitle>{shown.title}</AlertTitle>
       <AlertDescription className="space-y-1">
         <p>{shown.help}</p>
-        {certificateToCome && check.status !== "here" && check.status !== "unknown" && (
+        {certificateToCome && !check.points_here && check.status !== "unknown" && (
           <p>{t("domains.dnsCertificateAfter")}</p>
         )}
         {check.found.length > 0 && (
@@ -450,6 +493,13 @@ function DNSInstructions({ domain, action }: { domain: Domain; action: ReactNode
                 <DNSCell value={domain.hostname} label={t("domains.recordName")} />
                 <DNSCell value={target} label={t("domains.recordValue")} />
               </TableRow>
+              {domain.dns_target_ipv6 && (
+                <TableRow>
+                  <TableCell className="py-2 font-mono text-xs font-medium">AAAA</TableCell>
+                  <DNSCell value={domain.hostname} label={t("domains.recordName")} />
+                  <DNSCell value={domain.dns_target_ipv6} label={t("domains.recordValue")} />
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
@@ -535,6 +585,145 @@ function OwnCertificate({ domain }: { domain: Domain }) {
       </AlertDescription>
     </Alert>
   )
+}
+
+/** The connected zone a hostname is in: the longest, as the panel picks it. */
+function zoneFor(
+  hostname: string,
+  providers: DNSProvider[],
+): { provider: DNSProvider; zone: string } | null {
+  const name = hostname.trim().toLowerCase().replace(/\.$/, "")
+  let best: { provider: DNSProvider; zone: string } | null = null
+  if (!name.includes(".")) return null
+  for (const provider of providers) {
+    for (const zone of provider.zones) {
+      const covers = name === zone.name || name.endsWith(`.${zone.name}`)
+      if (covers && (!best || zone.name.length > best.zone.length)) {
+        best = { provider, zone: zone.name }
+      }
+    }
+  }
+  return best
+}
+
+/**
+ * The domain's record at the team's DNS provider: created and kept, somebody
+ * else's that already points here, refused — with the record in the way and
+ * what to do — or left to the person. The switch is here too.
+ */
+function ManagedRecord({ app, domain }: { app: App; domain: Domain }) {
+  const { t } = useTranslation()
+  const managed = domain.managed_dns
+  const change = useMutation({
+    mutationFn: (manage: boolean) =>
+      api.patch<Domain>(`/api/apps/${app.id}/domains/${domain.id}`, { manage_dns: manage }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["domains", app.id] }),
+  })
+  if (!managed) return null
+  const provider = managed.provider_name
+  const values = managed.records.map((record) => `${record.type} ${record.content}`).join(" · ")
+
+  const stop = (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={change.isPending}
+      onClick={() => change.mutate(false)}
+    >
+      {t("domains.stopKeeping")}
+    </Button>
+  )
+  const keep = (label: string) => (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={change.isPending}
+      onClick={() => change.mutate(true)}
+    >
+      {change.isPending ? <Spinner /> : <RefreshCwIcon className="size-3.5" />}
+      {label}
+    </Button>
+  )
+
+  let body: ReactNode
+  switch (managed.state) {
+    case "created":
+      body = (
+        <Alert variant="success">
+          <CircleCheckIcon />
+          <AlertTitle>{t("domains.dnsCreated", { provider })}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{t("domains.dnsCreatedHelp")}</p>
+            <p className="flex flex-wrap items-center gap-2 font-mono text-xs">
+              {values}
+              {managed.records.some((record) => record.proxied) && (
+                <Badge variant="outline" className="text-[10px]">
+                  {t("domains.dnsProxied")}
+                </Badge>
+              )}
+            </p>
+            <div>{stop}</div>
+          </AlertDescription>
+        </Alert>
+      )
+      break
+    case "elsewhere":
+      body = (
+        <Alert>
+          <InfoIcon />
+          <AlertTitle>{t("domains.dnsManagedElsewhere")}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{t("domains.dnsManagedElsewhereHelp", { provider, zone: managed.zone })}</p>
+            <div>{stop}</div>
+          </AlertDescription>
+        </Alert>
+      )
+      break
+    case "pending":
+      body = (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
+          {t("domains.dnsCreating", { provider })}
+        </p>
+      )
+      break
+    case "refused":
+    case "failed":
+      body = (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("domains.dnsNotCreated", { provider })}</p>
+          {managed.problem && <ErrorDisplay error={problemError(managed.problem)} />}
+          <div className="flex flex-wrap gap-2">
+            {keep(t("domains.tryAgain"))}
+            {stop}
+          </div>
+        </div>
+      )
+      break
+    default:
+      body = (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <span>
+            {managed.state === "off"
+              ? t("domains.dnsLeftToYou", { provider, zone: managed.zone })
+              : t("domains.dnsNotAsked", { provider, zone: managed.zone })}
+          </span>
+          {keep(t("domains.keepRecord", { provider }))}
+        </div>
+      )
+  }
+
+  return (
+    <div className="space-y-2">
+      {body}
+      {change.error != null && <ErrorDisplay error={change.error} compact />}
+    </div>
+  )
+}
+
+/** A stored problem, shown the way any failure is. */
+function problemError(problem: NonNullable<NonNullable<Domain["managed_dns"]>["problem"]>) {
+  return new ApiError(problem, 409)
 }
 
 /** One cell of the record, with the copy control the registrar's form wants. */

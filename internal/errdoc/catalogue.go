@@ -1280,6 +1280,144 @@ func DNSLookupFailed(hostname string, err error) *Problem {
 		Wrap(err)
 }
 
+// --- DNS providers ---
+//
+// A team connects Cloudflare, Hetzner, DigitalOcean or Route 53, and the panel
+// creates a domain's record there. Every one of these is about a record the
+// panel did not make, or a provider that would not do what it was asked: the
+// panel never overwrites a record it did not create, so most of them end with
+// a person deciding.
+
+// DNSProviderRefused is a provider turning a connection's credentials down.
+func DNSProviderRefused(provider, detail string) *Problem {
+	return New("dns.provider_refused", "The DNS provider refused the credentials").
+		WithCause("%s answered: %s", provider, orNone(detail)).
+		WithImpact("Nothing was saved and no record was changed.").
+		WithFix("Check that it is the whole token, that it has not expired, and that it may edit DNS: Zone, DNS, Edit and Zone, Zone, Read at "+
+			"Cloudflare; Read & Write at Hetzner; the domain scopes at DigitalOcean; route53:ListHostedZones, "+
+			"route53:ListResourceRecordSets and route53:ChangeResourceRecordSets at Route 53.").
+		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// DNSProviderFailed is a provider that could not be reached, or answered
+// with a failure of its own.
+func DNSProviderFailed(provider string, err error) *Problem {
+	return New("dns.provider_failed", "The DNS provider did not do what it was asked").
+		WithCause("Asking %s failed: %s", provider, err.Error()).
+		WithImpact("Nothing was changed at the provider. A record the panel keeps is tried again every few minutes.").
+		WithFix("Check the provider's status page, then test the connection under Settings, DNS providers. A domain's record can be tried again from its Domains tab.").
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		With("provider", provider).
+		Wrap(err)
+}
+
+// DNSNoZones is credentials the provider accepts and that can see no zone.
+func DNSNoZones(provider string) *Problem {
+	return New("dns.no_zones", "These credentials can see no zones").
+		WithCause("%s accepted them and listed no zones.", provider).
+		WithImpact("Nothing was saved: a connection with no zones would never be used.").
+		WithFix("Give the token the zones it should manage — at Cloudflare, under Zone Resources, include the zones or every zone of the account — and connect it again.").
+		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// DNSGlobalKey is Cloudflare's Global API Key pasted where a token belongs.
+func DNSGlobalKey() *Problem {
+	return New("dns.cloudflare_global_key", "That is Cloudflare's Global API Key").
+		WithCause("The value has the shape of the Global API Key, which can do anything in the Cloudflare account: delete zones, change the plan, read every setting.").
+		WithImpact("It was not sent anywhere and nothing was saved.").
+		WithFix("Create an API token instead: My Profile, API Tokens, Create Token, the Edit zone DNS template, with the zones this panel should manage. Paste that token.").
+		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest)
+}
+
+// DNSRecordConflict is a record somebody else made standing where the one the
+// panel would create goes, saying something else.
+func DNSRecordConflict(hostname, found, provider, want string) *Problem {
+	return New("dns.record_conflict", "Another record is in the way").
+		WithCause("%s already has %s at %s, which Skifity did not create.", hostname, found, provider).
+		WithImpact("Nothing was created or changed. Skifity never changes a record it did not create, so the name keeps sending visitors where that record says.").
+		WithFix("If nothing needs that record any more, delete it at %s and press Try again. Or change it yourself to %s: a record that already says that is left to you, and the domain works either way.", provider, want).
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname).With("found", found).With("wanted", want)
+}
+
+// DNSRecordExtra is an address of a type the panel is not creating, made by
+// somebody else: an old AAAA left beside the new A is the usual one.
+func DNSRecordExtra(hostname, found, provider string) *Problem {
+	return New("dns.record_extra", "An old address would still get some visitors").
+		WithCause("%s also has %s at %s, which Skifity did not create and is not this cluster's.", hostname, found, provider).
+		WithImpact("Nothing was created. With that record there, some visitors would reach this app and some would be sent there instead.").
+		WithFix("Delete that record at %s if it is left over, and press Try again. If it is this cluster's own IPv6 address, an administrator sets it under Settings, Domains, Cluster public IPv6 address, and the panel keeps the AAAA record itself.", provider).
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname).With("found", found)
+}
+
+// DNSRecordChanged is a record the panel made that somebody changed since.
+func DNSRecordChanged(hostname, kind, provider, now string) *Problem {
+	return New("dns.record_changed", "Somebody changed the record Skifity created").
+		WithCause("The %s record Skifity created for %s at %s now says %s.", kind, hostname, provider, now).
+		WithImpact("It was changed outside the panel, so it is not the panel's any more: Skifity stopped keeping it, and will neither change nor delete it.").
+		WithFix("If the change was a mistake, delete the record at %s and press Try again, and the panel creates it afresh. If it was meant, press Stop keeping the record on the domain.", provider).
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname).With("found", now)
+}
+
+// DNSNoZone is a record asked for at a hostname no connected zone covers.
+func DNSNoZone(hostname string) *Problem {
+	return New("dns.no_zone", "No connected DNS zone covers this domain").
+		WithCause("None of the team's DNS providers has a zone that %s is in.", hostname).
+		WithImpact("Nothing was changed.").
+		WithFix("Connect the provider that serves %s under Settings, DNS providers, or create the record yourself: the Domains tab shows what it has to say.", hostname).
+		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest).
+		With("hostname", hostname)
+}
+
+// DNSNoAddress is a record the panel cannot write because it does not know
+// where the cluster is.
+func DNSNoAddress(hostname string) *Problem {
+	return New("dns.no_address", "The panel does not know where this domain should point").
+		WithCause("No public address is set for this cluster and none of its servers has one the panel knows, so there is nothing to put in the record for %s.", hostname).
+		WithImpact("No record was created.").
+		WithFix("An administrator sets the address under Settings, Domains, Cluster public IP, and the record is created within a few minutes.").
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname)
+}
+
+// DNSTunnelNeedsCloudflare is a record for a Cloudflare tunnel asked for in a
+// zone somewhere else, where it would not work.
+func DNSTunnelNeedsCloudflare(hostname, provider string) *Problem {
+	return New("dns.tunnel_needs_cloudflare", "A Cloudflare tunnel is reached only through Cloudflare's DNS").
+		WithCause("This cluster is reached through a Cloudflare tunnel, and %s is in a zone at %s. A record pointing at a tunnel only works in a zone that is on Cloudflare.", hostname, provider).
+		WithImpact("No record was created.").
+		WithFix("Move the zone's DNS to Cloudflare and connect it here, or add %s as a public hostname on the tunnel in the Cloudflare dashboard.", hostname).
+		WithDocs("/docs/concepts#cloudflares-proxy-and-tunnels").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname)
+}
+
+// DNSApexCNAME is a zone's own name that would need a CNAME, which DNS
+// allows nowhere but at Cloudflare, which flattens it.
+func DNSApexCNAME(hostname, target, provider string) *Problem {
+	return New("dns.apex_cname", "A zone's own name cannot be a CNAME").
+		WithCause("%s is the zone itself, and pointing it at %s needs a CNAME, which %s does not allow there.", hostname, target, provider).
+		WithImpact("No record was created.").
+		WithFix("Use a name inside the zone, such as www.%s, and redirect the bare name to it; or have an administrator set Cluster public IP under Settings, Domains to an IP address.", hostname).
+		WithDocs("/docs/troubleshooting#the-panel-did-not-create-a-dns-record").
+		WithStatus(http.StatusConflict).
+		With("hostname", hostname)
+}
+
 // CertificateFailed reports a failed Let's Encrypt issuance.
 func CertificateFailed(hostname, reason string) *Problem {
 	return New("domain.certificate_failed", "The HTTPS certificate could not be issued").

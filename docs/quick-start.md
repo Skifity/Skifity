@@ -172,6 +172,11 @@ own rate limit, so cert-manager can ask for a certificate and keep renewing it.
 Your app keeps its original address too, so nothing breaks while DNS
 propagates.
 
+If your domain's DNS is at Cloudflare, Hetzner, DigitalOcean or Route 53,
+connect it under **Settings → DNS providers** first, and the panel creates the
+record for you when you add the domain, and removes it when you remove the
+domain. See [Connecting a DNS provider](concepts.md#connecting-a-dns-provider).
+
 To have `www.example.com` and `example.com` both work, add both, and set
 **Visitors** on the one you do not want people to stay on to **Go to** the
 other. Visitors there are sent on permanently, with the same path and query,
