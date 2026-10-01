@@ -1630,6 +1630,36 @@ func SecretManagerInUse(name string, count int, uses string) *Problem {
 		With("connection", name)
 }
 
+// ReferenceNotAllowed is a variable read through a connection from a path, or
+// in a project, that the connection is limited away from. It is refused when
+// the variable is set and again whenever it is read, so a connection narrowed
+// after the variable was set stops it at the next deploy.
+//
+// detail is internal/secretmgr's clause for what the connection allows. limit
+// is which limit refused it: "path" or "project".
+func ReferenceNotAllowed(variable, reference, name, detail, limit string) *Problem {
+	return New("secrets.reference_not_allowed", "The secret manager connection does not allow this").
+		WithCause("%s is read from %s, and the connection %s %s.", variable, reference, name, detail).
+		WithImpact("This variable was not read. Setting it is refused, and a deploy, a sync or a refresh that needs it stops before anything reaches the cluster: the version running keeps running.").
+		WithFix("Point the variable at a path the connection allows, or read it through a connection meant for this project. A team admin changes what a connection allows under Settings → Secret managers.").
+		WithDocs("/docs/configuration#limiting-a-connection").
+		WithStatus(http.StatusForbidden).
+		With("variable", variable).With("connection", name).With("limit", limit)
+}
+
+// SecretManagerLimitsBreakReferences is a change to a connection's limits
+// that would leave variables that read it now outside them, refused until the
+// administrator says that is what they mean.
+func SecretManagerLimitsBreakReferences(name string, count int, uses string) *Problem {
+	return New("secrets.limits_break_references", "Variables would stop resolving through this connection").
+		WithCause("%d variables read through %s would be outside its new limits: %s.", count, name, uses).
+		WithImpact("Nothing was changed. With the new limits, the next deploy, sync or refresh of those apps would stop before anything reaches the cluster.").
+		WithFix("Point those variables at an allowed path or another connection first. If cutting them off is the point, save the limits anyway: Save anyway in the panel, --force on the command line, force: true in the API.").
+		WithDocs("/docs/configuration#limiting-a-connection").
+		WithStatus(http.StatusConflict).
+		With("connection", name)
+}
+
 // --- configuration ---
 
 // NotConfigured reports a feature used before its settings were filled in.

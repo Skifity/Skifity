@@ -118,8 +118,8 @@ type Wanted struct {
 	Reference store.SecretReference
 }
 
-// Resolve reads every wanted value from the team's connections, and answers
-// them by variable.
+// Resolve reads every wanted value from the team's connections, for
+// variables of one project, and answers them by variable.
 //
 // A secret several variables read keys of is fetched once. The first that
 // cannot be read fails the whole call with a problem naming the variable,
@@ -128,7 +128,11 @@ type Wanted struct {
 //
 // A connection that is not the team's is not found. The API never stores
 // such a reference, and this is where that is made true rather than assumed.
-func (r *Resolver) Resolve(ctx context.Context, teamID string, wanted []Wanted) (map[string]string, error) {
+// The same goes for a connection's limits: a reference outside them is
+// refused here, before the manager is asked anything, whenever it was set —
+// so narrowing a connection takes effect at the next deploy, sync or refresh
+// of whatever was pointed at it before.
+func (r *Resolver) Resolve(ctx context.Context, teamID, projectID string, wanted []Wanted) (map[string]string, error) {
 	out := make(map[string]string, len(wanted))
 	if len(wanted) == 0 {
 		return out, nil
@@ -152,6 +156,9 @@ func (r *Resolver) Resolve(ctx context.Context, teamID string, wanted []Wanted) 
 					"that connection no longer exists"))
 			}
 			rows[ref.ConnectionID], row = found, found
+		}
+		if err := r.CheckLimits(ctx, row, projectID, w); err != nil {
+			return nil, err
 		}
 		p, ok := providers[row.ID]
 		if !ok {
@@ -177,11 +184,49 @@ func (r *Resolver) Resolve(ctx context.Context, teamID string, wanted []Wanted) 
 	return out, nil
 }
 
-// Check reads one reference now, so a typo in a path is found when it is
-// written rather than at the next deploy. The value is dropped.
-func (r *Resolver) Check(ctx context.Context, teamID, variable string, ref store.SecretReference) error {
-	_, err := r.Resolve(ctx, teamID, []Wanted{{Variable: variable, Reference: ref}})
+// Check reads one reference of a project's variable now, so a typo in a path
+// is found when it is written rather than at the next deploy. The value is
+// dropped.
+func (r *Resolver) Check(ctx context.Context, teamID, projectID, variable string, ref store.SecretReference) error {
+	_, err := r.Resolve(ctx, teamID, projectID, []Wanted{{Variable: variable, Reference: ref}})
 	return err
+}
+
+// CheckLimits answers the problem for a reference its connection's limits
+// refuse, or nil. It asks the manager nothing: a path outside the limits is
+// never read, not even to say that nothing is there.
+func (r *Resolver) CheckLimits(ctx context.Context, row store.SecretConnectionRow, projectID string, w Wanted) error {
+	limit := Refuses(row.SecretConnection, projectID, w.Reference.Path)
+	if limit == "" {
+		return nil
+	}
+	ref := w.Reference
+	ref.Connection = row.Name
+	var detail string
+	if limit == LimitProject {
+		// Other projects are counted, not named: a member limited to some
+		// projects is not told what else the team has.
+		others := "1 other project"
+		if n := len(row.AllowedProjectIDs); n != 1 {
+			others = fmt.Sprintf("%d other projects", n)
+		}
+		detail = fmt.Sprintf("is not for the project %s: an administrator limited it to %s", r.projectName(ctx, projectID), others)
+	} else {
+		detail = "reads only what is at or under " + DescribePaths(row.AllowedPaths)
+	}
+	return errdoc.ReferenceNotAllowed(w.Variable, ref.String(), row.Name, detail, string(limit))
+}
+
+// projectName is a project's name for a sentence, or its id when it cannot be
+// read.
+func (r *Resolver) projectName(ctx context.Context, projectID string) string {
+	if projectID == "" {
+		return "(none)"
+	}
+	if project, err := r.db.GetProject(ctx, projectID); err == nil {
+		return project.Name
+	}
+	return projectID
 }
 
 // unresolved is the problem for a variable that could not be read.

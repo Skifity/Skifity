@@ -264,6 +264,7 @@ export function AppDetailPage() {
             showBuildTime
             showPreviews
             refreshable
+            projectId={environment.data?.project_id}
           />
           <FilesCard app={current} />
         </TabsContent>

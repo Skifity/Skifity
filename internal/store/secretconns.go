@@ -22,6 +22,16 @@ type SecretConnection struct {
 	Name     string            `json:"name"`
 	Kind     string            `json:"kind"`
 	Settings map[string]string `json:"settings"`
+	// AllowedPaths are the path prefixes a reference through this connection
+	// may name, as internal/secretmgr normalises them for the kind. A
+	// reference is allowed at a prefix or under it, at the kind's separator.
+	// Empty is every path the credentials can read.
+	AllowedPaths []string `json:"allowed_paths"`
+	// AllowedProjectIDs are the projects whose variables, an app's own or a
+	// shared one, may read through this connection. Empty is every project.
+	// The id of a project deleted since stays, so the list never empties
+	// itself into "every project".
+	AllowedProjectIDs []string `json:"allowed_project_ids"`
 	// RefreshMinutes is how often the apps that read this connection are
 	// refreshed on their own. Zero, the default, is never.
 	RefreshMinutes int       `json:"refresh_minutes"`
@@ -51,13 +61,14 @@ func ReferenceDigestContext(appID, key string) string {
 }
 
 const secretConnectionColumns = `id, team_id, name, kind, settings, credentials_enc, refresh_minutes,
-	next_refresh_at, last_refresh_at, refresh_failures, last_error, created_at, updated_at`
+	next_refresh_at, last_refresh_at, refresh_failures, last_error, created_at, updated_at,
+	allowed_paths, allowed_project_ids`
 
 func scanSecretConnection(scan func(...any) error) (SecretConnectionRow, error) {
 	var r SecretConnectionRow
-	var settings, next, last, created, updated string
+	var settings, next, last, created, updated, paths, projects string
 	if err := scan(&r.ID, &r.TeamID, &r.Name, &r.Kind, &settings, &r.SealedCredentials, &r.RefreshMinutes,
-		&next, &last, &r.RefreshFailures, &r.LastError, &created, &updated); err != nil {
+		&next, &last, &r.RefreshFailures, &r.LastError, &created, &updated, &paths, &projects); err != nil {
 		return r, err
 	}
 	r.Settings = map[string]string{}
@@ -66,11 +77,49 @@ func scanSecretConnection(scan func(...any) error) (SecretConnectionRow, error) 
 			return r, fmt.Errorf("read the settings of the secret manager %s: %w", r.Name, err)
 		}
 	}
+	// A list that cannot be read fails the read rather than coming back
+	// empty: empty is no limit, and a limit is not lifted by a bad row.
+	var err error
+	if r.AllowedPaths, err = readList(paths); err != nil {
+		return r, fmt.Errorf("read the paths the secret manager %s is limited to: %w", r.Name, err)
+	}
+	if r.AllowedProjectIDs, err = readList(projects); err != nil {
+		return r, fmt.Errorf("read the projects the secret manager %s is limited to: %w", r.Name, err)
+	}
 	r.NextRefreshAt, _ = ParseTime(next)
 	r.LastRefreshAt, _ = ParseTime(last)
 	r.CreatedAt, _ = ParseTime(created)
 	r.UpdatedAt, _ = ParseTime(updated)
 	return r, nil
+}
+
+// readList reads a JSON list column. It never answers nil, so the API always
+// answers a list.
+func readList(column string) ([]string, error) {
+	out := []string{}
+	if column == "" {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(column), &out); err != nil {
+		return nil, err
+	}
+	return nonNilList(out), nil
+}
+
+// listColumn is a list as its column holds it.
+func listColumn(list []string) (string, error) {
+	encoded, err := json.Marshal(nonNilList(list))
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func nonNilList(list []string) []string {
+	if list == nil {
+		return []string{}
+	}
+	return list
 }
 
 func timeColumn(t time.Time) string {
@@ -90,11 +139,20 @@ func (db *DB) CreateSecretConnection(ctx context.Context, c *SecretConnection, s
 	if err != nil {
 		return fmt.Errorf("record the settings of %s: %w", c.Name, err)
 	}
+	c.AllowedPaths, c.AllowedProjectIDs = nonNilList(c.AllowedPaths), nonNilList(c.AllowedProjectIDs)
+	paths, err := listColumn(c.AllowedPaths)
+	if err != nil {
+		return fmt.Errorf("record the paths %s is limited to: %w", c.Name, err)
+	}
+	projects, err := listColumn(c.AllowedProjectIDs)
+	if err != nil {
+		return fmt.Errorf("record the projects %s is limited to: %w", c.Name, err)
+	}
 	now := Now()
 	if _, err := db.Exec(ctx, `INSERT INTO secret_connections (`+secretConnectionColumns+`)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.ID, c.TeamID, c.Name, c.Kind, string(settings), sealed, c.RefreshMinutes,
-		timeColumn(c.NextRefreshAt), "", 0, "", now, now); err != nil {
+		timeColumn(c.NextRefreshAt), "", 0, "", now, now, paths, projects); err != nil {
 		if errors.Is(err, ErrConflict) {
 			return fmt.Errorf("%w: this team already has a secret manager called %s", ErrConflict, c.Name)
 		}
@@ -167,20 +225,30 @@ func (db *DB) querySecretConnections(ctx context.Context, query string, args ...
 	return out, rows.Err()
 }
 
-// UpdateSecretConnection writes a connection's settings and refresh interval,
-// and its credentials when sealed is not empty. Empty keeps the ones stored.
+// UpdateSecretConnection writes a connection's settings, limits and refresh
+// interval, and its credentials when sealed is not empty. Empty keeps the
+// ones stored.
 func (db *DB) UpdateSecretConnection(ctx context.Context, c *SecretConnection, sealed string) error {
 	settings, err := json.Marshal(nonNilSettings(c.Settings))
 	if err != nil {
 		return fmt.Errorf("record the settings of %s: %w", c.Name, err)
 	}
+	c.AllowedPaths, c.AllowedProjectIDs = nonNilList(c.AllowedPaths), nonNilList(c.AllowedProjectIDs)
+	paths, err := listColumn(c.AllowedPaths)
+	if err != nil {
+		return fmt.Errorf("record the paths %s is limited to: %w", c.Name, err)
+	}
+	projects, err := listColumn(c.AllowedProjectIDs)
+	if err != nil {
+		return fmt.Errorf("record the projects %s is limited to: %w", c.Name, err)
+	}
 	now := Now()
 	res, err := db.Exec(ctx, `UPDATE secret_connections SET settings = ?, refresh_minutes = ?, next_refresh_at = ?,
-		refresh_failures = ?, last_error = ?,
+		refresh_failures = ?, last_error = ?, allowed_paths = ?, allowed_project_ids = ?,
 		credentials_enc = CASE WHEN ? = '' THEN credentials_enc ELSE ? END, updated_at = ?
 		WHERE id = ? AND team_id = ?`,
 		string(settings), c.RefreshMinutes, timeColumn(c.NextRefreshAt), c.RefreshFailures, c.LastError,
-		sealed, sealed, now, c.ID, c.TeamID)
+		paths, projects, sealed, sealed, now, c.ID, c.TeamID)
 	if err != nil {
 		return fmt.Errorf("save the secret manager %s: %w", c.Name, err)
 	}
@@ -232,6 +300,11 @@ type SecretConnectionUse struct {
 	OwnerID string `json:"owner_id"`
 	Owner   string `json:"owner"`
 	Key     string `json:"key"`
+	// ProjectID is the project the variable is read in: the app's, or the
+	// one sharing it. Path is the secret it names. Together they are what a
+	// connection's limits are checked against.
+	ProjectID string `json:"project_id"`
+	Path      string `json:"path"`
 }
 
 // Label is how the use is written for a person: app/KEY.
@@ -240,10 +313,15 @@ func (u SecretConnectionUse) Label() string { return u.Owner + "/" + u.Key }
 // SecretConnectionUses lists the variables that read a connection, app ones
 // first.
 func (db *DB) SecretConnectionUses(ctx context.Context, connectionID string) ([]SecretConnectionUse, error) {
-	rows, err := db.QueryContext(ctx, `SELECT 'app', a.id, a.name, v.key FROM app_variables v
-			JOIN apps a ON a.id = v.app_id WHERE v.ref_connection_id = ?
+	// The environment is joined loosely: a use whose project cannot be found
+	// is still a use, and removing the connection is still refused for it.
+	rows, err := db.QueryContext(ctx, `SELECT 'app', a.id, a.name, v.key, COALESCE(e.project_id, ''), v.ref_path
+			FROM app_variables v
+			JOIN apps a ON a.id = v.app_id
+			LEFT JOIN environments e ON e.id = a.environment_id
+			WHERE v.ref_connection_id = ?
 		UNION ALL
-		SELECT 'project', p.id, p.name, s.key FROM shared_variables s
+		SELECT 'project', p.id, p.name, s.key, p.id, s.ref_path FROM shared_variables s
 			JOIN projects p ON p.id = s.project_id WHERE s.ref_connection_id = ?`, connectionID, connectionID)
 	if err != nil {
 		return nil, fmt.Errorf("find the variables that read a secret manager: %w", err)
@@ -252,7 +330,7 @@ func (db *DB) SecretConnectionUses(ctx context.Context, connectionID string) ([]
 	out := []SecretConnectionUse{}
 	for rows.Next() {
 		var u SecretConnectionUse
-		if err := rows.Scan(&u.Scope, &u.OwnerID, &u.Owner, &u.Key); err != nil {
+		if err := rows.Scan(&u.Scope, &u.OwnerID, &u.Owner, &u.Key, &u.ProjectID, &u.Path); err != nil {
 			return nil, fmt.Errorf("read a variable that reads a secret manager: %w", err)
 		}
 		out = append(out, u)

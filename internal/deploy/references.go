@@ -119,12 +119,14 @@ func (d *Deployer) runtimeVariables(ctx context.Context, app store.App, env stor
 }
 
 // readReferences reads the values of the variables that are references, from
-// the connections of the team the app belongs to.
+// the connections of the team the app belongs to, as the app's project: a
+// connection limited to other projects, or to other paths, refuses them here
+// however long ago they were set.
 func (d *Deployer) readReferences(ctx context.Context, app store.App, wanted map[string]secretmgr.Wanted) (map[string]string, error) {
 	if len(wanted) == 0 {
 		return nil, nil
 	}
-	teamID, err := d.db.TeamIDForApp(ctx, app.ID)
+	teamID, projectID, err := d.db.ProjectOfApp(ctx, app.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +134,7 @@ func (d *Deployer) readReferences(ctx context.Context, app store.App, wanted map
 	for _, w := range wanted {
 		list = append(list, w)
 	}
-	return d.Secrets.Resolve(ctx, teamID, list)
+	return d.Secrets.Resolve(ctx, teamID, projectID, list)
 }
 
 // buildTimeVariables are the subset that affects what the image contains, and

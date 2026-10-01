@@ -185,7 +185,8 @@ skifity env import .env           # every KEY=value line in a file, rolled out o
 skifity env set STRIPE_KEY --from company-vault:shop#stripe_key  # read from a secret manager, never stored
 skifity env refresh               # read those again; roll out, or rebuild, only what changed
 skifity env rm LOG_LEVEL          # remove one
-skifity secrets connections list  # the team's secret managers; add, test, remove
+skifity secrets connections list  # the team's secret managers; add, limit, test, remove
+skifity secrets connections limit company-vault --allow-path shop --allow-project shop  # what it may be used for
 skifity scale --instances 3       # a fixed number
 skifity scale --auto --max 5      # or automatically
 skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, same build

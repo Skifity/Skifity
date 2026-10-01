@@ -1075,7 +1075,11 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
+	teamID, projectID, err := s.db.ProjectOfApp(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 
 	existing, err := s.db.ListVariables(r.Context(), app.ID)
 	if err != nil {
@@ -1100,7 +1104,7 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		}
 		// Read once now, so a wrong path is found here; the value is never
 		// stored, and a variable read from a secret manager is a secret.
-		if variable.Reference, err = s.referenceFor(r.Context(), teamID, key, *req.From); err != nil {
+		if variable.Reference, err = s.referenceFor(r.Context(), teamID, projectID, key, *req.From); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -1168,8 +1172,12 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 	for _, row := range existing {
 		wasSecret[row.Key], wasBuildTime[row.Key] = row.IsSecret, row.BuildTime
 	}
-	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	batch, err := s.prepareVariableChanges(r.Context(), teamID, req, wasSecret, wasBuildTime, true,
+	teamID, projectID, err := s.db.ProjectOfApp(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	batch, err := s.prepareVariableChanges(r.Context(), teamID, projectID, req, wasSecret, wasBuildTime, true,
 		func(key string) string { return variableContext(app.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1216,7 +1224,7 @@ func (s *Server) handleChangeSharedVariables(w http.ResponseWriter, r *http.Requ
 	for _, row := range existing {
 		wasSecret[row.Key] = row.IsSecret
 	}
-	batch, err := s.prepareVariableChanges(r.Context(), project.TeamID, req, wasSecret, nil, false,
+	batch, err := s.prepareVariableChanges(r.Context(), project.TeamID, project.ID, req, wasSecret, nil, false,
 		func(key string) string { return sharedVariableContext(project.ID, key) })
 	if err != nil {
 		writeError(w, r, err)
@@ -1265,7 +1273,7 @@ func (b variableBatch) answer() []store.Variable {
 // prepareVariableChanges checks a batch and seals its values, before anything
 // is written: a key that is not one, a key given twice, or a key both set and
 // removed refuses the whole batch.
-func (s *Server) prepareVariableChanges(ctx context.Context, teamID string, req changeVariablesRequest,
+func (s *Server) prepareVariableChanges(ctx context.Context, teamID, projectID string, req changeVariablesRequest,
 	wasSecret, wasBuildTime map[string]bool, buildTimeAllowed bool, sealContext func(key string) string) (variableBatch, error) {
 	var batch variableBatch
 	if len(req.Set)+len(req.Unset) == 0 {
@@ -1298,7 +1306,7 @@ func (s *Server) prepareVariableChanges(ctx context.Context, teamID string, req 
 			if item.Value != "" {
 				return batch, errdoc.BadRequest(fmt.Sprintf("%s has a value and a secret manager to read it from. Give one.", key))
 			}
-			ref, err := s.referenceFor(ctx, teamID, key, *item.From)
+			ref, err := s.referenceFor(ctx, teamID, projectID, key, *item.From)
 			if err != nil {
 				return batch, err
 			}
@@ -1468,7 +1476,7 @@ func (s *Server) handleSetSharedVariable(w http.ResponseWriter, r *http.Request)
 			writeError(w, r, errdoc.BadRequest("Give a value, or a secret manager to read it from, not both."))
 			return
 		}
-		if variable.Reference, err = s.referenceFor(r.Context(), project.TeamID, key, *req.From); err != nil {
+		if variable.Reference, err = s.referenceFor(r.Context(), project.TeamID, project.ID, key, *req.From); err != nil {
 			writeError(w, r, err)
 			return
 		}

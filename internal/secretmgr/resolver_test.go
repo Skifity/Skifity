@@ -57,7 +57,7 @@ func TestResolveReadsEachSecretOnceAndNamesWhatFailed(t *testing.T) {
 	f := newFakeVault(t)
 	vault := connect(t, db, keyring, acme, "company-vault", KindVault, f.settings(), f.credentials())
 
-	values, err := r.Resolve(t.Context(), acme, []Wanted{
+	values, err := r.Resolve(t.Context(), acme, "", []Wanted{
 		{Variable: "STRIPE_KEY", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}},
 		{Variable: "PORT", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "port"}},
 	})
@@ -73,7 +73,7 @@ func TestResolveReadsEachSecretOnceAndNamesWhatFailed(t *testing.T) {
 
 	// A key that is not there fails the lot, and says which variable, which
 	// connection and why.
-	_, err = r.Resolve(t.Context(), acme, []Wanted{
+	_, err = r.Resolve(t.Context(), acme, "", []Wanted{
 		{Variable: "STRIPE_KEY", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}},
 		{Variable: "MAIL_PASSWORD", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "mail"}},
 	})
@@ -91,7 +91,7 @@ func TestResolveReadsEachSecretOnceAndNamesWhatFailed(t *testing.T) {
 	}
 
 	// Another team's connection is not found, even with its id.
-	_, err = r.Resolve(t.Context(), other, []Wanted{
+	_, err = r.Resolve(t.Context(), other, "", []Wanted{
 		{Variable: "STOLEN", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}},
 	})
 	if !errors.As(err, &problem) || problem.Code != "secrets.reference_unresolved" || problem.Context["reason"] != string(NotFound) {
@@ -105,7 +105,7 @@ func TestACacheIsSharedAcrossResolutions(t *testing.T) {
 	vault := connect(t, db, keyring, acme, "company-vault", KindVault, f.settings(), f.credentials())
 	ctx := WithCache(t.Context())
 	for range 3 {
-		if _, err := r.Resolve(ctx, acme, []Wanted{
+		if _, err := r.Resolve(ctx, acme, "", []Wanted{
 			{Variable: "STRIPE_KEY", Reference: store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}},
 		}); err != nil {
 			t.Fatal(err)
@@ -169,7 +169,7 @@ func TestOneResolutionSignsInOnce(t *testing.T) {
 	r, db, keyring, acme, _ := resolverFixture(t)
 	f := newFakeInfisical(t)
 	infisical := connect(t, db, keyring, acme, "infisical", KindInfisical, f.settings(), f.credentials())
-	values, err := r.Resolve(t.Context(), acme, []Wanted{
+	values, err := r.Resolve(t.Context(), acme, "", []Wanted{
 		{Variable: "STRIPE_KEY", Reference: store.SecretReference{ConnectionID: infisical.ID, Path: "STRIPE_KEY"}},
 		{Variable: "FROM_CONFIG", Reference: store.SecretReference{ConnectionID: infisical.ID, Path: "/backend/CONFIG", Key: "stripe_key"}},
 	})

@@ -1,14 +1,23 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { KeyRoundIcon, PlusIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react"
+import {
+  KeyRoundIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  SlidersHorizontalIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
+import { useTeamProjects } from "@/components/settings/member-access"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -17,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -28,11 +37,13 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { useSession } from "@/hooks/use-session"
-import { api, type List } from "@/lib/api"
+import { api, ApiError, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { SecretManager, SecretManagerKind } from "@/lib/types"
+import type { Project, SecretManager, SecretManagerKind } from "@/lib/types"
 
 export const SECRET_MANAGER_KINDS: SecretManagerKind[] = ["vault", "infisical", "doppler", "aws"]
 
@@ -76,6 +87,36 @@ function credentialsFor(kind: SecretManagerKind, auth: string): string[] {
 
 const OPTIONAL_CREDENTIALS = new Set(["session_token"])
 
+/**
+ * What a path limit looks like for each kind: the way a reference to it
+ * writes the path. Examples of paths, not words, so they are not translated.
+ */
+const PATH_EXAMPLES: Record<SecretManagerKind, string> = {
+  vault: "shop\nshared/smtp",
+  infisical: "/shop",
+  doppler: "SHOP",
+  aws: "prod/shop",
+}
+
+/** The prefixes typed into the box, one a line. */
+function pathsFrom(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+/**
+ * The projects a connection may be used by, by name. A project deleted since
+ * stays on the connection's list, so the connection stays limited; it has no
+ * name to show.
+ */
+function projectNames(manager: SecretManager, projects: Project[]): string[] {
+  return manager.allowed_project_ids
+    .map((id) => projects.find((project) => project.id === id)?.name)
+    .filter((name): name is string => Boolean(name))
+}
+
 /** The one setting that tells two connections of a kind apart. */
 function where(manager: SecretManager): string | null {
   const s = manager.settings
@@ -109,6 +150,9 @@ export function SecretManagersCard() {
     enabled: Boolean(team),
   })
   const [adding, setAdding] = useState(false)
+  const [limiting, setLimiting] = useState<SecretManager | null>(null)
+  const projects = useTeamProjects()
+  const teamProjects = projects.data?.items ?? []
 
   const refresh = () =>
     void queryClient.invalidateQueries({ queryKey: ["secret-managers", team?.id] })
@@ -168,6 +212,10 @@ export function SecretManagersCard() {
                   </span>
                   {isAdmin && (
                     <>
+                      <Button variant="ghost" size="sm" onClick={() => setLimiting(manager)}>
+                        <SlidersHorizontalIcon className="size-4" />
+                        {t("secretManagers.limits")}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -198,6 +246,7 @@ export function SecretManagersCard() {
                     </>
                   )}
                 </div>
+                <LimitsSummary manager={manager} projects={teamProjects} />
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {isAdmin ? (
                     <Select
@@ -248,7 +297,274 @@ export function SecretManagersCard() {
       {adding && (
         <NewSecretManagerDialog path={path} onClose={() => setAdding(false)} onSaved={refresh} />
       )}
+      {limiting && (
+        <LimitsDialog
+          key={limiting.id}
+          path={`${path}/${limiting.id}`}
+          manager={limiting}
+          onClose={() => setLimiting(null)}
+          onSaved={refresh}
+        />
+      )}
     </Card>
+  )
+}
+
+/**
+ * What a connection may be used for, under its name. One nobody limited to
+ * some paths says so as a warning: anybody who can set a variable in any
+ * project can read whatever its credentials can.
+ */
+function LimitsSummary({ manager, projects }: { manager: SecretManager; projects: Project[] }) {
+  const { t } = useTranslation()
+  const names = projectNames(manager, projects)
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+        {manager.allowed_paths.length === 0 ? (
+          <Badge variant="outline" className="border-warning/30 text-warning">
+            {t("secretManagers.anyPath")}
+          </Badge>
+        ) : (
+          <span className="font-mono">
+            {t("secretManagers.onlyPaths", { paths: manager.allowed_paths.join(", ") })}
+          </span>
+        )}
+        <span>
+          {manager.allowed_project_ids.length === 0
+            ? t("secretManagers.everyProject")
+            : names.length > 0
+              ? t("secretManagers.onlyProjects", { projects: names.join(", ") })
+              : t("secretManagers.projectsGone")}
+        </span>
+      </div>
+      {manager.allowed_paths.length === 0 && (
+        <p className="flex items-start gap-1.5 text-warning">
+          <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+          {t("secretManagers.anyPathWarning")}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The two limits, as the new-connection form and the limits dialog both ask
+ * for them. The paths are a box of lines; the projects a switch and a list,
+ * because an empty list is every project and "none chosen yet" must not be
+ * sent as that.
+ */
+function LimitsFields({
+  idPrefix,
+  kind,
+  paths,
+  onPaths,
+  limited,
+  onLimited,
+  chosen,
+  onChosen,
+}: {
+  idPrefix: string
+  kind: SecretManagerKind
+  paths: string
+  onPaths: (paths: string) => void
+  limited: boolean
+  onLimited: (limited: boolean) => void
+  chosen: string[]
+  onChosen: (chosen: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const projects = useTeamProjects()
+  const items = projects.data?.items ?? []
+  const noPaths = pathsFrom(paths).length === 0
+  return (
+    <>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-paths`}>{t("secretManagers.allowedPaths")}</FieldLabel>
+        <Textarea
+          id={`${idPrefix}-paths`}
+          value={paths}
+          rows={3}
+          className="font-mono"
+          spellCheck={false}
+          autoComplete="off"
+          placeholder={PATH_EXAMPLES[kind]}
+          onChange={(event) => onPaths(event.target.value)}
+        />
+        <FieldDescription>
+          {t("secretManagers.allowedPathsHelp")} {t(`secretManagers.pathsLook.${kind}`)}
+        </FieldDescription>
+        {noPaths && (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+            {t("secretManagers.allowedPathsSuggest")}
+          </p>
+        )}
+      </Field>
+
+      <div className="space-y-3 rounded-lg border p-3">
+        <Field orientation="horizontal">
+          <Switch id={`${idPrefix}-limited`} checked={limited} onCheckedChange={onLimited} />
+          <FieldContent>
+            <FieldLabel htmlFor={`${idPrefix}-limited`} className="font-normal">
+              {t("secretManagers.onlySomeProjects")}
+            </FieldLabel>
+            <FieldDescription>{t("secretManagers.onlySomeProjectsHelp")}</FieldDescription>
+          </FieldContent>
+        </Field>
+        {limited && (
+          <div className="space-y-2 pl-1">
+            {items.map((project) => {
+              const box = `${idPrefix}-project-${project.id}`
+              return (
+                <Field key={project.id} orientation="horizontal">
+                  <Checkbox
+                    id={box}
+                    checked={chosen.includes(project.id)}
+                    onCheckedChange={(value) =>
+                      onChosen(
+                        value === true
+                          ? [...chosen, project.id]
+                          : chosen.filter((other) => other !== project.id),
+                      )
+                    }
+                  />
+                  <FieldLabel htmlFor={box} className="font-normal">
+                    {project.name}
+                  </FieldLabel>
+                </Field>
+              )
+            })}
+            {chosen.every((id) => !items.some((project) => project.id === id)) && (
+              <p className="text-xs text-muted-foreground">{t("secretManagers.chooseProject")}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * The projects to send: the ones chosen that still exist. A switch that is on
+ * with none of them is not sent at all — the form will not save it — because
+ * an empty list is every project.
+ */
+function chosenProjects(limited: boolean, chosen: string[], projects: Project[]): string[] {
+  if (!limited) return []
+  return chosen.filter((id) => projects.some((project) => project.id === id))
+}
+
+/**
+ * Changing what a connection may be used for. Narrowing it so that variables
+ * which read it now would be outside it is refused by the panel, naming them;
+ * the dialog then offers to save anyway, since cutting a project off is
+ * sometimes the point.
+ */
+function LimitsDialog({
+  path,
+  manager,
+  onClose,
+  onSaved,
+}: {
+  path: string
+  manager: SecretManager
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useTranslation()
+  const projects = useTeamProjects()
+  const [paths, setPaths] = useState(manager.allowed_paths.join("\n"))
+  const [limited, setLimited] = useState(manager.allowed_project_ids.length > 0)
+  const [chosen, setChosen] = useState<string[]>(manager.allowed_project_ids)
+
+  const sent = chosenProjects(limited, chosen, projects.data?.items ?? [])
+  const incomplete = limited && sent.length === 0
+
+  const save = useMutation({
+    mutationFn: (force: boolean) =>
+      api.patch<SecretManager>(path, {
+        allowed_paths: pathsFrom(paths),
+        allowed_project_ids: sent,
+        force: force || undefined,
+      }),
+    onSuccess: (saved) => {
+      const cut = saved.stopped_resolving ?? []
+      if (cut.length > 0) {
+        toast.warning(
+          t("secretManagers.limitsSavedCutOff", { name: saved.name, variables: cut.join(", ") }),
+        )
+      } else {
+        toast.success(t("secretManagers.limitsSaved", { name: saved.name }))
+      }
+      onSaved()
+      onClose()
+    },
+  })
+  const breaks =
+    save.error instanceof ApiError && save.error.problem.code === "secrets.limits_break_references"
+  // "Save anyway" is an answer to the variables the panel named for these
+  // limits; limits changed after that are asked about afresh.
+  const edited =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      save.reset()
+      set(value)
+    }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("secretManagers.limitsTitle", { name: manager.name })}</DialogTitle>
+          <DialogDescription>{t("secretManagers.limitsHelp")}</DialogDescription>
+        </DialogHeader>
+        <form
+          id="secret-manager-limits"
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!incomplete) save.mutate(false)
+          }}
+        >
+          <LimitsFields
+            idPrefix="secret-manager-limits"
+            kind={manager.kind}
+            paths={paths}
+            onPaths={edited(setPaths)}
+            limited={limited}
+            onLimited={edited(setLimited)}
+            chosen={chosen}
+            onChosen={edited(setChosen)}
+          />
+          {save.error != null && <ErrorDisplay error={save.error} compact />}
+        </form>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          {breaks ? (
+            <Button
+              variant="destructive"
+              disabled={save.isPending || incomplete}
+              onClick={() => save.mutate(true)}
+            >
+              {save.isPending && <Spinner />}
+              {t("secretManagers.saveAnyway")}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              form="secret-manager-limits"
+              disabled={save.isPending || incomplete}
+            >
+              {save.isPending && <Spinner />}
+              {t("secretManagers.saveLimits")}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -272,15 +588,21 @@ function NewSecretManagerDialog({
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [credentials, setCredentials] = useState<Record<string, string>>({})
   const [minutes, setMinutes] = useState("0")
+  const [paths, setPaths] = useState("")
+  const [limited, setLimited] = useState(false)
+  const [chosen, setChosen] = useState<string[]>([])
+  const projects = useTeamProjects()
 
   // Only what the chosen kind takes is sent: a field filled in for another
   // kind before switching is not a setting of this one.
   const settingFields = SETTINGS[kind]
   const credentialFields = credentialsFor(kind, auth)
+  const sentProjects = chosenProjects(limited, chosen, projects.data?.items ?? [])
   const missing =
     !/^[a-z0-9][a-z0-9_-]*$/.test(name) ||
     settingFields.some((field) => !field.optional && !settings[field.name]?.trim()) ||
-    credentialFields.some((field) => !OPTIONAL_CREDENTIALS.has(field) && !credentials[field])
+    credentialFields.some((field) => !OPTIONAL_CREDENTIALS.has(field) && !credentials[field]) ||
+    (limited && sentProjects.length === 0)
 
   const save = useMutation({
     mutationFn: () => {
@@ -299,6 +621,8 @@ function NewSecretManagerDialog({
         settings: sentSettings,
         credentials: sentCredentials,
         refresh_minutes: Number(minutes),
+        allowed_paths: pathsFrom(paths),
+        allowed_project_ids: sentProjects,
       })
     },
     onSuccess: (saved) => {
@@ -418,6 +742,17 @@ function NewSecretManagerDialog({
             </Field>
           ))}
           <FieldDescription>{t("secretManagers.credentialsHelp")}</FieldDescription>
+
+          <LimitsFields
+            idPrefix="new-secret-manager"
+            kind={kind}
+            paths={paths}
+            onPaths={setPaths}
+            limited={limited}
+            onLimited={setLimited}
+            chosen={chosen}
+            onChosen={setChosen}
+          />
 
           <Field>
             <FieldLabel htmlFor="secret-manager-refresh">{t("secretManagers.refresh")}</FieldLabel>

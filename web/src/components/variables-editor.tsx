@@ -97,6 +97,7 @@ export function VariablesEditor({
   showPreviews,
   refreshable,
   description,
+  projectId,
 }: {
   /** The API prefix, such as /api/apps/{id} or /api/projects/{id}. */
   base: string
@@ -107,6 +108,11 @@ export function VariablesEditor({
   /** Offer to read the ones from secret managers again: an app's. */
   refreshable?: boolean
   description?: string
+  /**
+   * The project the variables are read in, so only the secret managers it
+   * may use are offered. The panel refuses the others either way.
+   */
+  projectId?: string
 }) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
@@ -261,6 +267,7 @@ export function VariablesEditor({
       {adding && (
         <NewVariableRow
           showBuildTime={showBuildTime}
+          projectId={projectId}
           pending={save.isPending}
           error={save.error}
           onCancel={() => setAdding(false)}
@@ -486,12 +493,14 @@ function PreviewValueDialog({
 
 function NewVariableRow({
   showBuildTime,
+  projectId,
   pending,
   error,
   onSave,
   onCancel,
 }: {
   showBuildTime?: boolean
+  projectId?: string
   pending: boolean
   error: unknown
   onSave: (variable: NewVariable) => void
@@ -514,9 +523,18 @@ function NewVariableRow({
     queryFn: () => api.get<List<SecretManager>>(`/api/teams/${team?.id}/secret-managers`),
     enabled: Boolean(team) && source === "manager",
   })
-  const connections = managers.data?.items ?? []
+  const connected = managers.data?.items ?? []
+  // Only the ones this project may read through: one limited to other
+  // projects would be refused when the variable is saved.
+  const connections = connected.filter(
+    (manager) =>
+      projectId === undefined ||
+      manager.allowed_project_ids.length === 0 ||
+      manager.allowed_project_ids.includes(projectId),
+  )
   // The one chosen, or the only one there is.
   const chosen = connection || (connections.length === 1 ? connections[0].name : "")
+  const chosenManager = connections.find((manager) => manager.name === chosen)
   const fromManager = source === "manager"
 
   // The panel refuses a name Kubernetes cannot carry, and says so before the
@@ -590,7 +608,11 @@ function NewVariableRow({
             ) : managers.error ? (
               <ErrorDisplay error={managers.error} compact />
             ) : connections.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("variables.noSecretManagers")}</p>
+              <p className="text-sm text-muted-foreground">
+                {connected.length === 0
+                  ? t("variables.noSecretManagers")
+                  : t("variables.noSecretManagersForProject")}
+              </p>
             ) : (
               <div className="space-y-2">
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -635,6 +657,14 @@ function NewVariableRow({
                   </Field>
                 </div>
                 <FieldDescription>{t("variables.referenceHelp")}</FieldDescription>
+                {chosenManager && chosenManager.allowed_paths.length > 0 && (
+                  <FieldDescription>
+                    {t("variables.allowedPathsHint", {
+                      name: chosenManager.name,
+                      paths: chosenManager.allowed_paths.join(", "),
+                    })}
+                  </FieldDescription>
+                )}
               </div>
             )
           ) : (

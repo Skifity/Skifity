@@ -394,7 +394,8 @@
       "auth.passkey_added": "已添加通行密钥",
       "auth.passkey_removed": "已移除通行密钥",
       "auth.passkey_renamed": "已重命名通行密钥",
-      "auth.passkey_clone_suspected": "通行密钥被拒绝：它可能已被复制"
+      "auth.passkey_clone_suspected": "通行密钥被拒绝：它可能已被复制",
+      "secret_manager.limited": "已限制密钥管理器"
     }
   },
   "projects": {
@@ -818,7 +819,9 @@
     "connection": "密钥管理器",
     "path": "路径",
     "refKey": "键（可选）",
-    "referenceHelp": "该值在每次部署时读取，绝不保存在面板中。包含多个值的密钥需要指定所用值的键。现在会读取一次以进行检查。"
+    "referenceHelp": "该值在每次部署时读取，绝不保存在面板中。包含多个值的密钥需要指定所用值的键。现在会读取一次以进行检查。",
+    "noSecretManagersForProject": "没有允许此项目使用的密钥管理器。管理员可在“设置”→“密钥管理器”中允许。",
+    "allowedPathsHint": "{{name}} 只读取以下路径或其下的内容：{{paths}}。"
   },
   "domains": {
     "title": "域名",
@@ -3261,6 +3264,18 @@
         "cause": "此账户没有密码，也没有单点登录，一旦移除最后一个通行密钥，任何人都无法登录它。",
         "impact": "未做任何更改。",
         "fix": "请先添加另一个通行密钥。运行服务器的人也可以用 {{0}} admin reset-password 设置密码。"
+      },
+      "secrets_reference_not_allowed": {
+        "title": "密钥管理器连接不允许此操作",
+        "cause": "{{0}} 从 {{1}} 读取，但连接 {{2}} {{3}}。",
+        "impact": "未读取此变量。设置它会被拒绝，需要它的部署、同步或刷新会在任何内容到达集群前停止：当前运行的版本继续运行。",
+        "fix": "将变量指向该连接允许的路径，或通过专用于此项目的连接读取。团队管理员可在“设置”→“密钥管理器”中更改连接允许的范围。"
+      },
+      "secrets_limits_break_references": {
+        "title": "变量将无法再通过此连接读取",
+        "cause": "通过 {{1}} 读取的 {{0}} 个变量将超出其新限制：{{2}}。",
+        "impact": "没有更改任何内容。使用新限制后，这些应用的下一次部署、同步或刷新会在任何内容到达集群前停止。",
+        "fix": "请先将这些变量指向允许的路径或其他连接。如果目的就是切断它们，请仍然保存限制：在面板中点“仍然保存”，在命令行中使用 --force，在 API 中使用 force: true。"
       }
     }
   },
@@ -4064,8 +4079,33 @@
       "session_token": "Session token"
     },
     "optional": "（可选）",
-    "credentialsHelp": "只授予所需的最小权限：一个只读取应用所用密钥的策略。任何能设置变量的人，都能读取该连接能读取的内容。",
+    "credentialsHelp": "只授予所需的最小权限：一个只读取应用所用密钥的策略。该策略才是真正的边界；下面的限制只是收窄面板允许变量请求的范围。",
     "connect": "检查并连接",
-    "connected": "{{name}} 已连接。"
+    "connected": "{{name}} 已连接。",
+    "limits": "限制",
+    "limitsTitle": "{{name}} 可以用于什么",
+    "limitsHelp": "超出这些限制的变量在设置时会被拒绝，之前已设置的会在其应用下一次部署时停止。这些限制只约束经过面板的操作：真正的边界是密钥管理器自身的策略。",
+    "allowedPaths": "允许的路径",
+    "allowedPathsHelp": "每行一个前缀。路径等于前缀或位于其下时才被允许，仅以其开头不算：app 允许 app/db，不允许 app-b。留空表示任意路径。",
+    "pathsLook": {
+      "vault": "在 Vault 中，是挂载点下的路径，例如 shop；策略中写的 secret/data/shop 与之相同。",
+      "infisical": "在 Infisical 中，是一个文件夹，例如 /shop。",
+      "doppler": "在 Doppler 中，是密钥名称的开头，例如 SHOP 对应 SHOP_STRIPE_KEY：令牌本身已指定项目和配置。",
+      "aws": "在 AWS 中，是密钥名称的开头，例如 prod/shop；对于用 ARN 引用的变量，是 ARN 的开头。"
+    },
+    "allowedPathsSuggest": "请至少设置一个。否则，任何能在任一项目中设置变量的人，都能读取此连接凭据可读取的任何路径。",
+    "onlySomeProjects": "仅限部分项目",
+    "onlySomeProjectsHelp": "只有这些项目的变量（应用自己的变量或项目共享的变量）可以通过它读取。",
+    "chooseProject": "请至少选择一个项目。",
+    "anyPath": "任意路径",
+    "anyPathWarning": "未限制路径：任何能设置变量的人，都能读取其凭据可读取的一切。",
+    "onlyPaths": "仅限 {{paths}}",
+    "everyProject": "所有项目",
+    "onlyProjects": "仅限 {{projects}}",
+    "projectsGone": "其项目已被删除：没有变量可以通过它读取",
+    "saveLimits": "保存限制",
+    "saveAnyway": "仍然保存",
+    "limitsSaved": "已保存 {{name}} 的限制。",
+    "limitsSavedCutOff": "已保存 {{name}} 的限制。以下变量将无法再读取：{{variables}}。"
   }
 }

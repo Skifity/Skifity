@@ -1161,6 +1161,12 @@ export type SecretManager = {
   name: string
   kind: SecretManagerKind
   settings: Record<string, string>
+  /** Path prefixes a variable may read at or under. Empty is any path. */
+  allowed_paths: string[]
+  /** Projects whose variables may read through it. Empty is every project. */
+  allowed_project_ids: string[]
+  /** Only after a forced change of limits: the variables it cut off. */
+  stopped_resolving?: string[]
   credentials: string[]
   used_by: number
   refresh_minutes: number

@@ -402,7 +402,8 @@
       "auth.passkey_added": "Passkey added",
       "auth.passkey_removed": "Passkey removed",
       "auth.passkey_renamed": "Passkey renamed",
-      "auth.passkey_clone_suspected": "Passkey refused: it may have been copied"
+      "auth.passkey_clone_suspected": "Passkey refused: it may have been copied",
+      "secret_manager.limited": "Secret manager limited"
     }
   },
   "projects": {
@@ -828,7 +829,9 @@
     "connection": "Secret manager",
     "path": "Path",
     "refKey": "Key (optional)",
-    "referenceHelp": "The value is read at every deploy and never stored in the panel. A secret that holds several values needs the key of the one to use. It is read once now, to check it."
+    "referenceHelp": "The value is read at every deploy and never stored in the panel. A secret that holds several values needs the key of the one to use. It is read once now, to check it.",
+    "noSecretManagersForProject": "No secret manager may be used by this project. An administrator can allow it under Settings, Secret managers.",
+    "allowedPathsHint": "{{name}} reads only at or under: {{paths}}."
   },
   "domains": {
     "title": "Domains",
@@ -3280,6 +3283,18 @@
         "cause": "The account has no password and no single sign-on, so without its last passkey nobody could sign in to it.",
         "impact": "Nothing was changed.",
         "fix": "Add another passkey first. Whoever runs the server can also set a password with {{0}} admin reset-password."
+      },
+      "secrets_reference_not_allowed": {
+        "title": "The secret manager connection does not allow this",
+        "cause": "{{0}} is read from {{1}}, and the connection {{2}} {{3}}.",
+        "impact": "This variable was not read. Setting it is refused, and a deploy, a sync or a refresh that needs it stops before anything reaches the cluster: the version running keeps running.",
+        "fix": "Point the variable at a path the connection allows, or read it through a connection meant for this project. A team admin changes what a connection allows under Settings → Secret managers."
+      },
+      "secrets_limits_break_references": {
+        "title": "Variables would stop resolving through this connection",
+        "cause": "{{0}} variables read through {{1}} would be outside its new limits: {{2}}.",
+        "impact": "Nothing was changed. With the new limits, the next deploy, sync or refresh of those apps would stop before anything reaches the cluster.",
+        "fix": "Point those variables at an allowed path or another connection first. If cutting them off is the point, save the limits anyway: Save anyway in the panel, --force on the command line, force: true in the API."
       }
     }
   },
@@ -4088,8 +4103,33 @@
       "session_token": "Session token"
     },
     "optional": "(optional)",
-    "credentialsHelp": "Give it the least it needs: a policy that reads only the secrets your apps use. Anybody who can set a variable can read what the connection can.",
+    "credentialsHelp": "Give it the least it needs: a policy that reads only the secrets your apps use. That policy is the real boundary; the limits below narrow what the panel lets a variable ask for.",
     "connect": "Check and connect",
-    "connected": "{{name}} is connected."
+    "connected": "{{name}} is connected.",
+    "limits": "Limits",
+    "limitsTitle": "What {{name}} may be used for",
+    "limitsHelp": "A variable outside these limits is refused when it is set, and one set before stops at its app's next deploy. These limits bind only what goes through the panel: the secret manager's own policy is the real boundary.",
+    "allowedPaths": "Allowed paths",
+    "allowedPathsHelp": "One prefix a line. A path is allowed at a prefix or under it, never because it merely starts with it: app allows app/db, not app-b. Empty is any path.",
+    "pathsLook": {
+      "vault": "In Vault, a path under the mount, such as shop; secret/data/shop, as a policy writes it, is the same.",
+      "infisical": "In Infisical, a folder, such as /shop.",
+      "doppler": "In Doppler, the start of a secret's name, such as SHOP for SHOP_STRIPE_KEY: the token already names the project and config.",
+      "aws": "In AWS, the start of a secret's name, such as prod/shop, or of its ARN for variables that name one."
+    },
+    "allowedPathsSuggest": "Set at least one. Without it, anybody who can set a variable in any project can read any path this connection's credentials can.",
+    "onlySomeProjects": "Only some projects",
+    "onlySomeProjectsHelp": "Only variables of these projects, an app's own or one the project shares, may read through it.",
+    "chooseProject": "Choose at least one project.",
+    "anyPath": "Any path",
+    "anyPathWarning": "Not limited to any path: anybody who can set a variable can read whatever its credentials can.",
+    "onlyPaths": "Only {{paths}}",
+    "everyProject": "Every project",
+    "onlyProjects": "Only for {{projects}}",
+    "projectsGone": "Its projects were deleted: no variable can read through it",
+    "saveLimits": "Save limits",
+    "saveAnyway": "Save anyway",
+    "limitsSaved": "{{name}}'s limits are saved.",
+    "limitsSavedCutOff": "{{name}}'s limits are saved. These no longer resolve: {{variables}}."
   }
 }

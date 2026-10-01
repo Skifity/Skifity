@@ -1,0 +1,21 @@
+-- What a secret manager connection may be used for.
+--
+-- A connection belongs to the team, and until now anybody who may set a
+-- variable in any of the team's projects could point one at any path its
+-- credentials read, deploy, and read the value from inside their own app. An
+-- administrator can now limit a connection to some path prefixes and to some
+-- projects. Both lists are checked when a reference is set and again every
+-- time one is read, so narrowing a connection takes effect at the next
+-- deploy, sync or refresh of whatever was pointed at it before.
+--
+-- An empty list is no limit, which is what every connection made before this
+-- has, so none of them stops working.
+--
+-- The projects are a JSON list of ids rather than a table with a foreign key,
+-- on purpose. With ON DELETE CASCADE, deleting the last project a connection
+-- was limited to would leave an empty list, which means every project: the
+-- lesson of 0043, where the answer was a switch beside the list. Here the id
+-- of a deleted project simply stays, so a connection limited to projects that
+-- are all gone is limited to nothing rather than opened to everything.
+ALTER TABLE secret_connections ADD COLUMN allowed_paths TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE secret_connections ADD COLUMN allowed_project_ids TEXT NOT NULL DEFAULT '[]';

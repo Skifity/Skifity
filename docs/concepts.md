@@ -249,12 +249,16 @@ a pull request from a **fork** gets nothing read from a secret manager, not the
 value and not the reference, for the reason in [A preview's
 variables](#a-previews-variables).
 
-**Who can read what.** A connection reads whatever its policy allows, and
-anybody who can set a variable can point one at any path it can read. Give each
-connection a policy that reads only what your apps use — a Vault policy on
-`shop/*`, an Infisical identity with read access to one environment, a Doppler
-service token for one config, an IAM policy on a prefix — and a team that needs
-a wall between projects a connection per project.
+**Who can read what.** A connection reads whatever its policy allows. Unless an
+administrator [limits it](configuration.md#limiting-a-connection) to some paths
+and some projects, anybody who can set a variable in any of the team's projects
+can point one at any path it can read. Give each connection a policy that reads
+only what your apps use — a Vault policy on `shop/*`, an Infisical identity with
+read access to one environment, a Doppler service token for one config, an IAM
+policy on a prefix — and a team that needs a wall between projects a connection
+per project, limited to that project. A variable outside a connection's limits
+is refused when it is set, and again whenever it is read, so narrowing a
+connection stops what was pointed outside it at that app's next deploy.
 
 ## Files
 

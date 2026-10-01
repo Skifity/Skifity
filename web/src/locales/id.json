@@ -394,7 +394,8 @@
       "auth.passkey_added": "Kunci sandi ditambahkan",
       "auth.passkey_removed": "Kunci sandi dihapus",
       "auth.passkey_renamed": "Nama kunci sandi diganti",
-      "auth.passkey_clone_suspected": "Kunci sandi ditolak: mungkin sudah disalin"
+      "auth.passkey_clone_suspected": "Kunci sandi ditolak: mungkin sudah disalin",
+      "secret_manager.limited": "Pengelola rahasia dibatasi"
     }
   },
   "projects": {
@@ -818,7 +819,9 @@
     "connection": "Pengelola rahasia",
     "path": "Path",
     "refKey": "Kunci (opsional)",
-    "referenceHelp": "Nilainya dibaca di setiap deploy dan tidak pernah disimpan di panel. Rahasia yang berisi beberapa nilai memerlukan kunci dari nilai yang dipakai. Nilainya dibaca sekali sekarang untuk memeriksanya."
+    "referenceHelp": "Nilainya dibaca di setiap deploy dan tidak pernah disimpan di panel. Rahasia yang berisi beberapa nilai memerlukan kunci dari nilai yang dipakai. Nilainya dibaca sekali sekarang untuk memeriksanya.",
+    "noSecretManagersForProject": "Tidak ada pengelola rahasia yang boleh dipakai proyek ini. Administrator bisa mengizinkannya di Pengaturan, Pengelola rahasia.",
+    "allowedPathsHint": "{{name}} hanya membaca di atau di bawah: {{paths}}."
   },
   "domains": {
     "title": "Domain",
@@ -3261,6 +3264,18 @@
         "cause": "Akun ini tidak punya kata sandi dan tidak memakai single sign-on, jadi tanpa kunci sandi terakhirnya tidak ada yang bisa masuk ke akun ini.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Tambahkan kunci sandi lain dulu. Pengelola server juga dapat mengatur kata sandi dengan {{0}} admin reset-password."
+      },
+      "secrets_reference_not_allowed": {
+        "title": "Koneksi pengelola rahasia tidak mengizinkan ini",
+        "cause": "{{0}} dibaca dari {{1}}, dan koneksi {{2}} {{3}}.",
+        "impact": "Variabel ini tidak dibaca. Mengaturnya ditolak, dan deploy, sinkronisasi, atau penyegaran yang membutuhkannya berhenti sebelum apa pun sampai ke cluster: versi yang berjalan tetap berjalan.",
+        "fix": "Arahkan variabel ke path yang diizinkan koneksi, atau baca lewat koneksi yang dimaksudkan untuk proyek ini. Admin tim mengubah apa yang diizinkan koneksi di Pengaturan → Pengelola rahasia."
+      },
+      "secrets_limits_break_references": {
+        "title": "Variabel tidak akan bisa dibaca lagi lewat koneksi ini",
+        "cause": "{{0}} variabel yang membaca lewat {{1}} akan berada di luar batasan barunya: {{2}}.",
+        "impact": "Tidak ada yang diubah. Dengan batasan baru, deploy, sinkronisasi, atau penyegaran berikutnya dari aplikasi-aplikasi itu akan berhenti sebelum apa pun sampai ke cluster.",
+        "fix": "Arahkan dulu variabel-variabel itu ke path yang diizinkan atau ke koneksi lain. Jika memutusnya memang tujuannya, tetap simpan batasannya: Tetap simpan di panel, --force di baris perintah, force: true di API."
       }
     }
   },
@@ -4064,8 +4079,33 @@
       "session_token": "Session token"
     },
     "optional": "(opsional)",
-    "credentialsHelp": "Berikan akses seminimal mungkin: kebijakan yang hanya membaca rahasia yang dipakai aplikasi Anda. Siapa pun yang bisa mengatur variabel bisa membaca apa yang bisa dibaca koneksi ini.",
+    "credentialsHelp": "Berikan akses seminimal mungkin: kebijakan yang hanya membaca rahasia yang dipakai aplikasi Anda. Kebijakan itulah batas yang sebenarnya; batasan di bawah mempersempit apa yang boleh diminta variabel lewat panel.",
     "connect": "Periksa dan hubungkan",
-    "connected": "{{name}} terhubung."
+    "connected": "{{name}} terhubung.",
+    "limits": "Batasan",
+    "limitsTitle": "Untuk apa {{name}} boleh dipakai",
+    "limitsHelp": "Variabel di luar batasan ini ditolak saat diatur, dan yang diatur sebelumnya akan berhenti di deploy berikutnya dari aplikasinya. Batasan ini hanya berlaku untuk apa yang lewat panel: batas yang sebenarnya adalah kebijakan pengelola rahasia itu sendiri.",
+    "allowedPaths": "Path yang diizinkan",
+    "allowedPathsHelp": "Satu prefiks per baris. Path diizinkan jika sama dengan prefiks atau berada di bawahnya, bukan sekadar diawali olehnya: app mengizinkan app/db, bukan app-b. Kosong berarti path apa pun.",
+    "pathsLook": {
+      "vault": "Di Vault, path di bawah mount, seperti shop; secret/data/shop, seperti yang ditulis sebuah kebijakan, sama saja.",
+      "infisical": "Di Infisical, sebuah folder, seperti /shop.",
+      "doppler": "Di Doppler, awal nama rahasia, seperti SHOP untuk SHOP_STRIPE_KEY: token sudah menentukan proyek dan config.",
+      "aws": "Di AWS, awal nama rahasia, seperti prod/shop, atau awal ARN-nya untuk variabel yang menyebut ARN."
+    },
+    "allowedPathsSuggest": "Isi setidaknya satu. Tanpanya, siapa pun yang bisa mengatur variabel di proyek mana pun bisa membaca path apa pun yang bisa dibaca kredensial koneksi ini.",
+    "onlySomeProjects": "Hanya beberapa proyek",
+    "onlySomeProjectsHelp": "Hanya variabel dari proyek-proyek ini, milik aplikasi sendiri atau yang dibagikan proyek, yang boleh membaca lewat koneksi ini.",
+    "chooseProject": "Pilih setidaknya satu proyek.",
+    "anyPath": "Path apa pun",
+    "anyPathWarning": "Tidak dibatasi ke path mana pun: siapa pun yang bisa mengatur variabel bisa membaca apa pun yang bisa dibaca kredensialnya.",
+    "onlyPaths": "Hanya {{paths}}",
+    "everyProject": "Semua proyek",
+    "onlyProjects": "Hanya untuk {{projects}}",
+    "projectsGone": "Proyek-proyeknya sudah dihapus: tidak ada variabel yang bisa membaca lewat koneksi ini",
+    "saveLimits": "Simpan batasan",
+    "saveAnyway": "Tetap simpan",
+    "limitsSaved": "Batasan {{name}} disimpan.",
+    "limitsSavedCutOff": "Batasan {{name}} disimpan. Variabel ini tidak bisa dibaca lagi: {{variables}}."
   }
 }

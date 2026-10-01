@@ -411,3 +411,133 @@ func TestThePeriodicRefreshBacksOffAManagerThatFails(t *testing.T) {
 		t.Error("the backoff is not bounded")
 	}
 }
+
+// limit narrows a connection the way an administrator's PATCH does, after
+// variables were already pointed at it.
+func limit(t *testing.T, db *store.DB, connection store.SecretConnection, paths, projects []string) {
+	t.Helper()
+	row, err := db.GetSecretConnection(t.Context(), connection.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row.AllowedPaths, row.AllowedProjectIDs = paths, projects
+	if err := db.UpdateSecretConnection(t.Context(), &row.SecretConnection, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A connection narrowed after a variable was pointed at it stops that
+// variable at the next deploy, sync and refresh, whichever limit it fell
+// outside, and a shared variable is judged as the project sharing it.
+func TestANarrowedConnectionStopsWhatWasPointedOutsideIt(t *testing.T) {
+	d, db, app, env := testDeployer(t)
+	f, vault := withManager(t, d, db, app, map[string]any{"stripe_key": "sk_live_x"})
+	reference(t, db, app.ID, "STRIPE_KEY", vault, "stripe_key", false)
+	good, err := d.Deploy(t.Context(), api.DeployRequest{AppID: app.ID, CommitSHA: "abc123def456"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	markBuilt(t, db, good.ID, "registry/acme/web:1")
+	settled(t, db, good.ID)
+
+	teamID, _ := db.TeamIDForApp(t.Context(), app.ID)
+	other := store.Project{TeamID: teamID, Name: "Blog", Slug: "blog"}
+	if err := db.CreateProject(t.Context(), &other); err != nil {
+		t.Fatal(err)
+	}
+	notAllowed := func(what string, err error, limit secretmgr.Limit) {
+		t.Helper()
+		var problem *errdoc.Problem
+		if !errors.As(err, &problem) || problem.Code != "secrets.reference_not_allowed" || problem.Context["limit"] != string(limit) {
+			t.Fatalf("%s answered %v", what, err)
+		}
+		if !strings.Contains(problem.Cause, "company-vault") {
+			t.Errorf("%s does not name the connection: %s", what, problem.Cause)
+		}
+	}
+
+	// Limited to another project.
+	limit(t, db, vault, nil, []string{other.ID})
+	reads := f.reads.Load()
+	notAllowed("a sync", d.Sync(t.Context(), app.ID), secretmgr.LimitProject)
+	_, err = d.RefreshReferences(t.Context(), app.ID, "usr_1")
+	notAllowed("a refresh", err, secretmgr.LimitProject)
+	broken, err := d.Deploy(t.Context(), api.DeployRequest{AppID: app.ID, CommitSHA: "abc123def456"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed := settled(t, db, broken.ID); failed.Status != store.DeployFailed || failed.ErrorCode != "secrets.reference_not_allowed" ||
+		!strings.Contains(failed.ErrorMessage, "STRIPE_KEY") {
+		t.Fatalf("the deployment ended %s with %q: %s", failed.Status, failed.ErrorCode, failed.ErrorMessage)
+	}
+	if f.reads.Load() != reads {
+		t.Error("the manager was asked for a variable its connection no longer allows")
+	}
+	if last, err := db.LatestSuccessfulDeployment(t.Context(), app.ID); err != nil || last.ID != good.ID {
+		t.Errorf("the version that was serving is no longer the latest that succeeded: %v %v", last.ID, err)
+	}
+
+	// Limited to this project, and to other paths.
+	limit(t, db, vault, []string{"shop-admin"}, []string{env.ProjectID})
+	notAllowed("a sync", d.Sync(t.Context(), app.ID), secretmgr.LimitPath)
+
+	// Allowed again.
+	limit(t, db, vault, []string{"shop"}, []string{env.ProjectID})
+	if _, err := d.runtimeVariables(t.Context(), app, env); err != nil {
+		t.Fatalf("inside both limits: %v", err)
+	}
+
+	// A project's shared variable, in a project the connection is not for.
+	if err := db.ChangeVariables(t.Context(), app.ID, nil, []string{"STRIPE_KEY"}); err != nil {
+		t.Fatal(err)
+	}
+	shared := store.SharedVariable{ProjectID: env.ProjectID, Key: "SHARED_KEY", IsSecret: true,
+		Reference: &store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}}
+	if err := db.SetSharedVariable(t.Context(), &shared, ""); err != nil {
+		t.Fatal(err)
+	}
+	if variables, err := d.runtimeVariables(t.Context(), app, env); err != nil || variables["SHARED_KEY"] != "sk_live_x" {
+		t.Fatalf("a shared variable in an allowed project: %v %v", variables, err)
+	}
+	limit(t, db, vault, nil, []string{other.ID})
+	_, err = d.runtimeVariables(t.Context(), app, env)
+	notAllowed("a shared variable in another project", err, secretmgr.LimitProject)
+}
+
+// A fork's preview is given no reference at all, so a connection limited
+// away from its project changes nothing for it: it neither reads nor fails.
+func TestAForkPreviewIsUnaffectedByAConnectionsLimits(t *testing.T) {
+	d, db, app, env := testDeployer(t)
+	f, vault := withManager(t, d, db, app, map[string]any{"stripe_key": "sk_live_x"})
+	shared := store.SharedVariable{ProjectID: env.ProjectID, Key: "SHARED_KEY", IsSecret: true,
+		Reference: &store.SecretReference{ConnectionID: vault.ID, Path: "shop", Key: "stripe_key"}}
+	if err := db.SetSharedVariable(t.Context(), &shared, ""); err != nil {
+		t.Fatal(err)
+	}
+	limit(t, db, vault, []string{"elsewhere"}, []string{"prj_another"})
+	fork := store.Environment{ProjectID: env.ProjectID, Name: "Pull request #9", Slug: "pr-9", Kind: store.EnvPreview,
+		SourceRef: "pr-9", Namespace: "acme-shop-pr-9", FromFork: true}
+	if err := db.CreateEnvironment(t.Context(), &fork); err != nil {
+		t.Fatal(err)
+	}
+	copied := app
+	copied.ID, copied.EnvironmentID = "", fork.ID
+	if err := db.CreateApp(t.Context(), &copied); err != nil {
+		t.Fatal(err)
+	}
+	reference(t, db, copied.ID, "OWN_KEY", vault, "stripe_key", true)
+
+	variables, err := d.runtimeVariables(t.Context(), copied, fork)
+	if err != nil {
+		t.Fatalf("a fork's preview failed on a limit it is never asked about: %v", err)
+	}
+	if _, ok := variables["SHARED_KEY"]; ok {
+		t.Error("a fork's preview was given a shared variable read from a secret manager")
+	}
+	if _, err := d.buildTimeVariables(t.Context(), copied); err != nil {
+		t.Errorf("a fork's build failed on a limit: %v", err)
+	}
+	if n := f.reads.Load(); n != 0 {
+		t.Errorf("the secret manager was asked %d times for a fork's preview", n)
+	}
+}

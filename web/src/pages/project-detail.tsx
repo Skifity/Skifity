@@ -262,6 +262,7 @@ export function ProjectDetailPage() {
             base={`/api/projects/${projectId}`}
             queryKey={["shared-variables", projectId]}
             description={t("projects.sharedVariablesHelp")}
+            projectId={projectId}
           />
         </TabsContent>
       </Tabs>

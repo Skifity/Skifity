@@ -351,8 +351,10 @@ CLI:
 
 ```sh
 skifity secrets connections add company-vault --kind vault \
-  --address https://vault.example.com:8200 --credentials-file vault.json
+  --address https://vault.example.com:8200 --credentials-file vault.json \
+  --allow-path shop --allow-project shop
 skifity secrets connections list
+skifity secrets connections limit company-vault --allow-path shop --allow-path shared/smtp
 skifity secrets connections test company-vault
 skifity secrets connections remove company-vault
 ```
@@ -377,6 +379,63 @@ a Git host or a webhook: never to the cloud metadata address or the panel's own
 machine, fifteen seconds at most, and at most 1 MiB of answer. A redirect to
 another host is refused rather than followed, since it would carry the token
 with it.
+
+### Limiting a connection
+
+A connection belongs to the whole team. Without a limit, anybody who may set a
+variable in **any** of the team's projects can point one at **any** path the
+connection's credentials can read, deploy, and read the value from inside their
+own app. Two limits close that, set when the connection is added or later with
+**Limits** beside it under **Settings → Secret managers**, or
+`skifity secrets connections limit`:
+
+| Limit | What it is |
+|---|---|
+| Allowed paths | Path prefixes a variable may read at or under. Empty is any path, and the page says **Any path** beside such a connection. |
+| Allowed projects | The projects whose variables — an app's own, or one a project shares — may read through it. Empty is every project. |
+
+A prefix is written the way a reference's path is, for that kind of manager:
+
+| Kind | A prefix | Allows | Never allows |
+|---|---|---|---|
+| Vault, OpenBao | `shop`, under the mount; `secret/data/shop` as a policy writes it is the same | `shop`, `shop/production` | `shop-admin`, `shopping/x` |
+| Infisical | `/shop`, a folder | `/shop/STRIPE_KEY`, `/shop/api/TOKEN` | `/shop-admin/X` |
+| Doppler | `SHOP`, a name prefix, since the token already names the project and config | `SHOP`, `SHOP_STRIPE_KEY` | `SHOPPING_KEY` |
+| AWS Secrets Manager | `prod/shop`, a name prefix, or an ARN prefix for references written as ARNs | `prod/shop`, `prod/shop/db` | `prod/shop-admin`, an ARN when the prefix is a name |
+
+A prefix matches the path itself or anything under it at a `/` — an `_` for
+Doppler — and **never** as a string prefix: `app` does not allow `app-b`. A
+trailing `/*` is the prefix itself, because a prefix already covers everything
+under it; any other `*` is refused rather than read as "anything starting
+with". Doppler names are compared in upper case. A path with a `.` segment in
+it is under no prefix.
+
+The limits are checked in two places: when a variable is set — refused with
+`secrets.reference_not_allowed` before the manager is asked anything, so a
+refusal does not even say whether the secret exists — and **every time one is
+read**. A variable pointed somewhere before a connection was narrowed therefore
+stops at its app's next deploy, sync or refresh, with the same error, and the
+version running keeps running. Saving limits that would do that to variables
+which work today is refused with the list of them, until you save anyway
+(**Save anyway**, `--force`, or `"force": true`): cutting a project off is
+sometimes the point, and then it should be a decision rather than a surprise
+at somebody's next deploy. Who changed a connection's limits, and to what, is
+in the audit log as **Secret manager limited**.
+
+A project deleted after a connection was limited to it stays on the list, so a
+connection limited to projects that are all gone is limited to nothing rather
+than opened to every project.
+
+**The limit is the panel's.** It binds what goes through the panel and nothing
+else: the credentials still read everything the manager's own policy lets
+them, for anybody who holds them. The manager's policy is the real boundary.
+What to aim for is **one connection per project**, each signing in with
+credentials whose policy reads only that project's secrets — a Vault policy on
+`secret/data/shop/*`, an Infisical identity with access to one environment and
+folder, a Doppler service token for one config, an IAM policy on
+`arn:aws:secretsmanager:*:*:secret:prod/shop/*` — **and** limited here to that
+project and those paths, so that a mistake in either one is not enough on its
+own.
 
 ### HashiCorp Vault and OpenBao
 
