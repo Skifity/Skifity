@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"skifity/internal/sigv4"
 )
 
 // Fakes of each manager's API, answering what its public documentation says
@@ -368,7 +370,7 @@ func newFakeAWS(t *testing.T) *httptest.Server {
 // knows, at the time the request says, and compares.
 func validSignature(r *http.Request, body []byte) bool {
 	authorization := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authorization, sigv4Algorithm+" Credential="+fakeAWSAccessKey+"/") {
+	if !strings.HasPrefix(authorization, sigv4.Algorithm+" Credential="+fakeAWSAccessKey+"/") {
 		return false
 	}
 	at, err := time.Parse("20060102T150405Z", r.Header.Get("X-Amz-Date"))
@@ -388,8 +390,8 @@ func validSignature(r *http.Request, body []byte) bool {
 			again.Header.Set(name, value)
 		}
 	}
-	signV4(again, body, awsCredentials{accessKeyID: fakeAWSAccessKey, secretAccessKey: fakeAWSSecretKey,
-		sessionToken: r.Header.Get("X-Amz-Security-Token")}, "eu-central-1", service, at)
+	sigv4.Sign(again, body, sigv4.Credentials{AccessKeyID: fakeAWSAccessKey, SecretAccessKey: fakeAWSSecretKey,
+		SessionToken: r.Header.Get("X-Amz-Security-Token")}, "eu-central-1", service, at)
 	return again.Header.Get("Authorization") == authorization
 }
 

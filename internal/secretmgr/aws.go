@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"skifity/internal/sigv4"
 )
 
 // awsSecrets reads AWS Secrets Manager with an access key.
@@ -23,7 +25,7 @@ type awsSecrets struct {
 	caller
 	region   string
 	endpoint string
-	creds    awsCredentials
+	creds    sigv4.Credentials
 	now      func() time.Time
 }
 
@@ -32,10 +34,10 @@ func newAWS(c caller, settings, credentials map[string]string) *awsSecrets {
 		caller:   c,
 		region:   settings["region"],
 		endpoint: strings.TrimSuffix(settings["endpoint"], "/"),
-		creds: awsCredentials{
-			accessKeyID:     credentials["access_key_id"],
-			secretAccessKey: credentials["secret_access_key"],
-			sessionToken:    credentials["session_token"],
+		creds: sigv4.Credentials{
+			AccessKeyID:     credentials["access_key_id"],
+			SecretAccessKey: credentials["secret_access_key"],
+			SessionToken:    credentials["session_token"],
 		},
 		now: time.Now,
 	}
@@ -55,7 +57,7 @@ func (s *awsSecrets) address(service string) string {
 
 func (s *awsSecrets) sign(service string, body []byte) func(*http.Request) {
 	return func(req *http.Request) {
-		signV4(req, body, s.creds, s.region, service, s.now())
+		sigv4.Sign(req, body, s.creds, s.region, service, s.now())
 	}
 }
 

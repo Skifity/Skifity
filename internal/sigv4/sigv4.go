@@ -27,10 +27,12 @@ import (
 // Algorithm is the only one this package speaks.
 const Algorithm = "AWS4-HMAC-SHA256"
 
-// Credentials are an access key: its public id and its secret.
+// Credentials are an access key: its public id and its secret, and the
+// session token that comes with temporary ones.
 type Credentials struct {
 	AccessKeyID     string
 	SecretAccessKey string
+	SessionToken    string
 }
 
 // Sign adds X-Amz-Date and an Authorization header to a request whose body is
@@ -41,6 +43,10 @@ func Sign(req *http.Request, payload []byte, creds Credentials, region, service 
 	stamp := now.Format("20060102T150405Z")
 	day := now.Format("20060102")
 	req.Header.Set("X-Amz-Date", stamp)
+	if creds.SessionToken != "" {
+		// Signed like every other X-Amz-* header.
+		req.Header.Set("X-Amz-Security-Token", creds.SessionToken)
+	}
 
 	canonical, signed := CanonicalRequest(req, payload)
 	scope := day + "/" + region + "/" + service + "/aws4_request"

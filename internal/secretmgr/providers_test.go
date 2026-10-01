@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Each manager against a fake of its API: signing in, reading, and each way
@@ -230,22 +229,6 @@ func TestAWSSecretsManager(t *testing.T) {
 	expectReason(t, "an AWS that does not answer", err, Unreachable)
 	_, err = fetchOne(t, KindAWS, awsSettings(server), good, "huge", "")
 	expectReason(t, "an answer too large", err, BadAnswer)
-}
-
-// AWS's own test vector, get-vanilla, from its Signature Version 4 test
-// suite: the one request whose signature is published.
-func TestSignatureVersion4MatchesAWSTestVector(t *testing.T) {
-	req, err := http.NewRequest(http.MethodGet, "https://example.amazonaws.com/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signV4(req, nil, awsCredentials{accessKeyID: "AKIDEXAMPLE", secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"},
-		"us-east-1", "service", time.Date(2015, 8, 30, 12, 36, 0, 0, time.UTC))
-	want := "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, " +
-		"SignedHeaders=host;x-amz-date, Signature=5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31"
-	if got := req.Header.Get("Authorization"); got != want {
-		t.Errorf("Authorization:\n got %s\nwant %s", got, want)
-	}
 }
 
 // The panel's own client will not reach the metadata service or itself, and
