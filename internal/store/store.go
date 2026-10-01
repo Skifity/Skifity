@@ -87,7 +87,30 @@ func fileDSN(path string) string {
 }
 
 // OpenMemory opens a private in-memory database. Used by tests.
+//
+// Every one starts as a copy of the same migrated database, made once per
+// process: hundreds of tests each running every migration was most of what
+// the race detector's run spent its time on, and it ran into the ten minutes
+// go test allows a package.
 func OpenMemory(ctx context.Context) (*DB, error) {
+	db, err := openBlankMemory()
+	if err != nil {
+		return nil, err
+	}
+	image, err := migratedImage(ctx)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := db.restoreImage(ctx, image); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// openBlankMemory opens an in-memory database with nothing in it.
+func openBlankMemory() (*DB, error) {
 	sqlDB, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys(1)&_time_format=sqlite")
 	if err != nil {
 		return nil, fmt.Errorf("open in-memory database: %w", err)
@@ -95,12 +118,78 @@ func OpenMemory(ctx context.Context) (*DB, error) {
 	// A single connection, because every connection to ":memory:" gets its own
 	// database.
 	sqlDB.SetMaxOpenConns(1)
-	db := &DB{DB: sqlDB, path: ":memory:"}
-	if err := db.Migrate(ctx); err != nil {
-		sqlDB.Close()
-		return nil, err
+	return &DB{DB: sqlDB, path: ":memory:"}, nil
+}
+
+// memoryImage is a freshly migrated database as SQLite writes it to disk,
+// made by the first OpenMemory of the process.
+var memoryImage struct {
+	once  sync.Once
+	bytes []byte
+	err   error
+}
+
+func migratedImage(ctx context.Context) ([]byte, error) {
+	memoryImage.once.Do(func() {
+		db, err := openBlankMemory()
+		if err != nil {
+			memoryImage.err = err
+			return
+		}
+		defer db.Close()
+		// Not the caller's context: the image outlives the test that happened
+		// to ask first, and a cancelled one would fail every test after it.
+		if err := db.Migrate(context.WithoutCancel(ctx)); err != nil {
+			memoryImage.err = err
+			return
+		}
+		memoryImage.bytes, memoryImage.err = db.serialize(context.WithoutCancel(ctx))
+	})
+	return memoryImage.bytes, memoryImage.err
+}
+
+// serialize is the database as SQLite would write it to a file.
+func (db *DB) serialize(ctx context.Context) ([]byte, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("serialize the database: %w", err)
 	}
-	return db, nil
+	defer func() { _ = conn.Close() }()
+	var out []byte
+	err = conn.Raw(func(driverConn any) error {
+		s, ok := driverConn.(interface{ Serialize() ([]byte, error) })
+		if !ok {
+			return fmt.Errorf("the SQLite driver cannot serialize a database")
+		}
+		var err error
+		out, err = s.Serialize()
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("serialize the database: %w", err)
+	}
+	return out, nil
+}
+
+// restoreImage replaces the database's contents with a serialized one. The
+// connection's own settings, foreign keys among them, are kept.
+func (db *DB) restoreImage(ctx context.Context, image []byte) error {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("restore the database: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	err = conn.Raw(func(driverConn any) error {
+		d, ok := driverConn.(interface{ Deserialize([]byte) error })
+		if !ok {
+			return fmt.Errorf("the SQLite driver cannot deserialize a database")
+		}
+		return d.Deserialize(image)
+	})
+	if err != nil {
+		return fmt.Errorf("restore the database: %w", err)
+	}
+	return nil
 }
 
 // Path is the file this database lives in, for diagnostics and backups.
