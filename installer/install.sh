@@ -68,6 +68,8 @@ K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
 # The pod network. Decided in pick_pod_network below, unless it is set here.
 POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
+# Where k3s reads registries.yaml from, at start-up only.
+K3S_CONFIG_DIR="/etc/rancher/k3s"
 # Where the uninstaller goes, which the last lines of an install name.
 UNINSTALLER_PATH="/usr/local/bin/skifity-uninstall"
 # k3s applies every file here, and applies one again when it changes.
@@ -227,12 +229,22 @@ preflight() {
 	fi
 	ok "Disk ${DISK_GB} GB free"
 
-	if [ ! -d /run/systemd/system ]; then
+	# Only the k3s this script installs needs systemd. A k3s somebody already
+	# runs their own way (SKIFITY_SKIP_K3S) is theirs to start and stop, and
+	# refusing it for want of an init system the script will never call was
+	# refusing an install that would have worked.
+	if [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
+		note "k3s is already installed (SKIFITY_SKIP_K3S), so systemd is not needed"
+	elif [ ! -d /run/systemd/system ]; then
 		fail \
 			"This server is not running systemd, and k3s installs itself as a systemd service." \
-			"Use a normal Ubuntu or Debian server. Alpine and anything else on OpenRC will not work this way, and neither will a container with no init system, such as an unprivileged LXC or a Docker container."
+			"Use a normal Ubuntu or Debian server. Alpine and anything else on OpenRC will not work this way, and neither will a container with no init system, such as an unprivileged LXC or a Docker container.
+
+If k3s is already installed and running here, set SKIFITY_SKIP_K3S=1 and the
+installer uses it as it is."
+	else
+		ok "systemd is running"
 	fi
-	ok "systemd is running"
 
 	# The memory cgroup controller. The kubelet will not start without it, and
 	# what it prints on the way out is about cgroups rather than about the one
@@ -299,15 +311,17 @@ port_in_use() {
 install_k3s() {
 	step "Installing Kubernetes"
 
-	if [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
-		note "Skipped: SKIFITY_SKIP_K3S is set"
-		return 0
-	fi
-
-	# Before the early return below: an install that is being re-run still has
-	# to end up with the mirror and the ingress configured.
+	# Before either early return below: an install that is being re-run, or
+	# one onto a k3s somebody else installed, still has to end up with the
+	# mirror and the ingress configured. Without the mirror no image the panel
+	# builds can ever be pulled, and SKIFITY_SKIP_K3S used to return first.
 	configure_registry_mirror
 	configure_ingress
+
+	if [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
+		note "Skipped installing k3s: SKIFITY_SKIP_K3S is set"
+		return 0
+	fi
 
 	if have k3s && systemctl is-active --quiet k3s 2>/dev/null; then
 		ok "k3s is already installed and running"
@@ -374,19 +388,19 @@ pick_pod_network() {
 #
 # It is written before k3s starts, because that is when k3s reads it.
 configure_registry_mirror() {
-	mkdir -p /etc/rancher/k3s
-	cat >/etc/rancher/k3s/registries.yaml.new <<EOF
+	mkdir -p "$K3S_CONFIG_DIR"
+	cat >"$K3S_CONFIG_DIR/registries.yaml.new" <<EOF
 # Written by Skifity. Do not edit.
 mirrors:
   "${REGISTRY_HOST}":
     endpoint:
       - "http://127.0.0.1:${REGISTRY_NODE_PORT}"
 EOF
-	if cmp -s /etc/rancher/k3s/registries.yaml.new /etc/rancher/k3s/registries.yaml 2>/dev/null; then
-		rm -f /etc/rancher/k3s/registries.yaml.new
+	if cmp -s "$K3S_CONFIG_DIR/registries.yaml.new" "$K3S_CONFIG_DIR/registries.yaml" 2>/dev/null; then
+		rm -f "$K3S_CONFIG_DIR/registries.yaml.new"
 		return 0
 	fi
-	mv /etc/rancher/k3s/registries.yaml.new /etc/rancher/k3s/registries.yaml
+	mv "$K3S_CONFIG_DIR/registries.yaml.new" "$K3S_CONFIG_DIR/registries.yaml"
 	ok "the container runtime knows where the panel's registry is"
 
 	# k3s reads this at start-up only, so a change to a running node needs a
@@ -394,6 +408,10 @@ EOF
 	if systemctl is-active --quiet k3s 2>/dev/null; then
 		note "Restarting k3s so it picks up the registry configuration"
 		systemctl restart k3s >>"$LOG_FILE" 2>&1 || warn "k3s could not be restarted; do it by hand"
+	elif [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
+		# Not ours to restart: it was started some other way.
+		warn "k3s reads $K3S_CONFIG_DIR/registries.yaml only when it starts."
+		note "Restart it the way you started it, or the apps the panel builds cannot be pulled."
 	fi
 }
 

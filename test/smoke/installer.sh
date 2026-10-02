@@ -263,6 +263,28 @@ else
   t_pass "the plain-HTTP route does not pretend to have a certificate"
 fi
 
+# --- a k3s somebody else installed still gets what the panel needs ----------
+
+# SKIFITY_SKIP_K3S used to return before the registry mirror was written, so
+# on such an install no image the panel built could ever be pulled. Both files
+# are redirected into the work directory.
+out=$( (SKIFITY_SKIP_K3S=1; K3S_CONFIG_DIR="$WORKDIR/k3s"; K3S_MANIFESTS_DIR="$WORKDIR/k3s-manifests"
+  LOG_FILE=/dev/null; install_k3s) 2>&1 || true)
+if grep -q "http://127.0.0.1:${REGISTRY_NODE_PORT}" "$WORKDIR/k3s/registries.yaml" 2>/dev/null; then
+  t_pass "with SKIFITY_SKIP_K3S the registry mirror is still written"
+else
+  t_fail "with SKIFITY_SKIP_K3S no registry mirror was written, so built images cannot be pulled"
+fi
+if grep -q "allowExternalNameServices: true" "$WORKDIR/k3s-manifests/skifity-traefik.yaml" 2>/dev/null; then
+  t_pass "and so is the ingress configuration"
+else
+  t_fail "with SKIFITY_SKIP_K3S the ingress configuration was not written"
+fi
+case "$out" in
+*"only when it starts"*) t_pass "and the operator is told to restart the k3s they started" ;;
+*) t_fail "a changed mirror on somebody else's k3s should say it needs a restart, got: $out" ;;
+esac
+
 # --- the uninstaller the install names is put where it says ------------------
 
 # The install ends by naming skifity-uninstall, and nothing used to install it.
