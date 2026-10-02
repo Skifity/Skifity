@@ -84,7 +84,10 @@ func ClientImage(name, version string) string {
 //
 // It is a separate image on purpose: no database image ships curl, and
 // installing it inside the job needs root, which the namespace does not allow.
-const DefaultTransferImage = "curlimages/curl:8.11.1"
+// It holds a presigned URL to the team's bucket while it runs, so it is pinned
+// by digest as well as version: whoever could re-push the tag would otherwise
+// choose what reads that URL. Read from Docker Hub on 2026-10-02.
+const DefaultTransferImage = "curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69"
 
 // runAsUser is the account each image expects to run as.
 //

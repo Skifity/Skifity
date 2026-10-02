@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/dbsvc"
 	"skifity/internal/kube"
 	"skifity/internal/version"
 )
@@ -106,7 +107,7 @@ func VolumeOwnerFor(confinement kube.Confinement) VolumeOwner {
 // Defaults fills in the images and the bounds.
 func (s *VolumeJobSpec) Defaults() {
 	if s.Image == "" {
-		s.Image = "alpine:3"
+		s.Image = dbsvc.ToolsImage
 	}
 	if s.TransferImage == "" {
 		s.TransferImage = DefaultTransferImage

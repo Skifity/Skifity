@@ -404,8 +404,12 @@ func buildKitObjects(namespace string) []any {
 // place with the buildctl that talks to it. See builder/images.go.
 const buildKitImage = builder.BuildKitDaemonImage
 
-// registryImage is the in-cluster registry.
-const registryImage = "registry:3"
+// registryImage is the in-cluster registry, and the garbage collection that
+// sweeps it. It was registry:3, a tag that moves, so the registry holding
+// every image the panel built could change version under a restart with
+// nothing changed here. Pinned by version and index digest, read from Docker
+// Hub on 2026-10-02; move the two together.
+const registryImage = "registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8"
 
 // buildKitLocalAddress is how the readiness probe reaches buildkitd from
 // inside its own container.

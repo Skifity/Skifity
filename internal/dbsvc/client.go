@@ -7,6 +7,15 @@ import (
 	"skifity/internal/dbsvc/engine"
 )
 
+// ToolsImage is the small image with a shell, tar and gzip that a job runs
+// when it needs nothing more: the client for an engine the panel does not
+// know, and the copy of a volume. It was alpine:3, a tag that moves, so a
+// backup on one day ran different tools from the backup the day before with
+// nothing changed here. Pinned by version and index digest like the builders'
+// images (builder/images.go), read from Docker Hub on 2026-10-02; move the
+// two together.
+const ToolsImage = "alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+
 // ClientImage is the image a job that talks to a database runs its client
 // tools from: the database's own image, pinned as the database is, so the
 // client is the server's own version. The backup jobs, the password change
@@ -19,7 +28,7 @@ import (
 func ClientImage(name, version string) string {
 	e, ok := engine.Lookup(name)
 	if !ok {
-		return "alpine:3"
+		return ToolsImage
 	}
 	if version == "" {
 		version = e.DefaultVersion

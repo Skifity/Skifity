@@ -75,6 +75,9 @@ func (c *Cluster) ComponentVersion(ctx context.Context, name string) string {
 }
 
 func imageTag(image string) string {
+	// A digest is not a version: registry:3.1.2@sha256:… is 3.1.2, and the
+	// last colon of it is inside the digest.
+	image, _, _ = strings.Cut(image, "@")
 	if i := strings.LastIndex(image, ":"); i >= 0 && !strings.Contains(image[i:], "/") {
 		return image[i+1:]
 	}

@@ -24,7 +24,7 @@ func TestAComponentsVersionIsTheOneThisPanelInstalls(t *testing.T) {
 		"cloudnative-pg": "1.29.0", // not the 1.29 of its release branch
 		"keda":           "2.20.0",
 		"longhorn":       "1.10.0",
-		"registry":       "3",
+		"registry":       "3.1.2",
 		"buildkit":       builder.BuildKitVersion,
 		"system-upgrade": "0.20.2",
 		GuardComponent:   "",
@@ -44,6 +44,9 @@ func TestAComponentsVersionIsTheOneThisPanelInstalls(t *testing.T) {
 	}
 	if tag := imageTag("registry.internal:5000/cloudflared"); tag != "" {
 		t.Fatalf("a registry's port was read as a tag: %q", tag)
+	}
+	if tag := imageTag("registry.internal:5000/registry:3.1.2@sha256:ddf754342cfc"); tag != "3.1.2" {
+		t.Fatalf("an image pinned by digest is read as version %q", tag)
 	}
 }
 

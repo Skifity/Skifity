@@ -190,7 +190,7 @@ func registryGCJobSpec(namespace string) *batchv1.Job {
 					},
 					Containers: []corev1.Container{{
 						Name:  "collect",
-						Image: "registry:3",
+						Image: registryImage,
 						// --delete-untagged is the half that matters: the panel
 						// removed the tags, and without this the manifests they
 						// pointed at are kept for a tag that no longer exists.
