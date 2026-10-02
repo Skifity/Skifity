@@ -11,7 +11,12 @@
 # panel says so when asked (cli.platform_unavailable), and every release
 # publishes them beside the image. See docs/progress.md, Phase 73.
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY skifity /usr/local/bin/skifity
+# GoReleaser's dockers_v2 puts each platform's binary in a directory named for
+# the platform, linux/amd64/skifity and linux/arm64/skifity, and builds every
+# platform from one context. A bare `COPY skifity` names a file that is not
+# there, which is how the first tag would have found out.
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/skifity /usr/local/bin/skifity
 USER 65532:65532
 WORKDIR /var/lib/skifity
 EXPOSE 8080

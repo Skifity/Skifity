@@ -35,7 +35,9 @@ builds:
     flags: [-trimpath]
     ldflags:
       - -s -w
-      - -X skifity/internal/version.Version={{.Version}}
+      # The tag, v included, as `make build` reports it from git describe:
+      # the version the panel shows is the one somebody types to upgrade.
+      - -X skifity/internal/version.Version={{.Tag}}
       - -X skifity/internal/version.Commit={{.ShortCommit}}
       - -X skifity/internal/version.Date={{.Date}}
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -46,9 +48,10 @@ archives:
   - id: binaries
     formats: [binary]
     # Spelled out rather than left to a default: the installer downloads this
-    # exact name, and a Windows binary without .exe is one nobody can run by
-    # double-clicking it.
-    name_template: 'skifity-{{ .Os }}-{{ .Arch }}{{ if eq .Os "windows" }}.exe{{ end }}'
+    # exact name. No .exe here: a bare binary keeps its own extension, so
+    # Windows gets skifity-windows-amd64.exe, and adding one again published
+    # skifity-windows-amd64.exe.exe in a dry run.
+    name_template: "skifity-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
@@ -63,7 +66,13 @@ dockers_v2:
   - id: panel
     images:
       - "{{ .Env.IMAGE_REPO }}"
+    # The tag with its v is the one that matters: the installer pulls
+    # <image>:<RELEASED_VERSION> and the panel upgrades to <image>:<what was
+    # typed>, and both are spelled v0.1.0. {{ .Version }} alone drops the v,
+    # so an install of the first release would have pulled a tag nobody
+    # published. The bare number stays for whoever expects it.
     tags:
+      - "{{ .Tag }}"
       - "{{ .Version }}"
       - "latest"
     dockerfile: Dockerfile.release
@@ -97,6 +106,8 @@ changelog:
       - '^chore(\(.+\))?:'
 
 release:
+  # A tag such as v0.1.0-alpha.1 is published as a pre-release.
+  prerelease: auto
   footer: |
     ## Installing
 
@@ -111,5 +122,5 @@ release:
 
     ```sh
     kubectl -n skifity-system set image deployment/skifity-panel \
-      panel={{ .Env.IMAGE_REPO }}:{{ .Version }}
+      panel={{ .Env.IMAGE_REPO }}:{{ .Tag }}
     ```
