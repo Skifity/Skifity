@@ -3593,21 +3593,18 @@ all ten pages the panel serves rather than eight.
   largest single gap in this repository, it is a consequence of ADR-0010, and
   writing scripts that could not be run here would have widened it rather than
   closed it.
-* **Nothing has been released.** No tag, so nothing at
-  `ghcr.io/skifity/skifity` and no version to put in the one-line install.
-  Where it publishes is settled and derived from one line (Phase 64); what is
-  missing is the tag, and `docs/releasing.md` is the procedure. The installer
-  knows it is unreleased and refuses before k3s is installed rather than after.
-  The working path is still to clone, `make image`, and run
-  `installer/install.sh` from inside the clone with `SKIFITY_IMAGE` set, which
-  makes it read `deploy/*.yaml` from disk; the README, `llms.txt` and the quick
-  start say so where the one-line command is.
-* **The default branch is the working branch.** The project lives at
+* **The first release is v0.1.0**, cut before the cluster run that
+  `docs/releasing.md` asks for, at the maintainer's request; the README says
+  so beside the install command. The installer names it (`RELEASED_VERSION`),
+  the release workflow refuses a tag that disagrees, and
+  `release-dry-run.yml` builds the whole release, images included, whenever
+  something it is made of changes. *Superseded: this entry used to say nothing
+  had been released.*
+* **The default branch is `main`.** The project lives at
   `github.com/Skifity/Skifity` (moved from `TegarTheGreat/Skifity`, which
-  redirects), and its default branch is `claude/eloquent-shannon-12qxje`, the
-  one it was built on. Nothing depends on the name — the installer reads its
-  manifests from the release's own ref — but renaming it to `main` before the
-  first release is the owner's call and costs nothing now.
+  redirects). Nothing depends on the name: the installer reads its manifests
+  from the release's own tag. *Superseded: this entry used to say the default
+  branch was the one the project was built on.*
 * **No plugin has ever actually run.** The manifest standard, the permission
   model, the rendered Kubernetes objects, the event delivery and the blocking
   verdicts are unit-tested. Whether a real plugin image starts in the namespace

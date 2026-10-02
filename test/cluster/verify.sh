@@ -48,10 +48,10 @@ REPORT="/var/log/skifity-verify.log"
 # file and a Dockerfile with nothing to download, so a failure is the builder's
 # and not the network's.
 : "${VERIFY_GIT_REPO:=https://github.com/Skifity/Skifity}"
-# The branch to build from. This repository has no "main": what exists is
-# whatever branch this checkout is on, and that is the one worth verifying, so
-# it is read rather than assumed. A run that spent an hour installing and then
-# failed to clone a branch nobody ever pushed would be a waste of a server.
+# The branch to build from: whatever branch this checkout is on, because that
+# is the code being verified, so it is read rather than assumed to be main. A
+# run that spent an hour installing and then failed to clone a branch nobody
+# ever pushed would be a waste of a server.
 : "${VERIFY_GIT_BRANCH:=$(git -C "$(dirname "$0")/../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
 : "${VERIFY_GIT_ROOT:=test/cluster/sample-app}"
 : "${VERIFY_APP_PORT:=8080}"
@@ -132,7 +132,7 @@ need awk
 need python3
 
 if [ -z "$SKIFITY_IMAGE" ]; then
-	die "set SKIFITY_IMAGE to a panel image. No release is published yet, so build one with 'make image' and push it somewhere this server can pull from, or load it into k3s with 'k3s ctr images import'."
+	die "set SKIFITY_IMAGE to a panel image: a release's, such as ghcr.io/skifity/skifity:v0.1.0, or one built from this checkout with 'make image' and pushed somewhere this server can pull from, or loaded into k3s with 'k3s ctr images import'."
 fi
 ok "the panel image to install is $SKIFITY_IMAGE"
 

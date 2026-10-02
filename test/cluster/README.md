@@ -56,7 +56,7 @@ of them failed and you are fixing it.
 
 | Variable | What it is |
 |---|---|
-| `SKIFITY_IMAGE` | **Required.** The panel image. No release is published yet, so build one or push one somewhere the server can pull from. |
+| `SKIFITY_IMAGE` | **Required.** The panel image: a release's, such as `ghcr.io/skifity/skifity:v0.1.0`, or one built from this checkout and pushed somewhere the server can pull from. |
 | `SKIFITY_DOMAIN` | The panel's domain. Defaults to `<public-ip>.nip.io`, so there is nothing to set up in DNS. A domain you own is what makes the HTTPS check run rather than skip. |
 | `SKIFITY_PUBLIC_IP` | Set it when the machine cannot work its own out. |
 | `SKIFITY_PHASES` | Which phases to run. Default `1 2 3 4 5`. |
