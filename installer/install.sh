@@ -45,7 +45,7 @@ PROJECT_REPO="${SKIFITY_REPO:-Skifity/Skifity}"
 # workflow refuses to build a tag whose installer disagrees with it. While it
 # is empty nothing has been published, and check_release says so before
 # anything on this machine changes rather than after k3s is installed.
-RELEASED_VERSION=""
+RELEASED_VERSION="v0.1.0"
 VERSION="${SKIFITY_VERSION:-$RELEASED_VERSION}"
 
 # ghcr.io wants a lowercase path and a repository name keeps its owner's
