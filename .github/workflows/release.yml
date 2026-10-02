@@ -11,6 +11,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -42,9 +44,11 @@ jobs:
       # capitalisation, so it is lowered here rather than assumed.
       - name: Where this release publishes to
         run: |
-          echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-          echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}" >> "$GITHUB_ENV"
-          echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}" >> "$GITHUB_ENV"
+          {
+            echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+            echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}"
+            echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}"
+          } >> "$GITHUB_ENV"
 
       # The installer downloaded from this tag has to know which release it is.
       # It reads RELEASED_VERSION from its own source, so a tag whose installer
@@ -63,8 +67,42 @@ jobs:
           echo "installer/install.sh installs ${declared}"
 
       - uses: goreleaser/goreleaser-action@v7
+        id: goreleaser
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # What the provenance below vouches for: every file in checksums.txt,
+      # which is every binary the release published.
+      - name: The digests to sign
+        id: hashes
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: |
+          set -euo pipefail
+          checksums=$(printf '%s' "$ARTIFACTS" | jq -r '.[] | select(.type == "Checksum") | .path')
+          echo "hashes=$(base64 -w0 < "$checksums")" >> "$GITHUB_OUTPUT"
+
+  # SLSA level 3 provenance for the binaries, signed by GitHub's OIDC identity
+  # and attached to the release as skifity.intoto.jsonl, so anybody can check
+  # that a binary was built by this workflow from this tag:
+  #
+  #   slsa-verifier verify-artifact skifity-linux-amd64 \
+  #     --provenance-path skifity.intoto.jsonl \
+  #     --source-uri github.com/Skifity/Skifity --source-tag v0.1.0
+  #
+  # The generator verifies its own reference, so it is pinned to a tag rather
+  # than a commit, as its documentation requires.
+  provenance:
+    needs: [release]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: "${{ needs.release.outputs.hashes }}"
+      upload-assets: true
+      provenance-name: skifity.intoto.jsonl

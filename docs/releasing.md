@@ -59,9 +59,25 @@ by a stranger rather than by CI.
 ## What the tag does
 
 `.github/workflows/release.yml` builds the binaries with GoReleaser and pushes a
-multi-architecture image to `ghcr.io/<this repository, lowercased>`, tagged with
-the version and with `latest`. Nothing here names a registry path: it is derived
-from `GITHUB_REPOSITORY`, so it is correct wherever the repository lives.
+multi-architecture image to `ghcr.io/<this repository, lowercased>`, tagged
+`v0.1.0`, `0.1.0` and `latest`. Nothing here names a registry path: it is
+derived from `GITHUB_REPOSITORY`, so it is correct wherever the repository
+lives.
+
+The image carries the CLI for every other platform, gzipped, so the panel can
+hand a Mac or a Windows laptop its CLI (`scripts/release-cli.sh`). A second job
+signs SLSA provenance for every binary in `checksums.txt` and attaches it to the
+release as `skifity.intoto.jsonl`:
+
+```sh
+slsa-verifier verify-artifact skifity-linux-amd64 \
+  --provenance-path skifity.intoto.jsonl \
+  --source-uri github.com/Skifity/Skifity --source-tag v0.1.0
+```
+
+`.github/workflows/release-dry-run.yml` builds all of this without publishing
+whenever a file the release is made of changes, and looks inside both images, so
+the tag is not the first time the pipeline runs.
 
 The release notes carry the install command, pinned to the tag:
 

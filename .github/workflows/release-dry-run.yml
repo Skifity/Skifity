@@ -1,0 +1,103 @@
+name: Release dry run
+
+# The release, built and not published: the binaries, the CLI copies the image
+# carries, and both images, then a look inside them.
+#
+# The first tag was going to be the first time the release pipeline ever ran,
+# and a local dry run found three things it would have got wrong. A local run
+# cannot build the images without a Docker daemon, so this does it on every
+# change to what a release is made of, rather than on tag day.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .goreleaser.yaml
+      - Dockerfile.release
+      - scripts/release-cli.sh
+      - .github/workflows/release.yml
+      - .github/workflows/release-dry-run.yml
+  pull_request:
+    paths:
+      - .goreleaser.yaml
+      - Dockerfile.release
+      - scripts/release-cli.sh
+      - .github/workflows/release.yml
+      - .github/workflows/release-dry-run.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: Build the release without publishing it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      # The same values release.yml derives, so the dry run builds the same
+      # names a release would publish.
+      - name: Where a release would publish to
+        run: |
+          {
+            echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+            echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}"
+            echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}"
+          } >> "$GITHUB_ENV"
+
+      # --snapshot builds one image per platform, tagged with a -amd64 or
+      # -arm64 suffix, and loads them here instead of pushing a manifest.
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish
+
+      - name: The downloads are named as the installer and the docs say
+        run: |
+          set -eu
+          cat dist/checksums.txt
+          for name in skifity-linux-amd64 skifity-linux-arm64 skifity-darwin-amd64 \
+            skifity-darwin-arm64 skifity-windows-amd64.exe skifity-windows-arm64.exe; do
+            grep -q "  ${name}\$" dist/checksums.txt || { echo "no ${name} in the release" >&2; exit 1; }
+          done
+
+      # Each image must carry the other five platforms' CLIs and not its own,
+      # which the panel serves from its own binary, and the amd64 image must
+      # start and say which version it is.
+      - name: Each image carries the panel and every other platform's CLI
+        run: |
+          set -eu
+          docker image ls "$IMAGE_REPO"
+          for arch in amd64 arm64; do
+            image=$(docker image ls "$IMAGE_REPO" --format '{{.Repository}}:{{.Tag}}' | grep -- "-${arch}\$" | head -1)
+            [ -n "$image" ] || { echo "no ${arch} image was built" >&2; exit 1; }
+            id=$(docker create --platform "linux/${arch}" "$image")
+            rm -rf "cli-${arch}"
+            docker cp "${id}:/usr/local/share/skifity/cli" "cli-${arch}"
+            docker cp "${id}:/usr/local/bin/skifity" "panel-${arch}"
+            docker rm "$id" >/dev/null
+            ls -la "cli-${arch}"
+            count=$(find "cli-${arch}" -name 'skifity-*.gz' | wc -l)
+            [ "$count" = "5" ] || { echo "the ${arch} image carries ${count} CLIs, not 5" >&2; exit 1; }
+            [ ! -e "cli-${arch}/skifity-linux-${arch}.gz" ] || { echo "the ${arch} image carries its own CLI" >&2; exit 1; }
+            for gz in "cli-${arch}"/*.gz; do gzip -t "$gz"; done
+            [ -s "panel-${arch}" ] || { echo "the ${arch} image has no panel binary" >&2; exit 1; }
+          done
+          image=$(docker image ls "$IMAGE_REPO" --format '{{.Repository}}:{{.Tag}}' | grep -- "-amd64\$" | head -1)
+          docker run --rm --platform linux/amd64 "$image" version

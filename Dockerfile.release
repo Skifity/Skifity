@@ -5,11 +5,11 @@
 # binary and only needs it packaged, which keeps a release from compiling the
 # same code twice per architecture.
 #
-# It carries no CLI for other platforms yet: GoReleaser builds them, but
-# wiring its output into this context has never been run, and a line here
-# that copies a path nobody checked is a release that fails on tag day. The
-# panel says so when asked (cli.platform_unavailable), and every release
-# publishes them beside the image. See docs/progress.md, Phase 73.
+# It carries the CLI for every other platform, gzipped, as the root
+# Dockerfile's image does, so /api/cli/download can hand a Mac or a Windows
+# laptop the CLI from the panel itself. scripts/release-cli.sh puts them in
+# dist/cli/<platform>/ as each binary is built, and .goreleaser.yaml adds that
+# directory to this context.
 FROM gcr.io/distroless/static-debian12:nonroot
 # GoReleaser's dockers_v2 puts each platform's binary in a directory named for
 # the platform, linux/amd64/skifity and linux/arm64/skifity, and builds every
@@ -17,6 +17,7 @@ FROM gcr.io/distroless/static-debian12:nonroot
 # there, which is how the first tag would have found out.
 ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/skifity /usr/local/bin/skifity
+COPY dist/cli/$TARGETPLATFORM/ /usr/local/share/skifity/cli/
 USER 65532:65532
 WORKDIR /var/lib/skifity
 EXPOSE 8080

@@ -372,17 +372,18 @@ skifity db connect                # a private database, on localhost
 claude mcp add skifity -- skifity mcp
 ```
 
-The installer puts the CLI on the server. For your own computer, take it from
-[the release](https://github.com/Skifity/Skifity/releases/tag/v0.1.0):
+The installer puts the CLI on the server. For your own computer, your panel
+serves the one that matches it, for macOS, Linux and Windows:
 
 ```sh
-# macOS on Apple silicon; skifity-darwin-amd64 for an Intel Mac,
-# skifity-linux-amd64 or skifity-linux-arm64 for Linux
-curl -fsSL -o skifity https://github.com/Skifity/Skifity/releases/download/v0.1.0/skifity-darwin-arm64
+# os=darwin, linux or windows; arch=arm64 or amd64
+curl -fsS "https://panel.example.com/api/cli/download?os=darwin&arch=arm64" -o skifity
 chmod +x skifity && sudo mv skifity /usr/local/bin/
 ```
 
-On Windows it is `skifity-windows-amd64.exe` from the same page.
+Or take it from [the release](https://github.com/Skifity/Skifity/releases/tag/v0.1.0),
+where every binary comes with SLSA provenance that says which workflow built
+it from which tag.
 
 [`llms.txt`](llms.txt) describes the whole product on one page, and the panel
 serves it at `/llms.txt`. Every route of the HTTP API is described in OpenAPI

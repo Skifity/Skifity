@@ -41,6 +41,12 @@ builds:
       - -X skifity/internal/version.Commit={{.ShortCommit}}
       - -X skifity/internal/version.Date={{.Date}}
     mod_timestamp: "{{ .CommitTimestamp }}"
+    # A gzipped copy of each binary for the panel's image to serve laptops
+    # from /api/cli/download. See scripts/release-cli.sh.
+    hooks:
+      post:
+        - cmd: sh scripts/release-cli.sh "{{ .Path }}" "{{ .Target }}" "{{ .Ext }}"
+          dir: "."
 
 archives:
   # The installer downloads a bare binary, not an archive, so the name it
@@ -76,6 +82,10 @@ dockers_v2:
       - "{{ .Version }}"
       - "latest"
     dockerfile: Dockerfile.release
+    # The other platforms' CLIs, gzipped by scripts/release-cli.sh, one
+    # directory per image platform.
+    extra_files:
+      - dist/cli
     platforms:
       - linux/amd64
       - linux/arm64
