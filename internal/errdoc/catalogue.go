@@ -708,6 +708,23 @@ func NameTaken(kind, name string) *Problem {
 		With("name", name).With("taken_by", kind)
 }
 
+// DeployInterrupted means a deployment was cut off by a panel restart twice.
+//
+// The first restart is survived: the deployment is started again from where
+// it stood (internal/deploy/resume.go). A second one is not, because a
+// deployment the panel keeps dying during may be the reason it keeps dying.
+func DeployInterrupted() *Problem {
+	return New("deploy.interrupted", "The panel restarted twice during this deployment").
+		WithCause("The panel restarted while this deployment was running, started it again, " +
+			"and restarted again before it finished. It is not started a third time, in case " +
+			"this deployment is why the panel keeps restarting.").
+		WithImpact("Whatever had already been applied is still applied. Unless the new version " +
+			"had finished rolling out, the version that was serving before is still serving.").
+		WithFix("Deploy again. If the panel restarts during that one too, its own log says why: " +
+			"kubectl -n skifity-system logs deploy/skifity-panel --previous").
+		WithStatus(http.StatusConflict)
+}
+
 // ImageCollected means a version is too old to roll back to.
 //
 // The registry keeps the last few images for each app and collects the rest,

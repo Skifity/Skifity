@@ -2236,6 +2236,12 @@
         "impact": "Instance baru tidak bisa mulai. Versi sebelumnya masih jalan.",
         "fix": "Kalau ini image privat, tambahkan kredensial registry di Pengaturan. Kalau ini hasil build internal, registry di dalam cluster mungkin tidak terjangkau dari node ini: pastikan node-nya sudah bergabung ke jaringan cluster."
       },
+      "deploy_interrupted": {
+        "title": "Panel dimulai ulang dua kali selama deployment ini",
+        "cause": "Panel dimulai ulang saat deployment ini berjalan, menjalankannya lagi, lalu dimulai ulang lagi sebelum selesai. Deployment ini tidak dijalankan untuk ketiga kalinya, berjaga-jaga kalau justru deployment inilah yang membuat panel terus dimulai ulang.",
+        "impact": "Apa pun yang sudah diterapkan tetap diterapkan. Kecuali versi baru sudah selesai dirilis, versi yang melayani sebelumnya masih melayani.",
+        "fix": "Deploy lagi. Kalau panel dimulai ulang lagi selama deploy itu, log panel sendiri menjelaskan sebabnya: kubectl -n skifity-system logs deploy/skifity-panel --previous"
+      },
       "deploy_refused_by_plugin": {
         "title": "Sebuah plugin menghentikan deployment ini",
         "cause": "{{0}} menolaknya: {{1}}",

@@ -176,16 +176,20 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 		SecretManagers: deployer.Secrets,
 	})
 
-	// Anything left running when the panel stopped is marked failed with an
-	// explanation, rather than sitting in the UI as apparently in progress.
+	// Anything left running when the panel stopped is either picked up again
+	// or marked failed with an explanation, rather than sitting in the UI as
+	// apparently in progress. Deployments are picked up again, once: see
+	// deploy.ResumeInterrupted.
 	if err := provisioner.ResumeInterrupted(ctx); err != nil {
 		log.Warn("could not tidy up interrupted operations", "error", err)
 	}
 	if err := markInterruptedWork(ctx, db, log); err != nil {
 		return err
 	}
-	if err := markInterruptedDeployments(ctx, db, log); err != nil {
-		log.Warn("could not tidy up interrupted deployments", "error", err)
+	if resumed, err := deployer.ResumeInterrupted(ctx); err != nil {
+		log.Warn("could not pick up interrupted deployments", "error", err)
+	} else if resumed > 0 {
+		log.Info("picked up deployments a restart interrupted", "count", resumed)
 	}
 
 	background, stopBackground := context.WithCancel(ctx)
@@ -424,25 +428,6 @@ func markInterruptedWork(ctx context.Context, db *store.DB, log *slog.Logger) er
 	}
 	if components > 0 {
 		log.Info("settled components a restart caught being installed or upgraded", "count", components)
-	}
-	return nil
-}
-
-// markInterruptedDeployments fails deployments that were running when the panel
-// stopped, so they do not sit in the UI forever.
-func markInterruptedDeployments(ctx context.Context, db *store.DB, log *slog.Logger) error {
-	deployments, err := db.ListUnfinishedDeployments(ctx)
-	if err != nil {
-		return err
-	}
-	for _, deployment := range deployments {
-		log.Info("marking an interrupted deployment as failed", "deployment", deployment.ID)
-		if err := db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeployFailed,
-			"deploy.interrupted",
-			"The panel restarted while this deployment was running.",
-			"Deploy again. Your running instances were not affected by the restart."); err != nil {
-			return err
-		}
 	}
 	return nil
 }

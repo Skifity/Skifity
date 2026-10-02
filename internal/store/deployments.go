@@ -213,10 +213,12 @@ func (db *DB) SupersedeRunningDeployments(ctx context.Context, appID, exceptID s
 	return ids, nil
 }
 
-// ListUnfinishedDeployments finds deploys interrupted by a panel restart.
+// ListUnfinishedDeployments finds deploys interrupted by a panel restart,
+// oldest first. The number breaks a tie in the time, so within one app the
+// last one listed is always its newest.
 func (db *DB) ListUnfinishedDeployments(ctx context.Context) ([]Deployment, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+deploymentColumns+` FROM deployments
-		WHERE status IN ('queued','building','deploying') ORDER BY created_at`)
+		WHERE status IN ('queued','building','deploying') ORDER BY created_at, number`)
 	if err != nil {
 		return nil, fmt.Errorf("list unfinished deployments: %w", err)
 	}
@@ -230,6 +232,22 @@ func (db *DB) ListUnfinishedDeployments(ctx context.Context) ([]Deployment, erro
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// ClaimDeploymentResume marks a deployment as picked up again after a panel
+// restart, and says whether this call was the one that did it. A deployment
+// can be resumed once: false means it already was, and was interrupted again.
+func (db *DB) ClaimDeploymentResume(ctx context.Context, id string) (bool, error) {
+	result, err := db.ExecContext(ctx,
+		`UPDATE deployments SET resumed = 1 WHERE id = ? AND resumed = 0`, id)
+	if err != nil {
+		return false, fmt.Errorf("claim a deployment's resume: %w", err)
+	}
+	claimed, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("claim a deployment's resume: %w", err)
+	}
+	return claimed == 1, nil
 }
 
 // --- build logs ---

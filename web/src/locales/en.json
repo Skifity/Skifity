@@ -2255,6 +2255,12 @@
         "impact": "The new instances cannot start. The previous version is still running.",
         "fix": "If this is a private image, add the registry credentials in Settings. If it is an internal build, the in-cluster registry may not be reachable from this node: check that the node joined the cluster network."
       },
+      "deploy_interrupted": {
+        "title": "The panel restarted twice during this deployment",
+        "cause": "The panel restarted while this deployment was running, started it again, and restarted again before it finished. It is not started a third time, in case this deployment is why the panel keeps restarting.",
+        "impact": "Whatever had already been applied is still applied. Unless the new version had finished rolling out, the version that was serving before is still serving.",
+        "fix": "Deploy again. If the panel restarts during that one too, its own log says why: kubectl -n skifity-system logs deploy/skifity-panel --previous"
+      },
       "deploy_refused_by_plugin": {
         "title": "A plugin stopped this deployment",
         "cause": "{{0}} refused it: {{1}}",

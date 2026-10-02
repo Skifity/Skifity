@@ -147,8 +147,10 @@ Every one of these was checked against Skifity's code, not assumed.
   (ADR-0014). This is the largest open item from the audit.
 * A volume backup runs as uid 1000, so a directory another uid owns with mode
   0700 would archive empty. Proving it needs a cluster.
-* A deploy in flight when the panel restarts is marked interrupted, not
-  resumed; Dokploy's in-memory queue loses it the same way.
+* ~~A deploy in flight when the panel restarts is marked interrupted, not
+  resumed; Dokploy's in-memory queue loses it the same way.~~ Resumed now,
+  once, from where it stood: a build starts again, a built image goes
+  straight to the rollout (`internal/deploy/resume.go`).
 
 ## Scorecard
 
@@ -271,8 +273,9 @@ catalogue.
   was left out rather than half-built.
 * **One cloud provider.** Servers are ordered at Hetzner only; the provider
   interface is there for others.
-* The three shared items above: the panel's `cluster-admin`, the volume
-  backup's uid, and a deploy interrupted by a restart.
+* Two of the three shared items above: the panel's `cluster-admin` and the
+  volume backup's uid. The third, a deploy interrupted by a restart, is
+  resumed now.
 * Everything built in this pass is tested against fakes of the services and
   clusters it talks to, and none of it has run against a real one
   (ADR-0010). `docs/progress.md` says, part by part, what that leaves unseen.
