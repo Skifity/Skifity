@@ -55,32 +55,14 @@ Linux.
 
 ## 1. Install
 
-> **Not published yet.** No release has been tagged, so there is no version to
-> put in the URL below and nothing at `ghcr.io/skifity/skifity` to pull.
-> The installer knows this and refuses before it changes anything. To try it
-> today, clone the repository and run the installer from inside it, which reads
-> the manifests from disk instead of fetching them:
->
-> ```sh
-> git clone https://github.com/Skifity/Skifity && cd Skifity
-> make image                        # prints the tag it built
-> sudo SKIFITY_IMAGE=ghcr.io/skifity/skifity:$(git describe --tags --always --dirty) \
->   sh installer/install.sh
-> ```
->
-> The image tag is local; nothing is pushed anywhere. Running the installer from
-> inside the clone is what makes it read `deploy/*.yaml` from disk rather than
-> fetching them from a release that does not exist.
->
-> Do that on a VPS you can throw away. See the Status section of the README.
-
 SSH into the server and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/<version>/installer/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh | sudo sh
 ```
 
-`<version>` is the release you are installing, `v1.2.3`. It is in the URL on
+`v0.1.0` is the release you are installing; the newest is on the
+[releases page](https://github.com/Skifity/Skifity/releases). It is in the URL on
 purpose: the installer fetched from a tag applies the Kubernetes objects that
 tag's image was built with, so an upgrade never mixes one release's image with
 another's Deployment.
@@ -89,7 +71,7 @@ If you already have a domain pointed at the server, tell the installer and it
 sets up HTTPS at the same time:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/<version>/installer/install.sh \
+curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
   | sudo SKIFITY_DOMAIN=panel.example.com sh
 ```
 

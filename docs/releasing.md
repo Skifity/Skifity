@@ -19,6 +19,19 @@ make smoke      # the panel and the installer, against the real binary
 make e2e        # the interface, against the real binary
 ```
 
+And the release itself, dry, which nothing else runs:
+
+```sh
+IMAGE_REPO=ghcr.io/skifity/skifity REPO_URL=https://github.com/Skifity/Skifity \
+RAW_BASE=https://raw.githubusercontent.com/Skifity/Skifity \
+  goreleaser release --snapshot --clean --skip=publish
+```
+
+Add `docker` to `--skip` on a machine with no Docker daemon, and read
+`dist/checksums.txt`: those are the names people will download. The first dry
+run found three things the first tag would have got wrong — an image build
+copying from the wrong path, an image tag without its `v`, and `.exe.exe`.
+
 ## The tag
 
 The installer names the release it installs, in its own source, because it has

@@ -158,38 +158,29 @@ binary. The check that actually matters is Phase 6, and it needs a person.
 
 ## Can somebody install this today?
 
-Not with one command, and the reason is now one step rather than three.
+With one command, since v0.1.0 — on code that has still never met a cluster.
 
 **Where this project publishes is settled: the repository it is in.**
 `Skifity/Skifity`, so `ghcr.io/skifity/skifity` for the image and
 that repository's raw URL for the installer and the manifests. It is one line in
 `installer/install.sh` and one in the `Makefile`; everything else derives from
 them, and `scripts/check-home.sh` fails the build if a name this project does
-not own reappears anywhere. Moving to an organisation of its own later is those
-two lines.
+not own reappears anywhere.
 
 **The manifests are pinned to the release**, not to a branch:
-`raw.githubusercontent.com/<repo>/<version>/deploy`. That fixes a real defect —
-an install that pulled one release's image and another's Deployment — and it
-means no default branch has to exist for an install to work, which matters here,
-because this repository does not have one.
+`raw.githubusercontent.com/<repo>/<version>/deploy`. An install never pulls one
+release's image and another's Deployment.
 
-**What is missing is the tag.** No release has ever been cut, so
-`RELEASED_VERSION` in the installer is empty, and the installer says so and
-refuses before k3s is installed rather than after. `docs/releasing.md` is the
-list of steps, and the release workflow refuses to publish a tag whose installer
-disagrees with it.
+**The tag exists.** `RELEASED_VERSION` in the installer is `v0.1.0`, the release
+workflow refuses a tag whose installer disagrees, and the one-line install in
+the README is pinned to it. Before the tag, a local GoReleaser dry run found
+three things the release would have got wrong on the day: an image build that
+copied a file from the wrong path, an image tag without its `v` that the
+installer would have pulled in vain, and Windows binaries named `.exe.exe`.
 
-So the install that works today is still two commands:
-
-```sh
-make image
-sudo SKIFITY_IMAGE=<the tag it printed> sh installer/install.sh
-```
-
-That is a developer's install. The user's install is one `git tag` away — and
-that tag should not be cut before the run below, because the first thing a
-release does is invite somebody to install code that has never met a cluster.
+It was cut before the cluster run that `docs/releasing.md` asks for, by the
+maintainer's decision, so the README says so where the install command is. The
+first thing a stranger installs is code that has never met a cluster.
 
 That is the order of what is left:
 
@@ -199,8 +190,8 @@ That is the order of what is left:
    moves most of them, or tells us which ones were wrong, and nothing else in
    this repository is worth as much. `make verify-remote HOST=root@…` runs it on
    a throwaway server from a laptop.
-2. **The tag.** `docs/releasing.md`. Everything it needs is in place; what it
-   waits on is the run above, not a decision.
+2. **The next tag**, after that run, with whatever it found fixed.
+   `docs/releasing.md`.
 3. **Phase 6, with a person who has not seen it.** The documentation is served
    and its links resolve, which is not the same as it being followed.
    `docs/walkthrough.md` is the sheet they fill in.

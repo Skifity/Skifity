@@ -6094,6 +6094,36 @@ ordered, then replaced by the machine's own (ADR-0025); and the machine deleted
 on removal only if the panel made it. Not executed: Hetzner itself, cloud-init
 honouring the host key on its images, the key rotation on a real distribution.
 
+### The first release
+
+v0.1.0, cut at the maintainer's request before the cluster run
+`docs/releasing.md` asks for; the README says so beside the install command.
+The release pipeline had never run, and a local GoReleaser dry run (`c3d5131`)
+found three things the tag would have got wrong:
+
+* `Dockerfile.release` copied `skifity`, while GoReleaser's `dockers_v2` puts
+  each platform's binary at `$TARGETPLATFORM/skifity`. The image build would
+  have failed.
+* The image was tagged `{{ .Version }}`, which drops the `v`, while the
+  installer pulls `:v0.1.0` and the panel upgrades to the tag as typed. It is
+  now published as `v0.1.0`, `0.1.0` and `latest`, and the binary reports the
+  tag as `make build` does.
+* The Windows binaries were named `.exe.exe`.
+
+The image build was not exercised here, because this machine has no Docker
+daemon; the tag's own workflow is its first run.
+
+Writing the README's uninstall section found a fourth: every install ended by
+naming `skifity-uninstall`, and nothing ever put it on the server. The
+installer now installs it from the same release, from the clone or the tag,
+parses it first, and names it only if it is there. The installer smoke test
+covers both paths.
+
+The README is rewritten around the install: the command, what the server
+needs, the installer's options, upgrading and uninstalling, then what is
+different, a selection of the scorecard against Coolify, Dokploy and Kubero,
+and all thirty-eight screenshots.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
