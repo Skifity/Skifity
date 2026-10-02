@@ -3,8 +3,8 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/<repo>/<version>/installer/install.sh | sudo sh
 #
-# No release has been tagged yet, so there is no <version> to put in that URL.
-# Until there is, install from a clone:
+# <version> is a release tag, such as v0.1.0. To install an image you built
+# yourself, run it from inside a clone, which reads deploy/*.yaml from disk:
 #
 #   make image
 #   sudo SKIFITY_IMAGE=<your image> sh installer/install.sh
@@ -18,7 +18,8 @@
 #
 # Non-interactive use: set the variables below and it never asks anything.
 #
-#   SKIFITY_VERSION       image tag to install (default: latest)
+#   SKIFITY_VERSION       release to install (default: RELEASED_VERSION below,
+#                         the release this copy of the script came from)
 #   SKIFITY_IMAGE         full image reference, overrides SKIFITY_VERSION
 #   SKIFITY_DOMAIN        the domain the panel will answer on
 #   SKIFITY_ACME_EMAIL    the address Let's Encrypt sends expiry warnings to
@@ -56,7 +57,8 @@ IMAGE="${SKIFITY_IMAGE:-${IMAGE_REPO}:${VERSION}}"
 # branch moves; an install that pulled v1's image and main's objects would
 # apply a Deployment the image has never seen. This also means no default
 # branch has to exist for an install to work.
-MANIFEST_BASE="${SKIFITY_MANIFEST_BASE:-https://raw.githubusercontent.com/${PROJECT_REPO}/${VERSION}/deploy}"
+RELEASE_BASE="https://raw.githubusercontent.com/${PROJECT_REPO}/${VERSION}"
+MANIFEST_BASE="${SKIFITY_MANIFEST_BASE:-${RELEASE_BASE}/deploy}"
 NAMESPACE="skifity-system"
 CONFIG_DIR="/etc/skifity"
 DATA_DIR="/var/lib/skifity"
@@ -66,6 +68,8 @@ K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
 # The pod network. Decided in pick_pod_network below, unless it is set here.
 POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
+# Where the uninstaller goes, which the last lines of an install name.
+UNINSTALLER_PATH="/usr/local/bin/skifity-uninstall"
 # k3s applies every file here, and applies one again when it changes.
 K3S_MANIFESTS_DIR="/var/lib/rancher/k3s/server/manifests"
 ISSUER="skifity-letsencrypt"
@@ -757,6 +761,32 @@ install_cli() {
 	note "The panel serves it: curl -fsS ${PUBLIC_URL}/api/cli/download -o /usr/local/bin/skifity && chmod +x /usr/local/bin/skifity"
 }
 
+# install_uninstaller puts skifity-uninstall on the PATH. The install ends by
+# naming it as the way back out, and for a long time nothing put it there. It
+# is the uninstaller from the same release as this script: the clone's own
+# when there is one, the tag's otherwise. Without it the panel works all the
+# same, so a failure here is a warning.
+install_uninstaller() {
+	new="${UNINSTALLER_PATH}.new"
+	rm -f "$new"
+	if [ -f "$SOURCE_DIR/installer/uninstall.sh" ]; then
+		cp "$SOURCE_DIR/installer/uninstall.sh" "$new" 2>>"$LOG_FILE" || true
+	elif [ -n "$VERSION" ]; then
+		curl -fsSL --max-time 60 "${RELEASE_BASE}/installer/uninstall.sh" -o "$new" 2>>"$LOG_FILE" || true
+	fi
+	# Parsed before it is installed: a proxy's error page saved as the
+	# uninstaller would be found by somebody who wants to leave.
+	if [ -s "$new" ] && sh -n "$new" 2>>"$LOG_FILE"; then
+		chmod 0755 "$new"
+		mv "$new" "$UNINSTALLER_PATH"
+		ok "skifity-uninstall is on your PATH"
+		return 0
+	fi
+	rm -f "$new"
+	warn "Could not install skifity-uninstall; the panel itself is unaffected."
+	note "It is installer/uninstall.sh in the repository, at the release you installed."
+}
+
 finish() {
 	printf '\n%s%sSkifity is installed.%s\n\n' "$BOLD" "$GREEN" "$RESET"
 	# The token travels in the fragment, not the query string: a fragment is
@@ -779,7 +809,10 @@ finish() {
 	fi
 
 	printf '  Log        %s\n' "$LOG_FILE"
-	printf '  Uninstall  skifity-uninstall\n\n'
+	if [ -x "$UNINSTALLER_PATH" ]; then
+		printf '  Uninstall  sudo skifity-uninstall\n'
+	fi
+	printf '\n'
 	log "install completed, panel at ${PUBLIC_URL}"
 }
 
@@ -827,4 +860,5 @@ choose_hostname
 install_cert_manager
 install_panel
 install_cli
+install_uninstaller
 finish

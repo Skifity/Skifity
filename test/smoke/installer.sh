@@ -263,6 +263,41 @@ else
   t_pass "the plain-HTTP route does not pretend to have a certificate"
 fi
 
+# --- the uninstaller the install names is put where it says ------------------
+
+# The install ends by naming skifity-uninstall, and nothing used to install it.
+# From a clone it is copied from beside the installer; the path is redirected
+# into the work directory so the test installs nothing.
+mkdir -p "$WORKDIR/bin"
+( SOURCE_DIR="$ROOT"; UNINSTALLER_PATH="$WORKDIR/bin/skifity-uninstall"; LOG_FILE=/dev/null
+  install_uninstaller >/dev/null 2>&1 )
+if [ -x "$WORKDIR/bin/skifity-uninstall" ] && cmp -s "$WORKDIR/bin/skifity-uninstall" "$ROOT/installer/uninstall.sh"; then
+  t_pass "the uninstaller is installed from the clone, executable"
+else
+  t_fail "install_uninstaller did not put installer/uninstall.sh at the path it names"
+fi
+
+# No clone and no release to fetch from: a warning, nothing half-written, and
+# the last lines of the install do not name a command that is not there.
+out=$( (SOURCE_DIR="$WORKDIR"; VERSION=""; UNINSTALLER_PATH="$WORKDIR/bin/none"; LOG_FILE=/dev/null
+  install_uninstaller) 2>&1 || true)
+if [ ! -e "$WORKDIR/bin/none" ] && [ ! -e "$WORKDIR/bin/none.new" ]; then
+  t_pass "with nowhere to get it from, nothing is left behind"
+else
+  t_fail "install_uninstaller left a file behind with nothing to install"
+fi
+case "$out" in
+*"Could not install skifity-uninstall"*) t_pass "and it says so" ;;
+*) t_fail "install_uninstaller should warn when it cannot install, got: $out" ;;
+esac
+out=$( (UNINSTALLER_PATH="$WORKDIR/bin/none"; PUBLIC_URL="http://192.0.2.1.sslip.io"; PANEL_SCHEME=http
+  PANEL_HOST=192.0.2.1.sslip.io; SETUP_TOKEN=fake-setup-token; LOG_FILE=/dev/null; finish) 2>&1 || true)
+case "$out" in
+*"skifity-uninstall"*) t_fail "the install names skifity-uninstall when it is not there" ;;
+*) t_pass "an uninstaller that is not there is not named" ;;
+esac
+
+# --- nothing was installed --------------------------------------------------
 # --- nothing was installed --------------------------------------------------
 
 # The point of sourcing the installer is that it changes nothing. If any of
