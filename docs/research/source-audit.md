@@ -145,8 +145,13 @@ Every one of these was checked against Skifity's code, not assumed.
 * The panel runs with `cluster-admin`. Kubero's operator is as broad, but in a
   process of its own; Skifity's is the internet-facing panel itself
   (ADR-0014). This is the largest open item from the audit.
-* A volume backup runs as uid 1000, so a directory another uid owns with mode
-  0700 would archive empty. Proving it needs a cluster.
+* ~~A volume backup runs as uid 1000, so a directory another uid owns with mode
+  0700 would archive empty.~~ It runs as the uid the app runs as, with the
+  app's group; where the environment allows root, as root with only the four
+  capabilities that read and write anybody's files, so a restore keeps every
+  owner. A file it still cannot read stops the backup and says which setting
+  to change (`internal/backup/volume.go`). Proving it on real volumes still
+  needs a cluster.
 * ~~A deploy in flight when the panel restarts is marked interrupted, not
   resumed; Dokploy's in-memory queue loses it the same way.~~ Resumed now,
   once, from where it stood: a build starts again, a built image goes
@@ -273,9 +278,9 @@ catalogue.
   was left out rather than half-built.
 * **One cloud provider.** Servers are ordered at Hetzner only; the provider
   interface is there for others.
-* Two of the three shared items above: the panel's `cluster-admin` and the
-  volume backup's uid. The third, a deploy interrupted by a restart, is
-  resumed now.
+* One of the three shared items above: the panel's `cluster-admin`. The
+  volume backup runs as whoever owns the files now, and a deploy interrupted
+  by a restart is resumed.
 * Everything built in this pass is tested against fakes of the services and
   clusters it talks to, and none of it has run against a real one
   (ADR-0010). `docs/progress.md` says, part by part, what that leaves unseen.

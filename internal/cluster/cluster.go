@@ -490,7 +490,7 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		// known. Anything else is
 		// an image reference somebody typed or a template chose, and the only
 		// honest thing to say about its user is what the image itself says.
-		ImageBuiltHere: app.SourceType == "git" || app.SourceType == "upload",
+		ImageBuiltHere: kube.ImageBuiltHere(app.SourceType),
 		RunAsUser:      app.RunAsUser,
 	}
 	// The app's GPUs, and which of its workloads get them. A runtime setting

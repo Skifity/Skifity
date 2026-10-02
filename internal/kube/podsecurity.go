@@ -76,6 +76,13 @@ type Confinement struct {
 	User int
 }
 
+// ImageBuiltHere reports whether an app's image comes from Skifity's own
+// builder, which is what Confinement.BuiltHere means: an app built from Git or
+// from an upload, and not one that names an image somebody else built.
+func ImageBuiltHere(sourceType string) bool {
+	return sourceType == "git" || sourceType == "upload"
+}
+
 // RunAsUser is the uid to pin, or nil to let the image decide.
 //
 // Pinned only for an image Skifity built, because only then is the uid a fact

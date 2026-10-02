@@ -176,6 +176,7 @@ func (m *Manager) runVolumeRestore(ctx context.Context, op store.Operation, back
 		Restore:   true,
 		BackupID:  backup.ID,
 		SealImage: plan.image,
+		Owner:     VolumeOwnerFor(appConfinement(app, env)),
 		// No co-location: the app is stopped, so there is no pod to sit beside
 		// and an affinity to pods that do not exist can never be satisfied.
 	})

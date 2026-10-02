@@ -269,6 +269,15 @@ put one back.
 The volume is mounted read-only for the copy. A backup that can write to the
 thing it is copying is one bug away from being what destroyed it.
 
+**It reads the files as the app does.** The copy and the restore run as the
+user the app runs as, with the app's group. In an environment whose security
+level lets a container run as root, they run as root with only what reading
+and writing anybody's files takes, so a restore gives every file back to the
+user it belonged to — `www-data` in the official WordPress image, for
+instance. If an app writes files only its own user may read and the panel does
+not know that user, the backup stops and says so: give the uid the app runs as
+in its settings, and the backup uses it too.
+
 **Restoring stops the app.** A volume is held by one server at a time and the
 app has files open on it, so unpacking an archive underneath a running process
 is how a restore makes things worse. Skifity scales the app to zero, waits for

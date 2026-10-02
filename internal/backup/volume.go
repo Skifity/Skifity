@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/kube"
 	"skifity/internal/version"
 )
 
@@ -59,6 +60,47 @@ type VolumeJobSpec struct {
 	// SealImage, when set, seals the archive before it is uploaded and opens
 	// it after it is downloaded, as for a database. See JobSpec.
 	SealImage string
+	// Owner is who reads the volume's files and writes them back. See
+	// VolumeOwnerFor; the zero value is the builders' uid.
+	Owner VolumeOwner
+}
+
+// appGroup is the group every app's pod writes its volumes as (the FSGroup in
+// kube.BuildDeployment), and the uid the builders' images run as.
+const appGroup = 1000
+
+// VolumeOwner is the account the archive and the restore run as.
+//
+// They used to run as uid 1000 whatever the app ran as. That is right for an
+// image Skifity built and wrong for anything else: a directory another uid
+// owns with mode 0700 cannot be read by 1000, and a restore made every file
+// 1000's, so an app whose files belong to its own user — www-data in the
+// official WordPress image — got its data back and could not write to it.
+type VolumeOwner struct {
+	// UID is the app's own uid when the panel knows it: the builders' 1000, or
+	// the one somebody gave for an image that names its user.
+	UID int64
+	// Root reads and writes as root, with only the capabilities that get past
+	// file permissions and keep ownership: anything can be archived, and a
+	// restore puts every file back as its owner had it. Only where the
+	// environment's level already lets a container run as root.
+	Root bool
+}
+
+// VolumeOwnerFor decides it from the confinement the app's own pod runs
+// under. An environment that permits root gets root, because only there can
+// the app's files belong to anybody at all. Otherwise it is the uid the app
+// runs as, or 1000 when the image decides and the panel cannot know — with the
+// app's group beside it either way, so whatever the app made group-readable
+// can be read.
+func VolumeOwnerFor(confinement kube.Confinement) VolumeOwner {
+	if confinement.Level.AllowsRoot() {
+		return VolumeOwner{Root: true}
+	}
+	if uid := confinement.RunAsUser(); uid != nil {
+		return VolumeOwner{UID: *uid}
+	}
+	return VolumeOwner{UID: appGroup}
 }
 
 // Defaults fills in the images and the bounds.
@@ -71,6 +113,9 @@ func (s *VolumeJobSpec) Defaults() {
 	}
 	if s.TimeoutSeconds == 0 {
 		s.TimeoutSeconds = 2 * 60 * 60
+	}
+	if !s.Owner.Root && s.Owner.UID <= 0 {
+		s.Owner.UID = appGroup
 	}
 	if s.WorkspaceGB == 0 {
 		s.WorkspaceGB = 20
@@ -135,22 +180,32 @@ func BuildVolumeJob(s VolumeJobSpec) (*batchv1.Job, error) {
 	ttl := int32(3600)
 	workspaceSize := resource.MustParse(strconv.Itoa(s.WorkspaceGB) + "Gi")
 
+	security := &corev1.PodSecurityContext{
+		RunAsNonRoot: ptr(true),
+		// The archive runs as the same user the app does, because that is
+		// who owns the files on the volume. See VolumeOwner.
+		RunAsUser: ptr(s.Owner.UID),
+		// The app's own group too, so what it made group-readable is read
+		// whichever uid wrote it.
+		SupplementalGroups: []int64{appGroup},
+		// The containers run as different accounts and share the
+		// workspace, so the group is what lets both write to it.
+		FSGroup:        ptr(int64(65532)),
+		SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+	if s.Owner.Root {
+		// Each container says who it runs as: root for the files, and the
+		// transfer and seal containers keep their own non-root accounts.
+		security.RunAsNonRoot = nil
+		security.RunAsUser = nil
+	}
+
 	spec := corev1.PodSpec{
 		RestartPolicy:                corev1.RestartPolicyNever,
 		AutomountServiceAccountToken: ptr(false),
-		SecurityContext: &corev1.PodSecurityContext{
-			RunAsNonRoot: ptr(true),
-			// The archive runs as the same user the app does, because that is
-			// who owns the files on the volume. A different account would read
-			// nothing and write a valid, empty archive.
-			RunAsUser: ptr(int64(1000)),
-			// The two containers run as different accounts and share the
-			// workspace, so the group is what lets both write to it.
-			FSGroup:        ptr(int64(65532)),
-			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-		},
-		InitContainers: first,
-		Containers:     []corev1.Container{second},
+		SecurityContext:              security,
+		InitContainers:               first,
+		Containers:                   []corev1.Container{second},
 		Volumes: []corev1.Volume{
 			{
 				Name: "workspace",
@@ -205,6 +260,17 @@ func (s VolumeJobSpec) files(name, script string) corev1.Container {
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		Name: "data", MountPath: dataMount, ReadOnly: !s.Restore,
 	})
+	if s.Owner.Root {
+		// Root, with only what reading and writing anybody's files takes.
+		// All four are in the container runtime's default set, which is what
+		// the baseline level allows a container to keep.
+		container.SecurityContext.RunAsNonRoot = ptr(false)
+		container.SecurityContext.RunAsUser = ptr(int64(0))
+		container.SecurityContext.Capabilities = &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+			Add:  []corev1.Capability{"DAC_OVERRIDE", "CHOWN", "FOWNER", "FSETID"},
+		}
+	}
 	return container
 }
 
@@ -249,7 +315,12 @@ echo "==> Archiving %s"
 # An empty volume is a valid backup, and restoring one is how somebody empties
 # a volume on purpose. A tar of nothing is a few bytes, not zero, so the upload
 # step's emptiness check still catches a genuine failure.
-tar czf %s -C %s .
+if ! tar czf %s -C %s . ; then
+	echo "==> The archive stopped. If tar said Permission denied above, the app wrote" >&2
+	echo "    files this backup, running as uid $(id -u), may not read. Give the uid the" >&2
+	echo "    app runs as in its settings and the backup runs as it too." >&2
+	exit 1
+fi
 
 echo "==> Archived $(wc -c < %s) compressed bytes"
 `, dataMount, archiveFile, dataMount, archiveFile)

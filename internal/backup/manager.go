@@ -749,6 +749,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 		BackupID:     backup.ID,
 		CoLocateWith: m.coLocateWith(ctx, env.Namespace, app),
 		SealImage:    plan.image,
+		Owner:        VolumeOwnerFor(appConfinement(app, env)),
 	})
 	if err != nil {
 		fail(err)
@@ -778,6 +779,16 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 		"backup", backup.ID, "app", app.Name, "volume", volume.Name, "bytes", size)
 
 	m.applyRetention(ctx, storage, "volume", volume.ID)
+}
+
+// appConfinement is the confinement the app's own pod runs under, which the
+// cluster package derives the same way when it renders the app.
+func appConfinement(app store.App, env store.Environment) kube.Confinement {
+	return kube.Confinement{
+		Level:     kube.NormalizePodSecurity(env.PodSecurity),
+		BuiltHere: kube.ImageBuiltHere(app.SourceType),
+		User:      app.RunAsUser,
+	}
 }
 
 // coLocateWith returns the labels of the app's running pods, or nil.

@@ -1,10 +1,13 @@
 package backup
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"skifity/internal/kube"
 )
 
 func baseVolumeJob() VolumeJobSpec {
@@ -81,6 +84,108 @@ func TestTheBackupRunsAsTheAppsOwnUser(t *testing.T) {
 	if security.RunAsNonRoot == nil || !*security.RunAsNonRoot {
 		t.Error("the pod does not promise to be non-root")
 	}
+}
+
+// It used to be uid 1000 whatever the app ran as, so a directory another uid
+// owned with mode 0700 could not be archived, and a restore made every file
+// 1000's — an app whose files are its own user's got its data back and could
+// not write to it.
+func TestTheBackupRunsAsWhoeverOwnsTheAppsFiles(t *testing.T) {
+	cases := []struct {
+		name        string
+		confinement kube.Confinement
+		root        bool
+		uid         int64
+	}{
+		{"an image Skifity built", kube.Confinement{Level: kube.PodSecurityRestricted, BuiltHere: true}, false, 1000},
+		{"an image whose uid somebody gave", kube.Confinement{Level: kube.PodSecurityRestricted, User: 33}, false, 33},
+		{"an image that decides for itself", kube.Confinement{Level: kube.PodSecurityRestricted}, false, 1000},
+		{"anything where root is allowed", kube.Confinement{Level: kube.PodSecurityBaseline}, true, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			owner := VolumeOwnerFor(c.confinement)
+			if owner.Root != c.root || (!c.root && owner.UID != c.uid) {
+				t.Fatalf("owner is %+v, want root=%v uid=%d", owner, c.root, c.uid)
+			}
+			for _, restore := range []bool{false, true} {
+				spec := baseVolumeJob()
+				spec.Restore = restore
+				spec.Owner = owner
+				job, err := BuildVolumeJob(spec)
+				if err != nil {
+					t.Fatalf("BuildVolumeJob: %v", err)
+				}
+				pod := job.Spec.Template.Spec
+				if !slices.Contains(pod.SecurityContext.SupplementalGroups, 1000) {
+					t.Error("the app's group is not among the pod's, so group-readable files are not read")
+				}
+				files := filesContainer(t, pod)
+				if !c.root {
+					if pod.SecurityContext.RunAsUser == nil || *pod.SecurityContext.RunAsUser != c.uid {
+						t.Errorf("the pod runs as %v, want %d", pod.SecurityContext.RunAsUser, c.uid)
+					}
+					if files.SecurityContext.RunAsUser != nil {
+						t.Error("the files container names a user of its own instead of the app's")
+					}
+					continue
+				}
+				// Root for the files, with exactly what reading and writing
+				// anybody's files takes, all of it in the runtime's default
+				// set, which is what the baseline level allows.
+				if pod.SecurityContext.RunAsNonRoot != nil {
+					t.Error("the pod promises non-root while its files container runs as root")
+				}
+				security := files.SecurityContext
+				if security.RunAsUser == nil || *security.RunAsUser != 0 {
+					t.Errorf("the files container runs as %v, want root", security.RunAsUser)
+				}
+				added := security.Capabilities.Add
+				for _, want := range []corev1.Capability{"DAC_OVERRIDE", "CHOWN", "FOWNER", "FSETID"} {
+					if !slices.Contains(added, want) {
+						t.Errorf("the files container cannot %s", want)
+					}
+				}
+				if len(added) != 4 || !slices.Contains(security.Capabilities.Drop, "ALL") {
+					t.Errorf("the files container has more than it needs: drop %v, add %v",
+						security.Capabilities.Drop, added)
+				}
+				if security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation {
+					t.Error("the files container may escalate its privileges")
+				}
+				// The upload or download step never needs root.
+				for _, other := range append(pod.InitContainers, pod.Containers...) {
+					if other.Name == files.Name {
+						continue
+					}
+					if other.SecurityContext.RunAsNonRoot == nil || !*other.SecurityContext.RunAsNonRoot {
+						t.Errorf("%s does not promise to be non-root", other.Name)
+					}
+				}
+			}
+		})
+	}
+}
+
+// A backup that cannot read something stops, and says what to change.
+func TestAnUnreadableFileSaysWhatToChange(t *testing.T) {
+	script := archiveScript()
+	if !strings.Contains(script, "if ! tar czf") || !strings.Contains(script, "uid the") {
+		t.Errorf("the archive does not explain a failure to read:\n%s", script)
+	}
+}
+
+func filesContainer(t *testing.T, pod corev1.PodSpec) corev1.Container {
+	t.Helper()
+	for _, container := range append(pod.InitContainers, pod.Containers...) {
+		for _, mount := range container.VolumeMounts {
+			if mount.Name == "data" {
+				return container
+			}
+		}
+	}
+	t.Fatal("no container mounts the volume")
+	return corev1.Container{}
 }
 
 func TestARestoreChecksTheArchiveBeforeDeletingAnything(t *testing.T) {
