@@ -8,6 +8,10 @@
 #
 # Running the real installer belongs in a throwaway VM, never on a machine
 # anybody cares about.
+#
+# Nearly every check runs in a subshell, so that what it sets changes nothing
+# for the next one; the linter's note that such a change is lost is the point.
+# shellcheck disable=SC2030,SC2031
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -179,7 +183,7 @@ if awk '/^preflight\(\) \{/,/^\}/' "$ROOT/installer/install.sh" | grep -q 'check
 else
   t_fail "check_release is no longer called from preflight"
 fi
-if awk '/^preflight$/{p=1} /^install_k3s$/{k=1; if (p) print "ordered"}' "$ROOT/installer/install.sh" | grep -q ordered; then
+if awk '/^[[:space:]]*preflight$/{p=1} /^[[:space:]]*install_k3s$/{if (p) print "ordered"}' "$ROOT/installer/install.sh" | grep -q ordered; then
   t_pass "preflight runs before k3s is installed"
 else
   t_fail "install.sh no longer runs preflight before installing k3s"
@@ -313,13 +317,617 @@ case "$out" in
 *) t_fail "install_uninstaller should warn when it cannot install, got: $out" ;;
 esac
 out=$( (UNINSTALLER_PATH="$WORKDIR/bin/none"; PUBLIC_URL="http://192.0.2.1.sslip.io"; PANEL_SCHEME=http
-  PANEL_HOST=192.0.2.1.sslip.io; SETUP_TOKEN=fake-setup-token; LOG_FILE=/dev/null; finish) 2>&1 || true)
+  PANEL_HOST=192.0.2.1.sslip.io; SETUP_TOKEN="fake-setup-token"; LOG_FILE=/dev/null; finish) 2>&1 || true)
 case "$out" in
 *"skifity-uninstall"*) t_fail "the install names skifity-uninstall when it is not there" ;;
 *) t_pass "an uninstaller that is not there is not named" ;;
 esac
 
-# --- nothing was installed --------------------------------------------------
+# --- the options ------------------------------------------------------------
+
+INSTALLER="$ROOT/installer/install.sh"
+
+# --help has to work for somebody reading it before deciding to run it as
+# root, and it is the only thing that runs without root.
+#
+# SKIFITY_INSTALLER_LIB is emptied for these: a shell in POSIX mode exports
+# the assignment made for the `.` above, and the script would stop at once.
+out=$(SKIFITY_INSTALLER_LIB="" sh "$INSTALLER" --help 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ]; then
+  t_pass "--help exits zero, without root"
+else
+  t_fail "--help exited $status"
+fi
+for option in --domain --email --public-ip --version --image --skip-firewall --yes; do
+  case "$out" in
+  *"$option"*) ;;
+  *) t_fail "--help does not mention $option" ;;
+  esac
+done
+t_pass "--help lists the options"
+
+out=$(SKIFITY_INSTALLER_LIB="" sh "$INSTALLER" --nonsense 2>&1) && status=0 || status=$?
+case "$status:$out" in
+2:*"Unknown option: --nonsense"*) t_pass "an unknown option is refused before anything runs" ;;
+*) t_fail "an unknown option should exit 2 and say so, got $status: $out" ;;
+esac
+
+out=$(SKIFITY_INSTALLER_LIB="" sh "$INSTALLER" --domain 2>&1) && status=0 || status=$?
+case "$status:$out" in
+2:*"--domain needs a value"*) t_pass "an option missing its value is refused" ;;
+*) t_fail "--domain with no value should be refused, got $status: $out" ;;
+esac
+
+# What somebody pastes is a URL as often as a name.
+got=$( (parse_args --domain 'HTTPS://Panel.Example.TEST./setup' && printf '%s' "$SKIFITY_DOMAIN") 2>&1)
+if [ "$got" = "panel.example.test" ]; then
+  t_pass "a pasted URL becomes the bare domain"
+else
+  t_fail "--domain should be normalised to panel.example.test, got: $got"
+fi
+got=$( (parse_args --domain=panel.example.test --email=ops@example.test --yes &&
+  printf '%s %s %s' "$SKIFITY_DOMAIN" "$SKIFITY_ACME_EMAIL" "$SKIFITY_ASSUME_YES") 2>&1)
+if [ "$got" = "panel.example.test ops@example.test 1" ]; then
+  t_pass "--option=value works as well as --option value"
+else
+  t_fail "--option=value was not read, got: $got"
+fi
+got=$( (parse_args --version v9.9.9 && derive_release && printf '%s' "$IMAGE $MANIFEST_BASE") 2>&1)
+case "$got" in
+*":v9.9.9 "*"/v9.9.9/deploy") t_pass "--version moves the image and the manifests together" ;;
+*) t_fail "--version should change both the image and the manifests, got: $got" ;;
+esac
+
+for bad in "--domain not_a_domain" "--domain localhost" "--email nobody" "--email a&b@example.test" \
+  "--public-ip 300.1.2.3" "--public-ip example.test" "--pod-network calico" "--version v1;rm" \
+  "--image registry.example.test/a|b" "--staging=1"; do
+  # Word splitting into an option and its value is the point.
+  # shellcheck disable=SC2086
+  out=$( (parse_args $bad) 2>&1) && status=0 || status=$?
+  if [ "$status" = 2 ]; then
+    t_pass "refused: $bad"
+  else
+    t_fail "$bad should be refused, got $status: $out"
+  fi
+done
+for good in "--public-ip 203.0.113.10" "--public-ip 2001:db8::10" "--pod-network vxlan" \
+  "--domain xn--bcher-kva.example" "--image registry.example.test/team/skifity@sha256:abc123"; do
+  # shellcheck disable=SC2086
+  if (parse_args $good) >/dev/null 2>&1; then
+    t_pass "accepted: $good"
+  else
+    t_fail "$good should be accepted"
+  fi
+done
+
+# --- asking ---------------------------------------------------------------
+
+# Under `curl | sh`, stdin is the script. A question read from it ate the next
+# line of the installer, so questions go to the terminal; and with no terminal
+# at all, nobody is there to say yes, so the answer is no.
+answers="$WORKDIR/tty"
+if (SKIFITY_ASSUME_YES=""; TTY_DEV="$WORKDIR/no/such/tty"; confirm "Carry on?") </dev/null >/dev/null 2>&1; then
+  t_fail "with no terminal, confirm said yes on nobody's behalf"
+else
+  t_pass "with no terminal and no --yes, the answer is no"
+fi
+if (SKIFITY_ASSUME_YES=1; TTY_DEV="$WORKDIR/no/such/tty"; confirm "Carry on?") >/dev/null 2>&1; then
+  t_pass "--yes answers yes"
+else
+  t_fail "--yes should answer yes"
+fi
+printf 'y\n' >"$answers"
+if (SKIFITY_ASSUME_YES=""; TTY_DEV="$answers"; confirm "Carry on?") </dev/null >/dev/null 2>&1; then
+  t_pass "an answer is read from the terminal, not from stdin"
+else
+  t_fail "confirm did not read y from the terminal"
+fi
+printf 'n\n' >"$answers"
+if (SKIFITY_ASSUME_YES=""; TTY_DEV="$answers"; confirm "Carry on?") </dev/null >/dev/null 2>&1; then
+  t_fail "confirm took n for yes"
+else
+  t_pass "n is no"
+fi
+
+printf 'not a domain\nPanel.Example.TEST\n' >"$answers"
+got=$( (SKIFITY_DOMAIN=""; SKIFITY_ASSUME_YES=""; TTY_DEV="$answers"; KUBECONFIG_PATH="$WORKDIR/none"
+  LOG_FILE=/dev/null; ask_for_domain && printf '%s' "$SKIFITY_DOMAIN") </dev/null 2>/dev/null)
+if [ "$got" = "panel.example.test" ]; then
+  t_pass "a fresh install asks for a domain, and asks again after a typo"
+else
+  t_fail "ask_for_domain should have taken panel.example.test, got: $got"
+fi
+printf '\n' >"$answers"
+got=$( (SKIFITY_DOMAIN=""; SKIFITY_ASSUME_YES=""; TTY_DEV="$answers"; KUBECONFIG_PATH="$WORKDIR/none"
+  LOG_FILE=/dev/null; ask_for_domain && printf '[%s]' "$SKIFITY_DOMAIN") </dev/null 2>/dev/null)
+if [ "$got" = "[]" ]; then
+  t_pass "Enter skips the domain"
+else
+  t_fail "an empty answer should leave no domain, got: $got"
+fi
+# A second run never asks: the panel already has an address.
+: >"$WORKDIR/kubeconfig"
+printf 'panel.example.test\n' >"$answers"
+got=$( (SKIFITY_DOMAIN=""; SKIFITY_ASSUME_YES=""; TTY_DEV="$answers"; KUBECONFIG_PATH="$WORKDIR/kubeconfig"
+  LOG_FILE=/dev/null; ask_for_domain && printf '[%s]' "$SKIFITY_DOMAIN") </dev/null 2>/dev/null)
+if [ "$got" = "[]" ]; then
+  t_pass "a second run does not ask for a domain"
+else
+  t_fail "ask_for_domain asked on a server that already has k3s, got: $got"
+fi
+
+# --- the address ------------------------------------------------------------
+
+private_ok=0
+for address in 10.0.0.5 172.16.0.1 172.31.255.255 192.168.1.10 100.64.0.1 100.127.255.255 127.0.0.1 169.254.169.254; do
+  is_private_ipv4 "$address" || { t_fail "$address should count as private"; private_ok=1; }
+done
+for address in 203.0.113.10 172.15.0.1 172.32.0.1 100.63.255.255 100.128.0.1 8.8.8.8; do
+  is_private_ipv4 "$address" && { t_fail "$address should count as public"; private_ok=1; }
+done
+t_check "$private_ok" "private and public addresses are told apart, carrier-grade NAT included"
+
+# os-release sets VERSION, and VERSION is the release being installed. It used
+# to be sourced into the installer, after which every message named the
+# release as "24.04 LTS (Noble Numbat)".
+printf 'ID=ubuntu\nVERSION="24.04 LTS (Noble Numbat)"\nPRETTY_NAME="Ubuntu 24.04 LTS"\n' >"$WORKDIR/os-release"
+got=$( (VERSION=v1.2.3; OS_RELEASE="$WORKDIR/os-release"; os_field ID >/dev/null; os_field PRETTY_NAME >/dev/null
+  printf '%s|%s|%s' "$VERSION" "$(os_field ID)" "$(os_field PRETTY_NAME)") 2>&1)
+if [ "$got" = "v1.2.3|ubuntu|Ubuntu 24.04 LTS" ]; then
+  t_pass "reading os-release leaves the release being installed alone"
+else
+  t_fail "os_field should not touch VERSION, got: $got"
+fi
+
+# A k3s that is already installed is asked which pod network it uses: a second
+# run used to hand the panel an empty one.
+mkdir -p "$WORKDIR/k3s-existing/config.yaml.d"
+printf "ExecStart=/usr/local/bin/k3s \\\\\n    server \\\\\n    '--cluster-init' \\\\\n    '--flannel-backend=wireguard-native' \\\\\n" \
+  >"$WORKDIR/k3s-existing/k3s.service"
+got=$( (K3S_UNIT_PATH="$WORKDIR/k3s-existing/k3s.service"; K3S_CONFIG_DIR="$WORKDIR/k3s-existing"; existing_pod_network) 2>&1)
+if [ "$got" = "wireguard-native" ]; then
+  t_pass "the pod network of an installed k3s is read from its unit"
+else
+  t_fail "existing_pod_network should read wireguard-native from the unit, got: $got"
+fi
+printf 'flannel-backend: "vxlan"\n' >"$WORKDIR/k3s-existing/config.yaml.d/10-network.yaml"
+got=$( (K3S_UNIT_PATH="$WORKDIR/none"; K3S_CONFIG_DIR="$WORKDIR/k3s-existing"; existing_pod_network) 2>&1)
+if [ "$got" = "vxlan" ]; then
+  t_pass "and from its configuration files"
+else
+  t_fail "existing_pod_network should read vxlan from config.yaml.d, got: $got"
+fi
+
+# --- one install at a time --------------------------------------------------
+
+lock="$WORKDIR/lock"
+mkdir -p "$lock"
+printf '%s\n' "$$" >"$lock/pid"
+out=$( (LOCK_DIR="$lock"; LOG_FILE=/dev/null; take_lock) 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"already running"*) t_pass "a second install is refused while the first is running" ;;
+*) t_fail "take_lock should refuse a live lock, got $status: $out" ;;
+esac
+sh -c 'exit 0' &
+dead=$!
+wait "$dead" || true
+printf '%s\n' "$dead" >"$lock/pid"
+if (LOCK_DIR="$lock"; LOG_FILE=/dev/null; take_lock) >/dev/null 2>&1; then
+  t_pass "a lock left by an install that was killed is taken over"
+else
+  t_fail "take_lock should take over a lock whose process is gone"
+fi
+rm -rf "$lock"
+
+out=$( (LOG_FILE=/dev/null; interrupted) 2>&1) && status=0 || status=$?
+case "$status:$out" in
+130:*"run the installer again"*) t_pass "an interrupted install says running it again is how to finish" ;;
+*) t_fail "interrupted should exit 130 and say to run again, got $status: $out" ;;
+esac
+
+# The whole install is one function called on the last line, so a download cut
+# off halfway defines functions and runs nothing.
+if [ "$(grep -v '^[[:space:]]*$' "$INSTALLER" | tail -n 1)" = 'main "$@"' ]; then
+  t_pass "nothing runs until the whole script has arrived"
+else
+  t_fail "the last line of install.sh should be main \"\$@\""
+fi
+
+# --- the host firewall ------------------------------------------------------
+
+# make_stub DIR NAME writes an executable stand-in for a command, with the
+# body it reads from stdin.
+make_stub() {
+  mkdir -p "$1"
+  { printf '#!/bin/sh\n'; cat; } >"$1/$2"
+  chmod +x "$1/$2"
+}
+
+fw="$WORKDIR/fw-ufw"
+make_stub "$fw" ufw <<'STUB'
+printf "ufw %s\n" "$*" >>"$FW_LOG"; [ "$1" = status ] && echo "Status: active"; exit 0
+STUB
+(PATH="$fw:$PATH"; FW_LOG="$WORKDIR/ufw.log"; export FW_LOG; LOG_FILE=/dev/null; SKIFITY_SKIP_FIREWALL=""
+  configure_firewall) >/dev/null 2>&1
+fw_ok=0
+for want in "ufw allow 80/tcp" "ufw allow 443/tcp" "ufw allow from 10.42.0.0/16 to any" "ufw allow from 10.43.0.0/16 to any"; do
+  grep -qx "$want" "$WORKDIR/ufw.log" 2>/dev/null || { t_fail "an active ufw was not told: $want"; fw_ok=1; }
+done
+grep -q "ufw allow 6443" "$WORKDIR/ufw.log" 2>/dev/null && { t_fail "the Kubernetes API was opened to the world"; fw_ok=1; }
+t_check "$fw_ok" "an active ufw lets in HTTP, HTTPS and the cluster's networks, and nothing else"
+
+fw="$WORKDIR/fw-firewalld"
+make_stub "$fw" firewall-cmd <<'STUB'
+printf "firewall-cmd %s\n" "$*" >>"$FW_LOG"; [ "$1" = --state ] && echo running; exit 0
+STUB
+(PATH="$fw:$PATH"; FW_LOG="$WORKDIR/firewalld.log"; export FW_LOG; LOG_FILE=/dev/null; SKIFITY_SKIP_FIREWALL=""
+  have() { [ "$1" != ufw ] && command -v "$1" >/dev/null 2>&1; }
+  configure_firewall) >/dev/null 2>&1
+fw_ok=0
+for want in "firewall-cmd --permanent --add-port=443/tcp" "firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16" "firewall-cmd --reload"; do
+  grep -qx -- "$want" "$WORKDIR/firewalld.log" 2>/dev/null || { t_fail "a running firewalld was not told: $want"; fw_ok=1; }
+done
+t_check "$fw_ok" "a running firewalld is configured, and reloaded so it takes effect"
+
+# Oracle Cloud's images reject everything but SSH in iptables itself.
+fw="$WORKDIR/fw-iptables"
+make_stub "$fw" iptables <<'STUB'
+printf "iptables %s\n" "$*" >>"$FW_LOG"
+case "$1" in
+-S) printf "%s\n" "-P INPUT ACCEPT" "-A INPUT -p tcp --dport 22 -j ACCEPT" "-A INPUT -j REJECT --reject-with icmp-host-prohibited" ;;
+-C) exit 1 ;;
+esac
+exit 0
+STUB
+(PATH="$fw:$PATH"; FW_LOG="$WORKDIR/iptables.log"; export FW_LOG; LOG_FILE=/dev/null; SKIFITY_SKIP_FIREWALL=""
+  have() { case "$1" in ufw | firewall-cmd | netfilter-persistent | iptables-save) return 1 ;; esac; command -v "$1" >/dev/null 2>&1; }
+  configure_firewall) >/dev/null 2>&1
+if grep -qx -- "iptables -I INPUT -p tcp --dport 443 -j ACCEPT" "$WORKDIR/iptables.log" 2>/dev/null &&
+  grep -qx -- "iptables -I INPUT -s 10.42.0.0/16 -j ACCEPT" "$WORKDIR/iptables.log"; then
+  t_pass "iptables rules that reject by default are opened for HTTP, HTTPS and the cluster"
+else
+  t_fail "a rejecting iptables INPUT chain was left closed: $(cat "$WORKDIR/iptables.log" 2>/dev/null)"
+fi
+make_stub "$fw" iptables <<'STUB'
+printf "iptables %s\n" "$*" >>"$FW_LOG"
+case "$1" in
+-S) printf "%s\n" "-P INPUT ACCEPT" "-A INPUT -s 198.51.100.7/32 -j DROP" ;;
+esac
+exit 0
+STUB
+rm -f "$WORKDIR/iptables.log"
+(PATH="$fw:$PATH"; FW_LOG="$WORKDIR/iptables.log"; export FW_LOG; LOG_FILE=/dev/null; SKIFITY_SKIP_FIREWALL=""
+  have() { case "$1" in ufw | firewall-cmd) return 1 ;; esac; command -v "$1" >/dev/null 2>&1; }
+  configure_firewall) >/dev/null 2>&1
+if grep -q -- "-I INPUT" "$WORKDIR/iptables.log" 2>/dev/null; then
+  t_fail "iptables was changed although nothing rejects by default"
+else
+  t_pass "iptables that only drops one address is left alone"
+fi
+
+# --- a whole install, against stand-ins ---------------------------------------
+
+# Every step, in order, from the options to the last line, with each command
+# that would change this machine or reach the network replaced by a stand-in,
+# and every path moved into a directory of its own. The steps were only ever
+# tested one at a time, and one of them called a function that did not exist:
+# every real install stopped at the cluster token, under set -e, with
+# "run: not found" and no explanation.
+STUBS="$WORKDIR/stubs"
+REAL_UID=$(id -u)
+REAL_GID=$(id -g)
+make_stub "$STUBS" id <<'STUB'
+[ "$1" = -u ] && { echo 0; exit 0; }; exec /usr/bin/env -i PATH=/usr/bin:/bin id "$@"
+STUB
+make_stub "$STUBS" sleep <<'STUB'
+exit 0
+STUB
+make_stub "$STUBS" modprobe <<'STUB'
+exit 0
+STUB
+make_stub "$STUBS" ss <<'STUB'
+exit 0
+STUB
+make_stub "$STUBS" df <<'STUB'
+printf "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/vda1 104857600 10485760 94371840 10%% /\n"
+STUB
+make_stub "$STUBS" timedatectl <<'STUB'
+echo yes
+STUB
+make_stub "$STUBS" ufw <<'STUB'
+echo "Status: inactive"
+STUB
+make_stub "$STUBS" iptables <<'STUB'
+echo "-P INPUT ACCEPT"
+STUB
+make_stub "$STUBS" k3s <<'STUB'
+exit 0
+STUB
+make_stub "$STUBS" getent <<'STUB'
+case "$2" in panel.example.test) echo "203.0.113.10    STREAM panel.example.test" ;; *) exit 2 ;; esac
+STUB
+make_stub "$STUBS" systemctl <<'STUB'
+printf "systemctl %s\n" "$*" >>"$STUB_LOG"
+case "$*" in
+"is-active --quiet k3s") exit "${STUB_K3S_ACTIVE:-3}" ;;
+"is-active --quiet "*) exit 3 ;;
+esac
+exit 0
+STUB
+make_stub "$STUBS" kubectl <<'STUB'
+printf "kubectl %s\n" "$*" >>"$STUB_LOG"
+case "$*" in
+"get --raw /readyz") exit 0 ;;
+"get nodes --no-headers") echo "node-1   Ready   control-plane,etcd   1m   v1.33.4+k3s1" ;;
+"get nodes --no-headers -o custom-columns=NAME:.metadata.name") echo node-1 ;;
+*ExternalIP*) ;;
+*InternalIP*) printf "%s" "${STUB_NODE_IP:-10.0.0.5}" ;;
+*"get ingress skifity-panel"*) [ -n "${STUB_ROUTE:-}" ] || exit 1; printf "%s" "$STUB_ROUTE" ;;
+*"get deployment cert-manager"*) exit "${STUB_CERT_MANAGER:-1}" ;;
+*"get deployment skifity-panel"*) [ -n "${STUB_PANEL_IMAGE:-}" ] || exit 1; printf "%s" "$STUB_PANEL_IMAGE" ;;
+*"get clusterissuer"*) [ -n "${STUB_ISSUER_EMAIL:-}" ] || exit 1; printf "%s" "$STUB_ISSUER_EMAIL" ;;
+"apply -f "*)
+  file=$3
+  [ -s "$file" ] || { echo "error: no objects passed to apply" >&2; exit 1; }
+  cp "$file" "$STUB_DIR/applied-$(basename "$file")" ;;
+*"rollout status"*) ;;
+*"get svc skifity-panel"*) printf 30080 ;;
+*"get certificate skifity-panel-tls"*) printf True ;;
+*) printf "UNHANDLED kubectl %s\n" "$*" >>"$STUB_LOG" ;;
+esac
+exit 0
+STUB
+make_stub "$STUBS" curl <<'STUB'
+out=""; url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+  -o) out=$2; shift ;;
+  http://* | https://*) url=$1 ;;
+  esac
+  shift
+done
+printf "curl %s\n" "$url" >>"$STUB_LOG"
+emit() { if [ -n "$out" ]; then cat >"$out"; else cat; fi; }
+case "$url" in
+https://get.k3s.io) emit <"$STUB_DIR/fake-k3s-install.sh" ;;
+*/cert-manager.yaml) printf "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: cert-manager\n" | emit ;;
+https://api.ipify.org) printf "%s" "${STUB_OUTSIDE_IP:-203.0.113.10}" | emit ;;
+*/api/health) [ "${STUB_PANEL_DOWN:-0}" = 1 ] && exit 7; printf "{\"status\":\"ok\"}" | emit ;;
+*/api/setup/status) printf "{\"needs_setup\":%s,\"product\":\"Skifity\"}" "${STUB_NEEDS_SETUP:-true}" | emit ;;
+*/api/cli/download) printf "#!/bin/sh\necho skifity\n" | emit ;;
+*) printf "UNHANDLED curl %s\n" "$url" >>"$STUB_LOG"; exit 22 ;;
+esac
+STUB
+
+# k3s's installer, as far as the steps after it can tell: a unit with the
+# flags it was given, a join token and a kubeconfig.
+cat >"$WORKDIR/fake-k3s-install.sh" <<'FAKE'
+#!/bin/sh
+set -eu
+printf '%s\n' "$INSTALL_K3S_EXEC" >"$STUB_DIR/k3s-exec"
+printf '%s\n' "$INSTALL_K3S_CHANNEL" >"$STUB_DIR/k3s-channel"
+mkdir -p "$STUB_ROOT/etc/systemd/system" "$STUB_ROOT/var/lib/rancher/k3s/server" "$STUB_ROOT/etc/rancher/k3s"
+for arg in $INSTALL_K3S_EXEC; do printf "    '%s' \\\\\n" "$arg"; done >"$STUB_ROOT/etc/systemd/system/k3s.service"
+printf 'K10fake::server:not-a-real-token\n' >"$STUB_ROOT/var/lib/rancher/k3s/server/token"
+printf 'apiVersion: v1\n' >"$STUB_ROOT/etc/rancher/k3s/k3s.yaml"
+# Under curl | sh, stdin is the rest of the installer.
+if read -r line; then printf '%s\n' "$line" >"$STUB_DIR/k3s-read-stdin"; fi
+FAKE
+
+# fake_root prepares the machine an install runs on: Ubuntu, 1.5 GB and no
+# swap, systemd.
+fake_root() {
+  rm -rf "$1"
+  mkdir -p "$1/etc" "$1/proc" "$1/run/systemd/system" "$1/sys/fs/cgroup" "$1/var/log" "$1/usr/local/bin" "$1/stub" "$1/tmp"
+  printf 'ID=ubuntu\nVERSION="24.04 LTS (Noble Numbat)"\nPRETTY_NAME="Ubuntu 24.04 LTS"\n' >"$1/etc/os-release"
+  printf 'MemTotal:        1536000 kB\nSwapTotal:             0 kB\n' >"$1/proc/meminfo"
+  printf 'cpuset cpu io memory pids\n' >"$1/sys/fs/cgroup/cgroup.controllers"
+  cp "$WORKDIR/fake-k3s-install.sh" "$1/stub/fake-k3s-install.sh"
+}
+
+# run_install ROOT [options...] runs main against ROOT, in a shell of its own
+# so nothing it sets leaks into the next run. STUB_* settings pass through.
+run_install() {
+  fake="$1"
+  shift
+  # The script is in single quotes so the inner shell expands it.
+  # shellcheck disable=SC2016
+  env PATH="$STUBS:$PATH" STUB_DIR="$fake/stub" STUB_ROOT="$fake" STUB_LOG="$fake/stub/calls.log" \
+    TMPDIR="$fake/tmp" REAL_UID="$REAL_UID" REAL_GID="$REAL_GID" \
+    sh -c '
+      SKIFITY_INSTALLER_LIB=1 . "$1/installer/install.sh"
+      SOURCE_DIR="$1"
+      R="$2"
+      shift 2
+      CONFIG_DIR="$R/etc/skifity"
+      DATA_DIR="$R/var/lib/skifity"
+      MANIFEST_DIR="$R/var/lib/skifity/manifests"
+      LOG_FILE="$R/var/log/skifity-install.log"
+      KUBECONFIG_PATH="$R/etc/rancher/k3s/k3s.yaml"
+      K3S_CONFIG_DIR="$R/etc/rancher/k3s"
+      K3S_UNIT_PATH="$R/etc/systemd/system/k3s.service"
+      K3S_TOKEN_PATH="$R/var/lib/rancher/k3s/server/token"
+      K3S_MANIFESTS_DIR="$R/var/lib/rancher/k3s/server/manifests"
+      CLI_PATH="$R/usr/local/bin/skifity"
+      UNINSTALLER_PATH="$R/usr/local/bin/skifity-uninstall"
+      LOCK_DIR="$R/run/skifity-install.lock"
+      SYSTEMD_DIR="$R/run/systemd/system"
+      OS_RELEASE="$R/etc/os-release"
+      MEMINFO="$R/proc/meminfo"
+      CGROUP_CONTROLLERS="$R/sys/fs/cgroup/cgroup.controllers"
+      PROC_CGROUPS="$R/proc/cgroups"
+      TTY_DEV="$R/dev/tty"
+      RUN_UID="$REAL_UID"
+      RUN_GID="$REAL_GID"
+      main "$@"
+    ' run-install "$ROOT" "$fake" "$@"
+}
+
+IMAGE_UNDER_TEST="registry.example.test/skifity:0.0.0-test"
+
+# A fresh server behind NAT, no domain: the common case.
+FAKE="$WORKDIR/root-http"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ]; then
+  t_pass "a whole install runs from start to finish"
+else
+  t_fail "the install stopped with $status:
+$out"
+fi
+token=$(cat "$FAKE/etc/skifity/setup-token" 2>/dev/null || true)
+case "$out" in
+*"http://203-0-113-10.sslip.io/setup#token=${token}"*) t_pass "it ends with the setup link, on the public address of a server behind NAT" ;;
+*) t_fail "the install should end with the setup link on 203-0-113-10.sslip.io, got:
+$out" ;;
+esac
+case "$out" in
+*"10.0.0.5 on its own network and 203.0.113.10 on the internet"*) t_pass "and says which address is which" ;;
+*) t_fail "the NAT lookup should name both addresses" ;;
+esac
+if grep -q -- "--flannel-backend=wireguard-native" "$FAKE/stub/k3s-exec" 2>/dev/null &&
+  grep -q -- "--cluster-init" "$FAKE/stub/k3s-exec"; then
+  t_pass "k3s is installed with embedded etcd and an encrypted pod network"
+else
+  t_fail "k3s was not installed with the expected flags: $(cat "$FAKE/stub/k3s-exec" 2>/dev/null)"
+fi
+if [ -e "$FAKE/stub/k3s-read-stdin" ]; then
+  t_fail "k3s's installer was handed the installer's stdin"
+else
+  t_pass "k3s's installer cannot read the rest of a piped script"
+fi
+if cmp -s "$FAKE/var/lib/rancher/k3s/server/token" "$FAKE/etc/skifity/cluster-token" &&
+  [ -n "$(find "$FAKE/etc/skifity/cluster-token" -perm 0600)" ]; then
+  t_pass "the panel gets the cluster's join token, readable by nobody else"
+else
+  t_fail "the cluster token was not copied for the panel, or is readable by others"
+fi
+if [ -x "$FAKE/usr/local/bin/skifity" ] && [ -x "$FAKE/usr/local/bin/skifity-uninstall" ]; then
+  t_pass "the CLI and the uninstaller are on the PATH"
+else
+  t_fail "the CLI or the uninstaller was not installed"
+fi
+if grep -q '__[A-Z0-9_]*__' "$FAKE/stub/applied-panel.yaml" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null; then
+  t_fail "a placeholder reached the cluster"
+elif grep -q 'value: "http://203-0-113-10.sslip.io"' "$FAKE/stub/applied-panel.yaml" 2>/dev/null &&
+  grep -q 'value: "wireguard-native"' "$FAKE/stub/applied-panel.yaml" &&
+  grep -q "image: $IMAGE_UNDER_TEST" "$FAKE/stub/applied-panel.yaml"; then
+  t_pass "the panel is applied with its address, its pod network and the image asked for"
+else
+  t_fail "the applied panel is missing its address, pod network or image"
+fi
+if [ -e "$FAKE/run/skifity-install.lock" ] || [ -n "$(ls -A "$FAKE/tmp" 2>/dev/null)" ]; then
+  t_fail "the install left its lock or its temporary files behind"
+else
+  t_pass "the lock and the temporary files are gone afterwards"
+fi
+if [ -n "$(find "$FAKE/var/log/skifity-install.log" -perm 0600)" ]; then
+  t_pass "the log is readable by root alone"
+else
+  t_fail "the install log is readable by other users"
+fi
+case "$out" in
+*"no swap"*) t_pass "a server under 2 GB with no swap is warned about" ;;
+*) t_fail "1.5 GB with no swap should be warned about" ;;
+esac
+if grep -q UNHANDLED "$FAKE/stub/calls.log"; then
+  t_fail "the install made a call the stand-ins do not know: $(grep UNHANDLED "$FAKE/stub/calls.log" | head -3)"
+else
+  t_pass "every command the install ran was one the stand-ins expected"
+fi
+
+# The same server, run again after the first account exists, to upgrade.
+rm -f "$FAKE/stub/k3s-exec"
+out=$(export STUB_K3S_ACTIVE=0 STUB_NEEDS_SETUP=false STUB_ROUTE="203-0-113-10.sslip.io " \
+  STUB_PANEL_IMAGE="registry.example.test/skifity:0.0.0-old"
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && [ ! -e "$FAKE/stub/k3s-exec" ]; then
+  t_pass "a second run leaves a running k3s alone"
+else
+  t_fail "the second run stopped with $status, or reinstalled k3s:
+$out"
+fi
+case "$out" in
+*"setup#token"*) t_fail "a second run after setup printed a setup link that no longer works" ;;
+*"Sign in at "*"http://203-0-113-10.sslip.io"*) t_pass "after setup, a second run says where to sign in instead" ;;
+*) t_fail "a second run after setup should say where to sign in, got:
+$out" ;;
+esac
+case "$out" in
+*"Upgrading the panel from registry.example.test/skifity:0.0.0-old"*) t_pass "an upgrade says what it is upgrading from" ;;
+*) t_fail "the second run should say it is upgrading the panel" ;;
+esac
+if grep -q 'value: "wireguard-native"' "$FAKE/stub/applied-panel.yaml" 2>/dev/null; then
+  t_pass "a second run tells the panel the pod network k3s was installed with"
+else
+  t_fail "a second run handed the panel no pod network"
+fi
+
+# With a domain: cert-manager, the issuer, and a route with a certificate.
+FAKE="$WORKDIR/root-https"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --domain Panel.Example.TEST --email ops@example.test 2>&1) &&
+  status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null &&
+  grep -q "host: panel.example.test" "$FAKE/stub/applied-ingress.yaml"; then
+  t_pass "with --domain, the panel's route asks for a certificate for that name"
+else
+  t_fail "the HTTPS install did not apply a TLS route for panel.example.test ($status):
+$out"
+fi
+if grep -q "kubectl apply -f .*/cert-manager.yaml" "$FAKE/stub/calls.log" 2>/dev/null &&
+  grep -q "email: ops@example.test" "$FAKE/stub/applied-cluster-issuer.yaml" 2>/dev/null &&
+  grep -q "acme-v02.api.letsencrypt.org" "$FAKE/stub/applied-cluster-issuer.yaml"; then
+  t_pass "cert-manager is downloaded, applied, and given an issuer with the address"
+else
+  t_fail "cert-manager or its issuer was not set up"
+fi
+case "$out" in
+*"https://panel.example.test/setup#token="*) t_pass "and the setup link is on HTTPS" ;;
+*) t_fail "the setup link should be on https://panel.example.test" ;;
+esac
+
+# Run again to upgrade, with none of the first run's options. This used to
+# move a panel with a domain back to plain HTTP on an sslip.io name.
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_ROUTE="panel.example.test skifity-panel-tls" \
+  STUB_ISSUER_EMAIL=ops@example.test
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null &&
+  grep -q "email: ops@example.test" "$FAKE/stub/applied-cluster-issuer.yaml" 2>/dev/null; then
+  t_pass "a second run without --domain keeps the domain, its certificate and the issuer's address"
+else
+  t_fail "a second run without --domain lost the panel's domain ($status):
+$out"
+fi
+
+# A route that does not reach the panel is a warning that says where to look,
+# not a silent success.
+FAKE="$WORKDIR/root-down"
+fake_root "$FAKE"
+out=$(export STUB_PANEL_DOWN=1; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+0:*"does not reach it through the ingress"*"describe ingress skifity-panel"*"warnings above"*)
+  t_pass "a panel its address does not reach is reported, with where to look" ;;
+*) t_fail "an unreachable panel should be a warning with diagnostics, got $status:
+$out" ;;
+esac
+
+# Not Ubuntu or Debian, and nobody to ask: stop before changing anything.
+FAKE="$WORKDIR/root-other"
+fake_root "$FAKE"
+printf 'ID=gentoo\nPRETTY_NAME="Gentoo Linux"\n' >"$FAKE/etc/os-release"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" </dev/null 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"nobody confirmed"*"--yes"*) t_pass "an untested system with nobody to ask is a refusal, not a yes" ;;
+*) t_fail "an untested system without a terminal should stop and mention --yes, got $status:
+$out" ;;
+esac
+if [ -e "$FAKE/stub/k3s-exec" ]; then
+  t_fail "k3s was installed although the install was refused"
+else
+  t_pass "and nothing was installed"
+fi
+
 # --- nothing was installed --------------------------------------------------
 
 # The point of sourcing the installer is that it changes nothing. If any of

@@ -263,6 +263,26 @@ func TestInstallerAndPanelAgreeOnTheRegistry(t *testing.T) {
 	}
 }
 
+// TestInstallerTrustsThePanelsPodNetworks: the installer opens the first
+// server's firewall to the pod and service networks, and the panel opens every
+// server it adds to the same two. If they drift, the first server refuses the
+// traffic of pods the others accept, which shows up as DNS timeouts in a pod
+// rather than as anything about a firewall.
+func TestInstallerTrustsThePanelsPodNetworks(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "installer", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	for _, want := range []string{
+		`POD_CIDR="` + kube.PodCIDR + `"`,
+		`SERVICE_CIDR="` + kube.ServiceCIDR + `"`,
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("install.sh does not set %s", want)
+		}
+	}
+}
+
 // Every pod the panel's own manifests create has to be admitted by the Pod
 // Security level of the namespace it is created in. The panel's namespace once
 // enforced baseline while the panel mounted host paths, which baseline
