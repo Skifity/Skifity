@@ -1197,9 +1197,12 @@ find_public_ip() {
 
 # existing_panel_route prints the host the panel answers on now and, after a
 # space, the Secret its certificate is in — nothing at all on a first install.
+# [*] rather than [0] for the certificate: kubectl's JSONPath fails the whole
+# query on an index into an empty list, and an Ingress with `tls: []` would
+# then read as no panel at all.
 existing_panel_route() {
 	kubectl -n "$NAMESPACE" get ingress skifity-panel \
-		-o jsonpath='{.spec.rules[0].host}{" "}{.spec.tls[0].secretName}' 2>/dev/null || true
+		-o jsonpath='{.spec.rules[0].host}{" "}{.spec.tls[*].secretName}' 2>/dev/null || true
 }
 
 choose_hostname() {

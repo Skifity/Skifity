@@ -1,6 +1,7 @@
 package manifests
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
 
 	"skifity/internal/kube"
@@ -260,6 +262,70 @@ func TestInstallerAndPanelAgreeOnTheRegistry(t *testing.T) {
 	}
 	if !strings.Contains(yaml, "http://127.0.0.1:"+strconv.Itoa(kube.RegistryNodePort)) {
 		t.Errorf("the mirror configuration does not point at the node port:\n%s", yaml)
+	}
+}
+
+// TestInstallerReadsBackTheRouteItWrites: a second run of the installer keeps
+// the panel's address by reading its Ingress back with JSONPath, and a query
+// that fails reads as "no panel yet" — which moved a panel with a domain back
+// to plain HTTP. The installer's own expression is run against both routes it
+// writes, and against an empty tls list, which fails an index like [0].
+func TestInstallerReadsBackTheRouteItWrites(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "installer", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	text := string(script)
+	start := strings.Index(text, "existing_panel_route() {")
+	if start < 0 {
+		t.Fatal("install.sh has no existing_panel_route")
+	}
+	body := text[start:]
+	from := strings.Index(body, "-o jsonpath='")
+	if from < 0 {
+		t.Fatal("existing_panel_route does not ask kubectl for JSONPath")
+	}
+	expression := body[from+len("-o jsonpath='"):]
+	expression = expression[:strings.Index(expression, "'")]
+
+	query := func(object map[string]any) string {
+		t.Helper()
+		path := jsonpath.New("route")
+		// What `kubectl get -o jsonpath` does by default.
+		path.AllowMissingKeys(true)
+		if err := path.Parse(expression); err != nil {
+			t.Fatalf("parse %q: %v", expression, err)
+		}
+		var out bytes.Buffer
+		if err := path.Execute(&out, object); err != nil {
+			t.Fatalf("%q fails on %v: %v", expression, object, err)
+		}
+		return out.String()
+	}
+
+	for name, want := range map[string]string{
+		"ingress.yaml":     values["HOST"] + " ",
+		"ingress-tls.yaml": values["HOST"] + " skifity-panel-tls",
+	} {
+		rendered, err := Render(read(t, name), values)
+		if err != nil {
+			t.Fatalf("render %s: %v", name, err)
+		}
+		var object map[string]any
+		if err := yaml.Unmarshal([]byte(rendered), &object); err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		if got := query(object); got != want {
+			t.Errorf("from %s the installer reads %q, want %q", name, got, want)
+		}
+	}
+
+	empty := map[string]any{"spec": map[string]any{
+		"rules": []any{map[string]any{"host": "panel.example.test"}},
+		"tls":   []any{},
+	}}
+	if got := query(empty); got != "panel.example.test " {
+		t.Errorf("with an empty tls list the installer reads %q", got)
 	}
 }
 
