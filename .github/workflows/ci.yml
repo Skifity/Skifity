@@ -61,8 +61,17 @@ jobs:
           LINT_STRICT: "1"
         run: ./scripts/lint-shell.sh
 
+      # Both test steps keep their output, and a failure names its tests in
+      # the run's summary: a job log is not something every reader of a red
+      # build can open, and "exit code 1" says nothing about which test.
       - name: Test
-        run: go test ./...
+        run: |
+          set -o pipefail
+          go test ./... 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      - name: Name the tests that failed
+        if: failure()
+        run: ./scripts/ci-test-failures.sh "$RUNNER_TEMP/test.log"
 
       - name: Known vulnerabilities
         # govulncheck reports what the code actually reaches, so an unused
@@ -78,7 +87,13 @@ jobs:
       - name: Test with the race detector
         # The race detector needs cgo, so this job turns it back on for this
         # step only. Release binaries stay static.
-        run: CGO_ENABLED=1 go test -race ./...
+        run: |
+          set -o pipefail
+          CGO_ENABLED=1 go test -race ./... 2>&1 | tee "$RUNNER_TEMP/race.log"
+
+      - name: Name the tests that failed under the race detector
+        if: failure()
+        run: ./scripts/ci-test-failures.sh "$RUNNER_TEMP/race.log"
 
   frontend:
     name: Frontend
