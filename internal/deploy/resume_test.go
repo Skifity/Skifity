@@ -53,6 +53,10 @@ func TestAnInterruptedDeploymentIsPickedUpAgainOnce(t *testing.T) {
 		t.Error("the deployment's log does not say it was picked up again, and from where")
 	}
 
+	// The run goes on after the status is written — the log, the
+	// notifications — so it is let go of before the row is reused.
+	waitStopped(t, d, newer.ID)
+
 	// Interrupted a second time: not started a third.
 	if _, err := db.Exec(ctx, `UPDATE deployments SET status = 'deploying' WHERE id = ?`, newer.ID); err != nil {
 		t.Fatalf("put the deployment back in progress: %v", err)
@@ -117,6 +121,24 @@ func waitFinished(t *testing.T, db *store.DB, id string) store.Deployment {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("the deployment was still %s after 10 seconds", deployment.Status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// waitStopped waits until the deployer is no longer running a deployment.
+func waitStopped(t *testing.T, d *Deployer, id string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		d.mu.Lock()
+		_, running := d.running[id]
+		d.mu.Unlock()
+		if !running {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the deployment was still running after 10 seconds")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
