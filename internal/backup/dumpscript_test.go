@@ -373,16 +373,18 @@ config=""
 for arg in "$@"; do
   case "$arg" in --config=*) config=$(cat "${arg#--config=}") ;; esac
 done
-{
-  printf 'CALL\n'
-  printf 'TOOL %s\n' "$tool"
-  printf 'ARGS %s\n' "$*"
-  printf 'ENV %s|%s|%s\n' "${PGPASSWORD:-}" "${MYSQL_PWD:-}" "${REDISCLI_AUTH:-}"
-  printf 'FILE %s\n' "$config"
-} >> "$STUB_LOG"
+# One write for the whole record. A server runs in the background while the
+# client calls it, and five writes each let the two records interleave: the
+# server's TOOL line landed in the client's record, was overwritten there,
+# and the server was never seen to have run.
+record=$(printf 'CALL\nTOOL %s\nARGS %s\nENV %s|%s|%s\nFILE %s' "$tool" "$*" \
+  "${PGPASSWORD:-}" "${MYSQL_PWD:-}" "${REDISCLI_AUTH:-}" "$config")
+printf '%s\n' "$record" >> "$STUB_LOG"
 case "$tool" in
   *-server)
     cat "$1" > "$STUB_CONFIG"
+    # Up, and answering from here on: what the restore's ping waits for.
+    : > "$STUB_LOG.up"
     if [ -n "${SOURCE_DIES:-}" ]; then exec sleep 1; fi
     exec sleep 60 ;;
   pg_dump|mysqldump|mariadb-dump|mongodump)
@@ -395,7 +397,13 @@ target=live
 case " $* " in *" -p 6380 "*) target=here ;; esac
 case "$*" in
   *--rdb*) printf 'REDIS0011 header and some data' ;;
-  *" ping") echo PONG ;;
+  *" ping")
+    # The restore's own server answers once it has started, as a real one
+    # does. Answering before it had, a quick run finished and killed it
+    # before it had written down that it ran, and the test failed one time
+    # in ten.
+    if [ "$target" = here ] && [ ! -e "$STUB_LOG.up" ]; then exit 1; fi
+    echo PONG ;;
   *"info server")
     if [ "$target" = here ]; then v="${HERE_VERSION:-7.4.1}"; else v="${LIVE_VERSION:-7.4.1}"; fi
     printf '# Server\r\nredis_version:%s\r\nvalkey_version:%s\r\n' "$v" "$v" ;;
