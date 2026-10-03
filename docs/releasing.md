@@ -23,7 +23,6 @@ And the release itself, dry, which nothing else runs:
 
 ```sh
 IMAGE_REPO=ghcr.io/skifity/skifity REPO_URL=https://github.com/Skifity/Skifity \
-RAW_BASE=https://raw.githubusercontent.com/Skifity/Skifity \
   goreleaser release --snapshot --clean --skip=publish
 ```
 
@@ -79,16 +78,25 @@ slsa-verifier verify-artifact skifity-linux-amd64 \
 whenever a file the release is made of changes, and looks inside both images, so
 the tag is not the first time the pipeline runs.
 
-The release notes carry the install command, pinned to the tag:
+`installer/install.sh` and `installer/uninstall.sh` are attached to the release
+and listed in `checksums.txt`. That is what lets the README's install command
+name no version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/<repo>/<version>/installer/install.sh | sudo sh
+curl -fsSL https://github.com/<repo>/releases/latest/download/install.sh | sudo sh
 ```
 
-The version is in the URL on purpose. The installer fetches `deploy/*.yaml` from
-the same ref it was fetched from, so the objects applied are the ones that
-version's image was built with. An installer that read them from a branch would
-eventually apply a Deployment to an image that had never seen it.
+GitHub sends `releases/latest/download/` to the newest release that is neither
+a draft nor a pre-release, so the link is always the newest installer — and
+each installer installs its own release. `RELEASED_VERSION` inside it is the
+tag, and it fetches `deploy/*.yaml` from that tag, so the objects applied are
+the ones that version's image was built with. An installer that read them from
+a branch would eventually apply a Deployment to an image that had never seen
+it. The release notes give both that link and the one for the release itself,
+`releases/download/<tag>/install.sh`.
+
+Until the first release is published the link is a 404, which is why the tag
+is not optional.
 
 ## After the tag
 

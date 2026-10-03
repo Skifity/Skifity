@@ -61,6 +61,12 @@ archives:
 
 checksum:
   name_template: checksums.txt
+  # The installer and the uninstaller are part of the release too, so they
+  # are in checksums.txt, and with it in the provenance that vouches for
+  # every file listed there.
+  extra_files:
+    - glob: installer/install.sh
+    - glob: installer/uninstall.sh
 
 # The image is published to the repository this release is cut from.
 #
@@ -118,15 +124,34 @@ changelog:
 release:
   # A tag such as v0.1.0-alpha.1 is published as a pre-release.
   prerelease: auto
+  # Attached to every release, so that
+  #
+  #   https://github.com/<repo>/releases/latest/download/install.sh
+  #
+  # is always the newest release's installer, and the README's install
+  # command never names a version. Each one installs the release it is
+  # attached to: RELEASED_VERSION inside it is this tag, which release.yml
+  # checks before anything is published.
+  extra_files:
+    - glob: installer/install.sh
+    - glob: installer/uninstall.sh
   footer: |
     ## Installing
 
+    The newest release, whichever that is:
+
     ```sh
-    curl -fsSL {{ .Env.RAW_BASE }}/{{ .Tag }}/installer/install.sh | sudo sh
+    curl -fsSL {{ .Env.REPO_URL }}/releases/latest/download/install.sh | sudo sh
     ```
 
-    The installer is pinned to this tag, so the Kubernetes objects it applies
-    are the ones this image was built with.
+    This release exactly:
+
+    ```sh
+    curl -fsSL {{ .Env.REPO_URL }}/releases/download/{{ .Tag }}/install.sh | sudo sh
+    ```
+
+    Each installer installs the release it is attached to, with the Kubernetes
+    objects that release's image was built with.
 
     Already running Skifity? Upgrade from Settings, or:
 

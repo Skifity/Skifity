@@ -38,15 +38,18 @@ of memory.
 On a fresh Ubuntu 24.04 or Debian 12 server:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh | sudo sh
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh
 ```
 
 With a domain already pointed at the server, HTTPS is set up during the install:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
-  | sudo sh -s -- --domain panel.example.com
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh -s -- --domain panel.example.com
 ```
+
+The link is always the newest release's installer, and that installer installs
+its own release: the image and the Kubernetes objects of the same version, so
+the two can never disagree.
 
 That is the whole installation. The installer:
 
@@ -111,7 +114,7 @@ that does the same, for provisioning tools that prefer those.
 | `--email ADDRESS` | `SKIFITY_ACME_EMAIL` | The contact address registered with Let's Encrypt |
 | `--staging` | `SKIFITY_ACME_STAGING=1` | Let's Encrypt's staging server, for trying things out |
 | `--public-ip ADDRESS` | `SKIFITY_PUBLIC_IP` | The address the server is reached on, when the one found is wrong |
-| `--version TAG` | `SKIFITY_VERSION` | The release to install; defaults to the one in the URL |
+| `--version TAG` | `SKIFITY_VERSION` | The release to install; defaults to the installer's own, and `latest` asks GitHub for the newest |
 | `--image REFERENCE` | `SKIFITY_IMAGE` | A full image reference, for an image you built yourself |
 | `--pod-network NAME` | `SKIFITY_POD_NETWORK` | `wireguard-native` or `vxlan`; chosen from the kernel by default |
 | `--channel NAME` | `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
@@ -129,7 +132,7 @@ to carry on on a system it is not tested on — is answered no, not guessed:
 
 ```sh
 # As root, from cloud-init's runcmd or a provisioning script:
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh \
   | sh -s -- --yes --domain panel.example.com --email ops@example.com
 ```
 
@@ -142,11 +145,14 @@ skips that.
 <details>
 <summary><b>Upgrading and uninstalling</b></summary>
 
-**Upgrade** from Settings: type the release, such as `v0.2.0`. The panel copies
-its database first, off the server too when a backup bucket is set, and tells
-you the one command that goes back. Your apps keep running throughout. Running
-the newer release's installer does the same from a shell, and keeps everything
-the panel already has.
+**Upgrade** from Settings: type the release to move to. The panel copies its
+database first, off the server too when a backup bucket is set, and tells you
+the one command that goes back. Your apps keep running throughout. Running the
+install command again does the same from a shell — it fetches the newest
+installer — and keeps everything the panel already has.
+
+**One release exactly**, rather than the newest, is that release's own
+installer: `https://github.com/Skifity/Skifity/releases/download/<tag>/install.sh`.
 
 **Uninstall** with `skifity-uninstall`, which is conservative by default:
 
@@ -163,9 +169,8 @@ secret and every existing backup is unreadable for ever.
 </details>
 
 > [!NOTE]
-> **v0.1.0 is the first release**, and it has not yet been run against a real
-> cluster: the environment it was built in refuses privileged containers, so k3s
-> could never start there. Everything that needs a cluster is tested against a
+> **Skifity has not yet been run against a real cluster**: the environment it
+> was built in refuses privileged containers, so k3s could never start there. Everything that needs a cluster is tested against a
 > fake API server, golden manifests and a real in-process SSH server instead,
 > and the installer is run from start to finish against stand-ins for k3s,
 > kubectl and the network. Try it on a spare VPS before you move production onto
@@ -398,7 +403,7 @@ curl -fsS "https://panel.example.com/api/cli/download?os=darwin&arch=arm64" -o s
 chmod +x skifity && sudo mv skifity /usr/local/bin/
 ```
 
-Or take it from [the release](https://github.com/Skifity/Skifity/releases/tag/v0.1.0),
+Or take it from [the newest release](https://github.com/Skifity/Skifity/releases/latest),
 where every binary comes with SLSA provenance that says which workflow built
 it from which tag.
 
@@ -484,8 +489,8 @@ sudo sh installer/install.sh --image ghcr.io/skifity/skifity:$(git describe --ta
 
 Two things, plainly.
 
-**v0.1.0 is published, and has never met a real cluster.** The release has
-static binaries for Linux, macOS and Windows and a multi-architecture image at
+**It has never met a real cluster.** Every release has static binaries for
+Linux, macOS and Windows and a multi-architecture image at
 `ghcr.io/skifity/skifity`. But the environment Skifity was built in refuses
 privileged containers, so k3s could never start there. Everything that needs a
 cluster is tested against a fake API server, golden manifests, a real

@@ -58,7 +58,6 @@ jobs:
           {
             echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
             echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}"
-            echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}"
           } >> "$GITHUB_ENV"
 
       # --snapshot builds one image per platform, tagged with a -amd64 or
@@ -72,8 +71,11 @@ jobs:
         run: |
           set -eu
           cat dist/checksums.txt
+          # install.sh and uninstall.sh too: the README's install command is
+          # releases/latest/download/install.sh, which is a 404 without it.
           for name in skifity-linux-amd64 skifity-linux-arm64 skifity-darwin-amd64 \
-            skifity-darwin-arm64 skifity-windows-amd64.exe skifity-windows-arm64.exe; do
+            skifity-darwin-arm64 skifity-windows-amd64.exe skifity-windows-arm64.exe \
+            install.sh uninstall.sh; do
             grep -q "  ${name}\$" dist/checksums.txt || { echo "no ${name} in the release" >&2; exit 1; }
           done
 

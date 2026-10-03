@@ -47,7 +47,6 @@ jobs:
           {
             echo "IMAGE_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
             echo "REPO_URL=${{ github.server_url }}/${{ github.repository }}"
-            echo "RAW_BASE=https://raw.githubusercontent.com/${{ github.repository }}"
           } >> "$GITHUB_ENV"
 
       # The installer downloaded from this tag has to know which release it is.

@@ -1,9 +1,13 @@
 #!/bin/sh
 # Skifity installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/<repo>/<version>/installer/install.sh | sudo sh
+#   curl -fsSL https://github.com/<repo>/releases/latest/download/install.sh | sudo sh
 #
-# <version> is a release tag, such as v0.1.0. Options go after `sh -s --`:
+# That link is always the newest release's installer: every release has this
+# file attached, with RELEASED_VERSION below set to that release, so it
+# installs the image and the Kubernetes objects of the release it came from.
+# One release exactly is releases/download/<tag>/install.sh. Options go after
+# `sh -s --`:
 #
 #   curl -fsSL .../install.sh | sudo sh -s -- --domain panel.example.com
 #
@@ -28,7 +32,8 @@
 #   --email ADDRESS      SKIFITY_ACME_EMAIL    the contact address registered with Let's Encrypt
 #   --staging            SKIFITY_ACME_STAGING=1  use Let's Encrypt's staging server
 #   --public-ip ADDRESS  SKIFITY_PUBLIC_IP     the address the internet reaches this server on
-#   --version TAG        SKIFITY_VERSION       the release to install (default: RELEASED_VERSION below)
+#   --version TAG        SKIFITY_VERSION       the release to install (default: RELEASED_VERSION below;
+#                                              `latest` asks GitHub for the newest)
 #   --image REFERENCE    SKIFITY_IMAGE         a full image reference, overriding --version
 #   --pod-network NAME   SKIFITY_POD_NETWORK   wireguard-native or vxlan; default: wireguard-native
 #                                              when the kernel has the module, vxlan otherwise
@@ -239,6 +244,36 @@ download() {
 		-o "$2" "$1" 2>>"$LOG_FILE"
 }
 
+# latest_release prints the newest published release's tag. It follows the
+# redirect from /releases/latest to /releases/tag/<tag> rather than calling
+# GitHub's API, which lets an address make sixty anonymous calls an hour — a
+# limit a shared NAT address or a CI runner can already have spent.
+latest_release() {
+	landed=$(curl -fsSL --connect-timeout 20 --max-time 60 --retry 3 -o /dev/null \
+		-w '%{url_effective}' "https://github.com/${PROJECT_REPO}/releases/latest" 2>/dev/null) || return 1
+	case "$landed" in
+	*/releases/tag/?*) ;;
+	*) return 1 ;;
+	esac
+	tag=${landed##*/}
+	printf '%s' "$tag" | grep -Eq '^[A-Za-z0-9._-]+$' || return 1
+	printf '%s' "$tag"
+}
+
+# resolve_version turns --version latest into the tag it means, once, before
+# anything is derived from it.
+resolve_version() {
+	[ "${SKIFITY_VERSION:-}" = "latest" ] || return 0
+	resolved=$(latest_release) || fail \
+		"Could not find out which Skifity release is the newest." \
+		"Check that this server can reach github.com, or name the release:
+
+  sudo sh install.sh --version <tag>
+
+The releases are listed at https://github.com/${PROJECT_REPO}/releases."
+	SKIFITY_VERSION=$resolved
+}
+
 # --- options ----------------------------------------------------------------
 
 usage() {
@@ -249,7 +284,7 @@ Turns this server into a Skifity control plane: k3s, the panel, and a URL to
 open. Safe to run again.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/${PROJECT_REPO}/${RELEASED_VERSION:-<version>}/installer/install.sh | sudo sh -s -- [options]
+  curl -fsSL https://github.com/${PROJECT_REPO}/releases/latest/download/install.sh | sudo sh -s -- [options]
   sudo sh installer/install.sh [options]
 
 Options:
@@ -260,7 +295,9 @@ Options:
   --staging            use Let's Encrypt's staging server, for trying things out
   --public-ip ADDRESS  the address this server is reached on, when the one it
                        finds is wrong
-  --version TAG        the release to install (default: ${RELEASED_VERSION:-none})
+  --version TAG        the release to install (default: ${RELEASED_VERSION:-none},
+                       the release this installer came from); \`latest\` asks
+                       GitHub for the newest
   --image REFERENCE    a full image reference, overriding --version
   --pod-network NAME   wireguard-native or vxlan (default: wireguard-native when
                        the kernel has the module)
@@ -1634,6 +1671,7 @@ finish() {
 # functions and runs nothing.
 main() {
 	parse_args "$@"
+	resolve_version
 	derive_release
 
 	if [ -z "$SOURCE_DIR" ]; then

@@ -6236,6 +6236,15 @@ None of this has run against a real k3s either. The stand-ins answer the way
 kubectl and curl were read to answer, which is the same distance from a real
 run as every other test here.
 
+**The install command names no version.** Every release has `install.sh` and
+`uninstall.sh` attached and listed in `checksums.txt`, so
+`releases/latest/download/install.sh` is always the newest installer, and each
+installs its own release; the dry-run workflow checks both files are there.
+`--version latest` asks GitHub for the newest tag by following the
+`/releases/latest` redirect, not the API, whose anonymous limit a shared address
+can already have spent. Until the first tag is pushed that link is a 404: the
+tag has not been pushed from here, because pushing tags is refused.
+
 The README no longer measures Skifity against other products: the comparison
 table and the paragraphs that named them are gone, and what Skifity does is
 said on its own terms. The FAQ, the log drains page and the templates page

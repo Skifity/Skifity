@@ -327,6 +327,15 @@ esac
 
 INSTALLER="$ROOT/installer/install.sh"
 
+# make_stub DIR NAME writes an executable stand-in for a command, with the
+# body it reads from stdin.
+make_stub() {
+  mkdir -p "$1"
+  { printf '#!/bin/sh\n'; cat; } >"$1/$2"
+  chmod +x "$1/$2"
+}
+
+
 # --help has to work for somebody reading it before deciding to run it as
 # root, and it is the only thing that runs without root.
 #
@@ -376,6 +385,30 @@ got=$( (parse_args --version v9.9.9 && derive_release && printf '%s' "$IMAGE $MA
 case "$got" in
 *":v9.9.9 "*"/v9.9.9/deploy") t_pass "--version moves the image and the manifests together" ;;
 *) t_fail "--version should change both the image and the manifests, got: $got" ;;
+esac
+
+# --version latest follows GitHub's redirect from /releases/latest to the
+# newest release's tag; with no release at all, GitHub sends it to /releases.
+latest_stub="$WORKDIR/latest-stub"
+make_stub "$latest_stub" curl <<'STUB'
+for arg in "$@"; do last=$arg; done
+case "$last" in
+*/releases/latest) printf '%s' "$STUB_LANDED" ;;
+*) exit 22 ;;
+esac
+STUB
+got=$( (PATH="$latest_stub:$PATH"; STUB_LANDED="https://github.com/Skifity/Skifity/releases/tag/v9.8.7"
+  export STUB_LANDED; SKIFITY_VERSION=latest; SKIFITY_IMAGE=""
+  resolve_version && derive_release && printf '%s %s' "$SKIFITY_VERSION" "$IMAGE") 2>&1)
+case "$got" in
+"v9.8.7 "*":v9.8.7") t_pass "--version latest installs the newest release's tag" ;;
+*) t_fail "--version latest should resolve to v9.8.7, got: $got" ;;
+esac
+out=$( (PATH="$latest_stub:$PATH"; STUB_LANDED="https://github.com/Skifity/Skifity/releases"
+  export STUB_LANDED; SKIFITY_VERSION=latest; LOG_FILE=/dev/null; resolve_version) 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"which Skifity release is the newest"*"--version <tag>"*) t_pass "with no release to find, --version latest says so and how to name one" ;;
+*) t_fail "--version latest with no release should stop and explain, got $status: $out" ;;
 esac
 
 for bad in "--domain not_a_domain" "--domain localhost" "--email nobody" "--email a&b@example.test" \
@@ -535,14 +568,6 @@ fi
 
 # --- the host firewall ------------------------------------------------------
 
-# make_stub DIR NAME writes an executable stand-in for a command, with the
-# body it reads from stdin.
-make_stub() {
-  mkdir -p "$1"
-  { printf '#!/bin/sh\n'; cat; } >"$1/$2"
-  chmod +x "$1/$2"
-}
-
 fw="$WORKDIR/fw-ufw"
 make_stub "$fw" ufw <<'STUB'
 printf "ufw %s\n" "$*" >>"$FW_LOG"; [ "$1" = status ] && echo "Status: active"; exit 0
@@ -695,6 +720,7 @@ https://api.ipify.org) printf "%s" "${STUB_OUTSIDE_IP:-203.0.113.10}" | emit ;;
 */api/health) [ "${STUB_PANEL_DOWN:-0}" = 1 ] && exit 7; printf "{\"status\":\"ok\"}" | emit ;;
 */api/setup/status) printf "{\"needs_setup\":%s,\"product\":\"Skifity\"}" "${STUB_NEEDS_SETUP:-true}" | emit ;;
 */api/cli/download) printf "#!/bin/sh\necho skifity\n" | emit ;;
+*/releases/latest) printf "https://github.com/Skifity/Skifity/releases/tag/%s" "${STUB_LATEST:-v9.9.9}" ;;
 *) printf "UNHANDLED curl %s\n" "$url" >>"$STUB_LOG"; exit 22 ;;
 esac
 STUB
@@ -899,6 +925,22 @@ else
   t_fail "a second run without --domain lost the panel's domain ($status):
 $out"
 fi
+
+# No version and no image named, but `latest`: the release GitHub calls the
+# newest is the image installed, and the one named on the way in.
+FAKE="$WORKDIR/root-latest"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --version latest 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "image: ghcr.io/skifity/skifity:v9.9.9" "$FAKE/stub/applied-panel.yaml" 2>/dev/null; then
+  t_pass "an install with --version latest installs the newest release's image"
+else
+  t_fail "--version latest did not install the newest release ($status):
+$out"
+fi
+case "$out" in
+*"Installing v9.9.9"*"Skifity v9.9.9 is installed"*) t_pass "and names it, at the start and at the end" ;;
+*) t_fail "the install should name v9.9.9 at both ends" ;;
+esac
 
 # A route that does not reach the panel is a warning that says where to look,
 # not a silent success.

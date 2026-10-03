@@ -58,21 +58,22 @@ Linux.
 SSH into the server and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh | sudo sh
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh
 ```
 
-`v0.1.0` is the release you are installing; the newest is on the
-[releases page](https://github.com/Skifity/Skifity/releases). It is in the URL on
-purpose: the installer fetched from a tag applies the Kubernetes objects that
-tag's image was built with, so an upgrade never mixes one release's image with
-another's Deployment.
+The link is always the newest release's installer. Every release has its own
+attached, and each installs the release it came with: that release's image and
+the Kubernetes objects it was built with, so an upgrade never mixes one
+release's image with another's Deployment. For one release exactly, use its
+own installer, `https://github.com/Skifity/Skifity/releases/download/<tag>/install.sh`;
+the releases are listed on the
+[releases page](https://github.com/Skifity/Skifity/releases).
 
 If you already have a domain pointed at the server, tell the installer and it
 sets up HTTPS at the same time:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
-  | sudo sh -s -- --domain panel.example.com
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh -s -- --domain panel.example.com
 ```
 
 Run in a terminal without `--domain`, it asks whether you have one; press Enter
