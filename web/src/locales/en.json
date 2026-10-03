@@ -1335,7 +1335,7 @@
     },
     "cloud": {
       "tabExisting": "A server you have",
-      "tabCreate": "Create at a cloud provider",
+      "tabCreate": "Order a new one",
       "intro": "Skifity orders the machine, puts a firewall in front of it and joins it to the cluster. It gives the machine an SSH host key before the machine exists, so even the first connection is checked rather than trusted.",
       "connection": "Connection",
       "noConnection": "Connect a Hetzner Cloud project or a DigitalOcean account first. Its token stays in the panel, sealed, and is never shown again.",

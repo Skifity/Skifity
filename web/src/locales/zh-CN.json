@@ -1324,7 +1324,7 @@
     },
     "cloud": {
       "tabExisting": "已有的服务器",
-      "tabCreate": "在云服务商创建",
+      "tabCreate": "订购新的",
       "intro": "Skifity 会订购机器，在它前面放一道防火墙，并让它加入集群。机器在存在之前就会拿到一把 SSH 主机密钥，所以连第一次连接也是经过核对的，而不是盲目信任。",
       "connection": "连接",
       "noConnection": "请先连接一个 Hetzner Cloud 项目或 DigitalOcean 账户。它的令牌会加密保存在面板中，不会再显示。",

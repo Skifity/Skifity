@@ -1324,7 +1324,7 @@
     },
     "cloud": {
       "tabExisting": "Server yang sudah Anda miliki",
-      "tabCreate": "Buat di penyedia cloud",
+      "tabCreate": "Pesan yang baru",
       "intro": "Skifity memesan mesinnya, memasang firewall di depannya, dan menggabungkannya ke klaster. Mesin diberi kunci host SSH sebelum mesin itu ada, sehingga koneksi pertama pun diperiksa, bukan dipercaya begitu saja.",
       "connection": "Koneksi",
       "noConnection": "Hubungkan proyek Hetzner Cloud atau akun DigitalOcean terlebih dahulu. Tokennya disimpan terenkripsi di panel dan tidak pernah ditampilkan lagi.",
