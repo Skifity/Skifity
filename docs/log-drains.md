@@ -160,11 +160,8 @@ history: it is read from a file (`-` is stdin), piped in, or asked for. An
 assistant can list drains (`list_log_drains`) and cannot add one, because
 adding one takes a credential.
 
-## Compared with others
+## In short
 
-Coolify ships logs from a Fluent Bit container on each server, one kind of
-drain per server, with its credentials in a file on the server and each app
-opted in one by one. Here a drain belongs to a team, can be limited to its
-projects, is tested before it is saved, keeps its credentials encrypted and
-in a Secret, and every app is shipped without being touched. Dokploy and Kubero
-show live logs and do not ship them.
+A drain belongs to a team and can be limited to some of its projects. It is
+tested before it is saved, its credentials are kept encrypted and in a Secret,
+and every app is shipped without being touched: nothing is opted in app by app.

@@ -6174,6 +6174,74 @@ Still open, and why:
 * **The interactive terminal** stays a decision (`docs/roadmap.md`), and **the
   panel's `cluster-admin`** an architecture one (ADR-0014).
 
+### The installer, run from start to finish
+
+Every step of `installer/install.sh` had been tested on its own, and none of
+them together. The smoke test now sources the installer, moves every path into
+a directory of its own, puts stand-ins for kubectl, curl, systemctl, k3s's
+installer, ufw and iptables on the PATH, and runs `main` from the options to the
+last line: a fresh install behind NAT, a second run after setup, an install
+with a domain, a second run of that one, a panel its address does not reach,
+and an untested system with nobody to ask. Running it all together found what
+running the steps apart never could:
+
+* **No real install could have finished.** `copy_cluster_token` called `run`,
+  which the installer never defined — it lives in the uninstaller. Under
+  `set -e` every install stopped at "Giving the panel this cluster's join
+  token" with `run: not found` and no explanation. The test fails with exit 127
+  when it is put back.
+* **`/etc/os-release` overwrote the release being installed.** It was sourced
+  into the installer, and it sets `VERSION`. It is read in a subshell now.
+* **A manifest that failed to download was applied empty.** The fetch was the
+  left side of a pipeline, which `sh` does not stop for. It is downloaded to a
+  file first, with retries.
+* **A second run moved a panel with a domain back to plain HTTP** on an sslip.io
+  name, whenever it was run without the first run's options — which is how
+  anybody upgrades. It reads the address the panel answers on, and its
+  certificate, from the cluster, and keeps them.
+* **A second run handed the panel an empty pod network.** The choice was only
+  made when k3s was being installed. It is read from the installed k3s's unit
+  and configuration now.
+* **A question read its answer from the script.** Under `curl | sh`, stdin is
+  the rest of the installer; questions go to `/dev/tty`. With no terminal, the
+  answer used to be yes; it is no now, and `--yes` says yes.
+* **k3s's installer was downloaded to a fixed name in `/tmp`** and run from
+  there as root, which another local user could have replaced first. It goes
+  to a private temporary directory, and its stdin is closed.
+
+And what it did not do at all:
+
+* **Options.** `--domain`, `--email`, `--public-ip`, `--version`, `--image`,
+  `--yes` and the rest, after `sh -s --`, each checked before anything changes;
+  `--help` without root. Every environment variable still works.
+* **A domain is offered** on a fresh install with a terminal.
+* **NAT.** A private node address is looked up from outside once
+  (`api.ipify.org`, then `icanhazip.com`), and both are named.
+* **The host firewall.** An active ufw or firewalld, or iptables that rejects by
+  default (Oracle Cloud's images), is opened for 80, 443 and the pod and service
+  networks, the way the panel opens the servers it adds. A Go test keeps the
+  two networks the same as `internal/kube`'s.
+* **One install at a time**, with a lock that a killed install does not leave
+  stuck, and an interrupted one says that running it again finishes it.
+* **The whole script is one function called on the last line**, so a download
+  cut off halfway runs nothing.
+* **A check that the panel answers at its own address**, through the ingress,
+  before the link is printed; and after setup, a second run prints where to
+  sign in instead of a token that stopped working.
+* **Warnings** for an unsynchronised clock and for under 2 GB with no swap; the
+  log is readable by root alone; the certificate is waited for and named when it
+  is late.
+
+None of this has run against a real k3s either. The stand-ins answer the way
+kubectl and curl were read to answer, which is the same distance from a real
+run as every other test here.
+
+The README no longer measures Skifity against other products: the comparison
+table and the paragraphs that named them are gone, and what Skifity does is
+said on its own terms. The FAQ, the log drains page and the templates page
+lost their comparisons too; the templates page keeps its credit to the
+catalogue its conversions came from, which the licence asks for.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

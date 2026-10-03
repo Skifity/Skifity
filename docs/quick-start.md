@@ -72,11 +72,17 @@ sets up HTTPS at the same time:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
-  | sudo SKIFITY_DOMAIN=panel.example.com sh
+  | sudo sh -s -- --domain panel.example.com
 ```
 
-It checks the server first, installs Kubernetes, starts the panel, and finishes
-by printing a link. The link already has the setup token in it, so opening it is
+Run in a terminal without `--domain`, it asks whether you have one; press Enter
+to go without. `--help` lists every option — `--email`, `--public-ip`,
+`--version`, `--yes` for a run nobody is watching, and the rest — and each one
+has an environment variable as well, such as `SKIFITY_DOMAIN`.
+
+It checks the server first, opens the host firewall for HTTP and HTTPS if one is
+running, installs Kubernetes, starts the panel, checks that the panel answers at
+its own address through the ingress, and finishes by printing a link. The link already has the setup token in it, so opening it is
 the whole of the next step — no copying a forty-character string across. The
 token is in the `#fragment`, which browsers never send to a server, and the page
 takes it out of the address bar as soon as it has read it. The plain URL and the
@@ -88,7 +94,15 @@ the panel it has just started, so it is always the matching version and needs no
 internet at all.
 
 If it stops, it says what happened and what to do about it. The full log is at
-`/var/log/skifity-install.log`, and running the installer again is safe.
+`/var/log/skifity-install.log`, and running the installer again is safe: it
+keeps the address and the domain the panel already has, and once the first
+account exists it prints where to sign in instead of the setup link. That is
+also how to repair an install, or upgrade it from a shell.
+
+On a server behind NAT — AWS, Google Cloud, Oracle Cloud, a machine at home — the
+server's own address is a private one, and the installer looks up the address
+the internet reaches it on. If it picks the wrong one, or the panel is only
+meant for your own network, give it with `--public-ip`.
 
 ## 2. Create your account
 

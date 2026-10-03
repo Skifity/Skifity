@@ -13,7 +13,7 @@ You give it a server. It gives you URLs.
 [![Go](https://img.shields.io/github/go-mod/go-version/Skifity/Skifity)](go.mod)
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-blue)](LICENSE)
 
-[Install](#install) · [Why Skifity](#why-skifity) · [Compared](#compared-with-coolify-dokploy-and-kubero) · [Screenshots](#screenshots) · [CLI and MCP](#the-terminal-and-ai-assistants) · [Documentation](#documentation)
+[Install](#install) · [Features](#features) · [Screenshots](#screenshots) · [CLI and MCP](#the-terminal-and-ai-assistants) · [Documentation](#documentation)
 
 </div>
 
@@ -21,50 +21,61 @@ You give it a server. It gives you URLs.
   <img src="docs/images/overview-dark.png" alt="The overview in dark mode: projects, apps, cluster health and recent activity" width="880">
 </p>
 
-Skifity is a panel for running your own apps on your own servers, like Coolify
-or Dokploy, built on Kubernetes rather than Docker. Push a Git repository and it
-builds it, deploys it, gives it a URL and a certificate, and keeps it running.
-Add a second server and the two are one pool. The panel talks about **Apps**,
-**Instances**, **Servers**, **Domains** and **Databases**; Kubernetes stays
-underneath, one click away under **Advanced**, never in the way.
+Skifity turns the servers you rent into a platform for your own apps. Push a Git
+repository and it builds it, deploys it, gives it a URL with a certificate, and
+keeps it running. Add more servers and they become one pool: apps spread across
+them, and an app whose server dies comes back on another.
+
+The panel talks about **Apps**, **Instances**, **Servers**, **Domains** and
+**Databases**. Kubernetes runs underneath and stays out of sight, one click away
+under **Advanced**.
 
 One binary is the panel, the CLI and an MCP server, and it idles at **35 MiB**
 of memory.
 
 ## Install
 
-On a fresh Ubuntu 24.04 or Debian 12 server, as root:
+On a fresh Ubuntu 24.04 or Debian 12 server:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh | sudo sh
 ```
 
-That is the whole installation. The installer:
-
-1. **Checks the server** — operating system, memory, disk, ports — and stops
-   before changing anything if one of them will not do.
-2. **Installs Kubernetes** (k3s), with an encrypted pod network where the
-   kernel supports it.
-3. **Starts the panel** and the Kubernetes objects from the same release, so
-   an image and its Deployment can never come from different versions.
-4. **Prints a link** with a one-time setup token already in it. Open it,
-   create your account, and you are in.
-5. **Puts `skifity` and `skifity-uninstall` on the PATH**, both from the same
-   release.
-
-Everything it does is logged to `/var/log/skifity-install.log`, and running it
-again is safe: every step checks what is already there.
-
-**With a domain** pointed at the server, HTTPS is set up during the install:
+With a domain already pointed at the server, HTTPS is set up during the install:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
-  | sudo SKIFITY_DOMAIN=panel.example.com SKIFITY_ACME_EMAIL=you@example.com sh
+  | sudo sh -s -- --domain panel.example.com
 ```
 
-Without one, the panel answers at a free `sslip.io` address over plain HTTP, on
-purpose ([ADR-0015](docs/decisions.md)); add a domain in Settings later and HTTPS
-is turned on for it automatically.
+That is the whole installation. The installer:
+
+1. **Checks the server** — system, memory, disk, ports, clock — and stops
+   before changing anything if one of them will not do.
+2. **Opens the host firewall** for HTTP, HTTPS and the cluster's own traffic,
+   and nothing else, whether it is ufw, firewalld or plain iptables.
+3. **Installs Kubernetes** (k3s), with an encrypted pod network where the
+   kernel supports it.
+4. **Starts the panel** with the Kubernetes objects from the same release, so
+   an image and its Deployment never come from different versions.
+5. **Checks the panel answers at its own address**, through the ingress, the
+   way your browser will reach it.
+6. **Prints a link** with a one-time setup token already in it. Open it, create
+   your account, and you are in.
+7. **Puts `skifity` and `skifity-uninstall` on the PATH**, from the same release.
+
+Run in a terminal without `--domain`, it offers to take one. Without a domain
+the panel answers at a free `sslip.io` address over plain HTTP, on purpose
+([ADR-0015](docs/decisions.md)); add a domain in Settings later and HTTPS is
+turned on for it automatically. Behind NAT — AWS, Google Cloud, Oracle, a home
+router — it finds the address the internet reaches the server on.
+
+**Running it again is safe, and it is how you repair or upgrade.** It keeps the
+address, the domain and the certificate the panel already has, and after setup
+it prints where to sign in rather than a setup link that no longer works. Two
+copies cannot run at once, and an interrupted install finishes when you start
+it again. Everything is logged to `/var/log/skifity-install.log`, readable by
+root alone.
 
 <details>
 <summary><b>What the server needs</b></summary>
@@ -73,32 +84,58 @@ is turned on for it automatically.
 |---|---|---|
 | Operating system | Ubuntu 24.04 or Debian 12 | |
 | Architecture | amd64 or arm64 | |
-| Memory | 1 GB | 2 GB |
+| Memory | 1 GB | 2 GB, or 1 GB with swap |
 | Free disk | 8 GB | |
 | Access | root over SSH | |
+| Open ports | TCP 80 and 443 | |
 
 A fresh install is deliberately small: Kubernetes and the panel, nothing else.
 Certificates, the builder, the PostgreSQL operator and the rest install
 themselves the first time you use them, and each one says what it costs first.
+
+If your provider has a firewall of its own in front of the server, allow TCP 80
+and 443 there too; the installer cannot see it.
 
 </details>
 
 <details>
 <summary><b>Installer options</b></summary>
 
-Set any of these in front of `sh` and the installer never asks a question:
+Options go after `sh -s --` when the installer is piped from `curl`, or after
+`install.sh` when it is run from a clone. Each one has an environment variable
+that does the same, for provisioning tools that prefer those.
 
-| Variable | What it does |
-|---|---|
-| `SKIFITY_DOMAIN` | The domain the panel answers on, with HTTPS from Let's Encrypt |
-| `SKIFITY_ACME_EMAIL` | Where Let's Encrypt sends certificate expiry warnings |
-| `SKIFITY_ACME_STAGING` | `1` to use Let's Encrypt's staging server while testing |
-| `SKIFITY_VERSION` | The release to install; defaults to the one in the URL |
-| `SKIFITY_IMAGE` | A full image reference, for an image you built yourself |
-| `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
-| `SKIFITY_POD_NETWORK` | `wireguard-native` or `vxlan`; chosen from the kernel by default |
-| `SKIFITY_SKIP_K3S` | `1` when k3s is already installed and configured |
-| `SKIFITY_ASSUME_YES` | `1` to answer every prompt with yes |
+| Option | Variable | What it does |
+|---|---|---|
+| `--domain NAME` | `SKIFITY_DOMAIN` | The domain the panel answers on, with HTTPS from Let's Encrypt |
+| `--email ADDRESS` | `SKIFITY_ACME_EMAIL` | The contact address registered with Let's Encrypt |
+| `--staging` | `SKIFITY_ACME_STAGING=1` | Let's Encrypt's staging server, for trying things out |
+| `--public-ip ADDRESS` | `SKIFITY_PUBLIC_IP` | The address the server is reached on, when the one found is wrong |
+| `--version TAG` | `SKIFITY_VERSION` | The release to install; defaults to the one in the URL |
+| `--image REFERENCE` | `SKIFITY_IMAGE` | A full image reference, for an image you built yourself |
+| `--pod-network NAME` | `SKIFITY_POD_NETWORK` | `wireguard-native` or `vxlan`; chosen from the kernel by default |
+| `--channel NAME` | `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
+| `--skip-k3s` | `SKIFITY_SKIP_K3S=1` | Use the k3s already installed here as it is |
+| `--skip-firewall` | `SKIFITY_SKIP_FIREWALL=1` | Leave the host firewall alone |
+| `--yes` | `SKIFITY_ASSUME_YES=1` | Never ask anything |
+
+`--help` lists them without needing root. Every value is checked before
+anything changes, so a typo is one line now rather than a broken certificate
+later.
+
+**Unattended**, from cloud-init, Terraform or a CI job, pass `--yes`. Without a
+terminal and without `--yes`, the one question the installer may ask — whether
+to carry on on a system it is not tested on — is answered no, not guessed:
+
+```sh
+# As root, from cloud-init's runcmd or a provisioning script:
+curl -fsSL https://raw.githubusercontent.com/Skifity/Skifity/v0.1.0/installer/install.sh \
+  | sh -s -- --yes --domain panel.example.com --email ops@example.com
+```
+
+When the server's own address is a private one, the installer asks
+`api.ipify.org` (or `icanhazip.com`) once for the public one. `--public-ip`
+skips that.
 
 </details>
 
@@ -107,7 +144,9 @@ Set any of these in front of `sh` and the installer never asks a question:
 
 **Upgrade** from Settings: type the release, such as `v0.2.0`. The panel copies
 its database first, off the server too when a backup bucket is set, and tells
-you the one command that goes back. Your apps keep running throughout.
+you the one command that goes back. Your apps keep running throughout. Running
+the newer release's installer does the same from a shell, and keeps everything
+the panel already has.
 
 **Uninstall** with `skifity-uninstall`, which is conservative by default:
 
@@ -127,18 +166,17 @@ secret and every existing backup is unreadable for ever.
 > **v0.1.0 is the first release**, and it has not yet been run against a real
 > cluster: the environment it was built in refuses privileged containers, so k3s
 > could never start there. Everything that needs a cluster is tested against a
-> fake API server, golden manifests and a real in-process SSH server instead.
-> Try it on a spare VPS before you move production onto it, and
-> [open an issue](https://github.com/Skifity/Skifity/issues) with whatever you
-> find. More in [Status](#status).
+> fake API server, golden manifests and a real in-process SSH server instead,
+> and the installer is run from start to finish against stand-ins for k3s,
+> kubectl and the network. Try it on a spare VPS before you move production onto
+> it, and [open an issue](https://github.com/Skifity/Skifity/issues) with
+> whatever you find. More in [Status](#status).
 
-## Why Skifity
+## Features
 
-**Several servers are one pool.** Coolify and Dokploy run Docker, and their
-multi-server story is Docker Swarm, which is in maintenance. Skifity runs
-Kubernetes: an app that wants three instances gets them wherever there is room,
-and an app whose server dies is restarted elsewhere without anyone being woken
-up.
+**Several servers are one pool.** An app that wants three instances gets them
+wherever there is room, and an app whose server dies is restarted on another
+without anyone being woken up. Three control plane servers survive losing one.
 
 **Adding a server is an IP address and a password.** Skifity connects, checks
 the machine, installs a key of its own, configures the firewall, verifies the
@@ -147,10 +185,10 @@ each shown as it happens. The password is used exactly once and never stored;
 a test scans every column of the database for it. Or let it order the server
 for you at Hetzner Cloud or DigitalOcean.
 
-**Changing a setting does not rebuild your app.** The most common complaint
-about panels like this. Skifity separates what goes into the image from what
-the container reads at start-up, so changing a variable is a rollout in
-seconds, and the panel says which kind you are changing before you save.
+**Changing a setting does not rebuild your app.** What goes into the image is
+kept apart from what the container reads at start-up, so changing a variable is
+a rollout in seconds, and the panel says which kind you are changing before you
+save.
 
 **Rolling back restores the settings too**, not just the image. If a variable
 broke the app, rolling back puts the old variable back.
@@ -163,9 +201,14 @@ assumes it is alone — and says how to fix it.
 API and the MCP server, says what happened, what it means and how to fix it,
 with a button that copies the whole thing for an AI assistant.
 
+**Builds run unprivileged.** Images are built by rootless BuildKit in a
+namespace of their own: no privileged container, no Docker socket, nothing that
+hands a build the server it runs on.
+
 **Secrets are sealed to where they are stored.** Envelope encryption with a
 master key you can rotate without downtime, a recovery key shown once, and a
-ciphertext that will not open if it is copied to another row.
+ciphertext that will not open if it is copied to another row. SSH host keys are
+pinned the first time a server is seen.
 
 **It never phones home.** No licence key, no telemetry, no update check. It
 reaches the internet only for what you asked for: Let's Encrypt, your Git
@@ -225,32 +268,6 @@ managers.
 </td>
 </tr>
 </table>
-
-## Compared with Coolify, Dokploy and Kubero
-
-All four codebases were read side by side, and eighty capabilities scored.
-A ✓ counts one, a ◐ half. A selection:
-
-| | Coolify | Dokploy | Kubero | **Skifity** |
-|---|:-:|:-:|:-:|:-:|
-| Builds without a privileged container or the Docker socket | ✗ | ✗ | ✗ | ✓ |
-| Rollback restores settings, not only the image | ✗ | ✗ | ✗ | ✓ |
-| Promote the exact image to the next environment | ✗ | ✗ | ✗ | ✓ |
-| A preview of the whole environment, with its own databases | ✗ | ✗ | ✗ | ✓ |
-| Encrypted backups, verified by reading them back | ✗ | ✗ | ✗ | ✓ |
-| Secrets sealed to where they are stored, with key rotation | ✗ | ✗ | ✗ | ✓ |
-| SSH host keys pinned | ✗ | ✗ | ✗ | ✓ |
-| Autoscaling and scale to zero | ✗ | ✗ | ✓ | ✓ |
-| Survives losing a server | ✗ | ◐ | ✓ | ✓ |
-| An MCP server | ✓ | ✓ | ✗ | ✓ |
-| Passkeys | ✗ | ✓ | ✗ | ✓ |
-| An interactive terminal into a running container | ✓ | ✓ | ◐ | ◐ |
-| Template catalogue | 386 | 532 | 173 | 374 |
-| **Score, of 80** | **51** | **52** | **32** | **79** |
-
-The rows were chosen by Skifity's authors, so read the totals as where the
-products stand on this list and nothing more. Every row, with the evidence for
-it, is in [`docs/research/source-audit.md`](docs/research/source-audit.md).
 
 ## Screenshots
 
@@ -460,8 +477,7 @@ and runs on anything. To install an image you built yourself, run the installer
 from inside the clone, which reads the manifests from disk:
 
 ```sh
-sudo SKIFITY_IMAGE=ghcr.io/skifity/skifity:$(git describe --tags --always --dirty) \
-  sh installer/install.sh
+sudo sh installer/install.sh --image ghcr.io/skifity/skifity:$(git describe --tags --always --dirty)
 ```
 
 ## Status

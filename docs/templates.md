@@ -34,10 +34,10 @@ Chatwoot, Langfuse, Metabase, Redmine, Outline, Coder, Baserow, Linkwarden and
 about three hundred and fifty others.
 
 A hundred of them were written by hand, each from the project's own image,
-entrypoint and documentation. The rest were converted from the Coolify
-catalogue, which is the largest in this category and has been exercised by tens
-of thousands of installations — so the ports, the variables and the volumes come
-from somewhere that works rather than from guesswork.
+entrypoint and documentation. The rest were converted, with credit, from
+Coolify's open source catalogue of Compose files (Apache 2.0), which has been
+exercised by tens of thousands of installations — so the ports, the variables
+and the volumes come from somewhere that works rather than from guesswork.
 
 Forty-six install more than one app: a web app and its worker, or a service
 and its search index, or a stack of three or four. They land in the same
@@ -45,11 +45,11 @@ environment and reach each other by name. A worker among them has no port at
 all, which is what Skifity gives an app that does not listen: no Service, no
 readiness probe, no domain.
 
-What the conversion added is the part Coolify does not do:
+What the conversion added:
 
 * **Every image names a version**, and that version was fetched from its
-  registry to prove it exists. Coolify's own catalogue ships `latest` for more
-  than half its entries. Where a project does not publish semver — GitLab's
+  registry to prove it exists, where Compose catalogues commonly ship `latest`.
+  Where a project does not publish semver — GitLab's
   `19.1.8-ce.0`, SearXNG's date-and-commit, DokuWiki's `version-2026-07-14c` —
   the exact build it does publish is what a template names; an architecture, a
   runtime variant or a build of somebody's branch is not a version and is

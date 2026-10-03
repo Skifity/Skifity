@@ -5,6 +5,35 @@ has a button that copies the whole thing for an AI assistant. Start there. This
 page is for the things that happen outside the panel, or when the panel itself
 is the problem.
 
+## The installer stopped
+
+It says what happened and what to do, and everything it did is in
+`/var/log/skifity-install.log`. Fix what it names and run it again: every step
+checks what is already there, so a second run carries on rather than starting
+over, and it keeps the address and domain the panel already has.
+
+**"Another copy of the installer is already running."** Two installs at once
+would undo each other, so the second one stops. Wait for the first, or stop it
+with the `kill` command the message gives. A lock left by an install that was
+killed outright is taken over by the next run on its own.
+
+**It asks nothing and stops on an untested system.** Without a terminal — under
+cloud-init, Terraform or a CI job — the question whether to carry on on a system
+other than Ubuntu or Debian is answered no. Pass `--yes` to carry on.
+
+**The panel's address did not answer.** The install finishes with a warning
+when the panel is running but its address does not reach it through the
+ingress. Look at the ingress first:
+
+```sh
+kubectl -n kube-system get pods -l app.kubernetes.io/name=traefik
+kubectl -n skifity-system describe ingress skifity-panel
+```
+
+**The address is wrong.** Behind NAT the installer looks the public address up.
+Give the right one with `--public-ip`, or a domain with `--domain`, and run it
+again.
+
 ## The panel does not load
 
 **Nothing at all.** Check it is running:
@@ -20,9 +49,10 @@ kubectl -n skifity-system describe pod -l app.kubernetes.io/component=panel
 kubectl -n skifity-system logs -l app.kubernetes.io/component=panel
 ```
 
-**The page times out.** The server's firewall may be blocking ports 80 and 443.
-Some providers have a firewall in their control panel that the server cannot
-see.
+**The page times out.** Something between you and the server is blocking ports
+80 and 443. The installer opens ufw, firewalld and iptables on the server
+itself, but many providers have a firewall in their control panel that the
+server cannot see: allow TCP 80 and 443 there.
 
 **A certificate warning.** With no domain of your own, the panel is served over
 plain HTTP at an `sslip.io` address, on purpose: Let's Encrypt rate limits are

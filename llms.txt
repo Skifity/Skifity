@@ -358,6 +358,13 @@ installer prints a URL and a one-time setup token. With no domain the panel is
 reached at an `sslip.io` address over HTTP; add a domain in Settings and HTTPS
 is turned on for it automatically.
 
+Options go after `sh -s --`: `--domain panel.example.com` for HTTPS from the
+start, `--email`, `--public-ip`, `--version`, and `--yes` for a run nobody is
+watching — without a terminal and without `--yes` it refuses rather than
+guesses. `--help` lists them all and needs no root. Running it again is safe:
+it keeps the panel's address and domain, and after setup prints where to sign
+in instead of a setup link.
+
 ## Source
 
 <https://github.com/Skifity/Skifity>. `CLAUDE.md` in the repository is the

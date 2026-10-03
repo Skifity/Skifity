@@ -9,19 +9,22 @@ control plane servers survive losing one.
 What it is not is a managed service: nobody is on call for you. If the server
 goes down at 3am, that is your 3am.
 
-## How is this different from Coolify or Dokploy?
+## Why Kubernetes underneath?
 
-They run Docker Compose on one machine and add a second machine as a remote
-target. Skifity runs Kubernetes, so several servers are one pool: an app that
-needs three instances gets them wherever there is room, and an app whose server
-dies is restarted elsewhere without you doing anything.
+Because several servers should be one pool. An app that needs three instances
+gets them wherever there is room, and an app whose server dies is restarted
+elsewhere without you doing anything. Adding a server adds capacity; nothing
+has to be told which app lives where.
 
-The trade is that Kubernetes needs more memory. Skifity keeps that down by
-installing almost nothing until you use it.
+The trade is that Kubernetes needs more memory than running containers on one
+machine. Skifity keeps that down by installing almost nothing until you use it.
 
-The other difference is deliberate: changing a setting here does not rebuild
-your app. That is the single most common complaint about panels of this kind,
-and it is fixed at the design level, not worked around.
+## Does changing a setting rebuild my app?
+
+No. What goes into the image is kept apart from what the container reads when
+it starts, so changing a variable is a rollout in seconds. The panel says which
+kind of change you are making before you save, and a build-time variable is the
+only kind that rebuilds.
 
 ## How is this different from running Kubernetes myself?
 
