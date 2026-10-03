@@ -1135,7 +1135,7 @@ paths:
       summary: Create a server at a cloud provider and join it
       description: >-
         Panel administrators only. Orders a machine with one of the team's
-        cloud connections — Hetzner Cloud — behind a firewall that lets in
+        cloud connections — Hetzner Cloud or DigitalOcean — behind a firewall that lets in
         HTTP, HTTPS, SSH and the cluster's own servers, with an SSH host key
         the panel generated and pins before the machine exists. The panel then
         has the machine replace that key with its own, and joins it exactly as
@@ -5948,7 +5948,7 @@ components:
       properties:
         server_id: {type: string}
         provider_id: {type: string}
-        provider_kind: {type: string, enum: [hetzner]}
+        provider_kind: {type: string, enum: [hetzner, digitalocean]}
         provider_name: {type: string}
         machine_id: {type: string, description: 'The provider''s id for the machine. Empty until it is ordered.'}
         location: {type: string}
@@ -5983,8 +5983,8 @@ components:
       properties:
         id: {type: string}
         team_id: {type: string}
-        kind: {type: string, enum: [hetzner]}
-        title: {type: string, description: 'The provider''s name, such as Hetzner Cloud.'}
+        kind: {type: string, enum: [hetzner, digitalocean]}
+        title: {type: string, description: 'The provider''s name: Hetzner Cloud or DigitalOcean.'}
         name: {type: string}
         token_hint: {type: string, description: 'The token''s last four characters.'}
         checked_at: {type: string, format: date-time}
@@ -6005,7 +6005,7 @@ components:
       required: [token]
       additionalProperties: false
       properties:
-        kind: {type: string, enum: [hetzner], default: hetzner}
+        kind: {type: string, enum: [hetzner, digitalocean], default: hetzner}
         name: {type: string, description: 'The provider''s name when left empty.'}
         token: {type: string, format: password, description: 'A Read & Write API token for one project.'}
 

@@ -1335,10 +1335,10 @@
     },
     "cloud": {
       "tabExisting": "A server you have",
-      "tabCreate": "Create at Hetzner Cloud",
+      "tabCreate": "Create at a cloud provider",
       "intro": "Skifity orders the machine, puts a firewall in front of it and joins it to the cluster. It gives the machine an SSH host key before the machine exists, so even the first connection is checked rather than trusted.",
       "connection": "Connection",
-      "noConnection": "Connect a Hetzner Cloud project first. Its token stays in the panel, sealed, and is never shown again.",
+      "noConnection": "Connect a Hetzner Cloud project or a DigitalOcean account first. Its token stays in the panel, sealed, and is never shown again.",
       "location": "Location",
       "arch": "Processor",
       "archAmd64": "x86 (Intel, AMD)",
@@ -1350,10 +1350,10 @@
       "noTypes": "Nothing with this processor can be ordered in this location. Pick another location or processor.",
       "image": "Operating system",
       "name": "Name",
-      "nameHelp": "Its hostname, and its name at Hetzner and in the cluster: lower-case letters, digits and hyphens.",
+      "nameHelp": "Its hostname, and its name at the provider and in the cluster: lower-case letters, digits and hyphens.",
       "sshCluster": "SSH from the cluster's servers only",
       "sshClusterHelp": "Otherwise port 22 is open to anywhere, with passwords off. Limit it when the panel runs inside the cluster, which is where its connections come from.",
-      "firewall": "A Hetzner firewall lets in HTTP and HTTPS from anywhere, SSH, and the cluster's own ports from the cluster's servers only.",
+      "firewall": "The provider's firewall lets in HTTP and HTTPS from anywhere, SSH, and the cluster's own ports from the cluster's servers only.",
       "cost": "This orders a server that {{provider}} bills at {{price}} a month until it is deleted.",
       "create": "Create and join",
       "createdAt": "Created at {{provider}}",
@@ -3807,13 +3807,13 @@
         "title": "The cloud provider does not accept that token",
         "cause": "{{0}} answered that the token is invalid or unknown.",
         "impact": "Nothing was saved or created.",
-        "fix": "Create an API token with Read & Write permission in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens — and use that one."
+        "fix": "Create an API token that can write in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens; for DigitalOcean, API, then Tokens — and use that one."
       },
       "cloud_token_read_only": {
         "title": "That token can only read",
         "cause": "{{0}} accepts the token for reading only, and creating a server is a write.",
         "impact": "Nothing was saved or created.",
-        "fix": "Create a token with Read & Write permission in the project the servers should go in, and use that one instead."
+        "fix": "Create a token that can write — Read & Write at Hetzner Cloud, Full Access at DigitalOcean — in the account the servers should go in, and use that one instead."
       },
       "cloud_rate_limited": {
         "title": "The cloud provider asked the panel to slow down",
@@ -3837,7 +3837,7 @@
         "title": "The cloud account has reached a limit",
         "cause": "{{0}} refused: {{1}}",
         "impact": "No server was created.",
-        "fix": "Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits — or delete a server that is no longer needed."
+        "fix": "Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits, DigitalOcean under the account's droplet limit — or delete a server that is no longer needed."
       },
       "cloud_unavailable": {
         "title": "That server type is not available there right now",
@@ -4923,13 +4923,16 @@
   },
   "cloud": {
     "title": "Cloud providers",
-    "help": "Projects at a cloud provider that the panel can create servers in. Hetzner Cloud, for now.",
-    "empty": "None yet. Connect a Hetzner Cloud project to create servers from the panel.",
-    "add": "Connect Hetzner Cloud",
+    "help": "Accounts at a cloud provider that the panel can create servers in: Hetzner Cloud or DigitalOcean.",
+    "empty": "None yet. Connect a Hetzner Cloud project or a DigitalOcean account to create servers from the panel.",
+    "add": "Connect a provider",
+    "kind": "Provider",
     "name": "Name",
-    "namePlaceholder": "Hetzner Cloud",
     "token": "API token",
-    "tokenHelp": "In the Hetzner Console, open the project, then Security, then API tokens, and generate one with Read & Write permission. The panel checks it before saving it, keeps it sealed, and never shows it again.",
+    "tokenHelp": {
+      "hetzner": "In the Hetzner Console, open the project, then Security, then API tokens, and generate one with Read & Write permission. The panel checks it before saving it, keeps it sealed, and never shows it again.",
+      "digitalocean": "In the DigitalOcean control panel, open API, then Tokens, and generate one with Full Access, or with custom scopes that include creating droplets, SSH keys and firewalls. The panel checks it before saving it, keeps it sealed, and never shows it again."
+    },
     "save": "Check and save",
     "saved": "{{name}} is connected, and its token can create servers.",
     "test": "Test",

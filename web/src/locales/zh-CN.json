@@ -1324,10 +1324,10 @@
     },
     "cloud": {
       "tabExisting": "已有的服务器",
-      "tabCreate": "在 Hetzner Cloud 创建",
+      "tabCreate": "在云服务商创建",
       "intro": "Skifity 会订购机器，在它前面放一道防火墙，并让它加入集群。机器在存在之前就会拿到一把 SSH 主机密钥，所以连第一次连接也是经过核对的，而不是盲目信任。",
       "connection": "连接",
-      "noConnection": "请先连接一个 Hetzner Cloud 项目。它的令牌会加密保存在面板中，不会再显示。",
+      "noConnection": "请先连接一个 Hetzner Cloud 项目或 DigitalOcean 账户。它的令牌会加密保存在面板中，不会再显示。",
       "location": "位置",
       "arch": "处理器",
       "archAmd64": "x86（Intel、AMD）",
@@ -1339,10 +1339,10 @@
       "noTypes": "这个位置无法订购这种处理器的服务器。请换一个位置或处理器。",
       "image": "操作系统",
       "name": "名称",
-      "nameHelp": "它的主机名，也是它在 Hetzner 和集群中的名字：小写字母、数字和连字符。",
+      "nameHelp": "它的主机名，也是它在服务商和集群中的名字：小写字母、数字和连字符。",
       "sshCluster": "只允许集群的服务器通过 SSH 连接",
       "sshClusterHelp": "否则 22 端口对所有地址开放，并关闭密码登录。如果面板运行在集群内部，就可以限制它，因为面板的连接正是从那里发出的。",
-      "firewall": "Hetzner 防火墙允许来自任何地址的 HTTP 和 HTTPS、SSH，而集群自己的端口只对集群的服务器开放。",
+      "firewall": "服务商的防火墙允许来自任何地址的 HTTP 和 HTTPS、SSH，而集群自己的端口只对集群的服务器开放。",
       "cost": "这会订购一台服务器，{{provider}} 按每月 {{price}} 计费，直到它被删除。",
       "create": "创建并加入",
       "createdAt": "创建于 {{provider}}",
@@ -3788,13 +3788,13 @@
         "title": "云服务商不接受这个令牌",
         "cause": "{{0}} 回复说令牌无效或不存在。",
         "impact": "没有保存或创建任何东西。",
-        "fix": "在服务商的控制台里创建一个有 Read & Write 权限的 API 令牌——Hetzner Cloud 在项目的 Security 页面，再进 API tokens——然后用它。"
+        "fix": "在服务商的控制台里创建一个可以写入的 API 令牌——Hetzner Cloud 在项目的 Security 页面，再进 API tokens；DigitalOcean 在 API，再进 Tokens——然后用它。"
       },
       "cloud_token_read_only": {
         "title": "这个令牌只能读",
         "cause": "{{0}} 只把这个令牌当作只读令牌，而创建服务器是写操作。",
         "impact": "没有保存或创建任何东西。",
-        "fix": "在要放服务器的项目里创建一个有 Read & Write 权限的令牌，改用它。"
+        "fix": "在要放服务器的账户里创建一个可以写入的令牌——Hetzner Cloud 选 Read & Write，DigitalOcean 选 Full Access——改用它。"
       },
       "cloud_rate_limited": {
         "title": "云服务商要求面板放慢请求",
@@ -3818,7 +3818,7 @@
         "title": "云账户已经达到某个上限",
         "cause": "{{0}} 拒绝了：{{1}}",
         "impact": "没有创建服务器。",
-        "fix": "请服务商提高上限——Hetzner Cloud 在项目的 Limits 里提交申请——或者删掉不再需要的服务器。"
+        "fix": "请服务商提高上限——Hetzner Cloud 在项目的 Limits 里提交申请，DigitalOcean 在账户的 Droplet 上限里申请——或者删掉不再需要的服务器。"
       },
       "cloud_unavailable": {
         "title": "这个服务器类型目前在那里不可用",
@@ -4899,13 +4899,16 @@
   },
   "cloud": {
     "title": "云服务商",
-    "help": "面板可以在其中创建服务器的云服务商项目。目前支持 Hetzner Cloud。",
-    "empty": "还没有。连接一个 Hetzner Cloud 项目，就可以从面板创建服务器。",
-    "add": "连接 Hetzner Cloud",
+    "help": "面板可以在其中创建服务器的云服务商账户：Hetzner Cloud 或 DigitalOcean。",
+    "empty": "还没有。连接一个 Hetzner Cloud 项目或 DigitalOcean 账户，就可以从面板创建服务器。",
+    "add": "连接服务商",
+    "kind": "服务商",
     "name": "名称",
-    "namePlaceholder": "Hetzner Cloud",
     "token": "API 令牌",
-    "tokenHelp": "在 Hetzner Console 中打开项目，进入 Security，再进入 API tokens，生成一个有 Read & Write 权限的令牌。面板会在保存前检查它，加密保存，并且不会再显示。",
+    "tokenHelp": {
+      "hetzner": "在 Hetzner Console 中打开项目，进入 Security，再进入 API tokens，生成一个有 Read & Write 权限的令牌。面板会在保存前检查它，加密保存，并且不会再显示。",
+      "digitalocean": "在 DigitalOcean 控制面板中打开 API，再进入 Tokens，生成一个 Full Access 的令牌，或者自定义权限并包含创建 Droplet、SSH 密钥和防火墙。面板会在保存前检查它，加密保存，并且不会再显示。"
+    },
     "save": "检查并保存",
     "saved": "{{name}} 已连接，它的令牌可以创建服务器。",
     "test": "测试",

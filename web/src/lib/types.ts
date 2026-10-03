@@ -137,6 +137,9 @@ export type CloudServer = {
 }
 
 /** A team's connection to a cloud provider. The token is never sent. */
+/** The cloud providers the panel can create servers at, as internal/cloud names them. */
+export type CloudProviderKind = "hetzner" | "digitalocean"
+
 export type CloudProvider = {
   id: string
   kind: string

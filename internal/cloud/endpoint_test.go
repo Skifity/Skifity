@@ -20,7 +20,25 @@ func TestThePanelTalksToHetznerAndNowhereElse(t *testing.T) {
 	if h.client != hetznerClient {
 		t.Error("the client is not the guarded one")
 	}
-	if _, err := Open("digitalocean", "x"); err == nil {
+	if _, err := Open("vultr", "x"); err == nil {
 		t.Error("a provider this build does not have was opened")
+	}
+}
+
+// The same for DigitalOcean: its real address, through the guarded client.
+func TestThePanelTalksToDigitalOceanAndNowhereElse(t *testing.T) {
+	provider, err := Open(KindDigitalOcean, "not-a-real-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := provider.(*DigitalOcean)
+	if !ok {
+		t.Fatalf("Open answered %T", provider)
+	}
+	if d.endpoint != "https://api.digitalocean.com/v2" {
+		t.Errorf("the endpoint is %q", d.endpoint)
+	}
+	if d.client != digitalOceanClient {
+		t.Error("the client is not the guarded one")
 	}
 }

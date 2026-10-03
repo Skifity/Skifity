@@ -81,7 +81,7 @@ func (s *Server) handleAddCloudProvider(w http.ResponseWriter, r *http.Request) 
 		req.Kind = cloud.KindHetzner
 	}
 	if !cloud.Supported(req.Kind) {
-		writeError(w, r, errdoc.BadRequest("The panel can create servers at Hetzner Cloud (hetzner) only."))
+		writeError(w, r, errdoc.BadRequest("The panel can create servers at Hetzner Cloud (hetzner) and DigitalOcean (digitalocean)."))
 		return
 	}
 	token := strings.TrimSpace(req.Token)

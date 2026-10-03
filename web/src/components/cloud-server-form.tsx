@@ -33,11 +33,11 @@ import type { CloudOptions, CloudServerType, Operation } from "@/lib/types"
 
 type Arch = "amd64" | "arm64"
 
-/** A name Hetzner, a hostname and a Kubernetes node all accept. */
+/** A name a provider, a hostname and a Kubernetes node all accept. */
 const NAME = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 
 /**
- * Creating a server at Hetzner Cloud.
+ * Creating a server at a cloud provider: Hetzner Cloud or DigitalOcean.
  *
  * Everything offered comes from what the provider sells now, read with the
  * team's token: the locations, the server types that can be ordered in the one

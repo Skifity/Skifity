@@ -46,50 +46,61 @@ The panel shows these as they happen, and says what each one found.
    network this cluster uses.
 7. **Joining the cluster.** The panel waits for the node to report ready.
 
-## Creating a server at Hetzner Cloud
+## Creating a server at a cloud provider
 
-You do not need a machine first. **Add server → Create at Hetzner Cloud** orders
-one, puts a firewall in front of it and joins it, in one step, and the same is
-`skifity servers create web-2 --provider hetzner --location fsn1 --type cx22`.
-Like adding any server, it is the panel administrator's.
+You do not need a machine first. **Add server → Create at a cloud provider**
+orders one at Hetzner Cloud or DigitalOcean, puts a firewall in front of it and
+joins it, in one step, and the same is
+`skifity servers create web-2 --provider hetzner --location fsn1 --type cx22`,
+or `--provider digitalocean --location fra1 --type s-2vcpu-4gb`. Like adding
+any server, it is the panel administrator's.
 
-**Connect a project once.** In the Hetzner Console, open the project the
-servers should go in, then **Security → API tokens**, and generate a token with
-**Read & Write** permission. Paste it under **Settings → Cloud providers** (or
-`skifity cloud providers add --token-file FILE`). The panel asks Hetzner
-whether the token works, and whether it may create anything, before it keeps
-it — a read-only token is refused there, not at the first order. The token is
-sealed under that connection, is rotated with every other secret when the
-master key is, and is never shown again; the list shows its last four
-characters. A connection that servers were created with cannot be removed
-until they are, because deleting their machines needs it.
+**Connect an account once.** Paste a token under **Settings → Cloud providers**
+(or `skifity cloud providers add --kind hetzner --token-file FILE`, or
+`--kind digitalocean`). The token has to be able to write:
 
-**Pick what to order.** Locations, server types and images come from Hetzner as
-they are now: only types that can be ordered in the location picked are
-offered, each with its monthly price there, VAT included. Both processors work —
-x86 and Arm (the CAX types) — because k3s and the panel's images are built for
-both. Ubuntu 24.04 LTS is the default, and Debian 12 the alternative: the two
+* **Hetzner Cloud:** in the Hetzner Console, open the project the servers
+  should go in, then **Security → API tokens**, and generate a token with
+  **Read & Write** permission.
+* **DigitalOcean:** in the control panel, open **API → Tokens** and generate a
+  token with **Full Access**, or with custom scopes that include creating
+  droplets, SSH keys and firewalls.
+
+The panel asks the provider whether the token works, and whether it may create
+anything, before it keeps it — a read-only token is refused there, not at the
+first order. The token is sealed under that connection, is rotated with every
+other secret when the master key is, and is never shown again; the list shows
+its last four characters. A connection that servers were created with cannot
+be removed until they are, because deleting their machines needs it.
+
+**Pick what to order.** Locations, server types and images come from the
+provider as they are now: only types that can be ordered in the location picked
+are offered, each with its monthly price there. Hetzner's prices include VAT
+and are in euros; DigitalOcean's are in US dollars before tax, which is how
+each writes them. At Hetzner both processors work — x86 and Arm (the CAX types)
+— because k3s and the panel's images are built for both; droplets are x86.
+Ubuntu 24.04 LTS is the default, and Debian 12 the alternative: the two
 distributions the preflight check calls supported.
 
 **What happens, step by step.** Three steps come before the usual seven:
 
 1. **Ordering the machine.** The panel generates a key pair for this server
-   alone, as it does for every server, and gives Hetzner the public half, so
-   Hetzner sets no root password and emails nobody one. It finds or creates a
-   Hetzner firewall for the server (below). Then it generates the machine's
+   alone, as it does for every server, and gives the provider the public half, so
+   it sets no root password and emails nobody one. It finds or creates a
+   firewall at the provider for the server (below). Then it generates the machine's
    SSH **host key** itself, records its fingerprint, and orders the machine
    with that key in its cloud-init user data — so the panel knows who the
    machine is before it exists.
-2. **Waiting for it to start.** The panel waits for Hetzner to report the
+2. **Waiting for it to start.** The panel waits for the provider to report the
    machine running with an address, and lets that address through the
-   firewalls of the other machines it created. The key it gave Hetzner is
-   removed from the project; the machine already has it.
+   firewalls of the other machines it created. The key it gave the provider is
+   removed from the account; the machine already has it.
 3. **Checking its identity.** The panel connects and accepts nothing but the
    host key it generated. A machine that presents another one is refused
    *before* the panel signs in, so nothing is sent to it. Then, over that
    checked connection, the machine generates a host key of its own, the panel
    pins it, and proves a new connection gets it. The first key was in the user
-   data, which Hetzner keeps and anything on the machine can read back from
+   data, which the provider keeps and anything on the machine can read back from
    the metadata service; it is not the one the server ends up with. See
    ADR-0025 in the design decisions for why this, and not reading the key
    from the console.
@@ -97,7 +108,7 @@ distributions the preflight check calls supported.
 From there it is exactly the join every server gets: preflight, the server's
 own firewall, the network check, k3s at the cluster's version, ready.
 
-**The firewall.** Hetzner's firewall sits in front of the machine from its
+**The firewall.** The provider's firewall sits in front of the machine from its
 first boot and lets in, from anywhere, HTTP and HTTPS — what the server is for —
 and SSH (passwords are off; the panel signs in with its key). Everything the
 cluster needs between its own servers is let in from the cluster's addresses
@@ -105,7 +116,9 @@ and nobody else: the Kubernetes API on 6443, the kubelet on 10250, the pod
 network's VXLAN on UDP 8472 and WireGuard on UDP 51820 and 51821, and etcd's
 2379 and 2380 on a control plane server — the same list the server's own
 firewall opens. Outbound traffic is not limited: a node downloads k3s and pulls
-images. Every machine the panel created has its firewall updated when a server
+images. (A DigitalOcean firewall with no outbound rules lets nothing out, so
+the panel writes its outbound rules open; a droplet is put behind its firewall
+by a tag of that firewall's own, which it carries from its first boot.) Every machine the panel created has its firewall updated when a server
 joins or leaves, so the list follows the cluster.
 
 Tick **SSH from the cluster's servers only** to close port 22 to the internet
@@ -114,18 +127,18 @@ what the panel needs when it runs inside the cluster, as `install.sh` sets it
 up. A panel run elsewhere could not reach a machine created that way, so it is
 refused when the panel is not connected to a cluster.
 
-**What it costs.** The machine is billed by Hetzner from the moment it is
+**What it costs.** The machine is billed by the provider from the moment it is
 ordered until it is deleted, whether or not it joined. The form says the price
 before you order.
 
 **Deleting it.** Removing a server the panel created offers **Also delete the
-machine at Hetzner Cloud**. The server is drained and leaves the cluster first,
+machine at the provider**. The server is drained and leaves the cluster first,
 as any removal does; then the machine, its firewall and anything else the
 panel made for it are deleted. You type the server's name to confirm. The panel
 only ever deletes the machine it recorded ordering, and only while that machine
-still carries the label the panel gave it: a machine somebody relabelled, and
+still carries the label the panel gave it (a tag, at DigitalOcean): a machine somebody relabelled, and
 any server that was added with an address rather than created, is never
-deleted — it is left for you to delete in the Hetzner Console. Without the box
+deleted — it is left for you to delete in the provider's console. Without the box
 ticked, the machine keeps running, and keeps being billed.
 
 ## The password
@@ -346,6 +359,6 @@ completely, leaving it as you found it.
 Skifity refuses to remove a control plane server if that would leave the cluster
 without a majority, and explains why rather than letting you break it.
 
-A server Skifity created at Hetzner Cloud can have its machine deleted too, after
-it has left the cluster; see [Creating a server at Hetzner
-Cloud](#creating-a-server-at-hetzner-cloud).
+A server Skifity created at a cloud provider can have its machine deleted too,
+after it has left the cluster; see [Creating a server at a cloud
+provider](#creating-a-server-at-a-cloud-provider).

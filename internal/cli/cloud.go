@@ -46,9 +46,9 @@ var cloudStdin io.Reader = os.Stdin
 func cmdCloud(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("cloud", flag.ContinueOnError)
 	flags.SetOutput(out)
-	kind := flags.String("kind", "hetzner", "the provider; hetzner is the one there is")
+	kind := flags.String("kind", "hetzner", "the provider: hetzner or digitalocean")
 	name := flags.String("name", "", "what to call the connection; the provider's name when left out")
-	tokenFile := flags.String("token-file", "", "a file holding the project's Read & Write API token, or - for standard input")
+	tokenFile := flags.String("token-file", "", "a file holding an API token that can write, or - for standard input")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	positional, err := parseInterspersed(flags, args)
 	if err != nil {
@@ -222,12 +222,13 @@ func readToken(value string) (string, error) {
 //
 //	skifity servers create web-1 --provider hetzner --location fsn1 --type cx22
 //	skifity servers create arm-1 --provider eu --location fsn1 --type cax11 --image debian-12
+//	skifity servers create web-2 --provider digitalocean --location fra1 --type s-2vcpu-4gb
 func cmdServersCreate(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("servers create", flag.ContinueOnError)
 	flags.SetOutput(out)
-	provider := flags.String("provider", "", "the cloud connection, by name or id, or hetzner for the team's only one")
-	location := flags.String("location", "", "where, as `cloud providers` options name it, such as fsn1")
-	serverType := flags.String("type", "", "the server type, such as cx22, or cax11 for arm64")
+	provider := flags.String("provider", "", "the cloud connection, by name or id, or hetzner or digitalocean for the team's only one of that kind")
+	location := flags.String("location", "", "where, as `cloud providers` options name it, such as fsn1 or fra1")
+	serverType := flags.String("type", "", "the server type, such as cx22, cax11 for arm64, or s-2vcpu-4gb at DigitalOcean")
 	image := flags.String("image", "ubuntu-24.04", "ubuntu-24.04 or debian-12")
 	ssh := flags.String("ssh", "anywhere", "who can reach port 22: anywhere, or cluster for the cluster's servers only")
 	controlPlane := flags.Bool("control-plane", false, "join as a control plane member, for high availability")

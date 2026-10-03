@@ -939,14 +939,14 @@ func ClusterTokenMissing(path string) *Problem {
 
 // cloudDocs is where every cloud problem points: the section on creating a
 // server at a provider, which covers the token, the host key and deleting.
-const cloudDocs = "/docs/adding-servers#creating-a-server-at-hetzner-cloud"
+const cloudDocs = "/docs/adding-servers#creating-a-server-at-a-cloud-provider"
 
 // CloudTokenInvalid is a provider refusing a token outright.
 func CloudTokenInvalid(provider string) *Problem {
 	return New("cloud.token_invalid", "The cloud provider does not accept that token").
 		WithCause("%s answered that the token is invalid or unknown.", provider).
 		WithImpact("Nothing was saved or created.").
-		WithFix("Create an API token with Read & Write permission in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens — and use that one.").
+		WithFix("Create an API token that can write in the provider's console — for Hetzner Cloud, the project's Security page, then API tokens; for DigitalOcean, API, then Tokens — and use that one.").
 		WithDocs(cloudDocs).
 		WithStatus(http.StatusBadRequest).
 		With("provider", provider)
@@ -958,7 +958,7 @@ func CloudTokenReadOnly(provider string) *Problem {
 	return New("cloud.token_read_only", "That token can only read").
 		WithCause("%s accepts the token for reading only, and creating a server is a write.", provider).
 		WithImpact("Nothing was saved or created.").
-		WithFix("Create a token with Read & Write permission in the project the servers should go in, and use that one instead.").
+		WithFix("Create a token that can write — Read & Write at Hetzner Cloud, Full Access at DigitalOcean — in the account the servers should go in, and use that one instead.").
 		WithDocs(cloudDocs).
 		WithStatus(http.StatusBadRequest).
 		With("provider", provider)
@@ -1010,7 +1010,7 @@ func CloudLimitReached(provider, message string) *Problem {
 	return New("cloud.limit_reached", "The cloud account has reached a limit").
 		WithCause("%s refused: %s", provider, message).
 		WithImpact("No server was created.").
-		WithFix("Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits — or delete a server that is no longer needed.").
+		WithFix("Ask the provider to raise the limit — Hetzner Cloud takes a request under the project's Limits, DigitalOcean under the account's droplet limit — or delete a server that is no longer needed.").
 		WithStatus(http.StatusConflict).
 		With("provider", provider)
 }

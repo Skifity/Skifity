@@ -276,8 +276,11 @@ catalogue.
 * **Wildcard certificates.** DNS records are created at the provider, but a
   wildcard through DNS-01 needs a per-team issuer and checks across teams, and
   was left out rather than half-built.
-* **One cloud provider.** Servers are ordered at Hetzner only; the provider
-  interface is there for others.
+* ~~**One cloud provider.** Servers are ordered at Hetzner only; the provider
+  interface is there for others.~~ Hetzner Cloud and DigitalOcean, through the
+  same interface unchanged (`internal/cloud/digitalocean.go`), each with a fake
+  of its API that the whole create-pin-join flow runs against. Neither has
+  ordered a real machine from here.
 * One of the three shared items above: the panel's `cluster-admin`. The
   volume backup runs as whoever owns the files now, and a deploy interrupted
   by a restart is resumed.

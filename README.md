@@ -145,7 +145,7 @@ the machine, installs a key of its own, configures the firewall, verifies the
 network in both directions, installs k3s and joins the cluster — seven steps,
 each shown as it happens. The password is used exactly once and never stored;
 a test scans every column of the database for it. Or let it order the server
-for you at Hetzner Cloud.
+for you at Hetzner Cloud or DigitalOcean.
 
 **Changing a setting does not rebuild your app.** The most common complaint
 about panels like this. Skifity separates what goes into the image from what

@@ -2,6 +2,7 @@ package provision
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type cloudRig struct {
 	keyring  *crypto.Keyring
 	teamID   string
 	fake     *cloudtest.Hetzner
+	ocean    *cloudtest.DigitalOcean
 	machine  *sshx.TestServer
 	provider store.CloudProvider
 
@@ -49,6 +51,12 @@ type cloudRig struct {
 // host key from its user data, as cloud-init does; false is something else
 // answering at the address.
 func newCloudRig(t *testing.T, present bool) *cloudRig {
+	t.Helper()
+	return newCloudRigAt(t, present, cloud.KindHetzner)
+}
+
+// newCloudRigAt builds the rig against one provider's fake.
+func newCloudRigAt(t *testing.T, present bool, kind string) *cloudRig {
 	t.Helper()
 	p, db, keyring, teamID := testHarness(t)
 	r := &cloudRig{p: p, db: db, keyring: keyring, teamID: teamID}
@@ -78,17 +86,15 @@ func newCloudRig(t *testing.T, present bool) *cloudRig {
 	})
 
 	host, port := machine.Addr()
-	fake := cloudtest.New(t)
-	fake.IPv4 = host
-	fake.OnCreate = func(s cloudtest.Server) {
+	onCreate := func(userData, serverID string, publicKeys []string) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		r.userData = s.UserData
-		if server, err := db.GetServer(t.Context(), serverIDOf(s.Labels)); err == nil {
+		r.userData = userData
+		if server, err := db.GetServer(t.Context(), serverID); err == nil {
 			r.pinnedAtCreate = server.HostKey
 		}
 		r.attemptsAtCreate = len(machine.AuthAttempts())
-		for _, key := range s.PublicKeys {
+		for _, key := range publicKeys {
 			machine.Authorize(key)
 		}
 		if present {
@@ -96,7 +102,7 @@ func newCloudRig(t *testing.T, present bool) *cloudRig {
 			var config struct {
 				SSHKeys map[string]string `json:"ssh_keys"`
 			}
-			if err := yaml.Unmarshal([]byte(s.UserData), &config); err != nil {
+			if err := yaml.Unmarshal([]byte(userData), &config); err != nil {
 				t.Errorf("the user data is not YAML: %v", err)
 				return
 			}
@@ -105,14 +111,26 @@ func newCloudRig(t *testing.T, present bool) *cloudRig {
 			}
 		}
 	}
-	r.fake = fake
-	p.cloud = fake.Opener()
+	switch kind {
+	case cloud.KindDigitalOcean:
+		ocean := cloudtest.NewDigitalOcean(t)
+		ocean.IPv4 = host
+		ocean.OnCreate = func(d cloudtest.Droplet) { onCreate(d.UserData, serverIDOfTags(d.Tags), d.PublicKeys) }
+		r.ocean = ocean
+		p.cloud = ocean.Opener()
+	default:
+		fake := cloudtest.New(t)
+		fake.IPv4 = host
+		fake.OnCreate = func(s cloudtest.Server) { onCreate(s.UserData, serverIDOf(s.Labels), s.PublicKeys) }
+		r.fake = fake
+		p.cloud = fake.Opener()
+	}
 	p.cloudTiming = cloudTiming{
 		Poll: 10 * time.Millisecond, Boot: 3 * time.Second, SSH: 400 * time.Millisecond,
 		Gone: 200 * time.Millisecond, SSHPort: port, DialTimeout: 2 * time.Second,
 	}
 
-	r.provider = store.CloudProvider{ID: store.NewCloudProviderID(), TeamID: teamID, Kind: cloud.KindHetzner, Name: "Hetzner"}
+	r.provider = store.CloudProvider{ID: store.NewCloudProviderID(), TeamID: teamID, Kind: kind, Name: cloud.Title(kind)}
 	sealed, err := keyring.Seal([]byte(cloudtest.Token), store.CloudProviderContext(r.provider.ID))
 	if err != nil {
 		t.Fatal(err)
@@ -125,11 +143,26 @@ func newCloudRig(t *testing.T, present bool) *cloudRig {
 
 func serverIDOf(labels map[string]string) string { return labels["skifity.com/server-id"] }
 
+// serverIDOfTags is serverIDOf for a droplet, whose labels are tags.
+func serverIDOfTags(tags []string) string {
+	for _, tag := range tags {
+		if id, ok := strings.CutPrefix(tag, "skifity:server-id:"); ok {
+			return id
+		}
+	}
+	return ""
+}
+
 func (r *cloudRig) create(t *testing.T, name string) (store.Operation, store.Operation) {
 	t.Helper()
+	return r.createAt(t, name, "fsn1", "cx22")
+}
+
+func (r *cloudRig) createAt(t *testing.T, name, location, serverType string) (store.Operation, store.Operation) {
+	t.Helper()
 	op, err := r.p.CreateCloudServer(t.Context(), api.CreateCloudServerRequest{
-		TeamID: r.teamID, ProviderID: r.provider.ID, Name: name, Location: "fsn1",
-		ServerType: "cx22", Image: "ubuntu-24.04", SSHAccess: store.SSHFromAnywhere, Arch: cloud.ArchAMD64,
+		TeamID: r.teamID, ProviderID: r.provider.ID, Name: name, Location: location,
+		ServerType: serverType, Image: "ubuntu-24.04", SSHAccess: store.SSHFromAnywhere, Arch: cloud.ArchAMD64,
 	})
 	if err != nil {
 		t.Fatalf("CreateCloudServer: %v", err)
@@ -220,6 +253,63 @@ func TestACreatedServerIsPinnedBeforeItIsFirstReached(t *testing.T) {
 		t.Fatalf("%d firewalls", len(firewalls))
 	}
 	assertFirewall(t, firewalls[0], false)
+}
+
+// The same flow at DigitalOcean: ordered with the image's own name and the
+// key's id, behind its firewall from the first boot through a tag of the
+// firewall's own, pinned before it is reached, and joined the same way.
+func TestAServerAtDigitalOceanJoinsTheSameWay(t *testing.T) {
+	r := newCloudRigAt(t, true, cloud.KindDigitalOcean)
+	_, finished := r.createAt(t, "web-1", "fra1", "s-1vcpu-1gb")
+	if finished.Status != store.OpSucceeded {
+		t.Fatalf("the operation failed: %s %s\nsteps: %+v", finished.ErrorCode, finished.ErrorMsg, finished.Steps)
+	}
+	server, err := r.db.GetServer(t.Context(), finished.TargetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	pinned, attempts := r.pinnedAtCreate, r.attemptsAtCreate
+	r.mu.Unlock()
+	if pinned == "" || attempts != 0 {
+		t.Fatalf("pinned %q and %d sign-ins at the moment the droplet was ordered", pinned, attempts)
+	}
+	created, err := r.db.GetCloudServer(t.Context(), server.ID)
+	if err != nil || !created.HostKeyRotated || server.HostKey == pinned {
+		t.Errorf("the bootstrap host key was not replaced: %+v %v", created, err)
+	}
+	if server.Status != store.ServerReady {
+		t.Errorf("the server is %s", server.Status)
+	}
+
+	droplets := r.ocean.Droplets()
+	if len(droplets) != 1 {
+		t.Fatalf("%d droplets", len(droplets))
+	}
+	droplet := droplets[0]
+	if droplet.Image != "ubuntu-24-04-x64" || droplet.Region != "fra1" || droplet.Size != "s-1vcpu-1gb" ||
+		serverIDOfTags(droplet.Tags) != server.ID || created.MachineID != strconv.FormatInt(droplet.ID, 10) {
+		t.Errorf("ordered %+v, recorded %q", droplet, created.MachineID)
+	}
+	firewalls := r.ocean.Firewalls()
+	if len(firewalls) != 1 || len(firewalls[0].Tags) != 1 || !slices.Contains(droplet.Tags, firewalls[0].Tags[0]) {
+		t.Fatalf("the droplet is not behind its firewall from the first boot: %+v, tags %v", firewalls, droplet.Tags)
+	}
+	open := map[string]bool{}
+	for _, rule := range firewalls[0].InboundRules {
+		open[rule["protocol"].(string)+"/"+rule["ports"].(string)] = true
+	}
+	for _, port := range []string{"tcp/22", "tcp/80", "tcp/443", "tcp/6443", "tcp/10250", "udp/8472", "udp/51820", "udp/51821"} {
+		if !open[port] {
+			t.Errorf("%s is not open", port)
+		}
+	}
+	if len(firewalls[0].OutboundRules) == 0 {
+		t.Error("the firewall lets nothing out, so the node cannot download k3s")
+	}
+	if keys := r.ocean.Keys(); len(keys) != 0 {
+		t.Errorf("the imported key was left at DigitalOcean: %+v", keys)
+	}
 }
 
 // assertFirewall checks one machine's firewall against what the cluster needs.

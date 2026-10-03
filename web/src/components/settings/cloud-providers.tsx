@@ -10,13 +10,33 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { CloudProvider } from "@/lib/types"
+import type { CloudProvider, CloudProviderKind } from "@/lib/types"
+
+/** The providers' own names, which are the same in every language. */
+export const cloudProviderTitles: Record<CloudProviderKind, string> = {
+  hetzner: "Hetzner Cloud",
+  digitalocean: "DigitalOcean",
+}
+
+const kinds: CloudProviderKind[] = ["hetzner", "digitalocean"]
+
+/** A provider's name as people write it, for a kind this panel may not know. */
+export function cloudProviderTitle(kind: string) {
+  return cloudProviderTitles[kind as CloudProviderKind] ?? kind
+}
 
 /** The query every view of the team's cloud connections shares. */
 export function useCloudProviders() {
@@ -29,9 +49,10 @@ export function useCloudProviders() {
 }
 
 /**
- * Connecting a Hetzner Cloud project: a name and a token. The panel asks
- * Hetzner whether the token works, and whether it may create anything, before
- * it keeps it; after that the token is never shown again.
+ * Connecting a Hetzner Cloud project or a DigitalOcean account: a name and a
+ * token. The panel asks the provider whether the token works, and whether it
+ * may create anything, before it keeps it; after that the token is never
+ * shown again.
  */
 export function CloudProviderForm({
   onSaved,
@@ -42,13 +63,14 @@ export function CloudProviderForm({
 }) {
   const { t } = useTranslation()
   const { team } = useSession()
+  const [kind, setKind] = useState<CloudProviderKind>("hetzner")
   const [name, setName] = useState("")
   const [token, setToken] = useState("")
 
   const save = useMutation({
     mutationFn: () =>
       api.post<CloudProvider>(`/api/teams/${team?.id}/cloud-providers`, {
-        kind: "hetzner",
+        kind,
         name: name.trim() || undefined,
         token: token.trim(),
       }),
@@ -70,12 +92,27 @@ export function CloudProviderForm({
         save.mutate()
       }}
     >
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor="cloud-kind">{t("cloud.kind")}</FieldLabel>
+        <Select value={kind} onValueChange={(value) => setKind(value as CloudProviderKind)}>
+          <SelectTrigger id="cloud-kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {kinds.map((value) => (
+              <SelectItem key={value} value={value}>
+                {cloudProviderTitles[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
       <Field>
         <FieldLabel htmlFor="cloud-name">{t("cloud.name")}</FieldLabel>
         <Input
           id="cloud-name"
           value={name}
-          placeholder={t("cloud.namePlaceholder")}
+          placeholder={cloudProviderTitles[kind]}
           onChange={(event) => setName(event.target.value)}
         />
       </Field>
@@ -90,7 +127,7 @@ export function CloudProviderForm({
           onChange={(event) => setToken(event.target.value)}
         />
       </Field>
-      <FieldDescription className="sm:col-span-2">{t("cloud.tokenHelp")}</FieldDescription>
+      <FieldDescription className="sm:col-span-2">{t(`cloud.tokenHelp.${kind}`)}</FieldDescription>
       {save.error != null && (
         <div className="sm:col-span-2">
           <ErrorDisplay error={save.error} compact />

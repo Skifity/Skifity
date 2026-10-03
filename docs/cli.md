@@ -207,7 +207,9 @@ skifity open                      # print the URLs
 skifity apps                      # everything in this environment
 skifity servers                   # the machines
 skifity servers create web-2 --provider hetzner --location fsn1 --type cx22  # order one at Hetzner Cloud and join it
+skifity servers create web-3 --provider digitalocean --location fra1 --type s-2vcpu-4gb  # or at DigitalOcean
 skifity cloud providers add --token-file hcloud.token  # connect a Hetzner Cloud project; `-` reads stdin
+skifity cloud providers add --kind digitalocean --token-file do.token  # or a DigitalOcean account
 skifity cloud providers           # the team's cloud connections; test NAME, remove NAME
 skifity certs                     # the team's own TLS certificates, and what uses each
 skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version

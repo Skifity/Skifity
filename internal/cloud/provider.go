@@ -8,9 +8,9 @@
 // server goes through (internal/provision), so there is one way a node comes
 // to exist and one way it is checked.
 //
-// Hetzner Cloud is the only provider. The interface is shaped so DigitalOcean
-// (droplets, account SSH keys, cloud firewalls, tags) and Vultr (instances,
-// SSH keys, firewall groups, tags) fit it without a change here: each has the
+// Two providers: Hetzner Cloud, and DigitalOcean (droplets, account SSH keys,
+// cloud firewalls, tags), which fitted the interface without a change to it.
+// Vultr (instances, SSH keys, firewall groups, tags) would too: each has the
 // same five nouns under other names.
 package cloud
 
@@ -21,18 +21,25 @@ import (
 	"slices"
 )
 
-// KindHetzner is Hetzner Cloud.
-const KindHetzner = "hetzner"
+// The providers, by kind.
+const (
+	// KindHetzner is Hetzner Cloud.
+	KindHetzner = "hetzner"
+	// KindDigitalOcean is DigitalOcean.
+	KindDigitalOcean = "digitalocean"
+)
 
 // Kinds are the providers this build can talk to, in the order a form offers
 // them.
-var Kinds = []string{KindHetzner}
+var Kinds = []string{KindHetzner, KindDigitalOcean}
 
 // Title is a provider's name as a person writes it.
 func Title(kind string) string {
 	switch kind {
 	case KindHetzner:
 		return "Hetzner Cloud"
+	case KindDigitalOcean:
+		return "DigitalOcean"
 	}
 	return kind
 }
@@ -86,6 +93,8 @@ func Open(kind, token string) (Provider, error) {
 	switch kind {
 	case KindHetzner:
 		return NewHetzner(token), nil
+	case KindDigitalOcean:
+		return NewDigitalOcean(token), nil
 	}
 	return nil, fmt.Errorf("there is no cloud provider called %q", kind)
 }

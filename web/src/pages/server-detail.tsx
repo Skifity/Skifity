@@ -19,6 +19,7 @@ import { OperationProgress } from "@/components/operation-progress"
 import { ServerGPUCard } from "@/components/server-gpus"
 import { ServerHardening } from "@/components/server-hardening"
 import { ServerUsageCard } from "@/components/server-usage-card"
+import { cloudProviderTitle } from "@/components/settings/cloud-providers"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -436,9 +437,4 @@ function Usage({
       <Progress value={percent} />
     </div>
   )
-}
-
-/** A provider's name as people write it. A brand, so not translated. */
-function cloudProviderTitle(kind: string) {
-  return kind === "hetzner" ? "Hetzner Cloud" : kind
 }
