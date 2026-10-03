@@ -6121,6 +6121,59 @@ needs, the installer's options, upgrading and uninstalling, then what is
 different, a selection of the scorecard against Coolify, Dokploy and Kubero,
 and all thirty-eight screenshots.
 
+### What was not yet dependable
+
+A pass over what was written but would not hold up, after the release was
+prepared. Each item says what it fixes and what still has not run.
+
+* **An install onto an existing k3s** (`SKIFITY_SKIP_K3S`) returned before
+  writing the registry mirror, so no image the panel built could ever be
+  pulled, and refused any server without systemd though only the k3s it
+  installs needs it. Both fixed; the smoke test covers the mirror, the
+  ingress configuration and the restart message (`ae35ec9`).
+* **The release image carried no CLI for other platforms**, so on a
+  released install the panel refused a Mac or a Windows laptop its CLI.
+  `scripts/release-cli.sh` puts them in the image as `make image` does. The two
+  SLSA workflows were GitHub's unedited templates — provenance for files called
+  `artifact1`, a Go 1.17 build of a config that did not exist — and are replaced
+  by a provenance job in `release.yml`. `release-dry-run.yml` builds the whole
+  release, images included, on every change to what it is made of, and looks
+  inside both images; its first run passed (`2fb53d8`). This is the first time
+  the release image has been built at all.
+* **A deployment cut off by a panel restart** used to be failed with "deploy
+  again". It is picked up again, once, from where it stood: a build starts
+  again, a built image goes to the rollout. Twice is `deploy.interrupted`, now
+  in the error catalogue in five languages (`d1e8042`).
+* **A volume backup ran as uid 1000** whatever the app ran as. It runs as the
+  app's own uid with the app's group; where the environment allows root, as root
+  with only the four capabilities that read and write anybody's files, so a
+  restore keeps every owner (`7854d55`). Not executed against a real volume.
+* **Images that floated**: `alpine:3` and `registry:3` are pinned by version and
+  digest, and the transfer image that holds a presigned URL gets a digest
+  (`9c45afd`).
+* **One cloud provider.** DigitalOcean beside Hetzner Cloud, through the same
+  interface, with a fake of its API that the whole order, pin, rotate and join
+  flow runs against (`cba585e`). Neither has ordered a real machine from here.
+* **Two tests that failed one time in ten.** The Redis restore test's stubs
+  wrote their log in five writes each, so a background server's record and a
+  client's interleaved, and the stub client answered a ping before the server
+  had started. CI's race step failed once on `7854d55` and passed on the same
+  code after; this is the likeliest reason (`93a4653`). The new resume test now
+  waits for the run it started before reusing its row (`f9522cd`).
+
+Still open, and why:
+
+* **Nothing has run against a real cluster.** This machine could probably run
+  one — the kernel has what k3s needs and pods reach the internet — but bringing
+  k3s up here was refused by the session's own policy, and `CLAUDE.md` says the
+  same. It waits for the maintainer's say-so, or a VPS.
+* **Wildcard certificates over DNS-01.** A team can upload its own wildcard
+  certificate, and the panel's wildcard domain gives every app a name under it;
+  issuing one automatically needs a DNS credential at the panel's level, where
+  DNS providers are the teams'. A decision before code.
+* **The interactive terminal** stays a decision (`docs/roadmap.md`), and **the
+  panel's `cluster-admin`** an architecture one (ADR-0014).
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
