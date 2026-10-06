@@ -165,7 +165,7 @@ func TestSecretManagersAreAnAdministratorsToManage(t *testing.T) {
 
 func TestAVariableFromASecretManagerNeverShowsItsValue(t *testing.T) {
 	h := newHarness(t)
-	var logs bytes.Buffer
+	var logs lockedBuffer
 	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	h.api.log = logger
 	previous := slog.Default()

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,39 @@ import (
 //
 // The orchestrators are nil. Everything here is about who is allowed to ask,
 // which is decided before any of them is reached.
+
+// lockedBuffer is a log destination that can be read while something is still
+// writing to it.
+//
+// A test that points slog at a bytes.Buffer and then reads it back has two
+// goroutines on one buffer the moment anything else in the process logs: the
+// handler serialises its own writes, and the test's read is not one of them.
+// A test that makes the buffer slog's default, which TestAVariableFromASecretManagerNeverShowsItsValue
+// does so that nothing can log around the panel's own logger, has that
+// problem with every goroutine in the process — including ones left running by
+// an earlier test — and the race detector found it once in four CI runs.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *lockedBuffer) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf.Reset()
+}
 
 type harness struct {
 	t       *testing.T

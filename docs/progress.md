@@ -6289,6 +6289,23 @@ button: that, and whether the panel may ask GitHub which release is newest when
 it is pressed, is a decision for the maintainer, because the README says it
 never checks.
 
+**A data race in CI, not reproduced.** The race step failed once on `ed91c10`, in
+`TestAVariableFromASecretManagerNeverShowsItsValue`, and passed on the three
+commits before it and on the same code run here ninety times alone and three
+times as the whole package. The CI summary named the test and nothing else:
+the race detector's report, which is the diagnosis, is printed above the
+`--- FAIL` line the annotations were built from. So the script now turns each
+report into an annotation of its own, forty lines of it, and the next failure
+will say who wrote and who read.
+
+What is known is a hazard in the test, not a proven cause: it makes a plain
+`bytes.Buffer` slog's default logger so that nothing can log around the
+panel's, and reads it back at the end, so any goroutine in the process
+writing a log line at that moment — including one left running by an earlier
+test — races with the read. The buffer is locked now, in that test and the
+passkey one that does the same without the global. If the race was somewhere
+else, the annotation will show it.
+
 The README no longer measures Skifity against other products: the comparison
 table and the paragraphs that named them are gone, and what Skifity does is
 said on its own terms. The FAQ, the log drains page and the templates page

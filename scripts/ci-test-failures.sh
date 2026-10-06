@@ -9,8 +9,14 @@
 # a "--- FAIL" line, or a panic — becomes one annotation, with the indented
 # lines go test printed under it, the test's own words, as its message.
 #
-# GitHub shows ten error annotations a step, so the first ten failures are
-# named and the count says whether there were more.
+# A data race is reported by the race detector in the middle of the log, above
+# the "--- FAIL" line that only says "race detected during execution of test",
+# and the report — who wrote, who read, from where — is the whole diagnosis. So
+# each report becomes an annotation of its own, with the first forty lines of
+# it. A race that cannot be reproduced locally has nothing else to go on.
+#
+# GitHub shows ten error annotations a step: up to three of them are races,
+# the rest are failed tests, and the count says whether there were more.
 set -eu
 
 log="${1:?usage: ci-test-failures.sh LOG}"
@@ -29,8 +35,20 @@ awk '
 	END { if (message != "") print message }
 ' "$log" >"${log}.failures"
 
+awk '
+	function escape(text) { gsub(/%/, "%25", text); gsub(/\r/, "%0D", text); return text }
+	/^WARNING: DATA RACE/ { inrace = 1; message = escape($0); kept = 0; next }
+	inrace && /^==================$/ { print message; inrace = 0; message = ""; next }
+	inrace && kept < 40 { message = message "%0A" escape($0); kept++ }
+	END { if (inrace) print message }
+' "$log" >"${log}.races"
+
+races=$(wc -l <"${log}.races" | tr -d ' ')
 count=$(wc -l <"${log}.failures" | tr -d ' ')
-head -n 10 "${log}.failures" | while IFS= read -r failure; do
+head -n 3 "${log}.races" | while IFS= read -r race; do
+	printf '::error title=data race::%s\n' "$race"
+done
+head -n $((10 - (races > 3 ? 3 : races))) "${log}.failures" | while IFS= read -r failure; do
 	printf '::error title=go test::%s\n' "$failure"
 done
-echo "$count failing test(s) or panic(s) in $log"
+echo "$races data race(s), $count failing test(s) or panic(s) in $log"

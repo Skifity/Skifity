@@ -300,7 +300,7 @@ func TestAPasskeyAnswerThatDoesNotCheckOutIsRefused(t *testing.T) {
 	// The caller hears the same thing every time. The panel's log says which
 	// check it was, and that is what pins each case to its own cause rather
 	// than to whichever check happens to run first.
-	var log bytes.Buffer
+	var log lockedBuffer
 	h.api.log = slog.New(slog.NewTextHandler(&log, nil))
 
 	for _, refusal := range []struct {
