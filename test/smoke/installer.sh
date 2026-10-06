@@ -1020,6 +1020,278 @@ case "$out" in
 *) t_fail "--help should list the options" ;;
 esac
 
+# --- removing it, for real, against stand-ins --------------------------------
+
+# Everything above is a dry run, on purpose. These run the removal itself, with
+# every path moved into a directory of its own and kubectl and k3s's uninstall
+# script replaced by stand-ins that write down what they were asked.
+USTUBS="$WORKDIR/ustubs"
+make_stub "$USTUBS" id <<'STUB'
+[ "$1" = -u ] && { echo "${STUB_UID:-0}"; exit 0; }
+exec /usr/bin/env -i PATH=/usr/bin:/bin id "$@"
+STUB
+make_stub "$USTUBS" kubectl <<'STUB'
+printf "kubectl %s\n" "$*" >>"$STUB_LOG"
+case "$*" in
+"get --raw /readyz"*) [ "${STUB_CLUSTER_DOWN:-0}" = 1 ] && exit 1; exit 0 ;;
+"get namespaces"*) printf "namespace/env-a\nnamespace/env-b\n" ;;
+"delete namespace skifity-system"*) [ "${STUB_FAIL_NS:-0}" = 1 ] && { echo "error: timed out" >&2; exit 1; } ;;
+esac
+exit 0
+STUB
+
+# fake_uroot DIR lays out a server that has Skifity on it.
+fake_uroot() {
+  rm -rf "$1"
+  mkdir -p "$1/etc/skifity" "$1/var/lib/skifity" "$1/etc/rancher/k3s" "$1/bin" "$1/run"
+  printf 'fake master key\n' >"$1/etc/skifity/master.key"
+  printf 'fake database\n' >"$1/var/lib/skifity/panel.db"
+  printf 'apiVersion: v1\n' >"$1/etc/rancher/k3s/k3s.yaml"
+  printf 'mirrors: {}\n' >"$1/etc/rancher/k3s/registries.yaml"
+  printf '#!/bin/sh\n' >"$1/bin/skifity"
+  printf '#!/bin/sh\n' >"$1/bin/skifity-uninstall"
+  chmod +x "$1/bin/skifity" "$1/bin/skifity-uninstall"
+  make_stub "$1/bin" k3s-uninstall.sh <<'STUB'
+echo "k3s-uninstall" >>"$STUB_LOG"
+exit "${STUB_K3S_FAIL:-0}"
+STUB
+}
+
+# run_uninstall ROOT [options...] runs main against ROOT in a shell of its own.
+# Answers for the terminal go in ROOT/tty; with no such file there is none.
+run_uninstall() {
+  ur="$1"
+  shift
+  # The script is in single quotes so the inner shell expands it.
+  # shellcheck disable=SC2016
+  env PATH="$USTUBS:$PATH" STUB_LOG="$ur/calls.log" \
+    sh -c '
+      SKIFITY_UNINSTALLER_LIB=1 . "$1/installer/uninstall.sh"
+      R="$2"
+      shift 2
+      CONFIG_DIR="$R/etc/skifity"
+      DATA_DIR="$R/var/lib/skifity"
+      KUBECONFIG_PATH="$R/etc/rancher/k3s/k3s.yaml"
+      REGISTRIES_PATH="$R/etc/rancher/k3s/registries.yaml"
+      CLI_PATH="$R/bin/skifity"
+      UNINSTALLER_PATH="$R/bin/skifity-uninstall"
+      K3S_UNINSTALL="$R/bin/k3s-uninstall.sh"
+      K3S_AGENT_UNINSTALL="$R/bin/k3s-agent-uninstall.sh"
+      LOCK_DIR="$R/run/skifity-install.lock"
+      LOG_FILE="$R/uninstall.log"
+      TTY_DEV="$R/tty"
+      main "$@"
+    ' run-uninstall "$ROOT" "$ur" "$@"
+}
+
+# With no terminal and no --yes there is nobody to ask, and nothing is removed.
+UR="$WORKDIR/uroot"
+fake_uroot "$UR"
+out=$(run_uninstall "$UR" </dev/null 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"nobody to ask"*"--yes"*"Nothing was changed"*) t_pass "with no terminal and no --yes, nothing is removed" ;;
+*) t_fail "an uninstall with nobody to ask should refuse, got $status: $out" ;;
+esac
+# It looked at the cluster to say what would go, which changes nothing.
+if [ -f "$UR/var/lib/skifity/panel.db" ] && ! grep -q "delete\|k3s-uninstall" "$UR/calls.log"; then
+  t_pass "and nothing was deleted"
+else
+  t_fail "a refused uninstall still deleted something: $(cat "$UR/calls.log")"
+fi
+
+# The plain removal: the panel goes, in an order that leaves nothing dangling,
+# and the data and k3s stay.
+out=$(run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ]; then
+  t_pass "removing the panel exits zero"
+else
+  t_fail "removing the panel exited $status:
+$out"
+fi
+if [ "$(grep -n 'delete namespace skifity-system' "$UR/calls.log" | cut -d: -f1)" -gt "$(grep -n 'delete clusterrolebinding' "$UR/calls.log" | cut -d: -f1)" ] &&
+  grep -q "delete namespace skifity-builds" "$UR/calls.log"; then
+  t_pass "the namespace goes after the objects that point at it"
+else
+  t_fail "the panel was not removed in a safe order: $(cat "$UR/calls.log")"
+fi
+if grep -q k3s-uninstall "$UR/calls.log"; then
+  t_fail "k3s was removed without --all"
+elif [ -f "$UR/var/lib/skifity/panel.db" ] && [ -f "$UR/etc/skifity/master.key" ]; then
+  t_pass "k3s, the database and the master key stay"
+else
+  t_fail "the data was deleted without --purge"
+fi
+if [ ! -e "$UR/bin/skifity" ] && [ -e "$UR/bin/skifity-uninstall" ]; then
+  t_pass "the CLI goes, and the uninstaller stays for the next step"
+else
+  t_fail "the CLI or the uninstaller was handled wrongly"
+fi
+case "$out" in
+*"Skifity has been removed"*"skifity-uninstall --all"*"skifity-uninstall --purge"*) t_pass "it says what is still on the server and how to remove it" ;;
+*) t_fail "the summary should list what is left, got: $out" ;;
+esac
+if [ "$(find "$UR/uninstall.log" -perm 0600)" ]; then
+  t_pass "the log is readable by root alone"
+else
+  t_fail "the uninstall log is readable by others"
+fi
+
+# Removing k3s asks for a typed phrase, and says how many environments go with it.
+fake_uroot "$UR"
+printf 'yes\n' >"$UR/tty"
+out=$(run_uninstall "$UR" --all 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"2 environments are on it"*"Nothing was changed"*) t_pass "--all names the environments it would delete, and a plain yes is not enough" ;;
+*) t_fail "--all should count the environments and want a typed phrase, got $status: $out" ;;
+esac
+if ! grep -q "delete\|k3s-uninstall" "$UR/calls.log"; then
+  t_pass "and nothing was deleted either"
+else
+  t_fail "a refused --all deleted something: $(cat "$UR/calls.log")"
+fi
+printf 'remove k3s\n' >"$UR/tty"
+out=$(run_uninstall "$UR" --all 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q k3s-uninstall "$UR/calls.log"; then
+  t_pass "the typed phrase removes k3s"
+else
+  t_fail "--all with its phrase should remove k3s ($status): $out"
+fi
+if [ -f "$UR/etc/skifity/master.key" ]; then
+  t_pass "and still keeps the master key"
+else
+  t_fail "--all deleted the master key"
+fi
+
+# The data needs the longer phrase, and the wrong one removes nothing.
+fake_uroot "$UR"
+printf 'remove k3s\n' >"$UR/tty"
+out=$(run_uninstall "$UR" --purge 2>&1) && status=0 || status=$?
+if [ "$status" = 1 ] && [ -f "$UR/etc/skifity/master.key" ]; then
+  t_pass "--purge refuses the phrase for removing k3s"
+else
+  t_fail "--purge accepted the wrong phrase ($status): $out"
+fi
+printf 'delete my data\n' >"$UR/tty"
+out=$(run_uninstall "$UR" --purge 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && [ ! -e "$UR/etc/skifity" ] && [ ! -e "$UR/var/lib/skifity" ] && [ ! -e "$UR/etc/rancher/k3s/registries.yaml" ]; then
+  t_pass "--purge with its phrase deletes the data and the registry mirror"
+else
+  t_fail "--purge did not delete the data ($status): $out"
+fi
+
+# Everything: nothing is left for the uninstaller to remove, so it removes itself.
+fake_uroot "$UR"
+out=$(run_uninstall "$UR" --all --purge --yes 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && [ ! -e "$UR/bin/skifity-uninstall" ]; then
+  t_pass "--all --purge leaves nothing, the uninstaller included"
+else
+  t_fail "--all --purge should remove everything ($status): $out"
+fi
+case "$out" in
+*"Still on this server"*) t_fail "everything was removed, but the summary says something is left" ;;
+*"firewall"*) t_pass "and says the firewall rules it did not touch are the operator's now" ;;
+*) t_fail "the summary should mention the firewall rules, got: $out" ;;
+esac
+
+# A step that fails is reported as failed, the rest still run, and the exit
+# status says so. This used to print "Panel removed" over a namespace that was
+# still there.
+fake_uroot "$UR"
+out=$(STUB_FAIL_NS=1 run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"Could not delete the namespace skifity-system"*"not completely removed"*) t_pass "a namespace that would not go is reported, and the exit status says so" ;;
+*) t_fail "a failed delete should be reported and exit non-zero, got $status: $out" ;;
+esac
+case "$out" in
+*"Panel removed"*) t_fail "it claimed the panel was removed when a step failed" ;;
+*) t_pass "and it does not claim the panel was removed" ;;
+esac
+if grep -q "delete namespace skifity-builds" "$UR/calls.log"; then
+  t_pass "the steps after the failed one still ran"
+else
+  t_fail "one failure stopped the rest of the removal"
+fi
+fake_uroot "$UR"
+out=$(STUB_FAIL_NS=1 run_uninstall "$UR" --all --purge --yes 2>&1) && status=0 || status=$?
+if [ "$status" = 1 ] && [ -e "$UR/bin/skifity-uninstall" ] && [ ! -e "$UR/etc/skifity" ]; then
+  t_pass "after a failure the uninstaller stays, so running it again finishes the job"
+else
+  t_fail "a removal that failed should keep the uninstaller ($status)"
+fi
+
+# k3s that is not running cannot have the panel taken out of it, and saying
+# nothing used to be the result.
+fake_uroot "$UR"
+out=$(STUB_CLUSTER_DOWN=1 run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"k3s is not answering"*"systemctl start k3s"*) t_pass "a k3s that is not answering is reported, with how to start it" ;;
+*) t_fail "a stopped k3s should be reported, got $status: $out" ;;
+esac
+fake_uroot "$UR"
+out=$(STUB_CLUSTER_DOWN=1 run_uninstall "$UR" --all --yes 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q k3s-uninstall "$UR/calls.log"; then
+  t_pass "with --all a stopped k3s is simply removed"
+else
+  t_fail "--all should remove a stopped k3s ($status): $out"
+fi
+
+# k3s that its own installer did not put here has no script to remove it with.
+fake_uroot "$UR"
+rm -f "$UR/bin/k3s-uninstall.sh"
+make_stub "$UR/stubbin" k3s <<'STUB'
+exit 0
+STUB
+out=$(PATH="$UR/stubbin:$PATH"; export PATH; run_uninstall "$UR" --all --yes 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"was not installed with k3s's own installer"*) t_pass "a k3s with no uninstall script is not reported as removed" ;;
+*) t_fail "a k3s that cannot be uninstalled should be reported, got $status: $out" ;;
+esac
+
+# The installer's lock: an install and an uninstall would undo each other.
+fake_uroot "$UR"
+mkdir -p "$UR/run/skifity-install.lock"
+printf '%s\n' "$$" >"$UR/run/skifity-install.lock/pid"
+out=$(run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"installer is running"*) t_pass "an uninstall is refused while the installer runs" ;;
+*) t_fail "an uninstall under a running install should be refused, got $status: $out" ;;
+esac
+printf '99999999\n' >"$UR/run/skifity-install.lock/pid"
+out=$(run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ]; then
+  t_pass "a lock whose process is gone does not stop it"
+else
+  t_fail "a stale install lock stopped the uninstall ($status): $out"
+fi
+
+# rm -rf is never pointed at a place nobody means to delete.
+for bad in / /var /etc "" relative/dir /var/../etc; do
+  if (SKIFITY_UNINSTALLER_LIB=1 . "$ROOT/installer/uninstall.sh"; safe_dir "$bad") 2>/dev/null; then
+    t_fail "safe_dir accepted \"$bad\""
+  fi
+done
+t_pass "safe_dir refuses the root, a top-level directory, an empty or a relative path"
+fake_uroot "$UR"
+# shellcheck disable=SC2016
+out=$(env PATH="$USTUBS:$PATH" STUB_LOG="$UR/calls.log" sh -c '
+  SKIFITY_UNINSTALLER_LIB=1 . "$1/installer/uninstall.sh"
+  R="$2"
+  CONFIG_DIR="$R/etc/skifity"; DATA_DIR="/"; KUBECONFIG_PATH="$R/none"; REGISTRIES_PATH="$R/none"
+  CLI_PATH="$R/bin/skifity"; UNINSTALLER_PATH="$R/bin/skifity-uninstall"; LOCK_DIR="$R/run/x"
+  LOG_FILE="$R/uninstall.log"; TTY_DEV="$R/tty"
+  main --purge --yes' run-uninstall "$ROOT" "$UR" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"Refusing to delete \"/\""*) t_pass "a purge pointed at / is refused" ;;
+*) t_fail "a purge pointed at / should be refused, got $status: $out" ;;
+esac
+
+# Not root: nothing, and the way to fix it.
+out=$(STUB_UID=1000 run_uninstall "$UR" --yes 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"has to run as root"*) t_pass "without root it says so and does nothing" ;;
+*) t_fail "an uninstall without root should refuse, got $status: $out" ;;
+esac
+
 printf '\n'
 if [ "$FAILURES" -gt 0 ]; then
   printf '%s installer smoke check(s) failed.\n\n' "$FAILURES"

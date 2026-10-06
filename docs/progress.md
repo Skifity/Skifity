@@ -6245,6 +6245,34 @@ installs its own release; the dry-run workflow checks both files are there.
 can already have spent. Until the first tag is pushed that link is a 404: the
 tag has not been pushed from here, because pushing tags is refused.
 
+**The uninstaller got the same treatment**, and the same kind of finding. Its
+removals had only ever been tested as a dry run. They run for real now, against
+stand-ins for kubectl and k3s's uninstall script, and what that fixed:
+
+* **"Panel removed" was printed whatever happened.** Every `kubectl delete` ended
+  in `|| true`, so a namespace that would not go, or a k3s that was not running,
+  still ended in success. A failed step is named now, the others still run, the
+  exit status is not zero, and the summary says the removal was not complete.
+  A stopped k3s is reported, with how to start it, instead of skipped.
+* **Without a terminal the answer was empty, which happened to be no.** It is
+  now said out loud, and `--yes` is how a script goes ahead. Questions go to
+  `/dev/tty`, as in the installer.
+* **`--all` deleted every app and volume on a yes.** It asks for a typed `remove
+  k3s` and says how many environments are on the cluster; `--purge` keeps its
+  `delete my data`.
+* **It could run under an install.** It refuses while the installer's lock is
+  held by a live process.
+* **`rm -rf` took whatever it was pointed at.** `/`, a top-level directory, an
+  empty or relative path, or one with `..` in it are refused.
+* **Nothing said what was left.** The summary lists what is still on the
+  server and the command that removes each part, and `--all --purge` removes
+  the uninstaller itself when nothing else is left and nothing failed.
+* **Its output went nowhere.** What kubectl and k3s said is in
+  `/var/log/skifity-uninstall.log`, readable by root alone.
+
+A Go test keeps the names and the label it deletes by the same as the code that
+creates them. None of it has run against a real k3s.
+
 The README no longer measures Skifity against other products: the comparison
 table and the paragraphs that named them are gone, and what Skifity does is
 said on its own terms. The FAQ, the log drains page and the templates page

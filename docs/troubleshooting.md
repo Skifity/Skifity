@@ -34,6 +34,28 @@ kubectl -n skifity-system describe ingress skifity-panel
 Give the right one with `--public-ip`, or a domain with `--domain`, and run it
 again.
 
+## Removing Skifity
+
+`sudo skifity-uninstall` removes the panel and leaves k3s, your apps and your
+data. `--all` removes k3s and everything on it; `--purge` also deletes the
+database and the master key. `--dry-run` says what any of them would do and
+changes nothing. See [the README](https://github.com/Skifity/Skifity#install)
+for what each asks you to type.
+
+**"There is nobody to ask."** Without a terminal — over `ssh -T`, from a script
+— it removes nothing unless it is given `--yes`.
+
+**"k3s is not answering."** The panel's objects live in the cluster, so a
+stopped k3s cannot have them taken out. Start it with `systemctl start k3s` and
+run it again, or use `--all`, which removes k3s whether it is running or not.
+
+**It says something did not work.** Every step that fails is named, the others
+still run, and the exit status is not zero. What kubectl said is in
+`/var/log/skifity-uninstall.log`. Running it again is safe and carries on.
+
+**"The installer is running."** An install and an uninstall would undo each
+other. Let it finish, or stop it.
+
 ## The panel does not load
 
 **Nothing at all.** Check it is running:

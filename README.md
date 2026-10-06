@@ -163,8 +163,16 @@ sudo skifity-uninstall --purge    # also delete the database and the master key
 sudo skifity-uninstall --dry-run  # print what would happen, change nothing
 ```
 
-`--purge` asks for a typed confirmation: without the master key, every stored
-secret and every existing backup is unreadable for ever.
+It asks in proportion to what cannot be undone: a yes for the panel, a typed
+`remove k3s` for k3s — it says how many environments go with it — and a typed
+`delete my data` for the database and the master key, without which every
+stored secret and every existing backup is unreadable for ever. Without a
+terminal it asks nothing and removes nothing unless it is given `--yes`.
+
+A step that fails is reported as failed, the rest still run, and the exit status
+is not zero; running it again finishes the job. At the end it lists what is
+still on the server and the command that removes each part. It will not start
+while the installer is running.
 
 </details>
 

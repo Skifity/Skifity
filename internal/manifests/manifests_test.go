@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"skifity/internal/kube"
+	"skifity/internal/version"
 )
 
 // values are what the installer substitutes, with obviously fake stand-ins.
@@ -326,6 +327,36 @@ func TestInstallerReadsBackTheRouteItWrites(t *testing.T) {
 	}}
 	if got := query(empty); got != "panel.example.test " {
 		t.Errorf("with an empty tls list the installer reads %q", got)
+	}
+}
+
+// TestUninstallerNamesWhatTheInstallerCreated: the uninstaller deletes by
+// name and by label, and a name that drifted from the Go code would leave the
+// panel, or an environment's namespace, behind while saying it was removed.
+func TestUninstallerNamesWhatTheInstallerCreated(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "installer", "uninstall.sh"))
+	if err != nil {
+		t.Fatalf("read uninstall.sh: %v", err)
+	}
+	for _, want := range []string{
+		`NAMESPACE="` + values["NAMESPACE"] + `"`,
+		`BUILDS_NAMESPACE="` + kube.BuildsNamespace + `"`,
+		`ENVIRONMENT_LABEL="` + version.LabelKey("project-id") + `"`,
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("uninstall.sh does not set %s", want)
+		}
+	}
+
+	// And the objects it deletes by name have to be ones the installer applies.
+	rendered, err := Render(read(t, "panel.yaml"), values)
+	if err != nil {
+		t.Fatalf("render panel.yaml: %v", err)
+	}
+	for _, kind := range []string{"kind: Deployment", "kind: Service", "kind: ClusterRoleBinding"} {
+		if !strings.Contains(rendered, kind) {
+			t.Errorf("uninstall.sh deletes a %s, but panel.yaml does not create one", strings.TrimPrefix(kind, "kind: "))
+		}
 	}
 }
 
