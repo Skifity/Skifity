@@ -6163,10 +6163,33 @@ prepared. Each item says what it fixes and what still has not run.
 
 Still open, and why:
 
-* **Nothing has run against a real cluster.** This machine could probably run
-  one — the kernel has what k3s needs and pods reach the internet — but bringing
-  k3s up here was refused by the session's own policy, and `CLAUDE.md` says the
-  same. It waits for the maintainer's say-so, or a VPS.
+* **Nothing has run against a real cluster.** Asked for, with the maintainer's
+  say-so in so many words ("you run it, I have no access"), and refused again:
+  the session's auto-mode classifier denied installing k3s on this machine
+  ("Security Weaken"), as it had once before, and nothing was installed. What a
+  read-only look at the machine established, so the next attempt does not start
+  from nothing:
+  * It is a Firecracker VM, Ubuntu 24.04, kernel 6.18, 4 CPUs, 16 GB of memory
+    and about 14 GB of free disk. Registries, `get.k3s.io` and the k3s release
+    assets are reachable through the session's proxy.
+  * The kernel has overlayfs, netfilter with NAT and conntrack, bridge, veth,
+    vxlan, user namespaces and seccomp. It has no WireGuard, so the installer
+    would choose vxlan, which is the fallback nobody has exercised either.
+  * Its cgroups are v1 only. The `stable` k3s is v1.36.5 today, and the kubelet
+    refuses v1 by default from Kubernetes 1.35, so a run here needs
+    `failCgroupV1: false` for the kubelet or an older channel. A real VPS has v2.
+  * There is no systemd — process 1 is not an init system — so the installer's
+    systemd check refuses, by design, unless k3s is already running and the
+    installer is given `--skip-k3s`.
+  * There is no Docker, but the panel image does not need it: distroless plus
+    one layer holding the binary, assembled with `crane`, came to 27 MB with
+    the same user, working directory, entrypoint and command as
+    `Dockerfile.release`.
+  * `CAP_SYS_RESOURCE` is missing from the effective capabilities, which may
+    matter to pods that ask for a negative OOM score.
+  It stays open until a Bash permission rule lets the session do it, or until
+  `make verify-remote HOST=root@<a VPS>` is run on a server that can be
+  rebuilt.
 * **Wildcard certificates over DNS-01.** A team can upload its own wildcard
   certificate, and the panel's wildcard domain gives every app a name under it;
   issuing one automatically needs a DNS credential at the panel's level, where
