@@ -153,9 +153,6 @@ release:
     Each installer installs the release it is attached to, with the Kubernetes
     objects that release's image was built with.
 
-    Already running Skifity? Upgrade from Settings, or:
-
-    ```sh
-    kubectl -n skifity-system set image deployment/skifity-panel \
-      panel={{ .Env.IMAGE_REPO }}:{{ .Tag }}
-    ```
+    Already running Skifity? Run the same command again. It copies the
+    panel's database first, keeps your domain and certificates, and prints the
+    commands that go back if this release does not come up.

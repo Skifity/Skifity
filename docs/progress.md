@@ -6273,6 +6273,22 @@ stand-ins for kubectl and k3s's uninstall script, and what that fixed:
 A Go test keeps the names and the label it deletes by the same as the code that
 creates them. None of it has run against a real k3s.
 
+**Two claims in the README were wrong, and one gap was behind them.** It said
+the panel is upgraded "from Settings", and that running the installer again
+"does the same". Neither was true: the Settings page shows the current version
+and nothing to upgrade with — the only panel upgrade is `POST /api/upgrade` —
+and the installer changed the image and nothing else. The panel's own upgrade
+copies the database first, because a newer version migrates it and an older one
+refuses it, so an upgrade made by the installer had no way back. The installer
+now takes the same copy, through the CLI of the version that is running,
+before it replaces the image; stops if it cannot, unless `--no-snapshot`; keeps
+three; and prints the four commands that go back. The README, the release notes
+(which also suggested `kubectl set image`, which skips the copy), the releasing
+guide and the configuration page say what is true. There is still no upgrade
+button: that, and whether the panel may ask GitHub which release is newest when
+it is pressed, is a decision for the maintainer, because the README says it
+never checks.
+
 The README no longer measures Skifity against other products: the comparison
 table and the paragraphs that named them are gone, and what Skifity does is
 said on its own terms. The FAQ, the log drains page and the templates page

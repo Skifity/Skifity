@@ -665,9 +665,19 @@ apart, neither is enough.
 ## Upgrading
 
 The panel does not check for new versions: it contacts no server of its own,
-so a release is something you hear about from the releases page. Upgrading is
-one API call as a panel administrator — the panel changes the image of its own
-Deployment and Kubernetes rolls it out:
+so a release is something you hear about from the releases page.
+
+**From a shell**, run the install command again. It fetches the newest
+installer and does what the API call below does — copies the database first,
+changes the image, prints the commands that go back — and keeps the panel's
+address, domain and certificate:
+
+```sh
+curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh
+```
+
+**Through the API**, as a panel administrator — the panel changes the image of
+its own Deployment and Kubernetes rolls it out:
 
 ```sh
 curl -X POST https://panel.example.com/api/upgrade \
@@ -677,7 +687,8 @@ curl -X POST https://panel.example.com/api/upgrade \
 Your apps keep running throughout; the panel itself is down for the moment it
 takes the new version to start.
 
-**Before anything changes, the panel copies its database** beside itself, as
+**Before anything changes, the panel copies its database** (the installer does
+the same, through the CLI of the version that is running) beside itself, as
 `panel.db.before-upgrade-<time>-to-<version>`, and keeps the last three. If
 backup storage is set up it also puts a copy in the bucket. An upgrade that
 cannot take the local copy does not start.

@@ -889,6 +889,139 @@ else
   t_fail "a second run handed the panel no pod network"
 fi
 
+# --- upgrading by running the installer again ---------------------------------
+
+# A newer image migrates the database when it starts, and the older one refuses
+# what a later one has migrated, so going back needs a copy taken before. The
+# panel's own upgrade takes one; running the installer again used to change the
+# image and nothing else.
+
+# upgrade_root DIR lays out a server that already runs an older release.
+upgrade_root() {
+  fake_root "$1"
+  mkdir -p "$1/var/lib/skifity" "$1/var/lib/rancher/k3s/server" "$1/etc/rancher/k3s"
+  printf 'the database\n' >"$1/var/lib/skifity/panel.db"
+  printf 'K10fake::server:not-a-real-token\n' >"$1/var/lib/rancher/k3s/server/token"
+  printf 'apiVersion: v1\n' >"$1/etc/rancher/k3s/k3s.yaml"
+}
+
+# The CLI of the release that is running: it makes the copy, through SQLite.
+cli_stub() {
+  make_stub "$1/usr/local/bin" skifity <<'STUB'
+echo "cli $*" >>"$STUB_LOG"
+if [ "$1" = admin ] && [ "$2" = backup-db ]; then
+  shift 2
+  while [ "$1" = --database ]; do shift 2; done
+  [ "${STUB_CLI_FAILS:-0}" = 1 ] && { echo "no room" >&2; exit 1; }
+  printf 'a consistent copy\n' >"$1"
+  exit 0
+fi
+echo skifity
+STUB
+}
+
+upgrade_env() {
+  export STUB_K3S_ACTIVE=0 STUB_NEEDS_SETUP=false STUB_ROUTE="203-0-113-10.sslip.io " \
+    STUB_PANEL_IMAGE="registry.example.test/skifity:0.0.0-old"
+}
+
+UP="$WORKDIR/root-upgrade"
+upgrade_root "$UP"
+cli_stub "$UP"
+out=$(upgrade_env; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+snapshot=$(find "$UP/var/lib/skifity" -name 'panel.db.before-upgrade-*-to-0.0.0-test' | head -1)
+if [ "$status" = 0 ] && [ -s "$snapshot" ] && [ -n "$(find "$snapshot" -perm 0600)" ]; then
+  t_pass "an upgrade copies the database first, named for the release, readable by the panel's user alone"
+else
+  t_fail "the database was not copied before the upgrade ($status): $(ls "$UP/var/lib/skifity")
+$out"
+fi
+copied=$(grep -n "cli admin backup-db" "$UP/stub/calls.log" | head -1 | cut -d: -f1)
+applied=$(grep -n "kubectl apply -f .*/panel.yaml" "$UP/stub/calls.log" | head -1 | cut -d: -f1)
+if [ -n "$copied" ] && [ -n "$applied" ] && [ "$copied" -lt "$applied" ]; then
+  t_pass "and the copy is taken before the image is changed"
+else
+  t_fail "the copy should come before kubectl apply (copy at ${copied:-never}, apply at ${applied:-never})"
+fi
+if grep -q -- "--database $UP/var/lib/skifity/panel.db" "$UP/stub/calls.log"; then
+  t_pass "it copies the database the panel actually uses"
+else
+  t_fail "the CLI was not pointed at the panel's database: $(grep 'cli ' "$UP/stub/calls.log")"
+fi
+case "$out" in
+*"If the new version does not come up"*"scale deploy/skifity-panel --replicas=0"*"admin restore-db --yes $snapshot"*"rollout undo deploy/skifity-panel"*"--replicas=1"*)
+  t_pass "the commands that go back are printed, with the copy's path filled in" ;;
+*) t_fail "the way back should be printed, got:
+$out" ;;
+esac
+
+# The copy is what going back needs, so an upgrade that cannot take one does
+# not start.
+upgrade_root "$UP"
+rm -f "$UP/usr/local/bin/skifity"
+out=$(upgrade_env; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"could not be copied before upgrading"*"--no-snapshot"*) t_pass "an upgrade that cannot copy the database stops, and says how to go on anyway" ;;
+*) t_fail "an upgrade with no way to copy the database should stop, got $status: $out" ;;
+esac
+if [ ! -e "$UP/stub/applied-panel.yaml" ]; then
+  t_pass "and nothing was changed"
+else
+  t_fail "the panel was upgraded although its database could not be copied"
+fi
+upgrade_root "$UP"
+cli_stub "$UP"
+out=$(upgrade_env; export STUB_CLI_FAILS=1; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 1 ] && [ ! -e "$UP/stub/applied-panel.yaml" ] && ! ls "$UP"/var/lib/skifity/panel.db.before-upgrade-* >/dev/null 2>&1; then
+  t_pass "a copy that fails leaves no half-written file, and the upgrade does not start"
+else
+  t_fail "a failing copy should stop the upgrade and leave nothing behind ($status)"
+fi
+
+# --no-snapshot is the way through, and says what it costs.
+upgrade_root "$UP"
+rm -f "$UP/usr/local/bin/skifity"
+out=$(upgrade_env; run_install "$UP" --image "$IMAGE_UNDER_TEST" --no-snapshot 2>&1) && status=0 || status=$?
+case "$status:$out" in
+0:*"nothing to go back to"*) t_pass "--no-snapshot goes ahead, and says there will be nothing to go back to" ;;
+*) t_fail "--no-snapshot should upgrade with a warning, got $status: $out" ;;
+esac
+case "$out" in
+*"does not come up"*) t_fail "the way back was printed although no copy was taken" ;;
+*) t_pass "and does not print a way back it cannot offer" ;;
+esac
+
+# The same image again, and a first install, have nothing to copy.
+upgrade_root "$UP"
+cli_stub "$UP"
+out=$(upgrade_env; export STUB_PANEL_IMAGE="$IMAGE_UNDER_TEST"; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && ! grep -q "backup-db" "$UP/stub/calls.log" && ! ls "$UP"/var/lib/skifity/panel.db.before-upgrade-* >/dev/null 2>&1; then
+  t_pass "running the same release again copies nothing"
+else
+  t_fail "the same image should not be snapshotted ($status)"
+fi
+FAKE="$WORKDIR/root-first"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && ! grep -q "backup-db" "$FAKE/stub/calls.log"; then
+  t_pass "and so does a first install"
+else
+  t_fail "a first install has no database to copy ($status)"
+fi
+
+# Three copies are kept, like the panel keeps.
+upgrade_root "$UP"
+cli_stub "$UP"
+for n in 1 2 3 4 5; do printf 'old\n' >"$UP/var/lib/skifity/panel.db.before-upgrade-2026010${n}-000000-to-v0.0.${n}"; done
+out=$(upgrade_env; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+left=$(find "$UP/var/lib/skifity" -name 'panel.db.before-upgrade-*' | wc -l | tr -d ' ')
+if [ "$status" = 0 ] && [ "$left" = 3 ] && [ -n "$(find "$UP/var/lib/skifity" -name 'panel.db.before-upgrade-*-to-0.0.0-test')" ] &&
+  [ ! -e "$UP/var/lib/skifity/panel.db.before-upgrade-20260101-000000-to-v0.0.1" ]; then
+  t_pass "the three newest copies are kept, the new one among them"
+else
+  t_fail "old copies were not pruned to three ($status, $left left): $(ls "$UP/var/lib/skifity")"
+fi
+
 # With a domain: cert-manager, the issuer, and a route with a certificate.
 FAKE="$WORKDIR/root-https"
 fake_root "$FAKE"

@@ -120,6 +120,7 @@ that does the same, for provisioning tools that prefer those.
 | `--channel NAME` | `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
 | `--skip-k3s` | `SKIFITY_SKIP_K3S=1` | Use the k3s already installed here as it is |
 | `--skip-firewall` | `SKIFITY_SKIP_FIREWALL=1` | Leave the host firewall alone |
+| `--no-snapshot` | `SKIFITY_NO_SNAPSHOT=1` | Do not copy the panel's database before an upgrade |
 | `--yes` | `SKIFITY_ASSUME_YES=1` | Never ask anything |
 
 `--help` lists them without needing root. Every value is checked before
@@ -145,11 +146,18 @@ skips that.
 <details>
 <summary><b>Upgrading and uninstalling</b></summary>
 
-**Upgrade** from Settings: type the release to move to. The panel copies its
-database first, off the server too when a backup bucket is set, and tells you
-the one command that goes back. Your apps keep running throughout. Running the
-install command again does the same from a shell — it fetches the newest
-installer — and keeps everything the panel already has.
+**Upgrade** by running the install command again. It fetches the newest
+installer, copies the panel's database first — a newer version migrates it, and
+an older one cannot read it back — replaces the panel's image, and prints the
+four commands that go back if the new version does not come up. It keeps the
+address, the domain and the certificate the panel already has, and your apps
+keep running throughout. The copy is kept beside the database; the three newest
+stay. `--no-snapshot` skips it, at your own risk.
+
+The panel can also upgrade itself: one call to `POST /api/upgrade` as an
+administrator, which copies the database, off the server too when a backup
+bucket is set, and returns the same commands. See
+[Configuration](docs/configuration.md#upgrading).
 
 **One release exactly**, rather than the newest, is that release's own
 installer: `https://github.com/Skifity/Skifity/releases/download/<tag>/install.sh`.
@@ -214,9 +222,11 @@ assumes it is alone — and says how to fix it.
 API and the MCP server, says what happened, what it means and how to fix it,
 with a button that copies the whole thing for an AI assistant.
 
-**Builds run unprivileged.** Images are built by rootless BuildKit in a
-namespace of their own: no privileged container, no Docker socket, nothing that
-hands a build the server it runs on.
+**Builds run unprivileged.** Images are built by rootless BuildKit, as an
+unprivileged user, in a namespace of their own with default-deny networking: no
+privileged container and no Docker socket. The builds' namespace is the one
+place that admits an unconfined seccomp profile, which rootless BuildKit needs,
+and [ADR-0016](docs/decisions.md) says why.
 
 **Secrets are sealed to where they are stored.** Envelope encryption with a
 master key you can rotate without downtime, a recovery key shown once, and a

@@ -103,8 +103,9 @@ is not optional.
 1. **Install from the published command on a throwaway server**, not from a
    clone. It is the only way to find out whether the image is public, whether
    the manifests are reachable at that ref, and whether the CLI download works.
-2. **Upgrade an existing install** to it, from Settings, and check the apps kept
-   answering.
+2. **Upgrade an existing install** to it by running the install command again,
+   and check that the database was copied first, the apps kept answering, and
+   the commands it prints go back.
 3. Move any row in `docs/checklist.md` that the run proved, and say which run
    proved it.
 

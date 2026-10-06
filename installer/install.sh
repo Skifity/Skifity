@@ -40,6 +40,8 @@
 #   --channel NAME       SKIFITY_CHANNEL       the k3s channel (default: stable)
 #   --skip-k3s           SKIFITY_SKIP_K3S=1    k3s is already installed and configured
 #   --skip-firewall      SKIFITY_SKIP_FIREWALL=1  leave the host firewall alone
+#   --no-snapshot        SKIFITY_NO_SNAPSHOT=1    do not copy the panel's database before an upgrade
+#                                              (at your own risk: see snapshot_before_upgrade)
 #   --yes, -y            SKIFITY_ASSUME_YES=1  never ask anything
 #   --help, -h                                 print the options and exit
 #
@@ -154,6 +156,10 @@ PANEL_HOST=""
 PANEL_SCHEME=""
 PUBLIC_URL=""
 SETUP_TOKEN=""
+# The image the panel ran before this run, and the copy of its database taken
+# before it was replaced: both empty on a first install.
+PREVIOUS_IMAGE=""
+SNAPSHOT_PATH=""
 # Whether the panel answered at its own address: yes, no or unknown.
 PANEL_ANSWERS="unknown"
 # Whether the first account exists yet: done, pending or unknown.
@@ -304,13 +310,18 @@ Options:
   --channel NAME       the k3s release channel (default: stable)
   --skip-k3s           use the k3s already installed here as it is
   --skip-firewall      leave the host firewall alone
+  --no-snapshot        do not copy the panel's database before an upgrade; without
+                       the copy there is nothing to go back to if it goes wrong
   -y, --yes            never ask anything
   -h, --help           print this and exit
 
 Each option has an environment variable as well: SKIFITY_DOMAIN,
 SKIFITY_ACME_EMAIL, SKIFITY_ACME_STAGING=1, SKIFITY_PUBLIC_IP, SKIFITY_VERSION,
 SKIFITY_IMAGE, SKIFITY_POD_NETWORK, SKIFITY_CHANNEL, SKIFITY_SKIP_K3S=1,
-SKIFITY_SKIP_FIREWALL=1 and SKIFITY_ASSUME_YES=1.
+SKIFITY_SKIP_FIREWALL=1, SKIFITY_NO_SNAPSHOT=1 and SKIFITY_ASSUME_YES=1.
+
+Run again on a server that has Skifity, it upgrades it: the panel's database is
+copied first, and the commands that go back are printed at the end.
 
 The log is written to ${LOG_FILE}.
 EOF
@@ -394,12 +405,13 @@ parse_args() {
 			--channel) SKIFITY_CHANNEL="$value" ;;
 			esac
 			;;
-		--staging | --skip-k3s | --skip-firewall | --yes | -y | --help | -h)
+		--staging | --skip-k3s | --skip-firewall | --no-snapshot | --yes | -y | --help | -h)
 			[ "$inline" = 0 ] || usage_error "$opt does not take a value."
 			case "$opt" in
 			--staging) SKIFITY_ACME_STAGING=1 ;;
 			--skip-k3s) SKIFITY_SKIP_K3S=1 ;;
 			--skip-firewall) SKIFITY_SKIP_FIREWALL=1 ;;
+			--no-snapshot) SKIFITY_NO_SNAPSHOT=1 ;;
 			--yes | -y) SKIFITY_ASSUME_YES=1 ;;
 			--help | -h)
 				usage
@@ -1400,14 +1412,82 @@ fetch_manifest() {
 		"Check that this server can reach the internet, or clone the repository and run installer/install.sh from inside it so the manifests are read from disk."
 }
 
+# snapshot_before_upgrade copies the panel's database before a different image
+# replaces the one that is running.
+#
+# The new version migrates the database when it starts, and a version refuses a
+# database a later one has migrated, so putting the old image back is only half
+# of going back: the other half is a copy taken before. The panel's own
+# upgrade (POST /api/upgrade) takes one and refuses to start without it; this
+# is the same rule for an upgrade made by running the installer again, which
+# used to change the image and nothing else.
+#
+# The copy goes through SQLite, by the CLI of the version that is running, so it
+# is whole while the panel is writing: a plain cp can lose what is still in the
+# write-ahead log, and says nothing.
+snapshot_before_upgrade() {
+	SNAPSHOT_PATH=""
+	[ -n "$PREVIOUS_IMAGE" ] && [ "$PREVIOUS_IMAGE" != "$IMAGE" ] || return 0
+	database="$DATA_DIR/panel.db"
+	[ -s "$database" ] || return 0
+
+	if [ "${SKIFITY_NO_SNAPSHOT:-}" = "1" ]; then
+		warn "The panel's database was not copied (--no-snapshot): there will be nothing to go back to."
+		return 0
+	fi
+
+	# What the copy is named for: the tag the new image carries, cleaned of
+	# anything a file name would not want.
+	label=$(printf '%s' "${IMAGE##*[:/@]}" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40)
+	target="${database}.before-upgrade-$(date -u +%Y%m%d-%H%M%S)-to-${label}"
+
+	if [ -x "$CLI_PATH" ] &&
+		"$CLI_PATH" admin backup-db --database "$database" "$target" >>"$LOG_FILE" 2>&1 &&
+		[ -s "$target" ]; then
+		chown "$RUN_UID:$RUN_GID" "$target"
+		chmod 0600 "$target"
+		SNAPSHOT_PATH=$target
+		ok "The panel's database was copied to $target"
+		prune_snapshots "$database"
+		return 0
+	fi
+	rm -f "$target"
+	fail \
+		"The panel's database could not be copied before upgrading, so the upgrade was not started." \
+		"The new release migrates the database when it starts, and the release you have now cannot read one a later release has migrated. The copy is what going back needs, so nothing was changed.
+
+Check that there is room on the disk and that ${CLI_PATH} runs:
+
+  ${CLI_PATH} admin backup-db /root/panel-backup.db
+
+If you accept having nothing to go back to, run the installer again with --no-snapshot."
+}
+
+# prune_snapshots keeps the three newest copies taken before an upgrade, the
+# same number the panel keeps. The name starts with the time, so the order the
+# shell lists them in is oldest first.
+prune_snapshots() {
+	count=0
+	for copy in "$1".before-upgrade-*; do
+		[ -f "$copy" ] && count=$((count + 1))
+	done
+	for copy in "$1".before-upgrade-*; do
+		[ "$count" -gt 3 ] || break
+		[ -f "$copy" ] || continue
+		rm -f "$copy"
+		count=$((count - 1))
+	done
+}
+
 install_panel() {
 	step "Installing the panel"
 
-	current_image=$(kubectl -n "$NAMESPACE" get deployment skifity-panel \
+	PREVIOUS_IMAGE=$(kubectl -n "$NAMESPACE" get deployment skifity-panel \
 		-o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
-	if [ -n "$current_image" ] && [ "$current_image" != "$IMAGE" ]; then
-		note "Upgrading the panel from ${current_image} to ${IMAGE}"
+	if [ -n "$PREVIOUS_IMAGE" ] && [ "$PREVIOUS_IMAGE" != "$IMAGE" ]; then
+		note "Upgrading the panel from ${PREVIOUS_IMAGE} to ${IMAGE}"
 	fi
+	snapshot_before_upgrade
 
 	# Rendered to disk first, so the operator can see exactly what was applied.
 	render deploy/panel.yaml >"$MANIFEST_DIR/panel.yaml"
@@ -1427,7 +1507,7 @@ install_panel() {
 	ok "Route to the panel created"
 
 	step "Waiting for the panel to start"
-	if [ -z "$current_image" ]; then
+	if [ -z "$PREVIOUS_IMAGE" ]; then
 		note "The first start pulls the image, which takes a minute on a new server."
 	fi
 	kubectl -n "$NAMESPACE" rollout status deployment/skifity-panel --timeout=300s >>"$LOG_FILE" 2>&1 || fail \
@@ -1643,6 +1723,15 @@ finish() {
 	else
 		printf '  If the page does not load, the DNS record for %s\n' "$PANEL_HOST"
 		printf '  may not have reached your computer yet. Give it a few minutes.\n\n'
+	fi
+
+	if [ -n "$SNAPSHOT_PATH" ]; then
+		# The same four commands the panel prints after an upgrade of its own.
+		printf '  %sIf the new version does not come up,%s this goes back to %s:\n' "$BOLD" "$RESET" "$PREVIOUS_IMAGE"
+		printf '    kubectl -n %s scale deploy/skifity-panel --replicas=0\n' "$NAMESPACE"
+		printf '    skifity admin restore-db --yes %s\n' "$SNAPSHOT_PATH"
+		printf '    kubectl -n %s rollout undo deploy/skifity-panel\n' "$NAMESPACE"
+		printf '    kubectl -n %s scale deploy/skifity-panel --replicas=1\n\n' "$NAMESPACE"
 	fi
 
 	printf '  Panel      %s\n' "$PUBLIC_URL"
