@@ -1615,7 +1615,6 @@
     "auditLogHelp": "Siapa melakukan apa, kapan, dan dari mana.",
     "upgrade": "Perbarui",
     "currentVersion": "Versi saat ini",
-    "noUpdateCheck": "{{product}} tidak menghubungi server mana pun untuk memeriksa pembaruan.",
     "saved": "Pengaturan disimpan.",
     "rotateKeyDone": "Kunci utama telah dirotasi dan semua rahasia tersimpan dienkripsi ulang dengan kunci baru.",
     "rotateKeyPartial": "Master key baru sudah terpasang, tetapi beberapa secret tidak bisa dienkripsi ulang. Key lama disimpan agar secret tersebut tetap bisa dibaca — simpan juga recovery key sebelumnya sampai rotasi selesai tanpa kegagalan, karena recovery key baru tidak bisa membukanya.",
@@ -2697,6 +2696,18 @@
         "cause": "{{0}}",
         "impact": "Konektornya masih berjalan dengan token yang lama, jadi trafik tetap mengalir sampai mereka dimulai ulang.",
         "fix": "Perbaiki apa yang disebut penyebabnya lalu simpan tokennya lagi, atau pasang Cloudflare tunnel di halaman Komponen."
+      },
+      "upgrade_check_failed": {
+        "title": "Rilis terbaru tidak bisa diketahui",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Pastikan panel bisa menjangkau github.com lalu coba lagi. Anda juga bisa memperbarui dengan menyebut versinya sendiri."
+      },
+      "upgrade_check_unconfigured": {
+        "title": "Panel ini tidak tahu di mana rilisnya",
+        "cause": "Repositori rilis belum diatur. Installer yang mengaturnya; panel ini dipasang dengan cara lain.",
+        "impact": "Tidak ada yang ditanya, dan tidak ada yang diubah.",
+        "fix": "Jalankan installer lagi, yang akan mengaturnya, atau setel SKIFITY_UPDATE_REPOSITORY ke owner/name pada Deployment panel. Anda tetap bisa memperbarui dengan menyebut versinya sendiri."
       },
       "upgrade_failed": {
         "title": "Peningkatan tidak bisa dimulai",
@@ -4315,6 +4326,23 @@
     "detected": "Proses dari Procfile",
     "detectedHelp": "Yang dicentang berjalan di samping aplikasi sejak deploy pertama, dengan build yang sama. Hilangkan centang untuk melewatinya; proses bisa ditambahkan nanti di Penskalaan.",
     "change": "Ubah"
+  },
+  "panelUpgrade": {
+    "manualNote": "{{product}} tidak pernah memeriksa pembaruan sendiri. Rilis terbaru hanya ditanyakan saat Anda menekan tombolnya.",
+    "check": "Periksa pembaruan",
+    "available": "{{version}} tersedia.",
+    "releaseNotes": "Catatan rilis",
+    "upToDate": "Anda sudah menjalankan rilis terbaru.",
+    "ahead": "Ini lebih baru daripada rilis terbaru, {{version}}.",
+    "development": "Ini build yang dibuat setelah {{version}}, bukan rilis.",
+    "unknown": "Versi ini bukan nomor rilis, jadi tidak bisa dibandingkan dengan rilis terbaru, {{version}}.",
+    "noRelease": "Belum ada rilis yang dipublikasikan.",
+    "upgradeTo": "Perbarui ke {{version}}",
+    "confirmTitle": "Perbarui ke {{version}}?",
+    "confirm": "Panel menyalin databasenya dulu, lalu restart pada versi baru, yang butuh sebentar. Aplikasi Anda tetap berjalan. Kalau versi baru tidak bisa naik, perintah untuk kembali ditampilkan sesudahnya.",
+    "started": "Pembaruan sudah dimulai dan panel sedang restart. Muat ulang halaman ini satu menit lagi.",
+    "copiedTo": "Database disalin ke {{path}}",
+    "goBack": "Kalau versi baru tidak bisa naik, jalankan ini di server:"
   },
   "k3s": {
     "title": "Kubernetes (k3s)",

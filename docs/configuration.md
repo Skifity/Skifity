@@ -35,6 +35,7 @@ is a valid one.
 | `SKIFITY_DEV_FRONTEND_URL` | `http://127.0.0.1:5173` | Where that dev server is. |
 | `SKIFITY_CLUSTER_TOKEN_PATH` | `/etc/skifity/cluster-token` | The k3s join token of the cluster the panel runs in, put there by the installer. A panel installed onto a server that already runs k3s cannot invent this, and a server added later has to join with it. |
 | `SKIFITY_POD_NETWORK` | empty | The pod network the installer started this cluster with, `wireguard-native` or `vxlan`. Recorded the first time the panel starts and used for every server added afterwards, because nodes on different backends join without an error and then never reach each other. Leave empty on a cluster the installer did not create, and set it under **Settings → Cluster** instead. |
+| `SKIFITY_UPDATE_REPOSITORY` | empty | The GitHub repository, as `owner/name`, whose releases the panel asks about when an administrator presses **Check for updates** in Settings. The installer sets it. The panel never asks on its own, and with this empty the button says there is nowhere to ask. |
 | `SKIFITY_CLI_DIR` | `/usr/local/share/skifity/cli` | The command line tool for the platforms the panel does not run on, as `skifity-<os>-<arch>[.exe].gz`. The image puts macOS, Windows and the other Linux architecture there, so somebody deploying from a Mac or a Windows laptop downloads a CLI that runs on it. |
 
 `.env.example` in the repository is the same list, with comments.
@@ -664,8 +665,21 @@ apart, neither is enough.
 
 ## Upgrading
 
-The panel does not check for new versions: it contacts no server of its own,
-so a release is something you hear about from the releases page.
+The panel never checks for new versions on its own: nothing asks on a timer or
+at start-up. It asks which release is the newest only when a panel
+administrator presses **Check for updates** in Settings, runs
+`skifity upgrade`, or calls `POST /api/upgrade/check`. It follows GitHub's
+redirect from `/releases/latest` for the repository in
+`SKIFITY_UPDATE_REPOSITORY`, which the installer sets, through the same guarded
+client as everything else the panel dials, and sends nothing but the request.
+With the setting empty — a panel installed some other way — the check says
+there is nowhere to ask, and you can still upgrade by naming the version.
+
+**In Settings**, under **Upgrade**: **Check for updates**, then **Upgrade to**
+the newest. **From a terminal**, `skifity upgrade` asks, `skifity upgrade
+--latest` moves to the newest release when it is newer, and `skifity upgrade
+--to v0.2.0` names one. All three copy the database first and print the
+commands that go back.
 
 **From a shell**, run the install command again. It fetches the newest
 installer and does what the API call below does — copies the database first,

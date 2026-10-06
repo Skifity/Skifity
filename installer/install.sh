@@ -429,6 +429,10 @@ parse_args() {
 # validate_settings checks every value before anything is changed, so a typo
 # is a one-line message now rather than a broken certificate later.
 validate_settings() {
+	# It is substituted into a manifest with sed, and tells the panel where to
+	# look for releases.
+	printf '%s' "$PROJECT_REPO" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' ||
+		usage_error "SKIFITY_REPO is \"$PROJECT_REPO\", which is not a repository such as owner/name."
 	if [ -n "${SKIFITY_DOMAIN:-}" ]; then
 		SKIFITY_DOMAIN=$(normalise_domain "$SKIFITY_DOMAIN")
 		valid_domain "$SKIFITY_DOMAIN" ||
@@ -1399,6 +1403,7 @@ render() {
 		-e "s|__HOST__|${PANEL_HOST}|g" \
 		-e "s|__PUBLIC_URL__|${PUBLIC_URL}|g" \
 		-e "s|__POD_NETWORK__|${POD_NETWORK}|g" \
+		-e "s|__REPOSITORY__|${PROJECT_REPO}|g" \
 		-e "s|__CONFIG_DIR__|${CONFIG_DIR}|g" \
 		-e "s|__DATA_DIR__|${DATA_DIR}|g" \
 		-e "s|__ISSUER__|${ISSUER}|g" \

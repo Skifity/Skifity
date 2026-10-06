@@ -411,6 +411,16 @@ case "$status:$out" in
 *) t_fail "--version latest with no release should stop and explain, got $status: $out" ;;
 esac
 
+# The repository is substituted into a manifest with sed, and tells the panel
+# where to look for releases, so it is held to what a repository path is.
+out=$( (PROJECT_REPO='acme/skifity|evil'; validate_settings) 2>&1) && status=0 || status=$?
+case "$status:$out" in
+2:*"not a repository such as owner/name"*) t_pass "a repository that is not owner/name is refused" ;;
+*) t_fail "SKIFITY_REPO with a | in it should be refused, got $status: $out" ;;
+esac
+( PROJECT_REPO="acme/skifity"; validate_settings ) >/dev/null 2>&1 &&
+  t_pass "and owner/name is accepted" || t_fail "a repository such as acme/skifity should be accepted"
+
 for bad in "--domain not_a_domain" "--domain localhost" "--email nobody" "--email a&b@example.test" \
   "--public-ip 300.1.2.3" "--public-ip example.test" "--pod-network calico" "--version v1;rm" \
   "--image registry.example.test/a|b" "--staging=1"; do
@@ -832,6 +842,13 @@ if [ -x "$FAKE/usr/local/bin/skifity" ] && [ -x "$FAKE/usr/local/bin/skifity-uni
   t_pass "the CLI and the uninstaller are on the PATH"
 else
   t_fail "the CLI or the uninstaller was not installed"
+fi
+# The panel is told which repository "Check for updates" asks about, from the
+# one the installer itself came from: moving the project is one line.
+if grep -A1 'name: SKIFITY_UPDATE_REPOSITORY' "$FAKE/stub/applied-panel.yaml" 2>/dev/null | grep -q "value: \"${PROJECT_REPO}\""; then
+  t_pass "the panel is told which repository its releases are in"
+else
+  t_fail "the applied panel does not say where to look for releases: $(grep -A1 UPDATE_REPOSITORY "$FAKE/stub/applied-panel.yaml" 2>/dev/null)"
 fi
 if grep -q '__[A-Z0-9_]*__' "$FAKE/stub/applied-panel.yaml" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null; then
   t_fail "a placeholder reached the cluster"

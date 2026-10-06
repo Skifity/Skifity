@@ -10,6 +10,7 @@
 #   __NODE__        the node the panel is pinned to
 #   __PUBLIC_URL__  how people reach the panel, used for webhook URLs
 #   __POD_NETWORK__ the flannel backend this cluster was installed with
+#   __REPOSITORY__  the GitHub repository whose releases "Check for updates" asks about
 #   __CONFIG_DIR__  the host directory holding the master key
 #   __DATA_DIR__    the host directory holding the database
 ---
@@ -131,6 +132,10 @@ spec:
             # same one, because nodes that disagree never reach each other.
             - name: SKIFITY_POD_NETWORK
               value: "__POD_NETWORK__"
+            # Where "Check for updates" in Settings asks for the newest release,
+            # and only when somebody presses it: the panel never asks on its own.
+            - name: SKIFITY_UPDATE_REPOSITORY
+              value: "__REPOSITORY__"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

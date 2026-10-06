@@ -72,7 +72,7 @@ func TestAnUpgradeCopiesTheDatabaseFirstAndSaysHowToGoBack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	upgrade := func(version string) map[string]string {
+	upgrade := func(version string) map[string]any {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/api/upgrade",
 			strings.NewReader(`{"version":"`+version+`"}`))
@@ -83,7 +83,7 @@ func TestAnUpgradeCopiesTheDatabaseFirstAndSaysHowToGoBack(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
-		var answer map[string]string
+		var answer map[string]any
 		_ = json.NewDecoder(resp.Body).Decode(&answer)
 		if resp.StatusCode != http.StatusAccepted {
 			t.Fatalf("upgrading to %s answered %d: %v", version, resp.StatusCode, answer)
@@ -92,7 +92,7 @@ func TestAnUpgradeCopiesTheDatabaseFirstAndSaysHowToGoBack(t *testing.T) {
 	}
 
 	answer := upgrade("v1.2.0")
-	snapshot := answer["snapshot"]
+	snapshot, _ := answer["snapshot"].(string)
 	if !strings.HasPrefix(snapshot, filepath.Join(dir, "panel.db.before-upgrade-")) {
 		t.Fatalf("the snapshot is %q", snapshot)
 	}
@@ -102,9 +102,19 @@ func TestAnUpgradeCopiesTheDatabaseFirstAndSaysHowToGoBack(t *testing.T) {
 	}
 	// Going back is the old image and the copy: the old version refuses a
 	// database the new one has migrated.
-	undo := answer["if_it_goes_wrong"]
+	undo, _ := answer["if_it_goes_wrong"].(string)
 	if !strings.Contains(undo, "admin restore-db --yes "+snapshot) || !strings.Contains(undo, "rollout undo deploy/skifity-panel") {
 		t.Fatalf("the way back is %q", undo)
+	}
+	// And the same four steps as commands alone, which the interface prints.
+	commands, _ := answer["rollback"].([]any)
+	if len(commands) != 4 {
+		t.Fatalf("the rollback is %v", answer["rollback"])
+	}
+	for i, want := range []string{"--replicas=0", "admin restore-db --yes " + snapshot, "rollout undo deploy/skifity-panel", "--replicas=1"} {
+		if got, _ := commands[i].(string); !strings.Contains(got, want) {
+			t.Errorf("rollback step %d is %q, want it to contain %q", i+1, got, want)
+		}
 	}
 
 	for _, version := range []string{"v1.2.1", "v1.2.2", "v1.3.0"} {

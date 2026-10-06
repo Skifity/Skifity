@@ -162,7 +162,9 @@ test("an error speaks the language the panel is set to", async ({ page }) => {
   // the kind — "app" — as a value rather than inside the sentence.
   await page.goto("/apps/app_does_not_exist")
 
-  const catalogue = localeStrings("ru").errors as { catalogue: Record<string, Record<string, string>> }
+  const catalogue = localeStrings("ru").errors as {
+    catalogue: Record<string, Record<string, string>>
+  }
   const entry = catalogue.catalogue["resource_not_found"]
   const title = entry.title.replace("{{0}}", "app")
   const impact = entry.impact
@@ -171,7 +173,9 @@ test("an error speaks the language the panel is set to", async ({ page }) => {
   await expect(page.getByText(impact), "what it means, in Russian").toBeVisible()
 
   // And the English it replaced is nowhere on the page.
-  const english = localeStrings("en").errors as { catalogue: Record<string, Record<string, string>> }
+  const english = localeStrings("en").errors as {
+    catalogue: Record<string, Record<string, string>>
+  }
   await expect(
     page.getByText(english.catalogue["resource_not_found"].impact),
     "the English the server sent is still showing",
@@ -194,8 +198,10 @@ test("every logo the catalogue claims is actually there", async ({ page }) => {
 
   const list = await (await page.request.get("/api/templates", { headers })).json()
   const withIcon = list.items.filter((template: { icon?: string }) => template.icon)
-  expect(withIcon.length, "no template has a logo, so hack/fetch_icons.py has stopped working")
-    .toBeGreaterThan(150)
+  expect(
+    withIcon.length,
+    "no template has a logo, so hack/fetch_icons.py has stopped working",
+  ).toBeGreaterThan(150)
 
   const broken: string[] = []
   for (const template of withIcon) {
@@ -282,7 +288,10 @@ test("every page in the navigation renders", async ({ page }) => {
     // Suspense fallback, and an idle network says nothing about whether the
     // chunk rendered.
     await expect(
-      page.getByRole("heading", { level: 1 }).or(page.getByRole("heading", { level: 2 })).first(),
+      page
+        .getByRole("heading", { level: 1 })
+        .or(page.getByRole("heading", { level: 2 }))
+        .first(),
       `${label} (${path}) showed no heading`,
     ).toBeVisible({ timeout: 30_000 })
     await expect(
@@ -392,6 +401,28 @@ test("an app can be put behind a password, and the password never comes back", a
   expect(await (await page.request.get(`/api/apps/${appID}/password`)).text()).toContain(
     '"enabled":false',
   )
+})
+
+test("Settings asks about new releases only when the button is pressed", async ({ page }) => {
+  // Every request the page makes is watched, so the promise is checked rather
+  // than read: the panel never asks which release is the newest on its own.
+  const asked: string[] = []
+  page.on("request", (request) => {
+    if (request.url().includes("/api/upgrade/check")) asked.push(request.method())
+  })
+
+  await signIn(page)
+  await page.goto("/settings")
+  const check = page.getByRole("button", { name: "Check for updates" })
+  await expect(check).toBeVisible()
+  await expect(page.getByText(/never checks for updates on its own/)).toBeVisible()
+  expect(asked).toEqual([])
+
+  // This panel was not installed by the installer, so it has no repository to
+  // ask about, and says so instead of guessing.
+  await check.click()
+  await expect(page.getByText("This panel does not know where its releases are")).toBeVisible()
+  expect(asked).toEqual(["POST"])
 })
 
 /** Signs in, unless this context already has a session. */

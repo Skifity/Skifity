@@ -1615,7 +1615,6 @@
     "auditLogHelp": "谁、在什么时候、从哪里做了什么。",
     "upgrade": "升级",
     "currentVersion": "当前版本",
-    "noUpdateCheck": "{{product}} 不会联系任何服务器来检查更新。",
     "saved": "设置已保存。",
     "rotateKeyDone": "主密钥已轮换，所有已保存的机密都用新密钥重新加密。",
     "rotateKeyPartial": "新的主密钥已生效，但部分密钥无法重新加密。旧密钥已保留，以便它们仍可读取——在某次轮换完全成功之前，请同时保留之前的恢复密钥，因为新的恢复密钥无法打开它们。",
@@ -2697,6 +2696,18 @@
         "cause": "{{0}}",
         "impact": "连接器仍在用旧令牌运行，所以在它们重启之前流量照常。",
         "fix": "按「原因」里说的修好再保存一次令牌，或者在「组件」里安装 Cloudflare tunnel。"
+      },
+      "upgrade_check_failed": {
+        "title": "无法查到最新版本",
+        "cause": "{{0}}",
+        "impact": "没有更改任何内容。",
+        "fix": "确认面板能访问 github.com 后重试。你也可以自己指定版本来升级。"
+      },
+      "upgrade_check_unconfigured": {
+        "title": "这个面板不知道它的发布版本在哪里",
+        "cause": "没有设置发布仓库。它由安装程序设置；这个面板是用别的方式安装的。",
+        "impact": "没有向任何人询问，也没有更改任何内容。",
+        "fix": "重新运行安装程序即可设置，或在面板的 Deployment 上把 SKIFITY_UPDATE_REPOSITORY 设为 owner/name。你仍然可以自己指定版本来升级。"
       },
       "upgrade_failed": {
         "title": "升级启动不了",
@@ -4315,6 +4326,23 @@
     "detected": "Procfile 里的进程",
     "detectedHelp": "勾选的进程从第一次部署起就在应用旁边运行，使用同一次构建。取消勾选可以跳过；之后也可以在“伸缩”里添加。",
     "change": "修改"
+  },
+  "panelUpgrade": {
+    "manualNote": "{{product}} 从不自行检查更新。只有你按下按钮时，它才会询问最新版本是什么。",
+    "check": "检查更新",
+    "available": "{{version}} 可用。",
+    "releaseNotes": "发行说明",
+    "upToDate": "你运行的已是最新版本。",
+    "ahead": "当前版本比最新发布的 {{version}} 还要新。",
+    "development": "这是在 {{version}} 之后构建的版本，不是正式发布版。",
+    "unknown": "当前版本不是发布版本号，无法与最新发布的 {{version}} 比较。",
+    "noRelease": "尚未发布任何版本。",
+    "upgradeTo": "升级到 {{version}}",
+    "confirmTitle": "升级到 {{version}}？",
+    "confirm": "面板会先复制自己的数据库，然后在新版本上重启，需要片刻。你的应用会继续运行。如果新版本没有起来，之后会显示退回的命令。",
+    "started": "升级已开始，面板正在重启。请一分钟后重新加载此页面。",
+    "copiedTo": "数据库已复制到 {{path}}",
+    "goBack": "如果新版本没有起来，请在服务器上运行："
   },
   "k3s": {
     "title": "Kubernetes (k3s)",

@@ -197,6 +197,8 @@ skifity apply                     # and change it
 skifity rollback                  # back to the previous version
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
+skifity upgrade                   # ask which release of the panel is the newest; changes nothing
+skifity upgrade --latest          # move the panel to it, when it is newer (an administrator's)
 skifity scan                      # known vulnerabilities in the image it runs
 skifity scan --now                # scan it again, and wait for the report
 skifity deploy --accept-vulnerabilities  # past the check for fixable criticals, when it is on; audited

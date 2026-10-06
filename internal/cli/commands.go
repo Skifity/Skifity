@@ -107,6 +107,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdExport(ctx, rest, stdout)
 	case "open":
 		err = cmdOpen(ctx, rest, stdout)
+	case "upgrade":
+		err = cmdUpgrade(ctx, rest, stdout)
 	case "admin":
 		err = cmdAdmin(ctx, rest, stdout)
 	case "api":
@@ -293,6 +295,7 @@ Cluster:
   certs                 List, upload or remove the team's own TLS certificates
   dns providers         List, connect, test or remove the team's DNS providers
   drains                List, add, test or remove where the team's logs are shipped
+  upgrade               Ask which release is the newest, and upgrade the panel to it
 
 Secret managers:
   secrets connections   List, add, test or remove the Vault, Infisical, Doppler or

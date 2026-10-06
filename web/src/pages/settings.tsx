@@ -21,6 +21,7 @@ import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
+import { PanelUpgradeCard } from "@/components/settings/panel-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
 import { CloudProvidersCard } from "@/components/settings/cloud-providers"
 import { CertificatesCard } from "@/components/settings/certificates"
@@ -161,7 +162,7 @@ export function SettingsPage() {
           <SettingGroups except={["git", "plugins"]} />
           <PanelBackupsCard />
           <ExportCard />
-          <VersionCard />
+          <PanelUpgradeCard />
         </TabsContent>
         <TabsContent value="git" className="space-y-6 pt-4">
           <GitSources />
@@ -417,28 +418,6 @@ function inputType(setting: Setting): string {
     default:
       return "text"
   }
-}
-
-function VersionCard() {
-  const { t } = useTranslation()
-  const { meta } = useSession()
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t("settings.upgrade")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">{t("settings.currentVersion")}</span>
-          <span className="font-mono">{meta?.version ?? "—"}</span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.noUpdateCheck", { product: meta?.product ?? "Skifity" })}
-        </p>
-      </CardContent>
-    </Card>
-  )
 }
 
 /**

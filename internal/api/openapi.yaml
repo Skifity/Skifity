@@ -4956,7 +4956,9 @@ paths:
       operationId: upgradeStatus
       tags: [Settings]
       summary: The version running
-      description: Panel administrators only. The panel does not check for updates; nothing is sent anywhere.
+      description: >-
+        Panel administrators only. The panel never checks for updates on its
+        own; `POST /api/upgrade/check` asks, when called.
       responses:
         '200':
           description: The version.
@@ -4987,6 +4989,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/UpgradeStarted'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/upgrade/check:
+    post:
+      operationId: checkForUpgrade
+      tags: [Settings]
+      summary: Ask which release is the newest
+      description: >-
+        Panel administrators only. The one request the panel makes about new
+        releases, and only when it is made: nothing asks on a timer or at
+        start-up. It follows GitHub's redirect from `/releases/latest` for the
+        repository the installer configured (`SKIFITY_UPDATE_REPOSITORY`), and
+        sends nothing but the request itself. Nothing is changed. A POST so that
+        a prefetch or a crawler cannot trigger it.
+      responses:
+        '200':
+          description: What the newest release is, and how it compares with the one running.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UpgradeCheck'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/panel/backups:
@@ -8844,16 +8866,38 @@ components:
         current_version: {type: string}
         commit: {type: string}
         built: {type: string}
-        update_check: {type: string, const: disabled}
+        update_check: {type: string, const: manual}
         note: {type: string}
+
+    UpgradeCheck:
+      type: object
+      required: [current_version, state, repository, checked_at]
+      properties:
+        current_version: {type: string}
+        latest_version: {type: string, description: 'The newest release. Absent when none is published.'}
+        release_url: {type: string, format: uri}
+        state:
+          type: string
+          enum: [available, up_to_date, development, ahead, unknown, no_release]
+          description: >-
+            `available`: a newer release exists. `up_to_date`: this is the
+            newest. `development`: a build made after the newest release's tag.
+            `ahead`: newer than the newest release. `unknown`: the running
+            version is not a release number. `no_release`: nothing is published.
+        repository: {type: string, description: 'owner/name'}
+        checked_at: {type: string, format: date-time}
 
     UpgradeStarted:
       type: object
-      required: [status, previous_image, snapshot, note, if_it_goes_wrong]
+      required: [status, previous_image, snapshot, note, if_it_goes_wrong, rollback]
       properties:
         status: {type: string, const: started}
         previous_image: {type: string}
         snapshot: {type: string, description: 'The copy of the panel''s database taken first.'}
         note: {type: string}
-        if_it_goes_wrong: {type: string, description: 'The commands that go back.'}
+        if_it_goes_wrong: {type: string, description: 'The way back, as a sentence.'}
+        rollback:
+          type: array
+          description: The same steps as commands, in order, to run on the server.
+          items: {type: string}
         off_site_copy: {type: string, description: 'Where the copy was also stored, when backup storage is configured.'}

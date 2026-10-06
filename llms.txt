@@ -49,6 +49,7 @@ skifity gpus --count 1            Give each instance an NVIDIA GPU (--vendor amd
 skifity rollback                  Go back to the previous version
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
+skifity upgrade                   Ask which release of the panel is the newest; --latest upgrades to it, --to v0.2.0 names one (an administrator's; copies the database first)
 skifity scan                      Known vulnerabilities in the app's image; --now scans it again
 skifity run -- npm run migrate    Run a command once, in the app's image
 skifity processes set worker -- <command>  A worker beside the app, same build
@@ -367,6 +368,12 @@ watching — without a terminal and without `--yes` it refuses rather than
 guesses. `--help` lists them all and needs no root. Running it again is safe:
 it keeps the panel's address and domain, and after setup prints where to sign
 in instead of a setup link.
+
+To upgrade: Settings, then Upgrade, then Check for updates; or `skifity upgrade
+--latest`; or run the install command again. Each copies the panel's database
+first and shows the commands that go back. The panel never checks for updates
+on its own: it asks which release is the newest only when one of these asks it
+to, through POST /api/upgrade/check.
 
 ## Source
 

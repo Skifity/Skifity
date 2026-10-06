@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,10 @@ import (
 	"skifity/internal/settings"
 	"skifity/internal/version"
 )
+
+// repositoryPattern is what UpdateRepository may be: one owner and one name,
+// each of the characters GitHub allows in them.
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 
 // EnvPrefix is the prefix of every environment variable this package reads.
 const EnvPrefix = "SKIFITY_"
@@ -80,6 +85,15 @@ type Config struct {
 	// starts and every server it adds later is given the same backend. After
 	// that the setting is the answer and this is ignored.
 	PodNetwork string `json:"pod_network" toml:"pod_network"`
+	// UpdateRepository is the GitHub repository, as owner/name, whose releases
+	// the panel asks about when somebody presses "Check for updates" in
+	// Settings. The installer fills it in from the repository it was fetched
+	// from. It is empty on a panel installed some other way, and the check then
+	// says so rather than guessing.
+	//
+	// The panel never asks on its own: nothing reads this until a panel
+	// administrator presses the button, or calls POST /api/upgrade/check.
+	UpdateRepository string `json:"update_repository" toml:"update_repository"`
 	// CLIDir holds the command line tool built for the platforms this panel
 	// does not run on — macOS, Windows, the other architecture — as
 	// skifity-<os>-<arch>[.exe].gz, which the image puts there. The panel
@@ -161,6 +175,7 @@ func (c *Config) applyEnv(lookup func(string) string) {
 	str("SETUP_TOKEN_PATH", &c.SetupTokenPath)
 	str("CLUSTER_TOKEN_PATH", &c.ClusterTokenPath)
 	str("POD_NETWORK", &c.PodNetwork)
+	str("UPDATE_REPOSITORY", &c.UpdateRepository)
 	str("CLI_DIR", &c.CLIDir)
 
 	if v := lookup(EnvPrefix + "DEV_MODE"); v != "" {
@@ -206,6 +221,10 @@ func (c *Config) Validate() error {
 	}
 	if c.PublicURL != "" && !strings.HasPrefix(c.PublicURL, "http://") && !strings.HasPrefix(c.PublicURL, "https://") {
 		return fmt.Errorf("public_url %q must start with http:// or https://", c.PublicURL)
+	}
+	// It becomes part of a URL, so it is held to what a repository path is.
+	if c.UpdateRepository != "" && !repositoryPattern.MatchString(c.UpdateRepository) {
+		return fmt.Errorf("update_repository %q must look like owner/name", c.UpdateRepository)
 	}
 	switch c.PodNetwork {
 	case "", settings.FlannelWireGuard, settings.FlannelVXLAN:

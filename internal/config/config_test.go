@@ -69,6 +69,7 @@ func TestTheFileAndTheEnvironmentAgree(t *testing.T) {
 		"SKIFITY_TRUSTED_PROXY_COUNT": "3",
 		"SKIFITY_DEV_MODE":            "yes",
 		"SKIFITY_POD_NETWORK":         "vxlan",
+		"SKIFITY_UPDATE_REPOSITORY":   "Skifity/Skifity",
 		"SKIFITY_CLI_DIR":             "/opt/cli",
 	}
 

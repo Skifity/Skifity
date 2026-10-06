@@ -834,6 +834,27 @@ export type UpgradeReason = {
   text: string
 }
 
+/** What POST /api/upgrade/check found: asked only when somebody presses the button. */
+export type UpgradeCheck = {
+  current_version: string
+  latest_version?: string
+  release_url?: string
+  state: "available" | "up_to_date" | "development" | "ahead" | "unknown" | "no_release"
+  repository: string
+  checked_at: string
+}
+
+/** What POST /api/upgrade answers, sent before the panel stops. */
+export type UpgradeStarted = {
+  status: "started"
+  previous_image: string
+  /** The copy of the database taken first. */
+  snapshot: string
+  off_site_copy?: string
+  /** The commands that go back, in order, to run on the server. */
+  rollback: string[]
+}
+
 export type K3sUpgradePlan = {
   target: string
   steps: {

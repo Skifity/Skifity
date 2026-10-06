@@ -160,12 +160,17 @@ complete: the build fails if any string is missing from any of them.
 
 ## How do I update it?
 
-Settings shows the version you are running. Skifity does not check for updates
-and has nothing of ours to check with, so watch the releases page. Updating
-changes the panel's own image and Kubernetes rolls it out.
+Settings shows the version you are running. Skifity never checks for updates
+on its own and has nothing of ours to check with: it asks GitHub which release
+is the newest only when an administrator presses **Check for updates**, and
+sends nothing but the request. When there is a newer release, **Upgrade to** it
+copies the panel's database first, changes the panel's own image so Kubernetes
+rolls it out, and shows the commands that go back. `skifity upgrade` and
+`skifity upgrade --latest` do the same from a terminal, and running the install
+command again does it from a shell.
 
 It does reach the internet for things you ask for — a certificate from Let's
-Encrypt, a component's manifest from GitHub, your Git provider, your backup
-bucket — and the preflight asks a public-IP service for the address of a server
+Encrypt, a component's manifest from GitHub, the newest release when you press
+the button, your Git provider, your backup bucket — and the preflight asks a public-IP service for the address of a server
 being added, because a server behind NAT cannot tell you its own. None of that
 is a call to us, and none of it carries anything about you.

@@ -24,6 +24,7 @@ var values = map[string]string{
 	"NODE":        "test-node-1",
 	"PUBLIC_URL":  "https://panel.example.test",
 	"POD_NETWORK": "wireguard-native",
+	"REPOSITORY":  "example/skifity",
 	"HOST":        "panel.example.test",
 	"CONFIG_DIR":  "/etc/skifity",
 	"DATA_DIR":    "/var/lib/skifity",

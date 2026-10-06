@@ -6284,10 +6284,39 @@ now takes the same copy, through the CLI of the version that is running,
 before it replaces the image; stops if it cannot, unless `--no-snapshot`; keeps
 three; and prints the four commands that go back. The README, the release notes
 (which also suggested `kubectl set image`, which skips the copy), the releasing
-guide and the configuration page say what is true. There is still no upgrade
-button: that, and whether the panel may ask GitHub which release is newest when
-it is pressed, is a decision for the maintainer, because the README says it
-never checks.
+guide and the configuration page say what is true. There was still no
+upgrade button, and the next paragraph is what was built when the maintainer
+said to.
+
+**An upgrade control, which makes the README's claim true.** Settings → Upgrade
+has **Check for updates**, and when there is a newer release, **Upgrade to** it,
+behind a confirmation that says the database is copied first and the commands
+that go back are shown afterwards (they are, from the panel's own answer, as a
+list of commands rather than a sentence). `skifity upgrade` asks,
+`skifity upgrade --latest` moves to the newest when it is newer, and
+`--to v0.2.0` names one. What it asks, and when, is the decision the README had
+to be honest about: the panel **never checks on its own** — no timer, no
+start-up check, and a test fails if the Settings page or a plain `GET` sends
+anything — and asks only when a panel administrator presses the button or calls
+`POST /api/upgrade/check`. A POST, so a prefetch or a crawler cannot trigger
+it. It follows GitHub's redirect from `/releases/latest`, not the API, whose
+anonymous limit a shared address has often spent, through the same guarded
+client as everything else the panel dials, and sends nothing but the request.
+The repository it asks about is `SKIFITY_UPDATE_REPOSITORY`, which the installer
+fills in from the repository it came from (`__REPOSITORY__` in `deploy/panel.yaml`),
+so moving the project is still one line; with it empty the check says there is
+nowhere to ask. Two new errors, in five languages, and the README, FAQ,
+configuration and CLI pages now say "never on its own" instead of "never".
+
+What was run: the redirect parser, the version comparison (including
+`git describe` builds and pre-releases) and the handler against stand-ins; the
+real binary through Playwright, which sees exactly one request, after the
+button; and `lookupLatestRelease` against github.com, for the shape of a
+repository with no release, which is what this repository returns today. What
+was not: a repository that has a release — this machine's proxy refuses to
+fetch other repositories — so that shape is GitHub's documented redirect and
+the stand-in's, not an observation; and the upgrade itself, which needs a
+cluster.
 
 **A data race in CI, not reproduced.** The race step failed once on `ed91c10`, in
 `TestAVariableFromASecretManagerNeverShowsItsValue`, and passed on the three

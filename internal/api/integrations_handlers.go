@@ -743,10 +743,11 @@ func (s *Server) handleUpgradeStatus(w http.ResponseWriter, r *http.Request) {
 		"current_version": version.Version,
 		"commit":          version.Commit,
 		"built":           version.Date,
-		// Skifity does not phone home, so the panel cannot know what the latest
-		// release is. Saying so is better than a field that is always empty.
-		"update_check": "disabled",
-		"note":         "Skifity does not contact any server to check for updates. Follow the releases page to learn about new versions.",
+		// The panel never asks which release is the newest on its own. It does
+		// when an administrator presses "Check for updates", which is
+		// POST /api/upgrade/check.
+		"update_check": "manual",
+		"note":         "Skifity never checks for updates on its own. POST /api/upgrade/check asks for the newest release, and is only made when you do.",
 	})
 }
 
@@ -785,12 +786,20 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		"%[3]s admin restore-db --yes %[4]s; "+
 		"kubectl -n %[1]s rollout undo %[2]s; kubectl -n %[1]s scale %[2]s --replicas=1",
 		s.cfg.Namespace, deployment, version.Binary, started.Snapshot)
-	answer := map[string]string{
+	answer := map[string]any{
 		"status":           "started",
 		"previous_image":   started.Previous,
 		"snapshot":         started.Snapshot,
 		"note":             "The panel will restart. Your apps keep running while it does.",
 		"if_it_goes_wrong": undo,
+		// The same steps as commands and nothing else, for an interface that
+		// shows them in its own words around them.
+		"rollback": []string{
+			fmt.Sprintf("kubectl -n %s scale %s --replicas=0", s.cfg.Namespace, deployment),
+			fmt.Sprintf("%s admin restore-db --yes %s", version.Binary, started.Snapshot),
+			fmt.Sprintf("kubectl -n %s rollout undo %s", s.cfg.Namespace, deployment),
+			fmt.Sprintf("kubectl -n %s scale %s --replicas=1", s.cfg.Namespace, deployment),
+		},
 	}
 	if started.OffSite != "" {
 		answer["off_site_copy"] = started.OffSite

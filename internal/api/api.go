@@ -39,6 +39,9 @@ type Server struct {
 	log     *slog.Logger
 	// metrics is what the panel says about itself, for whatever is watching it.
 	metrics *metrics.Registry
+	// latestRelease asks which release is the newest. Nil means GitHub, through
+	// the guarded client; a test puts its own here.
+	latestRelease func(ctx context.Context, repository string) (string, error)
 
 	// setup guards first-run: it holds the one-time token until an admin exists.
 	setup *setupState
@@ -614,6 +617,9 @@ func (s *Server) routes() chi.Router {
 				admin.Post("/security/recovery-key/saved", s.handleRecoveryKeySaved)
 				admin.Get("/upgrade", s.handleUpgradeStatus)
 				admin.Post("/upgrade", s.handleUpgrade)
+				// The one place the panel asks anybody about new releases, and
+				// only because an administrator pressed the button.
+				admin.Post("/upgrade/check", s.handleUpgradeCheck)
 				admin.Get("/panel/backups", s.handleListPanelBackups)
 				admin.Post("/panel/backups", s.handleBackUpPanel)
 				admin.Post("/panel/backups/{backupID}/verify", s.handleVerifyPanelBackup)

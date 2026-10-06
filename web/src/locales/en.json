@@ -1632,7 +1632,6 @@
     "auditLogHelp": "Who did what, when, and from where.",
     "upgrade": "Upgrade",
     "currentVersion": "Current version",
-    "noUpdateCheck": "{{product}} does not contact any server to check for updates.",
     "saved": "Settings saved.",
     "rotateKeyDone": "The master key was rotated and every stored secret was re-encrypted with it.",
     "rotateKeyPartial": "The new master key is in place, but some secrets could not be re-encrypted. The old key was kept so they stay readable — keep your previous recovery key as well until a rotation finishes cleanly, because the new one does not open them.",
@@ -2716,6 +2715,18 @@
         "cause": "{{0}}",
         "impact": "The connectors are still running on the previous token, so traffic keeps flowing until they are restarted.",
         "fix": "Fix what the cause says and save the token again, or install Cloudflare tunnel under Components."
+      },
+      "upgrade_check_failed": {
+        "title": "The newest release could not be found out",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Check that the panel can reach github.com and try again. You can also upgrade by naming the version yourself."
+      },
+      "upgrade_check_unconfigured": {
+        "title": "This panel does not know where its releases are",
+        "cause": "No release repository is set. The installer sets one; this panel was installed another way.",
+        "impact": "Nothing was asked of anyone, and nothing was changed.",
+        "fix": "Run the installer again, which sets it, or set SKIFITY_UPDATE_REPOSITORY to owner/name on the panel's Deployment. You can still upgrade by naming the version yourself."
       },
       "upgrade_failed": {
         "title": "The upgrade could not be started",
@@ -4336,6 +4347,23 @@
     "detected": "Processes from the Procfile",
     "detectedHelp": "Ticked ones run beside the app from its first deploy, on the same build. Untick one to leave it out; it can be added later under Scaling.",
     "change": "Change"
+  },
+  "panelUpgrade": {
+    "manualNote": "{{product}} never checks for updates on its own. It asks which release is the newest only when you press the button.",
+    "check": "Check for updates",
+    "available": "{{version}} is available.",
+    "releaseNotes": "Release notes",
+    "upToDate": "You are running the newest release.",
+    "ahead": "This is newer than the newest release, {{version}}.",
+    "development": "This is a build made after {{version}}, not a release.",
+    "unknown": "This version is not a release number, so it cannot be compared with the newest release, {{version}}.",
+    "noRelease": "No release has been published yet.",
+    "upgradeTo": "Upgrade to {{version}}",
+    "confirmTitle": "Upgrade to {{version}}?",
+    "confirm": "The panel copies its database first, then restarts on the new version, which takes a moment. Your apps keep running. If the new version does not come up, the commands that go back are shown afterwards.",
+    "started": "The upgrade has started and the panel is restarting. Reload this page in a minute.",
+    "copiedTo": "The database was copied to {{path}}",
+    "goBack": "If the new version does not come up, run these on the server:"
   },
   "k3s": {
     "title": "Kubernetes (k3s)",

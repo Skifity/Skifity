@@ -146,17 +146,21 @@ skips that.
 <details>
 <summary><b>Upgrading and uninstalling</b></summary>
 
-**Upgrade** by running the install command again. It fetches the newest
-installer, copies the panel's database first — a newer version migrates it, and
-an older one cannot read it back — replaces the panel's image, and prints the
-four commands that go back if the new version does not come up. It keeps the
-address, the domain and the certificate the panel already has, and your apps
-keep running throughout. The copy is kept beside the database; the three newest
-stay. `--no-snapshot` skips it, at your own risk.
+**Upgrade** from **Settings → Upgrade**: press **Check for updates**, and when a
+newer release exists, **Upgrade to** it. From a terminal it is
+`skifity upgrade` to ask and `skifity upgrade --latest` to move to the newest.
+Either way the panel copies its database first — a newer version migrates it,
+and an older one cannot read it back, so it is the other half of going back —
+off the server too when a backup bucket is set, then restarts on the new image
+and shows the commands that go back if the new version does not come up. Your
+apps keep running throughout. The panel asks which release is the newest only
+when you press the button, and never on its own.
 
-The panel can also upgrade itself: one call to `POST /api/upgrade` as an
-administrator, which copies the database, off the server too when a backup
-bucket is set, and returns the same commands. See
+**Or run the install command again**, which does the same from a shell: it
+fetches the newest installer, copies the database first, replaces the image,
+prints the way back, and keeps the address, the domain and the certificate the
+panel already has. The copies are kept beside the database; the three newest
+stay. `--no-snapshot` skips the copy, at your own risk. See
 [Configuration](docs/configuration.md#upgrading).
 
 **One release exactly**, rather than the newest, is that release's own
@@ -233,9 +237,11 @@ master key you can rotate without downtime, a recovery key shown once, and a
 ciphertext that will not open if it is copied to another row. SSH host keys are
 pinned the first time a server is seen.
 
-**It never phones home.** No licence key, no telemetry, no update check. It
-reaches the internet only for what you asked for: Let's Encrypt, your Git
-provider, your backup bucket.
+**It never phones home.** No licence key, no telemetry, and no update check of
+its own: it asks GitHub which release is the newest only when you press **Check
+for updates**, and sends nothing but the request. Otherwise it reaches the
+internet only for what you asked for: Let's Encrypt, your Git provider, your
+backup bucket.
 
 <table>
 <tr>
