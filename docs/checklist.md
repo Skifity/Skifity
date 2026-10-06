@@ -171,9 +171,13 @@ not own reappears anywhere.
 `raw.githubusercontent.com/<repo>/<version>/deploy`. An install never pulls one
 release's image and another's Deployment.
 
-**The tag exists.** `RELEASED_VERSION` in the installer is `v0.1.0`, the release
-workflow refuses a tag whose installer disagrees, and the one-line install in
-the README is pinned to it. Before the tag, a local GoReleaser dry run found
+**The tag exists, and was published on 2026-10-06.** `RELEASED_VERSION` in the
+installer is `v0.1.0`, the release workflow refuses a tag whose installer
+disagrees, and the one-line install in the README is the newest release's own
+installer, `releases/latest/download/install.sh`, which installs the release it
+is attached to. The release workflow's first real run passed, provenance
+included, and what it published was checked from outside afterwards (see
+`docs/progress.md`). Before the tag, a local GoReleaser dry run found
 three things the release would have got wrong on the day: an image build that
 copied a file from the wrong path, an image tag without its `v` that the
 installer would have pulled in vain, and Windows binaries named `.exe.exe`.

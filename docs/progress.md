@@ -6121,6 +6121,26 @@ needs, the installer's options, upgrading and uninstalling, then what is
 different, a selection of the scorecard against Coolify, Dokploy and Kubero,
 and all thirty-eight screenshots.
 
+**v0.1.0 was published on 2026-10-06**, tagged by the maintainer from the
+Releases page on `f4c7afa` — pushing a tag from the session is refused, by the
+GitHub proxy, which is not something to route around. The release workflow ran
+for the first time and passed, provenance included. Checked from outside
+afterwards: ten assets (six binaries, `install.sh`, `uninstall.sh`,
+`checksums.txt`, `skifity.intoto.jsonl`); every checksum matches; the
+linux-amd64 binary reports `Skifity v0.1.0 (commit f4c7afa, …)`; and
+`releases/latest/download/install.sh` answers and is byte for byte the
+installer at the tag. The release notes carry GoReleaser's changelog.
+
+**Not yet right:** the image `ghcr.io/skifity/skifity` cannot be pulled
+without signing in. Anonymously it answers `UNAUTHORIZED: authentication
+required`, where a name that does not exist answers `DENIED` and an image that
+is public answers with its digest, so it exists and is private — the default for
+a package a workflow creates. Until its visibility is set to Public in the
+package's settings, every install ends at the pull, and the panel never starts.
+Nothing has pulled this image, started it or installed from it yet, so the
+tags (`v0.1.0`, `0.1.0`, `latest`) and the two architectures are what the
+workflow says it pushed and not something seen.
+
 ### What was not yet dependable
 
 A pass over what was written but would not hold up, after the release was
