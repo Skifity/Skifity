@@ -6131,15 +6131,31 @@ linux-amd64 binary reports `Skifity v0.1.0 (commit f4c7afa, …)`; and
 `releases/latest/download/install.sh` answers and is byte for byte the
 installer at the tag. The release notes carry GoReleaser's changelog.
 
-**Not yet right:** the image `ghcr.io/skifity/skifity` cannot be pulled
-without signing in. Anonymously it answers `UNAUTHORIZED: authentication
-required`, where a name that does not exist answers `DENIED` and an image that
-is public answers with its digest, so it exists and is private — the default for
-a package a workflow creates. Until its visibility is set to Public in the
-package's settings, every install ends at the pull, and the panel never starts.
-Nothing has pulled this image, started it or installed from it yet, so the
-tags (`v0.1.0`, `0.1.0`, `latest`) and the two architectures are what the
-workflow says it pushed and not something seen.
+**The image was private, and is public now.** Straight after the release,
+`ghcr.io/skifity/skifity` could not be pulled without signing in: anonymously it
+answered `UNAUTHORIZED: authentication required`, where a name that does not
+exist answers `DENIED` and an image that is public answers with its digest, so
+it existed and was private — the default for a package a workflow creates, and
+the reason every install would have ended at the pull. The maintainer set it to
+Public in the package's settings, and it was checked again from outside:
+
+* `v0.1.0`, `0.1.0` and `latest` are one digest, an OCI index of
+  `linux/amd64` and `linux/arm64`, with buildx's two attestation manifests.
+* Its configuration is the one `Dockerfile.release` describes: user
+  `65532:65532`, working directory `/var/lib/skifity`, entrypoint
+  `/usr/local/bin/skifity`, command `server`, port 8080, and labels naming this
+  repository and `f4c7afa`.
+* It carries the CLI for the five other platforms and not its own, and the
+  binary in it is byte for byte the release's `skifity-linux-amd64`
+  (`6a2a5287…`).
+* The installer's piped path, which has to find its manifests at the tag,
+  worked against the real thing: `panel.yaml`, `ingress.yaml` and
+  `ingress-tls.yaml` came from `raw.githubusercontent.com/…/v0.1.0/deploy` and
+  rendered with nothing left to substitute, the panel's `SKIFITY_UPDATE_REPOSITORY`
+  was `Skifity/Skifity`, and the image was `ghcr.io/skifity/skifity:v0.1.0`.
+
+What none of this is: a cluster pulling it, starting it and serving. Nothing
+has done that yet.
 
 ### What was not yet dependable
 
