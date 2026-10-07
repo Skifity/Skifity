@@ -369,6 +369,13 @@ guesses. `--help` lists them all and needs no root. Running it again is safe:
 it keeps the panel's address and domain, and after setup prints where to sign
 in instead of a setup link.
 
+The installer checks the server before changing anything and reports every
+problem at once: a port held by another program (named, with its systemd unit
+and the command that frees it) and a resolver that does not answer. Its long
+steps show a spinner with what is happening and the elapsed time on a terminal,
+and a line every thirty seconds in a log; `--verbose` prints what each step says,
+and the full log is `/var/log/skifity-install.log`.
+
 To upgrade: Settings, then Upgrade, then Check for updates; or `skifity upgrade
 --latest`; or run the install command again. Each copies the panel's database
 first and shows the commands that go back. The panel never checks for updates

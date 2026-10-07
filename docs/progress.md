@@ -6400,6 +6400,36 @@ said on its own terms. The FAQ, the log drains page and the templates page
 lost their comparisons too; the templates page keeps its credit to the
 catalogue its conversions came from, which the licence asks for.
 
+**The installer no longer goes quiet.** The slow parts of an install — the k3s
+download and start, cert-manager, the panel's image pull — wrote to the log and
+printed nothing, so a server that was working looked like one that had stopped.
+Every wait now says what it is waiting for and for how long: on a terminal one
+line redrawn in place (a spinner, what is happening, the time so far), without
+one a line when the wait starts and another every thirty seconds, and a
+`✓ … (47s)` line when it is done. What the step itself printed is in the log, its
+last lines are shown if it fails, and `--verbose` streams it. An interrupt stops
+the step being waited for, so a Ctrl-C does not leave k3s installing behind it.
+
+A real server's first run showed what else was missing, and the preflight now
+says it at once: a port taken by another program names the program, its process
+and its systemd unit and gives the command (`systemctl disable --now nginx`,
+`docker ps --filter publish=80`), and a resolver that does not answer is found
+in seconds instead of a minute into a download that fails with a message about
+curl. Every such problem is reported together, ending "Nothing on it has been
+changed". `sudo: unable to resolve host` is a warning with the one-line fix.
+
+What was run: the smoke test under `sh`, `dash`, `bash --posix` and `bash`, with
+stand-ins for `ss`, `getent` and the downloads — the waits in both modes, the
+failure message, `--verbose`, the interrupt, the port and DNS reports, a whole
+install with its wait lines and log — and the progress line itself in a real
+pseudo-terminal, which showed the single redrawn line and its replacement by the
+`✓` line. What was not: a real k3s download, whose detail phrases come from what
+k3s's installer prints and so are matched against the stand-in's, not an
+observation; and the port report's process names against a real `ss` on a
+machine with nginx on port 80, which is the output the stand-in imitates. The
+improvements reach a server only through a new release: the installer a user runs
+is the release's own.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

@@ -17,6 +17,31 @@ would undo each other, so the second one stops. Wait for the first, or stop it
 with the `kill` command the message gives. A lock left by an install that was
 killed outright is taken over by the next run on its own.
 
+**"Port 80 is in use by nginx (process 1234, nginx.service)."** Skifity serves
+your apps on ports 80 and 443 and needs both, so a web server that came with the
+server has to go. The message names the program, its process and its systemd
+unit, and gives the command: for a web server `systemctl disable --now <unit>`,
+for a Docker container `docker ps --filter publish=80` to find it. Nothing has
+been changed when it says this; run the installer again once the port is free.
+If you need that service, install Skifity on a server of its own, or move the
+service to another port.
+
+**"This server cannot look up any name."** The installer downloads Kubernetes and
+the panel's image by name, and a server whose resolver does not answer cannot
+find them. This is checked at the start, in seconds, rather than a minute in.
+Look at `cat /etc/resolv.conf` and `getent hosts github.com`; on Ubuntu and
+Debian with systemd-resolved, put `DNS=1.1.1.1 9.9.9.9` under `[Resolve]` in
+`/etc/systemd/resolved.conf` and run `systemctl restart systemd-resolved`.
+`sudo: unable to resolve host …` on every command is the same disease in a
+milder form: add `127.0.1.1 <the server's name>` to `/etc/hosts`.
+
+**It seems to be doing nothing.** It is not meant to look that way: every wait
+shows what it is waiting for and for how long, and the first download of
+Kubernetes or the panel's image can take several minutes on a slow link. If a
+line has not moved in a long time, run it again with `--verbose` to see what
+each step prints, or read `/var/log/skifity-install.log`, which has everything
+every step said.
+
 **It asks nothing and stops on an untested system.** Without a terminal — under
 cloud-init, Terraform or a CI job — the question whether to carry on on a system
 other than Ubuntu or Debian is answered no. Pass `--yes` to carry on.

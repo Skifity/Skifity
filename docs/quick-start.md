@@ -81,9 +81,20 @@ to go without. `--help` lists every option — `--email`, `--public-ip`,
 `--version`, `--yes` for a run nobody is watching, and the rest — and each one
 has an environment variable as well, such as `SKIFITY_DOMAIN`.
 
-It checks the server first, opens the host firewall for HTTP and HTTPS if one is
-running, installs Kubernetes, starts the panel, checks that the panel answers at
-its own address through the ingress, and finishes by printing a link. The link already has the setup token in it, so opening it is
+It checks the server first — and if something is wrong, such as another web
+server on port 80 or a resolver that does not answer, lists every problem
+together with what holds the port and the command that fixes it, before
+anything has been changed. Then it opens the host firewall for HTTP and HTTPS if
+one is running, installs Kubernetes, starts the panel, checks that the panel
+answers at its own address through the ingress, and finishes by printing a link.
+
+The long steps — the Kubernetes download, the panel's image — are never silent.
+On a terminal each shows one line with a spinner, what is happening and the time
+so far; in a log or under cloud-init it prints a line when a wait starts and one
+every thirty seconds while it lasts. `--verbose` shows what each step prints
+instead.
+
+The link already has the setup token in it, so opening it is
 the whole of the next step — no copying a forty-character string across. The
 token is in the `#fragment`, which browsers never send to a server, and the page
 takes it out of the address bar as soon as it has read it. The plain URL and the

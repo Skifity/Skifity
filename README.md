@@ -53,8 +53,9 @@ the two can never disagree.
 
 That is the whole installation. The installer:
 
-1. **Checks the server** — system, memory, disk, ports, clock — and stops
-   before changing anything if one of them will not do.
+1. **Checks the server** — system, memory, disk, ports, DNS, clock — and stops
+   before changing anything if one of them will not do. Every problem is listed
+   together, with what is holding a port and the command that frees it.
 2. **Opens the host firewall** for HTTP, HTTPS and the cluster's own traffic,
    and nothing else, whether it is ufw, firewalld or plain iptables.
 3. **Installs Kubernetes** (k3s), with an encrypted pod network where the
@@ -72,6 +73,21 @@ the panel answers at a free `sslip.io` address over plain HTTP, on purpose
 ([ADR-0015](docs/decisions.md)); add a domain in Settings later and HTTPS is
 turned on for it automatically. Behind NAT — AWS, Google Cloud, Oracle, a home
 router — it finds the address the internet reaches the server on.
+
+**It never goes quiet.** Most of an install is a download — Kubernetes, then
+the panel's image — and each wait says what it is waiting for and for how
+long. On a terminal that is one line, redrawn in place:
+
+```
+  ⠹ Installing Kubernetes (k3s) · Starting k3s 0:42
+```
+
+and when the step is done it becomes a line of its own, with the time it took:
+`✓ k3s installed (47s)`.
+Without a terminal — a log, a CI job, cloud-init — there is no animation, only a
+line when a wait starts and another every thirty seconds while it lasts. If a
+step fails, the last lines it printed are shown with the error, and
+`--verbose` shows what every step prints as it prints it.
 
 **Running it again is safe, and it is how you repair or upgrade.** It keeps the
 address, the domain and the certificate the panel already has, and after setup
@@ -121,6 +137,7 @@ that does the same, for provisioning tools that prefer those.
 | `--skip-k3s` | `SKIFITY_SKIP_K3S=1` | Use the k3s already installed here as it is |
 | `--skip-firewall` | `SKIFITY_SKIP_FIREWALL=1` | Leave the host firewall alone |
 | `--no-snapshot` | `SKIFITY_NO_SNAPSHOT=1` | Do not copy the panel's database before an upgrade |
+| `--verbose` | `SKIFITY_VERBOSE=1` | Show what each long step prints, as it prints it, instead of one progress line |
 | `--yes` | `SKIFITY_ASSUME_YES=1` | Never ask anything |
 
 `--help` lists them without needing root. Every value is checked before
