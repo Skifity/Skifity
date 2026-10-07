@@ -347,7 +347,7 @@ func TestMemcachedIsACacheOnlyItsEnvironmentReaches(t *testing.T) {
 	// The environment's own policy: every peer that may come in names a
 	// namespace, or is the environment's own pods. A peer with an empty
 	// namespace selector would be every environment on the cluster.
-	for _, policy := range kube.BuildNetworkPolicies("acme-shop-production", "skifity-system") {
+	for _, policy := range kube.BuildNetworkPolicies("acme-shop-production", "skifity-system", nil) {
 		for _, rule := range policy.Spec.Ingress {
 			for _, peer := range rule.From {
 				checkPeerIsNamed(t, peer)

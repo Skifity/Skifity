@@ -129,7 +129,10 @@ func BuildResourceQuota(namespace string, q NamespaceQuota) *corev1.ResourceQuot
 // Two objects rather than one: a deny-all baseline and an allow policy, because
 // Kubernetes network policies are additive and this is far easier to reason
 // about than one combined object.
-func BuildNetworkPolicies(namespace, systemNamespace string) []*networkingv1.NetworkPolicy {
+//
+// nodeAddresses is every address the cluster's nodes report; the public ones
+// among them are kept out of reach (see InternetEgress).
+func BuildNetworkPolicies(namespace, systemNamespace string, nodeAddresses []string) []*networkingv1.NetworkPolicy {
 	labels := map[string]string{"app.kubernetes.io/managed-by": version.Binary}
 	dnsPort := intstr.FromInt32(53)
 	udp := corev1.ProtocolUDP
@@ -198,27 +201,13 @@ func BuildNetworkPolicies(namespace, systemNamespace string) []*networkingv1.Net
 					// Within the environment.
 					To: []networkingv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{}}},
 				},
-				{
-					// And out to the internet, but not to other namespaces or
-					// to the node network, which is where the Kubernetes API,
-					// the kubelet and cloud metadata services live.
-					To: []networkingv1.NetworkPolicyPeer{{
-						IPBlock: &networkingv1.IPBlock{
-							CIDR: "0.0.0.0/0",
-							Except: []string{
-								"10.0.0.0/8",
-								"172.16.0.0/12",
-								"192.168.0.0/16",
-								// The cloud metadata endpoint, which hands out
-								// provider credentials to anything that asks.
-								"169.254.169.254/32",
-							},
-						},
-					}},
-				},
 			},
 		},
 	}
+	// And out to the internet, but not to other namespaces, the private
+	// networks, the cloud metadata services, or the nodes themselves, which is
+	// where the Kubernetes API, the kubelet, SSH and the registry are.
+	allow.Spec.Egress = append(allow.Spec.Egress, InternetEgress(nodeAddresses)...)
 	return []*networkingv1.NetworkPolicy{denyAll, allow}
 }
 

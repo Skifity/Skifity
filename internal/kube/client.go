@@ -936,13 +936,36 @@ func (c *Client) EnsureNamespace(ctx context.Context, namespace, teamID, project
 		BuildLimitRange(namespace),
 		BuildResourceQuota(namespace, quota),
 	}
-	for _, policy := range BuildNetworkPolicies(namespace, c.systemNamespace) {
+	nodes, err := c.NodeAddresses(ctx)
+	if err != nil {
+		return fmt.Errorf("prepare the namespace %s: %w", namespace, err)
+	}
+	for _, policy := range BuildNetworkPolicies(namespace, c.systemNamespace, nodes) {
 		objects = append(objects, policy)
 	}
 	if err := c.applier.ApplyAll(ctx, objects...); err != nil {
 		return fmt.Errorf("prepare the namespace %s: %w", namespace, err)
 	}
 	return nil
+}
+
+// NodeAddresses is every address the cluster's nodes report for themselves,
+// internal and external. Network policies name the public ones, so that a pod
+// is kept away from the machine it runs on.
+func (c *Client) NodeAddresses(ctx context.Context) ([]string, error) {
+	nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list the cluster's nodes: %w", err)
+	}
+	var out []string
+	for _, node := range nodes.Items {
+		for _, address := range node.Status.Addresses {
+			if address.Type == corev1.NodeInternalIP || address.Type == corev1.NodeExternalIP {
+				out = append(out, address.Address)
+			}
+		}
+	}
+	return out, nil
 }
 
 // DeleteNamespace removes an environment and everything in it.
@@ -987,4 +1010,63 @@ func (c *Client) RunOutcome(ctx context.Context, namespace, job string) (exitCod
 		}
 	}
 	return 0, false, nil
+}
+
+// ManagedNamespaces lists the namespaces the panel made that carry a label,
+// such as an environment's team or a plugin's id.
+func (c *Client) ManagedNamespaces(ctx context.Context, label string) ([]string, error) {
+	list, err := c.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/managed-by=" + version.Binary + "," + label,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list the namespaces: %w", err)
+	}
+	out := make([]string, 0, len(list.Items))
+	for _, ns := range list.Items {
+		// A namespace being deleted would only have its policies recreated.
+		if ns.Status.Phase == corev1.NamespaceTerminating || ns.DeletionTimestamp != nil {
+			continue
+		}
+		out = append(out, ns.Name)
+	}
+	return out, nil
+}
+
+// RefreshEnvironmentPolicies applies an environment's network policies again,
+// when the nodes' addresses have changed. Only the policies: not the
+// namespace, its quota or its pod security level, which belong to the
+// environment's own record and are applied from it.
+func (c *Client) RefreshEnvironmentPolicies(ctx context.Context, namespace string, nodeAddresses []string) error {
+	var objects []any
+	for _, policy := range BuildNetworkPolicies(namespace, c.systemNamespace, nodeAddresses) {
+		objects = append(objects, policy)
+	}
+	if err := c.applier.ApplyAll(ctx, objects...); err != nil {
+		return fmt.Errorf("refresh the network policies of %s: %w", namespace, err)
+	}
+	return nil
+}
+
+// RefreshPluginPolicies is the same for a plugin's namespace.
+func (c *Client) RefreshPluginPolicies(ctx context.Context, namespace string, nodeAddresses []string) error {
+	var objects []any
+	for _, policy := range buildPluginNetworkPolicies(namespace, c.systemNamespace, nodeAddresses) {
+		objects = append(objects, policy)
+	}
+	if err := c.applier.ApplyAll(ctx, objects...); err != nil {
+		return fmt.Errorf("refresh the network policies of %s: %w", namespace, err)
+	}
+	return nil
+}
+
+// NamespaceExists reports whether a namespace is there.
+func (c *Client) NamespaceExists(ctx context.Context, namespace string) (bool, error) {
+	_, err := c.clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err == nil {
+		return true, nil
+	}
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("read the namespace %s: %w", namespace, err)
 }

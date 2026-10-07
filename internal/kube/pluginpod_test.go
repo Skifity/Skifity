@@ -115,29 +115,15 @@ func TestAPluginCanReachThePanelDNSAndTheInternetAndNothingElse(t *testing.T) {
 		t.Errorf("a plugin accepts traffic from %+v, want only the panel's namespace", from)
 	}
 
-	// And the one egress rule that reaches outward must exclude the private
-	// ranges and the metadata address.
-	var internet *networkingv1.IPBlock
-	for _, rule := range allow.Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock != nil {
-				internet = peer.IPBlock
-			}
-		}
-	}
-	if internet == nil {
-		t.Fatal("a plugin cannot reach the internet at all, which is what most plugins are for")
-	}
-	for _, blocked := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.169.254/32"} {
-		found := false
-		for _, except := range internet.Except {
-			if except == blocked {
-				found = true
-			}
-		}
-		if !found {
+	// And what reaches outward must exclude the private ranges and the cloud
+	// metadata services.
+	for _, blocked := range []string{"10.43.0.1", "172.16.4.4", "192.168.0.9", "169.254.169.254"} {
+		if EgressAllows(allow.Spec.Egress, blocked, 80) {
 			t.Errorf("a plugin can reach %s, which is another namespace or the cloud metadata service", blocked)
 		}
+	}
+	if !EgressAllows(allow.Spec.Egress, "93.184.216.34", 443) {
+		t.Fatal("a plugin cannot reach the internet at all, which is what most plugins are for")
 	}
 }
 

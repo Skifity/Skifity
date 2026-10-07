@@ -22,7 +22,7 @@ func TestBuildsAreNotInThePanelsNamespace(t *testing.T) {
 // TestBuildNetworkPolicyLetsBuildsOutButNotIn: a build needs the repository
 // and the packages, and nothing else on the node network.
 func TestBuildNetworkPolicyLetsBuildsOutButNotIn(t *testing.T) {
-	policies := buildNetworkPolicies(kube.BuildsNamespace, "skifity-system")
+	policies := buildNetworkPolicies(kube.BuildsNamespace, "skifity-system", []string{"203.0.113.10"})
 	if len(policies) != 2 {
 		t.Fatalf("got %d policies, want a deny-all and an allow", len(policies))
 	}
@@ -30,24 +30,19 @@ func TestBuildNetworkPolicyLetsBuildsOutButNotIn(t *testing.T) {
 		t.Fatal("the first policy is not a deny-all baseline")
 	}
 
-	var sawInternet bool
-	for _, rule := range policies[1].Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock == nil || peer.IPBlock.CIDR != "0.0.0.0/0" {
-				continue
-			}
-			sawInternet = true
-			except := strings.Join(peer.IPBlock.Except, ",")
-			// The metadata service hands out the provider's credentials to
-			// anything that asks, and a build is the last thing that should.
-			for _, blocked := range []string{"169.254.169.254/32", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"} {
-				if !strings.Contains(except, blocked) {
-					t.Errorf("a build can reach %s", blocked)
-				}
-			}
+	// The metadata service hands out the provider's credentials to anything
+	// that asks, and a build is the last thing that should; the registry's
+	// NodePort and the Kubernetes API are on the node's own address, which a
+	// build has no business reaching either.
+	for _, blocked := range [][2]any{
+		{"169.254.169.254", 80}, {"10.0.0.5", 80}, {"172.16.0.1", 80}, {"192.168.0.1", 80},
+		{"203.0.113.10", 30500}, {"203.0.113.10", 6443}, {"203.0.113.10", 10250},
+	} {
+		if kube.EgressAllows(policies[1].Spec.Egress, blocked[0].(string), blocked[1].(int)) {
+			t.Errorf("a build can reach %s:%d", blocked[0], blocked[1])
 		}
 	}
-	if !sawInternet {
+	if !kube.EgressAllows(policies[1].Spec.Egress, "140.82.121.4", 443) {
 		t.Fatal("a build cannot reach the internet, so it cannot clone anything")
 	}
 }

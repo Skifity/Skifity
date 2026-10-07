@@ -62,6 +62,10 @@ func (c *Cluster) InstallPlugin(ctx context.Context, record store.Plugin, manife
 		return err
 	}
 
+	nodes, err := c.client.NodeAddresses(ctx)
+	if err != nil {
+		return fmt.Errorf("prepare the plugin's namespace: %w", err)
+	}
 	spec := kube.PluginSpec{
 		ID:              manifest.ID,
 		Name:            manifest.Name,
@@ -71,6 +75,7 @@ func (c *Cluster) InstallPlugin(ctx context.Context, record store.Plugin, manife
 		Health:          manifest.Runtime.Health,
 		MemoryMB:        manifest.Runtime.MemoryMB,
 		SystemNamespace: c.client.SystemNamespace(),
+		NodeAddresses:   nodes,
 	}
 
 	objects := kube.BuildPluginObjects(spec)

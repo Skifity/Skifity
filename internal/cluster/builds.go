@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"skifity/internal/kube"
 	"skifity/internal/version"
 )
 
@@ -50,7 +51,11 @@ func (c *Cluster) EnsureBuildNamespace(ctx context.Context) error {
 			ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: labels},
 		},
 	}
-	for _, policy := range buildNetworkPolicies(namespace, c.client.SystemNamespace()) {
+	nodes, err := c.client.NodeAddresses(ctx)
+	if err != nil {
+		return fmt.Errorf("prepare the build namespace: %w", err)
+	}
+	for _, policy := range buildNetworkPolicies(namespace, c.client.SystemNamespace(), nodes) {
 		objects = append(objects, policy)
 	}
 	if err := c.client.Applier().ApplyAll(ctx, objects...); err != nil {
@@ -65,7 +70,7 @@ func (c *Cluster) EnsureBuildNamespace(ctx context.Context) error {
 // packages are. It does not need the panel, another team's namespace, the
 // kubelet or the cloud metadata service, and the point of the deny-all
 // baseline is that it never gets them by accident.
-func buildNetworkPolicies(namespace, systemNamespace string) []*networkingv1.NetworkPolicy {
+func buildNetworkPolicies(namespace, systemNamespace string, nodeAddresses []string) []*networkingv1.NetworkPolicy {
 	labels := map[string]string{"app.kubernetes.io/managed-by": version.Binary}
 	dnsPort := intstr.FromInt32(53)
 	udp := corev1.ProtocolUDP
@@ -116,24 +121,12 @@ func buildNetworkPolicies(namespace, systemNamespace string) []*networkingv1.Net
 					},
 				},
 				{To: []networkingv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{}}}},
-				{
-					// Out to the internet for the repository and the packages,
-					// but not to the node network, where the Kubernetes API,
-					// the kubelet and the cloud metadata service live.
-					To: []networkingv1.NetworkPolicyPeer{{
-						IPBlock: &networkingv1.IPBlock{
-							CIDR: "0.0.0.0/0",
-							Except: []string{
-								"10.0.0.0/8",
-								"172.16.0.0/12",
-								"192.168.0.0/16",
-								"169.254.169.254/32",
-							},
-						},
-					}},
-				},
 			},
 		},
 	}
+	// Out to the internet for the repository and the packages, but not to the
+	// nodes' own addresses, where the Kubernetes API, the kubelet and the
+	// registry's NodePort are, nor to the cloud metadata service.
+	allow.Spec.Egress = append(allow.Spec.Egress, kube.InternetEgress(nodeAddresses)...)
 	return []*networkingv1.NetworkPolicy{denyAll, allow}
 }

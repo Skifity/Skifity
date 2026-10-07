@@ -83,6 +83,9 @@ type PluginSpec struct {
 	// SystemNamespace is where the panel runs, which is the one namespace this
 	// plugin may talk to.
 	SystemNamespace string
+	// NodeAddresses are the cluster's nodes' own addresses, which a plugin is
+	// kept away from (see InternetEgress).
+	NodeAddresses []string
 }
 
 func (s PluginSpec) port() int {
@@ -250,7 +253,7 @@ func BuildPluginObjects(s PluginSpec) []any {
 	}
 
 	objects := []any{ns, deployment, service}
-	for _, policy := range buildPluginNetworkPolicies(namespace, s.SystemNamespace) {
+	for _, policy := range buildPluginNetworkPolicies(namespace, s.SystemNamespace, s.NodeAddresses) {
 		objects = append(objects, policy)
 	}
 	return objects
@@ -267,7 +270,7 @@ func PluginServiceURL(id string, port int) string {
 
 // buildPluginNetworkPolicies confines a plugin to the panel, DNS and the
 // internet.
-func buildPluginNetworkPolicies(namespace, systemNamespace string) []*networkingv1.NetworkPolicy {
+func buildPluginNetworkPolicies(namespace, systemNamespace string, nodeAddresses []string) []*networkingv1.NetworkPolicy {
 	labels := map[string]string{"app.kubernetes.io/managed-by": version.Binary}
 	dnsPort := intstr.FromInt32(53)
 	udp := corev1.ProtocolUDP
@@ -322,28 +325,13 @@ func buildPluginNetworkPolicies(namespace, systemNamespace string) []*networking
 						},
 					}},
 				},
-				{
-					// Out to the internet, and nowhere private. A plugin that
-					// copies backups to a cloud provider is the obvious first
-					// plugin anybody writes; a plugin reading another
-					// namespace's database is not something to make possible.
-					To: []networkingv1.NetworkPolicyPeer{{
-						IPBlock: &networkingv1.IPBlock{
-							CIDR: "0.0.0.0/0",
-							Except: []string{
-								"10.0.0.0/8",
-								"172.16.0.0/12",
-								"192.168.0.0/16",
-								// The cloud metadata endpoint, which hands out
-								// the provider credentials for the whole
-								// machine to anything that asks.
-								"169.254.169.254/32",
-							},
-						},
-					}},
-				},
 			},
 		},
 	}
+	// Out to the internet, and nowhere private. A plugin that copies backups to
+	// a cloud provider is the obvious first plugin anybody writes; a plugin
+	// reading another namespace's database, or the node it runs on, is not
+	// something to make possible.
+	allow.Spec.Egress = append(allow.Spec.Egress, InternetEgress(nodeAddresses)...)
 	return []*networkingv1.NetworkPolicy{denyAll, allow}
 }

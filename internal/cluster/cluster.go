@@ -50,6 +50,12 @@ type Cluster struct {
 	// nothing when nothing changed.
 	logsMu      sync.Mutex
 	logsApplied string
+
+	// policiesFor is the set of node addresses the tenant network policies
+	// were last applied for; see MaintainNetworkPolicies.
+	policiesMu      sync.Mutex
+	policiesApplied bool
+	policiesFor     string
 }
 
 // New builds a Cluster.

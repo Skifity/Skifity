@@ -516,6 +516,10 @@ func runScheduler(ctx context.Context, db *store.DB, backups *backup.Manager, sc
 				if now.Minute()%5 == 0 {
 					runsafe.Go(log, "bringing the log collector up to date", func() { c.MaintainLogDrains(ctx) })
 				}
+				// The fence around the nodes' own addresses, which moves when
+				// a server joins or leaves. It applies nothing when nothing
+				// changed, and asks the cluster once a minute for the nodes.
+				runsafe.Go(log, "keeping the network policies in step with the nodes", func() { c.MaintainNetworkPolicies(ctx) })
 			}
 			// A team's template catalogues are downloaded once a day each,
 			// beside the tick for the same reason as the sweep: a slow host

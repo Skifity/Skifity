@@ -670,7 +670,7 @@ func TestNamespaceIsolation(t *testing.T) {
 }
 
 func TestNetworkPoliciesDenyByDefaultAndBlockMetadata(t *testing.T) {
-	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system")
+	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system", nil)
 	if len(policies) != 2 {
 		t.Fatalf("got %d policies, want a deny-all and an allow", len(policies))
 	}
@@ -684,23 +684,13 @@ func TestNetworkPoliciesDenyByDefaultAndBlockMetadata(t *testing.T) {
 	}
 
 	allow := policies[1]
-	var sawMetadataBlock bool
-	for _, rule := range allow.Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock == nil {
-				continue
-			}
-			for _, except := range peer.IPBlock.Except {
-				if except == "169.254.169.254/32" {
-					sawMetadataBlock = true
-				}
-			}
-		}
-	}
 	// The cloud metadata endpoint hands provider credentials to anything that
 	// asks, which is a well-trodden path from a compromised app to the account.
-	if !sawMetadataBlock {
+	if EgressAllows(allow.Spec.Egress, "169.254.169.254", 80) {
 		t.Fatal("egress to the cloud metadata endpoint is not blocked")
+	}
+	if !EgressAllows(allow.Spec.Egress, "93.184.216.34", 443) {
+		t.Fatal("an app cannot reach the internet")
 	}
 }
 
@@ -782,7 +772,7 @@ func TestScaleToZeroNeedsAHostname(t *testing.T) {
 // environment's default-deny policy would otherwise drop the request that woke
 // the app.
 func TestTheInterceptorCanReachTheApp(t *testing.T) {
-	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system")
+	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system", nil)
 	var allowed bool
 	for _, policy := range policies {
 		for _, rule := range policy.Spec.Ingress {
