@@ -1718,6 +1718,13 @@ EOF
 # labels, are on in k3s's Traefik already and are not touched. Changing this
 # file makes k3s upgrade Traefik, which restarts it one server at a time.
 #
+# Traefik is the one process every app's traffic goes through, on every server,
+# and it was installed with no resources at all: the lowest class Kubernetes
+# has, the first thing it stops when a machine runs short of memory, and with no
+# ceiling for a flood to push it through. A request for what it needs makes it
+# one of the last to be stopped, and a limit makes a runaway Traefik one
+# restarted pod instead of a machine that stops answering.
+#
 # An app that scales to zero is reached through an ExternalName Service that
 # aliases the KEDA interceptor (internal/kube/scaletozero.go), and Traefik's
 # Ingress provider refuses ExternalName backends unless told otherwise: every
@@ -1757,6 +1764,12 @@ spec:
     providers:
       kubernetesIngress:
         allowExternalNameServices: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
 TRAEFIK
 	if cmp -s "${ours}.new" "$ours" 2>/dev/null; then
 		rm -f "${ours}.new"

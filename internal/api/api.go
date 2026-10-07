@@ -36,6 +36,10 @@ type Server struct {
 	keyring *crypto.Keyring
 	auth    *auth.Service
 	hub     *events.Hub
+	// flood limits how fast one address may ask: see floodguard.go.
+	flood *floodGuard
+	// streams counts the realtime streams each account holds open.
+	streams streamCounter
 	log     *slog.Logger
 	// metrics is what the panel says about itself, for whatever is watching it.
 	metrics *metrics.Registry
@@ -174,6 +178,7 @@ func New(opts Options) *Server {
 		keyring:     opts.Keyring,
 		auth:        opts.Auth,
 		hub:         opts.Hub,
+		flood:       newFloodGuard(),
 		log:         opts.Logger,
 		cluster:     opts.Cluster,
 		provisioner: opts.Provisioner,
@@ -231,6 +236,8 @@ func (s *Server) routes() chi.Router {
 	r.Use(s.securityHeaders)
 
 	r.Route("/api", func(api chi.Router) {
+		// First: a caller over the line costs the panel nothing more than this.
+		api.Use(s.floodLimit)
 		api.Use(noCache)
 		api.Use(s.authenticate)
 		api.Use(s.csrf)
@@ -940,6 +947,7 @@ func (s *Server) Background(ctx context.Context) {
 			if dropped := s.hub.Sweep(time.Now()); dropped > 0 {
 				s.log.Debug("forgot the history of finished topics", "topics", dropped)
 			}
+			s.flood.sweep()
 		case <-ticker.C:
 			// A panic costs one hour of housekeeping, not the housekeeping.
 			func() {

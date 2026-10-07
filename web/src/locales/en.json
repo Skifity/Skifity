@@ -3951,6 +3951,18 @@
         "cause": "The secrets in {{0}} were sealed with a different key.",
         "impact": "Nothing was changed. Putting it in place would have left every stored secret unreadable.",
         "fix": "Find the recovery key that was shown when this panel was set up, or the master key file itself. A recovery key from another install, or from before the key was rotated, will not open it."
+      },
+      "api_too_many_requests": {
+        "title": "Too many requests",
+        "cause": "This address has sent far more requests than the panel answers in a second.",
+        "impact": "This request was not handled. Nothing was changed.",
+        "fix": "Wait {{0}} seconds and try again. A script that loops on the panel should slow down; a person will not meet this."
+      },
+      "api_too_many_streams": {
+        "title": "Too many live views are open",
+        "cause": "This account already has {{0}} live streams open, which is the most the panel keeps for one account.",
+        "impact": "This one was not opened. The ones that are open are not affected.",
+        "fix": "Close some of the panel's tabs, or stop the script that opens them, and try again."
       }
     }
   },

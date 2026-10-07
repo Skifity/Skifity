@@ -319,6 +319,15 @@ func (g *Guard) Run(ctx context.Context, address string) error {
 		Addr:              address,
 		Handler:           g.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
+		// A forward-auth request is a few headers and no body, so a client that
+		// takes longer than this to send one, to read the answer, or to do
+		// nothing on an open connection is holding a slot in the one process
+		// every request to the app passes through. Without these only the
+		// header was timed, and a connection that sent one slowly, or opened and
+		// said nothing, was kept for ever.
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 	go func() {
 		// The guard is the only thing standing in front of an app. A panic in

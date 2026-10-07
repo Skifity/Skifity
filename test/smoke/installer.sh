@@ -102,6 +102,14 @@ if grep -q 'allowExternalNameServices: true' "$manifests/skifity-traefik.yaml" 2
 else
   t_fail "Traefik refuses ExternalName backends, so an app that scales to zero answers 404"
 fi
+# Traefik carries every app's traffic, and was installed with no resources: the
+# first thing stopped when memory runs short, with no ceiling for a flood.
+if grep -q 'memory: 128Mi' "$manifests/skifity-traefik.yaml" 2>/dev/null &&
+  grep -q 'memory: 1Gi' "$manifests/skifity-traefik.yaml" 2>/dev/null; then
+  t_pass "Traefik asks for the memory it needs, and cannot take a machine with it"
+else
+  t_fail "Traefik was left with no resources, so a flood can take the machine with it"
+fi
 # An operator's own configuration of Traefik is not fought over.
 theirs="$WORKDIR/theirs"
 mkdir -p "$theirs"

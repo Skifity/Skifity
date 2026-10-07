@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +21,44 @@ import (
 
 // sseHeartbeat keeps proxies from closing an idle stream.
 const sseHeartbeat = 25 * time.Second
+
+// maxStreamsPerUser is how many realtime streams one account may hold open at
+// once. The interface keeps a handful (the list it is on, the log it is
+// reading); a script, or a browser with a hundred tabs, that opens streams
+// without end would keep a goroutine, a buffer and a replay for each, in the one
+// process that runs everything. Past this the oldest tab is not dropped: the
+// new one is refused, and says why.
+const maxStreamsPerUser = 40
+
+// streamCounter counts open streams per account.
+type streamCounter struct {
+	mu   sync.Mutex
+	open map[string]int
+}
+
+// acquire takes a place for the account, or says there is none left.
+func (c *streamCounter) acquire(user string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.open == nil {
+		c.open = map[string]int{}
+	}
+	if c.open[user] >= maxStreamsPerUser {
+		return false
+	}
+	c.open[user]++
+	return true
+}
+
+func (c *streamCounter) release(user string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.open[user] <= 1 {
+		delete(c.open, user)
+		return
+	}
+	c.open[user]--
+}
 
 // handleEventStream is the panel's realtime channel. A client subscribes to the
 // topics it is allowed to see; authorization happens here, once, rather than per
@@ -41,6 +80,16 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 		lastSeq, _ = strconv.ParseInt(raw, 10, 64)
 	} else if raw := r.URL.Query().Get("since"); raw != "" {
 		lastSeq, _ = strconv.ParseInt(raw, 10, 64)
+	}
+
+	// Whoever it is, counted by account: a token is an account too.
+	if user, ok := UserFrom(r.Context()); ok {
+		if !s.streams.acquire(user.ID) {
+			w.Header().Set("Retry-After", "10")
+			writeError(w, r, errdoc.TooManyStreams(maxStreamsPerUser))
+			return
+		}
+		defer s.streams.release(user.ID)
 	}
 
 	sub := s.hub.Subscribe(r.Context(), lastSeq, topics...)

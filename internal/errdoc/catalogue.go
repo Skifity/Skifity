@@ -3,6 +3,7 @@ package errdoc
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -758,6 +759,28 @@ func RateLimited(retryAfter string) *Problem {
 		WithFix("Wait %s and try again. If this was not you, change your password once you can sign in.", retryAfter).
 		WithStatus(http.StatusTooManyRequests).
 		With("retry_after", retryAfter)
+}
+
+// TooManyRequests is a caller asking faster than the panel answers anybody.
+func TooManyRequests(waitSeconds int) *Problem {
+	return New("api.too_many_requests", "Too many requests").
+		WithCause("This address has sent far more requests than the panel answers in a second.").
+		WithImpact("This request was not handled. Nothing was changed.").
+		WithFix("Wait %d seconds and try again. A script that loops on the panel should slow down; a person will not meet this.", waitSeconds).
+		WithStatus(http.StatusTooManyRequests).
+		Retry().
+		With("retry_after", strconv.Itoa(waitSeconds))
+}
+
+// TooManyStreams is an account holding more realtime streams open than the
+// panel gives one account.
+func TooManyStreams(limit int) *Problem {
+	return New("api.too_many_streams", "Too many live views are open").
+		WithCause("This account already has %d live streams open, which is the most the panel keeps for one account.", limit).
+		WithImpact("This one was not opened. The ones that are open are not affected.").
+		WithFix("Close some of the panel's tabs, or stop the script that opens them, and try again.").
+		WithStatus(http.StatusTooManyRequests).
+		Retry()
 }
 
 // --- SSH and provisioning ---

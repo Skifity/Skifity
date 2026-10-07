@@ -3932,6 +3932,18 @@
         "cause": "Rahasia di {{0}} disegel dengan kunci yang berbeda.",
         "impact": "Tidak ada yang diubah. Memasangnya akan membuat semua rahasia tersimpan tidak terbaca.",
         "fix": "Cari recovery key yang ditampilkan saat panel ini disiapkan, atau berkas kunci master itu sendiri. Recovery key dari instalasi lain, atau dari sebelum kunci dirotasi, tidak akan membukanya."
+      },
+      "api_too_many_requests": {
+        "title": "Terlalu banyak permintaan",
+        "cause": "Alamat ini mengirim jauh lebih banyak permintaan daripada yang dijawab panel dalam satu detik.",
+        "impact": "Permintaan ini tidak diproses. Tidak ada yang diubah.",
+        "fix": "Tunggu {{0}} detik lalu coba lagi. Skrip yang berputar terus ke panel sebaiknya diperlambat; orang biasa tidak akan mengalami ini."
+      },
+      "api_too_many_streams": {
+        "title": "Terlalu banyak tampilan langsung yang terbuka",
+        "cause": "Akun ini sudah membuka {{0}} aliran langsung, yaitu batas maksimum yang disediakan panel untuk satu akun.",
+        "impact": "Aliran ini tidak dibuka. Yang sudah terbuka tidak terpengaruh.",
+        "fix": "Tutup beberapa tab panel, atau hentikan skrip yang membukanya, lalu coba lagi."
       }
     }
   },
