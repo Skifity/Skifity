@@ -1,5 +1,5 @@
 id: dozzle-with-auth
-name: Dozzle With Auth
+name: Dozzle with authentication
 description: Dozzle is a simple and lightweight web UI for Docker logs.
 category: developer
 website: https://dozzle.dev/

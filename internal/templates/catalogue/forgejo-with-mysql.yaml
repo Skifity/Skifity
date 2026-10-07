@@ -1,5 +1,5 @@
 id: forgejo-with-mysql
-name: Forgejo With Mysql
+name: Forgejo with MySQL
 description: Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance,
   it just does the job.
 category: developer

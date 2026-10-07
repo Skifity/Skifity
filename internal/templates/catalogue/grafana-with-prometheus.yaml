@@ -1,5 +1,5 @@
 id: grafana-with-prometheus
-name: Grafana With Prometheus
+name: Grafana with Prometheus
 description: Grafana dashboards on top of a Prometheus that is already connected, ready for metrics.
 category: monitoring
 website: https://grafana.com/docs/grafana/latest/getting-started/get-started-grafana-prometheus/

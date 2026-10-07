@@ -1,5 +1,5 @@
 id: superset-with-postgresql
-name: Superset With Postgresql
+name: Apache Superset with PostgreSQL
 description: Modern data exploration and visualization platform (unofficial community docker image).
 category: analytics
 website: https://github.com/amancevice/docker-superset

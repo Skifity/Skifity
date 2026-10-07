@@ -1,5 +1,5 @@
 id: nexus-arm
-name: Nexus Arm
+name: Nexus (ARM)
 description: 'Open source Universal Repository Manager (ARM version, community edition), default credentials:
   admin/admin123.'
 category: developer

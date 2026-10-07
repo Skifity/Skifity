@@ -6504,6 +6504,22 @@ them now, and fails on anything that reaches past its own card, which the old
 layout did by 145 px at 375 px wide. Widening it found a link on Plugins that was
 14 px tall, under the 24 px a tap target needs; fixed.
 
+The Templates page, with 374 apps on it, read as a wall: a small grey heading per
+category, a card for each with a labelled Install button and a labelled Website
+button, a grey square with a letter where a logo was missing, and names that were
+the file's slug title-cased ("Bookstack", "Anythingllm", "Wordpress Without
+Database", "Calibre Web"). The names are the project's own now, in 129 catalogue
+files ("BookStack", "AnythingLLM", "WordPress without a database",
+"Calibre-Web"), the page has a category chip for each of the sixteen categories
+with how many it holds (a dropdown on a phone, where sixteen chips are five rows
+of filters), a result count, a heading and count per section, and cards that are
+the same height with the website as an icon. A template without a logo gets a
+colour from its id, so it is the same every time. "Everything else" is last.
+The page is exercised by a test that narrows by category, by search and on a
+phone, and by the layout test at 375, 768 and 1440 px. An app installed from a
+template whose name changed gets the new name's slug the next time one is
+installed; ones already installed keep theirs.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

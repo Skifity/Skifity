@@ -1,5 +1,5 @@
 id: redisinsight
-name: Redis Insight
+name: RedisInsight
 description: Redis's own GUI for browsing keys, running commands, profiling and analysing memory in Redis databases.
 category: developer
 website: https://redis.io/insight/

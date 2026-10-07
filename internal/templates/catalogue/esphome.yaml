@@ -1,5 +1,5 @@
 id: esphome
-name: Esphome
+name: ESPHome
 description: Smart Home Made Simple.
 category: automation
 website: https://esphome.io/guides/getting_started_command_line/

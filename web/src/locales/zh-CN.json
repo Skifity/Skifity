@@ -1527,6 +1527,16 @@
     "installedNote": "已安装。启动可能需要一分钟。",
     "installedApps_other": "已安装 {{count}} 个应用。启动可能需要一分钟。",
     "search": "搜索模板",
+    "allCategories": "全部",
+    "installNamed": "安装 {{name}}",
+    "websiteNamed": "打开 {{name}} 的官网",
+    "results_other": "{{count}} 个模板",
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "mariadb": "MariaDB",
+      "redis": "Redis"
+    },
     "notesTitle": "在它能用之前",
     "categories": {
       "ai": "人工智能",

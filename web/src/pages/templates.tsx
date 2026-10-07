@@ -46,10 +46,17 @@ import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import type { Environment, Project, Template } from "@/lib/types"
 
+/** What the category picker holds for "every category": a Select item cannot be empty. */
+const EVERY_CATEGORY = "__all__"
+
+/** How the same grid is laid out while the catalogue is loading and once it has loaded. */
+const GRID = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+
 export function TemplatesPage() {
   const { t } = useTranslation()
   const { team } = useSession()
   const [search, setSearch] = useState("")
+  const [category, setCategory] = useState("")
   const [installing, setInstalling] = useState<Template | null>(null)
   const [managing, setManaging] = useState(false)
 
@@ -71,7 +78,7 @@ export function TemplatesPage() {
   const stale = (catalogues.data?.items ?? []).filter((catalogue) => catalogue.last_error).length
 
   const items = useMemo(() => templates.data?.items ?? [], [templates.data])
-  const shown = useMemo(() => {
+  const searched = useMemo(() => {
     const needle = search.trim().toLowerCase()
     if (!needle) return items
     return items.filter(
@@ -83,18 +90,34 @@ export function TemplatesPage() {
     )
   }, [items, search])
 
-  // Sorted by the name somebody reads, not by the slug underneath it: sorting
-  // "cms" and "ai" alphabetically puts Websites first in English and somewhere
-  // else entirely in Russian, for a reason nobody can see on screen.
-  const categories = useMemo(
-    () =>
-      [...new Set(shown.map((template) => template.category))].sort((a, b) =>
-        t(`templates.categories.${a}`, { defaultValue: a }).localeCompare(
-          t(`templates.categories.${b}`, { defaultValue: b }),
-        ),
-      ),
-    [shown, t],
+  // The category is a slug in the file — "cms", "ai" — and showing the slug is
+  // how a page looks unfinished. defaultValue keeps a category nobody has
+  // translated yet readable rather than blank.
+  const labelOf = (slug: string) => t(`templates.categories.${slug}`, { defaultValue: slug })
+
+  // What each category holds under the current search, so a chip's number is
+  // what choosing it will show. Sorted by the name somebody reads, not by the
+  // slug underneath it: "cms" and "ai" alphabetically put Websites first in
+  // English and somewhere else entirely in Russian, for a reason nobody can see.
+  const counts = useMemo(() => {
+    const out = new Map<string, number>()
+    for (const template of searched) out.set(template.category, (out.get(template.category) ?? 0) + 1)
+    return out
+  }, [searched])
+  const categories = [...counts.keys()].sort((a, b) =>
+    // "Everything else" is where a template goes when nothing fits, so it is
+    // the last thing on the page and not a heading in the middle of the alphabet.
+    a === "other" || b === "other"
+      ? Number(a === "other") - Number(b === "other")
+      : labelOf(a).localeCompare(labelOf(b)),
   )
+
+  // A category chosen before the search emptied it is not a filter any more.
+  // Derived here rather than reset in an effect, so there is one render with
+  // the answer instead of one with a stale chip and one with the fix.
+  const active = counts.has(category) ? category : ""
+  const sections = active ? [active] : categories
+  const total = active ? (counts.get(active) ?? 0) : searched.length
 
   return (
     <Page>
@@ -128,19 +151,84 @@ export function TemplatesPage() {
         </Alert>
       )}
 
-      <InputGroup className="max-w-sm">
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-        <InputGroupInput
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={t("templates.search")}
-        />
-      </InputGroup>
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <InputGroup className="sm:max-w-sm">
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("templates.search")}
+            />
+          </InputGroup>
+          {/*
+            Sixteen chips are a row of filters on a laptop and five rows of
+            nothing but filters on a phone, so a phone gets the same choice as
+            one dropdown. Both write the same state.
+          */}
+          {categories.length > 1 && (
+            <Select
+              value={active || EVERY_CATEGORY}
+              onValueChange={(value) => setCategory(value === EVERY_CATEGORY ? "" : value)}
+            >
+              <SelectTrigger className="w-full sm:w-56 md:hidden" aria-label={t("templates.category")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={EVERY_CATEGORY}>
+                  {t("templates.allCategories")} · {searched.length}
+                </SelectItem>
+                {categories.map((slug) => (
+                  <SelectItem key={slug} value={slug}>
+                    {labelOf(slug)} · {counts.get(slug)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {searched.length > 0 && (
+            <p
+              className="shrink-0 text-sm whitespace-nowrap text-muted-foreground tabular-nums sm:ml-auto"
+              aria-live="polite"
+            >
+              {t("templates.results", { count: total })}
+            </p>
+          )}
+        </div>
+
+        {categories.length > 1 && (
+          <div
+            role="group"
+            aria-label={t("templates.category")}
+            className="hidden flex-wrap gap-2 md:flex"
+          >
+            <CategoryChip
+              active={active === ""}
+              label={t("templates.allCategories")}
+              count={searched.length}
+              onClick={() => setCategory("")}
+            />
+            {categories.map((slug) => (
+              <CategoryChip
+                key={slug}
+                active={active === slug}
+                label={labelOf(slug)}
+                count={counts.get(slug) ?? 0}
+                onClick={() => setCategory(slug)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {templates.isLoading ? (
-        <Skeleton className="h-64" />
+        <div className={GRID} aria-hidden>
+          {Array.from({ length: 9 }, (_, index) => (
+            <Skeleton key={index} className="h-40 rounded-xl" />
+          ))}
+        </div>
       ) : templates.error ? (
         <ErrorDisplay error={templates.error} onRetry={() => void templates.refetch()} />
       ) : items.length === 0 ? (
@@ -149,7 +237,7 @@ export function TemplatesPage() {
           title={t("templates.title")}
           description={t("templates.subtitle")}
         />
-      ) : shown.length === 0 ? (
+      ) : searched.length === 0 ? (
         <EmptyState
           icon={SearchIcon}
           title={t("common.noMatches")}
@@ -161,97 +249,150 @@ export function TemplatesPage() {
           }
         />
       ) : (
-        categories.map((category) => (
-          <section key={category} className="space-y-3">
-            {/*
-              The category is a slug in the file — "cms", "ai" — and showing
-              the slug is how a page looks unfinished. defaultValue keeps a
-              category nobody has translated yet readable rather than blank.
-            */}
-            <h2 className="text-sm font-medium text-muted-foreground">
-              {t(`templates.categories.${category}`, { defaultValue: category })}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {shown
-                .filter((template) => template.category === category)
-                .map((template) => (
-                  <Card
-                    // An id is unique within its catalogue, not across them:
-                    // a team's own wiki and the built-in one are two cards.
-                    key={`${template.catalogue?.id ?? ""}/${template.id}`}
-                    className="flex h-full flex-col transition-colors hover:border-primary/40"
-                  >
-                    <CardHeader>
-                      {/*
-                        min-w-0 on the row, not only on the text inside it.
-                        shadcn's CardHeader is a grid, and a grid item defaults
-                        to `min-width: auto`, which means "never narrower than
-                        my content" — so `truncate` further down never applied
-                        and "Calibre Web Automated Book Downloader" pushed the
-                        card 92px past the side of a 375px screen. Measured, not
-                        guessed: the row was 426px wide inside a 341px cell.
-                      */}
-                      <div className="flex min-w-0 items-start gap-3">
-                        <TemplateIcon template={template} />
-                        <div className="min-w-0 flex-1">
-                          {/*
-                            min-w-0 again, on the row as well as on its parent.
-                            A flex item will not shrink below its content unless
-                            every flex ancestor says it may, so without this the
-                            `truncate` below never applies: "Calibre Web
-                            Automated Book Downloader" pushed the card 92px past
-                            the side of a 375px screen, and the whole page moved
-                            sideways under a thumb that meant to scroll down.
-                          */}
-                          <div className="flex min-w-0 items-start justify-between gap-2">
-                            <CardTitle className="truncate text-base">{template.name}</CardTitle>
-                            {template.beta && (
-                              <Badge variant="outline" className="text-[10px]">
-                                {t("common.beta")}
-                              </Badge>
-                            )}
-                            {template.catalogue && (
-                              <Badge
-                                variant="secondary"
-                                className="max-w-32 shrink truncate text-[10px]"
-                                title={template.catalogue.name}
-                              >
-                                <span className="truncate">{template.catalogue.name}</span>
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {installs(template, t)}
-                          </p>
-                        </div>
-                      </div>
-                      <CardDescription className="line-clamp-3">
-                        {template.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="mt-auto flex items-center gap-2">
-                      <Button size="sm" onClick={() => setInstalling(template)}>
-                        {t("templates.install")}
-                      </Button>
-                      {template.website && (
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={template.website} target="_blank" rel="noreferrer">
-                            <ExternalLinkIcon className="size-3.5" />
-                            {t("templates.website")}
-                          </a>
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          </section>
-        ))
+        <div className="space-y-10">
+          {sections.map((slug) => (
+            <section key={slug} aria-labelledby={`templates-${slug}`} className="space-y-4">
+              <h2
+                id={`templates-${slug}`}
+                className="flex items-baseline gap-2 border-b pb-2 text-lg font-semibold tracking-tight"
+              >
+                {labelOf(slug)}
+                <span className="text-sm font-normal text-muted-foreground tabular-nums">
+                  {counts.get(slug)}
+                </span>
+              </h2>
+              <div className={GRID} role="list">
+                {searched
+                  .filter((template) => template.category === slug)
+                  .map((template) => (
+                    <TemplateCard
+                      // An id is unique within its catalogue, not across them:
+                      // a team's own wiki and the built-in one are two cards.
+                      key={`${template.catalogue?.id ?? ""}/${template.id}`}
+                      template={template}
+                      onInstall={() => setInstalling(template)}
+                    />
+                  ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
 
       {installing && <InstallDialog template={installing} onClose={() => setInstalling(null)} />}
       <TemplateCataloguesSheet open={managing} onOpenChange={setManaging} />
     </Page>
+  )
+}
+
+function CategoryChip({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  count: number
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? "default" : "outline"}
+      aria-pressed={active}
+      className="rounded-full"
+      onClick={onClick}
+    >
+      {label}
+      <span
+        className={cn(
+          "text-xs font-normal tabular-nums",
+          active ? "text-primary-foreground/70" : "text-muted-foreground",
+        )}
+      >
+        {count}
+      </span>
+    </Button>
+  )
+}
+
+/**
+ * One template, as a card the same height as its neighbours.
+ *
+ * The footer sits at the bottom whatever the description's length, the
+ * description stops at two lines, and the website is an icon rather than a
+ * second labelled button: three hundred and seventy-four of those made the
+ * catalogue read as a wall of buttons instead of a list of apps.
+ */
+function TemplateCard({ template, onInstall }: { template: Template; onInstall: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <Card
+      role="listitem"
+      className="gap-4 py-4 transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-md"
+    >
+      <CardHeader className="gap-3 px-4">
+        {/*
+          min-w-0 on every flex ancestor, not only on the text. shadcn's
+          CardHeader is a grid, and a flex or grid item will not shrink below
+          its content unless each ancestor says it may, so without this the
+          `truncate` below never applies: a long name pushed a card 92px past
+          the side of a 375px screen.
+        */}
+        <div className="flex min-w-0 items-center gap-3">
+          <TemplateIcon template={template} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <CardTitle className="truncate text-sm leading-tight" title={template.name}>
+                {template.name}
+              </CardTitle>
+              {template.beta && (
+                <Badge variant="outline" className="text-[10px]">
+                  {t("common.beta")}
+                </Badge>
+              )}
+              {template.catalogue && (
+                <Badge
+                  variant="secondary"
+                  className="max-w-24 shrink truncate text-[10px]"
+                  title={template.catalogue.name}
+                >
+                  <span className="truncate">{template.catalogue.name}</span>
+                </Badge>
+              )}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{installs(template, t)}</p>
+          </div>
+        </div>
+        <CardDescription className="line-clamp-2">{template.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="mt-auto flex items-center gap-2 px-4">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          aria-label={t("templates.installNamed", { name: template.name })}
+          onClick={onInstall}
+        >
+          {t("templates.install")}
+        </Button>
+        {template.website && (
+          <Button variant="ghost" size="icon-sm" asChild>
+            <a
+              href={template.website}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t("templates.websiteNamed", { name: template.name })}
+              title={t("templates.website")}
+            >
+              <ExternalLinkIcon />
+            </a>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -276,7 +417,9 @@ function installs(template: Template, t: TFunction): string {
     services.length === 1
       ? [versionOf(services[0].image)]
       : [t("common.app", { count: services.length })]
-  for (const database of template.databases ?? []) parts.push(database.engine)
+  for (const database of template.databases ?? []) {
+    parts.push(t(`templates.engines.${database.engine}`, { defaultValue: database.engine }))
+  }
   return parts.join(" · ")
 }
 
@@ -284,42 +427,65 @@ function installs(template: Template, t: TFunction): string {
  * The tag of an image reference, or the whole reference when it has none.
  *
  * A registry host may carry a port — `registry:5000/app` — so the tag is what
- * follows the last colon, and only when no slash follows it.
+ * follows the last colon, and only when no slash follows it. A tag that is a
+ * version is written the same way whether the project tags it `v1.1.11` or
+ * `1.16`: with the v, so it reads as a version and not as a count.
  */
 function versionOf(image: string): string {
   const colon = image.lastIndexOf(":")
   if (colon < 0 || image.slice(colon).includes("/")) return image
-  return image.slice(colon + 1)
+  const tag = image.slice(colon + 1).replace(/^v(?=\d)/i, "")
+  return /^\d/.test(tag) ? `v${tag}` : tag
+}
+
+/**
+ * The colours a template without a logo is given, so that a page of letters is
+ * not a page of grey squares. Chosen from the template's id, so a template has
+ * the same colour every time it is shown and in every language.
+ */
+const TONES = [
+  "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+]
+
+function toneFor(id: string): string {
+  let hash = 0
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return TONES[hash % TONES.length]
 }
 
 /**
  * A template's logo, or its first letter.
  *
- * The catalogue is the first page anybody opens and it was three hundred grey
- * squares with a letter in them. The logos are served by the panel out of its
- * own binary — not a CDN — so they work with no outbound network and tell
- * nobody else which self-hosted apps somebody is browsing.
+ * The logos are served by the panel out of its own binary — not a CDN — so
+ * they work with no outbound network and tell nobody else which self-hosted
+ * apps somebody is browsing.
  *
  * The letter is not only the fallback for a template the collection has no logo
  * for: it is also what is shown if the picture fails to load, which is why
  * `onError` clears the flag rather than leaving a broken image icon on the card.
+ * A logo sits on a white plate whatever the theme, because a logo drawn in dark
+ * ink on a dark card is not there.
  */
 function TemplateIcon({ template }: { template: Template }) {
   const [broken, setBroken] = useState(false)
-  const shell =
-    "flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted text-sm font-semibold text-muted-foreground"
+  const shell = "flex size-10 shrink-0 items-center justify-center rounded-lg"
 
   // The name is right beside it, so this is decoration and a screen reader
   // should skip it in both shapes.
   if (!template.icon || broken) {
     return (
-      <span aria-hidden className={shell}>
+      <span aria-hidden className={cn(shell, "text-base font-semibold", toneFor(template.id))}>
         {template.name.slice(0, 1).toUpperCase()}
       </span>
     )
   }
   return (
-    <span aria-hidden className={cn(shell, "overflow-hidden bg-background p-1.5")}>
+    <span aria-hidden className={cn(shell, "overflow-hidden border bg-white p-1.5")}>
       <img
         src={iconURL(template)}
         alt=""

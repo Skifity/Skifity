@@ -1,5 +1,5 @@
 id: pgbackweb
-name: Pgbackweb
+name: PG Back Web
 description: Effortless PostgreSQL backups with a user-friendly web interface!.
 category: developer
 website: https://github.com/eduardolat/pgbackweb

@@ -1,5 +1,5 @@
 id: sftpgo
-name: Sftpgo
+name: SFTPGo
 description: SFTPGo is an event-driven SFTP, FTP/S, HTTP/S and WebDAV server.
 category: storage
 website: https://docs.sftpgo.com/2.7/

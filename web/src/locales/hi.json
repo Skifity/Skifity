@@ -1541,6 +1541,17 @@
     "installedApps_one": "{{count}} ऐप लग गया। शुरू होने में एक मिनट लग सकता है।",
     "installedApps_other": "{{count}} ऐप लग गए। शुरू होने में एक मिनट लग सकता है।",
     "search": "टेम्पलेट खोजें",
+    "allCategories": "सभी",
+    "installNamed": "{{name}} लगाएँ",
+    "websiteNamed": "{{name}} की वेबसाइट खोलें",
+    "results_one": "{{count}} टेम्पलेट",
+    "results_other": "{{count}} टेम्पलेट",
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "mariadb": "MariaDB",
+      "redis": "Redis"
+    },
     "notesTitle": "इसके काम करने से पहले",
     "categories": {
       "ai": "एआई",

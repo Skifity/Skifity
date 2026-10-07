@@ -1,5 +1,5 @@
 id: n8n-with-postgres-and-worker
-name: N8N With Postgres And Worker
+name: n8n with PostgreSQL and a worker
 description: n8n is an extendable workflow automation tool with queue mode and workers.
 category: automation
 website: https://n8n.io

@@ -1,5 +1,5 @@
 id: imgcompress
-name: Imgcompress
+name: ImgCompress
 description: Offline image compression, conversion, and AI background removal for Docker homelabs.
 category: media
 website: https://imgcompress.karimzouine.com

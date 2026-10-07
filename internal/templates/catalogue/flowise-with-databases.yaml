@@ -1,5 +1,5 @@
 id: flowise-with-databases
-name: Flowise With Databases
+name: Flowise with databases
 description: Flowise is an open source low-code tool for developers to build customized LLM orchestration
   flows & AI agents. Also deploys Redis, Postgres and other services.
 category: ai

@@ -1,5 +1,5 @@
 id: gitea-with-mariadb
-name: Gitea With Mariadb
+name: Gitea with MariaDB
 description: Gitea is a self-hosted, lightweight Git service, offering version control, collaboration,
   and code hosting.
 category: developer

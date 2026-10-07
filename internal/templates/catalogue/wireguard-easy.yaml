@@ -1,5 +1,5 @@
 id: wireguard-easy
-name: Wireguard Easy
+name: WireGuard Easy
 description: The easiest way to run WireGuard VPN + Web-based Admin UI.
 category: security
 website: https://github.com/wg-easy/wg-easy

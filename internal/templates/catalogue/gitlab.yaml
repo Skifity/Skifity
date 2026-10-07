@@ -1,5 +1,5 @@
 id: gitlab
-name: Gitlab
+name: GitLab
 description: The all-in-one DevOps platform for seamless collaboration and continuous delivery.
 category: developer
 website: https://docs.gitlab.com/ee/install/docker.html

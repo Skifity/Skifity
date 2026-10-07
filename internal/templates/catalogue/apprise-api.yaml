@@ -1,5 +1,5 @@
 id: apprise-api
-name: Apprise Api
+name: Apprise API
 description: Push Notifications API.
 category: automation
 website: https://docs.linuxserver.io/images/docker-apprise-api/

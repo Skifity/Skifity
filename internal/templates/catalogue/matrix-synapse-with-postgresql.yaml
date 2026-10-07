@@ -1,5 +1,5 @@
 id: matrix-synapse-with-postgresql
-name: Matrix Synapse With Postgresql
+name: Matrix Synapse with PostgreSQL
 description: Chat securely with your family, friends, community, or build great apps with Matrix!.
 category: communication
 website: https://element-hq.github.io/synapse/latest/welcome_and_overview.html

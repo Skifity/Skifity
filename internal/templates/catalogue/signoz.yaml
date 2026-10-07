@@ -1,5 +1,5 @@
 id: signoz
-name: Signoz
+name: SigNoz
 description: An observability platform native to OpenTelemetry with logs, traces and metrics.
 category: monitoring
 website: https://signoz.io/docs/introduction/

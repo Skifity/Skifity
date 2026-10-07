@@ -1,5 +1,5 @@
 id: elasticsearch-with-kibana
-name: Elasticsearch With Kibana
+name: Elasticsearch with Kibana
 description: Elastic + Kibana is a Free and Open Source Search, Monitoring, and Visualization Stack.
 category: monitoring
 website: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-kibana-with-docker

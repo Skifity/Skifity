@@ -1,5 +1,5 @@
 id: uptime-kuma-with-mariadb
-name: Uptime Kuma With Mariadb
+name: Uptime Kuma with MariaDB
 description: Uptime Kuma is a monitoring tool for tracking the status and performance of your applications
   in real-time.
 category: monitoring

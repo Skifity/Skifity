@@ -1,5 +1,5 @@
 id: grafana-with-postgresql
-name: Grafana With Postgresql
+name: Grafana with PostgreSQL
 description: Grafana is the open source analytics & monitoring solution for every database.
 category: monitoring
 website: https://grafana.com

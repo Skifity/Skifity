@@ -1,5 +1,5 @@
 id: nocodb
-name: Nocodb
+name: NocoDB
 description: NocoDB is an open source Airtable alternative. Turns any MySQL, PostgreSQL, SQL Server, SQLite
   & MariaDB into a smart-spreadsheet.
 category: productivity

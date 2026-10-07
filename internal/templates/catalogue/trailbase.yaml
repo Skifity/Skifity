@@ -1,5 +1,5 @@
 id: trailbase
-name: Trailbase
+name: TrailBase
 description: A blazingly fast Rust/SQLite/Wasmtime app server with type-safe APIs.
 category: developer
 website: https://trailbase.io/

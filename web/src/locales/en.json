@@ -1539,6 +1539,17 @@
     "installedApps_one": "Installed {{count}} app. It may take a minute to start.",
     "installedApps_other": "Installed {{count}} apps. They may take a minute to start.",
     "search": "Search templates",
+    "allCategories": "All",
+    "installNamed": "Install {{name}}",
+    "websiteNamed": "Open the website of {{name}}",
+    "results_one": "{{count}} template",
+    "results_other": "{{count}} templates",
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "mariadb": "MariaDB",
+      "redis": "Redis"
+    },
     "notesTitle": "Before this works",
     "categories": {
       "ai": "AI",

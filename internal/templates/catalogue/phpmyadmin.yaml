@@ -1,5 +1,5 @@
 id: phpmyadmin
-name: Phpmyadmin
+name: phpMyAdmin
 description: phpMyAdmin is a web-based database management tool for administering your MySQL and MariaDB
   databases through a user-friendly interface.
 category: storage

@@ -1,5 +1,5 @@
 id: litellm
-name: Litellm
+name: LiteLLM
 description: Call all LLM APIs using the OpenAI format. Use Bedrock, Azure, OpenAI, Cohere, Anthropic,
   Ollama, Sagemaker, HuggingFace, Replicate, Groq (100+ LLMs).
 category: ai

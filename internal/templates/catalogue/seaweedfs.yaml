@@ -1,5 +1,5 @@
 id: seaweedfs
-name: Seaweedfs
+name: SeaweedFS
 description: SeaweedFS is a simple and highly scalable distributed file system. Compatible with S3, with
   an admin web interface.
 category: storage

@@ -1,5 +1,5 @@
 id: pi-hole
-name: Pi Hole
+name: Pi-hole
 description: Network-wide Ad Blocking.
 category: networking
 website: https://pi-hole.net/

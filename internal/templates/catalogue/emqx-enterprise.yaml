@@ -1,5 +1,5 @@
 id: emqx-enterprise
-name: Emqx Enterprise
+name: EMQX Enterprise
 description: Open-source MQTT broker for IoT, IIoT, and connected vehicles.
 category: networking
 website: https://www.emqx.io/docs/en/latest/deploy/install-docker.html

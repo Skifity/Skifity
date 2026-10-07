@@ -1,5 +1,5 @@
 id: rabbitmq
-name: Rabbitmq
+name: RabbitMQ
 description: With tens of thousands of users, RabbitMQ is one of the most popular open source message
   brokers.
 category: communication

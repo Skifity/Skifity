@@ -1,5 +1,5 @@
 id: denokv
-name: Denokv
+name: Deno KV
 description: The Denoland key-value database.
 category: storage
 website: https://docs.deno.com/deploy/kv/manual/

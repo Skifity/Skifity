@@ -1,5 +1,5 @@
 id: libreoffice
-name: Libreoffice
+name: LibreOffice
 description: LibreOffice is a free and powerful office suite.
 category: productivity
 website: https://docs.linuxserver.io/images/docker-libreoffice/

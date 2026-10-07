@@ -1,5 +1,5 @@
 id: prometheus-with-blackbox-exporter
-name: Prometheus With Blackbox Exporter
+name: Prometheus with Blackbox Exporter
 description: Probe websites and services from the outside over HTTP, TCP and DNS, and keep the results in
   Prometheus.
 category: monitoring

@@ -1,5 +1,5 @@
 id: electricsql
-name: Electricsql
+name: ElectricSQL
 description: Sync shape-based subsets of your Postgres data over HTTP.
 category: developer
 website: https://electric-sql.com/docs/guides/deployment

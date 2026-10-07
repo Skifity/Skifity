@@ -1569,6 +1569,19 @@
     "installedApps_many": "Установлено {{count}} приложений. Запуск может занять минуту.",
     "installedApps_other": "Установлено {{count}} приложения. Запуск может занять минуту.",
     "search": "Поиск по шаблонам",
+    "allCategories": "Все",
+    "installNamed": "Установить {{name}}",
+    "websiteNamed": "Открыть сайт {{name}}",
+    "results_one": "{{count}} шаблон",
+    "results_few": "{{count}} шаблона",
+    "results_many": "{{count}} шаблонов",
+    "results_other": "{{count}} шаблона",
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "mariadb": "MariaDB",
+      "redis": "Redis"
+    },
     "notesTitle": "Прежде чем это заработает",
     "categories": {
       "ai": "ИИ",

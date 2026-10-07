@@ -1,5 +1,5 @@
 id: qbittorrent
-name: Qbittorrent
+name: qBittorrent
 description: The qBittorrent project aims to provide an open-source software alternative to μTorrent.
 category: media
 website: https://docs.linuxserver.io/images/docker-qbittorrent/

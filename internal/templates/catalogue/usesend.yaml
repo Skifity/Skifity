@@ -1,5 +1,5 @@
 id: usesend
-name: Usesend
+name: useSend
 description: Usesend is an open-source alternative to Resend, Sendgrid, Mailgun and Postmark etc.
 category: communication
 website: https://docs.usesend.com/self-hosting/overview

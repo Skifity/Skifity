@@ -1,5 +1,5 @@
 id: uptime-kuma-with-mysql
-name: Uptime Kuma With Mysql
+name: Uptime Kuma with MySQL
 description: Uptime Kuma is a monitoring tool for tracking the status and performance of your applications
   in real-time.
 category: monitoring

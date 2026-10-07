@@ -1,5 +1,5 @@
 id: influxdb
-name: Influxdb
+name: InfluxDB
 description: Open source time series database for metrics, events, and analytics.
 category: storage
 website: https://docs.influxdata.com/influxdb/

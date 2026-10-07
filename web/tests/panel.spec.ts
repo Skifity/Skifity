@@ -221,6 +221,52 @@ test("every logo the catalogue claims is actually there", async ({ page }) => {
   }
 })
 
+// The catalogue is three hundred and seventy-four apps on one page, so what
+// makes it usable is being able to narrow it: a category, a search, or both.
+// The one thing that goes wrong quietly is the two disagreeing — a category
+// chosen, then a search that nothing in it matches, leaving a filter nobody can
+// see and a page that says there is nothing.
+test("the template catalogue narrows by category and by search", async ({ page }) => {
+  await signIn(page)
+  await page.goto("/templates")
+
+  const sections = page.locator('section[aria-labelledby^="templates-"]')
+  const chips = page.getByRole("group", { name: "Category" })
+  const search = page.getByPlaceholder("Search templates")
+  await expect(chips).toBeVisible()
+  await expect.poll(() => sections.count()).toBeGreaterThan(5)
+
+  await chips.getByRole("button", { name: /^AI \d+$/ }).click()
+  await expect(sections).toHaveCount(1)
+  await expect(sections.first().getByRole("heading", { level: 2 })).toContainText("AI")
+
+  // Only the website templates mention WordPress, so the AI category has
+  // nothing left, and the page shows what matched rather than an empty AI.
+  await search.fill("wordpress")
+  await expect(sections).toHaveCount(1)
+  await expect(sections.first().getByRole("heading", { level: 2 })).toContainText(
+    "Websites and publishing",
+  )
+  // One category left is not a choice, so there is no row of chips to choose from.
+  await expect(chips).toBeHidden()
+
+  await search.fill("no-such-template-anywhere")
+  await expect(page.getByText("Nothing matches that")).toBeVisible()
+  await expect(sections).toHaveCount(0)
+
+  // On a phone the same choice is one dropdown, not five rows of chips.
+  await page.setViewportSize({ width: 375, height: 800 })
+  await search.fill("")
+  await expect(chips).toBeHidden()
+  const picker = page.getByRole("combobox", { name: "Category" })
+  await picker.click()
+  await page.getByRole("option", { name: /^All · \d+$/ }).click()
+  await expect.poll(() => sections.count()).toBeGreaterThan(5)
+  await picker.click()
+  await page.getByRole("option", { name: /^AI · \d+$/ }).click()
+  await expect(sections).toHaveCount(1)
+})
+
 test("the documentation is served from the binary", async ({ page }) => {
   await page.goto("/docs/")
   await expect(page.getByRole("heading", { level: 1 })).toContainText("documentation")

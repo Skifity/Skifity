@@ -1,5 +1,5 @@
 id: unleash-without-database
-name: Unleash Without Database
+name: Unleash without a database
 description: Open source feature flag management for enterprises.
 category: developer
 website: https://docs.getunleash.io

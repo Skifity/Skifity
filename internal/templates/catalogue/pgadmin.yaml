@@ -1,5 +1,5 @@
 id: pgadmin
-name: Pgadmin
+name: pgAdmin
 description: pgAdmin is a web-based database management tool for administering your PostgreSQL databases
   through a user-friendly interface.
 category: storage

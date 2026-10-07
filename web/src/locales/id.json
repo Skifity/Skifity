@@ -1527,6 +1527,16 @@
     "installedNote": "Terpasang. Mungkin butuh semenit untuk menyala.",
     "installedApps_other": "{{count}} aplikasi terpasang. Mungkin butuh semenit untuk menyala.",
     "search": "Cari template",
+    "allCategories": "Semua",
+    "installNamed": "Pasang {{name}}",
+    "websiteNamed": "Buka situs web {{name}}",
+    "results_other": "{{count}} template",
+    "engines": {
+      "postgres": "PostgreSQL",
+      "mysql": "MySQL",
+      "mariadb": "MariaDB",
+      "redis": "Redis"
+    },
     "notesTitle": "Sebelum ini berjalan",
     "categories": {
       "ai": "AI",

@@ -1,5 +1,5 @@
 id: pocket-id-with-postgresql
-name: Pocket Id With Postgresql
+name: Pocket ID with PostgreSQL
 description: A simple and secure OIDC provider with passkey authentication.
 category: security
 website: https://pocket-id.org/docs/setup/installation

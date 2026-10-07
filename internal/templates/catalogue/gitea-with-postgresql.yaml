@@ -1,5 +1,5 @@
 id: gitea-with-postgresql
-name: Gitea With Postgresql
+name: Gitea with PostgreSQL
 description: Gitea is a self-hosted, lightweight Git service, offering version control, collaboration,
   and code hosting.
 category: developer

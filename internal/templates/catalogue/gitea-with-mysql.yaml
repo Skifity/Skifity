@@ -1,5 +1,5 @@
 id: gitea-with-mysql
-name: Gitea With Mysql
+name: Gitea with MySQL
 description: Gitea is a self-hosted, lightweight Git service, offering version control, collaboration,
   and code hosting.
 category: developer
