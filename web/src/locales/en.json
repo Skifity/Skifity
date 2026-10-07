@@ -1120,6 +1120,7 @@
     "removeServer": "Remove server",
     "removeServerWarning": "Instances running here move to your other servers first. Nothing is lost.",
     "wipeServer": "Also remove Kubernetes from the machine",
+    "acceptDataLoss": "Remove anyway, and lose the data on this server's volumes",
     "cancelAndClean": "Cancel and clean up",
     "cpu": "CPU",
     "memory": "Memory",
@@ -3963,6 +3964,12 @@
         "cause": "This account already has {{0}} live streams open, which is the most the panel keeps for one account.",
         "impact": "This one was not opened. The ones that are open are not affected.",
         "fix": "Close some of the panel's tabs, or stop the script that opens them, and try again."
+      },
+      "server_has_local_volumes": {
+        "title": "Data lives only on this server",
+        "cause": "{{0}} holds {{1}} volume(s) that exist nowhere else: {{2}}.",
+        "impact": "Removing the server does not move them. The apps that use them cannot start on another server, and the data is gone once the machine is wiped or deleted. Nothing was changed.",
+        "fix": "Back the data up first, or delete the apps that use it. If it does not matter, remove the server again and tick \"Remove anyway\", or add accept_data_loss=true to the request."
       }
     }
   },

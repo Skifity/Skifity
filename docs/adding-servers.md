@@ -350,6 +350,16 @@ Retry picks up where it stopped. Every step is safe to repeat.
 
 ## Removing a server
 
+Before anything is touched, the panel asks the cluster what exists only on the
+server. k3s's own storage ties a volume to the node it was made on, so an app
+with one does not start on another server after a drain — its pod waits for a
+node that has been deleted — and the data is gone once the machine is wiped or
+deleted. A server that holds some is not removed until you say so: the panel
+lists the volumes and offers "Remove anyway", and the API takes
+`accept_data_loss=true`. Back the data up first, or delete the apps that use it,
+if it matters. A cluster that cannot be asked is not a reason to refuse, since
+the likeliest reason to remove a server is that it has died.
+
 Instances are moved off first, then the server leaves the cluster. Nothing is
 lost.
 

@@ -31,7 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
-import { api } from "@/lib/api"
+import { ApiError, api } from "@/lib/api"
 import { formatCPU, formatDateTime, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { NodeInfo, Operation, Server } from "@/lib/types"
@@ -46,6 +46,8 @@ export function ServerDetailPage() {
   const confirm = useConfirm()
   const [wipe, setWipe] = useState(true)
   const [deleteMachine, setDeleteMachine] = useState(true)
+  // Asked for only once the panel has said data lives only on this server.
+  const [acceptDataLoss, setAcceptDataLoss] = useState(false)
   const [name, setName] = useState<string | null>(null)
   const [operationId, setOperationId] = useState<string | null>(null)
 
@@ -96,9 +98,9 @@ export function ServerDetailPage() {
     // dialog is sent as the confirmation the API asks for.
     mutationFn: (machine: { name: string } | null) =>
       api.delete<Operation>(
-        machine
+        (machine
           ? `/api/servers/${serverId}?delete_machine=true&confirm=${encodeURIComponent(machine.name)}`
-          : `/api/servers/${serverId}?wipe=${wipe}`,
+          : `/api/servers/${serverId}?wipe=${wipe}`) + (acceptDataLoss ? "&accept_data_loss=true" : ""),
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] })
@@ -351,6 +353,16 @@ export function ServerDetailPage() {
               </label>
             )}
             {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+            {remove.error instanceof ApiError &&
+              remove.error.problem.code === "server.has_local_volumes" && (
+                <label className="flex items-center gap-2.5 text-sm text-destructive">
+                  <Checkbox
+                    checked={acceptDataLoss}
+                    onCheckedChange={(checked) => setAcceptDataLoss(checked === true)}
+                  />
+                  {t("servers.acceptDataLoss")}
+                </label>
+              )}
             <Button
               variant="destructive"
               disabled={remove.isPending}

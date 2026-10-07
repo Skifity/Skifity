@@ -219,6 +219,10 @@ type Cluster interface {
 	// ControlPlaneCount is how many nodes actually run the cluster, which is
 	// not the same as how many rows the panel has for one team.
 	ControlPlaneCount(ctx context.Context) (int, error)
+	// VolumesOnNode lists the volumes that exist only on one node, as
+	// namespace/claim: what is lost with it, and what keeps an app from
+	// starting elsewhere while it is gone.
+	VolumesOnNode(ctx context.Context, nodeName string) ([]string, error)
 	// SetNodeGPULabel marks a server as having an NVIDIA card, or unmarks
 	// it, which decides whether the device plugin runs there.
 	SetNodeGPULabel(ctx context.Context, node string, nvidia bool) error

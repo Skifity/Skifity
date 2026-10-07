@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"skifity/internal/builder"
+	"skifity/internal/kube"
 	"skifity/internal/store"
 )
 
@@ -187,5 +188,35 @@ func TestADependencyIsDeployedFirst(t *testing.T) {
 	// A cycle does not hang it.
 	if got := deployOrder([]plannedApp{plan("a", "b"), plan("b", "a")}); len(got) != 2 {
 		t.Fatalf("a cycle deployed %d", len(got))
+	}
+}
+
+// A Compose file names its images itself, which was the way round the rule a
+// single app is held to: an image this panel built for another environment runs
+// only in the environment that built it.
+func TestAComposeFileCannotRunAnotherEnvironmentsBuiltImage(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	rival := h.newTenant("rival")
+	path := "/api/environments/" + acme.env.ID + "/stack"
+
+	theirs := kube.RegistryHost() + "/" + rival.env.Namespace + "/web:d1"
+	status, body := h.do(acme, http.MethodPost, path, map[string]any{
+		"services": []builder.ComposeService{{Name: "web", Image: theirs}},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("another environment's image was accepted: %d %s", status, truncate(body, 200))
+	}
+	if apps, _ := h.db.ListApps(t.Context(), acme.env.ID); len(apps) != 0 {
+		t.Errorf("a refused stack left %d apps behind", len(apps))
+	}
+
+	// Its own environment's image, and any public one, are fine.
+	own := kube.RegistryHost() + "/" + acme.env.Namespace + "/web:d1"
+	status, body = h.do(acme, http.MethodPost, path, map[string]any{
+		"services": []builder.ComposeService{{Name: "web", Image: own}, {Name: "cache", Image: "redis:7"}},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("its own environment's image was refused: %d %s", status, truncate(body, 200))
 	}
 }

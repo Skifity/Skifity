@@ -3,6 +3,8 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -227,5 +229,144 @@ func TestASucceededBackupReachesOnlyAChannelThatAskedForIt(t *testing.T) {
 	}
 	if !subscribes("backup.failed, backup.succeeded", EventBackupSucceeded) {
 		t.Error("a channel that asked for successful backups is not sent them")
+	}
+}
+
+// retryingDispatcher is a dispatcher with channels that wait milliseconds, not
+// seconds, between attempts.
+func retryingDispatcher(url string) *Dispatcher {
+	db := fakeStore{channels: []store.NotificationChannel{
+		{ID: "chan_1", Kind: "webhook", Name: "ops", Enabled: true, ConfigEnc: webhookConfig(url)},
+	}}
+	d := NewDispatcher(db, fakeKeyring{}, quietLogger(), nil)
+	d.retryAfter = []time.Duration{5 * time.Millisecond, 10 * time.Millisecond}
+	return d
+}
+
+// A service that was restarting for a moment must not cost the news that a
+// deployment failed: that is the message that is worth sending when something
+// is going wrong.
+func TestANotificationIsTriedAgainWhenTheServiceWasBusy(t *testing.T) {
+	var mu sync.Mutex
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		n := attempts
+		mu.Unlock()
+		if n <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	d := retryingDispatcher(server.URL)
+	d.Notify(t.Context(), "team_1", EventDeployFailed, Message{Title: "Deploying shop failed"})
+	// Wait is the shutdown signal, and ends any waiting to try again: it is not
+	// called until the retries have had their turn.
+	eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return attempts >= 3 })
+	d.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts != 3 {
+		t.Errorf("the service was asked %d times, want 3: two refusals and the delivery", attempts)
+	}
+}
+
+// eventually waits for a condition that a goroutine will make true.
+func eventually(t *testing.T, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// A refusal that will be the same next time is not asked again.
+func TestANotificationIsNotRepeatedWhenTheAnswerWillNotChange(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusUnauthorized, http.StatusBadRequest} {
+		var mu sync.Mutex
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			attempts++
+			mu.Unlock()
+			w.WriteHeader(status)
+		}))
+
+		d := retryingDispatcher(server.URL)
+		d.Notify(t.Context(), "team_1", EventDeployFailed, Message{Title: "x"})
+		eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return attempts >= 1 })
+		// Long enough for a retry to have been made, were one going to be.
+		time.Sleep(60 * time.Millisecond)
+		d.Wait()
+		server.Close()
+
+		mu.Lock()
+		if attempts != 1 {
+			t.Errorf("a %d was asked again: %d attempts", status, attempts)
+		}
+		mu.Unlock()
+	}
+}
+
+// And it stops being tried when it has been tried enough, and when the panel
+// is stopping: Wait must not hold a shutdown for half a minute of retries.
+func TestAnEndlesslyBusyServiceIsGivenUpOnAndDoesNotHoldUpShutdown(t *testing.T) {
+	var mu sync.Mutex
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		mu.Unlock()
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	d := retryingDispatcher(server.URL)
+	d.Notify(t.Context(), "team_1", EventDeployFailed, Message{Title: "x"})
+	eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return attempts >= 3 })
+	time.Sleep(60 * time.Millisecond)
+	d.Wait()
+	mu.Lock()
+	if attempts != 3 {
+		t.Errorf("a service that never answered was asked %d times, want 3: the first and two retries", attempts)
+	}
+	mu.Unlock()
+
+	// A long wait between attempts is cut short by Wait.
+	slow := retryingDispatcher(server.URL)
+	slow.retryAfter = []time.Duration{time.Hour}
+	slow.Notify(t.Context(), "team_1", EventDeployFailed, Message{Title: "x"})
+	eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return attempts >= 4 })
+	done := make(chan struct{})
+	go func() { slow.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wait is held for the hour a retry was going to wait")
+	}
+}
+
+func TestWhichFailuresAreWorthTryingAgain(t *testing.T) {
+	for err, want := range map[error]bool{
+		&statusError{code: 503}:                     true,
+		&statusError{code: 429}:                     true,
+		&statusError{code: 500}:                     true,
+		&statusError{code: 404}:                     false,
+		&statusError{code: 401}:                     false,
+		io.ErrUnexpectedEOF:                         true,
+		fmt.Errorf("send notification: %w", io.EOF): true,
+		errors.New("this address is not allowed"):   false,
+	} {
+		if got := transient(err); got != want {
+			t.Errorf("%v: transient=%v, want %v", err, got, want)
+		}
 	}
 }

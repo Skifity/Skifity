@@ -1070,3 +1070,40 @@ func (c *Client) NamespaceExists(ctx context.Context, namespace string) (bool, e
 	}
 	return false, fmt.Errorf("read the namespace %s: %w", namespace, err)
 }
+
+// VolumesPinnedToNode lists the volumes that exist only on one node, as
+// namespace/claim: the claims whose volume says, in its node affinity, that it
+// can be attached to that node and no other. k3s's default storage (local-path)
+// makes every volume this way, and a volume like that does not move when its
+// pod does: the pod waits for the node to come back.
+func (c *Client) VolumesPinnedToNode(ctx context.Context, nodeName string) ([]string, error) {
+	volumes, err := c.clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list the cluster's volumes: %w", err)
+	}
+	var out []string
+	for _, volume := range volumes.Items {
+		if volume.Spec.NodeAffinity == nil || volume.Spec.NodeAffinity.Required == nil {
+			continue
+		}
+		pinned := false
+		for _, term := range volume.Spec.NodeAffinity.Required.NodeSelectorTerms {
+			for _, expression := range term.MatchExpressions {
+				if expression.Key == "kubernetes.io/hostname" && expression.Operator == corev1.NodeSelectorOpIn &&
+					len(expression.Values) == 1 && expression.Values[0] == nodeName {
+					pinned = true
+				}
+			}
+		}
+		if !pinned {
+			continue
+		}
+		if claim := volume.Spec.ClaimRef; claim != nil {
+			out = append(out, claim.Namespace+"/"+claim.Name)
+		} else {
+			out = append(out, volume.Name)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}

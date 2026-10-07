@@ -940,6 +940,10 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	if err != nil {
 		return
 	}
+	// After everything below, whichever way it returns: the failure is reported
+	// first, and then, where the app has been left with nothing running, put
+	// back.
+	defer d.rollBackIfLeftDown(ctx, app, deployment, problem)
 	d.notify(ctx, app, deployment, notify.EventDeployFailed, notify.Message{
 		Title:  "Deploying " + app.Name + " failed",
 		Body:   problem.Error() + "\n\n" + problem.Fix,
@@ -958,6 +962,56 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 		"deployment_id": deployment.ID, "commit": deployment.CommitSHA,
 		"reason": problem.Code, "error": problem.Error(),
 	})
+}
+
+// failuresThatLeaveNothingRunning are the failures of a rollout, as opposed to a
+// build that never produced an image or a deploy that was never started.
+var rolloutFailures = map[string]bool{
+	"deploy.rollout_timeout":   true,
+	"deploy.image_pull_failed": true,
+	"app.crash_loop":           true,
+}
+
+// rollBackIfLeftDown puts the last version that worked back, for an app that a
+// failed deploy has left with nothing running.
+//
+// Most apps are not left so: a rolling update starts the new instances beside
+// the old and stops the old only once the new are ready, so a version that does
+// not start leaves the previous one serving, and the deployment is reported
+// failed. An app with a volume is different. Two instances writing to one volume
+// would corrupt it, so its deploys stop the old instance first, and a version
+// that does not start is an app that is down until somebody notices and rolls
+// back by hand.
+//
+// It happens once and only there: never for an app that is still serving, never
+// for a deploy that was itself a rollback (which would be a loop), and only
+// when there is a version that worked and its image is still in the registry.
+// The failure has been reported already, and says what was done about it.
+func (d *Deployer) rollBackIfLeftDown(ctx context.Context, app store.App, failed store.Deployment, problem *errdoc.Problem) {
+	if !rolloutFailures[problem.Code] || failed.Trigger == "rollback" {
+		return
+	}
+	volumes, err := d.db.ListVolumes(ctx, app.ID)
+	if err != nil || len(volumes) == 0 {
+		return
+	}
+	previous, err := d.db.LatestSuccessfulDeployment(ctx, app.ID)
+	if err != nil || previous.Number >= failed.Number || previous.Image == "" {
+		return
+	}
+	d.appendLog(ctx, failed.ID, "")
+	d.appendLog(ctx, failed.ID, fmt.Sprintf(
+		"%s keeps data on a volume, so its old version was stopped before this one started, and nothing is running. "+
+			"Putting version %d back.", app.Name, previous.Number))
+	rolled, err := d.Rollback(ctx, app.ID, previous.ID, "")
+	if err != nil {
+		d.appendLog(ctx, failed.ID, "It could not be put back automatically: "+errdoc.From(err).Error())
+		d.log.Warn("could not roll back an app a failed deploy left down",
+			"app", app.ID, "failed", failed.ID, "to", previous.ID, "error", err)
+		return
+	}
+	d.log.Info("rolled back an app a failed deploy left down",
+		"app", app.ID, "failed", failed.ID, "to", previous.ID, "rollback", rolled.ID)
 }
 
 // notify fills in what every deployment notification carries and sends it:

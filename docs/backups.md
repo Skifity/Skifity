@@ -247,6 +247,34 @@ was taken with at `/etc/skifity/master.key` before starting the panel, or pass
 the one you have with `--master-key`. A panel started with the wrong key comes
 up with every secret unreadable.
 
+## The cluster's own state
+
+Everything Kubernetes knows — which apps exist, their configuration, the
+certificates it issued — is in etcd, on the control plane server's disk. k3s
+snapshots it by itself, and Skifity asks for a snapshot every six hours and
+keeps the last twelve, which is three days:
+
+```sh
+ls /var/lib/rancher/k3s/server/db/snapshots/
+```
+
+They are a copy on the same disk. They save you from a bad upgrade or an object
+somebody deleted; they do not save you from losing the server, which is what
+copying that folder somewhere else is for. Skifity does not do that for you.
+
+To put one back on a single-server cluster, stop k3s and reset the cluster from
+the snapshot:
+
+```sh
+sudo systemctl stop k3s
+sudo k3s server --cluster-reset --cluster-reset-restore-path=/var/lib/rancher/k3s/server/db/snapshots/<the one you want>
+sudo systemctl start k3s
+```
+
+This has not been run against a real cluster by the people who wrote it. Read
+[k3s's own page on it](https://docs.k3s.io/datastore/backup-restore) first, and
+do it on a server you can rebuild.
+
 ## What is not backed up
 
 The master key. A backup of anything — a database, a volume, the panel itself —

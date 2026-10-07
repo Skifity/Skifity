@@ -3,10 +3,15 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"skifity/internal/runsafe"
@@ -65,7 +70,19 @@ type Dispatcher struct {
 	// wg lets the panel wait for in-flight notifications during shutdown, so a
 	// deployment failure reported at the moment of a restart still goes out.
 	wg sync.WaitGroup
+
+	// retryAfter is how long to wait before each new attempt at a notification
+	// that failed for a reason that may pass: one entry per retry. closing is
+	// closed when the panel is shutting down, and ends the waiting.
+	retryAfter []time.Duration
+	closing    chan struct{}
+	closeOnce  sync.Once
 }
+
+// defaultRetryAfter is two more attempts, five seconds and half a minute after
+// the one that failed: long enough for a restarting service or a dropped
+// connection, short enough that a deployment failure still reads as news.
+var defaultRetryAfter = []time.Duration{5 * time.Second, 30 * time.Second}
 
 // SetProvider gives the dispatcher the plugins that provide channel kinds.
 func (d *Dispatcher) SetProvider(provider Provider) {
@@ -79,7 +96,8 @@ func NewDispatcher(db Store, keyring Keyring, log *slog.Logger, panelURL func(co
 	if panelURL == nil {
 		panelURL = func(context.Context) string { return "" }
 	}
-	return &Dispatcher{db: db, keyring: keyring, log: log, panelURL: panelURL}
+	return &Dispatcher{db: db, keyring: keyring, log: log, panelURL: panelURL,
+		retryAfter: defaultRetryAfter, closing: make(chan struct{})}
 }
 
 // Notify delivers a message to the team's channels that subscribe to the event
@@ -134,14 +152,37 @@ func (d *Dispatcher) Notify(ctx context.Context, teamID, event string, msg Messa
 			// produced the event is usually over by now, and a notification
 			// cancelled because a browser navigated away is a notification
 			// nobody gets.
-			sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-			defer cancel()
-			if err := Send(sendCtx, kind, config, msg, d.provider); err != nil {
-				d.log.Warn("a notification could not be delivered",
-					"channel", id, "kind", kind, "event", event, "error", err)
-				return
+			detached := context.WithoutCancel(ctx)
+			var err error
+			for attempt := 0; ; attempt++ {
+				func() {
+					sendCtx, cancel := context.WithTimeout(detached, 30*time.Second)
+					defer cancel()
+					err = Send(sendCtx, kind, config, msg, d.provider)
+				}()
+				if err == nil {
+					d.log.Debug("notification delivered", "channel", id, "kind", kind, "event", event, "attempts", attempt+1)
+					return
+				}
+				// One attempt used to be all there was, and a service that was
+				// restarting, or a connection that dropped, lost the news that
+				// a deployment had failed: the one message that is worth
+				// sending at the moment something is going wrong.
+				if attempt >= len(d.retryAfter) || !transient(err) {
+					break
+				}
+				d.log.Info("a notification could not be delivered yet, and will be tried again",
+					"channel", id, "kind", kind, "event", event, "error", err, "in", d.retryAfter[attempt].String())
+				select {
+				case <-time.After(d.retryAfter[attempt]):
+				case <-d.closing:
+					d.log.Warn("a notification was not delivered, and the panel is stopping",
+						"channel", id, "kind", kind, "event", event, "error", err)
+					return
+				}
 			}
-			d.log.Debug("notification delivered", "channel", id, "kind", kind, "event", event)
+			d.log.Warn("a notification could not be delivered",
+				"channel", id, "kind", kind, "event", event, "error", err)
 		}(sendWith, channel.Kind, channel.ID, config)
 	}
 }
@@ -152,7 +193,35 @@ func (d *Dispatcher) Wait() {
 	if d == nil {
 		return
 	}
+	// Anything waiting to try again gives up now: it was going to try later, and
+	// there is no later.
+	d.closeOnce.Do(func() {
+		if d.closing != nil {
+			close(d.closing)
+		}
+	})
 	d.wg.Wait()
+}
+
+// transient says whether trying again could turn a failure into a delivery: a
+// service that was too busy or is restarting (429 and 5xx), a connection that
+// dropped or timed out. A refusal that will be the same next time (a wrong
+// token, a deleted webhook, an address the panel will not dial) is not.
+func transient(err error) bool {
+	var status *statusError
+	if errors.As(err, &status) {
+		return status.code == http.StatusTooManyRequests || status.code >= 500
+	}
+	var network net.Error
+	if errors.As(err, &network) && network.Timeout() {
+		return true
+	}
+	for _, target := range []error{io.EOF, io.ErrUnexpectedEOF, syscall.ECONNRESET, syscall.ECONNREFUSED, context.DeadlineExceeded} {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Dispatcher) configFor(teamID string, channel store.NotificationChannel) (map[string]string, error) {

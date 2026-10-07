@@ -1110,6 +1110,7 @@
     "removeServer": "Keluarkan server",
     "removeServerWarning": "Instance yang berjalan di sini dipindahkan ke server lain terlebih dahulu. Tidak ada yang hilang.",
     "wipeServer": "Hapus juga Kubernetes dari mesinnya",
+    "acceptDataLoss": "Tetap hapus, dan relakan data di volume server ini",
     "cancelAndClean": "Batalkan dan bersihkan",
     "cpu": "CPU",
     "memory": "Memori",
@@ -3944,6 +3945,12 @@
         "cause": "Akun ini sudah membuka {{0}} aliran langsung, yaitu batas maksimum yang disediakan panel untuk satu akun.",
         "impact": "Aliran ini tidak dibuka. Yang sudah terbuka tidak terpengaruh.",
         "fix": "Tutup beberapa tab panel, atau hentikan skrip yang membukanya, lalu coba lagi."
+      },
+      "server_has_local_volumes": {
+        "title": "Data hanya ada di server ini",
+        "cause": "{{0}} menyimpan {{1}} volume yang tidak ada di tempat lain: {{2}}.",
+        "impact": "Menghapus server tidak memindahkannya. Aplikasi yang memakainya tidak bisa berjalan di server lain, dan datanya hilang begitu mesin dibersihkan atau dihapus. Tidak ada yang diubah.",
+        "fix": "Cadangkan datanya dulu, atau hapus aplikasi yang memakainya. Jika datanya tidak penting, hapus server lagi dan centang \"Tetap hapus\", atau tambahkan accept_data_loss=true pada permintaan."
       }
     }
   },

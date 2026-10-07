@@ -783,6 +783,25 @@ func TooManyStreams(limit int) *Problem {
 		Retry()
 }
 
+// ServerHasVolumes is a server removed while volumes exist only on it.
+func ServerHasVolumes(server string, volumes []string) *Problem {
+	shown := volumes
+	if len(shown) > 5 {
+		shown = shown[:5]
+	}
+	list := strings.Join(shown, ", ")
+	if len(volumes) > len(shown) {
+		list += fmt.Sprintf(" and %d more", len(volumes)-len(shown))
+	}
+	return New("server.has_local_volumes", "Data lives only on this server").
+		WithCause("%s holds %d volume(s) that exist nowhere else: %s.", server, len(volumes), list).
+		WithImpact("Removing the server does not move them. The apps that use them cannot start on another server, and the data is gone once the machine is wiped or deleted. Nothing was changed.").
+		WithFix("Back the data up first, or delete the apps that use it. If it does not matter, remove the server again and tick \"Remove anyway\", or add accept_data_loss=true to the request.").
+		WithDocs("/docs/adding-servers#removing-a-server").
+		WithStatus(http.StatusConflict).
+		With("volumes", strings.Join(volumes, ", "))
+}
+
 // --- SSH and provisioning ---
 
 // SSHUnreachable means the TCP connection to the SSH port failed.

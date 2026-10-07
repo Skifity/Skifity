@@ -540,3 +540,36 @@ func TestEveryNodeKeepsMemoryBackForK3sItself(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryControlPlaneNodeSnapshotsEtcdTheSameWay: the cluster's state is in
+// etcd, on the control plane's own disk. k3s takes snapshots by itself, and this
+// makes how often and how many a decision of this panel's rather than a default
+// nobody read, on the first server and on every one that joins.
+func TestEveryControlPlaneNodeSnapshotsEtcdTheSameWay(t *testing.T) {
+	for name, script := range map[string]string{
+		"first server":  InstallServerScript("", "t", "203.0.113.10", "", nil),
+		"joined server": JoinServerScript("", "t", "https://203.0.113.10:6443", "203.0.113.11", ""),
+	} {
+		for _, want := range []string{
+			"20-skifity-etcd.yaml", `etcd-snapshot-schedule-cron: "0 */6 * * *"`, "etcd-snapshot-retention: 12",
+		} {
+			if !strings.Contains(script, want) {
+				t.Errorf("%s: the script does not contain %q", name, want)
+			}
+		}
+	}
+	// An agent has no etcd, and must not be given keys only a server has.
+	if agent := JoinAgentScript("", "t", "https://203.0.113.10:6443", "203.0.113.12", nil); strings.Contains(agent, "etcd-snapshot") {
+		t.Error("a worker was told how to snapshot an etcd it does not have")
+	}
+
+	installer, err := os.ReadFile(filepath.Join("..", "..", "installer", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`'etcd-snapshot-schedule-cron: "0 */6 * * *"'`, "'etcd-snapshot-retention: 12'"} {
+		if !strings.Contains(string(installer), want) {
+			t.Errorf("install.sh does not write %s", want)
+		}
+	}
+}

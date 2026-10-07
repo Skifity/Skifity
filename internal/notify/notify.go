@@ -668,10 +668,20 @@ func do(req *http.Request) error {
 	if resp.StatusCode >= 300 {
 		// The body usually says exactly what is wrong; include a little of it.
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("the service answered %s: %s", resp.Status, strings.TrimSpace(string(snippet)))
+		return &statusError{code: resp.StatusCode, text: fmt.Sprintf("the service answered %s: %s",
+			resp.Status, strings.TrimSpace(string(snippet)))}
 	}
 	return nil
 }
+
+// statusError is a service that answered, and said no. Whether trying again can
+// change that depends on the answer, which is why it is a type of its own.
+type statusError struct {
+	code int
+	text string
+}
+
+func (e *statusError) Error() string { return e.text }
 
 func renderMarkdown(msg Message) string {
 	var b strings.Builder

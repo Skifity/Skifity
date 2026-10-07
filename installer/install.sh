@@ -1546,6 +1546,22 @@ kubelet_config() {
 	printf '  - "eviction-hard=memory.available<%s,nodefs.available<10%%,imagefs.available<15%%,nodefs.inodesFree<5%%"\n' "$kubelet_hard"
 }
 
+# write_etcd_config makes k3s's etcd snapshots explicit. k3s takes them on its
+# own every twelve hours and keeps five, on the server's own disk; this asks for
+# six hours and twelve, which is three days of them, and the next paragraph of
+# docs/backups.md says where they are and how to put one back. They are a copy
+# on the same disk: the cluster's state survives a bad upgrade or a deleted
+# object, and not the loss of the server, which is what copying them elsewhere
+# is for.
+write_etcd_config() {
+	etcd_dir="$K3S_CONFIG_DIR/config.yaml.d"
+	mkdir -p "$etcd_dir"
+	printf '%s\n' '# Written by Skifity. Do not edit: the installer writes it again.' \
+		'etcd-snapshot-schedule-cron: "0 */6 * * *"' \
+		'etcd-snapshot-retention: 12' >"$etcd_dir/20-skifity-etcd.yaml"
+	ok "the cluster's state is snapshotted every six hours, and the last twelve are kept"
+}
+
 # write_kubelet_config puts that where k3s reads it, before k3s first starts.
 write_kubelet_config() {
 	kubelet_dir="$K3S_CONFIG_DIR/config.yaml.d"
@@ -1578,6 +1594,7 @@ install_k3s() {
 	fi
 
 	write_kubelet_config
+	write_etcd_config
 	note "This downloads and starts k3s, which takes a minute or two."
 	download https://get.k3s.io "$TMP_DIR/k3s-install.sh" 120 || fail \
 		"Could not download the k3s installer from get.k3s.io." \

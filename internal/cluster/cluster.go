@@ -670,6 +670,12 @@ func (c *Cluster) ControlPlaneCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
+// VolumesOnNode lists the volumes that exist only on a node (see
+// kube.Client.VolumesPinnedToNode), as namespace/claim.
+func (c *Cluster) VolumesOnNode(ctx context.Context, nodeName string) ([]string, error) {
+	return c.client.VolumesPinnedToNode(ctx, nodeName)
+}
+
 // QuotaUsage reports how much of an environment's ceiling is in use.
 func (c *Cluster) QuotaUsage(ctx context.Context, namespace string) (api.EnvironmentQuota, error) {
 	raw, err := c.client.QuotaUsage(ctx, namespace)

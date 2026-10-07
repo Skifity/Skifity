@@ -78,6 +78,12 @@ func (s *Server) installTemplate(
 		if nameOverride != "" && len(tpl.Services) == 1 {
 			name = nameOverride
 		}
+		// A catalogue a team keeps is its own, and its images are whatever it
+		// wrote. One that names an image this panel built for another
+		// environment is the same way round the rule a single app is held to.
+		if err := s.checkImageReference(r.Context(), svc.Image, env.Namespace); err != nil {
+			return result, err
+		}
 		app := store.App{
 			EnvironmentID: env.ID,
 			Name:          name,

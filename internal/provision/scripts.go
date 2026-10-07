@@ -456,6 +456,13 @@ func installScript(version, token, serverURL, args string, isServer bool) string
 	if isServer {
 		role = "server"
 	}
+	// What only a server has to be told: the cluster's own database is on the
+	// control plane nodes, so snapshots are theirs. An agent has no such keys,
+	// and is not given them.
+	serverOnly := ""
+	if isServer {
+		serverOnly = EtcdSnapshotScript
+	}
 	var env strings.Builder
 	fmt.Fprintf(&env, "INSTALL_K3S_EXEC=%s ", shellsafe.Quote(role+" "+args))
 	if version != "" {
@@ -497,6 +504,7 @@ case "$kubelet_kb" in
   ;;
 esac
 
+%s
 echo "==> Downloading the k3s installer"
 if command -v curl >/dev/null 2>&1; then
   curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
@@ -524,7 +532,7 @@ done
 echo "k3s did not start within two minutes. The last log lines were:" >&2
 journalctl -u k3s -u k3s-agent --no-pager -n 40 2>/dev/null >&2 || true
 exit 21
-`, kube.RegistriesYAML(), KubeletConfigFunction, env.String())
+`, kube.RegistriesYAML(), KubeletConfigFunction, serverOnly, env.String())
 }
 
 // KubeletConfigFunction is the shell function that says what the kubelet keeps
@@ -555,6 +563,19 @@ const KubeletConfigFunction = `kubelet_config() {
 	printf '  - "kube-reserved=cpu=100m,memory=%s"\n' "$kubelet_kube"
 	printf '  - "eviction-hard=memory.available<%s,nodefs.available<10%%,imagefs.available<15%%,nodefs.inodesFree<5%%"\n' "$kubelet_hard"
 }
+`
+
+// EtcdSnapshotScript makes a control plane node's etcd snapshots explicit: k3s
+// takes them by itself every twelve hours and keeps five, on the server's own
+// disk, and this asks for every six and the last twelve. installer/install.sh
+// writes the same file on the first server, and a test checks they agree.
+const EtcdSnapshotScript = `echo "==> Snapshotting the cluster's state every six hours"
+mkdir -p /etc/rancher/k3s/config.yaml.d
+cat > /etc/rancher/k3s/config.yaml.d/20-skifity-etcd.yaml <<'SKIFITY_ETCD'
+# Written by Skifity. Do not edit: the installer writes it again.
+etcd-snapshot-schedule-cron: "0 */6 * * *"
+etcd-snapshot-retention: 12
+SKIFITY_ETCD
 `
 
 // NodeTokenScript reads the join token from the first control plane node.

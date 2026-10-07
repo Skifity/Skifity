@@ -830,6 +830,13 @@ for case_ in "1000000:256Mi:100Mi" "3000000:512Mi:200Mi" "6008000:1Gi:300Mi"; do
     t_fail "the kubelet's reservations for $kb kB are wrong: $(cat "$file" 2>/dev/null)"
   fi
 done
+(K3S_CONFIG_DIR="$kubelet_dir/k3s"; LOG_FILE=/dev/null; write_etcd_config) >/dev/null 2>&1
+if grep -qx 'etcd-snapshot-schedule-cron: "0 \*/6 \* \* \*"' "$kubelet_dir/k3s/config.yaml.d/20-skifity-etcd.yaml" 2>/dev/null &&
+  grep -qx 'etcd-snapshot-retention: 12' "$kubelet_dir/k3s/config.yaml.d/20-skifity-etcd.yaml"; then
+  t_pass "the cluster's state is snapshotted every six hours, and three days of them are kept"
+else
+  t_fail "the etcd snapshot schedule is wrong: $(cat "$kubelet_dir/k3s/config.yaml.d/20-skifity-etcd.yaml" 2>/dev/null)"
+fi
 rm -rf "$kubelet_dir/k3s"
 printf 'garbage\n' >"$kubelet_dir/meminfo"
 (K3S_CONFIG_DIR="$kubelet_dir/k3s"; MEMINFO="$kubelet_dir/meminfo"; LOG_FILE=/dev/null; write_kubelet_config) >/dev/null 2>&1

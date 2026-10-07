@@ -2120,6 +2120,7 @@ paths:
         - {name: wipe, in: query, description: 'Also uninstall k3s from the machine.', schema: {type: boolean}}
         - {name: delete_machine, in: query, description: 'Delete the machine at the cloud provider. Only for a server the panel created.', schema: {type: boolean}}
         - {name: confirm, in: query, description: 'The server''s name, exactly. Needed with delete_machine.', schema: {type: string}}
+        - {name: accept_data_loss, in: query, description: 'Remove the server although volumes exist only on it. Without it the removal is refused (409, server.has_local_volumes) and lists them.', schema: {type: boolean}}
       responses:
         '202': {$ref: '#/components/responses/OperationStarted'}
         default: {$ref: '#/components/responses/Error'}

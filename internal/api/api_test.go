@@ -461,10 +461,18 @@ type fakeCluster struct {
 	Cluster
 	controlPlanes int
 	err           error
+	// volumes are what exists only on the node being asked about, and
+	// volumesErr what asking says.
+	volumes    []string
+	volumesErr error
 }
 
 func (f fakeCluster) ControlPlaneCount(context.Context) (int, error) {
 	return f.controlPlanes, f.err
+}
+
+func (f fakeCluster) VolumesOnNode(context.Context, string) ([]string, error) {
+	return f.volumes, f.volumesErr
 }
 
 // withCluster rebuilds the harness's server with a cluster attached, and keeps
@@ -950,5 +958,59 @@ func TestSilenceAboutASecretKeepsItSecret(t *testing.T) {
 		if strings.Contains(body, leaked) {
 			t.Errorf("%q came back from the API", leaked)
 		}
+	}
+}
+
+// TestAServerHoldingTheOnlyCopyOfSomeDataIsNotRemovedBySaying: k3s's own storage
+// ties a volume to the node it was made on. Removing that server does not move
+// the data, the apps that use it cannot start elsewhere, and a wipe or a deleted
+// machine ends it. Said before anything is touched, and overridden by saying so.
+func TestAServerHoldingTheOnlyCopyOfSomeDataIsNotRemovedWithoutSayingSo(t *testing.T) {
+	h := newHarness(t)
+	acme := adminTenant(h, "acme")
+	h.withCluster(fakeCluster{volumes: []string{"acme-shop-production/data-web", "acme-shop-production/data-db"}})
+
+	server := store.Server{
+		TeamID: acme.team.ID, Name: "worker-1", Host: "203.0.113.20",
+		SSHPort: 22, SSHUser: "root", Role: "worker", NodeName: "worker-1",
+	}
+	if err := h.db.CreateServer(t.Context(), &server); err != nil {
+		t.Fatalf("create server: %v", err)
+	}
+
+	status, body := h.do(acme, http.MethodDelete, "/api/servers/"+server.ID, nil)
+	if status != http.StatusConflict || !strings.Contains(body, "server.has_local_volumes") ||
+		!strings.Contains(body, "acme-shop-production/data-web") {
+		t.Fatalf("a server holding data was not refused with what it holds: %d %s", status, body)
+	}
+	got, err := h.db.GetServer(t.Context(), server.ID)
+	if err != nil || got.Status == store.ServerRemoving {
+		t.Fatalf("a refused removal started anyway: %v %+v", err, got)
+	}
+
+	// Saying so is enough. (There is no provisioner in this harness, which
+	// answers after the check, so what matters is that it was not refused.)
+	_, body = h.do(acme, http.MethodDelete, "/api/servers/"+server.ID+"?accept_data_loss=true", nil)
+	if strings.Contains(body, "server.has_local_volumes") {
+		t.Fatalf("accept_data_loss did not override the refusal: %s", body)
+	}
+}
+
+// A cluster that cannot be asked is not a reason to keep a dead server listed:
+// the likeliest reason to remove one is that it has died.
+func TestADeadServerCanBeRemovedWhenTheClusterCannotSayWhatItHolds(t *testing.T) {
+	h := newHarness(t)
+	acme := adminTenant(h, "acme")
+	h.withCluster(fakeCluster{volumesErr: errors.New("no route to host")})
+	server := store.Server{
+		TeamID: acme.team.ID, Name: "worker-1", Host: "203.0.113.20",
+		SSHPort: 22, SSHUser: "root", Role: "worker", NodeName: "worker-1",
+	}
+	if err := h.db.CreateServer(t.Context(), &server); err != nil {
+		t.Fatal(err)
+	}
+	_, body := h.do(acme, http.MethodDelete, "/api/servers/"+server.ID, nil)
+	if strings.Contains(body, "server.has_local_volumes") {
+		t.Fatalf("a server was kept because the cluster could not be asked: %s", body)
 	}
 }

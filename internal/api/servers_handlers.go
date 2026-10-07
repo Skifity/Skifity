@@ -205,6 +205,23 @@ func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Volumes that exist only on this server go with it. k3s's own storage ties
+	// a volume to the node it was made on, so an app with one does not start
+	// elsewhere after a drain: its pod waits for a node that has been deleted,
+	// and the data is gone when the machine is wiped or deleted. Said before
+	// anything is touched, and overridden by saying so.
+	//
+	// A cluster that cannot be asked is not a reason to refuse: the likeliest
+	// reason to remove a server is that it has died.
+	if s.cluster != nil && server.NodeName != "" && !queryBool(r, "accept_data_loss") {
+		if volumes, err := s.cluster.VolumesOnNode(r.Context(), server.NodeName); err != nil {
+			s.log.Warn("could not check which volumes are on a server being removed", "server", server.ID, "error", err)
+		} else if len(volumes) > 0 {
+			writeError(w, r, errdoc.ServerHasVolumes(server.Name, volumes))
+			return
+		}
+	}
+
 	opts := RemoveServerOptions{Wipe: queryBool(r, "wipe"), DeleteMachine: queryBool(r, "delete_machine")}
 	if opts.DeleteMachine {
 		// Deleting a machine is the one part of this nothing can undo, so it

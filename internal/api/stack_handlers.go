@@ -100,6 +100,15 @@ func (s *Server) handleCreateStack(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, err)
 			return
 		}
+		// The same rule a single app is held to: an image this panel built for
+		// another environment does not run in this one. A Compose file names
+		// its images itself, and was the way round it.
+		if plan.app.SourceType == "image" {
+			if err := s.checkImageReference(r.Context(), plan.app.Image, env.Namespace); err != nil {
+				writeError(w, r, err)
+				return
+			}
+		}
 		if other, taken := bySlug[plan.app.Slug]; taken {
 			writeError(w, r, errdoc.StackDuplicate(other, service.Name, plan.app.Slug))
 			return
