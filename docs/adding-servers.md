@@ -274,17 +274,31 @@ promote them.
 With one control plane server, rebooting it means the cluster cannot be changed
 for a few minutes. Your apps keep running the whole time; you just cannot deploy.
 
-With three, losing one changes nothing at all. Two is worse than one: a
-two-member etcd cluster cannot form a majority when either member is lost, so
-the panel refuses to leave you there.
+With three, losing one changes nothing at all *to the cluster*. Two is worse
+than one: a two-member etcd cluster cannot form a majority when either member is
+lost, so the panel refuses to leave you there.
+
+Three control planes do not make the panel highly available. The panel is one
+pod, with its database and master key on one server's disk, and it runs where
+they are. If that server is lost, your apps keep serving and the cluster keeps
+its quorum, and the panel stays down until you restore its database and key onto
+another server. Nothing tells you meanwhile, because the thing that sends
+notifications is the panel: watch it from outside, with an uptime check on its
+address.
 
 Promoting a server moves its instances elsewhere first, then rejoins it as a
 control plane member.
 
 ## Hardening
 
-Adding a server opens the ports the cluster needs and closes the rest; it does
-not change how the machine lets people in. A cloud image usually arrives with
+Adding a server opens the cluster's ports to the other members, on a firewall
+that is already running; it does not turn one on, and it closes nothing. A server
+with no firewall has the Kubernetes API (6443) and the kubelet (10250) open to
+the internet, protected only by their own authentication, unless the provider's
+firewall closes them: allow TCP 22, 80 and 443 there, and the other members'
+addresses for the rest. The one port Skifity does close itself is 30500, the
+registry's, which takes no password. It also does not change how the machine
+lets people in. A cloud image usually arrives with
 SSH taking passwords and root allowed to sign in with one, and that stays as it
 was.
 

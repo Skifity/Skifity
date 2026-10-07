@@ -170,9 +170,16 @@ the guard if it is not running yet. What it costs below applies to it too.
   softened per site. Two replicas run, spread across servers, and a replica with
   no rules loaded reports itself as not ready so a rollout never puts one in
   front of traffic it cannot judge.
-* **It is not a WAF.** There is no request body inspection, no rate limiting and
-  no bot scoring. It answers "may this address, from this place, reach this
-  path", and nothing else.
+* **It is not a WAF.** There is no request body inspection, no per-app rate
+  limiting and no bot scoring. It answers "may this address, from this place,
+  reach this path", and nothing else.
+* **It is not protection against a flood.** A flood of requests, from one address
+  or many, reaches Traefik before anything here looks at it, and Traefik is shared
+  by every app on the server. The panel limits what one address can ask of its own
+  API, and Traefik is capped in memory so a runaway is one restarted pod, but
+  volume is a job for something in front of the server: Cloudflare's proxy or
+  tunnel, or the provider's own DDoS protection. See
+  [Security](https://github.com/Skifity/Skifity/blob/main/SECURITY.md#known-limits).
 * A blocked visitor gets a plain 403 and is told nothing about which rule
   stopped them.
 

@@ -12,8 +12,11 @@ goes down at 3am, that is your 3am.
 ## Why Kubernetes underneath?
 
 Because several servers should be one pool. An app that needs three instances
-gets them wherever there is room, and an app whose server dies is restarted
-elsewhere without you doing anything. Adding a server adds capacity; nothing
+gets them wherever there is room, and a stateless app whose server dies is
+restarted elsewhere without you doing anything. An app with a volume is not: the
+default storage keeps a volume on the server that made it, so the app waits for
+that server to come back. For data that must survive a server, use a managed
+Postgres with more than one instance, or install Longhorn. Adding a server adds capacity; nothing
 has to be told which app lives where.
 
 The trade is that Kubernetes needs more memory than running containers on one

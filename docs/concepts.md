@@ -1432,7 +1432,10 @@ database. Others join it.
 
 With one control plane server, a reboot means a few minutes of downtime for the
 cluster's control — your apps keep running. With three, losing one changes
-nothing.
+nothing *for the cluster*: the panel itself is one pod with its database on one
+server's disk, and it is not replicated. If that server is lost the panel is
+down until you put it back on another (see
+[Troubleshooting](troubleshooting.md)), while the apps keep serving.
 
 A worker can be promoted to a control plane server, if it is big enough for one:
 2 GB of memory and 20 GB of disk, against the 1 GB and 8 GB a worker needs,

@@ -70,6 +70,69 @@ These are the lines the code defends, and the ones it does not.
   to the node is a known limit of that, not a surprise — but reaching the
   panel's secrets from one is a vulnerability.
 
+## Known limits
+
+What follows is what Skifity does not do, or does only in part, today. It is
+here so that nobody finds it out the hard way. Nothing below, or above, has been
+run against a real cluster by the people who wrote it: `docs/progress.md` says
+what has been executed and what has only been written and tested against fakes.
+
+**Builds are not isolated from each other.**
+
+* One BuildKit serves every team. It listens inside the build namespace without a
+  password, and a build step runs beside it with its process sandbox off, because
+  rootless BuildKit needs that in Kubernetes. A hostile build step can read what
+  another team's build holds in that daemon, and push over images in the registry.
+* The registry takes no password and tags are mutable. What keeps the world and the
+  apps away from it is a firewall rule that drops its port from outside the
+  machine and a network policy that keeps pods off the machine's own address; a
+  build in the build namespace is not stopped by either, because it needs the
+  registry to work.
+* The fix is a daemon and a short-lived push token per build. It is the boundary
+  that matters, and it cannot be tested without a cluster, so it has not been
+  done. Until it is, treat a team that can build as able to affect every
+  team's images, and do not host teams that do not trust each other.
+
+**Floods are not handled.** A volumetric attack, or one address asking faster
+than a server can answer, is out of scope above, and the panel does little about
+it beyond a per-address limit on its own API, a cap on how much memory Traefik may
+take, and per-app allow and block rules. There is no per-app rate limit. Put
+Cloudflare, or your provider's DDoS protection, in front of anything that matters.
+
+**The panel is a single point of failure.** It is one pod with its database and
+master key on one server's disk. Three control plane servers keep the cluster up
+and do not change that. If its server is lost, apps keep serving and the panel is
+down until its database and key are restored elsewhere. Nothing watches the
+panel from outside: use an uptime check on its address.
+
+**Backups are opt-in, and data is on one server.** Nothing is backed up until a
+backup storage is set. k3s's default storage keeps a volume on the server that
+made it: a server lost is its volumes lost, and an app with one waits for it. A
+managed Postgres can have several instances; the other engines have one. There is
+no point-in-time recovery. etcd is snapshotted every six hours onto the same disk,
+which is not a backup of the server.
+
+**The host firewall is yours.** The installer opens ports on a firewall that is
+already running and turns none on. On a server with none, the Kubernetes API and
+the kubelet are reachable from the internet behind their own authentication unless
+your provider's firewall closes them. The installer does close one port itself,
+the registry's.
+
+**The first install is plain HTTP.** With no domain the panel answers on an
+sslip.io address over HTTP, and the setup token, the first password and the
+session cookie cross the network in clear. Give the installer a domain, or do the
+first sign-in from a network you trust.
+
+**Node protection is a request, not a guarantee.** Every server keeps memory back
+for k3s and evicts a pod that grows past what it asked for, and every container
+has a default limit on what it may write to disk. Nothing stops a tenant from
+requesting limits larger than the machine, and a full registry volume fails every
+team's pushes. Disk and memory alerts notify; they do not act.
+
+**A panel administrator is root everywhere** (above), and the panel can be made to
+request any address a private network answers, including the Kubernetes API, by
+the URL of a webhook or a log drain that an administrator of a team sets.
+
 ## In scope
 
 The panel, the CLI, the MCP server, the installer, the Kubernetes objects the

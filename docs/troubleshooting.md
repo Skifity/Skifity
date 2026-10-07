@@ -251,7 +251,7 @@ reason rather than a guess. The common ones:
 | No server has enough free CPU or memory | Lower what the app reserves under **Scaling**, or add a server. Reserved is a guarantee, so an app reserving more than it uses keeps other apps off the machine. |
 | This environment has reached its limit | Raise the environment's limits, or give this app less. The bars on the project page show which limit. |
 | This app's volume has not been created yet | On one server this is usually the storage class still starting. Across servers it means no server can provide the volume. |
-| The only servers with room are not accepting apps | A control-plane server does not run apps unless you allow it, and a server being drained accepts nothing. |
+| The only servers with room are not accepting apps | A server being drained accepts nothing. Control-plane servers are not kept free of apps — Skifity puts no taint on them — so they take apps like any other server, beside etcd and the Kubernetes API. |
 | Every server already runs an instance of this app | Instances are spread across servers, so a three-instance app wants three servers. Add one, or run fewer. |
 
 An app with no instances at all and a message about a limit never got as far as

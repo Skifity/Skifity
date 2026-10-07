@@ -6430,6 +6430,69 @@ machine with nginx on port 80, which is the output the stand-in imitates. The
 improvements reach a server only through a new release: the installer a user runs
 is the release's own.
 
+## Isolation, floods and recovery, read back against the code
+
+Four readers went through the cluster's isolation, its resistance to floods, its
+security and its recovery, each reading the code for what was claimed and what was
+only assumed. Their verdict was that the design is careful and the docs candid,
+and that nothing had run on a cluster. What they found, and what was done, is
+below; "tested" means a unit test or a stand-in, never a cluster.
+
+**Fixed, with tests.**
+
+* Pods could reach the machine they ran on. The egress rule excepted the private
+  ranges and one metadata address, so a server holding its public address on its
+  network card was inside "the internet": the Kubernetes API (a Service address is
+  translated to the server's own before the policy looks), the kubelet, SSH and
+  the registry's NodePort were reachable from every tenant pod, and the host
+  firewall trusts the pods' network on every port. Environments, builds and
+  plugins now share one rule, with the nodes' own addresses named and open on 80
+  and 443 only, and a pass on the minute tick applies it again when a server joins.
+* The registry (no password, a NodePort on every address) is closed to everything
+  but the machine itself by a rule in the raw table, which holds under ufw,
+  firewalld or nothing, repeated at boot by a unit, on the first server and on
+  every one added. The installer says so on a server with no firewall.
+* A missing master key was answered with a new one, which loses every secret while
+  the panel starts and signs everybody in. It now refuses when the database holds
+  secrets, tries an existing key on one of them, and `skifity admin restore-key`
+  reads the recovery key, which nothing could do before.
+* Memory and disk: each node keeps memory back for k3s and evicts early, every
+  container has a default ephemeral-storage limit, the build workspace and the
+  shared builder's cache have ceilings, and BuildKit is told how much to keep.
+* Floods: a per-address bucket in front of the panel's API, forty streams per
+  account, timeouts on the guard, a memory request and ceiling on Traefik.
+* Builds: a team's burst no longer queues everybody else behind it; build containers
+  drop NET_RAW and cannot gain privilege.
+* Recovery: notifications are retried when the failure may pass; removing a server
+  that holds the only copy of some data is refused until said; an app with a volume
+  that a failed deploy left down is put back once; etcd snapshots are explicit; a
+  Compose file or a team's catalogue can no longer name another environment's built
+  image.
+
+**Not fixed, and said so in SECURITY.md.** One BuildKit for every team with its
+process sandbox off, and a registry with no password: a build step can reach both,
+and the fix (a daemon and a short-lived push token per build) cannot be tested
+without a cluster. The panel as a single point of failure. Backups opt-in, data
+pinned to one server, no point-in-time recovery. No per-app rate limit, and no
+defence against volume. No host firewall turned on. The first install over HTTP.
+
+**Not run.** None of it on a real cluster: not the egress rule's effect on a live
+Kubernetes API, not the raw rule on a real kernel and its survival of a reboot or
+a firewall reload, not the kubelet's reservations or eviction, not the rollback or
+the volume check against a real node. The shell was run in `sh`, `dash` and bash
+with stand-ins for `iptables`, `systemctl` and `kubectl`; the progress line in a
+real pseudo-terminal. The first thing to do with a cluster is
+`curl <node public IP>:30500/v2/` and `:6443` from a tenant pod, and from outside.
+
+A first real install, by the owner, on a 6 GB Ubuntu 22.04 server with no
+firewall, found what the stand-ins could not: port 80 held by another web server,
+a resolver that did not answer, a domain behind Cloudflare's proxy that the
+installer called a wrong record, and cert-manager's webhook never becoming ready
+with nothing said about why. The installer now names what holds a port, checks
+DNS first, knows Cloudflare's addresses, and asks the cluster why a pod is not
+ready. That last failure, and a later one (the panel's connection to the API
+refused during a deploy), have not been explained.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
