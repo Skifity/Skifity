@@ -101,7 +101,8 @@ KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
 # Where k3s reads registries.yaml and config.yaml from, at start-up only.
 K3S_CONFIG_DIR="/etc/rancher/k3s"
 # The unit k3s's own installer writes, with the flags it was started with.
-K3S_UNIT_PATH="/etc/systemd/system/k3s.service"
+UNIT_DIR="/etc/systemd/system"
+K3S_UNIT_PATH="$UNIT_DIR/k3s.service"
 # The token a server needs to join this cluster, written by k3s.
 K3S_TOKEN_PATH="/var/lib/rancher/k3s/server/token"
 # k3s applies every file here, and applies one again when it changes.
@@ -169,6 +170,8 @@ PREFLIGHT_FIXES=""
 # reason is on the screen and not only in the log; and how long the last wait
 # took, for the line that reports it done.
 LAST_OUTPUT=""
+# What the cluster says about pods that did not become ready; see explain_pods.
+DIAGNOSIS=""
 PROGRESS_SECONDS=0
 # A background step being waited for, so an interrupt can stop it.
 PROGRESS_PID=""
@@ -213,6 +216,10 @@ fail() {
 	if [ -n "$LAST_OUTPUT" ]; then
 		printf '\n%sThe last lines it printed%s\n' "$BOLD" "$RESET" >&2
 		printf '%s\n' "$LAST_OUTPUT" | sed 's/^/  /' >&2
+	fi
+	if [ -n "$DIAGNOSIS" ]; then
+		printf '\n%sWhat the cluster says%s\n' "$BOLD" "$RESET" >&2
+		printf '%s' "$DIAGNOSIS" | sed 's/^/  /' >&2
 	fi
 	if [ "${2:-}" != "" ]; then
 		printf '\n%sWhat to do%s\n%s\n' "$BOLD" "$RESET" "$2" >&2
@@ -549,6 +556,77 @@ pods_ready() {
 	kubectl -n "$1" get pods --no-headers 2>/dev/null | awk '
 		{ split($2, n, "/"); total++; if (n[1] == n[2] && $3 == "Running") ready++ }
 		END { if (total) printf "%d of %d pods ready", ready, total }'
+}
+
+# explain_pods says why the pods of a namespace are not ready, from what the
+# cluster itself reports, into DIAGNOSIS for fail() to print.
+#
+# "The webhook never became ready" was true, and it sent everybody to run three
+# commands and read the output themselves, on a server where they had never
+# used kubectl. The cluster already knows: a pod that cannot pull its image says
+# which image and why, a pod that keeps stopping says how it stopped, and one
+# with nowhere to run says what is missing. The first minute of a failed first
+# install is when somebody is least able to read that, so it is read for them.
+#
+#   explain_pods NAMESPACE [SELECTOR]
+explain_pods() {
+	ex_ns=$1
+	ex_selector=${2:-}
+	DIAGNOSIS=""
+	# shellcheck disable=SC2086 # the selector is "-l a=b", two words, or nothing
+	ex_pods=$(kubectl -n "$ex_ns" get pods $ex_selector --no-headers 2>/dev/null |
+		awk '{ split($2, n, "/"); if (n[1] != n[2] || ($3 != "Running" && $3 != "Completed")) print $1 }' | head -n 4)
+	if [ -z "$ex_pods" ]; then
+		DIAGNOSIS="No pod in ${ex_ns} is reported as failing. They may simply be slow: run the installer again to wait longer."
+		return 0
+	fi
+	for ex_pod in $ex_pods; do
+		ex_image=$(kubectl -n "$ex_ns" get pod "$ex_pod" -o jsonpath='{.spec.containers[0].image}' 2>/dev/null || true)
+		ex_state=$(kubectl -n "$ex_ns" get pod "$ex_pod" -o jsonpath='{range .status.containerStatuses[*]}{.state.waiting.reason}{"|"}{.lastState.terminated.reason}{"|"}{.lastState.terminated.exitCode}{"\n"}{end}' 2>/dev/null | head -n 1)
+		ex_phase=$(kubectl -n "$ex_ns" get pod "$ex_pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+		ex_waiting=${ex_state%%|*}
+		ex_rest=${ex_state#*|}
+		ex_died=${ex_rest%%|*}
+		DIAGNOSIS="${DIAGNOSIS}${ex_pod}: ${ex_waiting:-${ex_phase:-unknown}}"
+		[ -z "$ex_died" ] || DIAGNOSIS="${DIAGNOSIS} (last stopped: ${ex_died})"
+		DIAGNOSIS="${DIAGNOSIS}
+"
+		# What the cluster said about it, newest last.
+		ex_events=$(kubectl -n "$ex_ns" get events --field-selector "involvedObject.name=${ex_pod}" --no-headers 2>/dev/null |
+			awk '$2 != "Normal" {$1 = ""; print}' | sed 's/^ *//' | tail -n 3 | cut -c1-200)
+		if [ -n "$ex_events" ]; then
+			DIAGNOSIS="${DIAGNOSIS}$(printf '%s\n' "$ex_events" | sed 's/^/    /')
+"
+		fi
+		case "${ex_waiting}:${ex_died}" in
+		ErrImagePull:* | ImagePullBackOff:*)
+			ex_host=${ex_image%%/*}
+			DIAGNOSIS="${DIAGNOSIS}  -> This server could not download ${ex_image:-its image}. Check that it can reach ${ex_host}:
+       getent hosts ${ex_host}
+       curl -sI https://${ex_host}/v2/
+     A resolver that does not answer, or a firewall in front of the server, is the usual cause.
+"
+			;;
+		CrashLoopBackOff:* | *:Error | *:OOMKilled)
+			DIAGNOSIS="${DIAGNOSIS}  -> It starts and stops. Why:
+       kubectl -n ${ex_ns} logs ${ex_pod} --previous | tail -n 20
+     'i/o timeout' to 10.43.0.1 means the pod network is not carrying traffic between pods and the
+     API server, which on this install is almost always the kernel or the provider's network.
+"
+			;;
+		ContainerCreating:* | PodInitializing:*)
+			DIAGNOSIS="${DIAGNOSIS}  -> Still being created. 'FailedCreatePodSandBox' above is the pod network: see
+     kubectl -n kube-system get pods
+"
+			;;
+		:*)
+			if [ "$ex_phase" = "Pending" ]; then
+				DIAGNOSIS="${DIAGNOSIS}  -> Waiting for a place to run. The line above says what is missing: memory, disk or a node that is ready.
+"
+			fi
+			;;
+		esac
+	done
 }
 
 cert_manager_detail() { pods_ready cert-manager; }
@@ -1341,6 +1419,86 @@ configure_firewall() {
 	note "A firewall at your provider, if there is one, has to allow TCP 80 and 443 too."
 }
 
+# guard_registry_port closes the registry's NodePort to everybody but this
+# machine.
+#
+# The registry is exposed on a NodePort so that every node's container runtime
+# can pull from it over loopback (ADR-0017), and a NodePort listens on every
+# address the server has: the internet, and every pod on the node, reach it as
+# well, and it takes no password. Anyone who can reach it can read, overwrite
+# or delete any image the panel built. Nothing but this machine's own container
+# runtime has a reason to ask, so everything that arrives from outside is
+# dropped before kube-proxy sees it. That is the raw table's PREROUTING chain,
+# which runs ahead of ufw, firewalld and the nat table alike, so it holds
+# whichever of them is in use, or none.
+#
+# Only traffic to one of this machine's own addresses is dropped, so an app's
+# own port 30500 on the pod network is not touched. The rule is repeated at
+# boot by a systemd unit, because iptables does not keep it by itself.
+guard_registry_port() {
+	if [ "${SKIFITY_SKIP_FIREWALL:-}" = "1" ]; then
+		warn "TCP ${REGISTRY_NODE_PORT}, the registry's port, is not closed (--skip-firewall)."
+		note "It takes no password. Close it from outside yourself:"
+		note "  iptables -t raw -I PREROUTING -p tcp --dport ${REGISTRY_NODE_PORT} -m addrtype --dst-type LOCAL ! -i lo -j DROP"
+		return 0
+	fi
+
+	if ! have iptables && have apt-get; then
+		note "Installing iptables, which keeps the registry's port closed"
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables >>"$LOG_FILE" 2>&1 || true
+	fi
+	if ! have iptables; then
+		warn "TCP ${REGISTRY_NODE_PORT}, the registry's port, could not be closed: iptables is not on this server."
+		note "It takes no password. Install iptables and run this again, or block that port from outside."
+		return 0
+	fi
+
+	# One spelling of the rule, used to check for it, to add it and in the unit.
+	registry_guard_rule="PREROUTING -p tcp --dport ${REGISTRY_NODE_PORT} -m addrtype --dst-type LOCAL ! -i lo -j DROP"
+	# shellcheck disable=SC2086 # the rule is words on purpose
+	if ! iptables -w -t raw -C $registry_guard_rule 2>/dev/null; then
+		# shellcheck disable=SC2086
+		iptables -w -t raw -I $registry_guard_rule >>"$LOG_FILE" 2>&1 || true
+	fi
+
+	unit="$UNIT_DIR/skifity-registry-guard.service"
+	if have systemctl && [ -d "$UNIT_DIR" ]; then
+		cat >"${unit}.new" <<EOF
+# Written by Skifity. Do not edit.
+# Keeps the registry's NodePort closed to everything but this machine
+# (guard_registry_port in install.sh).
+[Unit]
+Description=Skifity: keep the registry's port closed to the network
+Wants=network-pre.target
+Before=network-pre.target k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -w -t raw -C ${registry_guard_rule} 2>/dev/null || iptables -w -t raw -I ${registry_guard_rule}'
+ExecStop=-/bin/sh -c 'iptables -w -t raw -D ${registry_guard_rule}'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+		if ! cmp -s "${unit}.new" "$unit" 2>/dev/null; then
+			mv "${unit}.new" "$unit"
+			systemctl daemon-reload >>"$LOG_FILE" 2>&1 || true
+		else
+			rm -f "${unit}.new"
+		fi
+		systemctl enable skifity-registry-guard.service >>"$LOG_FILE" 2>&1 || true
+	fi
+
+	# shellcheck disable=SC2086
+	if iptables -w -t raw -C $registry_guard_rule 2>/dev/null; then
+		ok "TCP ${REGISTRY_NODE_PORT}, the registry's port, is closed to the network"
+	else
+		warn "TCP ${REGISTRY_NODE_PORT}, the registry's port, could not be closed."
+		note "It takes no password. Block it from outside, or run this again."
+	fi
+}
+
 # iptables_rejects_by_default is true when INPUT ends by refusing what no rule
 # let in. A rule that drops one address is somebody's decision and is left
 # alone; only a policy, or a catch-all rule, makes this server unreachable.
@@ -1762,6 +1920,42 @@ choose_hostname() {
 	PUBLIC_URL="${PANEL_SCHEME}://${PANEL_HOST}"
 }
 
+# Cloudflare's own IPv4 addresses, as published at https://www.cloudflare.com/ips-v4.
+# A hostname behind its proxy (the orange cloud) answers DNS with one of these
+# instead of the server's, which is not a mistake and not what the next check
+# should call one. internal/dnsprov keeps the same list for the panel's own
+# check, and a test makes sure the two agree.
+CLOUDFLARE_RANGES="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
+
+# ip_to_int turns a dotted IPv4 address into a number.
+ip_to_int() {
+	(
+		IFS=.
+		# shellcheck disable=SC2086 # split on the dots on purpose
+		set -- $1
+		printf '%s' $(($1 * 16777216 + $2 * 65536 + $3 * 256 + $4))
+	)
+}
+
+# in_range is true when an IPv4 address is inside a network written a.b.c.d/n.
+in_range() {
+	range_base=$(ip_to_int "${2%/*}")
+	range_bits=${2#*/}
+	range_size=$((1 << (32 - range_bits)))
+	range_ip=$(ip_to_int "$1")
+	[ $((range_ip / range_size)) -eq $((range_base / range_size)) ]
+}
+
+is_cloudflare_address() {
+	case "$1" in
+	*[!0-9.]* | '') return 1 ;;
+	esac
+	for cidr in $CLOUDFLARE_RANGES; do
+		if in_range "$1" "$cidr"; then return 0; fi
+	done
+	return 1
+}
+
 # check_domain_points_here says so, now, when the A record is missing.
 #
 # A certificate is issued by Let's Encrypt answering a challenge at this
@@ -1781,6 +1975,13 @@ check_domain_points_here() {
 		warn "$PANEL_HOST does not resolve to anything yet."
 		note "Create an A record for $PANEL_HOST pointing at $PUBLIC_IP. Until it exists,"
 		note "Let's Encrypt cannot issue a certificate and the panel has no address to answer on."
+	elif [ "$resolved" != "$PUBLIC_IP" ] && is_cloudflare_address "$resolved"; then
+		# The record is probably right: it is the proxy that answers.
+		warn "$PANEL_HOST is behind Cloudflare's proxy (it resolves to $resolved), not straight to this server."
+		note "That can work, and it can stop Let's Encrypt from issuing the certificate, depending on"
+		note "Cloudflare's SSL mode. The sure way is to open the record in Cloudflare, make sure it"
+		note "points at $PUBLIC_IP, and set its proxy status to \"DNS only\" (the grey cloud) until the"
+		note "panel opens over HTTPS. After that the proxy can go back on with SSL mode \"Full (strict)\"."
 	elif [ "$resolved" != "$PUBLIC_IP" ]; then
 		warn "$PANEL_HOST resolves to $resolved, and this server is $PUBLIC_IP."
 		note "Point the A record at $PUBLIC_IP. Until it does, Let's Encrypt will refuse the"
@@ -1804,11 +2005,16 @@ install_cert_manager() {
 			"cert-manager did not install." \
 			"Applying it again is safe: run the installer again. What kubectl said is in ${LOG_FILE}."
 		with_progress "Waiting for cert-manager to start" cert_manager_detail \
-			kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s || fail \
-			"cert-manager installed but its webhook never became ready." \
-			"Look at it with:
+			kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s || {
+			explain_pods cert-manager
+			fail \
+				"cert-manager installed but its webhook never became ready." \
+				"What the cluster says above is why. Fix that, and run the installer again: it carries on from here.
+More detail:
 
-  kubectl -n cert-manager get pods"
+  kubectl -n cert-manager get pods
+  kubectl -n cert-manager logs deploy/cert-manager-webhook"
+		}
 		ok "cert-manager is ready$(took)"
 	fi
 
@@ -1974,7 +2180,9 @@ install_panel() {
 		note "The first start pulls the image, which takes a minute on a new server."
 	fi
 	with_progress "Starting the panel" panel_detail \
-		kubectl -n "$NAMESPACE" rollout status deployment/skifity-panel --timeout=300s || fail \
+		kubectl -n "$NAMESPACE" rollout status deployment/skifity-panel --timeout=300s || {
+		explain_pods "$NAMESPACE" "-l app.kubernetes.io/component=panel"
+		fail \
 		"The panel did not start within five minutes." \
 		"See what it is waiting for:
 
@@ -1983,6 +2191,7 @@ install_panel() {
   kubectl -n ${NAMESPACE} logs -l app.kubernetes.io/component=panel
 
 If the image could not be pulled, check that ${IMAGE} exists and that this server can reach the registry."
+	}
 	ok "The panel is running$(took)"
 }
 
@@ -2245,6 +2454,7 @@ main() {
 
 	ask_for_domain
 	configure_firewall
+	guard_registry_port
 	install_k3s
 
 	# Every kubectl call from here on talks to the cluster this installer just made.

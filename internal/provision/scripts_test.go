@@ -1,12 +1,15 @@
 package provision
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"skifity/internal/kube"
 	"skifity/internal/settings"
 )
 
@@ -426,5 +429,44 @@ func TestTheResearchPageSaysWhatTheCodeDoes(t *testing.T) {
 			continue
 		}
 		t.Errorf("stack.md documents %s and no generated script passes it", flag)
+	}
+}
+
+// TestTheRegistryPortIsClosedOnEveryServer: the registry takes no password and
+// is a NodePort, which listens on every address a server has. The installer
+// closes it on the first server and this script on every server added later,
+// and the two have to say the same thing, or one server in a cluster is open.
+func TestTheRegistryPortIsClosedOnEveryServer(t *testing.T) {
+	script := FirewallScript([]string{"203.0.113.10"}, true)
+	rule := RegistryGuardRule()
+
+	wantRule := fmt.Sprintf("PREROUTING -p tcp --dport %d -m addrtype --dst-type LOCAL ! -i lo -j DROP", kube.RegistryNodePort)
+	if rule != wantRule {
+		t.Fatalf("the rule is %q, want %q", rule, wantRule)
+	}
+	for _, want := range []string{
+		"iptables -w -t raw -I " + rule,
+		"skifity-registry-guard.service",
+		"systemctl enable skifity-registry-guard.service",
+		"Before=network-pre.target k3s.service k3s-agent.service",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the firewall script does not contain %q", want)
+		}
+	}
+	// A server with no firewall at all is the one most in need of it.
+	noFirewall := FirewallScript(nil, false)
+	if !strings.Contains(noFirewall, "iptables -w -t raw -I "+rule) {
+		t.Error("a server with no members and no firewall does not get the rule")
+	}
+
+	// The installer spells the same rule, with the port as a variable.
+	installer, err := os.ReadFile(filepath.Join("..", "..", "installer", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spelled := strings.ReplaceAll(string(installer), "${REGISTRY_NODE_PORT}", strconv.Itoa(kube.RegistryNodePort))
+	if !strings.Contains(spelled, `registry_guard_rule="`+rule+`"`) {
+		t.Errorf("install.sh does not close the registry's port with %q", rule)
 	}
 }

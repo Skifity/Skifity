@@ -640,6 +640,168 @@ else
   t_pass "iptables that only drops one address is left alone"
 fi
 
+# --- the registry's port ------------------------------------------------------
+
+# The registry is a NodePort that takes no password, and a NodePort listens on
+# every address the server has. Nothing but this machine's own container runtime
+# has a reason to ask, so the install drops what arrives from anywhere else.
+guard="$WORKDIR/guard"
+unitdir="$WORKDIR/guard-units"
+mkdir -p "$unitdir"
+make_stub "$guard" iptables <<'STUB'
+# A rule that is not there yet: -C says no until -I has been run.
+printf "iptables %s\n" "$*" >>"$FW_LOG"
+case " $* " in
+*" -C "*) [ -f "$FW_LOG.added" ] || exit 1 ;;
+*" -I "*) : >"$FW_LOG.added" ;;
+esac
+exit 0
+STUB
+make_stub "$guard" systemctl <<'STUB'
+printf "systemctl %s\n" "$*" >>"$FW_LOG"
+exit 0
+STUB
+rm -f "$WORKDIR/guard.log" "$WORKDIR/guard.log.added"
+out=$( (PATH="$guard:$PATH"; FW_LOG="$WORKDIR/guard.log"; export FW_LOG; LOG_FILE=/dev/null
+  UNIT_DIR="$unitdir"; SKIFITY_SKIP_FIREWALL=""; guard_registry_port) 2>&1)
+want_rule="iptables -w -t raw -I PREROUTING -p tcp --dport 30500 -m addrtype --dst-type LOCAL ! -i lo -j DROP"
+if grep -qx -- "$want_rule" "$WORKDIR/guard.log"; then
+  t_pass "the registry's port is dropped for anything that is not this machine, ahead of any firewall"
+else
+  t_fail "the registry's port was not closed: $(cat "$WORKDIR/guard.log" 2>/dev/null)"
+fi
+case "$out" in *"the registry's port, is closed to the network"*) t_pass "and the install says so" ;; *) t_fail "no confirmation: $out" ;; esac
+if grep -q -- "-I PREROUTING -p tcp --dport 30500" "$unitdir/skifity-registry-guard.service" 2>/dev/null &&
+  grep -q "^Before=.*k3s.service" "$unitdir/skifity-registry-guard.service" &&
+  grep -qx "systemctl enable skifity-registry-guard.service" "$WORKDIR/guard.log"; then
+  t_pass "a systemd unit repeats the rule at every boot, before k3s starts"
+else
+  t_fail "the rule would not survive a reboot: $(cat "$unitdir/skifity-registry-guard.service" 2>/dev/null)"
+fi
+
+# Run again: the rule is there, so it is not added twice.
+: >"$WORKDIR/guard.log"
+(PATH="$guard:$PATH"; FW_LOG="$WORKDIR/guard.log"; export FW_LOG; LOG_FILE=/dev/null
+  UNIT_DIR="$unitdir"; SKIFITY_SKIP_FIREWALL=""; guard_registry_port) >/dev/null 2>&1
+if grep -q -- " -I " "$WORKDIR/guard.log"; then
+  t_fail "a second run added the rule again"
+else
+  t_pass "running the installer again does not stack a second rule"
+fi
+
+# --skip-firewall means leave the firewall alone, and says what that costs.
+: >"$WORKDIR/guard.log"
+out=$( (PATH="$guard:$PATH"; FW_LOG="$WORKDIR/guard.log"; export FW_LOG; LOG_FILE=/dev/null
+  UNIT_DIR="$unitdir"; SKIFITY_SKIP_FIREWALL=1; guard_registry_port) 2>&1)
+if [ ! -s "$WORKDIR/guard.log" ]; then
+  t_pass "--skip-firewall touches no firewall"
+else
+  t_fail "--skip-firewall still ran: $(cat "$WORKDIR/guard.log")"
+fi
+case "$out" in *"takes no password"*"--dst-type LOCAL"*) t_pass "and says what is left open, with the command to close it" ;; *) t_fail "no warning: $out" ;; esac
+
+# A server with no iptables, and no way to get it, says so rather than
+# reporting a port closed that is not.
+out=$( (LOG_FILE=/dev/null; UNIT_DIR="$unitdir"; SKIFITY_SKIP_FIREWALL=""
+  have() { return 1; }
+  guard_registry_port) 2>&1)
+case "$out" in *"could not be closed: iptables is not on this server"*) t_pass "without iptables it says the port is open, not that it is closed" ;; *) t_fail "got: $out" ;; esac
+
+# --- a domain behind Cloudflare -----------------------------------------------
+
+if is_cloudflare_address 104.21.11.36 && is_cloudflare_address 172.67.1.1 && is_cloudflare_address 131.0.72.5 &&
+  is_cloudflare_address 162.159.0.1 && ! is_cloudflare_address 103.171.85.54 && ! is_cloudflare_address 104.15.255.255 &&
+  ! is_cloudflare_address 104.32.0.1 && ! is_cloudflare_address "" && ! is_cloudflare_address 2606:4700::1; then
+  t_pass "Cloudflare's addresses are told from a server's, at the edges of its ranges too"
+else
+  t_fail "is_cloudflare_address is wrong"
+fi
+cf="$WORKDIR/cf-dns"
+make_stub "$cf" getent <<'STUB'
+case "$2" in
+proxied.example.test) echo "104.21.11.36    STREAM $2" ;;
+elsewhere.example.test) echo "198.51.100.9    STREAM $2" ;;
+here.example.test) echo "203.0.113.10    STREAM $2" ;;
+esac
+STUB
+for case_ in proxied elsewhere here; do
+  out=$( (PATH="$cf:$PATH"; PANEL_HOST="$case_.example.test"; PUBLIC_IP=203.0.113.10; check_domain_points_here) 2>&1)
+  case "$case_:$out" in
+  proxied:*"behind Cloudflare's proxy"*"DNS only"*"Full (strict)"*) t_pass "a domain behind Cloudflare's proxy is told to go grey, not to change a record that is right" ;;
+  elsewhere:*"resolves to 198.51.100.9"*"Point the A record"*) t_pass "a domain that points somewhere else is still told to point here" ;;
+  here:*"already points at this server"*) t_pass "a domain that points here is left alone" ;;
+  *) t_fail "$case_: $out" ;;
+  esac
+done
+case "$(PATH="$cf:$PATH"; PANEL_HOST=proxied.example.test; PUBLIC_IP=203.0.113.10; check_domain_points_here 2>&1)" in
+*"Point the A record at"*) t_fail "a Cloudflare address was told to change its record" ;;
+*) t_pass "and is not told to point the record anywhere" ;;
+esac
+
+# --- saying why a pod is not ready ------------------------------------------------
+
+# "The webhook never became ready" sent a first-time user to run commands on a
+# server where they had never used kubectl. The cluster already knew why.
+diag="$WORKDIR/diag"
+make_stub "$diag" kubectl <<'STUB'
+case "$*" in
+*"get pods"*"--no-headers"*)
+  case "${STUB_PODS:-pull}" in
+  pull) printf '%s\n' "cert-manager-webhook-abc   0/1   ImagePullBackOff   0   3m" "cert-manager-cainjector-x   1/1   Running   0   3m" ;;
+  crash) printf '%s\n' "web-1   0/1   CrashLoopBackOff   4   3m" ;;
+  pending) printf '%s\n' "web-1   0/1   Pending   0   3m" ;;
+  healthy) printf '%s\n' "web-1   1/1   Running   0   3m" ;;
+  esac ;;
+*"-o jsonpath={.spec.containers[0].image}"*) echo "quay.io/jetstack/cert-manager-webhook:v1.21.2" ;;
+*"containerStatuses"*)
+  case "${STUB_PODS:-pull}" in
+  pull) echo "ImagePullBackOff||" ;;
+  crash) echo "CrashLoopBackOff|Error|1" ;;
+  pending) echo "||" ;;
+  esac ;;
+*"-o jsonpath={.status.phase}"*)
+  case "${STUB_PODS:-pull}" in pending) echo Pending ;; *) echo Running ;; esac ;;
+*"get events"*)
+  case "${STUB_PODS:-pull}" in
+  pull) printf '%s\n' "2m   Normal    Pulling   pod/cert-manager-webhook-abc   Pulling image" \
+    "2m   Warning   Failed    pod/cert-manager-webhook-abc   Failed to pull image: lookup quay.io: Temporary failure in name resolution" ;;
+  pending) printf '%s\n' "1m   Warning   FailedScheduling   pod/web-1   0/1 nodes are available: 1 Insufficient memory." ;;
+  esac ;;
+esac
+exit 0
+STUB
+out=$( (PATH="$diag:$PATH"; STUB_PODS=pull; export STUB_PODS; explain_pods cert-manager; printf '%s' "$DIAGNOSIS") 2>&1)
+case "$out" in
+*"cert-manager-webhook-abc: ImagePullBackOff"*"Temporary failure in name resolution"*"could not download quay.io/jetstack/cert-manager-webhook:v1.21.2"*"getent hosts quay.io"*)
+  t_pass "a pod that cannot pull says which image, why, and how to check the server's way to its registry" ;;
+*) t_fail "diagnosis was: $out" ;;
+esac
+case "$out" in
+*"cainjector"*) t_fail "a pod that is fine was listed as a problem: $out" ;;
+*"Pulling image"*) t_fail "a routine event was shown as if it were a problem: $out" ;;
+*) t_pass "pods that are ready, and events that are routine, are left out" ;;
+esac
+out=$( (PATH="$diag:$PATH"; STUB_PODS=crash; export STUB_PODS; explain_pods demo "-l app=web"; printf '%s' "$DIAGNOSIS") 2>&1)
+case "$out" in
+*"CrashLoopBackOff (last stopped: Error)"*"logs web-1 --previous"*"pod network"*) t_pass "a pod that keeps stopping says how, where its log is, and the likeliest cause" ;;
+*) t_fail "diagnosis was: $out" ;;
+esac
+out=$( (PATH="$diag:$PATH"; STUB_PODS=pending; export STUB_PODS; explain_pods demo; printf '%s' "$DIAGNOSIS") 2>&1)
+case "$out" in
+*"web-1: Pending"*"Insufficient memory"*"Waiting for a place to run"*) t_pass "a pod with nowhere to run says what is missing" ;;
+*) t_fail "diagnosis was: $out" ;;
+esac
+out=$( (PATH="$diag:$PATH"; STUB_PODS=healthy; export STUB_PODS; explain_pods demo; printf '%s' "$DIAGNOSIS") 2>&1)
+case "$out" in
+*"No pod in demo is reported as failing"*) t_pass "pods that are all ready are not blamed" ;;
+*) t_fail "diagnosis was: $out" ;;
+esac
+out=$( (PATH="$diag:$PATH"; STUB_PODS=pull; export STUB_PODS; LOG_FILE=/dev/null; explain_pods cert-manager; fail "It did not work." "Try again.") 2>&1) || true
+case "$out" in
+*"It did not work."*"What the cluster says"*"ImagePullBackOff"*"What to do"*) t_pass "the failure message carries the cluster's own explanation, before what to do" ;;
+*) t_fail "failure was: $out" ;;
+esac
+
 # --- waiting, and saying so ----------------------------------------------------
 
 # The slow parts of an install used to print nothing: a server that was working
@@ -770,15 +932,25 @@ fi
 
 # An interrupt has to stop the step being waited for: a k3s installer left
 # running behind a Ctrl-C would carry on installing.
+#
+# Waited for, not looked at: a process that has been killed and not yet
+# collected by its parent still answers `kill -0`, so looking made this test
+# pass or fail by how quickly the shell happened to collect it. The status says
+# how it ended, and the watchdog is only there so that a step that was not
+# stopped fails this test instead of hanging it.
 sleep 30 &
 child=$!
+( sleep 8; kill -9 "$child" 2>/dev/null ) &
+watchdog=$!
 ( PROGRESS_PID=$child; stop_progress )
-sleep 0.2
-if kill -0 "$child" 2>/dev/null; then
-  kill "$child" 2>/dev/null
-  t_fail "stop_progress left the step running"
-else
+child_status=0
+wait "$child" 2>/dev/null || child_status=$?
+kill "$watchdog" 2>/dev/null || true
+wait "$watchdog" 2>/dev/null || true
+if [ "$child_status" = 143 ]; then
   t_pass "an interrupt stops the step being waited for"
+else
+  t_fail "stop_progress left the step running (it ended with status $child_status, not 143)"
 fi
 
 # What the panel's pod is doing, in words that say what to expect.
@@ -937,7 +1109,7 @@ FAKE
 # swap, systemd.
 fake_root() {
   rm -rf "$1"
-  mkdir -p "$1/etc" "$1/proc" "$1/run/systemd/system" "$1/sys/fs/cgroup" "$1/var/log" "$1/usr/local/bin" "$1/stub" "$1/tmp"
+  mkdir -p "$1/etc" "$1/etc/systemd/system" "$1/proc" "$1/run/systemd/system" "$1/sys/fs/cgroup" "$1/var/log" "$1/usr/local/bin" "$1/stub" "$1/tmp"
   printf 'ID=ubuntu\nVERSION="24.04 LTS (Noble Numbat)"\nPRETTY_NAME="Ubuntu 24.04 LTS"\n' >"$1/etc/os-release"
   printf 'MemTotal:        1536000 kB\nSwapTotal:             0 kB\n' >"$1/proc/meminfo"
   printf 'cpuset cpu io memory pids\n' >"$1/sys/fs/cgroup/cgroup.controllers"
@@ -964,7 +1136,8 @@ run_install() {
       LOG_FILE="$R/var/log/skifity-install.log"
       KUBECONFIG_PATH="$R/etc/rancher/k3s/k3s.yaml"
       K3S_CONFIG_DIR="$R/etc/rancher/k3s"
-      K3S_UNIT_PATH="$R/etc/systemd/system/k3s.service"
+      UNIT_DIR="$R/etc/systemd/system"
+      K3S_UNIT_PATH="$UNIT_DIR/k3s.service"
       K3S_TOKEN_PATH="$R/var/lib/rancher/k3s/server/token"
       K3S_MANIFESTS_DIR="$R/var/lib/rancher/k3s/server/manifests"
       CLI_PATH="$R/usr/local/bin/skifity"
@@ -1445,10 +1618,26 @@ esac
 exit 0
 STUB
 
+make_stub "$USTUBS" iptables <<'STUB'
+# The registry's rule is "there" until it has been deleted once.
+printf "iptables %s\n" "$*" >>"$STUB_LOG"
+case " $* " in
+*" -C "*) [ -f "$STUB_LOG.rule" ] || exit 1 ;;
+*" -D "*) rm -f "$STUB_LOG.rule" ;;
+esac
+exit 0
+STUB
+make_stub "$USTUBS" systemctl <<'STUB'
+printf "systemctl %s\n" "$*" >>"$STUB_LOG"
+exit 0
+STUB
+
 # fake_uroot DIR lays out a server that has Skifity on it.
 fake_uroot() {
   rm -rf "$1"
-  mkdir -p "$1/etc/skifity" "$1/var/lib/skifity" "$1/etc/rancher/k3s" "$1/bin" "$1/run"
+  mkdir -p "$1/etc/skifity" "$1/var/lib/skifity" "$1/etc/rancher/k3s" "$1/etc/systemd/system" "$1/bin" "$1/run"
+  printf '[Unit]\n' >"$1/etc/systemd/system/skifity-registry-guard.service"
+  : >"$1/calls.log.rule"
   printf 'fake master key\n' >"$1/etc/skifity/master.key"
   printf 'fake database\n' >"$1/var/lib/skifity/panel.db"
   printf 'apiVersion: v1\n' >"$1/etc/rancher/k3s/k3s.yaml"
@@ -1478,6 +1667,7 @@ run_uninstall() {
       DATA_DIR="$R/var/lib/skifity"
       KUBECONFIG_PATH="$R/etc/rancher/k3s/k3s.yaml"
       REGISTRIES_PATH="$R/etc/rancher/k3s/registries.yaml"
+      REGISTRY_GUARD_UNIT="$R/etc/systemd/system/skifity-registry-guard.service"
       CLI_PATH="$R/bin/skifity"
       UNINSTALLER_PATH="$R/bin/skifity-uninstall"
       K3S_UNINSTALL="$R/bin/k3s-uninstall.sh"
@@ -1565,6 +1755,13 @@ if [ -f "$UR/etc/skifity/master.key" ]; then
   t_pass "and still keeps the master key"
 else
   t_fail "--all deleted the master key"
+fi
+if [ ! -e "$UR/etc/systemd/system/skifity-registry-guard.service" ] && [ ! -e "$UR/calls.log.rule" ] &&
+  grep -q "iptables -w -t raw -D PREROUTING -p tcp --dport 30500" "$UR/calls.log" &&
+  grep -q "systemctl disable --now skifity-registry-guard.service" "$UR/calls.log"; then
+  t_pass "and takes away the rule that kept the registry's port closed, and the unit that repeated it"
+else
+  t_fail "--all left the registry's port rule behind: $(cat "$UR/calls.log")"
 fi
 
 # The data needs the longer phrase, and the wrong one removes nothing.

@@ -322,8 +322,73 @@ iptables)
   ;;
 esac
 
+%s
 echo "firewall_configured=${FIREWALL}"
-`, shellsafe.Quote(PodCIDR), shellsafe.Quote(ServiceCIDR), rules.String())
+`, shellsafe.Quote(PodCIDR), shellsafe.Quote(ServiceCIDR), rules.String(), RegistryGuardScript())
+}
+
+// RegistryGuardRule is the iptables rule that keeps the registry's NodePort
+// closed to everything but the machine itself, in the words iptables takes.
+//
+// A NodePort listens on every address a server has, the registry takes no
+// password, and anything that reaches it can read, overwrite or delete the
+// images the panel built. Nothing but the server's own container runtime, over
+// loopback, has a reason to ask. The rule is in the raw table, which runs ahead
+// of ufw, firewalld and kube-proxy's nat table, so it holds whichever firewall
+// the server uses, or none. It drops only what is addressed to one of the
+// server's own addresses, so a pod's own port of the same number on the pod
+// network is not touched.
+//
+// installer/install.sh (guard_registry_port) spells the same rule, and a test
+// checks that the two agree.
+func RegistryGuardRule() string {
+	return fmt.Sprintf("PREROUTING -p tcp --dport %d -m addrtype --dst-type LOCAL ! -i lo -j DROP", kube.RegistryNodePort)
+}
+
+// RegistryGuardScript closes the registry's port on a server and keeps it
+// closed across reboots. Nothing in it can fail the script: a server without
+// iptables says so and carries on, and the panel's hardening audit reports it.
+func RegistryGuardScript() string {
+	rule := RegistryGuardRule()
+	return fmt.Sprintf(`
+# The registry's NodePort takes no password and must not be reachable from
+# outside this machine.
+if ! command -v iptables >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iptables >/dev/null 2>&1 || true
+fi
+if command -v iptables >/dev/null 2>&1; then
+  if ! iptables -w -t raw -C %[1]s 2>/dev/null; then
+    iptables -w -t raw -I %[1]s >/dev/null 2>&1 || true
+  fi
+  if command -v systemctl >/dev/null 2>&1 && [ -d /etc/systemd/system ]; then
+    cat > /etc/systemd/system/skifity-registry-guard.service <<'SKIFITY_GUARD'
+# Written by Skifity. Do not edit.
+[Unit]
+Description=Skifity: keep the registry's port closed to the network
+Wants=network-pre.target
+Before=network-pre.target k3s.service k3s-agent.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -w -t raw -C %[1]s 2>/dev/null || iptables -w -t raw -I %[1]s'
+ExecStop=-/bin/sh -c 'iptables -w -t raw -D %[1]s'
+
+[Install]
+WantedBy=multi-user.target
+SKIFITY_GUARD
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable skifity-registry-guard.service >/dev/null 2>&1 || true
+  fi
+  if iptables -w -t raw -C %[1]s 2>/dev/null; then
+    echo "registry_port_closed=yes"
+  else
+    echo "registry_port_closed=no"
+  fi
+else
+  echo "registry_port_closed=no_iptables"
+fi
+`, rule)
 }
 
 // serverArgs are the flags every control plane node has to agree on.

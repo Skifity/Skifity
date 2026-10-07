@@ -31,6 +31,10 @@ DATA_DIR="/var/lib/skifity"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
 # What the installer put on this machine.
 REGISTRIES_PATH="/etc/rancher/k3s/registries.yaml"
+# The rule that keeps the registry's NodePort closed, and the unit that repeats
+# it at boot (guard_registry_port in install.sh).
+REGISTRY_NODE_PORT=30500
+REGISTRY_GUARD_UNIT="/etc/systemd/system/skifity-registry-guard.service"
 CLI_PATH="/usr/local/bin/skifity"
 UNINSTALLER_PATH="/usr/local/bin/skifity-uninstall"
 # What k3s's own installer left to remove it with.
@@ -301,6 +305,29 @@ remove_k3s() {
 		note "Remove it the way it was installed, then run this again."
 	else
 		note "k3s does not look installed; nothing to remove."
+	fi
+	remove_registry_guard
+}
+
+# remove_registry_guard takes away what keeps the registry's port closed. It
+# goes with k3s: the registry it protects is gone, and a rule nobody remembers
+# is a rule somebody debugs for an afternoon.
+remove_registry_guard() {
+	if have iptables; then
+		# Until -C says it is gone, so a rule added twice by hand goes too.
+		guard_rule="PREROUTING -p tcp --dport ${REGISTRY_NODE_PORT} -m addrtype --dst-type LOCAL ! -i lo -j DROP"
+		# shellcheck disable=SC2086 # the rule is words on purpose
+		while [ "$DRY_RUN" != "1" ] && iptables -w -t raw -C $guard_rule 2>/dev/null; do
+			# shellcheck disable=SC2086
+			iptables -w -t raw -D $guard_rule >>"$LOG_FILE" 2>&1 || break
+		done
+	fi
+	if [ -e "$REGISTRY_GUARD_UNIT" ]; then
+		if have systemctl; then
+			attempt "stop the registry port guard" systemctl disable --now skifity-registry-guard.service || true
+		fi
+		attempt "remove the registry port guard" rm -f "$REGISTRY_GUARD_UNIT" || true
+		if have systemctl && [ "$DRY_RUN" != "1" ]; then systemctl daemon-reload >>"$LOG_FILE" 2>&1 || true; fi
 	fi
 }
 
