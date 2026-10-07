@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -133,7 +134,12 @@ func checkKeyAgainstDatabase(ctx context.Context, ring *crypto.Keyring, database
 		return false, nil
 	}
 	if _, err := os.Stat(database); err != nil {
-		return false, nil
+		// No database yet is a fresh install being given its key; anything
+		// else is a database that is there and cannot be looked at.
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("look at the panel's database: %w", err)
 	}
 	inspection, err := store.Inspect(ctx, database)
 	if err != nil {
