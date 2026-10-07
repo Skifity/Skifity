@@ -101,6 +101,15 @@ func (m *Manager) Start(ctx context.Context, databaseID string) (store.Database,
 	}
 	m.publish(ctx, record.ID)
 
+	// Read before the wait begins, not after: a cluster that answers at once
+	// finishes the wait before this function returns, and the answer to "start
+	// it" was then sometimes "running" and sometimes "starting", by how quickly
+	// the other goroutine got there. The wait is what changes it from here on.
+	started, err := m.db.GetDatabase(ctx, record.ID)
+	if err != nil {
+		return store.Database{}, err
+	}
+
 	background := context.WithoutCancel(ctx)
 	spec := Spec{Name: record.Slug, Namespace: env.Namespace, Engine: record.Engine}
 	runsafe.Go(m.log, "starting database "+record.ID, func() {
@@ -116,7 +125,7 @@ func (m *Manager) Start(ctx context.Context, databaseID string) (store.Database,
 		}
 		m.publish(ctx, record.ID)
 	})
-	return m.db.GetDatabase(ctx, record.ID)
+	return started, nil
 }
 
 // scaleStatefulSet sets a database's StatefulSet to a number of instances.
