@@ -1,10 +1,12 @@
 package builder
 
 import (
-	batchv1 "k8s.io/api/batch/v1"
 	"os/exec"
 	"strings"
 	"testing"
+
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func baseJob() JobSpec {
@@ -564,4 +566,65 @@ func withDockerfile(t *testing.T, script string) string {
 		return script
 	}
 	return script + "\n" + staticDockerfile(t, script)
+}
+
+// TestABuildCannotFillTheNodesDisk: a build's workspace is on the node's own
+// disk, and a full disk is not one build failing but the kubelet evicting pods
+// from the whole machine.
+func TestABuildCannotFillTheNodesDisk(t *testing.T) {
+	job, err := BuildJob(baseJob())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod := job.Spec.Template.Spec
+	var workspace bool
+	for _, volume := range pod.Volumes {
+		if volume.Name != "workspace" {
+			continue
+		}
+		workspace = true
+		if volume.EmptyDir == nil || volume.EmptyDir.SizeLimit == nil || volume.EmptyDir.SizeLimit.IsZero() {
+			t.Error("the build's workspace has no size limit")
+		}
+	}
+	if !workspace {
+		t.Fatal("the build has no workspace")
+	}
+	if pod.Containers[0].Resources.Limits.StorageEphemeral().IsZero() {
+		t.Error("the build container has no ephemeral-storage limit")
+	}
+}
+
+// TestBuildContainersCannotForgePacketsOrGainPrivilege: the code being built is
+// somebody's repository, in a pod on the node's bridge.
+func TestBuildContainersCannotForgePacketsOrGainPrivilege(t *testing.T) {
+	for _, builder := range []Builder{BuilderRailpack, BuilderNixpacks, BuilderDockerfile} {
+		spec := baseJob()
+		spec.Builder = builder
+		spec.NixpacksImage = "registry.example.test/nixpacks@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		job, err := BuildJob(spec)
+		if err != nil {
+			t.Fatalf("%s: %v", builder, err)
+		}
+		pod := job.Spec.Template.Spec
+		for _, container := range append(append([]corev1.Container{}, pod.InitContainers...), pod.Containers...) {
+			security := container.SecurityContext
+			if security == nil || security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation {
+				t.Errorf("%s: %s can gain privilege", builder, container.Name)
+				continue
+			}
+			dropped := false
+			if security.Capabilities != nil {
+				for _, c := range security.Capabilities.Drop {
+					dropped = dropped || c == "NET_RAW"
+				}
+			}
+			if !dropped {
+				t.Errorf("%s: %s keeps NET_RAW and can forge packets on the node's bridge", builder, container.Name)
+			}
+			if security.Privileged != nil && *security.Privileged {
+				t.Errorf("%s: %s is privileged", builder, container.Name)
+			}
+		}
+	}
 }

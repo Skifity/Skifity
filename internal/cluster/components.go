@@ -316,6 +316,7 @@ func buildKitObjects(namespace string) []any {
 
 	replicas := int32(1)
 	runAsUser := int64(1000)
+	cacheLimit := resource.MustParse(BuildKitCacheLimit)
 	deployment := &appsv1.Deployment{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
 		ObjectMeta: metav1.ObjectMeta{Name: BuildKitService, Namespace: namespace, Labels: labels},
@@ -343,6 +344,10 @@ func buildKitObjects(namespace string) []any {
 						Args: []string{
 							"--addr", fmt.Sprintf("tcp://0.0.0.0:%d", BuildKitPort),
 							"--oci-worker-no-process-sandbox",
+							// Its own garbage collection, told how much to keep.
+							// Left to itself the cache grows until the disk is
+							// full, and the disk it fills is the node's.
+							"--oci-worker-gc-keepstorage", fmt.Sprint(BuildKitKeepStorageMB),
 						},
 						Ports: []corev1.ContainerPort{{Name: "grpc", ContainerPort: BuildKitPort}},
 						SecurityContext: &corev1.SecurityContext{
@@ -354,7 +359,12 @@ func buildKitObjects(namespace string) []any {
 								corev1.ResourceCPU:    resource.MustParse("100m"),
 								corev1.ResourceMemory: resource.MustParse("256Mi"),
 							},
-							Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")},
+							Limits: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("2Gi"),
+								// The cache's ceiling, a little over, plus the
+								// layer being built: see BuildKitCacheLimit.
+								corev1.ResourceEphemeralStorage: resource.MustParse(BuildKitEphemeralLimit),
+							},
 						},
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
@@ -379,7 +389,7 @@ func buildKitObjects(namespace string) []any {
 						// An emptyDir rather than a volume: the build cache is
 						// worth keeping between builds on one node but is not
 						// worth a PVC that pins the builder to one server.
-						VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+						VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &cacheLimit}},
 					}},
 				},
 			},
@@ -399,6 +409,18 @@ func buildKitObjects(namespace string) []any {
 
 	return []any{deployment, service}
 }
+
+// How much disk the shared builder may use. BuildKit keeps its cache, and
+// removes the oldest of it when it holds more than BuildKitKeepStorageMB; the
+// volume holding it is capped a little above that (BuildKitCacheLimit), so that
+// the garbage collector is what keeps it down and the cap is only what stops a
+// runaway. Over the cap the builder's pod is evicted, which fails the builds in
+// flight and nobody else's pods.
+const (
+	BuildKitKeepStorageMB  = 8000
+	BuildKitCacheLimit     = "14Gi"
+	BuildKitEphemeralLimit = "16Gi"
+)
 
 // buildKitImage is the rootless builder, pinned by version and digest in one
 // place with the buildctl that talks to it. See builder/images.go.

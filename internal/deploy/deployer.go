@@ -258,7 +258,13 @@ func (d *Deployer) run(ctx context.Context, deploymentID string) {
 	if deployment.Image == "" {
 		// Queued until a build slot is free, and said so: a deployment that
 		// sits at "queued" with nothing in its log looks stuck.
-		release, err := d.slots.acquire(ctx, func() int { return d.buildLimit(ctx) }, func(running, ahead int) {
+		// Whose turn it is depends on the team: see buildSlots. A project that
+		// cannot be read queues as nobody's, which is what it did before.
+		team := ""
+		if project, err := d.db.GetProject(ctx, env.ProjectID); err == nil {
+			team = project.TeamID
+		}
+		release, err := d.slots.acquireFor(ctx, team, func() int { return d.buildLimit(ctx) }, func(running, ahead int) {
 			d.appendLog(ctx, deployment.ID, fmt.Sprintf(
 				"Waiting to build: %d builds are running, as many as this panel runs at once, and %d %s ahead of this one.",
 				running, ahead, pluralIs(ahead)))

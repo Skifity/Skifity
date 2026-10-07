@@ -278,8 +278,14 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 		labels[version.LabelKey("project-id")] = s.ProjectID
 	}
 
+	// The workspace is the repository and what the build writes beside it, on the
+	// node's own disk. Without a ceiling one build that writes without end (a
+	// dependency cache in the wrong place, a log) fills the disk, and a full
+	// disk is not one build failing: the kubelet evicts pods from the whole
+	// machine. Over this size the build's own pod is the one evicted.
+	workspaceLimit := resource.MustParse(WorkspaceSizeLimit)
 	volumes := []corev1.Volume{
-		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
 	}
 	mounts := []corev1.VolumeMount{{Name: "workspace", MountPath: workspace}}
 
@@ -320,6 +326,14 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 		buildContainer.VolumeMounts = append(buildContainer.VolumeMounts,
 			corev1.VolumeMount{Name: "registry-auth", MountPath: "/root/.docker", ReadOnly: true})
 	}
+
+	// What the repository's code can do from inside the pod, whichever container
+	// runs it: no raw sockets, which would let it forge packets on the node's
+	// bridge, and no gaining privilege it was not started with.
+	for i := range initContainers {
+		initContainers[i].SecurityContext = confinedContainer()
+	}
+	buildContainer.SecurityContext = confinedContainer()
 
 	backoffLimit := int32(0) // a failed build is reported, not retried blindly
 	activeDeadline := int64(s.TimeoutSeconds)
@@ -845,7 +859,27 @@ func buildResources(s JobSpec) corev1.ResourceRequirements {
 		},
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse(fmt.Sprintf("%dMi", s.MemLimitMB)),
+			// The writable layer, logs and workspace together: a little over
+			// the workspace's own ceiling, so that the ceiling is what trips.
+			corev1.ResourceEphemeralStorage: resource.MustParse(BuildEphemeralLimit),
 		},
+	}
+}
+
+// WorkspaceSizeLimit is how much a build's workspace may hold, and
+// BuildEphemeralLimit how much its pod may write to the node's disk in all.
+const (
+	WorkspaceSizeLimit  = "10Gi"
+	BuildEphemeralLimit = "12Gi"
+)
+
+// confinedContainer is the security context every build container gets. The
+// user is left alone: the tools these images ship expect to run as they were
+// built, and the boundary that matters is the pod's.
+func confinedContainer() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: ptr(false),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"NET_RAW"}},
 	}
 }
 

@@ -217,3 +217,83 @@ func waitFor(t *testing.T, condition func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+// A team that pushed forty builds is not forty places in front of the team that
+// pushed one a second later. Of the builds waiting, the next to run belongs to
+// the team with the fewest running.
+func TestOneTeamsBurstDoesNotHoldEveryoneElseBehindIt(t *testing.T) {
+	slots := newBuildSlots()
+	two := func() int { return 2 }
+	quiet := func(int, int) {}
+
+	// Acme holds both slots, and queues three more behind them.
+	heldA, err := slots.acquireFor(t.Context(), "acme", two, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heldB, err := slots.acquireFor(t.Context(), "acme", two, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var order []string
+	var wg sync.WaitGroup
+	releases := make(chan func(), 8)
+	arrive := func(team string, label string) {
+		told := make(chan struct{})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			release, err := slots.acquireFor(t.Context(), team, two, func(int, int) { close(told) })
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			mu.Lock()
+			order = append(order, label)
+			mu.Unlock()
+			releases <- release
+		}()
+		select {
+		case <-told:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s did not queue", label)
+		}
+	}
+	for _, label := range []string{"acme-3", "acme-4", "acme-5"} {
+		arrive("acme", label)
+	}
+	// And a different team arrives last.
+	arrive("globex", "globex-1")
+
+	// One of Acme's builds finishes. Acme still has one running and Globex has
+	// none, so Globex goes next although it is last in line.
+	heldA()
+	waitFor(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(order) == 1 })
+	mu.Lock()
+	if order[0] != "globex-1" {
+		t.Errorf("%s went first, and the team with nothing running should have", order[0])
+	}
+	mu.Unlock()
+
+	// The rest follow in the order they came, whoever is running what.
+	heldB()
+	(<-releases)()
+	waitFor(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(order) >= 2 })
+	(<-releases)()
+	waitFor(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(order) >= 3 })
+	(<-releases)()
+	waitFor(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(order) >= 4 })
+	(<-releases)()
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"globex-1", "acme-3", "acme-4", "acme-5"}
+	for i, label := range want {
+		if order[i] != label {
+			t.Errorf("the order builds ran in was %v, want %v", order, want)
+			break
+		}
+	}
+}

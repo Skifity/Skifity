@@ -1,11 +1,13 @@
 package cluster
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"skifity/internal/kube"
 )
@@ -112,5 +114,40 @@ func TestBuildKitProbeKnowsWhereBuildKitIs(t *testing.T) {
 	// that breaks for no reason they can see.
 	if strings.HasSuffix(container.Image, ":latest") || strings.Contains(container.Image, ":master") {
 		t.Errorf("BuildKit is pinned to a moving tag: %q", container.Image)
+	}
+}
+
+// TestTheSharedBuilderCannotFillTheNodesDisk: one BuildKit serves every team and
+// keeps its cache on the node's disk. Left alone the cache grows until the disk
+// is full, and a full disk is the kubelet evicting pods from the whole machine.
+func TestTheSharedBuilderCannotFillTheNodesDisk(t *testing.T) {
+	var deployment *appsv1.Deployment
+	for _, object := range buildKitObjects(kube.BuildsNamespace) {
+		if d, ok := object.(*appsv1.Deployment); ok {
+			deployment = d
+		}
+	}
+	if deployment == nil {
+		t.Fatal("BuildKit has no Deployment")
+	}
+	pod := deployment.Spec.Template.Spec
+	args := strings.Join(pod.Containers[0].Args, " ")
+	if !strings.Contains(args, "--oci-worker-gc-keepstorage "+fmt.Sprint(BuildKitKeepStorageMB)) {
+		t.Errorf("BuildKit is not told how much cache to keep: %s", args)
+	}
+	for _, volume := range pod.Volumes {
+		if volume.Name == "cache" && (volume.EmptyDir == nil || volume.EmptyDir.SizeLimit == nil) {
+			t.Error("the builder's cache has no ceiling")
+		}
+	}
+	if pod.Containers[0].Resources.Limits.StorageEphemeral().IsZero() {
+		t.Error("the builder has no ephemeral-storage limit")
+	}
+	// The collector is what keeps the cache down; the ceiling is for a runaway.
+	keep := resource.MustParse(fmt.Sprintf("%dM", BuildKitKeepStorageMB))
+	ceiling := resource.MustParse(BuildKitCacheLimit)
+	if ceiling.Cmp(keep) <= 0 {
+		t.Errorf("the cache ceiling %s is not above what the collector keeps (%s), so it would be evicted in normal use",
+			BuildKitCacheLimit, keep.String())
 	}
 }
