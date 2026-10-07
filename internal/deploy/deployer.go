@@ -477,6 +477,15 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	d.appendLog(ctx, deployment.ID, "Waiting for the new instances to become ready.")
 	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, rolloutWait(spec)); err != nil {
 		status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, app.Slug)
+		// A cluster that stopped answering is not an app that did not start. The
+		// panel was told "the new version did not start: check the app's logs"
+		// when its own connection to the Kubernetes API was refused, which
+		// sent the person to an app that may have been fine and away from the
+		// server that was not.
+		if statusErr != nil && kube.IsUnreachable(err) && kube.IsUnreachable(statusErr) {
+			d.appendLog(ctx, deployment.ID, "The panel lost its connection to the cluster while waiting for the new version: "+err.Error())
+			return nil, errdoc.ClusterUnreachable(err)
+		}
 		ready, wanted := 0, int(spec.DesiredReplicas())
 		reason := err.Error()
 		if statusErr == nil {

@@ -523,6 +523,25 @@ sudo journalctl -u k3s -n 100 --no-pager
 
 The usual cause is the server running out of disk. Check with `df -h`.
 
+A deploy that ends with "The cluster is not responding", or a Kubernetes call
+refused or cut off partway (`connection refused`, `unexpected EOF`) is the same
+thing seen from the panel: k3s was not answering, usually because it was
+restarting. Look for why:
+
+```sh
+sudo systemctl status k3s --no-pager | head -15     # "since" a few minutes ago is a restart
+sudo journalctl -u k3s --since "30 min ago" --no-pager | grep -iE 'restart|panic|fatal|killed|etcd.*(slow|took too long|timeout)' | tail
+sudo dmesg | grep -iE 'out of memory|killed process' | tail -5
+free -m; uptime
+```
+
+* **Out of memory** (`killed process` naming k3s): the machine is too small for
+  what runs on it. Add memory or swap, or remove what is not needed.
+* **etcd is slow** (`took too long`, `slow fdatasync`, `leader`): the disk cannot
+  keep up. A virtual disk on shared network storage does this; k3s's database
+  wants a fast local one.
+* **Neither**: send the first lines of the log around the restart in an issue.
+
 ## A server says "not responding"
 
 The node stopped reporting. The server may be off, out of disk, or unreachable.
