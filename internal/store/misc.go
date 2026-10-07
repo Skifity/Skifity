@@ -28,6 +28,21 @@ func (db *DB) GetSetting(ctx context.Context, key string) (value string, encrypt
 	return value, encrypted, nil
 }
 
+// SealedSample is one encrypted setting, for trying a master key against: a key
+// that opens it is the one the database was sealed with, and one that does not
+// is not. Empty when nothing in the database is sealed yet.
+func (db *DB) SealedSample(ctx context.Context) (key, value string, err error) {
+	err = db.QueryRowContext(ctx,
+		`SELECT key, value FROM settings WHERE encrypted = 1 AND value != '' ORDER BY key LIMIT 1`).Scan(&key, &value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("read a sealed setting: %w", err)
+	}
+	return key, value, nil
+}
+
 // SetSetting writes one setting. value must already be sealed when encrypted is true.
 func (db *DB) SetSetting(ctx context.Context, key, value string, encrypted bool, updatedBy string) error {
 	_, err := db.Exec(ctx, `INSERT INTO settings (key, value, encrypted, updated_at, updated_by)

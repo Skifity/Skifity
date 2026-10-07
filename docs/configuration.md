@@ -22,6 +22,7 @@ is a valid one.
 | `SKIFITY_LISTEN` | `:8080` | The address to bind to. `127.0.0.1:8080` keeps it off the network behind a reverse proxy. |
 | `SKIFITY_DATABASE_PATH` | `/var/lib/skifity/panel.db` | The SQLite file holding everything except the master key. |
 | `SKIFITY_MASTER_KEY_PATH` | `/etc/skifity/master.key` | The key every stored secret is encrypted with. Back this up. |
+| `SKIFITY_ALLOW_NEW_MASTER_KEY` | off | Lets the panel make a new master key when the database already holds secrets and the key file is gone. Without it the panel refuses to start, because a new key opens nothing the old one sealed. Set it once, and only if the key and its recovery key are both lost for good. |
 | `SKIFITY_SETUP_TOKEN_PATH` | `/etc/skifity/setup-token` | The one-time token that allows the first account. Deleted once setup is done. |
 | `SKIFITY_PUBLIC_URL` | derived from the request | How people reach the panel. Used for webhook URLs and links in notifications. |
 | `SKIFITY_KUBECONFIG` | empty | Empty when running inside the cluster: the ServiceAccount is used instead. |
@@ -645,7 +646,10 @@ Two things, and they are not the same thing:
 
 1. `/etc/skifity/master.key` — without it every stored secret and every database
    backup is unreadable. The panel can also print a recovery key that encodes
-   the same secret in a form you can write on paper.
+   the same secret in a form you can write on paper, and `skifity admin
+   restore-key` turns that back into the file. A panel whose key is gone does
+   not start, and says so: see [the master key is
+   missing](troubleshooting.md#the-master-key-is-missing).
 2. `/var/lib/skifity/panel.db` — the panel's own state: teams, apps, settings
    and history. Your applications' data is in their volumes and databases, and
    is backed up separately by the panel itself.

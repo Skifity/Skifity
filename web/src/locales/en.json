@@ -3915,6 +3915,42 @@
         "cause": "Creating {{0}} stopped: {{1}}",
         "impact": "The machine may exist at the provider, and be billed, without being in the cluster.",
         "fix": "Open the server in the panel and press Retry, or remove it there and delete its machine too."
+      },
+      "crypto_master_key_missing": {
+        "title": "The panel's master key is missing",
+        "cause": "The database already holds accounts or secrets, and there is no master key at {{0}}. Starting anyway would create a new key, and a new key opens nothing the old one sealed.",
+        "impact": "The panel did not start, and nothing was changed. Every stored secret and every encrypted backup stays unreadable until the key it was sealed with is back.",
+        "fix": "Put the master key back at that path. If it is gone, rebuild it from the recovery key you downloaded: `skifity admin restore-key`. Only if you are starting over, with nothing to keep, set SKIFITY_ALLOW_NEW_MASTER_KEY=1 once."
+      },
+      "crypto_master_key_mismatch": {
+        "title": "The master key does not match this database",
+        "cause": "The key at {{0}} cannot open the secrets stored in the database. It is a different key from the one the database was sealed with: one from another install, or one that was replaced.",
+        "impact": "The panel did not start, and nothing was changed. Starting would have left every stored secret unreadable.",
+        "fix": "Put the key this database was sealed with at that path, or rebuild it from the recovery key with `skifity admin restore-key`. After restoring a backup of the database, the key to use is the one the panel had when the backup was taken."
+      },
+      "admin_recovery_key_unreadable": {
+        "title": "That is not a recovery key this panel can read",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Copy it again from the file you downloaded. It starts with SKIFITY-RECOVERY-v1-; spaces, dashes and line breaks are ignored."
+      },
+      "admin_master_key_exists": {
+        "title": "There is already a master key here",
+        "cause": "{{0}} exists.",
+        "impact": "Nothing was changed.",
+        "fix": "If it is the wrong key, run this again with --yes: the key that is there is kept beside the new one, not deleted."
+      },
+      "admin_restore_key_database": {
+        "title": "The panel's database could not be read to check the key against",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "Stop the panel and run this again, or give the database with --database."
+      },
+      "admin_recovery_key_wrong": {
+        "title": "That recovery key does not open this panel's database",
+        "cause": "The secrets in {{0}} were sealed with a different key.",
+        "impact": "Nothing was changed. Putting it in place would have left every stored secret unreadable.",
+        "fix": "Find the recovery key that was shown when this panel was set up, or the master key file itself. A recovery key from another install, or from before the key was rotated, will not open it."
       }
     }
   },

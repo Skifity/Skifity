@@ -145,6 +145,24 @@ func SaveKeyring(path string, ring *Keyring) error {
 	return nil
 }
 
+// KeyFileExists reports whether a key file is there, without reading it.
+//
+// It is a question of its own, asked before InitKeyring, because InitKeyring
+// answers a missing file by making a new key, and whether that is the right
+// answer depends on what else is on the server: on a first start it is, and on
+// a server whose database already holds secrets it is the quietest way there is
+// to lose all of them.
+func KeyFileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, fmt.Errorf("stat master key file %s: %w", path, err)
+}
+
 // InitKeyring creates a key file with a single fresh key when none exists, and
 // returns the keyring either way. It is safe to call on every start.
 func InitKeyring(path string) (*Keyring, error) {

@@ -36,12 +36,14 @@ Usage:
   %s admin list-users               show the accounts on this panel
   %s admin backup-db <path>         write a consistent copy of the database
   %s admin restore-db <file>        put a backup of the database back
+  %s admin restore-key              write the master key back from a recovery key,
+                                    which is read from standard input
   %s admin plugin-key               make a signing key for a plugin store
   %s admin plugin-sign <key> <file> sign a plugin store index
 
 These run on the server the panel is installed on and read its database
 directly, so they work when nobody can sign in. They need to be run as root.
-`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
+`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
 		return nil
 	}
 
@@ -54,6 +56,8 @@ directly, so they work when nobody can sign in. They need to be run as root.
 		return adminBackupDatabase(ctx, args[1:], out)
 	case "restore-db":
 		return adminRestoreDatabase(ctx, args[1:], out)
+	case "restore-key":
+		return adminRestoreKey(ctx, args[1:], os.Stdin, out)
 	case "plugin-key":
 		return adminPluginKey(args[1:], out)
 	case "plugin-sign":

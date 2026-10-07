@@ -81,6 +81,47 @@ still run, and the exit status is not zero. What kubectl said is in
 **"The installer is running."** An install and an uninstall would undo each
 other. Let it finish, or stop it.
 
+## The master key is missing
+
+The panel stops at start-up, and its log says "The panel's master key is
+missing". Its database already holds accounts or secrets, and there is no key at
+`/etc/skifity/master.key`. It used to make a new key and start; a new key opens
+nothing the old one sealed, so every stored token and password and every
+encrypted backup was lost without a word. Now it refuses, and nothing has been
+changed.
+
+Put the key back where it was. If it is gone, rebuild it from the recovery key
+you downloaded when you set the panel up:
+
+```sh
+read -rs KEY; printf %s "$KEY" | sudo skifity admin restore-key
+kubectl -n skifity-system rollout restart deployment/skifity-panel
+```
+
+The command tries the key on a secret in the database first and writes nothing
+if it does not open it. A recovery key holds the key that was active when it was
+shown: anything sealed by an older key, from before a rotation, needs that key
+too.
+
+If the key and the recovery key are both gone for good, and you mean to carry on
+without the secrets (every integration's credentials will have to be entered
+again), start once with `SKIFITY_ALLOW_NEW_MASTER_KEY=1`:
+
+```sh
+kubectl -n skifity-system set env deployment/skifity-panel SKIFITY_ALLOW_NEW_MASTER_KEY=1
+```
+
+and take it away again afterwards with `SKIFITY_ALLOW_NEW_MASTER_KEY-`.
+
+## The master key does not match
+
+"The master key does not match this database": a key is there, and it cannot
+open the secrets in the database. It is the key of another install, or one that
+was replaced. The panel does not start on it, because it would come up with every
+stored secret unreadable. Put the key the database was sealed with in its place,
+or rebuild it from the recovery key as above. After restoring a backup of the
+database, the key to use is the one the panel had when the backup was taken.
+
 ## The panel does not load
 
 **Nothing at all.** Check it is running:

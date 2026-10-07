@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 
 	"skifity/internal/cli"
 	"skifity/internal/config"
+	"skifity/internal/errdoc"
 	"skifity/internal/guard"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
@@ -38,7 +40,14 @@ func main() {
 	switch args[0] {
 	case "server":
 		if err := runServer(ctx, args[1:]); err != nil {
-			fmt.Fprintf(os.Stderr, "\n%s: %s\n\n", version.Binary, err)
+			// A failure the panel knows how to explain is printed whole: it is
+			// what somebody reads in `kubectl logs` when the pod will not stay up.
+			var problem *errdoc.Problem
+			if errors.As(err, &problem) {
+				fmt.Fprintf(os.Stderr, "\n%s: %s\n", version.Binary, problem.Text())
+			} else {
+				fmt.Fprintf(os.Stderr, "\n%s: %s\n\n", version.Binary, err)
+			}
 			os.Exit(1)
 		}
 

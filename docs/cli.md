@@ -475,6 +475,18 @@ back — a copy from `backup-db`, or one the panel uploaded to the backup bucket
 and without `--yes` only checks it and says what it would do. See
 [Backups](backups.md#putting-it-back).
 
+The master key has its own way back. The recovery key the panel showed at setup
+is read from standard input, so it stays out of the process list and the shell's
+history:
+
+```sh
+read -rs KEY; printf %s "$KEY" | sudo skifity admin restore-key
+```
+
+`restore-key` tries the key on a secret in the panel's database first, and writes
+nothing if it does not open it. A master key that is already there is only
+replaced with `--yes`, and is kept beside the new one.
+
 ## AI assistants
 
 The same binary is an MCP server:

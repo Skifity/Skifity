@@ -3896,6 +3896,42 @@
         "cause": "Pembuatan {{0}} berhenti: {{1}}",
         "impact": "Mesin mungkin sudah ada di penyedia dan ditagih, tanpa berada di klaster.",
         "fix": "Buka server di panel lalu tekan Coba lagi, atau hapus server di sana beserta mesinnya."
+      },
+      "crypto_master_key_missing": {
+        "title": "Kunci master panel tidak ada",
+        "cause": "Basis data sudah berisi akun atau rahasia, dan tidak ada kunci master di {{0}}. Jika tetap dijalankan, kunci baru akan dibuat, dan kunci baru tidak bisa membuka apa pun yang disegel kunci lama.",
+        "impact": "Panel tidak dijalankan, dan tidak ada yang diubah. Semua rahasia tersimpan dan semua backup terenkripsi tetap tidak terbaca sampai kunci yang dipakai menyegelnya kembali.",
+        "fix": "Kembalikan kunci master ke lokasi itu. Jika hilang, bangun ulang dari recovery key yang Anda unduh: `skifity admin restore-key`. Hanya jika Anda memulai dari nol dan tidak ada yang perlu disimpan, setel SKIFITY_ALLOW_NEW_MASTER_KEY=1 satu kali."
+      },
+      "crypto_master_key_mismatch": {
+        "title": "Kunci master tidak cocok dengan basis data ini",
+        "cause": "Kunci di {{0}} tidak bisa membuka rahasia yang tersimpan di basis data. Ini kunci yang berbeda dari yang dipakai menyegel basis data: kunci dari instalasi lain, atau yang telah diganti.",
+        "impact": "Panel tidak dijalankan, dan tidak ada yang diubah. Menjalankannya akan membuat semua rahasia tersimpan tidak terbaca.",
+        "fix": "Letakkan kunci yang dipakai menyegel basis data ini di lokasi itu, atau bangun ulang dari recovery key dengan `skifity admin restore-key`. Setelah memulihkan backup basis data, kunci yang dipakai adalah yang dimiliki panel saat backup dibuat."
+      },
+      "admin_recovery_key_unreadable": {
+        "title": "Itu bukan recovery key yang bisa dibaca panel ini",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Salin ulang dari berkas yang Anda unduh. Diawali SKIFITY-RECOVERY-v1-; spasi, tanda hubung, dan pemisah baris diabaikan."
+      },
+      "admin_master_key_exists": {
+        "title": "Sudah ada kunci master di sini",
+        "cause": "{{0}} sudah ada.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jika itu kunci yang salah, jalankan lagi dengan --yes: kunci yang ada disimpan di samping yang baru, tidak dihapus."
+      },
+      "admin_restore_key_database": {
+        "title": "Basis data panel tidak bisa dibaca untuk memeriksa kunci",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Hentikan panel lalu jalankan lagi, atau tentukan basis datanya dengan --database."
+      },
+      "admin_recovery_key_wrong": {
+        "title": "Recovery key itu tidak membuka basis data panel ini",
+        "cause": "Rahasia di {{0}} disegel dengan kunci yang berbeda.",
+        "impact": "Tidak ada yang diubah. Memasangnya akan membuat semua rahasia tersimpan tidak terbaca.",
+        "fix": "Cari recovery key yang ditampilkan saat panel ini disiapkan, atau berkas kunci master itu sendiri. Recovery key dari instalasi lain, atau dari sebelum kunci dirotasi, tidak akan membukanya."
       }
     }
   },

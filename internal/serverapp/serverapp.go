@@ -46,17 +46,18 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	log.Info("starting", "product", version.Name, "version", version.Version,
 		"commit", version.Commit, "listen", cfg.Listen)
 
-	keyring, err := crypto.InitKeyring(cfg.MasterKeyPath)
-	if err != nil {
-		return fmt.Errorf("prepare the master key: %w", err)
-	}
-	log.Info("master key ready", "path", cfg.MasterKeyPath, "active_key", keyring.ActiveID())
-
+	// The database first: whether a missing key may be made again depends on
+	// what is in it. See prepareMasterKey.
 	db, err := store.Open(ctx, cfg.DatabasePath)
 	if err != nil {
 		return fmt.Errorf("open the panel database: %w", err)
 	}
 	defer db.Close()
+	keyring, err := prepareMasterKey(ctx, cfg.MasterKeyPath, db, cfg.AllowNewMasterKey, log)
+	if err != nil {
+		return fmt.Errorf("prepare the master key: %w", err)
+	}
+	log.Info("master key ready", "path", cfg.MasterKeyPath, "active_key", keyring.ActiveID())
 	schemaVersion, _ := db.SchemaVersion(ctx)
 	log.Info("database ready", "path", cfg.DatabasePath, "schema_version", schemaVersion)
 

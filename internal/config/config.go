@@ -37,6 +37,12 @@ type Config struct {
 	// MasterKeyPath is the file holding the master encryption key. It is kept
 	// outside the database on purpose: see ADR-0006.
 	MasterKeyPath string `json:"master_key_path" toml:"master_key_path"`
+	// AllowNewMasterKey lets the panel start with a new master key when the
+	// database already holds sealed secrets and the key is gone. It is the
+	// answer for somebody who has lost the key and the recovery key and means
+	// to carry on without the secrets; without it the panel refuses to start,
+	// because the same situation is also what a mistake looks like.
+	AllowNewMasterKey bool `json:"allow_new_master_key" toml:"allow_new_master_key"`
 	// KubeconfigPath is empty when running inside the cluster, where the
 	// ServiceAccount token is used instead.
 	//
@@ -180,6 +186,9 @@ func (c *Config) applyEnv(lookup func(string) string) {
 
 	if v := lookup(EnvPrefix + "DEV_MODE"); v != "" {
 		c.DevMode = truthy(v)
+	}
+	if v := lookup(EnvPrefix + "ALLOW_NEW_MASTER_KEY"); v != "" {
+		c.AllowNewMasterKey = truthy(v)
 	}
 	if v := lookup(EnvPrefix + "TRUSTED_PROXY_COUNT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {

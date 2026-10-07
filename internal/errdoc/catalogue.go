@@ -2457,3 +2457,21 @@ func orNone(s string) string {
 	}
 	return s
 }
+
+// MasterKeyMissing is a panel that found its database but not its key.
+func MasterKeyMissing(path string) *Problem {
+	return New("crypto.master_key_missing", "The panel's master key is missing").
+		WithCause("The database already holds accounts or secrets, and there is no master key at %s. Starting anyway would create a new key, and a new key opens nothing the old one sealed.", path).
+		WithImpact("The panel did not start, and nothing was changed. Every stored secret and every encrypted backup stays unreadable until the key it was sealed with is back.").
+		WithFix("Put the master key back at that path. If it is gone, rebuild it from the recovery key you downloaded: `skifity admin restore-key`. Only if you are starting over, with nothing to keep, set SKIFITY_ALLOW_NEW_MASTER_KEY=1 once.").
+		WithDocs("/docs/troubleshooting#the-master-key-is-missing")
+}
+
+// MasterKeyMismatch is a key that does not open the database it was found next to.
+func MasterKeyMismatch(path string) *Problem {
+	return New("crypto.master_key_mismatch", "The master key does not match this database").
+		WithCause("The key at %s cannot open the secrets stored in the database. It is a different key from the one the database was sealed with: one from another install, or one that was replaced.", path).
+		WithImpact("The panel did not start, and nothing was changed. Starting would have left every stored secret unreadable.").
+		WithFix("Put the key this database was sealed with at that path, or rebuild it from the recovery key with `skifity admin restore-key`. After restoring a backup of the database, the key to use is the one the panel had when the backup was taken.").
+		WithDocs("/docs/troubleshooting#the-master-key-does-not-match")
+}
