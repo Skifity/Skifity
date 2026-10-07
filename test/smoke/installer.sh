@@ -640,6 +640,170 @@ else
   t_pass "iptables that only drops one address is left alone"
 fi
 
+# --- waiting, and saying so ----------------------------------------------------
+
+# The slow parts of an install used to print nothing: a server that was working
+# looked like one that had stopped. Every wait now says what it is waiting for.
+
+if [ "$(fmt_elapsed 7)" = "0:07" ] && [ "$(fmt_elapsed 65)" = "1:05" ] && [ "$(fmt_elapsed 754)" = "12:34" ]; then
+  t_pass "time so far is shown as m:ss"
+else
+  t_fail "fmt_elapsed is wrong: $(fmt_elapsed 7) $(fmt_elapsed 65) $(fmt_elapsed 754)"
+fi
+got=$( (PROGRESS_SECONDS=3; took; PROGRESS_SECONDS=12; took; PROGRESS_SECONDS=125; took) )
+if [ "$got" = " (12s) (2m 5s)" ]; then
+  t_pass "a finished wait says how long it took, unless it was over in a moment"
+else
+  t_fail "took should be silent under five seconds, got: $got"
+fi
+if [ "$(LC_ALL=C.UTF-8 spinner_frame 0)" = "⠋" ] && [ "$(LC_ALL=C.UTF-8 spinner_frame 10)" = "⠋" ] &&
+  [ "$(LC_ALL=C LANG='' spinner_frame 0)" = "|" ] && [ "$(LC_ALL=C LANG='' spinner_frame 3)" = "$(printf '\134')" ]; then
+  t_pass "the spinner is braille where the locale can show it and ASCII where it cannot"
+else
+  t_fail "spinner_frame is wrong"
+fi
+printf 'one\n\n[INFO]  Downloading binary\n[INFO]  systemd: Starting k3s\n\n' >"$WORKDIR/k3s.out"
+if [ "$(k3s_install_detail "$WORKDIR/k3s.out")" = "systemd: Starting k3s" ]; then
+  t_pass "what the k3s installer last said is shown without its prefix"
+else
+  t_fail "k3s_install_detail should say what k3s's installer last printed"
+fi
+
+# Without a terminal: a line when the wait starts, and the step's own output in
+# the log and nowhere else.
+wlog="$WORKDIR/wait.log"
+: >"$wlog"
+steps="$WORKDIR/steps"
+make_stub "$steps" noisy <<'STUB'
+echo "downloading the thing"
+echo "line two"
+exit "${NOISY_EXIT:-0}"
+STUB
+out=$( (PROGRESS_MODE=plain; LOG_FILE="$wlog"; TMP_DIR="$WORKDIR"; with_progress "Doing the thing" "" "$steps/noisy"; printf 'rc=%s\n' "$?") 2>&1)
+case "$out" in
+*"Doing the thing"*"rc=0"*) t_pass "a wait without a terminal says what it is waiting for, once, at the start" ;;
+*) t_fail "with_progress printed: $out" ;;
+esac
+case "$out" in
+*"downloading the thing"*) t_fail "the step's own output reached the terminal" ;;
+*) t_pass "and what the step prints stays out of the way" ;;
+esac
+if grep -q "Doing the thing: [0-9]*s, exit 0" "$wlog" && grep -q "downloading the thing" "$wlog"; then
+  t_pass "while the log keeps all of it, under a heading with how it ended"
+else
+  t_fail "the log should hold the step's output under a heading: $(cat "$wlog")"
+fi
+
+# A step that fails: its status comes back, and its last lines are kept for the
+# failure message, which used to say only "see the log".
+out=$( (PROGRESS_MODE=plain; LOG_FILE="$wlog"; TMP_DIR="$WORKDIR"; NOISY_EXIT=7; export NOISY_EXIT
+  with_progress "Doing the thing" "" "$steps/noisy" || printf 'rc=%s\n' "$?"
+  fail "It did not work." "Try again.") 2>&1) && status=0 || status=$?
+case "$out" in
+*"rc=7"*"It did not work."*"The last lines it printed"*"line two"*"What to do"*) t_pass "a failed step's last lines are in the failure message, and its status is kept" ;;
+*) t_fail "the failure should show what the step said, got: $out" ;;
+esac
+
+# On a terminal: one line, redrawn in place, with a spinner, what is
+# happening, and the time so far.
+make_stub "$steps" slow <<'STUB'
+sleep 1.4
+STUB
+detail_demo() { printf 'pulling the image'; }
+( PROGRESS_MODE="tty"; LOG_FILE="$wlog"; TMP_DIR="$WORKDIR"; LC_ALL="C.UTF-8"; with_progress "Starting the panel" detail_demo "$steps/slow" ) >"$WORKDIR/tty.out" 2>&1
+cr=$(printf '\r')
+if grep -q "$cr" "$WORKDIR/tty.out" && grep -q "Starting the panel" "$WORKDIR/tty.out" &&
+  grep -q "pulling the image" "$WORKDIR/tty.out" && grep -q "0:0[01]" "$WORKDIR/tty.out"; then
+  t_pass "on a terminal the wait is one line, redrawn, with what is happening and the time so far"
+else
+  t_fail "the terminal progress is wrong: $(od -c "$WORKDIR/tty.out" | head -5)"
+fi
+if [ "$(tail -c 4 "$WORKDIR/tty.out" | od -An -c | tr -d ' ')" = '\r033[K' ]; then
+  t_pass "and the line is cleared when the wait is over, so the result can take its place"
+else
+  t_fail "the spinner line was not cleared: $(tail -c 8 "$WORKDIR/tty.out" | od -c | head -2)"
+fi
+# And the line is never wider than the terminal.
+( PROGRESS_MODE="tty"; PROGRESS_COLS=50; progress_draw "A label" "a very long detail that goes on and on and on and on and on" 0 5 ) >"$WORKDIR/wide.out"
+if [ "$(sed 's/\x1b\[[0-9;]*[A-Za-z]//g; s/\r//' "$WORKDIR/wide.out" | wc -m | tr -d ' ')" -le 50 ]; then
+  t_pass "the line is cut to the width of the terminal"
+else
+  t_fail "the progress line is wider than the terminal: $(cat "$WORKDIR/wide.out")"
+fi
+
+# A wait that is still going says so every so often, for a log that cannot redraw.
+out=$( (PROGRESS_MODE=plain; PROGRESS_PLAIN_EVERY=1; LOG_FILE="$wlog"; TMP_DIR="$WORKDIR"
+  with_progress "Starting the panel" detail_demo "$steps/slow") 2>&1)
+if [ "$(printf '%s\n' "$out" | grep -c 'pulling the image')" -ge 1 ] && printf '%s' "$out" | grep -q "(0:0[12])"; then
+  t_pass "without a terminal a long wait says it is still going, with what and for how long"
+else
+  t_fail "a long wait should repeat itself in a log, got: $out"
+fi
+
+# --verbose shows what the step prints, as it prints it, and keeps its status.
+out=$( (PROGRESS_MODE=plain; SKIFITY_VERBOSE=1; LOG_FILE="$wlog"; TMP_DIR="$WORKDIR"; NOISY_EXIT=3; export NOISY_EXIT
+  with_progress "Doing the thing" "" "$steps/noisy" || printf 'rc=%s\n' "$?") 2>&1)
+case "$out" in
+*"    downloading the thing"*"    line two"*"rc=3"*) t_pass "--verbose shows the step's own output, indented, and keeps its status" ;;
+*) t_fail "--verbose should show the step's output, got: $out" ;;
+esac
+( parse_args --verbose && [ "$SKIFITY_VERBOSE" = 1 ] ) >/dev/null 2>&1 &&
+  t_pass "--verbose is an option" || t_fail "--verbose should be accepted"
+
+# poll_until: yes before the time is up, or no after it.
+flag="$WORKDIR/ready.flag"
+rm -f "$flag"
+( sleep 1; : >"$flag" ) &
+if (PROGRESS_MODE=plain; LOG_FILE="$wlog"; poll_until "Waiting for the flag" 10 "" test -e "$flag") >/dev/null 2>&1; then
+  t_pass "a wait for something ends as soon as it is true"
+else
+  t_fail "poll_until should succeed once the flag exists"
+fi
+started=$(date +%s)
+if (PROGRESS_MODE=plain; LOG_FILE="$wlog"; poll_until "Waiting for nothing" 2 "" test -e "$WORKDIR/never") >/dev/null 2>&1; then
+  t_fail "poll_until succeeded for something that never happens"
+elif [ $(($(date +%s) - started)) -le 5 ]; then
+  t_pass "and gives up at the time it was given"
+else
+  t_fail "poll_until took $(($(date +%s) - started))s to give up on 2s"
+fi
+
+# An interrupt has to stop the step being waited for: a k3s installer left
+# running behind a Ctrl-C would carry on installing.
+sleep 30 &
+child=$!
+( PROGRESS_PID=$child; stop_progress )
+sleep 0.2
+if kill -0 "$child" 2>/dev/null; then
+  kill "$child" 2>/dev/null
+  t_fail "stop_progress left the step running"
+else
+  t_pass "an interrupt stops the step being waited for"
+fi
+
+# What the panel's pod is doing, in words that say what to expect.
+detail_kubectl="$WORKDIR/detail-kubectl"
+make_stub "$detail_kubectl" kubectl <<'STUB'
+case "$*" in
+*"waiting.reason"*) printf '%s' "${STUB_REASON:-}" ;;
+*"status.phase"*) printf '%s' "${STUB_PHASE:-}" ;;
+*"get pods --no-headers"*) printf 'a-1   1/1   Running   0   1m\na-2   0/1   ContainerCreating   0   5s\nb-3   1/1   Running   0   1m\n' ;;
+esac
+STUB
+for pair in "ContainerCreating|pulling the image" "ErrImagePull|cannot pull the image" "ImagePullBackOff|is it public" "CrashLoopBackOff|keeps stopping"; do
+  reason=${pair%%|*}
+  want=${pair#*|}
+  got=$( (PATH="$detail_kubectl:$PATH"; NAMESPACE=skifity-system; STUB_REASON=$reason; export STUB_REASON; panel_detail) 2>&1)
+  case "$got" in
+  *"$want"*) t_pass "a pod that is $reason is described: $want" ;;
+  *) t_fail "panel_detail for $reason should say \"$want\", got: $got" ;;
+  esac
+done
+got=$( (PATH="$detail_kubectl:$PATH"; NAMESPACE=skifity-system; STUB_PHASE=Running; export STUB_PHASE; panel_detail) 2>&1)
+case "$got" in *"health check"*) t_pass "a running pod that is not ready yet says it is waiting for its health check" ;; *) t_fail "got: $got" ;; esac
+got=$( (PATH="$detail_kubectl:$PATH"; pods_ready cert-manager) 2>&1)
+[ "$got" = "2 of 3 pods ready" ] && t_pass "pods are counted: $got" || t_fail "pods_ready said: $got"
+
 # --- a whole install, against stand-ins ---------------------------------------
 
 # Every step, in order, from the options to the last line, with each command
@@ -661,6 +825,14 @@ make_stub "$STUBS" modprobe <<'STUB'
 exit 0
 STUB
 make_stub "$STUBS" ss <<'STUB'
+# What `ss -lntpH "sport = :80"` prints for a web server with a master and a
+# worker, when STUB_PORT80 names one; nothing otherwise.
+case "$*" in
+*"sport = :80"*)
+  [ -z "${STUB_PORT80:-}" ] || printf 'LISTEN 0 511 0.0.0.0:80 0.0.0.0:* users:(("%s",pid=812,fd=6),("%s",pid=811,fd=6))\n' "$STUB_PORT80" "$STUB_PORT80" ;;
+*"sport = :443"*)
+  [ -z "${STUB_PORT443:-}" ] || printf 'LISTEN 0 4096 0.0.0.0:443 0.0.0.0:* users:(("%s",pid=2201,fd=4))\n' "$STUB_PORT443" ;;
+esac
 exit 0
 STUB
 make_stub "$STUBS" df <<'STUB'
@@ -679,7 +851,18 @@ make_stub "$STUBS" k3s <<'STUB'
 exit 0
 STUB
 make_stub "$STUBS" getent <<'STUB'
-case "$2" in panel.example.test) echo "203.0.113.10    STREAM panel.example.test" ;; *) exit 2 ;; esac
+# `getent hosts NAME` is the preflight's DNS check; STUB_DNS_DOWN=1 is a server
+# whose resolver does not answer. `getent ahostsv4 NAME` is the domain check.
+case "$1" in
+hosts)
+  [ "${STUB_DNS_DOWN:-0}" = 1 ] && exit 2
+  [ -n "${STUB_DNS_MISSING:-}" ] && [ "$2" = "$STUB_DNS_MISSING" ] && exit 2
+  echo "192.0.2.7       $2"
+  ;;
+ahostsv4)
+  case "$2" in panel.example.test) echo "203.0.113.10    STREAM panel.example.test" ;; *) exit 2 ;; esac
+  ;;
+esac
 STUB
 make_stub "$STUBS" systemctl <<'STUB'
 printf "systemctl %s\n" "$*" >>"$STUB_LOG"
@@ -1074,6 +1257,78 @@ if [ "$status" = 0 ] && grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" 2>/dev/
 else
   t_fail "a second run without --domain lost the panel's domain ($status):
 $out"
+fi
+
+# A server that is not ready is told so before anything on it changes, with what
+# is wrong and what to do about it. This is what the first real server said:
+# "something is already listening on port 80", and nothing about what.
+FAKE="$WORKDIR/root-busy"
+fake_root "$FAKE"
+out=$(export STUB_PORT80=nginx; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"Nothing on it has been changed"*"Port 80 is in use by nginx (processes 811, 812)"*"systemctl disable --now nginx"*)
+  t_pass "a port held by nginx is named, with the command that frees it" ;;
+*) t_fail "a busy port 80 should name nginx and how to stop it, got $status: $out" ;;
+esac
+if [ ! -e "$FAKE/stub/k3s-exec" ]; then
+  t_pass "and nothing was installed"
+else
+  t_fail "k3s was installed although port 80 is taken"
+fi
+out=$(export STUB_PORT443=docker-proxy; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"Port 443 is in use by docker-proxy"*"docker ps --filter publish=443"*) t_pass "a port held by Docker says how to find the container" ;;
+*) t_fail "a Docker-held port should say how to find the container, got $status: $out" ;;
+esac
+
+# Every problem at once: one run, not one per fix.
+out=$(export STUB_PORT80=apache2 STUB_DNS_DOWN=1; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"2 problems that would stop the install"*"1. Port 80 is in use by apache2"*"2. This server cannot look up any name"*"/etc/resolv.conf"*"systemd-resolved"*)
+  t_pass "a server with two problems is told about both at once" ;;
+*) t_fail "two problems should be reported together, got $status: $out" ;;
+esac
+case "$out" in
+*"does not resolve, and sudo says so"*"127.0.1.1"*) t_pass "and a server whose own name does not resolve is told how to fix the sudo warning" ;;
+*) t_fail "the unresolvable hostname should be mentioned with its fix, got: $out" ;;
+esac
+
+# One name blocked is not the same thing as DNS being down.
+out=$(export STUB_DNS_MISSING=ghcr.io; run_install "$FAKE" --image "ghcr.io/example/skifity:1" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+1:*"cannot look up ghcr.io, which the install needs"*) t_pass "one name that does not resolve is reported by name, not as a dead resolver" ;;
+*) t_fail "a single missing name should be named, got $status: $out" ;;
+esac
+
+# A hostname sudo cannot resolve is a warning, and the install goes on.
+FAKE="$WORKDIR/root-hostname"
+fake_root "$FAKE"
+own_name=$(hostname)
+out=$(STUB_DNS_MISSING="$own_name"; export STUB_DNS_MISSING; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$out" in
+0:*"does not resolve, and sudo says so"*"Skifity registry.example.test"*"is installed"*) t_pass "an unresolvable hostname is a warning, and the install carries on" ;;
+*) t_fail "an unresolvable hostname should only warn, got $status: $out" ;;
+esac
+
+# The installer says what it is doing while it waits, in the log of a run that
+# has no terminal.
+FAKE="$WORKDIR/root-waits"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+for wait in "Installing Kubernetes (k3s)" "Waiting for the Kubernetes API server" "Waiting for the node to be ready" "Starting the panel" "to answer"; do
+  case "$out" in
+  *"$wait"*) ;;
+  *) t_fail "the install never said it was waiting for: $wait" ;;
+  esac
+done
+case "$out" in
+*"Most of the time is spent waiting for downloads"*) t_pass "the install says up front what the long parts are, and each wait says what it is waiting for" ;;
+*) t_fail "the install should say what to expect before the long parts" ;;
+esac
+if grep -q "Installing Kubernetes (k3s): [0-9]*s, exit 0" "$FAKE/var/log/skifity-install.log"; then
+  t_pass "and the log has each wait, with how long it took and how it ended"
+else
+  t_fail "the log should record each wait: $(grep WAIT "$FAKE/var/log/skifity-install.log" | head -3)"
 fi
 
 # No version and no image named, but `latest`: the release GitHub calls the

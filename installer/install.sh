@@ -42,6 +42,7 @@
 #   --skip-firewall      SKIFITY_SKIP_FIREWALL=1  leave the host firewall alone
 #   --no-snapshot        SKIFITY_NO_SNAPSHOT=1    do not copy the panel's database before an upgrade
 #                                              (at your own risk: see snapshot_before_upgrade)
+#   --verbose            SKIFITY_VERBOSE=1     show what each long step prints, as it prints it
 #   --yes, -y            SKIFITY_ASSUME_YES=1  never ask anything
 #   --help, -h                                 print the options and exit
 #
@@ -160,6 +161,17 @@ SETUP_TOKEN=""
 # before it was replaced: both empty on a first install.
 PREVIOUS_IMAGE=""
 SNAPSHOT_PATH=""
+# What is wrong with this server, collected by preflight so that a server with
+# two problems is told about both at once, and not one at a time over two runs.
+PREFLIGHT_COUNT=0
+PREFLIGHT_FIXES=""
+# The last lines a step printed before it failed, shown by fail() so the
+# reason is on the screen and not only in the log; and how long the last wait
+# took, for the line that reports it done.
+LAST_OUTPUT=""
+PROGRESS_SECONDS=0
+# A background step being waited for, so an interrupt can stop it.
+PROGRESS_PID=""
 # Whether the panel answered at its own address: yes, no or unknown.
 PANEL_ANSWERS="unknown"
 # Whether the first account exists yet: done, pending or unknown.
@@ -182,6 +194,8 @@ say() { printf '%s\n' "$*"; log "$*"; }
 step() { printf '%s==>%s %s\n' "$BOLD" "$RESET" "$*"; log "STEP $*"; }
 ok() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$*"; log "OK $*"; }
 note() { printf '  %s%s%s\n' "$DIM" "$*" "$RESET"; log "NOTE $*"; }
+# bad is a problem that will stop the install, shown as it is found.
+bad() { printf '  %s✗%s %s\n' "$RED" "$RESET" "$*"; log "PROBLEM $*"; }
 warn() {
 	WARNINGS=$((WARNINGS + 1))
 	printf '  %s!%s %s\n' "$YELLOW" "$RESET" "$*"
@@ -194,6 +208,12 @@ warn() {
 fail() {
 	printf '\n%s%sInstallation stopped%s\n\n' "$BOLD" "$RED" "$RESET" >&2
 	printf '%s\n' "$1" >&2
+	# What the step itself said last, when it had something to say: the reason
+	# was in a log file somebody then had to find and open.
+	if [ -n "$LAST_OUTPUT" ]; then
+		printf '\n%sThe last lines it printed%s\n' "$BOLD" "$RESET" >&2
+		printf '%s\n' "$LAST_OUTPUT" | sed 's/^/  /' >&2
+	fi
 	if [ "${2:-}" != "" ]; then
 		printf '\n%sWhat to do%s\n%s\n' "$BOLD" "$RESET" "$2" >&2
 	fi
@@ -280,6 +300,293 @@ The releases are listed at https://github.com/${PROJECT_REPO}/releases."
 	SKIFITY_VERSION=$resolved
 }
 
+# --- waiting ------------------------------------------------------------------
+
+# Most of an install is other people's downloads: Kubernetes, then the panel's
+# image. They used to write to the log and print nothing, so a server that was
+# working looked the same as one that had stopped, for minutes at a time. Every
+# wait now says what it is waiting for and for how long.
+#
+# On a terminal that is one line, redrawn in place: a spinner, what is
+# happening, and the time so far. Anywhere else — a log, a CI job, cloud-init —
+# it is a line when the wait starts and another every thirty seconds, because a
+# line redrawn with carriage returns is noise in a file. SKIFITY_VERBOSE=1
+# (--verbose) shows what the step prints instead.
+if [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then PROGRESS_MODE="tty"; else PROGRESS_MODE="plain"; fi
+PROGRESS_COLS=80
+# How often, without a terminal, a wait that is still going says so.
+PROGRESS_PLAIN_EVERY=30
+
+# One tenth of a second is what makes a spinner look alive. A sleep that does
+# not take fractions (it is not in POSIX) gets one second, which still moves.
+PROGRESS_TICK=0.2
+
+progress_sleep() {
+	sleep "$PROGRESS_TICK" 2>/dev/null || {
+		PROGRESS_TICK=1
+		sleep 1
+	}
+}
+
+# The braille frames need UTF-8; anything else gets ASCII.
+spinner_frame() {
+	case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+	*UTF-8* | *utf-8* | *UTF8* | *utf8*)
+		case $(($1 % 10)) in
+		0) printf '⠋' ;; 1) printf '⠙' ;; 2) printf '⠹' ;; 3) printf '⠸' ;; 4) printf '⠼' ;;
+		5) printf '⠴' ;; 6) printf '⠦' ;; 7) printf '⠧' ;; 8) printf '⠇' ;; *) printf '⠏' ;;
+		esac
+		;;
+	*)
+		case $(($1 % 4)) in
+		0) printf '|' ;; 1) printf '/' ;; 2) printf -- '-' ;; *) printf '\134' ;;
+		esac
+		;;
+	esac
+}
+
+# 0:07, 1:05, 12:30.
+fmt_elapsed() { printf '%d:%02d' $(($1 / 60)) $(($1 % 60)); }
+
+# took says how long the last wait took, for the line that reports it done. A
+# wait that was over in a moment says nothing.
+took() {
+	[ "$PROGRESS_SECONDS" -ge 5 ] || return 0
+	if [ "$PROGRESS_SECONDS" -ge 60 ]; then
+		printf ' (%dm %ds)' $((PROGRESS_SECONDS / 60)) $((PROGRESS_SECONDS % 60))
+	else
+		printf ' (%ds)' "$PROGRESS_SECONDS"
+	fi
+}
+
+progress_width() {
+	cols=""
+	if have tput; then cols=$(tput cols 2>/dev/null || true); fi
+	case "$cols" in '' | *[!0-9]*) cols=80 ;; esac
+	[ "$cols" -ge 40 ] || cols=80
+	printf '%s' "$cols"
+}
+
+# progress_draw redraws the one line: LABEL DETAIL FRAME SECONDS.
+progress_draw() {
+	elapsed=$(fmt_elapsed "$4")
+	shown=""
+	# What is left of the line once the label, the time and the spinner are in,
+	# keeping one column free: a line that fills the terminal exactly wraps.
+	room=$((PROGRESS_COLS - 9 - ${#1} - ${#elapsed}))
+	if [ -n "$2" ] && [ "$room" -gt 8 ]; then
+		shown=" · $(printf '%s' "$2" | cut -c1-"$room")"
+	fi
+	printf '\r\033[K  %s%s%s %s%s%s %s%s' "$YELLOW" "$(spinner_frame "$3")" "$RESET" "$1" \
+		"$DIM" "$shown" "$elapsed" "$RESET"
+}
+
+progress_clear() {
+	[ "$PROGRESS_MODE" != tty ] || printf '\r\033[K'
+}
+
+# progress_plain prints the line a log can use: LABEL DETAIL SECONDS.
+progress_plain() {
+	if [ -n "$2" ]; then
+		printf '  %s…%s %s · %s (%s)\n' "$DIM" "$RESET" "$1" "$2" "$(fmt_elapsed "$3")"
+	else
+		printf '  %s…%s %s (%s)\n' "$DIM" "$RESET" "$1" "$(fmt_elapsed "$3")"
+	fi
+}
+
+# stop_progress ends the step being waited for, which an interrupt has to do
+# before it leaves: a background k3s installer left running behind a Ctrl-C
+# would carry on installing.
+stop_progress() {
+	if [ -n "$PROGRESS_PID" ]; then
+		kill "$PROGRESS_PID" 2>/dev/null || true
+		PROGRESS_PID=""
+	fi
+}
+
+# with_progress runs a command that takes a while, showing progress until it
+# is done, and returns its exit status.
+#
+#   with_progress LABEL DETAIL_FUNCTION COMMAND [ARGS...]
+#
+# What the command prints goes to the log, and to nowhere else; when it fails,
+# its last lines are kept for fail() to show. DETAIL_FUNCTION, if given, is
+# called every couple of seconds with the file the command writes to, and
+# prints a short phrase about what is happening, such as "pulling the image".
+with_progress() {
+	label=$1
+	detail_fn=$2
+	shift 2
+	started=$(date +%s)
+	out=$(mktemp "${TMP_DIR:-${TMPDIR:-/tmp}}/step.XXXXXX")
+	LAST_OUTPUT=""
+	log "WAIT $label"
+
+	if [ "${SKIFITY_VERBOSE:-}" = "1" ]; then
+		# The command's own words, indented, as they arrive. Its status has to
+		# come out of the pipeline some other way, because sh has no pipefail.
+		printf '  %s…%s %s\n' "$DIM" "$RESET" "$label"
+		{
+			"$@" </dev/null 2>&1
+			printf '%s' "$?" >"$out.status"
+		} | tee "$out" | sed 's/^/    /'
+		rc=$(cat "$out.status" 2>/dev/null || echo 1)
+	else
+		"$@" </dev/null >"$out" 2>&1 &
+		PROGRESS_PID=$!
+		PROGRESS_COLS=$(progress_width)
+		tick=0
+		detail=""
+		last_detail=0
+		last_line=$started
+		[ "$PROGRESS_MODE" = tty ] || progress_plain "$label" "" 0
+		while kill -0 "$PROGRESS_PID" 2>/dev/null; do
+			now=$(date +%s)
+			if [ -n "$detail_fn" ] && [ $((now - last_detail)) -ge 2 ]; then
+				detail=$("$detail_fn" "$out" 2>/dev/null || true)
+				last_detail=$now
+			fi
+			if [ "$PROGRESS_MODE" = tty ]; then
+				progress_draw "$label" "$detail" "$tick" $((now - started))
+			elif [ $((now - last_line)) -ge "$PROGRESS_PLAIN_EVERY" ]; then
+				progress_plain "$label" "$detail" $((now - started))
+				last_line=$now
+			fi
+			tick=$((tick + 1))
+			progress_sleep
+		done
+		if wait "$PROGRESS_PID"; then rc=0; else rc=$?; fi
+		PROGRESS_PID=""
+		progress_clear
+	fi
+
+	PROGRESS_SECONDS=$(($(date +%s) - started))
+	# The log keeps everything the step said, under a heading that says which
+	# step and how it ended.
+	{
+		printf '%s ---- %s: %ss, exit %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$label" "$PROGRESS_SECONDS" "$rc"
+		cat "$out"
+	} >>"$LOG_FILE" 2>/dev/null || true
+	if [ "$rc" != 0 ]; then
+		LAST_OUTPUT=$(grep -v '^[[:space:]]*$' "$out" | tail -n 12)
+	fi
+	rm -f "$out" "$out.status"
+	return "$rc"
+}
+
+# poll_until asks a question every two seconds until the answer is yes or the
+# time is up, showing progress meanwhile. It is for what has to become true
+# rather than for a command that has to finish.
+#
+#   poll_until LABEL SECONDS DETAIL_FUNCTION COMMAND [ARGS...]
+#
+# Returns 0 when COMMAND succeeds, 1 when SECONDS pass first.
+poll_until() {
+	label=$1
+	limit=$2
+	detail_fn=$3
+	shift 3
+	started=$(date +%s)
+	PROGRESS_COLS=$(progress_width)
+	tick=0
+	detail=""
+	last_check=0
+	last_line=$started
+	first=1
+	rc=1
+	log "WAIT $label"
+	[ "$PROGRESS_MODE" = tty ] || progress_plain "$label" "" 0
+	while :; do
+		now=$(date +%s)
+		if [ "$first" = 1 ] || [ $((now - last_check)) -ge 2 ]; then
+			first=0
+			last_check=$now
+			if "$@" >/dev/null 2>&1; then
+				rc=0
+				break
+			fi
+			if [ -n "$detail_fn" ]; then detail=$("$detail_fn" 2>/dev/null || true); fi
+		fi
+		[ $((now - started)) -lt "$limit" ] || break
+		if [ "$PROGRESS_MODE" = tty ]; then
+			progress_draw "$label" "$detail" "$tick" $((now - started))
+		elif [ $((now - last_line)) -ge "$PROGRESS_PLAIN_EVERY" ]; then
+			progress_plain "$label" "$detail" $((now - started))
+			last_line=$now
+		fi
+		tick=$((tick + 1))
+		progress_sleep
+	done
+	PROGRESS_SECONDS=$(($(date +%s) - started))
+	progress_clear
+	outcome="gave up"
+	[ "$rc" != 0 ] || outcome="done"
+	log "WAIT $label: ${PROGRESS_SECONDS}s, $outcome"
+	return "$rc"
+}
+
+# --- what a wait can say about itself -----------------------------------------
+
+# What the k3s installer last said: "Downloading binary", "Starting k3s".
+k3s_install_detail() {
+	last=$(grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -n 1)
+	case "$last" in
+	'[INFO]  '*) last=${last#'[INFO]  '} ;;
+	esac
+	printf '%s' "$last"
+}
+
+node_ready() {
+	[ "$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready"' | wc -l)" -ge 1 ]
+}
+
+node_detail() {
+	kubectl get nodes --no-headers 2>/dev/null | awk 'NR == 1 {print $1 " is " $2}'
+}
+
+# "2 of 3 pods ready" for a namespace.
+pods_ready() {
+	kubectl -n "$1" get pods --no-headers 2>/dev/null | awk '
+		{ split($2, n, "/"); total++; if (n[1] == n[2] && $3 == "Running") ready++ }
+		END { if (total) printf "%d of %d pods ready", ready, total }'
+}
+
+cert_manager_detail() { pods_ready cert-manager; }
+
+# What the panel's pod is doing, in words that say what to expect: the first
+# start is an image pull, and a pull that cannot succeed should say so in the
+# first minute and not at the end of five.
+panel_detail() {
+	pod='-l app.kubernetes.io/component=panel'
+	# shellcheck disable=SC2086
+	reason=$(kubectl -n "$NAMESPACE" get pods $pod \
+		-o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)
+	# shellcheck disable=SC2086
+	phase=$(kubectl -n "$NAMESPACE" get pods $pod -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+	case "$reason" in
+	ContainerCreating | PodInitializing) printf 'pulling the image and starting it' ;;
+	ErrImagePull | ImagePullBackOff) printf 'cannot pull the image yet, retrying; is it public, and is this server online?' ;;
+	CrashLoopBackOff) printf 'it keeps stopping; kubectl -n %s logs -l app.kubernetes.io/component=panel' "$NAMESPACE" ;;
+	'')
+		case "$phase" in
+		Running) printf 'started; waiting for its health check' ;;
+		*) printf 'waiting for a place to run' ;;
+		esac
+		;;
+	*) printf '%s' "$reason" ;;
+	esac
+}
+
+certificate_ready() {
+	[ "$(kubectl -n "$NAMESPACE" get certificate skifity-panel-tls \
+		-o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" = "True" ]
+}
+
+certificate_detail() {
+	kubectl -n "$NAMESPACE" get certificate skifity-panel-tls \
+		-o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null | cut -c1-80
+}
+
 # --- options ----------------------------------------------------------------
 
 usage() {
@@ -312,13 +619,16 @@ Options:
   --skip-firewall      leave the host firewall alone
   --no-snapshot        do not copy the panel's database before an upgrade; without
                        the copy there is nothing to go back to if it goes wrong
+  --verbose            show what each long step prints, as it prints it, instead
+                       of a spinner; everything is in the log either way
   -y, --yes            never ask anything
   -h, --help           print this and exit
 
 Each option has an environment variable as well: SKIFITY_DOMAIN,
 SKIFITY_ACME_EMAIL, SKIFITY_ACME_STAGING=1, SKIFITY_PUBLIC_IP, SKIFITY_VERSION,
 SKIFITY_IMAGE, SKIFITY_POD_NETWORK, SKIFITY_CHANNEL, SKIFITY_SKIP_K3S=1,
-SKIFITY_SKIP_FIREWALL=1, SKIFITY_NO_SNAPSHOT=1 and SKIFITY_ASSUME_YES=1.
+SKIFITY_SKIP_FIREWALL=1, SKIFITY_NO_SNAPSHOT=1, SKIFITY_VERBOSE=1 and
+SKIFITY_ASSUME_YES=1.
 
 Run again on a server that has Skifity, it upgrades it: the panel's database is
 copied first, and the commands that go back are printed at the end.
@@ -405,13 +715,14 @@ parse_args() {
 			--channel) SKIFITY_CHANNEL="$value" ;;
 			esac
 			;;
-		--staging | --skip-k3s | --skip-firewall | --no-snapshot | --yes | -y | --help | -h)
+		--staging | --skip-k3s | --skip-firewall | --no-snapshot | --verbose | --yes | -y | --help | -h)
 			[ "$inline" = 0 ] || usage_error "$opt does not take a value."
 			case "$opt" in
 			--staging) SKIFITY_ACME_STAGING=1 ;;
 			--skip-k3s) SKIFITY_SKIP_K3S=1 ;;
 			--skip-firewall) SKIFITY_SKIP_FIREWALL=1 ;;
 			--no-snapshot) SKIFITY_NO_SNAPSHOT=1 ;;
+			--verbose) SKIFITY_VERBOSE=1 ;;
 			--yes | -y) SKIFITY_ASSUME_YES=1 ;;
 			--help | -h)
 				usage
@@ -500,6 +811,7 @@ take_lock() {
 }
 
 on_exit() {
+	stop_progress
 	if [ -n "$TMP_DIR" ]; then
 		rm -rf "$TMP_DIR"
 	fi
@@ -512,6 +824,7 @@ on_exit() {
 # step checks what is there before it acts, so starting again is how to finish.
 interrupted() {
 	trap - INT TERM HUP
+	stop_progress
 	printf '\n\n%sInterrupted.%s Nothing was left in a state a second run cannot finish:\n' "$BOLD" "$RESET" >&2
 	printf 'run the installer again and it carries on from where this one stopped.\n' >&2
 	log "INTERRUPTED"
@@ -688,22 +1001,16 @@ On other systems, look for cgroup_disable=memory on the kernel command line."
 	fi
 	[ "$memory_cgroup" = yes ] && ok "The memory cgroup is enabled"
 
+	ports_before=$PREFLIGHT_COUNT
 	for port in 80 443 6443; do
-		if port_in_use "$port"; then
-			# 6443 already listening usually means k3s is installed, which is fine.
-			if [ "$port" = "6443" ] && [ -f "$KUBECONFIG_PATH" ]; then
-				continue
-			fi
-			fail \
-				"Something is already listening on port ${port}, and Skifity needs it to serve your apps." \
-				"Find it with:
-
-  ss -lptn 'sport = :${port}'
-
-Stop that service, or move it to another port, and run this again. A web server such as nginx or Apache installed by your provider is the usual cause."
+		port_in_use "$port" || continue
+		# 6443 already listening usually means k3s is installed, which is fine.
+		if [ "$port" = "6443" ] && [ -f "$KUBECONFIG_PATH" ]; then
+			continue
 		fi
+		port_problem "$port"
 	done
-	ok "Ports 80, 443 and 6443 are free"
+	[ "$PREFLIGHT_COUNT" -gt "$ports_before" ] || ok "Ports 80, 443 and 6443 are free"
 
 	have curl || fail \
 		"The installer needs curl, and it is not on this server." \
@@ -711,6 +1018,17 @@ Stop that service, or move it to another port, and run this again. A web server 
 
   apt-get update && apt-get install -y curl"
 	ok "curl is available"
+
+	check_names
+
+	# Everything that would stop the install, said once.
+	if [ "$PREFLIGHT_COUNT" -gt 0 ]; then
+		plural="problems"
+		[ "$PREFLIGHT_COUNT" -ne 1 ] || plural="problem"
+		fail \
+			"This server has ${PREFLIGHT_COUNT} ${plural} that would stop the install, shown above. Nothing on it has been changed." \
+			"$PREFLIGHT_FIXES"
+	fi
 
 	check_clock
 	check_docker
@@ -727,6 +1045,162 @@ port_in_use() {
 	fi
 	# No way to tell. k3s will report the conflict itself if there is one.
 	return 1
+}
+
+# preflight_problem records one thing wrong with this server, with what to do
+# about it, for the single report at the end of preflight.
+#
+#   preflight_problem SUMMARY FIX
+preflight_problem() {
+	PREFLIGHT_COUNT=$((PREFLIGHT_COUNT + 1))
+	bad "$1"
+	PREFLIGHT_FIXES="${PREFLIGHT_FIXES}
+${PREFLIGHT_COUNT}. $1
+
+$(printf '%s\n' "$2" | sed 's/^/   /')
+"
+}
+
+# port_listeners says who holds a TCP port, one line each: the process's name,
+# its id, and the systemd unit it belongs to or a dash. Needs ss and root, and
+# prints nothing when it cannot tell.
+port_listeners() {
+	have ss || return 0
+	ss -lntpH "sport = :$1" 2>/dev/null | grep -o '"[^"]*",pid=[0-9]*' | sort -u |
+		sed 's/^"\(.*\)",pid=\([0-9]*\)$/\1 \2/' | while read -r name pid; do
+		unit=$(sed -n 's|.*/\([^/]*\.service\)$|\1|p' "/proc/${pid}/cgroup" 2>/dev/null | head -n 1)
+		printf '%s %s %s\n' "$name" "$pid" "${unit:--}"
+	done
+}
+
+# port_problem explains a port that is taken: by what, and what to do about it
+# for the commonest of those. "Something is already listening" was true and
+# left everybody to find out what, which is the part they could not do.
+port_problem() {
+	port=$1
+	holders=$(port_listeners "$port")
+	if [ -z "$holders" ]; then
+		preflight_problem "Port ${port} is already in use, and Skifity needs it." \
+"Find out what is using it:
+
+  ss -lptn 'sport = :${port}'
+
+Stop that service, or move it to another port, and run this again. A web server
+that came with the server, such as nginx or Apache, is the usual cause."
+		return 0
+	fi
+
+	# One entry per program, not per process: nginx runs a master and workers,
+	# and they are one thing to stop.
+	grouped=$(printf '%s\n' "$holders" | awk '
+		{
+			if (!($1 in pids)) { order[++n] = $1; pids[$1] = $2; unit[$1] = $3 }
+			else { pids[$1] = pids[$1] ", " $2; if (unit[$1] == "-") unit[$1] = $3 }
+		}
+		END { for (i = 1; i <= n; i++) printf "%s|%s|%s\n", order[i], pids[order[i]], unit[order[i]] }')
+	names=$(printf '%s\n' "$grouped" | awk -F'|' '
+		{
+			kind = ($2 ~ /,/) ? "processes" : "process"
+			unit = ($3 == "-") ? "" : ", " $3
+			printf "%s%s (%s %s%s)", (NR > 1 ? ", " : ""), $1, kind, $2, unit
+		}')
+	hint=$(printf '%s\n' "$grouped" | while IFS='|' read -r name pids unit; do
+		target=$unit
+		[ "$unit" != "-" ] || target=$name
+		case "$name" in
+		nginx | apache2 | httpd | caddy | lighttpd | haproxy | openresty | envoy | traefik)
+			printf '%s is a web server. If you do not need it, stop it and keep it from starting again:\n\n  systemctl disable --now %s\n\n' "$name" "$target"
+			;;
+		docker-proxy)
+			printf 'A Docker container publishes this port. Find it, and stop it if you do not need it:\n\n  docker ps --filter publish=%s\n  docker stop <its name>\n\n' "$port"
+			;;
+		*)
+			printf 'To see what %s is:\n\n  ps -fp %s\n\n' "$name" "${pids%%,*}"
+			;;
+		esac
+	done)
+	case "$port" in
+	6443) what="the Kubernetes API" ;;
+	*) what="the ingress that serves your apps on ports 80 and 443" ;;
+	esac
+	preflight_problem "Port ${port} is in use by ${names}, and Skifity needs it for ${what}." \
+"${hint}
+
+If you need that service, give it another port, or install Skifity on a server of
+its own. Then run this again."
+}
+
+# check_names looks up every name the install will need, before anything
+# changes. A server whose DNS does not answer was found out a minute into the
+# install, by a download that failed with a message about curl; a lookup that
+# times out takes seconds and says what to fix.
+check_names() {
+	have getent || return 0
+	wanted=""
+	if [ "${SKIFITY_SKIP_K3S:-}" != "1" ]; then wanted="get.k3s.io github.com"; fi
+	# The manifests of the release, when they are not in a clone beside this file.
+	if [ ! -f "$SOURCE_DIR/deploy/panel.yaml" ]; then wanted="$wanted raw.githubusercontent.com"; fi
+	# The registry the panel's image comes from, unless it is a local one.
+	registry=${IMAGE%%/*}
+	case "$registry" in
+	*.*) wanted="$wanted $registry" ;;
+	esac
+
+	missing=""
+	checked=0
+	for host in $wanted; do
+		case " $missing " in *" $host "*) continue ;; esac
+		checked=$((checked + 1))
+		if have timeout; then
+			timeout 8 getent hosts "$host" >/dev/null 2>&1 || missing="$missing $host"
+		else
+			getent hosts "$host" >/dev/null 2>&1 || missing="$missing $host"
+		fi
+	done
+	missing=${missing# }
+	if [ -z "$missing" ]; then
+		[ "$checked" -eq 0 ] || ok "Names resolve: $(printf '%s' "$wanted" | tr -s ' ' | sed 's/^ //; s/ /, /g')"
+	elif [ "$(printf '%s\n' "$missing" | wc -w | tr -d ' ')" -eq "$checked" ]; then
+		preflight_problem "This server cannot look up any name, so its DNS is not answering ($(printf '%s' "$missing" | sed 's/ /, /g'))." \
+"Everything the install downloads is found by name. See what the server is
+asking, and whether it answers:
+
+  cat /etc/resolv.conf
+  getent hosts github.com
+
+If the resolver in /etc/resolv.conf does not answer, give the server one that
+does. On Ubuntu and Debian with systemd-resolved, put these two lines in
+/etc/systemd/resolved.conf, under [Resolve], and restart it:
+
+  DNS=1.1.1.1 9.9.9.9
+  systemctl restart systemd-resolved
+
+A provider's own resolver that is down is also worth a message to the provider."
+	else
+		preflight_problem "This server cannot look up $(printf '%s' "$missing" | sed 's/ /, /g'), which the install needs." \
+"The rest resolve, so DNS works, and these names are blocked or mistyped by something
+between this server and them. Check with:
+
+  getent hosts ${missing%% *}
+
+A firewall or a DNS filter at the provider is the usual cause."
+	fi
+
+	# Not a problem for the install: sudo prints it on every command, and a
+	# server that cannot look up its own name has usually a resolver that does
+	# not answer, which is why it is worth a line.
+	own=$(hostname 2>/dev/null || true)
+	if [ -n "$own" ]; then
+		if have timeout; then
+			timeout 8 getent hosts "$own" >/dev/null 2>&1 || own_unknown=1
+		else
+			getent hosts "$own" >/dev/null 2>&1 || own_unknown=1
+		fi
+		if [ "${own_unknown:-0}" = 1 ]; then
+			warn "This server's own name, ${own}, does not resolve, and sudo says so on every command."
+			note "Nothing breaks, but it is easy to fix:  echo \"127.0.1.1 ${own}\" >> /etc/hosts"
+		fi
+	fi
 }
 
 # check_clock warns about a clock nothing keeps right. Let's Encrypt refuses a
@@ -908,17 +1382,18 @@ install_k3s() {
 	# --cluster-init starts embedded etcd even on one node, so a second and third
 	# control plane server can join later without rebuilding the cluster.
 	# stdin is closed: under `curl | sh` it is the rest of this script.
-	INSTALL_K3S_CHANNEL="$K3S_CHANNEL" \
+	with_progress "Installing Kubernetes (k3s)" k3s_install_detail \
+		env INSTALL_K3S_CHANNEL="$K3S_CHANNEL" \
 		INSTALL_K3S_EXEC="server --cluster-init --flannel-backend=${POD_NETWORK} --write-kubeconfig-mode=0600 --secrets-encryption" \
-		sh "$TMP_DIR/k3s-install.sh" </dev/null >>"$LOG_FILE" 2>&1 || fail \
+		sh "$TMP_DIR/k3s-install.sh" || fail \
 		"k3s did not install." \
-		"The last lines of ${LOG_FILE} say why. The usual causes are no outbound network access to get.k3s.io and github.com, or a kernel without the modules k3s needs.
+		"The usual causes are no outbound network access to get.k3s.io and github.com, or a kernel without the modules k3s needs. All of what it printed is in ${LOG_FILE}.
 
 To see the error on its own, run k3s's installer by hand:
 
   curl -sfL https://get.k3s.io | sh -"
 
-	ok "k3s installed"
+	ok "k3s installed$(took)"
 }
 
 # pick_pod_network decides how pods on different servers reach each other.
@@ -1088,33 +1563,14 @@ TRAEFIK
 wait_for_cluster() {
 	step "Waiting for the cluster"
 
-	tries=0
-	while [ "$tries" -lt 120 ]; do
-		if kubectl get --raw /readyz >/dev/null 2>&1; then
-			break
-		fi
-		tries=$((tries + 1))
-		sleep 2
-	done
-	if [ "$tries" -lt 120 ]; then
-		ok "The API server is answering"
-	else
-		fail \
-			"The Kubernetes API server did not come up within four minutes." \
-			"Look at what k3s is saying:
+	poll_until "Waiting for the Kubernetes API server" 240 "" kubectl get --raw /readyz || fail \
+		"The Kubernetes API server did not come up within four minutes." \
+		"Look at what k3s is saying:
 
   journalctl -u k3s -n 50 --no-pager"
-	fi
+	ok "The API server is answering$(took)"
 
-	tries=0
-	while [ "$tries" -lt 90 ]; do
-		if [ "$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready"' | wc -l)" -ge 1 ]; then
-			break
-		fi
-		tries=$((tries + 1))
-		sleep 2
-	done
-	[ "$tries" -lt 90 ] || fail \
+	poll_until "Waiting for the node to be ready" 180 node_detail node_ready || fail \
 		"The node never became ready." \
 		"Look at what is wrong with:
 
@@ -1122,7 +1578,7 @@ wait_for_cluster() {
   journalctl -u k3s -n 50 --no-pager"
 
 	NODE_NAME=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -n 1)
-	ok "Node ${NODE_NAME} is ready"
+	ok "Node ${NODE_NAME} is ready$(took)"
 }
 
 # --- the panel --------------------------------------------------------------
@@ -1344,15 +1800,16 @@ install_cert_manager() {
 		download "$CERT_MANAGER_URL" "$TMP_DIR/cert-manager.yaml" 300 || fail \
 			"Could not download cert-manager from ${CERT_MANAGER_URL}." \
 			"Check that this server can reach github.com, then run the installer again. Without cert-manager the panel still works over plain HTTP: run the installer without --domain."
-		kubectl apply -f "$TMP_DIR/cert-manager.yaml" >>"$LOG_FILE" 2>&1 || fail \
+		with_progress "Installing cert-manager" "" kubectl apply -f "$TMP_DIR/cert-manager.yaml" || fail \
 			"cert-manager did not install." \
-			"The log at ${LOG_FILE} has what kubectl said. Applying it again is safe: run the installer again."
-		kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s >>"$LOG_FILE" 2>&1 || fail \
+			"Applying it again is safe: run the installer again. What kubectl said is in ${LOG_FILE}."
+		with_progress "Waiting for cert-manager to start" cert_manager_detail \
+			kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s || fail \
 			"cert-manager installed but its webhook never became ready." \
 			"Look at it with:
 
   kubectl -n cert-manager get pods"
-		ok "cert-manager is ready"
+		ok "cert-manager is ready$(took)"
 	fi
 
 	acme_server="https://acme-v02.api.letsencrypt.org/directory"
@@ -1374,9 +1831,10 @@ install_cert_manager() {
 	# cert-manager's webhook validates every issuer, and it reports ready a
 	# moment before it can answer. That moment is a failure on a fresh install
 	# unless it is waited out.
-	retry 12 5 kubectl apply -f "$MANIFEST_DIR/cluster-issuer.yaml" >>"$LOG_FILE" 2>&1 || fail \
+	with_progress "Creating the certificate issuer" "" \
+		retry 12 5 kubectl apply -f "$MANIFEST_DIR/cluster-issuer.yaml" || fail \
 		"Could not create the certificate issuer." \
-		"Run the installer again. If it keeps failing, the log at ${LOG_FILE} has what kubectl said."
+		"Run the installer again. If it keeps failing, ${LOG_FILE} has the whole of what kubectl said."
 	if [ "${SKIFITY_ACME_STAGING:-}" = "1" ]; then
 		ok "Certificates will be issued by Let's Encrypt's staging server, which browsers do not trust"
 	else
@@ -1515,7 +1973,8 @@ install_panel() {
 	if [ -z "$PREVIOUS_IMAGE" ]; then
 		note "The first start pulls the image, which takes a minute on a new server."
 	fi
-	kubectl -n "$NAMESPACE" rollout status deployment/skifity-panel --timeout=300s >>"$LOG_FILE" 2>&1 || fail \
+	with_progress "Starting the panel" panel_detail \
+		kubectl -n "$NAMESPACE" rollout status deployment/skifity-panel --timeout=300s || fail \
 		"The panel did not start within five minutes." \
 		"See what it is waiting for:
 
@@ -1524,7 +1983,7 @@ install_panel() {
   kubectl -n ${NAMESPACE} logs -l app.kubernetes.io/component=panel
 
 If the image could not be pulled, check that ${IMAGE} exists and that this server can reach the registry."
-	ok "The panel is running"
+	ok "The panel is running$(took)"
 }
 
 # wait_for_certificate gives Let's Encrypt a couple of minutes, and says so
@@ -1533,17 +1992,10 @@ If the image could not be pulled, check that ${IMAGE} exists and that this serve
 wait_for_certificate() {
 	[ "$PANEL_SCHEME" = "https" ] || return 0
 	step "Waiting for the certificate"
-	tries=0
-	while [ "$tries" -lt 40 ]; do
-		ready=$(kubectl -n "$NAMESPACE" get certificate skifity-panel-tls \
-			-o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-		if [ "$ready" = "True" ]; then
-			ok "Let's Encrypt issued a certificate for $PANEL_HOST"
-			return 0
-		fi
-		tries=$((tries + 1))
-		sleep 3
-	done
+	if poll_until "Waiting for Let's Encrypt to issue the certificate" 120 certificate_detail certificate_ready; then
+		ok "Let's Encrypt issued a certificate for $PANEL_HOST$(took)"
+		return 0
+	fi
 	warn "The certificate for $PANEL_HOST has not been issued yet."
 	note "Until it is, the browser warns about a temporary one. When the DNS record is new,"
 	note "this usually sorts itself out within minutes. To see what cert-manager is waiting for:"
@@ -1570,18 +2022,15 @@ check_panel_answers() {
 	[ "$PANEL_SCHEME" = "https" ] && port=443
 	target=$(address_for_resolve "${NODE_IP:-127.0.0.1}")
 
-	tries=0
-	while [ "$tries" -lt 30 ]; do
-		# -k: the certificate may not be issued yet, and this is a check that
-		# the route reaches the panel, not of the certificate.
-		if curl -fsSk --max-time 5 --resolve "${PANEL_HOST}:${port}:${target}" \
-			"${PUBLIC_URL}/api/health" >/dev/null 2>>"$LOG_FILE"; then
-			PANEL_ANSWERS=yes
-			break
-		fi
-		tries=$((tries + 1))
-		sleep 2
-	done
+	# -k: the certificate may not be issued yet, and this is a check that the
+	# route reaches the panel, not of the certificate.
+	panel_responds() {
+		curl -fsSk --max-time 5 --resolve "${PANEL_HOST}:${port}:${target}" \
+			"${PUBLIC_URL}/api/health" >/dev/null 2>&1
+	}
+	if poll_until "Waiting for ${PUBLIC_URL} to answer" 60 "" panel_responds; then
+		PANEL_ANSWERS=yes
+	fi
 	if [ "$PANEL_ANSWERS" != "yes" ]; then
 		PANEL_ANSWERS=no
 		warn "The panel is running, but ${PUBLIC_URL} does not reach it through the ingress."
@@ -1590,7 +2039,7 @@ check_panel_answers() {
 		note "  kubectl -n ${NAMESPACE} describe ingress skifity-panel"
 		return 0
 	fi
-	ok "${PUBLIC_URL} answers"
+	ok "${PUBLIC_URL} answers$(took)"
 
 	status=$(curl -fsSk --max-time 5 --resolve "${PANEL_HOST}:${port}:${target}" \
 		"${PUBLIC_URL}/api/setup/status" 2>>"$LOG_FILE" || true)
@@ -1781,6 +2230,12 @@ main() {
 	START_TIME=$(date +%s)
 	printf '\n%sSkifity%s  self-hosted apps, powered by Kubernetes\n' "$BOLD" "$RESET"
 	printf '%sInstalling %s%s\n\n' "$DIM" "$(release_label)" "$RESET"
+	# What to expect, before the long parts rather than during them. No number
+	# of minutes: it depends on the server's connection, and nobody has timed
+	# one yet.
+	printf '  Most of the time is spent waiting for downloads: Kubernetes first, then\n'
+	printf '  the panel'"'"'s image. Each wait below says what it is waiting for and for\n'
+	printf '  how long, and everything is written to %s.\n\n' "$LOG_FILE"
 
 	preflight
 	take_lock
