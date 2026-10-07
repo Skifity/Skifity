@@ -44,6 +44,7 @@ import { api, ApiError, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { Project, SecretManager, SecretManagerKind } from "@/lib/types"
+import { cardHeaderWithActions } from "@/lib/layout"
 
 export const SECRET_MANAGER_KINDS: SecretManagerKind[] = ["vault", "infisical", "doppler", "aws"]
 
@@ -173,7 +174,7 @@ export function SecretManagersCard() {
   const items = managers.data?.items ?? []
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className={cardHeaderWithActions}>
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-base">
             <KeyRoundIcon className="size-4" />

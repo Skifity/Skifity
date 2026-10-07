@@ -26,6 +26,7 @@ import { api, type List } from "@/lib/api"
 import { formatBytes } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App, AppFile } from "@/lib/types"
+import { cardHeaderWithActions } from "@/lib/layout"
 
 /** What the dialog is editing: a new file, or one that is already there. */
 type Editing = { file?: AppFile }
@@ -55,7 +56,7 @@ export function FilesCard({ app }: { app: App }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className={cardHeaderWithActions}>
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-base">
             <FileCodeIcon className="size-4" />

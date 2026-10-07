@@ -24,6 +24,7 @@ import { api, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { CloudProvider, CloudProviderKind } from "@/lib/types"
+import { cardHeaderWithActions } from "@/lib/layout"
 
 /** The providers' own names, which are the same in every language. */
 export const cloudProviderTitles: Record<CloudProviderKind, string> = {
@@ -175,7 +176,7 @@ export function CloudProvidersCard() {
   const items = providers.data?.items ?? []
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className={cardHeaderWithActions}>
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-base">
             <CloudIcon className="size-4" />

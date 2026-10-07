@@ -667,7 +667,11 @@ function StoreCheckCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          <Link className="underline underline-offset-4" to="/plugins">
+          {/* min-h-6: a link under 24px is a target somebody misses. */}
+          <Link
+            className="inline-flex min-h-6 items-center underline underline-offset-4"
+            to="/plugins"
+          >
             {t("settings.pluginStoreGoToPlugins")}
           </Link>
         </p>

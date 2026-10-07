@@ -31,6 +31,7 @@ import {
 import { api } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
+import { cardHeaderWithActions } from "@/lib/layout"
 import type {
   App,
   Deployment,
@@ -122,7 +123,7 @@ export function SecurityTab({ app }: { app: App }) {
         )}
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <CardHeader className={cardHeaderWithActions}>
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2 text-base">
               <ScanSearchIcon className="size-4" />

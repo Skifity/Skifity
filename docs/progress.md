@@ -6493,6 +6493,17 @@ DNS first, knows Cloudflare's addresses, and asks the cluster why a pod is not
 ready. That last failure, and a later one (the panel's connection to the API
 refused during a deploy), have not been explained.
 
+A screenshot from the owner's phone showed Settings → Certificates with its card
+squeezed: the title and the paragraph under it a few words wide, one word to a
+line, and the upload button running off the right-hand edge. Nine cards had the
+same header, a row at every width, which a language with longer words than
+English's breaks first. They share one class now (`web/src/lib/layout.ts`):
+stacked on a phone, beside the text from the `sm` breakpoint. The layout test had
+opened one of Settings' thirteen tabs, which is how it passed; it opens all of
+them now, and fails on anything that reaches past its own card, which the old
+layout did by 145 px at 375 px wide. Widening it found a link on Plugins that was
+14 px tall, under the 24 px a tap target needs; fixed.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after

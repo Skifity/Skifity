@@ -26,7 +26,24 @@ const PAGES: Array<[string, string]> = [
   ["/templates", "Templates"],
   ["/activity", "Activity"],
   ["/account", "Account"],
-  ["/settings", "Settings"],
+  // Every tab of Settings, not only the first: the tabs are where the cards
+  // with a button beside their title are, and a layout test that opened one of
+  // thirteen passed on a Certificates card whose button ran off the screen.
+  ...[
+    "panel",
+    "git",
+    "certificates",
+    "dns",
+    "cloud",
+    "notifications",
+    "secrets",
+    "logs",
+    "components",
+    "plugins",
+    "members",
+    "security",
+    "audit",
+  ].map((tab) => [`/settings?tab=${tab}`, `Settings: ${tab}`] as [string, string]),
 ]
 
 /**
@@ -123,6 +140,53 @@ async function overflow(page: Page): Promise<number> {
   })
 }
 
+/**
+ * spills names the first thing that reaches past the card it is in.
+ *
+ * The page-wide check above does not see it when the card is inside something
+ * that clips, which is how a button that ran off the edge of a card, on a phone,
+ * passed: nothing stuck out of the *viewport*, because the card's own container
+ * hid it. A card's contents belong inside the card.
+ */
+async function spills(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    for (const card of Array.from(document.querySelectorAll('[data-slot="card"]'))) {
+      const outer = card.getBoundingClientRect()
+      if (outer.width === 0) continue
+      for (const element of Array.from(card.querySelectorAll("*"))) {
+        const box = element.getBoundingClientRect()
+        if (box.width === 0 || box.height === 0) continue
+        // Not on screen to begin with: the invisible native input a checkbox
+        // keeps for forms to read is laid over its control, a little off it.
+        const own = getComputedStyle(element)
+        if (
+          own.opacity === "0" ||
+          own.visibility === "hidden" ||
+          element.closest('[aria-hidden="true"]')
+        )
+          continue
+        // Text that is allowed to scroll or to be cut with an ellipsis is not
+        // a spill; a scrolling table is a deliberate choice.
+        let clipped = false
+        for (
+          let parent = element.parentElement;
+          parent && parent !== card;
+          parent = parent.parentElement
+        ) {
+          const style = getComputedStyle(parent)
+          if (style.overflowX !== "visible") clipped = true
+        }
+        if (clipped) continue
+        if (box.right > outer.right + 1 || box.left < outer.left - 1) {
+          const el = element as HTMLElement
+          return `${el.tagName.toLowerCase()}.${el.className?.toString().slice(0, 60)} (${Math.round(box.left)}..${Math.round(box.right)}) is outside its card (${Math.round(outer.left)}..${Math.round(outer.right)}): "${(el.textContent ?? "").trim().slice(0, 40)}"`
+        }
+      }
+    }
+    return ""
+  })
+}
+
 /** widest names the element that sticks out, so a failure is actionable. */
 async function widest(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -175,6 +239,8 @@ test.describe("layout", () => {
           over,
           `${name} at ${width}px: ${over}px of horizontal scroll. ${await widest(page)}`,
         ).toBeLessThanOrEqual(1)
+
+        expect(await spills(page), `${name} at ${width}px: something is outside its card`).toBe("")
       }
     })
   }

@@ -29,6 +29,7 @@ import { api, type List } from "@/lib/api"
 import { formatDate, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { SavedCertificate, TeamCertificate } from "@/lib/types"
+import { cardActions, cardHeaderWithActions } from "@/lib/layout"
 
 /**
  * Certificates the team brings for its own hostnames: a company CA's, an EV
@@ -111,7 +112,7 @@ export function CertificatesCard() {
   const items = certificates.data?.items ?? []
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className={cardHeaderWithActions}>
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheckIcon className="size-4" />
@@ -119,7 +120,7 @@ export function CertificatesCard() {
           </CardTitle>
           <CardDescription>{t("certificates.help")}</CardDescription>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className={cardActions}>
           <Button variant="ghost" size="sm" asChild>
             <a href="/docs/quick-start#your-own-certificate" target="_blank" rel="noreferrer">
               <BookOpenIcon className="size-3.5" />

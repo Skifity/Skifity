@@ -17,6 +17,7 @@ import { api, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { RegistryCredential } from "@/lib/types"
+import { cardHeaderWithActions } from "@/lib/layout"
 
 type Saved = { registry: RegistryCredential; checked: boolean; unchecked_because?: string }
 
@@ -65,7 +66,7 @@ export function RegistriesCard() {
   const items = registries.data?.items ?? []
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className={cardHeaderWithActions}>
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-base">
             <ContainerIcon className="size-4" />
