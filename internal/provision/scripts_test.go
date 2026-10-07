@@ -470,3 +470,73 @@ func TestTheRegistryPortIsClosedOnEveryServer(t *testing.T) {
 		t.Errorf("install.sh does not close the registry's port with %q", rule)
 	}
 }
+
+// TestEveryNodeKeepsMemoryBackForK3sItself: k3s runs the API server and etcd
+// in one process beside the pods, and Kubernetes counts none of that memory
+// unless told. The installer and the provisioner write the same file, from the
+// same function, and it has to say the same thing for the same machine.
+func TestEveryNodeKeepsMemoryBackForK3sItself(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no shell available")
+	}
+	installer, err := os.ReadFile(filepath.Join("..", "..", "installer", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(installer), "kubelet_config() {")
+	if start < 0 {
+		t.Fatal("install.sh has no kubelet_config")
+	}
+	end := strings.Index(string(installer)[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("kubelet_config in install.sh does not end")
+	}
+	if got := string(installer)[start : start+end+3]; got != KubeletConfigFunction {
+		t.Errorf("install.sh and the provisioner write the kubelet's reservations from different text:\n--- install.sh\n%s\n--- provision\n%s", got, KubeletConfigFunction)
+	}
+
+	for _, c := range []struct {
+		kb               int
+		system, kube, hd string
+	}{
+		{1000000, "256Mi", "128Mi", "100Mi"}, // ~1 GB
+		{1536000, "256Mi", "128Mi", "100Mi"}, // 1.5 GB
+		{3000000, "512Mi", "256Mi", "200Mi"}, // ~3 GB
+		{6008000, "1Gi", "512Mi", "300Mi"},   // the 6 GB server this was written against
+		{16000000, "1Gi", "512Mi", "300Mi"},  // a large one
+	} {
+		cmd := exec.Command("sh", "-c", KubeletConfigFunction+"\nkubelet_config \"$1\"", "sh", strconv.Itoa(c.kb))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("kubelet_config %d: %v\n%s", c.kb, err, out)
+		}
+		text := string(out)
+		for _, want := range []string{
+			`"system-reserved=cpu=100m,memory=` + c.system + `"`,
+			`"kube-reserved=cpu=100m,memory=` + c.kube + `"`,
+			`"eviction-hard=memory.available<` + c.hd + `,nodefs.available<10%,imagefs.available<15%,nodefs.inodesFree<5%"`,
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%d kB: the file lacks %s:\n%s", c.kb, want, text)
+			}
+		}
+		// Replacing eviction-hard replaces all of it, so every signal has to be named.
+		if !strings.HasPrefix(text, "# Written by Skifity") || !strings.Contains(text, "\nkubelet-arg:\n") {
+			t.Errorf("%d kB: not a k3s config file:\n%s", c.kb, text)
+		}
+	}
+
+	for _, script := range []string{
+		InstallServerScript("", "t", "203.0.113.10", "", nil),
+		JoinServerScript("", "t", "https://203.0.113.10:6443", "203.0.113.11", ""),
+		JoinAgentScript("", "t", "https://203.0.113.10:6443", "203.0.113.12", nil),
+	} {
+		if !strings.Contains(script, "config.yaml.d/10-skifity-kubelet.yaml") {
+			t.Error("a node is installed without the kubelet's reservations")
+		}
+		// And before k3s starts, which is when it reads them.
+		if strings.Index(script, "10-skifity-kubelet.yaml") > strings.Index(script, "k3s-install.sh") {
+			t.Error("the kubelet's reservations are written after k3s has started")
+		}
+	}
+}

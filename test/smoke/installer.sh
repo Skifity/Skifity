@@ -802,6 +802,35 @@ case "$out" in
 *) t_fail "failure was: $out" ;;
 esac
 
+# --- what the node keeps for itself -------------------------------------------
+
+kubelet_dir="$WORKDIR/kubelet"
+mkdir -p "$kubelet_dir"
+for case_ in "1000000:256Mi:100Mi" "3000000:512Mi:200Mi" "6008000:1Gi:300Mi"; do
+  kb=${case_%%:*}
+  rest=${case_#*:}
+  want_system=${rest%%:*}
+  want_hard=${rest#*:}
+  printf 'MemTotal:  %s kB\n' "$kb" >"$kubelet_dir/meminfo"
+  rm -rf "$kubelet_dir/k3s"
+  (K3S_CONFIG_DIR="$kubelet_dir/k3s"; MEMINFO="$kubelet_dir/meminfo"; LOG_FILE=/dev/null; write_kubelet_config) >/dev/null 2>&1
+  file="$kubelet_dir/k3s/config.yaml.d/10-skifity-kubelet.yaml"
+  if grep -q "system-reserved=cpu=100m,memory=$want_system" "$file" 2>/dev/null &&
+    grep -q "eviction-hard=memory.available<$want_hard,nodefs.available<10%,imagefs.available<15%,nodefs.inodesFree<5%" "$file"; then
+    t_pass "a $((kb / 1024)) MB server keeps $want_system back for k3s and evicts at $want_hard free"
+  else
+    t_fail "the kubelet's reservations for $kb kB are wrong: $(cat "$file" 2>/dev/null)"
+  fi
+done
+rm -rf "$kubelet_dir/k3s"
+printf 'garbage\n' >"$kubelet_dir/meminfo"
+(K3S_CONFIG_DIR="$kubelet_dir/k3s"; MEMINFO="$kubelet_dir/meminfo"; LOG_FILE=/dev/null; write_kubelet_config) >/dev/null 2>&1
+if [ ! -e "$kubelet_dir/k3s/config.yaml.d/10-skifity-kubelet.yaml" ]; then
+  t_pass "a machine whose memory cannot be read gets the defaults, not a guess"
+else
+  t_fail "a file was written without knowing the memory"
+fi
+
 # --- waiting, and saying so ----------------------------------------------------
 
 # The slow parts of an install used to print nothing: a server that was working

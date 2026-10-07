@@ -486,6 +486,17 @@ cat > /etc/rancher/k3s/registries.yaml <<'SKIFITY_REGISTRIES'
 %s
 SKIFITY_REGISTRIES
 
+echo "==> Keeping memory back for the node itself"
+%s
+kubelet_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || true)
+case "$kubelet_kb" in
+'' | *[!0-9]*) ;;
+*)
+  mkdir -p /etc/rancher/k3s/config.yaml.d
+  kubelet_config "$kubelet_kb" > /etc/rancher/k3s/config.yaml.d/10-skifity-kubelet.yaml
+  ;;
+esac
+
 echo "==> Downloading the k3s installer"
 if command -v curl >/dev/null 2>&1; then
   curl -sfL https://get.k3s.io -o /tmp/k3s-install.sh
@@ -513,8 +524,38 @@ done
 echo "k3s did not start within two minutes. The last log lines were:" >&2
 journalctl -u k3s -u k3s-agent --no-pager -n 40 2>/dev/null >&2 || true
 exit 21
-`, kube.RegistriesYAML(), env.String())
+`, kube.RegistriesYAML(), KubeletConfigFunction, env.String())
 }
+
+// KubeletConfigFunction is the shell function that says what the kubelet keeps
+// back for the machine itself, from the memory it has in kB. installer/install.sh
+// has the same text, and a test checks that the two have not drifted apart.
+const KubeletConfigFunction = `kubelet_config() {
+	kubelet_mb=$(($1 / 1024))
+	if [ "$kubelet_mb" -lt 2048 ]; then
+		kubelet_system=256Mi
+		kubelet_kube=128Mi
+		kubelet_hard=100Mi
+	elif [ "$kubelet_mb" -lt 4096 ]; then
+		kubelet_system=512Mi
+		kubelet_kube=256Mi
+		kubelet_hard=200Mi
+	else
+		kubelet_system=1Gi
+		kubelet_kube=512Mi
+		kubelet_hard=300Mi
+	fi
+	printf '%s\n' '# Written by Skifity. Do not edit: the installer writes it again.' \
+		'# What the kubelet keeps back for k3s itself (the API server, etcd and the' \
+		'# controllers run in the same process), and how early it starts evicting pods' \
+		'# for memory, so that one app that grows without limit is stopped before it' \
+		'# takes the machine the panel runs on with it.' \
+		'kubelet-arg:'
+	printf '  - "system-reserved=cpu=100m,memory=%s"\n' "$kubelet_system"
+	printf '  - "kube-reserved=cpu=100m,memory=%s"\n' "$kubelet_kube"
+	printf '  - "eviction-hard=memory.available<%s,nodefs.available<10%%,imagefs.available<15%%,nodefs.inodesFree<5%%"\n' "$kubelet_hard"
+}
+`
 
 // NodeTokenScript reads the join token from the first control plane node.
 const NodeTokenScript = `

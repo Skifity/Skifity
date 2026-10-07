@@ -83,13 +83,23 @@ func BuildLimitRange(namespace string) *corev1.LimitRange {
 			Limits: []corev1.LimitRangeItem{{
 				Type: corev1.LimitTypeContainer,
 				// Applied when a container sets no limit of its own.
+				//
+				// Ephemeral storage is the container's writable layer, its
+				// logs and its emptyDir volumes, all on the node's own disk. A
+				// container with no limit on it can fill that disk, and a full
+				// disk is not one app failing: the kubelet evicts pods from the
+				// whole machine, neighbours included. With a limit, the one
+				// that writes without end is the one that is evicted. Volumes
+				// the app asked for are claims on storage and are not counted.
 				Default: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("512Mi"),
-					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory:           resource.MustParse("512Mi"),
+					corev1.ResourceCPU:              resource.MustParse("1"),
+					corev1.ResourceEphemeralStorage: resource.MustParse("8Gi"),
 				},
 				DefaultRequest: corev1.ResourceList{
-					corev1.ResourceMemory: resource.MustParse("128Mi"),
-					corev1.ResourceCPU:    resource.MustParse("50m"),
+					corev1.ResourceMemory:           resource.MustParse("128Mi"),
+					corev1.ResourceCPU:              resource.MustParse("50m"),
+					corev1.ResourceEphemeralStorage: resource.MustParse("100Mi"),
 				},
 			}},
 		},

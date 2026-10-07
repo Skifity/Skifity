@@ -1509,6 +1509,53 @@ iptables_rejects_by_default() {
 
 # --- k3s --------------------------------------------------------------------
 
+# kubelet_config says what the kubelet keeps back for the machine itself, from
+# the memory it has in kB. k3s runs the API server, etcd and the controllers in
+# one process beside the pods, and Kubernetes counts none of it unless it is
+# told: with nothing reserved, pods' requests could add up to the whole machine
+# and the cluster's own brain would be fighting its tenants for memory. The
+# eviction threshold is how early the kubelet starts stopping pods that use more
+# than they asked for, which is what turns an app that grows without limit into
+# one restarted app and not a machine that stops answering.
+#
+# internal/provision/scripts.go carries the same function for servers added
+# later, and a test checks that the two are the same text.
+kubelet_config() {
+	kubelet_mb=$(($1 / 1024))
+	if [ "$kubelet_mb" -lt 2048 ]; then
+		kubelet_system=256Mi
+		kubelet_kube=128Mi
+		kubelet_hard=100Mi
+	elif [ "$kubelet_mb" -lt 4096 ]; then
+		kubelet_system=512Mi
+		kubelet_kube=256Mi
+		kubelet_hard=200Mi
+	else
+		kubelet_system=1Gi
+		kubelet_kube=512Mi
+		kubelet_hard=300Mi
+	fi
+	printf '%s\n' '# Written by Skifity. Do not edit: the installer writes it again.' \
+		'# What the kubelet keeps back for k3s itself (the API server, etcd and the' \
+		'# controllers run in the same process), and how early it starts evicting pods' \
+		'# for memory, so that one app that grows without limit is stopped before it' \
+		'# takes the machine the panel runs on with it.' \
+		'kubelet-arg:'
+	printf '  - "system-reserved=cpu=100m,memory=%s"\n' "$kubelet_system"
+	printf '  - "kube-reserved=cpu=100m,memory=%s"\n' "$kubelet_kube"
+	printf '  - "eviction-hard=memory.available<%s,nodefs.available<10%%,imagefs.available<15%%,nodefs.inodesFree<5%%"\n' "$kubelet_hard"
+}
+
+# write_kubelet_config puts that where k3s reads it, before k3s first starts.
+write_kubelet_config() {
+	kubelet_dir="$K3S_CONFIG_DIR/config.yaml.d"
+	kubelet_kb=$(awk '/^MemTotal:/ {print $2}' "$MEMINFO" 2>/dev/null || true)
+	case "$kubelet_kb" in '' | *[!0-9]*) return 0 ;; esac
+	mkdir -p "$kubelet_dir"
+	kubelet_config "$kubelet_kb" >"$kubelet_dir/10-skifity-kubelet.yaml"
+	ok "the node keeps memory back for k3s itself, and evicts a runaway app early"
+}
+
 install_k3s() {
 	step "Installing Kubernetes"
 
@@ -1530,6 +1577,7 @@ install_k3s() {
 		return 0
 	fi
 
+	write_kubelet_config
 	note "This downloads and starts k3s, which takes a minute or two."
 	download https://get.k3s.io "$TMP_DIR/k3s-install.sh" 120 || fail \
 		"Could not download the k3s installer from get.k3s.io." \

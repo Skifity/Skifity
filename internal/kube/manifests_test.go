@@ -667,6 +667,11 @@ func TestNamespaceIsolation(t *testing.T) {
 	if limits.Spec.Limits[0].Default.Memory().IsZero() {
 		t.Fatal("a container created without a memory limit would get none")
 	}
+	// Nor may one that writes without end be able to fill the node's disk,
+	// which evicts every pod on the machine and not only itself.
+	if limits.Spec.Limits[0].Default.StorageEphemeral().IsZero() {
+		t.Fatal("a container created without an ephemeral-storage limit would get none")
+	}
 }
 
 func TestNetworkPoliciesDenyByDefaultAndBlockMetadata(t *testing.T) {
