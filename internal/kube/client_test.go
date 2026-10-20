@@ -583,6 +583,54 @@ func TestThePreviousContainersLogIsReadable(t *testing.T) {
 	}
 }
 
+// An instance that has never started has no log. Asked for one, the API
+// server says "waiting to start" or "does not have a host assigned", which the
+// panel passed on as something gone wrong; what the instance is waiting for is
+// the answer. With none ready, one that has run at all is read before one that
+// has not.
+func TestAnInstanceThatHasNotStartedSaysWhatItIsWaitingFor(t *testing.T) {
+	labelSet := map[string]string{"app.kubernetes.io/name": "web"}
+	waiting := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "web-waiting", Namespace: "ns", Labels: labelSet},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+			Conditions: []corev1.PodCondition{{
+				Type: corev1.PodScheduled, Status: corev1.ConditionFalse, Reason: "Unschedulable",
+				Message: "0/2 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity, " +
+					"1 node(s) were unschedulable.",
+			}},
+		},
+	}
+	c := &Client{clientset: fake.NewSimpleClientset(waiting), systemNamespace: "skifity-system"}
+	_, err := c.AppLogs(t.Context(), "ns", "web", LogOptions{TailLines: 20})
+	var notStarted *NotStarted
+	if !errors.As(err, &notStarted) || notStarted.Instance != "web-waiting" ||
+		!strings.Contains(notStarted.Reason, "server is back") {
+		t.Fatalf("the log of an instance waiting for its volume's server answered %v", err)
+	}
+
+	creating := corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending,
+		ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{
+			Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}}}}}}
+	if got := waitingFor(creating); got != "it is still starting." {
+		t.Errorf("an instance being created is waiting for %q", got)
+	}
+
+	crashed := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "web-crashed"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: []corev1.ContainerStatus{{
+			State:                corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+			LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+		}}},
+	}
+	if !hasStarted(crashed) {
+		t.Error("an instance waiting to be restarted after it exited has a log, and was taken for one that has none")
+	}
+	if got := pickLogPod([]corev1.Pod{*waiting, crashed}, false); got.Name != "web-crashed" {
+		t.Errorf("with none ready, the log came from %s, want the instance that has run", got.Name)
+	}
+}
+
 // TestFollowingAnEarlierContainerIsNotAThing: it has already exited, so a
 // stream that stays open would hang rather than end.
 func TestFollowingAnEarlierContainerIsNotAThing(t *testing.T) {

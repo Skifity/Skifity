@@ -1257,6 +1257,18 @@ func CrashLoop(app string, restarts int, logTail string) *Problem {
 		With("app", app).With("restarts", itoa(restarts)).With("log_tail", tail(logTail, 4000))
 }
 
+// AppNotStarted is an app whose log was asked for before any instance had
+// started: there is no log yet, which is not a fault in the logs.
+func AppNotStarted(instance, reason string) *Problem {
+	return New("app.not_started", "No instance of this app has started yet").
+		WithCause("%s has not started: %s", instance, reason).
+		WithImpact("There is nothing in its log until it starts.").
+		WithFix("If it does not start, the reason above says what it is waiting for, and the app's Advanced tab has what Kubernetes said about it.").
+		WithDocs("/docs/troubleshooting#what-kubernetes-said").
+		WithStatus(http.StatusConflict).
+		With("instance", instance)
+}
+
 // --- scanning images for vulnerabilities ---
 
 // VulnerableImage is a deploy stopped because its image has a critical

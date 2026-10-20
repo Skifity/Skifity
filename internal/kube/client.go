@@ -643,6 +643,13 @@ func (c *Client) AppLogs(ctx context.Context, namespace, appSlug string, opts Lo
 	}
 
 	target := pickLogPod(pods.Items, opts.Previous)
+	// An instance that has never started has no log, and the API server's
+	// answer for it — "waiting to start", "does not have a host assigned" —
+	// came out of the panel as something gone wrong. What it is waiting for
+	// is the answer.
+	if !opts.Previous && !hasStarted(target) {
+		return nil, &NotStarted{Instance: target.Name, Reason: waitingFor(target)}
+	}
 
 	options := &corev1.PodLogOptions{
 		Follow:     opts.Follow && !opts.Previous,
@@ -664,11 +671,52 @@ func (c *Client) AppLogs(ctx context.Context, namespace, appSlug string, opts Lo
 	return stream, nil
 }
 
+// NotStarted is an app none of whose instances has started: there is no log
+// to read yet. Reason is what the instance is waiting for, in the panel's
+// words where it has them.
+type NotStarted struct {
+	Instance string
+	Reason   string
+}
+
+func (e *NotStarted) Error() string {
+	return fmt.Sprintf("%s has not started: %s", e.Instance, e.Reason)
+}
+
+// hasStarted reports whether any of a pod's containers has run, now or
+// before: one that is running, one that has exited, and one waiting to be
+// started again all have a log.
+func hasStarted(pod corev1.Pod) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Running != nil || cs.State.Terminated != nil || cs.LastTerminationState.Terminated != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// waitingFor is what an instance that has not started is waiting for: the
+// scheduler's reason or the container's, as the instance list says it.
+func waitingFor(pod corev1.Pod) string {
+	inst := describePod(pod)
+	switch {
+	case inst.Message != "":
+		return inst.Message
+	case inst.Status == "", inst.Status == string(corev1.PodPending),
+		inst.Status == "ContainerCreating", inst.Status == "PodInitializing":
+		return "it is still starting."
+	default:
+		return inst.Status + "."
+	}
+}
+
 // pickLogPod chooses the instance whose log is worth reading.
 //
 // Normally that is a ready one: a crash-looping pod's output is what somebody
-// wants when nothing is serving, and noise when something is. Asking for the
-// earlier container inverts it — the pod that restarted is the whole point.
+// wants when nothing is serving, and noise when something is. With none ready,
+// one that has started at all, which has a log, over one that has not.
+// Asking for the earlier container inverts it — the pod that restarted is the
+// whole point.
 func pickLogPod(pods []corev1.Pod, previous bool) corev1.Pod {
 	target := pods[0]
 	if previous {
@@ -688,6 +736,11 @@ func pickLogPod(pods []corev1.Pod, previous bool) corev1.Pod {
 			if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
 				return pod
 			}
+		}
+	}
+	for _, pod := range pods {
+		if hasStarted(pod) {
+			return pod
 		}
 	}
 	return target

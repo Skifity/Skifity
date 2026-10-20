@@ -167,6 +167,32 @@ func TestAProcessIsReadAndStatedByItsOwnName(t *testing.T) {
 	}
 }
 
+// waitingCluster has an app whose one instance has not started.
+type waitingCluster struct {
+	Cluster
+}
+
+func (waitingCluster) AppLogs(context.Context, string, string, LogOptions) (io.ReadCloser, error) {
+	return nil, &kube.NotStarted{Instance: "shop-7d4db6466b-vd9m8",
+		Reason: kube.ExplainUnschedulable("0/2 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity.")}
+}
+
+// An app whose instance is waiting for its server has no log yet. That came
+// back as "Something went wrong", logged as a failure of the panel's; it is
+// what the instance is waiting for.
+func TestTheLogOfAnAppThatHasNotStartedSaysWhatItIsWaitingFor(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	h.withCluster(waitingCluster{})
+	app := h.app(acme, "shop")
+
+	status, body := h.do(acme, http.MethodGet, "/api/apps/"+app.ID+"/logs?tail=20", nil)
+	if status != http.StatusConflict || !strings.Contains(body, "app.not_started") ||
+		!strings.Contains(body, "server is back") || !strings.Contains(body, "shop-7d4db6466b-vd9m8") {
+		t.Fatalf("the log of an app that has not started answered %d: %s", status, body)
+	}
+}
+
 func TestAnAppIsCreatedWithItsProcfilesProcesses(t *testing.T) {
 	h := newHarness(t)
 	acme := h.newTenant("acme")

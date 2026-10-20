@@ -1968,6 +1968,12 @@
         "impact": "The app is not serving traffic reliably.",
         "fix": "Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three."
       },
+      "app_not_started": {
+        "title": "No instance of this app has started yet",
+        "cause": "{{0}} has not started: {{1}}",
+        "impact": "There is nothing in its log until it starts.",
+        "fix": "If it does not start, the reason above says what it is waiting for, and the app's Advanced tab has what Kubernetes said about it."
+      },
       "auth_csrf": {
         "title": "This request was blocked for safety",
         "cause": "The request did not carry a matching CSRF token.",
@@ -4733,7 +4739,8 @@
       "scheduling_cpu": "No server has enough free CPU for this instance. Lower the CPU it reserves under Scaling, or add a server.",
       "scheduling_memory": "No server has enough free memory for this instance. Lower the memory it reserves under Scaling, or add a server.",
       "scheduling_volume": "This app's volume has not been created yet. On a single server that is usually a storage class that is still starting; across servers it means no server can provide the volume.",
-      "scheduling_taint": "The only servers with room are not accepting apps. A control-plane server does not run apps unless you allow it, and a server being drained accepts nothing.",
+      "scheduling_volume_server": "This app's volume is kept on one server's own disk, and that server is not taking it now: it is being emptied, or it has stopped answering. The app starts again when that server is back. A volume on a server's own disk does not move to another.",
+      "scheduling_taint": "The only servers with room are not accepting apps: a server being emptied, one that has stopped answering, and one short of disk or memory take nothing new.",
       "scheduling_node_affinity": "No server matches where this app is allowed to run.",
       "scheduling_anti_affinity": "Every server already runs an instance of this app. Add a server, or run fewer instances.",
       "scheduling_unexplained": "No server can take this instance: {{0}}",

@@ -1948,6 +1948,12 @@
         "impact": "Aplikasi tidak melayani trafik dengan andal.",
         "fix": "Baca baris log terakhir di bawah: penyebabnya hampir selalu ada di situ. Tiga yang paling sering: variabel lingkungan yang kurang, database yang tidak terjangkau, dan port yang sebenarnya tidak didengarkan aplikasi."
       },
+      "app_not_started": {
+        "title": "Belum ada instance aplikasi ini yang berjalan",
+        "cause": "{{0}} belum berjalan: {{1}}",
+        "impact": "Lognya kosong sampai instance itu berjalan.",
+        "fix": "Kalau tidak kunjung berjalan, alasan di atas menyebutkan apa yang ditunggunya, dan tab Lanjutan aplikasi berisi apa yang dicatat Kubernetes tentangnya."
+      },
       "auth_csrf": {
         "title": "Permintaan ini diblokir demi keamanan",
         "cause": "Permintaan tidak membawa token CSRF yang cocok.",
@@ -4710,7 +4716,8 @@
       "scheduling_cpu": "Tidak ada server dengan CPU bebas yang cukup untuk instance ini. Turunkan CPU yang dicadangkannya di Penskalaan, atau tambah server.",
       "scheduling_memory": "Tidak ada server dengan memori bebas yang cukup untuk instance ini. Turunkan memori yang dicadangkannya di Penskalaan, atau tambah server.",
       "scheduling_volume": "Disk aplikasi ini belum dibuat. Di satu server, biasanya storage class-nya masih bersiap; di beberapa server, artinya tidak ada server yang bisa menyediakan disk itu.",
-      "scheduling_taint": "Server yang masih punya ruang tidak menerima aplikasi. Server control plane tidak menjalankan aplikasi kecuali kamu izinkan, dan server yang sedang dikosongkan tidak menerima apa pun.",
+      "scheduling_volume_server": "Disk aplikasi ini disimpan di disk milik satu server, dan server itu sedang tidak menerimanya: server itu sedang dikosongkan, atau berhenti menjawab. Aplikasi berjalan lagi begitu server itu kembali. Disk yang tersimpan di disk milik sebuah server tidak berpindah ke server lain.",
+      "scheduling_taint": "Server yang masih punya ruang tidak menerima aplikasi: server yang sedang dikosongkan, yang berhenti menjawab, dan yang kekurangan disk atau memori tidak menerima apa pun yang baru.",
       "scheduling_node_affinity": "Tidak ada server yang cocok dengan tempat aplikasi ini boleh berjalan.",
       "scheduling_anti_affinity": "Setiap server sudah menjalankan instance aplikasi ini. Tambah server, atau jalankan lebih sedikit instance.",
       "scheduling_unexplained": "Tidak ada server yang bisa menerima instance ini: {{0}}",

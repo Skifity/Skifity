@@ -26,6 +26,10 @@ func TestExplanationsCarryTheFix(t *testing.T) {
 			"volume", ExplainUnschedulable},
 		{"taint", "0/1 nodes are available: 1 node(s) had untolerated taint {a: b}.",
 			"not accepting apps", ExplainUnschedulable},
+		// What a drained server's app said on the first two-server run: the
+		// taint is there too, and adding a server would not have helped.
+		{"volume on a server", "0/2 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity, " +
+			"1 node(s) had untolerated taint(s).", "server is back", ExplainUnschedulable},
 		{"anti-affinity", "0/2 nodes are available: 2 node(s) didn't match pod anti-affinity rules.",
 			"Add a server", ExplainUnschedulable},
 		{"quota", `pods "web-abc" is forbidden: exceeded quota: environment, requested: pods=1`,

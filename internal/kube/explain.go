@@ -50,6 +50,12 @@ func unschedulable(message string) Explanation {
 	case strings.Contains(lower, "unbound immediate persistentvolumeclaims"),
 		strings.Contains(lower, "pod has unbound"):
 		return explained("scheduling_volume")
+	// Before the taint: a volume on one server's own disk is why the
+	// instance can go nowhere else, and that server being emptied or gone is
+	// why it cannot go there either. Adding a server does not help.
+	case strings.Contains(lower, "didn't match persistentvolume's node affinity"),
+		strings.Contains(lower, "volume node affinity conflict"):
+		return explained("scheduling_volume_server")
 	case strings.Contains(lower, "untolerated taint"):
 		return explained("scheduling_taint")
 	case strings.Contains(lower, "node(s) didn't match pod's node affinity"),
@@ -204,9 +210,11 @@ var explanations = map[string]string{
 	"scheduling_volume": "This app's volume has not been created yet. " +
 		"On a single server that is usually a storage class that is still starting; " +
 		"across servers it means no server can provide the volume.",
-	"scheduling_taint": "The only servers with room are not accepting apps. " +
-		"A control-plane server does not run apps unless you allow it, " +
-		"and a server being drained accepts nothing.",
+	"scheduling_volume_server": "This app's volume is kept on one server's own disk, and that server is not " +
+		"taking it now: it is being emptied, or it has stopped answering. The app starts again when that " +
+		"server is back. A volume on a server's own disk does not move to another.",
+	"scheduling_taint": "The only servers with room are not accepting apps: a server being emptied, " +
+		"one that has stopped answering, and one short of disk or memory take nothing new.",
 	"scheduling_node_affinity": "No server matches where this app is allowed to run.",
 	"scheduling_gpu": "No server has a free GPU for this instance (%s). " +
 		"Every card is in use by other instances, or no server's device plugin offers one: " +

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -249,6 +250,12 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		TailLines: tailLines, Follow: follow, Previous: previous,
 	})
 	if err != nil {
+		// No instance has started, so there is no log yet: what it is
+		// waiting for, rather than a failure to read one.
+		var notStarted *kube.NotStarted
+		if errors.As(err, &notStarted) {
+			err = errdoc.AppNotStarted(notStarted.Instance, notStarted.Reason)
+		}
 		writeError(w, r, err)
 		return
 	}
