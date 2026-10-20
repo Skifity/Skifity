@@ -632,16 +632,13 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 		spec.PasswordUsers = password.Username + ":" + password.Hash
 	}
 
-	// The issuer only exists once an ACME email has been configured, and
-	// referencing a missing issuer leaves certificates stuck forever.
-	if email, _, err := c.db.GetSetting(ctx, settings.KeyACMEEmail); err == nil && email != "" {
-		spec.ClusterIssuer = ClusterIssuerName
+	issuer, err := c.CertificateIssuer(ctx)
+	if err != nil {
+		return spec, err
 	}
+	spec.ClusterIssuer = issuer
 	return spec, nil
 }
-
-// ClusterIssuerName is the cert-manager ClusterIssuer the panel creates.
-const ClusterIssuerName = "skifity-letsencrypt"
 
 // ControlPlaneCount is how many nodes actually run the cluster.
 //

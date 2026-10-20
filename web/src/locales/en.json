@@ -1686,11 +1686,15 @@
       },
       "domains_acme_email": {
         "label": "Let's Encrypt email",
-        "help": "Where Let's Encrypt sends certificate expiry warnings. Required before HTTPS certificates can be issued."
+        "help": "The address the certificate authority's account is registered with. Optional: certificates are issued without one, and Let's Encrypt no longer sends expiry warnings to it."
       },
       "domains_acme_server": {
         "label": "ACME directory URL",
         "help": "Leave empty for Let's Encrypt production. Point it at the staging directory while you are testing, so you do not hit the rate limit."
+      },
+      "domains_acme_ca_bundle": {
+        "label": "ACME server's certificate authority",
+        "help": "Only for an ACME server of your own, such as step-ca: the certificate, in PEM, of the authority that signs the server's own HTTPS address, so cert-manager trusts it. Leave empty for Let's Encrypt, which every system already trusts."
       },
       "domains_cloudflare_tunnel_token": {
         "label": "Cloudflare tunnel token",
@@ -2715,6 +2719,12 @@
         "cause": "{{0}}",
         "impact": "The connectors are still running on the previous token, so traffic keeps flowing until they are restarted.",
         "fix": "Fix what the cause says and save the token again, or install Cloudflare tunnel under Components."
+      },
+      "domains_issuer_not_applied": {
+        "title": "The settings were saved, but the certificate issuer was not updated",
+        "cause": "{{0}}",
+        "impact": "Certificates are still asked for as the issuer was set up before.",
+        "fix": "Fix what the cause says and save the settings again."
       },
       "upgrade_check_failed": {
         "title": "The newest release could not be found out",

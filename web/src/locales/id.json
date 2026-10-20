@@ -1666,11 +1666,15 @@
       },
       "domains_acme_email": {
         "label": "Email Let's Encrypt",
-        "help": "Tujuan peringatan kedaluwarsa sertifikat dari Let's Encrypt. Wajib diisi sebelum sertifikat HTTPS bisa diterbitkan."
+        "help": "Alamat yang didaftarkan pada akun penerbit sertifikat. Opsional: sertifikat tetap diterbitkan tanpanya, dan Let's Encrypt tidak lagi mengirim peringatan kedaluwarsa ke sana."
       },
       "domains_acme_server": {
         "label": "URL direktori ACME",
         "help": "Kosongkan untuk Let's Encrypt produksi. Arahkan ke direktori staging selama pengujian agar tidak kena batas laju."
+      },
+      "domains_acme_ca_bundle": {
+        "label": "Otoritas sertifikat server ACME",
+        "help": "Hanya untuk server ACME milik sendiri, seperti step-ca: sertifikat dalam format PEM dari otoritas yang menandatangani alamat HTTPS server itu sendiri, agar cert-manager mempercayainya. Kosongkan untuk Let's Encrypt, yang sudah dipercaya semua sistem."
       },
       "domains_cloudflare_tunnel_token": {
         "label": "Token Cloudflare tunnel",
@@ -2695,6 +2699,12 @@
         "cause": "{{0}}",
         "impact": "Konektornya masih berjalan dengan token yang lama, jadi trafik tetap mengalir sampai mereka dimulai ulang.",
         "fix": "Perbaiki apa yang disebut penyebabnya lalu simpan tokennya lagi, atau pasang Cloudflare tunnel di halaman Komponen."
+      },
+      "domains_issuer_not_applied": {
+        "title": "Pengaturannya tersimpan, tapi penerbit sertifikatnya tidak diperbarui",
+        "cause": "{{0}}",
+        "impact": "Sertifikat masih diminta dengan pengaturan penerbit yang lama.",
+        "fix": "Perbaiki apa yang disebut penyebabnya lalu simpan pengaturannya lagi."
       },
       "upgrade_check_failed": {
         "title": "Rilis terbaru tidak bisa diketahui",

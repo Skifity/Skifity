@@ -1,6 +1,16 @@
 package settings
 
-import "testing"
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"testing"
+	"time"
+)
 
 // A setting whose kind does not match its validator is a form that accepts what
 // the server will reject: a text box for a yes/no value, or a free-text field
@@ -167,6 +177,53 @@ func TestParseGroupRoles(t *testing.T) {
 	for _, bad := range []string{"no-equals", "g = acme", "g = acme:god", " = acme:admin", "g = :admin"} {
 		if _, err := ParseGroupRoles(bad); err == nil {
 			t.Errorf("%q was accepted", bad)
+		}
+	}
+}
+
+// The ACME server's authority is certificates in PEM and nothing else: a key
+// pasted by mistake is refused rather than stored and sent to cert-manager.
+func TestTheACMEAuthorityIsCertificatesOnly(t *testing.T) {
+	def, ok := Lookup(KeyACMECABundle)
+	if !ok {
+		t.Fatal("no setting for the ACME server's authority")
+	}
+	if !def.Multiline {
+		t.Error("a PEM bundle is many lines, and a single-line box drops them")
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Test authority"},
+		NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificate := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateKey := string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+
+	for _, good := range []string{certificate, certificate + certificate, "\n" + certificate + "\n\n"} {
+		if err := def.Validate(good); err != nil {
+			t.Errorf("a bundle of certificates was refused: %v", err)
+		}
+	}
+	for name, bad := range map[string]string{
+		"a private key":                     privateKey,
+		"a certificate and its key":         certificate + privateKey,
+		"text":                              "not a certificate",
+		"something after the last one":      certificate + "trailing words",
+		"a certificate that does not parse": "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n",
+	} {
+		if err := def.Validate(bad); err == nil {
+			t.Errorf("%s was accepted as the ACME server's authority", name)
 		}
 	}
 }

@@ -1666,11 +1666,15 @@
       },
       "domains_acme_email": {
         "label": "Let's Encrypt 邮箱",
-        "help": "Let's Encrypt 发送证书到期提醒的地址。签发 HTTPS 证书前必须填写。"
+        "help": "证书颁发机构账户注册时使用的地址。可选：不填也能签发证书，而且 Let's Encrypt 已不再向它发送到期提醒。"
       },
       "domains_acme_server": {
         "label": "ACME 目录地址",
         "help": "留空表示使用 Let's Encrypt 正式环境。测试时请指向 staging 目录，以免触发速率限制。"
+      },
+      "domains_acme_ca_bundle": {
+        "label": "ACME 服务器的证书颁发机构",
+        "help": "仅用于你自己的 ACME 服务器（如 step-ca）：为该服务器自身 HTTPS 地址签名的颁发机构的 PEM 证书，好让 cert-manager 信任它。使用 Let's Encrypt 时留空，所有系统都已信任它。"
       },
       "domains_cloudflare_tunnel_token": {
         "label": "Cloudflare tunnel 令牌",
@@ -2695,6 +2699,12 @@
         "cause": "{{0}}",
         "impact": "连接器仍在用旧令牌运行，所以在它们重启之前流量照常。",
         "fix": "按「原因」里说的修好再保存一次令牌，或者在「组件」里安装 Cloudflare tunnel。"
+      },
+      "domains_issuer_not_applied": {
+        "title": "设置已保存，但证书签发方没有更新",
+        "cause": "{{0}}",
+        "impact": "证书仍按签发方原来的设置申请。",
+        "fix": "按「原因」里说的修好，再保存一次设置。"
       },
       "upgrade_check_failed": {
         "title": "无法查到最新版本",

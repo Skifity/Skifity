@@ -82,6 +82,9 @@ type Cluster interface {
 	NodeDisks(ctx context.Context) (map[string]api.NodeDisk, error)
 	AppStatus(ctx context.Context, namespace, appSlug string) (api.AppRuntimeStatus, error)
 	CertificateStatus(ctx context.Context, namespace, name string) (cluster.CertificateState, error)
+	// CertificateIssuer is the issuer apps' certificates come from, or ""
+	// when there is none to ask.
+	CertificateIssuer(ctx context.Context) (string, error)
 	DeleteNamespace(ctx context.Context, namespace string) error
 	// ScrapeTraefik reads the ingress's counters, for the requests apps
 	// answered.
@@ -120,6 +123,10 @@ type Watcher struct {
 	repairMu sync.Mutex
 	repairs  map[string]bool
 	repairWG sync.WaitGroup
+	// asked is when each app was last applied again to ask for the
+	// certificate its domains want; see askForCertificate.
+	askedMu sync.Mutex
+	asked   map[string]time.Time
 }
 
 // New builds a Watcher. cluster, hub and notifier may all be nil, and the
@@ -455,6 +462,7 @@ func (w *Watcher) checkCertificate(ctx context.Context, app store.DeployedApp) {
 		return
 	}
 	if !state.Found {
+		w.askForCertificate(ctx, app)
 		return
 	}
 
@@ -508,6 +516,54 @@ func (w *Watcher) checkCertificate(ctx context.Context, app store.DeployedApp) {
 		Level:  "error",
 		Path:   "/apps/" + app.ID + "/domains",
 		Fields: map[string]string{"App": app.Name, "Domain": secured[0].Hostname},
+	})
+}
+
+// askAgainAfter is how long an app applied again for its certificate is left
+// before it is applied again.
+const askAgainAfter = 15 * time.Minute
+
+// askForCertificate applies an app again when it has hostnames that want a
+// certificate, there is an issuer to ask, and cert-manager has no Certificate
+// for it: its Ingress was written before there was an issuer to name. That is
+// every app on a server installed with a domain by a release before 0.1.1,
+// which named the issuer only once an email was set in Settings, and every app
+// deployed before HTTPS certificates were installed. Their domains waited at
+// "pending" for a certificate nothing had asked for. Applying the app again is
+// what a change to one of its domains does, and it builds nothing.
+func (w *Watcher) askForCertificate(ctx context.Context, app store.DeployedApp) {
+	if w.drift == nil {
+		return
+	}
+	issuer, err := w.cluster.CertificateIssuer(ctx)
+	if err != nil || issuer == "" {
+		return
+	}
+	w.askedMu.Lock()
+	if last, ok := w.asked[app.ID]; ok && time.Since(last) < askAgainAfter {
+		w.askedMu.Unlock()
+		return
+	}
+	if w.asked == nil {
+		w.asked = map[string]time.Time{}
+	}
+	w.asked[app.ID] = time.Now()
+	w.askedMu.Unlock()
+
+	// A deploy or a sync in progress writes the Ingress itself.
+	if deploying, known := w.deployingApps(ctx); !known || deploying[app.ID] || w.drift.Busy(app.ID) || w.repairing(app.ID) {
+		return
+	}
+	w.repairWG.Add(1)
+	runsafe.Go(w.log, "ask for a certificate for "+app.ID, func() {
+		defer w.repairWG.Done()
+		applyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), repairTimeout)
+		defer cancel()
+		if err := w.drift.RepairDrift(applyCtx, app.ID); err != nil {
+			w.log.Warn("could not apply an app again to ask for its certificate", "app", app.ID, "error", err)
+			return
+		}
+		w.log.Info("applied an app again to ask for the certificate its domains want", "app", app.ID)
 	})
 }
 

@@ -7,8 +7,10 @@
 package settings
 
 import (
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -130,6 +132,7 @@ const (
 	KeyClusterIPv6           = "domains.cluster_ipv6"
 	KeyACMEEmail             = "domains.acme_email"
 	KeyACMEServer            = "domains.acme_server"
+	KeyACMECABundle          = "domains.acme_ca_bundle"
 	KeyCloudflareTunnelToken = "domains.cloudflare_tunnel_token"
 	KeyTrustedProxies        = "domains.trusted_proxies"
 	KeyGeoCountryURL         = "domains.geo_country_url"
@@ -356,7 +359,7 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyACMEEmail, Label: "Let's Encrypt email", Group: GroupDomains,
-		Help:        "Where Let's Encrypt sends certificate expiry warnings. Required before HTTPS certificates can be issued.",
+		Help:        "The address the certificate authority's account is registered with. Optional: certificates are issued without one, and Let's Encrypt no longer sends expiry warnings to it.",
 		Placeholder: "you@example.com",
 		Kind:        KindEmail,
 		Validate:    validateEmail,
@@ -367,6 +370,13 @@ var Definitions = []Definition{
 		Placeholder: "https://acme-staging-v02.api.letsencrypt.org/directory",
 		Kind:        KindURL,
 		Validate:    validateURL,
+	},
+	{
+		Key: KeyACMECABundle, Label: "ACME server's certificate authority", Group: GroupDomains, Multiline: true,
+		Help: "Only for an ACME server of your own, such as step-ca: the certificate, in PEM, of the authority that signs the server's own HTTPS address, so cert-manager trusts it. " +
+			"Leave empty for Let's Encrypt, which every system already trusts.",
+		Placeholder: "-----BEGIN CERTIFICATE-----",
+		Validate:    validateCertificateBundle,
 	},
 	{
 		Key: KeyCloudflareTunnelToken, Label: "Cloudflare tunnel token", Group: GroupDomains, Secret: true,
@@ -791,6 +801,37 @@ func validateIPv6(value string) error {
 	ip := net.ParseIP(value)
 	if ip == nil || ip.To4() != nil {
 		return errors.New("enter an IPv6 address, such as 2001:db8::10; the IPv4 address goes in Cluster public IP")
+	}
+	return nil
+}
+
+// validateCertificateBundle accepts one or more PEM certificates, and nothing
+// else: a key pasted by mistake is refused rather than stored.
+func validateCertificateBundle(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	rest := []byte(value)
+	found := 0
+	for {
+		block, more := pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			return fmt.Errorf("paste certificates only; this has a %s in it", strings.ToLower(block.Type))
+		}
+		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+			return fmt.Errorf("a certificate in it cannot be read: %w", err)
+		}
+		found++
+		rest = more
+	}
+	if found == 0 {
+		return errors.New("that is not a certificate in PEM, which starts with -----BEGIN CERTIFICATE-----")
+	}
+	if strings.TrimSpace(string(rest)) != "" {
+		return errors.New("there is something after the last certificate that is not one")
 	}
 	return nil
 }

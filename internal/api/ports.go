@@ -199,6 +199,10 @@ type Cluster interface {
 	// RefreshCloudflareTunnel re-applies the tunnel token from Settings, so
 	// that changing it in the panel changes what the connectors are using.
 	RefreshCloudflareTunnel(ctx context.Context) error
+	// RefreshClusterIssuer writes the certificate settings into the issuer
+	// apps' certificates come from, when there is one, so that changing them
+	// in the panel changes where certificates are asked for.
+	RefreshClusterIssuer(ctx context.Context) error
 	// ComponentStatus reports whether an add-on is present.
 	ComponentStatus(ctx context.Context, name string) (store.ClusterComponent, error)
 	// ComponentVersion is the version of an add-on this panel installs now,

@@ -9,12 +9,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
-	"skifity/internal/settings"
 	"skifity/internal/version"
 )
 
@@ -128,63 +126,6 @@ func (c *Cluster) installCertManager(ctx context.Context) error {
 	return c.retry(ctx, 10, 3*time.Second, func() error {
 		return c.EnsureClusterIssuer(ctx)
 	})
-}
-
-// EnsureClusterIssuer creates or updates the Let's Encrypt issuer.
-//
-// It also creates the Traefik middleware that redirects HTTP to HTTPS, because
-// an issued certificate that nothing redirects to is only half the promise.
-func (c *Cluster) EnsureClusterIssuer(ctx context.Context) error {
-	email, _, err := c.db.GetSetting(ctx, settings.KeyACMEEmail)
-	if err != nil {
-		return err
-	}
-	if email == "" {
-		return fmt.Errorf("no Let's Encrypt email is configured; set one under Settings, then Domains")
-	}
-	server, _, err := c.db.GetSetting(ctx, settings.KeyACMEServer)
-	if err != nil {
-		return err
-	}
-	if server == "" {
-		server = "https://acme-v02.api.letsencrypt.org/directory"
-	}
-
-	issuer := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "cert-manager.io/v1",
-		"kind":       "ClusterIssuer",
-		"metadata": map[string]any{
-			"name":   ClusterIssuerName,
-			"labels": map[string]any{"app.kubernetes.io/managed-by": version.Binary},
-		},
-		"spec": map[string]any{
-			"acme": map[string]any{
-				"email":  email,
-				"server": server,
-				"privateKeySecretRef": map[string]any{
-					"name": ClusterIssuerName + "-account-key",
-				},
-				"solvers": []any{map[string]any{
-					// HTTP-01 works for anyone with a domain pointing at the
-					// cluster, with no DNS credentials to configure.
-					"http01": map[string]any{
-						"ingress": map[string]any{"class": "traefik"},
-					},
-				}},
-			},
-		},
-	}}
-	if err := c.client.Applier().Apply(ctx, issuer); err != nil {
-		return err
-	}
-
-	// The HTTPS redirect middleware used to be created here, once, in the
-	// panel's own namespace, and referenced by every app's Ingress. Traefik
-	// refuses a cross-namespace middleware reference unless allowCrossNamespace
-	// is turned on, and it is off by default — so the reference resolved to
-	// nothing and no app was ever redirected. It is rendered into each app's
-	// own namespace now, by EnsureNamespace.
-	return nil
 }
 
 // RegistryService is where builds push and nodes pull from.

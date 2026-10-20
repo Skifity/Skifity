@@ -126,6 +126,18 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	// A setting that something in the cluster is already running on has to
 	// reach the cluster too, or saving it does nothing a user can see.
+	if issuerSettingsChanged(req.Values) && s.cluster != nil {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), time.Minute)
+		defer cancel()
+		if err := s.cluster.RefreshClusterIssuer(ctx); err != nil {
+			writeError(w, r, errdoc.New("domains.issuer_not_applied", "The settings were saved, but the certificate issuer was not updated").
+				WithCause("%s", err).
+				WithImpact("Certificates are still asked for as the issuer was set up before.").
+				WithFix("Fix what the cause says and save the settings again.").
+				WithStatus(http.StatusBadGateway))
+			return
+		}
+	}
 	if _, changed := req.Values[settings.KeyCloudflareTunnelToken]; changed && s.cluster != nil {
 		// The save has happened; this is the cluster catching up, and it must
 		// not be abandoned because the browser navigated away.
@@ -141,6 +153,17 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeOK(w)
+}
+
+// issuerSettingsChanged reports whether a save touched what the certificate
+// issuer is made from.
+func issuerSettingsChanged(values map[string]string) bool {
+	for _, key := range []string{settings.KeyACMEEmail, settings.KeyACMEServer, settings.KeyACMECABundle} {
+		if _, ok := values[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleListComponents(w http.ResponseWriter, r *http.Request) {

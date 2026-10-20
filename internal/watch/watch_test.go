@@ -256,6 +256,7 @@ type fakeCluster struct {
 	disks           map[string]api.NodeDisk
 	apps            map[string]api.AppRuntimeStatus
 	certs           map[string]cluster.CertificateState
+	issuer          string
 	deletedSpaces   []string
 	deleteNamespace error
 	traefik         []kube.TraefikPod
@@ -287,6 +288,10 @@ func (f *fakeCluster) AppStatus(_ context.Context, _, slug string) (api.AppRunti
 
 func (f *fakeCluster) CertificateStatus(_ context.Context, _, name string) (cluster.CertificateState, error) {
 	return f.certs[name], nil
+}
+
+func (f *fakeCluster) CertificateIssuer(context.Context) (string, error) {
+	return f.issuer, nil
 }
 
 // sentMessage is one notification a test can assert on.
@@ -659,5 +664,45 @@ func TestTheConfiguredLifetimeIsUsed(t *testing.T) {
 
 	if age := time.Since(db.previewsBefore); age < 36*time.Hour || age > 60*time.Hour {
 		t.Fatalf("previews are reclaimed after %s, want about two days", age)
+	}
+}
+
+// An app whose domains want a certificate, with an issuer to ask and no
+// Certificate at all, was applied before there was an issuer to name in its
+// Ingress. It is applied again, once, and not again every minute.
+func TestAnAppAppliedBeforeThereWasAnIssuerIsAppliedAgain(t *testing.T) {
+	db := newFakeStore()
+	db.apps = []store.DeployedApp{{
+		App:    store.App{ID: "app_1", Name: "shop", Slug: "shop", Status: "running"},
+		TeamID: "team_1", Namespace: "acme-shop-production",
+	}}
+	db.domains["app_1"] = []store.Domain{{
+		ID: "dom_1", AppID: "app_1", Hostname: "shop.example.com", TLS: true,
+		Status: "pending", CreatedAt: time.Now().Add(-time.Hour),
+	}}
+	c := &fakeCluster{
+		apps: map[string]api.AppRuntimeStatus{"shop": {DesiredReplicas: 1, ReadyReplicas: 1}},
+	}
+	drift := &fakeDrift{reports: map[string]api.DriftReport{"app_1": inSync}, busy: map[string]bool{}}
+	w, notifier := testWatcher(t, db, c)
+	w.WithDrift(drift)
+
+	// No issuer: there is nothing to ask, and nothing is applied.
+	w.Once(t.Context())
+	w.repairWG.Wait()
+	if _, applied := drift.counts(); applied != 0 {
+		t.Fatalf("applied the app %d times with no issuer to ask", applied)
+	}
+
+	c.issuer = "skifity-letsencrypt"
+	w.Once(t.Context())
+	w.repairWG.Wait()
+	w.Once(t.Context())
+	w.repairWG.Wait()
+	if _, applied := drift.counts(); applied != 1 {
+		t.Fatalf("applied the app %d times, want once", applied)
+	}
+	if got := notifier.eventsOf(notify.EventCertificate); got != 0 {
+		t.Fatalf("sent %d certificate notifications while one was being asked for", got)
 	}
 }
