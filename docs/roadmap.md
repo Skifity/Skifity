@@ -104,31 +104,22 @@ has one. The ordering is fixed and the tests run without a cluster.
 
 In the order it matters.
 
-1. **Run it on real hardware.** Nothing below this line is worth as much as
-   this. The check is written now — `test/cluster/verify.sh`, or `make verify` —
-   so this is one command on a server somebody is willing to rebuild, rather
-   than an afternoon of improvisation. It installs, deploys an app, settles
-   whether autoscaling has metrics and whether scale-to-zero is wired the way it
-   is drawn, and measures what the whole thing costs. Until it has passed once,
-   every other claim in this repository is about code that has never met a
-   cluster.
-2. **Tag a release.** Everything a tag needs is now in place. The release
-   publishes to the repository it is cut from, derived from `GITHUB_REPOSITORY`,
-   so it is right wherever that is; the installer derives its image, its
-   manifests and its links from one `PROJECT_REPO` line; the manifests are
-   pinned to the release being installed rather than to a branch, so no default
-   branch has to exist and no install can mix one release's image with another's
-   objects; `scripts/check-home.sh` fails the build if a name this project does
-   not own comes back; and the release workflow refuses a tag whose installer
-   does not say it installs that tag. `docs/releasing.md` is the procedure.
-
-   What it waits on is the run above, not a decision. A release is an invitation
-   to install, and the first person to accept it should not be the first person
-   to find out whether any of this works on a cluster.
-
-3. **Measure k3s's own footprint.** The panel's is measured, in
-   `docs/performance.md`. The cluster's is not, and "runs on a 2 GB VPS" is a
-   claim about the pair.
+1. **Run it on real hardware** — *done, on one server, on every push.* The
+   `Cluster` workflow installs each push to `main` on a fresh GitHub-hosted
+   Ubuntu server with the real installer and works through
+   `test/cluster/verify.sh`. Its first runs found a database volume asking for a
+   storage class that is not there, a database kept off the Kubernetes API, an
+   app on a cloud machine given no address, a new pod unfenced for its first
+   moment and a scale-to-zero add-on fetched by a name no release has; all are
+   fixed, and the fifth run passed everything a single throwaway server can
+   check. `docs/progress.md` has each run.
+2. **Tag a release** — *done.* v0.1.0 was cut before the cluster run, by the
+   maintainer's decision; v0.1.1 is the first tag cut after it, with everything
+   it found fixed. `docs/releasing.md` is the procedure.
+3. **Measure k3s's own footprint** — *done on a large machine.*
+   `docs/performance.md` has k3s at 922–988 MiB on a 16 GB runner with every
+   component installed. What a 1 GB server can hold, which is what the README's
+   minimum promises, is still a claim nobody has measured.
 4. **A second pair of eyes on the security model.** Phase 17 below was the
    first pass and found three things. It was still the same eyes. Tenant
    isolation is the one class of bug where being wrong is not recoverable, and
@@ -158,9 +149,10 @@ In the order it matters.
 
 ## The one thing none of this fixes
 
-None of the cluster code has ever been run against a real cluster: the sandbox
-this was built in refuses privileged containers, so k3s could never start here
-(ADR-0010). Everything is checked against a fake clientset, golden manifests and
-a real in-process SSH server, and that is not the same thing. Running the
-installer on real hardware and deploying one application end to end remains the
-first task, ahead of everything above.
+Nothing has run on more than one server. The `Cluster` workflow is one
+GitHub-hosted machine, so a second server joining, its pulls through the first
+one's registry, an app moving when a server goes away and the network policies
+between servers are all checked against a fake clientset, golden manifests and a
+real in-process SSH server, and that is not the same thing. A backup restored
+from a real bucket and a certificate for a domain of one's own are in the same
+place for a smaller reason: the run needs a bucket and a domain to be given.

@@ -6,10 +6,12 @@ was never true.
 
 ## Before the tag
 
-**The cluster run has to have passed.** `test/cluster/verify.sh` on a real
-server, or `make verify-remote HOST=root@…` from here. `docs/checklist.md` says
-which of the eighteen rows that moves; until it has run once, a release ships
-code that has never met a cluster.
+**The cluster run has to have passed, for the commit being tagged.** The
+`Cluster` workflow runs `test/cluster/verify.sh` on a fresh server on every push
+to `main`; its run for that commit, or for the last commit before it that was
+more than documentation, has to be green. `make verify-remote HOST=root@…` runs
+the same on a server of your own. `docs/checklist.md` says which of the
+eighteen rows it proves.
 
 Then the ordinary gates:
 

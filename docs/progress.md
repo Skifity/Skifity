@@ -11,21 +11,27 @@ See ADR-0010. Nothing below is called verified unless it was actually executed.
 Where a cluster is required, the code is written and unit-tested against a fake
 clientset and golden manifests, and that is said plainly rather than glossed over.
 
+That stopped being the whole story in October 2026: the `Cluster` workflow
+installs every push to `main` on a fresh GitHub-hosted Ubuntu server and runs
+`test/cluster/verify.sh` against the k3s it made. What it found and what it
+proves is under [A real cluster, at last](#a-real-cluster-at-last). It is one
+server: anything that needs a second one has still never run.
+
 ## Phase status
 
 | Phase | Title | Status |
 |---|---|---|
 | 0 | Research and key decisions | done |
 | 1 | Repository foundation | done |
-| 2 | One-command installer | done, not run on a real server |
+| 2 | One-command installer | done; installs a fresh server on every push |
 | 3 | Panel core: accounts, security, encryption | code complete, tested |
-| 4 | Server and cluster management | code complete, cluster not exercised |
-| 5 | App deployment | code complete, builds not exercised |
-| 6 | Scaling | code complete, cluster not exercised |
-| 7 | Databases, storage, backups | code complete, cluster not exercised |
+| 4 | Server and cluster management | one server exercised on every push; more than one never run |
+| 5 | App deployment | done; built and deployed on a real cluster on every push |
+| 6 | Scaling | autoscaling and scale to zero exercised on one server |
+| 7 | Databases, storage, backups | volumes and PostgreSQL exercised; a backup to a real bucket never run |
 | 8 | Developer experience and vibe coding | done |
 | 9 | Differentiating features | done |
-| 10 | Hardening and release | done, except a run on real hardware |
+| 10 | Hardening and release | done; the tenant fences checked on a real cluster on every push |
 
 ## What is done
 
@@ -82,6 +88,8 @@ deliberately broken.
 
 **Not verified:** the installer has never been run on a real server. It needs
 root, systemd and a kernel k3s can use, none of which this sandbox allows.
+*(Since October 2026 it is, on every push: see
+[A real cluster, at last](#a-real-cluster-at-last).)*
 
 ### Phase 3 — code complete, tested
 
@@ -102,7 +110,9 @@ through presigned URLs so storage credentials never enter a tenant namespace.
 
 Exercised against a fake clientset, golden manifests, a real in-process SSH
 server that records the commands it receives, and `sh -n` on every generated
-script. Not exercised against a real cluster.
+script. Not exercised against a real cluster. *(The single-server half of this
+is now, on every push: see [A real cluster, at last](#a-real-cluster-at-last).
+Adding, promoting and removing a second server still has not been.)*
 
 ### Phases 8–9 — done
 
@@ -6611,12 +6621,44 @@ fetched from `keda-http-add-on-0.15.0.yaml`, a file no release has; the asset is
 rollback that ran expected the variables back, which the product says, in its
 documentation and in the rollback dialog, it does not do.
 
+**The fifth run** passed 72, failed none and skipped 3, on `5f96150`. With the
+add-on installed, the last two pieces that had only been drawn ran:
+
+* *An app asleep wakes for a visitor.* The app was set to scale to zero and put
+  to sleep; a request through the ingress was held by KEDA's interceptor until
+  an instance was up, and answered.
+* *An app asleep wakes for its own deploy.* Asleep again, it was deployed: the
+  deployment said it was waking the app to show the new version starts, and
+  succeeded once an instance of that version was ready. Before, a rollout of no
+  instances was finished the moment it started, so every deploy of a sleeping
+  app succeeded whatever it deployed, and the first visitor found out whether
+  it started.
+* *Rollback* restored the earlier version with the one instance it ran and left
+  the variables as they are now, which is what the dialog promises.
+
+The three skips are the three things a throwaway runner cannot do: a
+certificate for a domain of one's own (the runner's free address is on sslip.io,
+served over plain HTTP by design, ADR-0015), a backup to a real bucket, and a
+server going away, which needs a second one.
+
+Across the second to fifth runs, measured at the end of each with cert-manager,
+the registry, CloudNativePG and, in the fifth, KEDA installed, and several apps
+running: the k3s server process at 922–988 MiB resident, the panel's pod at
+19–24 MiB, and the whole 16 GB machine at 2.2–2.6 GB in use, the runner's own
+services included. The installer took 161–169 seconds each time.
+`docs/performance.md` has the figures beside the estimates they replace.
+
 **Not run.** Nothing on more than one server: the pulls through another
 server's NodePort, the gateway addresses the registry's policy names, a server
-going away. A stock Ubuntu 24.04 server only as far as the runner is one.
+going away. A stock Ubuntu 24.04 server only as far as the runner is one. And
+k3s has been measured on a machine with 16 GB, where nothing makes it give
+memory back; how it behaves on the 1 GB server the requirements allow has not
+been seen.
 
 ## Idle resource usage
 
-`docs/performance.md`. The panel is measured: 34 MiB resident idle, 38 MiB after
-400 requests, 39 MiB of binary. k3s's own footprint is not measured here, for
-the same reason as everything else that needs a cluster.
+`docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,
+38 MiB after 400 requests, 39 MiB of binary, and 19–24 MiB in its pod on a real
+cluster. k3s is measured on the Cluster workflow's runner, at 922–988 MiB with
+every component this checks installed, on a machine with 16 GB; on a small
+server it has not been measured.

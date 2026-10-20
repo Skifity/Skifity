@@ -124,8 +124,8 @@ encryption and key rotation, manifest generation, config parsing, permission
 checks, preflight parsing, the scaling readiness checker. Two smoke tests run the
 real binary rather than mocks: one takes the panel through first-run setup,
 sign-in, tokens and the CLI, the other checks the installer's logic without
-installing anything. Neither touches a cluster, and nothing else does either —
-see ADR-0010. No snapshot tests, no coverage targets.
+installing anything. Neither touches a cluster; the `Cluster` workflow below is
+the one thing that does — see ADR-0010. No snapshot tests, no coverage targets.
 
 One Playwright test covers the interface: first-run setup, the recovery-key
 gate, the shell, the theme, and all five languages. It runs against the real

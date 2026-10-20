@@ -17,7 +17,9 @@ make e2e         The Playwright interface test, against the real binary
 
 Nothing in this repository runs an installer, k3s or anything else
 system-level on your machine. If a change needs a cluster, it needs a VM or a
-container — see [ADR-0010](docs/decisions.md).
+container — see [ADR-0010](docs/decisions.md) — or the `Cluster` workflow, which
+installs every push to `main` on a fresh server and can be run on demand from
+the Actions tab. [`test/cluster/README.md`](test/cluster/README.md) says how.
 
 ## The rules that are not obvious
 

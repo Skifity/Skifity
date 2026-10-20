@@ -439,8 +439,9 @@ signature at all — the panel just says so.
 > model, the rendered Kubernetes objects, the event delivery, the blocking
 > verdicts, and the store's signature and hash checks are all unit-tested.
 > Whether a real plugin image starts in the namespace this renders, and whether
-> an event reaches it over a real cluster network, has not been tried — the same
-> gap as everything else in ADR-0010.
+> an event reaches it over a real cluster network, has not been tried: the
+> `Cluster` workflow that checks the rest of the product on a real server
+> installs no plugin, because none has been published to install.
 >
 > **There is no store at `plugins.skifity.com` yet.** The panel can read one,
 > verify one and install from one; nothing is published at that address. Until

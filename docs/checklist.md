@@ -9,8 +9,8 @@ Three statuses, and only three:
 
 | | Means |
 |---|---|
-| **Works** | There is a test that runs, on every push, and it passes. `make check`, `make smoke` or the Playwright suite. |
-| **Written** | The code and its unit tests exist. It has never run against a real cluster, because the machine this was built on cannot start one (ADR-0010). |
+| **Works** | There is a test that runs, on every push, and it passes: `make check`, `make smoke`, the Playwright suite, or the Cluster workflow, which installs Skifity on a fresh single-server k3s and runs `test/cluster/verify.sh` against it. |
+| **Written** | The code and its unit tests exist, and no cluster run has exercised it yet. |
 | **Missing** | Not there. |
 
 Nothing is marked Works because it looks right.
@@ -19,27 +19,31 @@ Nothing is marked Works because it looks right.
 
 | # | Item | Status | Checked by |
 |---|---|---|---|
-| 1 | Git → build → deploy | Written | Phase 1 |
-| 2 | Live build logs | Written | Phase 1 |
-| 3 | Domain and HTTPS, automatically | Written | Phase 1 |
-| 4 | Variables and secrets, safely | Works (stored) / Written (delivered) | Go tests, `make smoke`; Phase 1 |
-| 5 | Persistent storage | Written | Phase 2 |
-| 6 | One-click databases | Written | Phase 2 |
+| 1 | Git → build → deploy | **Works** | Cluster workflow, phase 1 |
+| 2 | Live build logs | **Works** | Cluster workflow, phase 1 |
+| 3 | Domain and HTTPS, automatically | Works (address) / Written (certificate) | Cluster workflow, phase 1; a certificate needs a domain of one's own |
+| 4 | Variables and secrets, safely | **Works** | Go tests, `make smoke`; cluster workflow, phase 1 |
+| 5 | Persistent storage | **Works** | Cluster workflow, phase 2 |
+| 6 | One-click databases | Works (PostgreSQL) / Written (the other eight) | Cluster workflow, phase 2 |
 | 7 | Backup and restore, proven | Written | Phase 2 |
-| 8 | One-click rollback | Written | Phase 1 |
-| 9 | Zero-downtime deploys | Written | Phases 1, 4, 5 |
-| 10 | Application logs and metrics | Written | Phase 5 |
+| 8 | One-click rollback | **Works** | Cluster workflow, phase 1 |
+| 9 | Zero-downtime deploys | **Works** | Cluster workflow, phases 1 and 5 |
+| 10 | Application logs and metrics | **Works** | Cluster workflow, phase 5 |
 | 11 | Safe sign-in (2FA/SSO) and roles | **Works** | Go tests, `make smoke` |
-| 12 | Isolation between projects | Works (panel) / Written (network) | Go tests; Phase 3 |
-| 13 | Resource limits and quotas | Written | Phase 3 |
-| 14 | Apps keep running when the panel is down | Written | Phase 4 |
-| 15 | Easy install and upgrade | Written | `make smoke` checks the installer's logic without installing; Phase 5 |
+| 12 | Isolation between projects | **Works** | Go tests; cluster workflow, phase 3 |
+| 13 | Resource limits and quotas | **Works** | Cluster workflow, phase 3 |
+| 14 | Apps keep running when the panel is down | **Works** | Cluster workflow, phase 4 |
+| 15 | Easy install and upgrade | Works (install) / Written (upgrade between releases) | `make smoke`; the cluster workflow installs with the real installer and replaces the panel under an app serving, phase 5 |
 | 16 | Export, no lock-in | **Works** | Go tests, `make smoke` |
-| 17 | Notification on failure | Written | Phase 5 |
+| 17 | Notification on failure | Works (webhook) / Written (the other nine services) | Cluster workflow, phase 5 |
 | 18 | Documentation | Works (it is served and its links resolve) | Go tests; Phase 6 is a person |
 
-Two are Works end to end. Most are Written. That ratio is the honest state of
-this product, and it does not change until `test/cluster/verify.sh` has run.
+Twelve are Works end to end, five in part, one Written. What is left Written
+is what a single throwaway server cannot show, and one thing it could: a backup
+taken and restored from a real bucket, a certificate for a domain of one's own,
+the eight database engines that are not PostgreSQL, delivery to the nine
+notification services that are not a webhook, everything that needs a second
+server, and an upgrade from one release to the next.
 
 ## Where each one is
 
@@ -50,21 +54,25 @@ webhook deploys on push. The build fingerprint (ADR-0007) means a variable
 change never rebuilds.
 
 **2. Live build logs.** Lines are stored as they arrive and streamed over SSE,
-with the last twenty builds kept per app. The panel's own log streaming is
-covered; a real build's output has never been watched.
+with the last twenty builds kept per app. The Cluster workflow reads a real
+build's log through the panel while the build is still running.
 
 **3. Domain and HTTPS.** cert-manager is installed the first time a domain is
 added. Every app also gets a free address with no DNS to configure: `sslip.io`
 over plain HTTP, on purpose — every install in the world shares that domain's
-Let's Encrypt rate limit (ADR-0015). A domain you own gets a certificate.
+Let's Encrypt rate limit (ADR-0015). A domain you own gets a certificate. The
+Cluster workflow checks the free address answers through the ingress; the
+certificate needs a domain of one's own pointed at the server, which a runner
+does not have, so it has not been issued on a real cluster yet.
 
 **4. Variables and secrets.** Every secret is sealed with a key of its own,
 wrapped by a master key kept outside the database, and bound to where it is
 stored so a copied row will not open (`internal/crypto`). Once stored, a value
 is never shown again — not by the panel, the CLI, the API, the export or an
 assistant. `internal/logging` redacts by key and by value pattern, and
-`make smoke` greps the panel's own log for every secret it sent. What has never
-been proven is the last step: the Secret reaching the container.
+`make smoke` greps the panel's own log for every secret it sent. The last step
+is proven too: the Cluster workflow changes a variable and reads the new value
+back from the app, with the image unchanged.
 
 **5. Persistent storage.** A volume becomes a PersistentVolumeClaim, and an app
 with one switches to the Recreate strategy, because two instances writing one
@@ -79,7 +87,8 @@ sealed, and injected into a linked app as a connection string.
 **7. Backup and restore.** Scheduled or manual, to any S3-compatible bucket,
 for databases and for volumes. **"Proven" is exactly the word this cannot
 claim**: no backup has ever been taken and no backup has ever been restored.
-Phase 2 does both. The drill worth running once by hand is the other half:
+Phase 2 does both, given a bucket, and the Cluster workflow has none to give it,
+so it skips and says so. The drill worth running once by hand is the other half:
 restore into a *different* cluster, which is the only version of this that
 matters on the day it matters.
 
@@ -92,7 +101,7 @@ garbage-collected, instead of leaving a pod in ImagePullBackOff.
 five-second `preStop` pause stops a proxy sending to a pod that has already
 begun shutting down — the half that was missing until the scaling audit. Phase 1
 holds the app under continuous traffic through a rolling restart and counts what
-fails.
+fails, and on every push the count is zero.
 
 **10. Application logs and metrics.** Logs stream from the pods through the
 panel. Each instance reports what it is *using*, not what it reserved. The panel
@@ -112,25 +121,30 @@ same team and 403 on the 25 team-wide ones not named as open to them. An API tok
 
 **12. Isolation between projects.** An environment is a namespace with a
 default-deny NetworkPolicy, a ResourceQuota, a LimitRange and the `restricted`
-Pod Security profile. The panel side is proven by the route walk above. The
-network side has never been enforced by a real CNI, which is what Phase 3 does
-by trying to reach one namespace's app from another.
+Pod Security profile. The panel side is proven by the route walk above, and
+the network side by Phase 3 on a real CNI: a pod in another namespace cannot
+reach an environment's app, and an app's own pod reaches neither the Kubernetes
+API, the kubelet nor the registry, from the first moment it runs (ADR-0027).
 
 **13. Resource limits and quotas.** Generous by default — they exist to contain
 a mistake, not to ration — and visible: the panel shows how much of an
 environment's ceiling is in use, because the first sign of hitting one used to
 be a deployment failing with a message about a resource nobody had heard of.
+Phase 3 asks for sixty-four cores and a real quota refuses them.
 
 **14. Apps keep running when the panel is down.** True by construction: apps are
 served by Kubernetes and the panel is not in the request path. Being true by
-construction is not the same as having been seen. Phase 4 scales the panel to
-zero and keeps asking the app for an answer.
+construction is not the same as having been seen, and it has been: Phase 4
+scales the panel to zero and the app answers every request.
 
 **15. Install and upgrade.** One POSIX shell script, no bashisms, with a
 preflight that refuses before it changes anything and an uninstaller that can be
-dry-run. `make smoke` checks its logic without installing anything. The panel
+dry-run. `make smoke` checks its logic without installing anything, and the
+Cluster workflow installs every push with it on a fresh server. The panel
 upgrades itself by changing the image on its own Deployment; the apps do not
-notice, and Phase 5 checks that by holding traffic through it.
+notice, and Phase 5 checks that by replacing the panel's pod under an app
+serving traffic. An upgrade from one release to the next, by running the
+installer again, is the part that has not run.
 
 **16. Export, no lock-in.** `skifity export` writes the whole team as JSON plus
 each app's Kubernetes objects, ready for `kubectl apply` on any cluster. The
@@ -145,9 +159,10 @@ events: a deploy succeeding or failing, an app going unhealthy, a server added
 or lost, a backup failing, a certificate failing. A channel can be changed
 after it is added, and limited to some projects; what each event belongs to is
 in [Configuration](configuration.md#limiting-a-channel-to-some-projects). The
-payloads are checked against a local listener in Go tests; delivery to the real
-services has never been seen end to end, which is the only part that counts.
-Phase 5 stands up a listener and breaks a deployment on purpose.
+payloads are checked against a local listener in Go tests. Phase 5 stands up a
+listener on a real cluster and breaks a deployment on purpose, and the webhook
+arrives; delivery to the nine real services that are not a webhook has never
+been seen end to end.
 
 **18. Documentation.** Thirteen pages, served from inside the binary so they work on
 a machine with no other browser and no outbound network — which is exactly when
@@ -158,7 +173,8 @@ binary. The check that actually matters is Phase 6, and it needs a person.
 
 ## Can somebody install this today?
 
-With one command, since v0.1.0 — on code that has still never met a cluster.
+With one command, since v0.1.0, and since v0.1.1 on code that has met one: every
+push to `main` is installed on a fresh server and crosschecked (see the table).
 
 **Where this project publishes is settled: the repository it is in.**
 `Skifity/Skifity`, so `ghcr.io/skifity/skifity` for the image and
@@ -182,21 +198,25 @@ three things the release would have got wrong on the day: an image build that
 copied a file from the wrong path, an image tag without its `v` that the
 installer would have pulled in vain, and Windows binaries named `.exe.exe`.
 
-It was cut before the cluster run that `docs/releasing.md` asks for, by the
-maintainer's decision, so the README says so where the install command is. The
-first thing a stranger installs is code that has never met a cluster.
+v0.1.0 was cut before the cluster run that `docs/releasing.md` asks for, by the
+maintainer's decision. The run has happened since, on every push: the `Cluster`
+workflow installs the commit on a fresh GitHub-hosted Ubuntu server with the
+real installer and works through `test/cluster/verify.sh`. Its first runs found
+what the fakes could not — an empty storage class, a database kept off the
+API, an app with no address on a cloud machine, a new pod's unfenced first
+moment, a scale-to-zero add-on fetched by a name no release has — and v0.1.1 is
+the tag with all of it fixed.
 
-That is the order of what is left:
+What is left, in order:
 
-1. **`test/cluster/verify.sh`, once, on a real server.** Thirteen of the
-   eighteen rows are Written outright and two more are half of one, which means
-   the code and its unit tests exist and no cluster has ever seen them. One run
-   moves most of them, or tells us which ones were wrong, and nothing else in
-   this repository is worth as much. `make verify-remote HOST=root@…` runs it on
-   a throwaway server from a laptop.
-2. **The next tag**, after that run, with whatever it found fixed.
-   `docs/releasing.md`.
-3. **Phase 6, with a person who has not seen it.** The documentation is served
+1. **An upgrade from one release to the next**, by running the newer
+   installer over an install of the older one with an app serving.
+2. **A second server.** Pulls through another server's NodePort, a server
+   going away, the gateway addresses the registry lets in: nothing above has
+   run on more than one. Phase 4 says how.
+3. **A backup restored from a real bucket**, and a certificate for a domain of
+   one's own: set the variables `test/cluster/README.md` names.
+4. **Phase 6, with a person who has not seen it.** The documentation is served
    and its links resolve, which is not the same as it being followed.
    `docs/walkthrough.md` is the sheet they fill in.
 
@@ -205,7 +225,9 @@ Everything else on the roadmap is smaller than any of these.
 ## The phases
 
 `test/cluster/verify.sh` runs phases 1 to 5 on a real server. It installs k3s
-and changes the machine, so it is never in CI and asks before it starts.
+and changes the machine, so it is never part of `make check` and asks before it
+starts; the `Cluster` workflow runs it on a throwaway GitHub-hosted server on
+every push to `main`.
 
 ```sh
 sudo SKIFITY_IMAGE=... bash test/cluster/verify.sh
@@ -229,5 +251,6 @@ silently are the expensive ones.
 ## What this page is for
 
 When a check in `verify.sh` passes on a real cluster, the row above moves from
-Written to Works and this page says which run proved it. Until then, every
-Written row is a claim, and this file is the list of claims.
+Written to Works and this page says what proved it; `docs/progress.md` has each
+run. Until then, every Written row is a claim, and this file is the list of
+claims.

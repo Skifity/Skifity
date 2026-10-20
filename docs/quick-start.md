@@ -1,8 +1,8 @@
 # Quick start
 
 From an empty server to an app on the internet. Most of it is waiting for things
-to download, and how long that takes has never been measured on real hardware —
-when it has, the number goes here.
+to download: on a fresh cloud server the installer takes about three minutes
+(161 to 169 seconds, each time the `Cluster` workflow has run it).
 
 ## What you need
 

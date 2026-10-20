@@ -27,20 +27,39 @@ Kubernetes client. That is the trade for having one file to copy, nothing to
 install alongside it, and a troubleshooting page that works on a server with no
 route to the internet.
 
-## The rest of a fresh install
+## On a real cluster
 
-**Not measured here.** A real cluster could never be started in the environment
-this was built in, so these are the upstream projects' own figures for a
-single-node install:
+**Measured** by the `Cluster` workflow, which installs every push to `main` on
+a fresh GitHub-hosted Ubuntu 24.04 server (4 cores, 16 GB) and runs
+`test/cluster/verify.sh` against it. The figures are taken at the end of the
+run, with cert-manager, the registry, CloudNativePG and the firewall installed
+(and KEDA, in the last of them) and the apps the run deployed still running, so
+they are a busy server rather than an idle one. Four runs:
 
-| | Roughly |
+| | Measured |
 |---|---|
-| k3s server, with embedded etcd | 500 MiB |
-| Traefik, metrics-server, CoreDNS, local-path | included above |
-| Skifity panel | 38 MiB, measured |
-| **A fresh install, total** | **around 550 MiB** |
+| k3s server process (API server, etcd, controllers), resident | 922–988 MiB |
+| The panel's pod, working set | 19–24 MiB |
+| The whole machine in use, the runner's own services included | 2.2–2.6 GB |
+| The installer, from nothing to a panel answering | 161–169 seconds |
 
-Which is why the requirement is 1 GB: the other 450 MiB is for your apps.
+The panel reads smaller in its pod than on a laptop: the kubelet reports the
+working set, which leaves out file pages the kernel can drop, and the laptop
+figure is everything resident.
+
+k3s is the large one. Every component above brings resource definitions and
+controllers of its own, and the API server holds all of them. On a 16 GB
+machine nothing asks it to give memory back, so this is the most it took rather
+than the least it needs. k3s's own documentation gives
+[2 GB](https://docs.k3s.io/installation/requirements#hardware) as the minimum
+for a server, and measures
+[about 1.6 GB](https://docs.k3s.io/reference/resource-profiling) for one
+running a workload and a monitoring stack.
+
+**What a 1 GB server can hold has not been measured.** The installer accepts
+900 MB and warns below 1.8 GB without swap, and the README asks for 1 GB at
+least and recommends 2 GB, or 1 GB with swap. Every optional component below
+makes a small server tighter.
 
 ## Components, when you install them
 

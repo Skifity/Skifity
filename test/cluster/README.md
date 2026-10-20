@@ -2,23 +2,24 @@
 
 Everything in `test/smoke` checks this product against fakes, golden files and an
 in-process SSH server, because the machine it was built on could not start a
-cluster. `docs/progress.md` says so plainly, and it is the largest single gap in
-this repository.
+cluster. Those checks are fast and run on every change; they are not the same
+thing as a cluster.
 
 `verify.sh` is the other half. It installs Skifity on a real server and works
 through the checklist a self-hosted platform is actually judged on —
 `docs/checklist.md` is that list, and the column that says which of the eighteen
-items have a test that runs and which are still only written.
+items have a test that runs and which are still only written. It runs on every
+push to `main` (below), and `docs/progress.md` says what each run found.
 
 ## The phases
 
 | Phase | What it settles | Checklist |
 |---|---|---|
-| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a variable change restarts it without rebuilding, one call rolls it back, and a rolling restart under continuous traffic drops nothing. | 1, 2, 3, 4, 8, 9 |
+| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a variable change restarts it without rebuilding, one call rolls it back, a rolling restart under continuous traffic drops nothing, switching autoscaling on keeps the instances there are, and a folder with no repository is built and deployed. | 1, 2, 3, 4, 8, 9 |
 | **2 — the data** | A volume keeps what was written to it across a restart, a managed database comes up on its own, a backup restores, and the export carries every app's Kubernetes objects and none of its secrets. | 5, 6, 7, 16 |
-| **3 — security and isolation** | A token for one team answers 404 on another, a member cannot run the panel, a pod in one namespace cannot reach another's app, and asking for sixty-four cores is refused by a real quota. | 11, 12, 13 |
+| **3 — security and isolation** | A token for one team answers 404 on another, a member cannot run the panel, a pod in one namespace cannot reach another's app, an app's pod starts behind its fence and reaches neither the Kubernetes API, the kubelet nor the registry, a build runs its own BuildKit and cannot write to the registry without its token, a rate limit answers 429 at the ingress, and asking for sixty-four cores is refused by a real quota. | 11, 12, 13 |
 | **4 — what survives** | The panel is scaled to zero and the app keeps answering every request. A node is drained and the work moves, with the disruption budget letting it move one instance at a time. | 14, 9 |
-| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, and a deployment that cannot pull its image actually sends a notification. | 10, 15, 17 |
+| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, a deployment that cannot pull its image actually sends a notification, and an app asleep at zero instances wakes for a visitor and for its own deploy. | 10, 15, 17 |
 
 Phase 6 is a person and should not become a script: give somebody
 `docs/quick-start.md` and nothing else, and write down where they get stuck.
@@ -94,17 +95,27 @@ of them failed and you are fixing it.
 The parts of this script that only talk to the panel — first-run setup, the CSRF
 header, creating an API token, inviting somebody, what a member is refused, the
 export — are also checked by `make smoke` against the real binary on every push.
-That is deliberate: a field renamed in the API would otherwise leave this script
-quietly checking nothing, on the one machine nobody can run from CI.
+That is deliberate: a field renamed in the API shows up in the fast checks
+first, rather than as a cluster run that fails twenty minutes in.
 
-Everything else here has never run.
+The rest runs on every push to `main`, on one server, and passes. Three checks
+skip there, and each says why rather than pretending:
+
+* **The HTTPS certificate.** The runner's free address is on sslip.io, served
+  over plain HTTP on purpose (ADR-0015). Set `SKIFITY_DOMAIN` to a domain you
+  own, pointed at the server.
+* **A backup that restores.** It needs a bucket; set the `VERIFY_S3_*`
+  variables.
+* **A server going away.** It needs a second server, and a runner is one.
+
+None of those three has run anywhere yet, and neither has anything else that
+needs more than one server.
 
 ## What to send back
 
-The whole of `/var/log/skifity-verify.log`. A failure in it is worth more than a
-pass: it is the first thing this product has ever been told by a real cluster,
-and every check names what it expected so the report can be acted on rather than
-interpreted.
+The whole of `/var/log/skifity-verify.log`, or the `cluster-report` artifact. A
+failure in it is worth more than a pass: every check names what it expected, so
+the report can be acted on rather than interpreted.
 
 ## Why it is not in `make check`
 

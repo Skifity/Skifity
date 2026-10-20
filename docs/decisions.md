@@ -178,6 +178,13 @@ a different fact with a different remedy: it needs a person to allow it, not a d
 decision below is unchanged, because no cluster has been run either way. What changes is that "it is
 impossible here" was not true, and it had been written down for months.
 
+**Update, 2026-10-20.** A cluster now runs on every push to `main`. A GitHub-hosted runner is a fresh
+Ubuntu server with systemd that allows k3s, and the `Cluster` workflow installs the commit there with
+the real installer and works through `test/cluster/verify.sh` (`test/cluster/README.md`). The decision
+below still stands for the fast layer: the fakes run in seconds, on every change and on a contributor's
+own machine, where the runner takes twenty-five minutes and the internet. What a runner cannot be is
+more than one server, and that part of the gap remains.
+
 **Options.** (a) Skip Kubernetes testing, (b) mock everything, (c) test against fakes that implement the
 real interfaces, and keep the cluster-dependent smoke tests as runnable scripts.
 

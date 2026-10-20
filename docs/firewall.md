@@ -212,8 +212,12 @@ the guard if it is not running yet. What it costs below applies to it too.
 * A blocked visitor gets a plain 403 and is told nothing about which rule
   stopped them.
 
-> **Never run against a real cluster.** The rules engine, the address handling,
-> the geo lookup, the guard's decisions and the rendered Kubernetes objects are
-> all unit-tested, and the country and network lookups were checked against the
-> real DB-IP databases. Nothing here has been through a live Traefik. See the
-> Status section of the README.
+> **Run against a real cluster in part.** On every push to `main`, the
+> `Cluster` workflow installs the firewall on a fresh server, gives an app a
+> rule that allows three requests a minute on one path, and checks through the
+> live Traefik and the guard that the fourth is answered 429 and that a path
+> the rule does not cover still answers. Blocking by address, country or
+> network has not been through a live cluster: the rules engine, the address
+> handling, the geo lookup and the guard's decisions are unit-tested, and the
+> country and network lookups were checked against the real DB-IP databases.
+> See the Status section of the README.

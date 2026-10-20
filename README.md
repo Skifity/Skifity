@@ -206,11 +206,15 @@ while the installer is running.
 </details>
 
 > [!NOTE]
-> **Skifity has not yet been run against a real cluster**: the environment it
-> was built in refuses privileged containers, so k3s could never start there. Everything that needs a cluster is tested against a
-> fake API server, golden manifests and a real in-process SSH server instead,
-> and the installer is run from start to finish against stand-ins for k3s,
-> kubectl and the network. Try it on a spare VPS before you move production onto
+> **Skifity runs on a real cluster on every push, and on one server only.** A
+> fresh Ubuntu 24.04 machine is installed with the real installer and taken
+> through [`test/cluster/verify.sh`](test/cluster/README.md): builds from Git
+> and from a folder, rollouts under traffic, rollback, autoscaling, scale to
+> zero, volumes, PostgreSQL, the fences between tenants, quotas, the panel
+> switched off and replaced under a running app, and notifications. It has not
+> yet met a second server, a server failing, a backup restored from a real
+> bucket, an upgrade from one release to the next, or anybody attacking it on
+> purpose. Try it on a spare VPS before you move production onto
 > it, and [open an issue](https://github.com/Skifity/Skifity/issues) with
 > whatever you find. More in [Status](#status).
 
@@ -532,16 +536,19 @@ sudo sh installer/install.sh --image ghcr.io/skifity/skifity:$(git describe --ta
 
 Two things, plainly.
 
-**It has never met a real cluster.** Every release has static binaries for
-Linux, macOS and Windows and a multi-architecture image at
-`ghcr.io/skifity/skifity`. But the environment Skifity was built in refuses
-privileged containers, so k3s could never start there. Everything that needs a
-cluster is tested against a fake API server, golden manifests, a real
-in-process SSH server and shell syntax checks — the same code paths, and not
-the same thing as having run. [`docs/progress.md`](docs/progress.md) says
-exactly what has and has not been executed, and
-[`test/cluster/verify.sh`](test/cluster/README.md) is the run that would change
-that. Try it on a spare VPS first.
+**It has met one real server, and keeps meeting it.** Every release has
+static binaries for Linux, macOS and Windows and a multi-architecture image at
+`ghcr.io/skifity/skifity`. Every push to `main` installs that commit on a fresh
+GitHub-hosted Ubuntu machine with the real installer and runs
+[`test/cluster/verify.sh`](test/cluster/README.md) against the k3s it made;
+its first runs found what no fake could have — a database volume asking for a
+storage class that is not there, a database kept off the Kubernetes API, an app
+on a cloud machine given no address, a new pod unfenced for its first moment —
+and each is fixed.
+[`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
+platform is judged on that proves, and [`docs/progress.md`](docs/progress.md)
+what each run found. Nothing has run on more than one server yet. Try it on a
+spare VPS first.
 
 **The plugin store is not published.** `plugins.skifity.com` does not resolve,
 so the Store tab says it could not reach anything. A plugin is installed by
