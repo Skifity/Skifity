@@ -123,7 +123,12 @@ func (c *Cluster) installCertManager(ctx context.Context) error {
 	}
 	// The webhook needs a moment after becoming ready before it will admit a
 	// ClusterIssuer; retrying is simpler and more reliable than guessing a sleep.
-	return c.retry(ctx, 10, 3*time.Second, func() error {
+	// Two minutes of it: the webhook answers only once cert-manager's own
+	// injector has given it a certificate, which on a small server can take
+	// longer than the half minute this used to wait, and running out left the
+	// server with cert-manager and no issuer, and every domain waiting for a
+	// certificate nothing would ask for.
+	return c.retry(ctx, 40, 3*time.Second, func() error {
 		return c.EnsureClusterIssuer(ctx)
 	})
 }

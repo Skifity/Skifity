@@ -2215,10 +2215,11 @@ More detail:
 		-e "s|__ACME_SERVER__|${acme_server}|g" \
 		"$TMP_DIR/cluster-issuer.yaml" >"$MANIFEST_DIR/cluster-issuer.yaml"
 	# cert-manager's webhook validates every issuer, and it reports ready a
-	# moment before it can answer. That moment is a failure on a fresh install
-	# unless it is waited out.
+	# moment before it can answer: until cert-manager's own injector has given
+	# it a certificate. That moment is a failure on a fresh install unless it
+	# is waited out, and on a small server it can be longer than a minute.
 	with_progress "Creating the certificate issuer" "" \
-		retry 12 5 kubectl apply -f "$MANIFEST_DIR/cluster-issuer.yaml" || fail \
+		retry 24 5 kubectl apply -f "$MANIFEST_DIR/cluster-issuer.yaml" || fail \
 		"Could not create the certificate issuer." \
 		"Run the installer again. If it keeps failing, ${LOG_FILE} has the whole of what kubectl said."
 	case "$acme_server" in
