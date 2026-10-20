@@ -93,10 +93,10 @@ kube get pods -A --no-headers -l 'job-name' 2>/dev/null | awk '{print $1, $2}' |
 	done
 
 # What Skifity wrote about itself, and what the stand-ins for a bucket, an
-# ACME server, a Git host and the services notifications go to said, where a
-# run had them.
+# ACME server, a Git host, a secret manager and the services notifications go
+# to said, where a run had them.
 for file in /var/log/skifity-install.log /var/log/skifity-verify.log /var/log/skifity-upgrade.log \
-	/tmp/moto.log /tmp/pebble.log /tmp/mailpit.log /tmp/ntfy.log /tmp/gotify.log /tmp/gitea.log; do
+	/tmp/moto.log /tmp/pebble.log /tmp/mailpit.log /tmp/ntfy.log /tmp/gotify.log /tmp/gitea.log /tmp/openbao.log /tmp/mattermost.log; do
 	[ -f "$file" ] && cp "$file" "$OUT/" 2>/dev/null
 done
 

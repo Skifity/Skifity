@@ -8,8 +8,9 @@
 # six phases:
 #
 #   1  Git to build to deploy, live build logs, a domain, a variable change,
-#      a rollback, a deploy that drops no requests, and a folder with no
-#      repository behind it built the same way.
+#      a variable read from a secret manager, a rollback, a deploy that drops
+#      no requests, and a folder with no repository behind it built the same
+#      way.
 #   2  A volume that survives a restart, a managed database, a backup that
 #      restores, and an export you could leave with.
 #   3  One team cannot see another's, one namespace cannot reach another's,
@@ -104,12 +105,30 @@ REPORT="/var/log/skifity-verify.log"
 : "${VERIFY_GOTIFY_SERVER:=}"
 : "${VERIFY_GOTIFY_TOKEN:=}"
 : "${VERIFY_GOTIFY_CLIENT_TOKEN:=}"
+# Mattermost is a server at VERIFY_MATTERMOST_API (its /api/v4), with an
+# incoming webhook at VERIFY_MATTERMOST_HOOK that posts to the channel
+# VERIFY_MATTERMOST_CHANNEL, read with the token in VERIFY_MATTERMOST_TOKEN.
+: "${VERIFY_MATTERMOST_HOOK:=}"
+: "${VERIFY_MATTERMOST_API:=}"
+: "${VERIFY_MATTERMOST_TOKEN:=}"
+: "${VERIFY_MATTERMOST_CHANNEL:=}"
 # A Git host at a private address, as a Gitea at home is: VERIFY_GIT_HOST_REPO
 # is an https:// repository on it holding the sample app at the root of its
 # main branch, and VERIFY_GIT_HOST_CA the authority that signed the host's
 # certificate. Without them the check skips.
 : "${VERIFY_GIT_HOST_REPO:=}"
 : "${VERIFY_GIT_HOST_CA:=}"
+# A secret manager a variable is read from: a Vault, or an OpenBao, which
+# speaks the same API, at VERIFY_VAULT_ADDRESS, with a KV version 2 mount at
+# secret/ that the token in VERIFY_VAULT_TOKEN may write to. Without them the
+# check skips.
+: "${VERIFY_VAULT_ADDRESS:=}"
+: "${VERIFY_VAULT_TOKEN:=}"
+
+# An image with a shell, for what runs a command through one, and for an app
+# with nothing on any server's disk: nginx as an unprivileged user, from
+# GitHub's registry. The sample app's image has no shell.
+SHELL_IMAGE="ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine"
 
 PASS=0
 FAIL=0
@@ -412,6 +431,13 @@ wait_deployed() {
 	return 1
 }
 
+# volume_node CLAIM prints the server a volume on a server's own disk is kept
+# on, for a claim in the environment's namespace, and nothing for any other.
+volume_node() {
+	kubectl get pv -o jsonpath='{range .items[*]}{.spec.claimRef.namespace}{" "}{.spec.claimRef.name}{" "}{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]}{"\n"}{end}' \
+		2>/dev/null | awk -v ns="$NAMESPACE" -v claim="$1" '$1 == ns && $2 == claim {print $3}' || true
+}
+
 # server_usage_known SERVER says whether the panel has the server's memory,
 # processor and disk, which it reads every minute from the server's kubelet.
 server_usage_known() {
@@ -425,9 +451,10 @@ sys.exit(0 if points and 0 < disk.get("used_mb", 0) < disk.get("capacity_mb", 0)
 '
 }
 
-# ntfy_has TOPIC TITLE and gotify_has TITLE say whether the server holds a
-# message with that title, read with the server's own credentials: what is
-# checked is what arrived, not that the panel said it sent something.
+# ntfy_has TOPIC TITLE, gotify_has TITLE and mattermost_has TITLE say whether
+# the server holds a message with that title, read with the server's own
+# credentials: what is checked is what arrived, not that the panel said it sent
+# something.
 ntfy_has() {
 	curl -fsS -H "Authorization: Bearer $VERIFY_NTFY_TOKEN" "$VERIFY_NTFY_SERVER/$1/json?poll=1" 2>/dev/null |
 		python3 -c '
@@ -441,6 +468,16 @@ gotify_has() {
 		python3 -c '
 import json, sys
 titles = [message.get("title") for message in json.load(sys.stdin).get("messages") or []]
+sys.exit(0 if sys.argv[1] in titles else 1)
+' "$1"
+}
+mattermost_has() {
+	curl -fsS -H "Authorization: Bearer $VERIFY_MATTERMOST_TOKEN" \
+		"$VERIFY_MATTERMOST_API/channels/$VERIFY_MATTERMOST_CHANNEL/posts?per_page=200" 2>/dev/null |
+		python3 -c '
+import json, sys
+posts = (json.load(sys.stdin).get("posts") or {}).values()
+titles = [a.get("title") for p in posts for a in (p.get("props") or {}).get("attachments") or []]
 sys.exit(0 if sys.argv[1] in titles else 1)
 ' "$1"
 }
@@ -546,6 +583,9 @@ fi
 
 APP_ID=""
 APP_HOST=""
+# An app with nothing on any server's disk and an instance on each server,
+# made in phase 4 for what a server going away should not be noticed by.
+MOVER_HOST=""
 
 if wants 1; then
 phase "Phase 1 — Git to running, and back again"
@@ -729,6 +769,77 @@ SECRET_IN_LOG=$(kubectl -n "$PANEL_NS" logs deploy/skifity-panel --tail=500 2>/d
 [ "${SECRET_IN_LOG:-0}" = "0" ] \
 	&& ok "the panel's own log does not contain the password it was set up with" \
 	|| no "the panel logged something that looks like the setup password; internal/logging is meant to redact by value as well as by key"
+
+step "A variable read from a secret manager"
+
+# The variable holds where the value is, not the value: the panel reads it
+# when the app is rolled out, and a value changed in the manager reaches the
+# app when its variables are refreshed, without a build. The next step sets
+# VERSION to a value again, which drops the reference.
+if [ -z "$VERIFY_VAULT_ADDRESS" ] || [ -z "$VERIFY_VAULT_TOKEN" ]; then
+	skip "a variable read from a secret manager" "no VERIFY_VAULT_ADDRESS and VERIFY_VAULT_TOKEN"
+else
+	vault_put() {
+		curl -fsS -o /dev/null -X POST "$VERIFY_VAULT_ADDRESS/v1/secret/data/verify/hello" \
+			-H "X-Vault-Token: $VERIFY_VAULT_TOKEN" -H 'Content-Type: application/json' \
+			-d "{\"data\":{\"version\":\"$1\"}}"
+	}
+	serving() {
+		for _ in $(seq 1 36); do
+			BODY=$(curl -s --max-time 10 -H "Host: $APP_HOST" "http://127.0.0.1/" || true)
+			case "$BODY" in *"version=$1"*) return 0 ;; esac
+			sleep 5
+		done
+		return 1
+	}
+	FIRST_SECRET="bao-first-$(date +%s)"
+	SECOND_SECRET="bao-second-$(date +%s)"
+	vault_put "$FIRST_SECRET" || no "the secret manager at $VERIFY_VAULT_ADDRESS would not take a secret to read back"
+	CONNECTED=$(curl -sS -X POST "$PANEL/api/teams/$TEAM_ID/secret-managers" -H 'Content-Type: application/json' \
+		-H "Authorization: Bearer $TOKEN" \
+		-d "{\"name\":\"verify-bao\",\"kind\":\"vault\",\"settings\":{\"address\":\"$VERIFY_VAULT_ADDRESS\"},\"credentials\":{\"token\":\"$VERIFY_VAULT_TOKEN\"}}" || true)
+	MANAGER=$(printf '%s' "$CONNECTED" | pick id 2>/dev/null || echo "")
+	if [ -z "$MANAGER" ]; then
+		no "connecting the secret manager at $VERIFY_VAULT_ADDRESS was refused: ${CONNECTED:-no answer}"
+	else
+		ok "the panel signed in to the secret manager before keeping the connection"
+		IMAGE_BEFORE=$(api GET "/api/apps/$APP_ID/deployments" | pick items.0.image 2>/dev/null || echo "")
+		SET=$(curl -sS -X PUT "$PANEL/api/apps/$APP_ID/variables" -H 'Content-Type: application/json' \
+			-H "Authorization: Bearer $TOKEN" \
+			-d '{"key":"VERSION","from":{"connection":"verify-bao","path":"verify/hello","key":"version"}}' || true)
+		if ! printf '%s' "$SET" | pick variable.key >/dev/null 2>&1; then
+			no "VERSION could not be read from the secret manager: ${SET:-no answer}"
+		elif serving "$FIRST_SECRET"; then
+			ok "the app runs with the value the secret manager holds"
+		else
+			no "the app answers '${BODY:-nothing}', not the value in the secret manager"
+		fi
+		vault_put "$SECOND_SECRET" || no "the secret manager would not take the changed secret"
+		REFRESHED=$(api POST "/api/apps/$APP_ID/variables/refresh" || echo "")
+		CHANGED=$(printf '%s' "$REFRESHED" | pick changed 2>/dev/null || echo "")
+		case "$CHANGED" in
+			*VERSION*) ok "a refresh found the value changed in the secret manager" ;;
+			*) no "a refresh after the secret changed answered '${REFRESHED:-nothing}', without VERSION among what changed" ;;
+		esac
+		serving "$SECOND_SECRET" \
+			&& ok "and rolled the app out with it" \
+			|| no "after the refresh the app answers '${BODY:-nothing}', not the changed value"
+		[ "$(api GET "/api/apps/$APP_ID/deployments" | pick items.0.image)" = "$IMAGE_BEFORE" ] \
+			&& ok "with the image it had: a value from a secret manager is configuration, and builds nothing" \
+			|| no "reading a variable from a secret manager produced a new image"
+		LISTED=$(api GET "/api/apps/$APP_ID/variables" || echo "")
+		case "$LISTED" in
+			*"$FIRST_SECRET"* | *"$SECOND_SECRET"*) no "the app's variables, as the API lists them, show the value read from the secret manager" ;;
+			*verify-bao*) ok "the app's variables say where VERSION is read from, and never what it is" ;;
+			*) no "the app's variables do not say VERSION is read from the secret manager: $LISTED" ;;
+		esac
+		LEAKED=$(kubectl -n "$PANEL_NS" logs deploy/skifity-panel --tail=2000 2>/dev/null |
+			grep -c -e "$FIRST_SECRET" -e "$SECOND_SECRET" -e "$VERIFY_VAULT_TOKEN" || true)
+		[ "${LEAKED:-0}" = "0" ] \
+			&& ok "the panel's own log holds neither the values it read nor the token it read them with" \
+			|| no "the panel logged a value it read from the secret manager, or the token, $LEAKED time(s)"
+	fi
+fi
 
 step "Deploying again, and rolling back (checklist 8)"
 
@@ -1781,18 +1892,59 @@ else
 	if [ -z "$VICTIM" ]; then
 		skip "the node-failure check" "every node runs the control plane; draining one would take the cluster with it"
 	else
+		# What a drain is meant to move without anybody noticing is an app
+		# with nothing on any server's own disk, with an instance on each
+		# server. The phase 1 app has kept a volume since phase 2, which ties
+		# it to the server the volume was made on, and which server that is
+		# the scheduler's choice: it is checked for what that choice means.
+		MOVER=$(api POST "/api/environments/$ENV_ID/apps" \
+			"{\"name\":\"mover\",\"source_type\":\"image\",\"image\":\"$SHELL_IMAGE\",\"port\":8080,\"deploy\":true}" \
+			| pick app.id 2>/dev/null || echo "")
+		if [ -n "$MOVER" ] && wait_deployed "$MOVER"; then
+			api PUT "/api/apps/$MOVER/scaling" '{"replicas":2,"autoscale":false}' >/dev/null || true
+			for _ in $(seq 1 36); do
+				[ "$(kubectl -n "$NAMESPACE" get deploy mover -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)" = "2" ] && break
+				sleep 5
+			done
+			MOVER_HOST=$(api GET "/api/apps/$MOVER/domains" | pick items.0.hostname 2>/dev/null || echo "")
+		fi
+		SERVERS=$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=mover \
+			-o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' 2>/dev/null | sort -u | wc -l || true)
+		if [ -z "$MOVER_HOST" ]; then
+			no "an app from $SHELL_IMAGE with two instances did not come up to be moved"
+		else
+			[ "$SERVERS" = "2" ] \
+				&& ok "an app with two instances has one on each server" \
+				|| no "an app with two instances has them on $SERVERS server(s), not one on each"
+		fi
+		PINNED=$(volume_node hello-data)
 		kubectl drain "$VICTIM" --ignore-daemonsets --delete-emptydir-data --force --timeout=180s >>"$REPORT" 2>&1 \
 			&& ok "$VICTIM drained: the disruption budget let the instances move one at a time" \
 			|| no "$VICTIM could not be drained inside three minutes; a PodDisruptionBudget that cannot be satisfied blocks a drain forever"
-		DRAIN_FAILS=0
-		for _ in $(seq 1 10); do
-			[ "$(through_ingress "$APP_HOST" 10)" = "200" ] || DRAIN_FAILS=$((DRAIN_FAILS + 1))
-			sleep 1
-		done
-		[ "$DRAIN_FAILS" = "0" ] \
-			&& ok "the app kept answering while a server was emptied" \
-			|| no "$DRAIN_FAILS of 10 requests failed while a node was drained"
+		if [ -n "$MOVER_HOST" ]; then
+			DRAIN_FAILS=0
+			for _ in $(seq 1 10); do
+				[ "$(through_ingress "$MOVER_HOST" 10)" = "200" ] || DRAIN_FAILS=$((DRAIN_FAILS + 1))
+				sleep 1
+			done
+			[ "$DRAIN_FAILS" = "0" ] \
+				&& ok "the app kept answering while a server was emptied" \
+				|| no "$DRAIN_FAILS of 10 requests failed while a node was drained"
+		fi
 		kubectl uncordon "$VICTIM" >/dev/null 2>&1 || true
+		# An app whose volume is on the server's own disk waits for that
+		# server, which is what the volume being there means, and comes back
+		# with it. Longhorn, under Settings, is how a volume moves.
+		if [ -n "$APP_HOST" ] && [ "$PINNED" = "${VICTIM#node/}" ]; then
+			BACK=""
+			for _ in $(seq 1 36); do
+				[ "$(through_ingress "$APP_HOST" 5)" = "200" ] && { BACK=1; break; }
+				sleep 5
+			done
+			[ -n "$BACK" ] \
+				&& ok "the app whose volume is on ${VICTIM#node/}'s own disk waited for that server, and answered once it was back" \
+				|| no "the app whose volume is on ${VICTIM#node/}'s own disk did not answer again once that server was back"
+		fi
 	fi
 fi
 fi
@@ -1921,7 +2073,7 @@ JSON
 	# which is the one sent below.
 	TEST_TITLE="Skifity test notification"
 	NTFY_TOPIC="skifity-crosscheck"
-	MAIL_CHANNEL="" NTFY_CHANNEL="" GOTIFY_CHANNEL=""
+	MAIL_CHANNEL="" NTFY_CHANNEL="" GOTIFY_CHANNEL="" MATTERMOST_CHANNEL=""
 	if [ -z "$VERIFY_SMTP_SERVER" ] || [ -z "$VERIFY_MAILPIT" ]; then
 		skip "email notifications" "no mail server was given. Set VERIFY_SMTP_SERVER and VERIFY_MAILPIT"
 	elif ! api PUT /api/settings "$(cat <<JSON
@@ -1984,10 +2136,34 @@ JSON
 				|| no "the test notification never arrived at Gotify (the panel answered $CODE)"
 		fi
 	fi
-	if [ -n "$NTFY_CHANNEL$GOTIFY_CHANNEL" ]; then
+	if [ -z "$VERIFY_MATTERMOST_HOOK" ] || [ -z "$VERIFY_MATTERMOST_API" ] || [ -z "$VERIFY_MATTERMOST_TOKEN" ] ||
+		[ -z "$VERIFY_MATTERMOST_CHANNEL" ]; then
+		skip "Mattermost notifications" "no Mattermost server was given. Set VERIFY_MATTERMOST_HOOK, VERIFY_MATTERMOST_API, VERIFY_MATTERMOST_TOKEN and VERIFY_MATTERMOST_CHANNEL"
+	else
+		# Mattermost takes Slack's payload, attachments and all, which is what
+		# the panel sends to both.
+		MATTERMOST_CHANNEL=$(api POST "/api/teams/$TEAM_ID/notifications" "$(cat <<JSON
+{"kind":"mattermost","name":"verify-mattermost","events":["deploy.failed"],
+ "config":{"webhook_url":"$VERIFY_MATTERMOST_HOOK"}}
+JSON
+)" | pick id 2>/dev/null || echo "")
+		if [ -z "$MATTERMOST_CHANNEL" ]; then
+			no "a Mattermost notification channel could not be created"
+		else
+			CODE=$(api_code POST "/api/teams/$TEAM_ID/notifications/$MATTERMOST_CHANNEL/test")
+			for _ in $(seq 1 10); do
+				mattermost_has "$TEST_TITLE" && break
+				sleep 2
+			done
+			mattermost_has "$TEST_TITLE" \
+				&& ok "a test notification arrived in a Mattermost channel, through its incoming webhook" \
+				|| no "the test notification never arrived at Mattermost (the panel answered $CODE)"
+		fi
+	fi
+	if [ -n "$NTFY_CHANNEL$GOTIFY_CHANNEL$MATTERMOST_CHANNEL" ]; then
 		LISTED=$(api GET "/api/teams/$TEAM_ID/notifications" 2>/dev/null || echo "")
 		LEAKED=""
-		for secret in "$VERIFY_NTFY_TOKEN" "$VERIFY_GOTIFY_TOKEN"; do
+		for secret in "$VERIFY_NTFY_TOKEN" "$VERIFY_GOTIFY_TOKEN" "${VERIFY_MATTERMOST_HOOK##*/}"; do
 			case "$LISTED" in *"$secret"*) [ -z "$secret" ] || LEAKED=1 ;; esac
 		done
 		if [ -z "$LISTED" ]; then
@@ -2001,7 +2177,7 @@ JSON
 
 	# And a real failure, which is the one that matters, to every channel at
 	# once.
-	if [ -n "$CHANNEL$MAIL_CHANNEL$NTFY_CHANNEL$GOTIFY_CHANNEL" ]; then
+	if [ -n "$CHANNEL$MAIL_CHANNEL$NTFY_CHANNEL$GOTIFY_CHANNEL$MATTERMOST_CHANNEL" ]; then
 		: >"$HOOK_LOG"
 		FAILED_TITLE="Deploying broken failed"
 		BROKEN=$(api POST "/api/environments/$ENV_ID/apps" \
@@ -2016,6 +2192,7 @@ JSON
 					{ [ -z "$MAIL_CHANNEL" ] || mail_has ops@example.test "$FAILED_TITLE"; } &&
 					{ [ -z "$NTFY_CHANNEL" ] || ntfy_has "$NTFY_TOPIC" "$FAILED_TITLE"; } &&
 					{ [ -z "$GOTIFY_CHANNEL" ] || gotify_has "$FAILED_TITLE"; } &&
+					{ [ -z "$MATTERMOST_CHANNEL" ] || mattermost_has "$FAILED_TITLE"; } &&
 					break
 				sleep 5
 			done
@@ -2040,10 +2217,15 @@ JSON
 					&& ok "the same failure arrived at Gotify" \
 					|| no "at Gotify, $UNTOLD"
 			fi
+			if [ -n "$MATTERMOST_CHANNEL" ]; then
+				mattermost_has "$FAILED_TITLE" \
+					&& ok "the same failure arrived at Mattermost" \
+					|| no "at Mattermost, $UNTOLD"
+			fi
 			api DELETE "/api/apps/$BROKEN" >/dev/null 2>&1 || true
 		fi
 	fi
-	for id in $MAIL_CHANNEL $NTFY_CHANNEL $GOTIFY_CHANNEL; do
+	for id in $MAIL_CHANNEL $NTFY_CHANNEL $GOTIFY_CHANNEL $MATTERMOST_CHANNEL; do
 		api DELETE "/api/teams/$TEAM_ID/notifications/$id" >/dev/null 2>&1 || true
 	done
 	kill "$LISTENER" 2>/dev/null || true
@@ -2100,6 +2282,56 @@ else
 	fi
 fi
 
+step "Changed outside the panel, and put back"
+
+# What the panel applied is compared with what is in the cluster, on the fields
+# the panel sets and nowhere else: the autoscaler, cert-manager and Traefik
+# write fields of their own beside it, and a check that took those for
+# somebody's change would cry wolf on every app. Until here those controllers
+# were fakes.
+if [ -z "$APP_ID" ]; then
+	skip "the drift check" "phase 1 did not run, so there is no app to compare"
+else
+	drift_report() { api GET "/api/apps/$APP_ID/drift" 2>/dev/null || echo "{}"; }
+	# drift_settled prints the status once nothing is being applied.
+	drift_settled() {
+		local status=""
+		for _ in $(seq 1 24); do
+			status=$(drift_report | pick status 2>/dev/null || echo "")
+			[ -n "$status" ] && [ "$status" != "applying" ] && break
+			sleep 5
+		done
+		printf '%s' "$status"
+	}
+	limit_now() {
+		kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}' 2>/dev/null || true
+	}
+	STATUS=$(drift_settled)
+	[ "$STATUS" = "in_sync" ] \
+		&& ok "an app nobody changed is in step with what the panel applied, with the cluster's controllers writing beside it" \
+		|| no "an app nobody changed is reported as '${STATUS:-nothing}': $(drift_report | head -c 400)"
+	LIMIT=$(limit_now)
+	kubectl -n "$NAMESPACE" patch deploy hello --type=json \
+		-p '[{"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"300Mi"}]' >/dev/null 2>>"$REPORT" || true
+	STATUS=$(drift_settled)
+	BY=$(drift_report | python3 -c '
+import json, sys
+print(" ".join(sorted({item.get("changed_by", "") for item in json.load(sys.stdin).get("items") or []} - {""})))
+' 2>/dev/null || echo "")
+	[ "$STATUS" = "drifted" ] \
+		&& ok "a limit changed with kubectl is reported as changed, by ${BY:-somebody it could not name}" \
+		|| no "a memory limit changed with kubectl was reported as '${STATUS:-nothing}'"
+	if api POST "/api/apps/$APP_ID/drift/repair" >/dev/null; then
+		STATUS=$(drift_settled)
+		[ "$STATUS" = "in_sync" ] && [ "$(limit_now)" = "$LIMIT" ] \
+			&& ok "putting the app back restored the limit the panel set, $LIMIT" \
+			|| no "after putting the app back it is '${STATUS:-nothing}' with a limit of $(limit_now), not $LIMIT"
+	else
+		no "putting the app back was refused"
+	fi
+	kubectl -n "$NAMESPACE" rollout status deploy/hello --timeout=180s >/dev/null 2>&1 || true
+fi
+
 step "A notice in front of an app, for maintenance"
 
 # The guard answers for an app in maintenance. Traefik's forward-auth gives the
@@ -2143,8 +2375,7 @@ step "A worker, a command run once, and one on a schedule"
 
 # Each runs an app's image with a command of its own, through a shell, the way
 # a Procfile's line is. The sample app's image has no shell, so this is an app
-# whose image has one: nginx as an unprivileged user, from GitHub's registry.
-SHELL_IMAGE="ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine"
+# whose image has one.
 SHELL_APP=$(api POST "/api/environments/$ENV_ID/apps" \
 	"{\"name\":\"shell\",\"source_type\":\"image\",\"image\":\"$SHELL_IMAGE\",\"port\":8080,\"deploy\":true}" \
 	| pick app.id 2>/dev/null || echo "")
@@ -2229,6 +2460,133 @@ sys.exit(0 if run.get("exit_code") == 3 and "ran-once" in run.get("lines", []) e
 			|| no "a command scheduled for every minute did not succeed within two and a half minutes"
 		api DELETE "/api/apps/$SHELL_APP/jobs/$JOB" >/dev/null 2>&1 || true
 	fi
+fi
+
+step "Logs shipped to a drain of the team's own"
+
+# A collector on every server reads the pods' log files and sends each team's
+# lines to that team's drains, from a namespace whose policy keeps it off the
+# cluster's own networks. The drain is a listener on this machine; the lines
+# are the nginx app's access log, for a path nobody else asks for.
+DRAIN_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "")
+SHELL_HOST=""
+[ -z "$SHELL_APP" ] || SHELL_HOST=$(api GET "/api/apps/$SHELL_APP/domains" | pick items.0.hostname 2>/dev/null || echo "")
+if [ -z "$SHELL_HOST" ] || [ -z "$DRAIN_IP" ]; then
+	skip "the log drain" "the nginx app above has no address, or this node has no internal one"
+else
+	DRAIN_LOG=$(mktemp)
+	python3 - "$DRAIN_LOG" >/dev/null 2>&1 <<'PYEOF' &
+import http.server, sys
+path = sys.argv[1]
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get("content-length", 0))
+        with open(path, "ab") as f:
+            f.write(self.rfile.read(length) + b"\n")
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *_):
+        pass
+http.server.HTTPServer(("0.0.0.0", 19098), Handler).serve_forever()
+PYEOF
+	DRAIN_LISTENER=$!
+	sleep 2
+	DRAIN=$(api POST "/api/teams/$TEAM_ID/log-drains" \
+		"{\"name\":\"verify\",\"kind\":\"http\",\"settings\":{\"url\":\"http://$DRAIN_IP:19098/\"}}" | pick id 2>/dev/null || echo "")
+	if [ -z "$DRAIN" ]; then
+		no "a drain to a listener on this machine was refused"
+	else
+		[ -s "$DRAIN_LOG" ] \
+			&& ok "the drain's test line arrived at the listener" \
+			|| no "the drain was kept without its test line arriving"
+		kubectl -n skifity-logs rollout status ds/skifity-log-collector --timeout=180s >/dev/null 2>&1 || true
+		MARK="drain-check-$(date +%s)"
+		for _ in $(seq 1 30); do
+			curl -s -o /dev/null --max-time 5 -H "Host: $SHELL_HOST" "http://127.0.0.1/$MARK" || true
+			grep -q "$MARK" "$DRAIN_LOG" && break
+			sleep 4
+		done
+		grep -q "$MARK" "$DRAIN_LOG" \
+			&& ok "an app's own log lines reached the drain, read from the server's pod logs by the collector" \
+			|| no "nothing the app logged reached the drain in two minutes; the collector's own log is in the report"
+		grep -q "$MARK" "$DRAIN_LOG" || kubectl -n skifity-logs logs ds/skifity-log-collector --tail=40 >>"$REPORT" 2>&1 || true
+		api DELETE "/api/teams/$TEAM_ID/log-drains/$DRAIN" >/dev/null 2>&1 || true
+	fi
+	kill "$DRAIN_LISTENER" 2>/dev/null || true
+fi
+
+step "A preview of a branch: the whole environment, seeded"
+
+# A preview is a copy of the environment for one branch, in a namespace of its
+# own: the app built from the branch and, with "Previews copy the whole
+# environment" on, every other app at the image it runs. A seed runs once in a
+# new preview, after its first deploy, for the data an empty preview needs; it
+# runs through a shell, so here it is the nginx app's. The branch is the one
+# this run builds, since the repository has no other: what is checked is the
+# preview, not what is different in it.
+if [ -z "$APP_ID" ] || [ -z "$SHELL_APP" ]; then
+	skip "a preview" "phase 1's app or the nginx app above is not there to copy"
+else
+	SEED_MARK="seeded-by-the-crosscheck"
+	api PATCH "/api/environments/$ENV_ID" '{"preview_stack":true}' >/dev/null \
+		|| no "the environment would not copy itself whole for its previews"
+	api PATCH "/api/apps/$SHELL_APP" "{\"preview_seed\":\"echo $SEED_MARK\"}" >/dev/null \
+		|| no "the nginx app would not take a seed for its previews"
+	STARTED=$(api POST "/api/apps/$APP_ID/previews" "{\"branch\":\"$VERIFY_GIT_BRANCH\"}" 2>/dev/null || echo "")
+	PREVIEW_ENV=$(printf '%s' "$STARTED" | pick environment_id 2>/dev/null || echo "")
+	PREVIEW_APP=$(printf '%s' "$STARTED" | pick app_id 2>/dev/null || echo "")
+	if [ -z "$PREVIEW_ENV" ] || [ -z "$PREVIEW_APP" ]; then
+		no "a preview of $VERIFY_GIT_BRANCH could not be started: ${STARTED:-no answer}"
+	else
+		PREVIEW_NS=$(api GET "/api/environments/$PREVIEW_ENV" | pick namespace 2>/dev/null || echo "")
+		if wait_deployed "$PREVIEW_APP"; then
+			PREVIEW_HOST=$(api GET "/api/apps/$PREVIEW_APP/domains" | pick items.0.hostname 2>/dev/null || echo "")
+			[ -n "$PREVIEW_HOST" ] && [ "$(through_ingress "$PREVIEW_HOST" 30)" = "200" ] \
+				&& ok "the preview of $VERIFY_GIT_BRANCH was built, deployed in a namespace of its own, and answers at $PREVIEW_HOST" \
+				|| no "the preview deployed and does not answer at ${PREVIEW_HOST:-no address}"
+		else
+			no "the preview of $VERIFY_GIT_BRANCH did not deploy"
+		fi
+		COPY=$(api GET "/api/environments/$PREVIEW_ENV/apps" | python3 -c '
+import json, sys
+for app in json.load(sys.stdin).get("items") or []:
+    if app.get("slug") == "shell":
+        print(app["id"])
+' 2>/dev/null || echo "")
+		if [ -z "$COPY" ]; then
+			no "the preview has no copy of the nginx app, with the whole environment asked for"
+		else
+			wait_deployed "$COPY" || true
+			SEED_LOG=""
+			for _ in $(seq 1 24); do
+				DEPLOYED=$(api GET "/api/apps/$COPY/deployments" | pick items.0.id 2>/dev/null || echo "")
+				SEED_LOG=$(api GET "/api/apps/$COPY/deployments/$DEPLOYED/logs" 2>/dev/null || echo "")
+				case "$SEED_LOG" in *"The seed command finished."*) break ;; esac
+				sleep 5
+			done
+			# The mark twice: once in the command the log says it runs, once in
+			# what the command printed.
+			MARKS=$(printf '%s' "$SEED_LOG" | grep -o "$SEED_MARK" | wc -l || true)
+			case "$SEED_LOG" in
+			*"The seed command finished."*)
+				[ "$MARKS" -ge 2 ] \
+					&& ok "the preview's copy of the nginx app ran at its image and was seeded once, after its first deploy, with the seed's output in its log" \
+					|| no "the seed finished without its output in the deployment's log" ;;
+			*) no "the preview's copy of the nginx app was not seeded: $(printf '%s' "$SEED_LOG" | tail -c 400)" ;;
+			esac
+		fi
+		api POST "/api/apps/$APP_ID/previews/close" "{\"branch\":\"$VERIFY_GIT_BRANCH\"}" >/dev/null \
+			|| no "the preview could not be closed"
+		CLOSED=""
+		for _ in $(seq 1 36); do
+			[ -n "$PREVIEW_NS" ] && ! kubectl get namespace "$PREVIEW_NS" >/dev/null 2>&1 && { CLOSED=1; break; }
+			sleep 5
+		done
+		[ -n "$CLOSED" ] \
+			&& ok "closing the preview removed its namespace and everything in it" \
+			|| no "the preview's namespace ${PREVIEW_NS:-unknown} was still there three minutes after it was closed"
+	fi
+	api PATCH "/api/environments/$ENV_ID" '{"preview_stack":false}' >/dev/null 2>&1 || true
 fi
 [ -z "$SHELL_APP" ] || api DELETE "/api/apps/$SHELL_APP" >/dev/null 2>&1 || true
 
@@ -2612,7 +2970,7 @@ if [ -n "$SECOND_ID" ] && [ -n "$VERIFY_SECOND_SERVER_FAILS" ]; then
 	GONE=""
 	for _ in $(seq 1 60); do
 		[ "$(api_code GET "/api/servers/$SECOND_ID")" = "404" ] && { GONE=1; break; }
-		[ "$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")" = "failed" ] && break
+		[ "$(api GET "/api/servers/$SECOND_ID" 2>/dev/null | pick status 2>/dev/null || echo "")" = "failed" ] && break
 		sleep 5
 	done
 	if [ -n "$GONE" ]; then
@@ -2639,14 +2997,36 @@ if [ -n "$SECOND_ID" ] && [ -n "$VERIFY_SECOND_SERVER_FAILS" ]; then
 elif [ -n "$SECOND_ID" ]; then
 	step "Taking the second server out, through the panel"
 
+	# A server whose own disk holds a volume is refused, naming it: removing
+	# the server does not move the data. Which server a volume is made on is
+	# the scheduler's choice, so whether the second one holds any by now
+	# depends on the run. When it does, the refusal is checked, and the
+	# server is then removed the way the refusal says to, accepting the loss.
+	# What is asked for an answer meanwhile is an app that can move: the
+	# phase 4 app with an instance on each server where there is one, or the
+	# phase 1 app where its volume is not on the server going away.
+	PROBE=$MOVER_HOST
+	[ -n "$PROBE" ] || [ "$(volume_node hello-data)" = "$SECOND_NODE" ] || PROBE=$APP_HOST
+	REFUSAL=$(mktemp)
+	CODE=$(curl -s -o "$REFUSAL" -w '%{http_code}' -X DELETE "$PANEL/api/servers/$SECOND_ID" -H "Authorization: Bearer $TOKEN" || true)
+	if [ "$CODE" = "409" ] && grep -q server.has_local_volumes "$REFUSAL"; then
+		HELD=$(pick error.context.volumes <"$REFUSAL" 2>/dev/null || echo "")
+		[ -n "$HELD" ] \
+			&& ok "the panel refused to remove a server whose own disk holds data, and named it: $HELD" \
+			|| no "the panel refused to remove a server that holds data without saying which: $(head -c 300 "$REFUSAL")"
+		CODE=$(api_code DELETE "/api/servers/$SECOND_ID?accept_data_loss=true")
+	fi
+	case "$CODE" in
+	2??) ;;
+	*) no "the panel refused to remove the second server ($CODE): $(head -c 300 "$REFUSAL")" ;;
+	esac
 	REMOVE_FAILS=0
-	api DELETE "/api/servers/$SECOND_ID" >/dev/null 2>&1 || no "the panel refused to remove the second server"
 	GONE=""
 	for _ in $(seq 1 60); do
-		[ -n "$APP_HOST" ] && { [ "$(through_ingress "$APP_HOST" 5)" = "200" ] || REMOVE_FAILS=$((REMOVE_FAILS + 1)); }
+		[ -n "$PROBE" ] && { [ "$(through_ingress "$PROBE" 5)" = "200" ] || REMOVE_FAILS=$((REMOVE_FAILS + 1)); }
 		CODE=$(api_code GET "/api/servers/$SECOND_ID")
 		[ "$CODE" = "404" ] && { GONE=1; break; }
-		[ "$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")" = "failed" ] && break
+		[ "$(api GET "/api/servers/$SECOND_ID" 2>/dev/null | pick status 2>/dev/null || echo "")" = "failed" ] && break
 		sleep 5
 	done
 	if [ -n "$GONE" ]; then
@@ -2658,9 +3038,9 @@ elif [ -n "$SECOND_ID" ]; then
 	kubectl get node "$SECOND_NODE" >/dev/null 2>&1 \
 		&& no "the cluster still lists $SECOND_NODE after the server was removed" \
 		|| ok "and the cluster no longer lists it"
-	[ -z "$APP_HOST" ] || {
+	[ -z "$PROBE" ] || {
 		[ "$REMOVE_FAILS" = "0" ] \
-			&& ok "the app answered while its second server was taken away" \
+			&& ok "an app with nothing on that server's disk answered while the server was taken away" \
 			|| no "$REMOVE_FAILS requests failed while the second server was taken away"
 	}
 fi

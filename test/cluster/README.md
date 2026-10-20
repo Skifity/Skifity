@@ -15,11 +15,11 @@ push to `main` (below), and `docs/progress.md` says what each run found.
 
 | Phase | What it settles | Checklist |
 |---|---|---|
-| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a domain of its own gets a certificate from an ACME server and sends visitors to HTTPS while the free address stays plain HTTP, a variable change restarts it without rebuilding, one call rolls it back, a rolling restart under continuous traffic drops nothing, switching autoscaling on keeps the instances there are, a folder with no repository is built and deployed, and a repository on a Git host at a private address is refused until an administrator lists the host and its authority, and then built. | 1, 2, 3, 4, 8, 9 |
+| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a domain of its own gets a certificate from an ACME server and sends visitors to HTTPS while the free address stays plain HTTP, a variable change restarts it without rebuilding, a variable read from a secret manager runs it with the value the manager holds and a changed value reaches it without a build, one call rolls it back, a rolling restart under continuous traffic drops nothing, switching autoscaling on keeps the instances there are, a folder with no repository is built and deployed, and a repository on a Git host at a private address is refused until an administrator lists the host and its authority, and then built. | 1, 2, 3, 4, 8, 9 |
 | **2 — the data** | A volume keeps what was written to it across a restart; a managed PostgreSQL comes up on its own, and so does each of the eight other engines; a backup of every engine the panel backs up is restored over the live database and holds what it held when the backup was taken, and so does a volume's; a backup sealed with a passphrase is ciphertext in the bucket and still restores; the panel reads a backup through and copies its own database to the bucket; and the export carries every app's Kubernetes objects and none of its secrets. | 5, 6, 7, 16 |
 | **3 — security and isolation** | A token for one team answers 404 on another, a member cannot run the panel, a pod in one namespace cannot reach another's app, an app's pod starts behind its fence and reaches neither the Kubernetes API, the kubelet nor the registry, a build runs its own BuildKit and cannot write to the registry without its token, a rate limit answers 429 at the ingress, and asking for sixty-four cores is refused by a real quota. | 11, 12, 13 |
-| **4 — what survives** | The panel is scaled to zero and the app keeps answering every request. With a second server, a node is drained and the work moves, with the disruption budget letting it move one instance at a time; and at the end of the run the panel takes the second server out with the app answering throughout, or a restart is seen to leave one of the app's instances on each server, the server is switched off without warning, and it is removed as one that is gone. | 14, 9 |
-| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, a deployment that cannot pull its image actually sends a notification — to a webhook, and, given servers for them, by email, to ntfy and to Gotify, each read back from the server it went to — a forgotten password is reset through the link the panel emails, a maintenance notice is answered in front of an app, a worker, a command run once and one on a schedule run from an app's image, a Compose file is deployed as a stack whose services reach each other by name, a template is installed from the catalogue, a version is promoted to another environment, a server reports its disk, a database is reached from the machine through the panel and through Traefik, and an app asleep at zero instances wakes for a visitor and for its own deploy. | 10, 15, 17 |
+| **4 — what survives** | The panel is scaled to zero and the app keeps answering every request. With a second server, a node is drained and the work moves, with the disruption budget letting it move one instance at a time and an app with an instance on each server answering throughout, while an app whose volume is on that server's own disk answers again once the server is back; and at the end of the run the panel refuses to take out a server holding data, naming it, and takes it out when told the data may go, with an app that has nothing on its disk answering throughout — or a restart is seen to leave one of the app's instances on each server, the server is switched off without warning, and it is removed as one that is gone. | 14, 9 |
+| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, a deployment that cannot pull its image actually sends a notification — to a webhook, and, given servers for them, by email, to ntfy, to Gotify and to Mattermost, each read back from the server it went to — a forgotten password is reset through the link the panel emails, an object changed with kubectl is reported, with who changed it, and put back, a maintenance notice is answered in front of an app, a worker, a command run once and one on a schedule run from an app's image, an app's own log lines reach a drain of the team's, a preview of a branch copies the whole environment into a namespace of its own, seeds it once and is gone when closed, a Compose file is deployed as a stack whose services reach each other by name, a template is installed from the catalogue, a version is promoted to another environment, a server reports its disk, a database is reached from the machine through the panel and through Traefik, and an app asleep at zero instances wakes for a visitor and for its own deploy. | 10, 15, 17 |
 
 Phase 6 is a person and should not become a script: give somebody
 `docs/quick-start.md` and nothing else, and write down where they get stuck.
@@ -41,12 +41,16 @@ Let's Encrypt's staging server is used for the panel's own address, because
 nothing on the internet can reach a runner and the production server is not
 the place to fail a challenge on every push.
 
-Two stand-ins run on the runner beside it, on its own address, which is a
-private one: a bucket (moto, which answers presigned URLs as S3 does) for the
-backups, and an ACME server (Pebble, Let's Encrypt's own test server, its
-address signed by an authority made for the run) for the certificate. The
-crosscheck gives both to the panel under Settings, the way a bucket and an ACME
-server of one's own are given, and points the app's domain at the runner. What
+Stand-ins run on the runner beside it, on its own address, which is a private
+one: a bucket (moto, which answers presigned URLs as S3 does) for the backups;
+an ACME server (Pebble, Let's Encrypt's own test server, its address signed by
+an authority made for the run) for the certificate; a Gitea over HTTPS with an
+authority of its own, holding the sample app; Mailpit, ntfy, Gotify and
+Mattermost, the last on the runner's own PostgreSQL, for notifications; and
+OpenBao, which speaks Vault's API, for a variable read from a secret manager.
+The crosscheck gives the bucket and the ACME server to the panel under
+Settings, the way a bucket and an ACME server of one's own are given, and
+points the app's domain at the runner. What
 they stand in for is checked against them exactly as it would be against the
 real thing: the backup jobs reach a bucket on a private address through their
 own network policy, and the certificate is validated through the same ingress
@@ -146,6 +150,8 @@ of them failed and you are fixing it.
 | `VERIFY_NTFY_SERVER` / `VERIFY_NTFY_TOKEN` | An ntfy server and a token for it. Without them the ntfy check skips. |
 | `VERIFY_GOTIFY_SERVER` / `VERIFY_GOTIFY_TOKEN` / `VERIFY_GOTIFY_CLIENT_TOKEN` | A Gotify server, an application's token to push with and a client's token to read back with. Without them the Gotify check skips. |
 | `VERIFY_GIT_HOST_REPO` / `VERIFY_GIT_HOST_CA` | An `https://` repository holding the sample app on a Git host at a private address, and the authority that signed the host's certificate. Without them the private Git host check skips. |
+| `VERIFY_MATTERMOST_HOOK` / `VERIFY_MATTERMOST_API` / `VERIFY_MATTERMOST_TOKEN` / `VERIFY_MATTERMOST_CHANNEL` | A Mattermost incoming webhook, the server's `/api/v4`, a token that reads the channel the webhook posts to, and that channel's id. Without them the Mattermost check skips. |
+| `VERIFY_VAULT_ADDRESS` / `VERIFY_VAULT_TOKEN` | A Vault or OpenBao with a KV version 2 mount at `secret/`, and a token that may write to it. Without them the check of a variable read from a secret manager skips. |
 
 ## What is already proven, and what is not
 

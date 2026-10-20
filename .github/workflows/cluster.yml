@@ -263,6 +263,80 @@ jobs:
             echo "GOTIFY_CLIENT_TOKEN=${gotify_client}"
           } >>"$GITHUB_ENV"
 
+      # Mattermost, for a channel of that kind, from its own release on the
+      # PostgreSQL this runner has: its first user is its administrator, who
+      # makes a team and an incoming webhook through its API, and the channel
+      # is read back the same way. A Mattermost that does not come up skips
+      # its checks rather than ending the run.
+      - name: Start Mattermost
+        continue-on-error: true
+        run: |
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -q -c "CREATE ROLE mmuser LOGIN PASSWORD 'not-a-real-password'" \
+            -c "CREATE DATABASE mattermost OWNER mmuser"
+          mkdir -p /tmp/mattermost
+          cd /tmp/mattermost
+          curl -fsSL https://releases.mattermost.com/11.11.1/mattermost-team-11.11.1-linux-amd64.tar.gz |
+            tar -xz --exclude='mattermost/prepackaged_plugins/*'
+          cd mattermost
+          MM_SQLSETTINGS_DRIVERNAME=postgres \
+            MM_SQLSETTINGS_DATASOURCE="postgres://mmuser:not-a-real-password@127.0.0.1:5432/mattermost?sslmode=disable&connect_timeout=10" \
+            MM_SERVICESETTINGS_LISTENADDRESS=:8065 \
+            MM_SERVICESETTINGS_SITEURL="http://${address}:8065" \
+            MM_SERVICESETTINGS_ENABLEINCOMINGWEBHOOKS=true \
+            MM_PLUGINSETTINGS_ENABLE=false \
+            MM_LOGSETTINGS_ENABLEFILE=false \
+            nohup ./bin/mattermost >/tmp/mattermost.log 2>&1 &
+          trap 'tail -n 40 /tmp/mattermost.log >&2' ERR
+          mm=http://127.0.0.1:8065/api/v4
+          for _ in $(seq 1 60); do
+            curl -fs "$mm/system/ping" 2>/dev/null | grep -q '"OK"' && break
+            sleep 2
+          done
+          token=""
+          json() {
+            curl -fsS -X "$1" "$mm$2" ${token:+-H "Authorization: Bearer $token"} \
+              -H 'Content-Type: application/json' ${3:+-d "$3"}
+          }
+          json POST /users '{"email":"crosscheck@example.test","username":"crosscheck","password":"Not-a-real-password-1"}' >/dev/null
+          token=$(curl -fsS -D - -o /dev/null -X POST "$mm/users/login" -H 'Content-Type: application/json' \
+            -d '{"login_id":"crosscheck","password":"Not-a-real-password-1"}' | awk 'tolower($1) == "token:" {print $2}' | tr -d '\r')
+          team=$(json POST /teams '{"name":"crosscheck","display_name":"Crosscheck","type":"O"}' | jq -r .id)
+          channel=$(json GET "/teams/$team/channels/name/town-square" | jq -r .id)
+          hook=$(json POST /hooks/incoming "{\"channel_id\":\"$channel\",\"display_name\":\"Skifity\"}" | jq -r .id)
+          if [ -z "$token" ] || [ -z "$hook" ] || [ "$hook" = null ]; then
+            echo "Mattermost handed out no token or no webhook" >&2
+            false
+          fi
+          {
+            echo "MATTERMOST_HOOK=http://${address}:8065/hooks/${hook}"
+            echo "MATTERMOST_API=${mm}"
+            echo "MATTERMOST_TOKEN=${token}"
+            echo "MATTERMOST_CHANNEL=${channel}"
+          } >>"$GITHUB_ENV"
+
+      # A secret manager for phase 1's variable read from one: OpenBao, which
+      # speaks Vault's API, in development mode, with its KV version 2 mount at
+      # secret/ and a root token that is plainly not a secret, on this server's
+      # address as a team's own would be.
+      - name: Start a secret manager
+        run: |
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          mkdir -p /tmp/openbao
+          cd /tmp/openbao
+          curl -fsSL -o openbao.tar.gz \
+            https://github.com/openbao/openbao/releases/download/v2.7.1/openbao_2.7.1_linux_amd64.tar.gz
+          tar -xzf openbao.tar.gz bao
+          nohup ./bao server -dev -dev-root-token-id=not-a-real-token -dev-listen-address=0.0.0.0:8200 \
+            >/tmp/openbao.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fs -o /dev/null http://127.0.0.1:8200/v1/sys/health && break
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:8200/v1/sys/health || { cat /tmp/openbao.log; exit 1; }
+          echo "VAULT_ADDRESS=http://${address}:8200" >>"$GITHUB_ENV"
+
       # Let's Encrypt's staging server for the panel's own address: nothing on
       # the internet can reach this runner, so no certificate will be issued
       # for it, and the production server is not the place to fail a challenge
@@ -295,8 +369,14 @@ jobs:
             VERIFY_GOTIFY_SERVER="$GOTIFY_SERVER" \
             VERIFY_GOTIFY_TOKEN="$GOTIFY_TOKEN" \
             VERIFY_GOTIFY_CLIENT_TOKEN="$GOTIFY_CLIENT_TOKEN" \
+            VERIFY_MATTERMOST_HOOK="${MATTERMOST_HOOK:-}" \
+            VERIFY_MATTERMOST_API="${MATTERMOST_API:-}" \
+            VERIFY_MATTERMOST_TOKEN="${MATTERMOST_TOKEN:-}" \
+            VERIFY_MATTERMOST_CHANNEL="${MATTERMOST_CHANNEL:-}" \
             VERIFY_GIT_HOST_REPO="$GIT_HOST_REPO" \
             VERIFY_GIT_HOST_CA=/tmp/gitea/ca.pem \
+            VERIFY_VAULT_ADDRESS="$VAULT_ADDRESS" \
+            VERIFY_VAULT_TOKEN=not-a-real-token \
             bash test/cluster/verify.sh
 
       - name: Collect what the cluster says
