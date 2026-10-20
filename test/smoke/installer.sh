@@ -993,6 +993,13 @@ fi
 # stopped fails this test instead of hanging it.
 sleep 30 &
 child=$!
+# Stopped once it is sleep. A TERM that lands between the fork and the exec is
+# handled by the copy of this script the child still is, traps and all, and
+# the step goes on to run: under load that was this test failing at random.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ "$(cat "/proc/$child/comm" 2>/dev/null)" = sleep ] && break
+  sleep 0.1
+done
 ( sleep 8; kill -9 "$child" 2>/dev/null ) &
 watchdog=$!
 ( PROGRESS_PID=$child; stop_progress )
