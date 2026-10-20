@@ -1362,6 +1362,12 @@ by KEDA's interceptor, so nobody sees a 503 — they see a slow first page. It
 needs a hostname, because the interceptor decides what to wake from the address
 that was asked for.
 
+A deploy of a sleeping app wakes it the same way, and waits for the new version
+to be ready like any other deploy; the app goes back to sleep five quiet minutes
+later. A version that does not start fails its deploy, rather than the first
+visitor's request. If the app cannot be woken, the deploy log says so and that
+the version has not been seen to start.
+
 Once anything is scaling an app — a target or scale to zero — the panel stops
 writing an instance count of its own. It would otherwise put the app back to its
 minimum every time you changed a variable.

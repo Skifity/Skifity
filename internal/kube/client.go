@@ -789,6 +789,42 @@ func (c *Client) WaitForNoPods(ctx context.Context, namespace, name string, time
 	}
 }
 
+// Asleep reports whether a Deployment is scaled to no instances at all, which
+// is what an app that scales to zero is while nobody uses it.
+func (c *Client) Asleep(ctx context.Context, namespace, name string) (bool, error) {
+	deployment, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", name, err)
+	}
+	return deployment.Spec.Replicas != nil && *deployment.Spec.Replicas == 0, nil
+}
+
+// WaitForAwake blocks until a Deployment is asked for at least one instance:
+// until whatever scales it has scaled it up. It says nothing about whether the
+// instance has started; WaitForRollout does that.
+func (c *Client) WaitForAwake(ctx context.Context, namespace, name string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		asleep, err := c.Asleep(ctx, namespace, name)
+		if err != nil {
+			return err
+		}
+		if !asleep {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s was still at no instances after %s", name, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
 // ImagePullError is a rollout that cannot finish because a new instance's
 // image cannot be pulled, for a reason that waiting will not change.
 type ImagePullError struct {

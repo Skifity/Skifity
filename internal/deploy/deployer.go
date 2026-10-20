@@ -474,6 +474,9 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		d.log.Warn("could not remove a process that is no longer wanted", "app", app.ID, "error", err)
 	}
 
+	// A sleeping app has no instances to wait for, and would be done at once.
+	stopWaking := d.wakeForRollout(ctx, deployment.ID, spec)
+	defer stopWaking()
 	d.appendLog(ctx, deployment.ID, "Waiting for the new instances to become ready.")
 	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, rolloutWait(spec)); err != nil {
 		status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, app.Slug)
