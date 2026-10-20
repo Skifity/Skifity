@@ -6,7 +6,22 @@
  * side and not the other is a rule that silently stops matching.
  */
 
+/** What a rule set does with a request no rule decided. */
 export type FirewallAction = "allow" | "block"
+
+/**
+ * What a rule may do. "limit" counts the requests the rule matches for each
+ * visitor and answers 429 to one over its limit; under it, the rule does not
+ * decide and the next one is asked. It is never a set's default, because it
+ * has no answer of its own for a visitor under the limit.
+ */
+export type FirewallRuleAction = FirewallAction | "limit"
+
+/** How many requests a visitor may make in a period, for a "limit" rule. */
+export type FirewallLimit = {
+  requests: number
+  period_seconds: number
+}
 
 export type FirewallField =
   | "ip.src"
@@ -40,9 +55,11 @@ export type FirewallExpr = {
 export type FirewallRule = {
   id: string
   name: string
-  action: FirewallAction
+  action: FirewallRuleAction
   expr: FirewallExpr
   enabled: boolean
+  /** Set on a "limit" rule, and on no other: the Go side refuses either mistake. */
+  limit?: FirewallLimit
 }
 
 export type FirewallRuleSet = {
@@ -148,4 +165,23 @@ export function withoutCondition(expr: FirewallExpr, index: number): FirewallExp
   if (!group) return expr
   const children = group.children.filter((_, i) => i !== index)
   return withGroupKind({ all: children.length > 0 ? children : [newTest()] }, group.kind)
+}
+
+/** The periods the form offers a limit in, in seconds. */
+export const LIMIT_PERIODS = [1, 60, 3600] as const
+
+/** A limit somebody starts from: sixty requests a minute is a page reloaded once a second. */
+export const DEFAULT_LIMIT: FirewallLimit = { requests: 60, period_seconds: 60 }
+
+/**
+ * Gives a rule a new action, with the limit it then needs or without the one
+ * it no longer may have. A block rule that still carried a limit would be
+ * refused when saved, and a limit rule with none could not be saved at all.
+ */
+export function withAction(rule: FirewallRule, action: FirewallRuleAction): FirewallRule {
+  if (action === "limit") {
+    return { ...rule, action, limit: rule.limit ?? DEFAULT_LIMIT }
+  }
+  const { limit: _dropped, ...rest } = rule
+  return { ...rest, action }
 }

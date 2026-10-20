@@ -7159,9 +7159,22 @@ components:
       properties:
         id: {type: string}
         name: {type: string}
-        action: {type: string, enum: [allow, block]}
+        action:
+          type: string
+          enum: [allow, block, limit]
+          description: >-
+            allow and block decide. limit counts the requests the rule matches for
+            each visitor and answers 429 to one over its limit; under it the rule
+            does not decide and the next one is asked.
         expr: {$ref: '#/components/schemas/RuleExpr'}
         enabled: {type: boolean}
+        limit:
+          type: object
+          description: Required on a limit rule, refused on any other.
+          required: [requests, period_seconds]
+          properties:
+            requests: {type: integer, minimum: 1, maximum: 1000000}
+            period_seconds: {type: integer, minimum: 1, maximum: 86400}
 
     RuleExpr:
       type: object

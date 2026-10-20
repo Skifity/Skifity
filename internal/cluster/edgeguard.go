@@ -374,6 +374,11 @@ func guardObjects(namespace, image string, config guard.Config) ([]any, error) {
 			Ports: []corev1.ServicePort{{
 				Name: "guard", Port: int32(kube.GuardPort), TargetPort: intstr.FromString("guard"),
 			}},
+			// Each replica keeps its own counts for rate-limit rules. Without
+			// this, Traefik's requests alternated between the two and a visitor
+			// got twice the limit; with it, each Traefik sticks to one replica,
+			// and only a replica going away moves it.
+			SessionAffinity: corev1.ServiceAffinityClientIP,
 		},
 	}
 

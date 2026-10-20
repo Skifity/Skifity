@@ -23,19 +23,23 @@ import { Switch } from "@/components/ui/switch"
 import { api } from "@/lib/api"
 import {
   FIREWALL_FIELDS,
+  LIMIT_PERIODS,
   groupOf,
   needsGeo,
   newGroup,
   newTest,
   operatorsFor,
+  withAction,
   withGroupKind,
   withoutCondition,
   type Firewall,
   type FirewallAction,
   type FirewallExpr,
   type FirewallField,
+  type FirewallLimit,
   type FirewallOperator,
   type FirewallRule,
+  type FirewallRuleAction,
 } from "@/lib/firewall"
 
 /**
@@ -246,14 +250,15 @@ function RuleCard({
         />
         <Select
           value={rule.action}
-          onValueChange={(value) => onChange({ ...rule, action: value as FirewallAction })}
+          onValueChange={(value) => onChange(withAction(rule, value as FirewallRuleAction))}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-40" aria-label={t("firewall.ruleAction")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="allow">{t("firewall.action.allow")}</SelectItem>
             <SelectItem value="block">{t("firewall.action.block")}</SelectItem>
+            <SelectItem value="limit">{t("firewall.action.limit")}</SelectItem>
           </SelectContent>
         </Select>
         <CardTitle className="sr-only">{rule.name}</CardTitle>
@@ -273,10 +278,90 @@ function RuleCard({
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {rule.action === "limit" && rule.limit && (
+          <LimitEditor
+            ruleId={rule.id}
+            limit={rule.limit}
+            onChange={(limit) => onChange({ ...rule, limit })}
+          />
+        )}
         <ExprEditor expr={rule.expr} onChange={(expr) => onChange({ ...rule, expr })} depth={0} />
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * How many requests a visitor may make, and in what period.
+ *
+ * Three periods rather than a number of seconds: "per minute" is how anybody
+ * thinks about a login page. A period saved some other way, through the API,
+ * is shown as itself rather than silently replaced.
+ */
+function LimitEditor({
+  ruleId,
+  limit,
+  onChange,
+}: {
+  ruleId: string
+  limit: FirewallLimit
+  onChange: (limit: FirewallLimit) => void
+}) {
+  const { t } = useTranslation()
+  const periods: number[] = [...LIMIT_PERIODS]
+  if (!periods.includes(limit.period_seconds)) periods.push(limit.period_seconds)
+
+  function periodLabel(seconds: number) {
+    switch (seconds) {
+      case 1:
+        return t("firewall.limit.second")
+      case 60:
+        return t("firewall.limit.minute")
+      case 3600:
+        return t("firewall.limit.hour")
+      default:
+        return t("firewall.limit.seconds", { count: seconds })
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label htmlFor={`limit-${ruleId}`} className="text-sm">
+          {t("firewall.limit.requests")}
+        </Label>
+        <Input
+          id={`limit-${ruleId}`}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={1000000}
+          className="w-28"
+          value={limit.requests}
+          onChange={(e) =>
+            onChange({ ...limit, requests: Number.parseInt(e.target.value, 10) || 0 })
+          }
+        />
+        <span className="text-sm text-muted-foreground">{t("firewall.limit.per")}</span>
+        <Select
+          value={String(limit.period_seconds)}
+          onValueChange={(value) => onChange({ ...limit, period_seconds: Number(value) })}
+        >
+          <SelectTrigger className="w-36" aria-label={t("firewall.limit.period")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {periods.map((seconds) => (
+              <SelectItem key={seconds} value={String(seconds)}>
+                {periodLabel(seconds)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("firewall.limit.help")}</p>
+    </div>
   )
 }
 

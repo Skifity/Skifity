@@ -338,3 +338,105 @@ func TestAnEmptyGroupIsRefusedWhenItArrivesAsJSON(t *testing.T) {
 		t.Fatal("the shape the interface sends when the last condition is deleted was accepted")
 	}
 }
+
+// counting is a Counter that remembers every request it is shown, the way the
+// guard's does, without its windows.
+type counting map[string]int
+
+func (c counting) Over(ruleID string, ip netip.Addr, limit Limit) bool {
+	key := ruleID + "|" + ip.String()
+	c[key]++
+	return c[key] > limit.Requests
+}
+
+// The rate limit people come here for: five attempts at the login page a
+// minute, for each visitor, and a block further down that still applies to
+// everybody under that limit.
+func TestALimitRuleDecidesOnlyOverItsLimit(t *testing.T) {
+	set := RuleSet{
+		Default: ActionAllow,
+		Rules: []Rule{
+			{
+				ID: "login", Name: "Five tries a minute at the login page",
+				Action: ActionLimit, Enabled: true,
+				Limit: &Limit{Requests: 5, PeriodSeconds: 60},
+				Expr:  test(FieldPath, OpStartsWith, "/login"),
+			},
+			{
+				ID: "admin", Name: "Nobody outside the office reaches admin",
+				Action: ActionBlock, Enabled: true,
+				Expr: Expr{All: []Expr{
+					test(FieldPath, OpStartsWith, "/login/admin"),
+					test(FieldIP, OpNotIn, "203.0.113.0/24"),
+				}},
+			},
+		},
+	}
+	counter := counting{}
+	visitor := Request{IP: ip("198.51.100.7"), Path: "/login"}
+
+	for i := 1; i <= 5; i++ {
+		if got := set.EvaluateWith(visitor, counter); got.Action != ActionAllow {
+			t.Fatalf("attempt %d was %s, and five are allowed", i, got.Action)
+		}
+	}
+	over := set.EvaluateWith(visitor, counter)
+	if over.Action != ActionLimit || over.RuleID != "login" {
+		t.Fatalf("the sixth attempt in a minute was %+v, want the limit to decide", over)
+	}
+	if over.RetryAfterSeconds != 60 {
+		t.Errorf("the visitor is told to wait %d seconds, want the period", over.RetryAfterSeconds)
+	}
+
+	// Another visitor has a count of their own.
+	if got := set.EvaluateWith(Request{IP: ip("198.51.100.8"), Path: "/login"}, counter); got.Action != ActionAllow {
+		t.Errorf("a different visitor was limited by somebody else's attempts: %s", got.Action)
+	}
+
+	// Under its limit, a limit rule does not decide, so the block below it does.
+	fresh := counting{}
+	if got := set.EvaluateWith(Request{IP: ip("198.51.100.9"), Path: "/login/admin"}, fresh); got.Action != ActionBlock || got.RuleID != "admin" {
+		t.Errorf("the block after a limit rule did not apply: %+v", got)
+	}
+
+	// With nothing counting, a limit never decides: Evaluate on its own is a
+	// pure function of the request.
+	for range 10 {
+		if got := set.Evaluate(visitor); got.Action != ActionAllow {
+			t.Fatalf("a limit decided with nothing counting: %+v", got)
+		}
+	}
+}
+
+func TestALimitIsHeldToOneThatMeansSomething(t *testing.T) {
+	rule := func(action Action, limit *Limit) RuleSet {
+		return RuleSet{Rules: []Rule{{
+			ID: "r", Name: "r", Action: action, Enabled: true, Limit: limit,
+			Expr: test(FieldPath, OpStartsWith, "/"),
+		}}}
+	}
+	for name, set := range map[string]RuleSet{
+		"a limit rule with no limit":       rule(ActionLimit, nil),
+		"no requests at all":               rule(ActionLimit, &Limit{Requests: 0, PeriodSeconds: 60}),
+		"no period":                        rule(ActionLimit, &Limit{Requests: 10, PeriodSeconds: 0}),
+		"a period longer than a day":       rule(ActionLimit, &Limit{Requests: 10, PeriodSeconds: 86401}),
+		"a block rule carrying a limit":    rule(ActionBlock, &Limit{Requests: 10, PeriodSeconds: 60}),
+		"a limit as the set's own default": {Default: ActionLimit},
+	} {
+		if err := set.Validate(); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	if err := rule(ActionLimit, &Limit{Requests: 100, PeriodSeconds: 60}).Validate(); err != nil {
+		t.Errorf("a sensible limit was refused: %v", err)
+	}
+
+	// And it survives the trip through the database.
+	raw, err := json.Marshal(rule(ActionLimit, &Limit{Requests: 100, PeriodSeconds: 60}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"limit":{"requests":100,"period_seconds":60}`) {
+		t.Errorf("the limit is stored as %s", raw)
+	}
+}

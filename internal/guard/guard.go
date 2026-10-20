@@ -41,6 +41,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +101,10 @@ type Guard struct {
 	opts   Options
 	log    *slog.Logger
 	lookup *geoip.Lookup
+	// limits counts the requests rate-limit rules match. It lives as long as
+	// the process: a rules reload keeps the counts, so changing an unrelated
+	// rule does not hand every visitor a fresh allowance.
+	limits *limiter
 
 	mu      sync.RWMutex
 	config  Config
@@ -114,7 +119,13 @@ func New(opts Options) *Guard {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Guard{opts: opts, log: log, lookup: geoip.New()}
+	g := &Guard{opts: opts, log: log, lookup: geoip.New()}
+	g.limits = newLimiter(time.Now, func(ruleID string, visitor netip.Prefix) {
+		// Once per visitor and window rather than once per refused request: a
+		// visitor hammering a login page would otherwise write the log full.
+		g.log.Info("rate limited", "rule", ruleID, "visitor", visitor.String())
+	})
+	return g
 }
 
 // Close releases the geo databases.
@@ -244,7 +255,7 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 		request.ASN = result.ASN
 	}
 
-	return protected.RuleSet.Evaluate(request), request, true
+	return protected.RuleSet.EvaluateWith(request, g.limits), request, true
 }
 
 // Handler is what Traefik talks to.
@@ -273,6 +284,14 @@ func (g *Guard) Handler() http.Handler {
 			// should be unreachable in a running cluster — it is the answer for
 			// the moment between a pod starting and the kubelet noticing.
 			http.Error(w, "This site is not accepting requests right now.", http.StatusServiceUnavailable)
+			return
+		}
+		if decision.Action == edgerules.ActionLimit {
+			// When the visitor may ask again, at the latest: the end of the
+			// longest window it could be. Clients and crawlers that honour it
+			// stop on their own.
+			w.Header().Set("Retry-After", strconv.Itoa(max(decision.RetryAfterSeconds, 1)))
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 		if decision.Action == edgerules.ActionBlock {
@@ -356,6 +375,8 @@ func (g *Guard) watch(ctx context.Context) {
 	defer rules.Stop()
 	geo := time.NewTicker(24 * time.Hour)
 	defer geo.Stop()
+	counts := time.NewTicker(time.Minute)
+	defer counts.Stop()
 
 	for {
 		select {
@@ -367,6 +388,8 @@ func (g *Guard) watch(ctx context.Context) {
 			}
 		case <-geo.C:
 			g.RefreshGeo(ctx, nil, time.Now())
+		case <-counts.C:
+			g.limits.sweep()
 		}
 	}
 }

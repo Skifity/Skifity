@@ -21,7 +21,7 @@ across two replicas, and nothing at all until you install it.
 
 ## Writing a rule
 
-A rule has a name, an action — **Allow** or **Block** — and a condition. The
+A rule has a name, an action — **Allow**, **Block** or **Limit the rate** — and a condition. The
 condition is a group: *match all of these*, or *match any of these*. A group can
 hold another group, which is how and-or-and is written without anybody learning
 a syntax.
@@ -81,6 +81,34 @@ MaxMind subscription. The format is the same.
 free and without any database — they know the answer already and send it with
 the request. The database is then only consulted for what the headers did not
 answer.
+
+## Limiting the rate
+
+A rule whose action is **Limit the rate** counts the requests it matches, for
+each visitor's address, and answers one who has made more than its limit in the
+period with `429 Too Many Requests` and a `Retry-After` header, until the period
+is over. Under the limit it does not decide: the rules after it are asked as if
+it were not there, so a limit on the login page does not stop a block further
+down applying to everybody.
+
+The everyday shape is a login page: *path starts with* `/login`, limited to
+five requests a minute. A visitor who mistypes their password twice never sees
+it; somebody trying a list of passwords sees nothing else.
+
+* The count is per address, and per /64 for IPv6, because one machine is
+  usually given a whole one. It is the address the firewall already works out
+  (see below), so behind Cloudflare it is the visitor's, not Cloudflare's.
+* Each period is a fixed window from a visitor's first request in it, so a
+  visitor who times their requests to the second gets twice the limit once,
+  and then waits like everybody else.
+* The counts live in the firewall's own process, not in a database: a rule
+  saved again keeps them, a restart of the firewall forgets them. Each of
+  Traefik's instances keeps talking to the same firewall replica, so the two
+  replicas do not each give a visitor the whole limit.
+* Past two hundred thousand visitors counted at once, a new one is not
+  counted at all rather than refused. That many addresses at once is a flood
+  from many machines, which a count per address does not stop, and a limiter
+  that refused everybody once it was full would be an outage of its own.
 
 ## What happens to a rule that cannot be answered
 
@@ -170,12 +198,13 @@ the guard if it is not running yet. What it costs below applies to it too.
   softened per site. Two replicas run, spread across servers, and a replica with
   no rules loaded reports itself as not ready so a rollout never puts one in
   front of traffic it cannot judge.
-* **It is not a WAF.** There is no request body inspection, no per-app rate
-  limiting and no bot scoring. It answers "may this address, from this place,
-  reach this path", and nothing else.
-* **It is not protection against a flood.** A flood of requests, from one address
-  or many, reaches Traefik before anything here looks at it, and Traefik is shared
-  by every app on the server. The panel limits what one address can ask of its own
+* **It is not a WAF.** There is no request body inspection and no bot
+  scoring. It answers "may this address, from this place, reach this path, and
+  how often", and nothing else.
+* **It is not protection against a flood.** A rate limit stops one address
+  asking too often; a flood of requests, from many addresses, reaches Traefik
+  before anything here looks at it, and Traefik is shared by every app on the
+  server. The panel limits what one address can ask of its own
   API, and Traefik is capped in memory so a runaway is one restarted pod, but
   volume is a job for something in front of the server: Cloudflare's proxy or
   tunnel, or the provider's own DDoS protection. See

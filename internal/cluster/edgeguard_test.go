@@ -90,6 +90,11 @@ func TestTheGuardSurvivesAServerAndARollout(t *testing.T) {
 	if len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != int32(kube.GuardPort) {
 		t.Errorf("the Service listens on %+v and the middleware dials %d", service.Spec.Ports, kube.GuardPort)
 	}
+	// Each replica counts rate limits on its own, so Traefik has to keep asking
+	// the same one, or every visitor gets twice the limit.
+	if service.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
+		t.Errorf("the guard's Service is not sticky (%q), so a rate limit is split between replicas", service.Spec.SessionAffinity)
+	}
 }
 
 // It reads a file and answers HTTP. A token for the Kubernetes API in a pod

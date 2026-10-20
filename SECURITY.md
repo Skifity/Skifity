@@ -93,10 +93,11 @@ what has been executed and what has only been written and tested against fakes.
   done. Until it is, treat a team that can build as able to affect every
   team's images, and do not host teams that do not trust each other.
 
-**Floods are not handled.** A volumetric attack, or one address asking faster
-than a server can answer, is out of scope above, and the panel does little about
-it beyond a per-address limit on its own API, a cap on how much memory Traefik may
-take, and per-app allow and block rules. There is no per-app rate limit. Put
+**Floods are not handled.** A volumetric attack, from many addresses at once, is
+out of scope above. What the panel does is per address: a limit on its own API, a
+cap on how much memory Traefik may take, and, on an app with the firewall on,
+allow and block rules and rate limits per visitor's address — which stop one
+address asking too often and do nothing against a thousand asking at once. Put
 Cloudflare, or your provider's DDoS protection, in front of anything that matters.
 
 **The panel is a single point of failure.** It is one pod with its database and

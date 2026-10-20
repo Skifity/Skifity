@@ -58,10 +58,44 @@ const (
 	ActionAllow Action = "allow"
 	// ActionBlock answers 403 and never reaches the app.
 	ActionBlock Action = "block"
+	// ActionLimit counts the requests a rule matches, for each visitor, and
+	// answers 429 to a visitor who has made more than the rule's Limit allows.
+	// Under the limit the rule does not decide, and the rules after it are asked
+	// as if it were not there: a limit on /login does not stop a block on a
+	// country further down the list.
+	ActionLimit Action = "limit"
 )
 
-// Valid reports whether an action is one that exists.
+// Valid reports whether an action can be a rule set's default: allow or
+// block. A limit is not a default, because it has no answer of its own for
+// a visitor under it.
 func (a Action) Valid() bool { return a == ActionAllow || a == ActionBlock }
+
+// validForRule reports whether a rule may have this action.
+func (a Action) validForRule() bool { return a.Valid() || a == ActionLimit }
+
+// Limit is how many requests a visitor may make in a period, for a rule whose
+// action is ActionLimit.
+type Limit struct {
+	Requests      int `json:"requests"`
+	PeriodSeconds int `json:"period_seconds"`
+}
+
+// The bounds a limit is held to. Under one request is no limit; over a day is
+// a period nothing would remember, the guard included.
+const (
+	maxLimitRequests = 1_000_000
+	maxLimitPeriod   = 24 * 60 * 60
+)
+
+// Counter keeps the counts limit rules need. A rule set keeps none itself,
+// which is what keeps Evaluate a function of the request and nothing else;
+// the guard passes one that remembers.
+type Counter interface {
+	// Over counts one request by a visitor against a rule's limit and reports
+	// whether that visitor has now made more than it allows.
+	Over(ruleID string, ip netip.Addr, limit Limit) bool
+}
 
 // Field is one thing about a request that a test can look at.
 type Field string
@@ -159,6 +193,8 @@ type Rule struct {
 	Action  Action `json:"action"`
 	Expr    Expr   `json:"expr"`
 	Enabled bool   `json:"enabled"`
+	// Limit is set on a rule whose action is ActionLimit, and on no other.
+	Limit *Limit `json:"limit,omitempty"`
 }
 
 // RuleSet is what protects one app, or the panel itself.
@@ -208,6 +244,9 @@ type Decision struct {
 	// they test was not known. It is the difference between a rule that did not
 	// match and a rule that could not be asked, and the panel shows it.
 	Skipped []string
+	// RetryAfterSeconds is how long a visitor stopped by a limit rule should
+	// wait, at most, before asking again. Zero for every other decision.
+	RetryAfterSeconds int
 }
 
 // truth is three-valued: true, false, or not knowable from this request.
@@ -219,11 +258,19 @@ const (
 	isUnknown
 )
 
-// Evaluate runs a rule set against a request.
+// Evaluate runs a rule set against a request, with nothing counting: a limit
+// rule never decides. See EvaluateWith.
+func (s RuleSet) Evaluate(req Request) Decision {
+	return s.EvaluateWith(req, nil)
+}
+
+// EvaluateWith runs a rule set against a request.
 //
 // Rules are tried in order and the first one that is true decides, which is the
-// order they are shown in and the order somebody reading them would assume.
-func (s RuleSet) Evaluate(req Request) Decision {
+// order they are shown in and the order somebody reading them would assume. A
+// limit rule that is true counts the request with counter, and decides only
+// when the visitor has gone over its limit.
+func (s RuleSet) EvaluateWith(req Request, counter Counter) Decision {
 	decision := Decision{Action: s.Default}
 	if !decision.Action.Valid() {
 		decision.Action = ActionAllow
@@ -234,6 +281,13 @@ func (s RuleSet) Evaluate(req Request) Decision {
 		}
 		switch rule.Expr.evaluate(req) {
 		case isTrue:
+			if rule.Action == ActionLimit {
+				if counter == nil || rule.Limit == nil || !req.IP.IsValid() ||
+					!counter.Over(rule.ID, req.IP, *rule.Limit) {
+					continue
+				}
+				decision.RetryAfterSeconds = rule.Limit.PeriodSeconds
+			}
 			decision.Action = rule.Action
 			decision.RuleID = rule.ID
 			decision.RuleName = rule.Name
@@ -482,8 +536,11 @@ func (s RuleSet) Validate() error {
 		if strings.TrimSpace(rule.Name) == "" {
 			return fmt.Errorf("%s has no name; a rule nobody can identify is a rule nobody will dare delete", where)
 		}
-		if !rule.Action.Valid() {
-			return fmt.Errorf("%s has no action; it is %q or %q", where, ActionAllow, ActionBlock)
+		if !rule.Action.validForRule() {
+			return fmt.Errorf("%s has no action; it is %q, %q or %q", where, ActionAllow, ActionBlock, ActionLimit)
+		}
+		if err := rule.validateLimit(); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
 		}
 		if err := rule.Expr.validate(0); err != nil {
 			return fmt.Errorf("%s: %w", where, err)
@@ -496,6 +553,28 @@ const (
 	maxRules = 200
 	maxDepth = 8
 )
+
+// validateLimit holds a limit rule to a limit that means something, and every
+// other rule to having none: a block rule carrying a limit nobody can see in
+// the interface would be a rule that does not do what it shows.
+func (r Rule) validateLimit() error {
+	if r.Action != ActionLimit {
+		if r.Limit != nil {
+			return fmt.Errorf("only a rule that limits the rate has a limit")
+		}
+		return nil
+	}
+	if r.Limit == nil {
+		return fmt.Errorf("a rule that limits the rate needs a number of requests and a period")
+	}
+	if r.Limit.Requests < 1 || r.Limit.Requests > maxLimitRequests {
+		return fmt.Errorf("the limit is between 1 and %d requests", maxLimitRequests)
+	}
+	if r.Limit.PeriodSeconds < 1 || r.Limit.PeriodSeconds > maxLimitPeriod {
+		return fmt.Errorf("the period of a limit is between a second and a day")
+	}
+	return nil
+}
 
 func (e Expr) validate(depth int) error {
 	if depth > maxDepth {

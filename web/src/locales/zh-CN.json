@@ -4180,7 +4180,8 @@
     "noGeoHelp": "请在设置、域名与 HTTPS 中打开「查询访客的国家和网络」。在此之前，这类规则在每次请求时都会被跳过。",
     "action": {
       "allow": "允许",
-      "block": "拦截"
+      "block": "拦截",
+      "limit": "限制频率"
     },
     "fields": {
       "ip.src": "访客地址",
@@ -4209,6 +4210,17 @@
       "http.method": "POST",
       "http.user_agent": "badbot",
       "http.header": "一个值"
+    },
+    "ruleAction": "此规则的动作",
+    "limit": {
+      "requests": "请求数",
+      "per": "每",
+      "period": "时间段",
+      "second": "秒",
+      "minute": "分钟",
+      "hour": "小时",
+      "help": "按每位访问者的地址计数。超过上限后，在该时间段结束前一律返回 429 Too Many Requests；未超过时，后面的规则照常生效。",
+      "seconds_other": "{{count}} 秒"
     }
   },
   "appPassword": {

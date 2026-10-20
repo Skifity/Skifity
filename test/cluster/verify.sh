@@ -794,6 +794,43 @@ PYEOF
 	fi
 fi
 
+step "A rate limit is a ceiling at the ingress"
+
+# Through the real Traefik and the real guard: a rule that allows three requests
+# a minute on one path, and the fourth answered 429 before it reaches the app.
+if [ -z "$APP_HOST" ]; then
+	skip "the rate limit" "phase 1 did not run or the app was given no address, so there is nothing to limit"
+else
+	api POST /api/components/firewall/install >/dev/null 2>&1 \
+		|| no "the firewall component could not be installed"
+	api PUT "/api/apps/$APP_ID/firewall" "$(cat <<'JSON'
+{"enabled":true,"rules":{"default":"allow","rules":[{"id":"verify-limit","name":"Three a minute","action":"limit","enabled":true,
+ "limit":{"requests":3,"period_seconds":60},
+ "expr":{"test":{"field":"http.path","op":"starts_with","values":["/limited"]}}}]}}
+JSON
+)" >/dev/null || no "a rate-limit rule was refused"
+	# The kubelet delivers a changed ConfigMap within a minute or so, and the
+	# guard reads it within seconds of that; until then nothing is counted.
+	CODES=""
+	for _ in $(seq 1 30); do
+		CODES=""
+		for _ in 1 2 3 4 5; do
+			CODES="$CODES $(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Host: $APP_HOST" "http://127.0.0.1/limited")"
+		done
+		case "$CODES" in *429*) break ;; esac
+		sleep 5
+	done
+	case "$CODES" in
+		*429*) ok "past the limit the ingress answered 429 (the last five answered$CODES)" ;;
+		*) no "five requests in a row to a path limited to three a minute all got through:$CODES" ;;
+	esac
+	[ "$(through_ingress "$APP_HOST" 10)" = "200" ] \
+		&& ok "a path the rule does not cover is not limited" \
+		|| no "a path the rate-limit rule does not cover was refused too"
+	# Off again, so what follows sees the app as it was.
+	api PUT "/api/apps/$APP_ID/firewall" '{"enabled":false,"rules":{"default":"allow","rules":[]}}' >/dev/null || true
+fi
+
 step "A quota is a real ceiling (checklist 13)"
 
 QUOTA=$(api GET "/api/environments/$ENV_ID/quota" 2>/dev/null || echo "{}")

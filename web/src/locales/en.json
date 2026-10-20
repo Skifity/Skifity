@@ -4200,7 +4200,8 @@
     "noGeoHelp": "Turn on \"Look up a visitor's country and network\" under Settings, then Domains and HTTPS. Until then, a rule like this is skipped on every request.",
     "action": {
       "allow": "Allow",
-      "block": "Block"
+      "block": "Block",
+      "limit": "Limit the rate"
     },
     "fields": {
       "ip.src": "Visitor's address",
@@ -4229,6 +4230,18 @@
       "http.method": "POST",
       "http.user_agent": "badbot",
       "http.header": "a value"
+    },
+    "ruleAction": "What this rule does",
+    "limit": {
+      "requests": "Requests",
+      "per": "per",
+      "period": "Period",
+      "second": "second",
+      "minute": "minute",
+      "hour": "hour",
+      "help": "Counted for each visitor's address. Past the limit they are answered 429 Too Many Requests until the period is over; under it, the rules after this one still apply.",
+      "seconds_one": "{{count}} second",
+      "seconds_other": "{{count}} seconds"
     }
   },
   "appPassword": {

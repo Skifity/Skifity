@@ -4180,7 +4180,8 @@
     "noGeoHelp": "Nyalakan \"Cari negara dan jaringan pengunjung\" di Setelan, lalu Domain dan HTTPS. Sampai itu, aturan seperti ini dilewati di setiap request.",
     "action": {
       "allow": "Izinkan",
-      "block": "Blokir"
+      "block": "Blokir",
+      "limit": "Batasi laju"
     },
     "fields": {
       "ip.src": "Alamat pengunjung",
@@ -4209,6 +4210,17 @@
       "http.method": "POST",
       "http.user_agent": "badbot",
       "http.header": "sebuah nilai"
+    },
+    "ruleAction": "Apa yang dilakukan aturan ini",
+    "limit": {
+      "requests": "Permintaan",
+      "per": "per",
+      "period": "Periode",
+      "second": "detik",
+      "minute": "menit",
+      "hour": "jam",
+      "help": "Dihitung untuk setiap alamat pengunjung. Melewati batas, pengunjung dijawab 429 Too Many Requests sampai periodenya habis; di bawah batas, aturan setelah ini tetap berlaku.",
+      "seconds_other": "{{count}} detik"
     }
   },
   "appPassword": {
