@@ -75,6 +75,20 @@ jobs:
           free -m
           df -h /
 
+      # A bucket for phase 2's backup and restore, on this server's own
+      # address: S3 that nothing outside can reach, which is the case the
+      # backup jobs' network policy exists for. moto is a stand-in for S3 that
+      # answers presigned URLs as S3 does and keeps what it is given in memory.
+      - name: Start a bucket on this server
+        run: |
+          python3 -m venv /tmp/moto
+          /tmp/moto/bin/pip install --quiet 'moto[server]>=5.1,<6'
+          nohup /tmp/moto/bin/moto_server -H 0.0.0.0 -p 9000 >/tmp/moto.log 2>&1 &
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9000/ && break; sleep 1; done
+          curl -fsS -X PUT http://127.0.0.1:9000/skifity-backups >/dev/null
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          echo "BUCKET_ENDPOINT=http://${address}:9000" >>"$GITHUB_ENV"
+
       # Let's Encrypt's staging server: nothing on the internet can reach this
       # runner, so no certificate will be issued, and the production server is
       # not the place to fail a challenge on every push. The installer says
@@ -91,6 +105,10 @@ jobs:
             SKIFITY_PHASES="$PHASES" \
             VERIFY_GIT_REPO="https://github.com/${GITHUB_REPOSITORY}" \
             VERIFY_GIT_BRANCH="${GITHUB_REF_NAME}" \
+            VERIFY_S3_ENDPOINT="$BUCKET_ENDPOINT" \
+            VERIFY_S3_BUCKET=skifity-backups \
+            VERIFY_S3_ACCESS_KEY=not-a-real-key \
+            VERIFY_S3_SECRET_KEY=not-a-real-secret \
             bash test/cluster/verify.sh
 
       - name: Collect what the cluster says

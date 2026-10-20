@@ -724,8 +724,16 @@ else
 JSON
 )" >/dev/null || no "the storage settings were refused"
 
-	# Something to lose. Through the app's own one-off command runner, which is
-	# also the only way a migration ever runs.
+	# Something to lose, and something to get back: a row written before the
+	# backup, changed after it, and expected back as it was once the backup is
+	# restored. Through the database's own pod, as its superuser, so what is
+	# checked is the data and not anything the panel says about it.
+	DB_POD=$(kubectl -n "$NAMESPACE" get pods -l cnpg.io/cluster=verifydb -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+	DB_NAME=$(kubectl -n "$NAMESPACE" get clusters.postgresql.cnpg.io verifydb -o jsonpath='{.spec.bootstrap.initdb.database}' 2>/dev/null || echo "")
+	db_sql() { kubectl -n "$NAMESPACE" exec "$DB_POD" -c postgres -- psql -tAq -d "${DB_NAME:-postgres}" -c "$1" 2>>"$REPORT"; }
+	db_sql "create table if not exists verify_restore (value text); delete from verify_restore; insert into verify_restore values ('before')" >/dev/null \
+		|| no "a row could not be written to the database before the backup"
+
 	BACKUP_ID=$(api POST "/api/databases/$DB_ID/backups" '{}' | pick id 2>/dev/null || echo "")
 	if [ -z "$BACKUP_ID" ]; then
 		no "a backup could not be started"
@@ -736,7 +744,8 @@ JSON
 			sleep 10
 		done
 		if [ "$B_STATE" = "succeeded" ]; then
-			ok "a backup ran and was uploaded"
+			ok "a backup ran and was uploaded to $VERIFY_S3_ENDPOINT"
+			db_sql "update verify_restore set value = 'after'" >/dev/null || true
 			OP=$(api POST "/api/databases/$DB_ID/restore/$BACKUP_ID?overwrite=true" | pick id 2>/dev/null || echo "")
 			if [ -z "$OP" ]; then
 				no "the restore was refused"
@@ -749,9 +758,14 @@ JSON
 				[ "$R_STATE" = "succeeded" ] \
 					&& ok "the backup restored over the live database without an error" \
 					|| no "the restore ended as '${R_STATE:-unknown}'. A backup that has never been restored is a file, not a backup."
+				RESTORED=$(db_sql "select value from verify_restore" | tr -d '[:space:]')
+				[ "$RESTORED" = "before" ] \
+					&& ok "and what is in the database is what was there when the backup was taken" \
+					|| no "after the restore the row reads '${RESTORED:-nothing}', not what the backup was taken of ('before')"
 			fi
 		else
-			no "the backup ended as '${B_STATE:-unknown}'; the bucket, the keys or the path style is wrong"
+			no "the backup ended as '${B_STATE:-unknown}'; the bucket, the keys, the path style, or the way from the backup job to the bucket is wrong"
+			kubectl -n "$NAMESPACE" get networkpolicy -o wide >>"$REPORT" 2>&1 || true
 		fi
 	fi
 	say "  Restoring into a *different* cluster is the half a script cannot do on one"
