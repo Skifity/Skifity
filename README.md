@@ -209,17 +209,22 @@ while the installer is running.
 </details>
 
 > [!NOTE]
-> **Skifity runs on a real cluster on every push, and on one server only.** A
-> fresh Ubuntu 24.04 machine is installed with the real installer and taken
-> through [`test/cluster/verify.sh`](test/cluster/README.md): builds from Git
-> and from a folder, rollouts under traffic, rollback, autoscaling, scale to
-> zero, volumes, PostgreSQL, the fences between tenants, quotas, the panel
-> switched off and replaced under a running app, and notifications. It has not
-> yet met a second server, a server failing, a backup restored from a real
-> bucket, an upgrade from one release to the next, or anybody attacking it on
-> purpose. Try it on a spare VPS before you move production onto
-> it, and [open an issue](https://github.com/Skifity/Skifity/issues) with
-> whatever you find. More in [Status](#status).
+> **Skifity runs on a real cluster on every push.** A fresh Ubuntu 24.04
+> machine is installed with the real installer and taken through
+> [`test/cluster/verify.sh`](test/cluster/README.md): builds from Git, from a
+> folder and from a Gitea on the machine's own network, rollouts under traffic,
+> rollback, autoscaling, scale to zero, a certificate for an app's own domain,
+> volumes, all nine database engines, backups of each restored from a bucket,
+> workers and scheduled commands, a Compose stack, a template, promotion between
+> environments, maintenance mode, the database tunnel, the fences between
+> tenants, quotas, the panel switched off and replaced under a running app, and
+> notifications by webhook, email, ntfy and Gotify. The same runs on two
+> servers, one of them switched off without warning, and as an upgrade from the
+> last release. It has not met Let's Encrypt itself, a bucket that is not a
+> stand-in, two servers on separate networks, or anybody attacking it on
+> purpose. Try it on a spare VPS before you move production onto it, and
+> [open an issue](https://github.com/Skifity/Skifity/issues) with whatever you
+> find. More in [Status](#status).
 
 ## Features
 
@@ -539,19 +544,25 @@ sudo sh installer/install.sh --image ghcr.io/skifity/skifity:$(git describe --ta
 
 Two things, plainly.
 
-**It has met one real server, and keeps meeting it.** Every release has
-static binaries for Linux, macOS and Windows and a multi-architecture image at
+**It meets real servers on every push.** Every release has static binaries
+for Linux, macOS and Windows and a multi-architecture image at
 `ghcr.io/skifity/skifity`. Every push to `main` installs that commit on a fresh
 GitHub-hosted Ubuntu machine with the real installer and runs
-[`test/cluster/verify.sh`](test/cluster/README.md) against the k3s it made;
-its first runs found what no fake could have — a database volume asking for a
-storage class that is not there, a database kept off the Kubernetes API, an app
-on a cloud machine given no address, a new pod unfenced for its first moment —
-and each is fixed.
+[`test/cluster/verify.sh`](test/cluster/README.md) against the k3s it made,
+with a bucket and an ACME server standing in beside it; runs it again across
+two servers, the second a virtual machine the panel adds over SSH; switches
+that second server off without warning; and upgrades the last release to the
+commit with an app serving. Those runs found what no fake could have — a
+database volume asking for a storage class that is not there, a database kept
+off the Kubernetes API, a new pod unfenced for its first moment, a certificate
+no app could ever be issued, a database engine that never started, an upgrade
+that dropped the panel's domain, a server that could not be removed once it
+had failed, a restart that put both of an app's instances on one server,
+builds that could not clone from a Git host on one's own network — and each is
+fixed.
 [`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
 platform is judged on that proves, and [`docs/progress.md`](docs/progress.md)
-what each run found. Nothing has run on more than one server yet. Try it on a
-spare VPS first.
+what each run found. Try it on a spare VPS first.
 
 **The plugin store is not published.** `plugins.skifity.com` does not resolve,
 so the Store tab says it could not reach anything. A plugin is installed by

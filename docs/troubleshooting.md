@@ -564,10 +564,13 @@ free -m; uptime
 ## A server says "not responding"
 
 The node stopped reporting. The server may be off, out of disk, or unreachable.
-The cluster notices within a minute, and from then on an app with an instance
-on another server is answered by that one alone. The instances that were on
-the server are started on the others about five minutes after it stopped, if
-there is room; until then an app whose only instance was there is down.
+The cluster notices within a minute (fifty seconds or so; it waits that long so
+that a server which is only slow to report is not taken for one that is gone).
+Until it does, a request that lands on an instance that was on that server goes
+unanswered; from then on an app with an instance on another server is answered
+by that one alone. The instances that were on the server are started on the
+others about five minutes after it stopped, if there is room; until then an app
+whose only instance was there is down.
 
 If the server is gone for good, remove it in the panel. A server that is not
 answering cannot be emptied first, so it is not waited on: its instances start

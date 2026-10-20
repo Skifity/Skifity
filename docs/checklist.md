@@ -9,7 +9,7 @@ Three statuses, and only three:
 
 | | Means |
 |---|---|
-| **Works** | There is a test that runs, on every push, and it passes: `make check`, `make smoke`, the Playwright suite, or the Cluster workflow, which installs Skifity on a fresh single-server k3s and runs `test/cluster/verify.sh` against it. |
+| **Works** | There is a test that runs, on every push, and it passes: `make check`, `make smoke`, the Playwright suite, the Cluster workflow, which installs Skifity on a fresh single-server k3s and runs `test/cluster/verify.sh` against it and upgrades the last release with an app serving, or the Two servers workflow, which runs the same across two servers and switches one off. |
 | **Written** | The code and its unit tests exist, and no cluster run has exercised it yet. |
 | **Missing** | Not there. |
 
@@ -21,29 +21,27 @@ Nothing is marked Works because it looks right.
 |---|---|---|---|
 | 1 | Git → build → deploy | **Works** | Cluster workflow, phase 1 |
 | 2 | Live build logs | **Works** | Cluster workflow, phase 1 |
-| 3 | Domain and HTTPS, automatically | Works (address) / Written (certificate) | Cluster workflow, phase 1; a certificate needs a domain of one's own |
+| 3 | Domain and HTTPS, automatically | **Works** | Cluster workflow, phase 1, with an ACME server on the runner |
 | 4 | Variables and secrets, safely | **Works** | Go tests, `make smoke`; cluster workflow, phase 1 |
 | 5 | Persistent storage | **Works** | Cluster workflow, phase 2 |
-| 6 | One-click databases | Works (PostgreSQL) / Written (the other eight) | Cluster workflow, phase 2 |
-| 7 | Backup and restore, proven | Written | Phase 2 |
+| 6 | One-click databases | **Works** | Cluster workflow, phase 2: all nine engines |
+| 7 | Backup and restore, proven | **Works** | Cluster workflow, phase 2, with a bucket on the runner |
 | 8 | One-click rollback | **Works** | Cluster workflow, phase 1 |
 | 9 | Zero-downtime deploys | **Works** | Cluster workflow, phases 1 and 5 |
 | 10 | Application logs and metrics | **Works** | Cluster workflow, phase 5 |
 | 11 | Safe sign-in (2FA/SSO) and roles | **Works** | Go tests, `make smoke` |
 | 12 | Isolation between projects | **Works** | Go tests; cluster workflow, phase 3 |
 | 13 | Resource limits and quotas | **Works** | Cluster workflow, phase 3 |
-| 14 | Apps keep running when the panel is down | **Works** | Cluster workflow, phase 4 |
-| 15 | Easy install and upgrade | Works (install) / Written (upgrade between releases) | `make smoke`; the cluster workflow installs with the real installer and replaces the panel under an app serving, phase 5 |
+| 14 | Apps keep running when the panel is down | **Works** | Cluster workflow, phase 4; Two servers workflow |
+| 15 | Easy install and upgrade | **Works** | `make smoke`; the Cluster workflow installs with the real installer, upgrades the last release with an app serving, and replaces the panel under one, phase 5 |
 | 16 | Export, no lock-in | **Works** | Go tests, `make smoke` |
-| 17 | Notification on failure | Works (webhook) / Written (the other nine services) | Cluster workflow, phase 5 |
+| 17 | Notification on failure | Works (webhook, email, ntfy, Gotify) / Written (the other six services) | Cluster workflow, phase 5, with Mailpit, ntfy and Gotify on the runner |
 | 18 | Documentation | Works (it is served and its links resolve) | Go tests; Phase 6 is a person |
 
-Twelve are Works end to end, five in part, one Written. What is left Written
-is what a single throwaway server cannot show, and one thing it could: a backup
-taken and restored from a real bucket, a certificate for a domain of one's own,
-the eight database engines that are not PostgreSQL, delivery to the nine
-notification services that are not a webhook, everything that needs a second
-server, and an upgrade from one release to the next.
+Sixteen are Works end to end and two in part. What is left is what no
+machine GitHub lends can show: delivery to the six notification services the
+crosscheck runs no server for — Telegram, Discord, Slack, Mattermost,
+Microsoft Teams and Pushover — and the person phase 6 is.
 
 ## Where each one is
 
@@ -61,9 +59,13 @@ build's log through the panel while the build is still running.
 added. Every app also gets a free address with no DNS to configure: `sslip.io`
 over plain HTTP, on purpose — every install in the world shares that domain's
 Let's Encrypt rate limit (ADR-0015). A domain you own gets a certificate. The
-Cluster workflow checks the free address answers through the ingress; the
-certificate needs a domain of one's own pointed at the server, which a runner
-does not have, so it has not been issued on a real cluster yet.
+Cluster workflow checks the free address answers through the ingress, and runs
+an ACME server on the runner — Pebble, Let's Encrypt's own test server — which
+the crosscheck gives the panel under Settings: a domain of the app's own is
+issued a certificate validated over HTTP through the same ingress, answers over
+HTTPS with it, sends plain HTTP there, and leaves the free address on plain
+HTTP. What it cannot show is Let's Encrypt itself, for a domain on the
+internet.
 
 **4. Variables and secrets.** Every secret is sealed with a key of its own,
 wrapped by a master key kept outside the database, and bound to where it is
@@ -82,15 +84,22 @@ a volume and several instances.
 **6. One-click databases.** PostgreSQL through CloudNativePG, plus MySQL,
 MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse and Memcached as
 single-instance StatefulSets. The operator is installed on first use. Credentials are generated,
-sealed, and injected into a linked app as a connection string.
+sealed, and injected into a linked app as a connection string. The Cluster
+workflow asks for all nine and waits for each to come up on its own, under the
+environment's restricted profile and its quota; that found Dragonfly crashing
+on its password variable, and MongoDB 8 refusing Linux 7.0, both fixed.
 
 **7. Backup and restore.** Scheduled or manual, to any S3-compatible bucket,
-for databases and for volumes. **"Proven" is exactly the word this cannot
-claim**: no backup has ever been taken and no backup has ever been restored.
-Phase 2 does both, given a bucket, and the Cluster workflow has none to give it,
-so it skips and says so. The drill worth running once by hand is the other half:
-restore into a *different* cluster, which is the only version of this that
-matters on the day it matters.
+for databases and for volumes. The Cluster workflow runs a bucket on the runner
+and phase 2 proves it the only way the word allows: for every engine the panel
+backs up — PostgreSQL, MySQL, MariaDB, MongoDB, Redis and Valkey — and for an
+app's volume, it writes a value, takes a backup, changes the value, restores
+the backup over the live database or disk, and reads the first value back
+through the engine's own client. A backup sealed with a passphrase is checked
+to be ciphertext in the bucket and still restores; the panel reads backups back
+through, and copies its own database to the bucket. The drill worth running
+once by hand is the other half: restore into a *different* cluster, which is
+the only version of this that matters on the day it matters.
 
 **8. One-click rollback.** A rollback is a new deployment carrying the old
 image, so history stays a straight line, and it restores the settings that
@@ -135,7 +144,11 @@ Phase 3 asks for sixty-four cores and a real quota refuses them.
 **14. Apps keep running when the panel is down.** True by construction: apps are
 served by Kubernetes and the panel is not in the request path. Being true by
 construction is not the same as having been seen, and it has been: Phase 4
-scales the panel to zero and the app answers every request.
+scales the panel to zero and the app answers every request. With two servers,
+it drains one with the app answering, the panel takes one out with the app
+answering throughout, and a second job switches one off without warning: the
+app answers from the server that is left once the cluster knows, and the
+panel can remove the server that is gone.
 
 **15. Install and upgrade.** One POSIX shell script, no bashisms, with a
 preflight that refuses before it changes anything and an uninstaller that can be
@@ -144,7 +157,10 @@ Cluster workflow installs every push with it on a fresh server. The panel
 upgrades itself by changing the image on its own Deployment; the apps do not
 notice, and Phase 5 checks that by replacing the panel's pod under an app
 serving traffic. An upgrade from one release to the next, by running the
-installer again, is the part that has not run.
+newer installer over the older one, has a job of its own: it installs the last
+release, runs this commit's installer over it with an app answering twice a
+second, checks what the new panel kept, and goes back with the commands the
+installer printed.
 
 **16. Export, no lock-in.** `skifity export` writes the whole team as JSON plus
 each app's Kubernetes objects, ready for `kubectl apply` on any cluster. The
@@ -159,10 +175,14 @@ events: a deploy succeeding or failing, an app going unhealthy, a server added
 or lost, a backup failing, a certificate failing. A channel can be changed
 after it is added, and limited to some projects; what each event belongs to is
 in [Configuration](configuration.md#limiting-a-channel-to-some-projects). The
-payloads are checked against a local listener in Go tests. Phase 5 stands up a
-listener on a real cluster and breaks a deployment on purpose, and the webhook
-arrives; delivery to the nine real services that are not a webhook has never
-been seen end to end.
+payloads are checked against a local listener in Go tests. Phase 5 runs a
+webhook listener, Mailpit, an ntfy server that refuses anybody without a token
+and Gotify on the runner, makes a channel of each, and reads each test message
+back through that server's own API; then it breaks a deployment on purpose,
+and the failure arrives at all four. Email goes through the panel's own Email
+settings, and so does a password reset, whose link sets a new password and
+works once. Delivery to the six services the crosscheck runs no server for has
+never been seen end to end.
 
 **18. Documentation.** Thirteen pages, served from inside the binary so they work on
 a machine with no other browser and no outbound network — which is exactly when
@@ -201,24 +221,32 @@ installer would have pulled in vain, and Windows binaries named `.exe.exe`.
 v0.1.0 was cut before the cluster run that `docs/releasing.md` asks for, by the
 maintainer's decision. The run has happened since, on every push: the `Cluster`
 workflow installs the commit on a fresh GitHub-hosted Ubuntu server with the
-real installer and works through `test/cluster/verify.sh`. Its first runs found
-what the fakes could not — an empty storage class, a database kept off the
-API, an app with no address on a cloud machine, a new pod's unfenced first
-moment, a scale-to-zero add-on fetched by a name no release has — and v0.1.1 is
-the tag with all of it fixed.
+real installer and works through `test/cluster/verify.sh`, with a bucket and
+an ACME server beside it, and upgrades the last release to the commit; the
+`Two servers` workflow runs the same across two servers and switches one off.
+Their runs found what the fakes could not — an empty storage class, a database
+kept off the API, an app with no address on a cloud machine, a new pod's
+unfenced first moment, a scale-to-zero add-on fetched by a name no release
+has, a certificate no app could be issued, a database engine that crashed on
+its password and another that refused a new kernel, an upgrade that dropped
+the panel's domain, a server that could not be removed once it had failed, a
+restart that put both of an app's instances on one server, builds that could
+not clone from a Git host on one's own network — and v0.1.1 is the tag with
+all of it fixed.
 
 What is left, in order:
 
-1. **An upgrade from one release to the next**, by running the newer
-   installer over an install of the older one with an app serving.
-2. **A second server.** Pulls through another server's NodePort, a server
-   going away, the gateway addresses the registry lets in: nothing above has
-   run on more than one. Phase 4 says how.
-3. **A backup restored from a real bucket**, and a certificate for a domain of
-   one's own: set the variables `test/cluster/README.md` names.
-4. **Phase 6, with a person who has not seen it.** The documentation is served
+1. **Phase 6, with a person who has not seen it.** The documentation is served
    and its links resolve, which is not the same as it being followed.
    `docs/walkthrough.md` is the sheet they fill in.
+2. **Servers of one's own.** Everything above runs on machines GitHub lends
+   for an hour: two servers on one runner, a stand-in bucket, Let's Encrypt's
+   test server. A network between servers that drops packets, a real bucket,
+   Let's Encrypt itself and a restore into a different cluster are owed by
+   somebody running it.
+3. **The six notification services the crosscheck runs no server for** —
+   Telegram, Discord, Slack, Mattermost, Microsoft Teams and Pushover. Each
+   needs an account, or for Mattermost a server, to deliver to.
 
 Everything else on the roadmap is smaller than any of these.
 
@@ -239,7 +267,7 @@ sudo SKIFITY_IMAGE=... SKIFITY_PHASES=2 bash test/cluster/verify.sh   # one phas
 | 1 — the basic path | 1, 2, 3, 4, 8, 9 | A server |
 | 2 — the data | 5, 6, 7, 16 | A server; backups need an S3 bucket |
 | 3 — security and isolation | 11, 12, 13 | A server |
-| 4 — what survives | 14, 9 | A server; the node check needs two |
+| 4 — what survives | 14, 9 | A server; the node checks need two |
 | 5 — running it | 10, 15, 17 | A server |
 | 6 — release readiness | 18 | A person who has not seen it before |
 

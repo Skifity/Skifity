@@ -40,18 +40,21 @@ with nothing deployed:
 
 | | Measured |
 |---|---|
-| k3s server process (API server, etcd, controllers), resident | 758 MiB |
+| k3s server process (API server, etcd, controllers), resident | 748–780 MiB |
 | What the install added to the machine | about 1,000 MiB |
 | The installer, from nothing to a panel answering | 161–169 seconds |
 
 **A busy server**, at the end of a run, with the registry, CloudNativePG, the
-firewall and KEDA installed and the run's apps and database still running:
+firewall and KEDA installed and the run's apps and database still running. The
+latest runs also issue a certificate, start and remove again a database of
+each of the other eight engines, and run a stack, a template, a worker and a
+second environment's copy of the app, and read at the top of each range:
 
 | | Measured |
 |---|---|
-| k3s server process, resident | 922–988 MiB |
-| The panel's pod, working set | 19–29 MiB |
-| The whole machine in use, the runner's own services included | 2.2–2.9 GB |
+| k3s server process, resident | 922–1,040 MiB |
+| The panel's pod, working set | 19–31 MiB |
+| The whole machine in use, the runner's own services included | 2.2–3.0 GB |
 
 The panel reads smaller in its pod than on a laptop: the kubelet reports the
 working set, which leaves out file pages the kernel can drop, and the laptop

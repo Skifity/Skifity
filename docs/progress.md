@@ -6655,10 +6655,365 @@ k3s has been measured on a machine with 16 GB, where nothing makes it give
 memory back; how it behaves on the 1 GB server the requirements allow has not
 been seen.
 
+## What one throwaway server could not show
+
+The fifth run passed everything a single throwaway server can check. What it
+could not was the list at the end of it: an upgrade from one release to the
+next, a second server, a backup to a bucket, and a certificate. Each now runs
+on every push, in a job or a workflow of its own (`test/cluster/README.md`),
+and each found something.
+
+**An upgrade from the last release.** Most servers are not fresh installs: an
+earlier release installed them, and they get a new one by running the newer
+installer over the top. The `Cluster` workflow's second job,
+`test/cluster/upgrade.sh`, does exactly that. It installs the newest published
+release with the installer published with it, signs up, makes an app with a
+variable and asks for a PostgreSQL database, runs this commit's installer over
+it while asking the app for an answer twice a second, checks what the new panel
+kept, and goes back with the four commands the installer printed. Its runs
+found six things, none of which a fresh install could:
+
+* *The CLI had never been put on a server.* The installer asked for it on the
+  panel's NodePort, which the panel's Service has never had, so every install
+  ended with a warning, the cluster runs included. It is fetched through the
+  ingress at the server's own address now, the way the health check is. A
+  server an earlier release installed has none, so an upgrade fetches the
+  running panel's own, the version whose SQLite the copy has to go through.
+* *That copy went to a file named after the server's address,* in whatever
+  directory the installer ran from: fetching the CLI set a shell variable of
+  the same name as the copy's path. The way back the installer printed pointed
+  there.
+* *Going back left a panel that could not start.* `restore-db` runs as root and
+  put a file only root could read in place of the database; the panel runs as
+  its own user, and said "unable to open database file". The restored file now
+  takes the owner and mode of the one it replaces.
+* *Every app refused connections for a second* while Traefik was replaced to
+  take its new configuration: told to stop, a Traefik closed its ports at once,
+  while the cluster still sent it visitors. It keeps accepting for five seconds
+  now. The Traefik an upgrade from 0.1.0 replaces was configured by 0.1.0 and
+  cannot do that, so the installer says so before it happens.
+* *`--public-ip` on an upgrade dropped the panel's domain* for an sslip.io name,
+  and its certificate with it. The domain is kept.
+* *A database 0.1.0 created never starts,* for the storage class found in the
+  first cluster run. After upgrading, deleting it and asking again works; the
+  run does exactly that, and it came up.
+
+The run on `96ccc35` passed all 30 checks, and so has every run since. The app
+answered all 542 requests while the installer ran and for two minutes after;
+the API token and password from 0.1.0 still worked; the app, its variable and
+the panel's address were kept; the database was copied first; k3s got the
+memory reservations and etcd snapshot schedule a fresh install has; the new
+panel deployed the old panel's app; and the four printed commands brought 0.1.0
+back on the copy, with the account and the app, answering all 72 requests while
+it went.
+
+**A second server.** A runner is one machine nothing outside can reach, but
+GitHub's Linux runners can run a virtual machine. The `Two servers` workflow
+boots Ubuntu's cloud image as a KVM guest on a bridge on the runner, and
+`verify.sh` has the panel add it through its API, over SSH as root with a key
+made for it, the way a person does, and then runs every phase across both.
+Joining needed nothing: the one thing the first run tripped on was the test's
+own, a guest that could not pull an image built for the run and published
+nowhere, and the guest is now given it before its k3s starts. The run on
+`96ccc35` passed 81 checks, failed none, and skipped the two that need what
+that workflow does not set up (a bucket, an ACME server):
+
+* the panel checked, keyed, fenced and joined the guest, and the cluster
+  listed two ready servers;
+* an instance of the app built on the first server ran on the second, pulling
+  the image through the registry, and the second server's own ingress answered
+  for it;
+* phase 4 drained the second server instead of skipping: the disruption budget
+  moved the instances one at a time and the app kept answering;
+* and at the end the panel took the second server out, draining it and
+  removing the node.
+
+Taking it out was not clean, though: two runs counted requests failing while
+the second server was emptied and removed. Reading the removal for a cause
+found a real gap — eviction stops an instance first and only then does its
+Deployment start another, so an app whose only instance was on the server is
+down until the replacement starts — and an app with no ready instance
+elsewhere is now rolled out onto the servers that stay first, and an eviction
+a disruption budget defers is asked again for up to two minutes. But that was
+not what the runs had counted. In both, the app had no instances at all by
+then: the step before had switched scale to zero off, and the add-on, which
+goes on scaling an app until its objects are deleted, had scaled it to none on
+its way out, after the panel had given it its size back; nothing ever scaled
+it up again. Switching scale to zero off now deletes the add-on's objects,
+waits for them to go, and then gives the app the size it is configured for,
+and the crosscheck switches it off while the app is asleep and expects an
+answer. The run on `cd0f0a2` was the first in which it held: switching scale
+to zero off gave the sleeping app its instance back, and the app answered every
+request while the second server was emptied and taken out.
+
+**A server that fails.** Taking a server out is somebody's decision; losing one
+is not, and reading the removal to write a check for it found that a server
+that had stopped answering could not be removed at all. An eviction asks the
+server to stop an instance; nothing there is listening, so every instance on it
+stayed "terminating" for as long as its node was listed, and after five minutes
+the removal stopped with "some instances would not move" — on exactly the
+server the troubleshooting page told people to remove. When the node has
+stopped reporting, the removal no longer evicts or waits: deleting the node is
+what has Kubernetes start the instances on the other servers, and what kept its
+data on that server's own disk is named instead, since it cannot start
+anywhere else. Reading around it found three more things:
+
+* *The registry could start on a worker,* and the images every app runs went
+  with it when that server did: its volume keeps it on whichever server it
+  first started on. It prefers a server that runs the control plane now.
+* *Deleting a volume deleted nothing but the panel's row.* The dialog says the
+  disk and everything on it go; the app kept mounting the disk until its next
+  deploy, and the disk stayed for good, tying the app to its server — which
+  the panel then refused to take out for a volume nobody could see any more.
+  The app is applied without it now, and the disk is deleted once nothing
+  mounts it.
+* *The vulnerability scanner's cache counted as data a server takes with it,*
+  so taking out the server it happened to be on asked somebody to agree to
+  lose it. It is a cache, and is left out.
+
+A second job in the `Two servers` workflow kills the virtual machine outright,
+which to the cluster is a power cut, with the app running on both servers.
+Its first run, on `cd0f0a2`, found that the app was not running on both: a
+restart had put its two instances on the second server, so when that server
+went the app went with it, and all twenty requests after the cluster knew
+failed until the panel had removed the server and Kubernetes had started the
+instances again, two and a half minutes on. An app's instances are spread
+across servers, but the spread counted every pod with the app's labels, and a
+rolling restart's old pods, which are about to go, are among them: the new ones
+went wherever the old ones were not. The spread and the anti-affinity now count
+only the pods of the same version, by the label a Deployment gives each one
+(`pod-template-hash`, through `matchLabelKeys`). The run on `fcda550` saw it
+hold. A restart left one instance on each server; the cluster knew the server
+was gone after 52 seconds, and until then 8 of the 12 requests through the
+first server went unanswered, the ones the ingress still sent to the instance
+that was gone; from then on the app answered every request; the panel marked
+the server as not responding after 82 seconds and removed it in 5; and the app
+was back to two instances, on the server that was left, 148 seconds after the
+other one stopped. Those first fifty seconds are Kubernetes waiting to be sure
+a server that is only slow to report is not taken for one that is gone, and
+`docs/troubleshooting.md` says so.
+
+What two servers on one runner cannot show is two servers apart: a network
+between them that drops or delays packets rather than vanishing.
+
+**A backup to a bucket, and back.** A bucket is the one thing a backup needs
+that a runner does not have, and the easiest to stand in for: moto answers
+presigned URLs as S3 does, on the runner's own address. That address is a
+private one, which was the first finding: every job of the panel's that touches
+a bucket runs in the environment's namespace, whose policy keeps every pod off
+the private ranges, so a bucket on one's own network — MinIO beside the
+cluster, at home or in an office — was one no backup could reach. Before such a
+job the panel now resolves the bucket's host and, when it is an address the
+policy refuses, opens exactly that address and port to the panel's backup jobs
+and to nothing else. The second was the moment ADR-0027 is about, from the
+other side: a pod that has just started is refused by the pods it talks to
+until the policy controller has its address, and a dump is the first thing a
+backup's pod does, so the first backup was refused within a second by a
+database that was up the whole time. Each backup, restore and import now waits
+up to a minute for the engine's own client to get an answer. The run on
+`547cdff` took a backup of PostgreSQL, changed the row it had written, restored
+the backup over the live database and read the row back as it was.
+
+Everything else about backups had still never run: the five other engines the
+panel backs up, each with its own tools — a mysqldump, a mariadb-dump, a
+MongoDB archive, and a Redis or Valkey snapshot that goes back by the database
+replicating from a server the restore starts — a volume's archive, a backup
+sealed with a passphrase, the panel reading a backup through, and the panel's
+copy of its own database. The crosscheck asks for all of it now, each round
+trip checked through the engine's own client rather than through the panel.
+The run on `cd0f0a2` passed all of it the first time. Each of the five
+engines' backups was restored over its live database, which then held what it
+held when the backup was taken, read back through mysql, mariadb, mongosh,
+redis-cli and valkey-cli; the volume's archive put the app's file back; the
+sealed backup was `SKFSEAL1` in the bucket, read through by the panel and
+restored; and the panel copied its own database to the bucket and read the copy
+back.
+
+**The other eight database engines.** PostgreSQL runs through CloudNativePG;
+MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse and Memcached are
+a StatefulSet each, from the engine's own image, under the environment's
+restricted Pod Security profile and its quota, and none of them had ever run.
+The crosscheck now asks for all eight at once and waits for each to come up on
+its own, which is its own client answering the readiness check. Seven did, the
+first time, across two servers. Dragonfly crashed on start, every time: it
+reads every `DFLY_<flag>` variable as that flag and stops at any `DFLY_`
+variable that is not one, and the password went in as `DFLY_PASSWORD`, which
+its own help still names. It goes in as `DFLY_requirepass` now, still through
+the environment and never in the arguments, and the run on `547cdff` saw all
+eight come up.
+
+The same day's two-server run saw MongoDB fail instead, on a runner GitHub had
+moved to Linux 7.0. MongoDB 8 ships Google's TCMalloc, whose per-CPU caches
+break on Linux 6.19 and newer, and it stops as it starts on such a kernel,
+reading the version from the system (SERVER-121912) — so every Ubuntu kernel
+that calls itself 7.0.0, which is what Ubuntu 24.04 moves to, is refused,
+whatever was fixed in it. The database sat in a crash loop that told the panel
+nothing. The panel reads every server's kernel now: where one runs 6.19 or
+newer, a new MongoDB gets 7.0, which has the older allocator, and asking for
+8.0 is refused with the reason (`docs/databases.md` has what to do with a
+MongoDB 8 made before). The run on `cd0f0a2` landed on a runner with Linux
+7.0.0-1017-azure: the new MongoDB was given 7.0 and came up, asking for 8.0 was
+refused with the reason, and the 7.0 database's backup restored like the
+others'.
+
+**A certificate for a domain of the app's own.** The free address is plain
+HTTP on purpose (ADR-0015), so a certificate needs a domain of one's own, and
+nothing on the internet can reach a runner to validate one. An ACME server on
+the runner can: Pebble, Let's Encrypt's own test server, with its address
+signed by an authority made for the run, which the crosscheck gives the panel
+under Settings the way an ACME server of one's own is given. Reading the code
+to write the check found three things, and the first run with it a fourth:
+
+* *Apps never asked the issuer that was there.* They named it only once the
+  ACME email was set in Settings, which the installer never writes; on a
+  server installed with a domain the issuer existed, and every app's own
+  domain waited for a certificate nothing had asked for. Apps name the issuer
+  whenever it exists now, and the watcher applies an app again, once, when its
+  domains want a certificate and none was asked for.
+* *Saving the ACME settings changed nothing but SQLite.* The issuer was written
+  once, when cert-manager was installed through the panel. Saving them reaches
+  it now; the email is optional, as it is for Let's Encrypt; a new setting
+  holds the authority that signs an ACME server of one's own; at start the
+  panel records what the installer's issuer says, so the page does not
+  contradict it; and a later run of the installer keeps the ACME server the
+  panel chose instead of putting Let's Encrypt's production one back.
+* *A domain with a certificate broke the app's free address.* The redirect to
+  HTTPS was one middleware per namespace, and Traefik runs a middleware for
+  every hostname of the Ingress that names it, so the sslip.io address, which
+  has no certificate, sent every visitor permanently to an HTTPS address served
+  with Traefik's own certificate. Each app has a redirect anchored to its
+  hostnames that have a certificate now.
+* *No app's certificate could ever be issued.* cert-manager makes a NodePort
+  Service for the pod that answers an HTTP-01 challenge unless told otherwise,
+  in the app's own namespace, and every environment's quota allows no
+  NodePort: the Service was refused and the challenge was never answered. Both
+  issuers ask for a ClusterIP now, and at start the panel rewrites an issuer
+  that still asks for a NodePort, so a server upgraded by any means is mended.
+  This is very likely why a domain on the owner's own server never left
+  "pending".
+
+The run on `547cdff` was the first to see a certificate issued: saving the ACME
+server in Settings changed the issuer, cert-manager was issued a certificate for
+the app's domain, validated over HTTP through the ingress; the domain answered
+over HTTPS with it, trusted from the ACME server's own root; plain HTTP on it
+was sent to HTTPS with its path; the free address kept answering over plain
+HTTP; and the panel showed the domain as active.
+
+**One run that ended before it began.** The installer's download of k3s from
+GitHub failed once, and the installer gave up, which ended the run before a
+single check. A server's own network fails like that too. The installer tries
+twice more now, five seconds apart, and says so.
+
+**The sixth run on one server**, on `547cdff`, passed 89 checks, failed none,
+and skipped one: the node check, which needs a second server and runs in the
+`Two servers` workflow. The seventh, on `cd0f0a2`, passed 123 and failed none,
+with a mail server, ntfy and Gotify beside it; the eighth, on `fcda550`,
+passed 146 and failed none, with a Gitea beside it and the checks of the
+section below. The upgrade from the last release passed on both.
+
+The `Two servers` workflow passed 90 checks on `cd0f0a2`, and on `fcda550`
+passed 107 and failed five, all for one reason the crosscheck had not allowed
+for. The app phase 1 builds is given a volume in phase 2, and with its
+instances now spread across both servers, the one left to mount it was on the
+second: the volume was made on that server's own disk. Draining the server
+then left the app nowhere to run until it was back, and the panel rightly
+refused to remove a server holding data, with `server.has_local_volumes`.
+Which server a volume is made on is the scheduler's choice, so the drain now
+checks an app with nothing on any server's disk and an instance on each, and
+checks that the app whose volume is there waits for that server and answers
+once it is back; the removal checks that the panel names the data it refuses
+to lose, then removes the server the way the refusal says to. Reading it found
+two things in the panel. An app's log, asked for while its one instance was
+waiting for that server, came back as "Something went wrong" with a fix that
+said to open an issue: an instance that has never started has no log, and it
+now says what it is waiting for (`app.not_started`), with a started instance
+read before one that has not. And the reason it was waiting —
+"didn't match PersistentVolume's node affinity" — was one the panel had no
+words for: it is said now, that the app's volume is on one server's own disk
+and that server is not taking it, along with a correction to the sentence for
+a server that is not accepting apps, which claimed a control-plane server runs
+no apps unless allowed. Skifity puts no taint on one, as the troubleshooting
+page already said.
+
+## What had only ever run against fakes
+
+Most phases above end with a line that starts "Not executed": the part that
+needed a real cluster, a real service or a real server, and was checked
+against a fake instead. With a cluster on every push, the crosscheck now asks
+for each of those a runner can stand a real thing in for.
+
+**Being told, by something other than a webhook.** A webhook was the one
+notification a run had ever seen arrive. The `Cluster` workflow now runs
+Mailpit, an ntfy server that refuses anybody without a token, and Gotify on the
+runner's address, and phase 5 makes a channel of each and reads every message
+back through that server's own API rather than taking the panel's word for it.
+The run on `cd0f0a2` was the first with them: the test message arrived by
+email, through the server under Settings → Email, at ntfy with its token and
+at Gotify; listing the channels gave back none of the tokens stored in them; a
+deployment broken on purpose arrived at all four; and a password reset went
+the same way, its link setting a new password once, ending the session the
+member had, and refusing the old password.
+
+**A Git host on one's own network.** Writing a check for a Gitea beside the
+cluster found that no build could clone from one. Builds are kept off the
+private ranges and off the servers, so a repository on a Gitea at home, a
+GitLab on the office network or a Git host on a server at a port other than
+the web's was one whose clone waited two minutes for a connection the build
+namespace's policy dropped, and failed with a timeout that named nothing.
+Settings → Git now lists the hosts on one's own network builds may reach: a
+build of a repository on a listed host gets a network policy of its own,
+selecting that build's pods alone, to the host's addresses on the
+repository's port, removed when the build ends. A host listed without a port
+is that host on 443 alone, so listing a server for its web interface does not
+open its SSH. A build of a repository on a host nobody listed is refused before
+it starts with `build.git_host_private`, which says where the host resolved to
+and who can allow it. The metadata services are never opened, and a host that
+also resolves to a public address is cloned from that one, as before. The
+authority that signed a home Gitea's certificate is trusted beside the public
+ones, by the clone and by the panel's own requests to Git hosts. The `Cluster`
+workflow runs a Gitea on the runner's address, over HTTPS with an authority
+made for the run, holding the sample app. The run on `fcda550` saw a build of
+it refused before it started, saying who could allow it; with the host listed
+and its authority given, the same build cloned it and deployed, and the app
+answered; and the build's way to the host was closed once it finished.
+
+**The rest of what had only met fakes**, on `fcda550`, all for the first time
+and all passing:
+
+* *Maintenance mode*, through the real Traefik rather than the guard alone: a
+  visitor was shown the notice with a 503 and a `Retry-After`, and the app
+  answered again once it ended (phase 98 had not seen Traefik pass the page
+  through).
+* *A worker, a command run once, and a schedule.* A worker ran from the app's
+  image with its own command and was never sent a visitor; removing it removed
+  its Deployment; a command run once gave back its output and its exit code;
+  and one scheduled for every minute ran and succeeded (phase 106).
+* *A Compose file as one stack*: two services deployed together, one reached
+  the other by its name and port as in Compose, the published one answered at
+  its address, and the one nothing published had none (phase 101).
+* *A template from the catalogue*: Homer, installed in one click, answered at
+  its address and wrote its settings to its disk as the user its image runs
+  as.
+* *Promotion*: a second environment ran the very image phase 1 built, with
+  nothing built again, and answered from its own namespace (phase 103).
+* *The database tunnel*: a tunnel opened through the Traefik in front of the
+  panel and PostgreSQL answered at its end, and `skifity db connect` gave psql
+  on the server the database, which answered (phases 105 and 110).
+* *A server's usage*: the panel had the server's memory, processor and disk,
+  the disk read from its kubelet through the API server's proxy (phase 99).
+
+Still only against fakes, because a runner cannot stand in for them: a seed Job
+for a whole-environment preview, which needs a pull request from a Git host
+that can reach the panel; a sign-in against a real SSO provider, a passkey on a
+real authenticator, a GPU, servers made at Hetzner, Bitbucket, and the Git
+hosts' own webhooks; and delivery to Telegram, Discord, Slack, Microsoft Teams
+and Pushover.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,
-38 MiB after 400 requests, 39 MiB of binary, and 19–29 MiB in its pod on a real
-cluster. k3s is measured on the Cluster workflow's runner: 758 MiB just after a
-fresh install, which adds about 1 GB to the machine in all, and 922–988 MiB with
-every component this checks installed, on a machine with 16 GB.
+38 MiB after 400 requests, 39 MiB of binary, and 19–31 MiB in its pod on a real
+cluster. k3s is measured on the Cluster workflow's runner: 748–780 MiB just
+after a fresh install, which adds about 1 GB to the machine in all, and
+922–1,040 MiB with every component this checks installed, on a machine with
+16 GB.

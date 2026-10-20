@@ -374,8 +374,19 @@ lists the volumes and offers "Remove anyway", and the API takes
 if it matters. A cluster that cannot be asked is not a reason to refuse, since
 the likeliest reason to remove a server is that it has died.
 
-Instances are moved off first, then the server leaves the cluster. Nothing is
-lost.
+Instances are moved off first, then the server leaves the cluster. An app whose
+only instances are on the server is started on another one before they are
+stopped, as a deploy does, so it keeps answering; the others move one instance
+at a time, as their disruption budgets allow. Nothing is lost.
+
+A server that has stopped answering — switched off, or gone — cannot be asked
+to stop anything, so it is not waited on: it leaves the cluster straight away,
+and Kubernetes starts its instances on the other servers. The removal names
+whatever kept its data on that server's own disk, since that cannot start
+anywhere else; restore it from a backup.
+
+The vulnerability scanner's cache is not counted as data on a server: it is
+made again wherever the next scan runs.
 
 Tick **Also remove Kubernetes from the machine** to clean the server up
 completely, leaving it as you found it.
