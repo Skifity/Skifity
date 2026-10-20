@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -18,6 +19,10 @@ import (
 // object stops being rendered, which is how a deleted domain's Ingress rule
 // actually disappears.
 const FieldManager = "skifity"
+
+// ReplicasHandoffManager is the second owner a Deployment's size is given for
+// the moment an autoscaler takes it over. See handOverReplicas.
+const ReplicasHandoffManager = "skifity-replicas-handoff"
 
 // gvrFor maps the kinds the panel renders onto their API resources.
 //
@@ -129,18 +134,86 @@ func (a *Applier) Apply(ctx context.Context, obj any) error {
 		return fmt.Errorf("encode %s/%s: %w", u.GetKind(), u.GetName(), err)
 	}
 
-	client := a.dynamic.Resource(gvr)
-	options := metav1.PatchOptions{FieldManager: FieldManager, Force: ptr(true)}
-
+	var client dynamic.ResourceInterface = a.dynamic.Resource(gvr)
 	if namespace := u.GetNamespace(); namespace != "" {
-		_, err = client.Namespace(namespace).Patch(ctx, u.GetName(), types.ApplyPatchType, data, options)
-	} else {
-		_, err = client.Patch(ctx, u.GetName(), types.ApplyPatchType, data, options)
+		client = a.dynamic.Resource(gvr).Namespace(namespace)
 	}
-	if err != nil {
+	if u.GetKind() == "Deployment" {
+		if err := handOverReplicas(ctx, client, u); err != nil {
+			return fmt.Errorf("hand %s/%s's size to its autoscaler: %w", u.GetKind(), u.GetName(), err)
+		}
+	}
+
+	options := metav1.PatchOptions{FieldManager: FieldManager, Force: ptr(true)}
+	if _, err := client.Patch(ctx, u.GetName(), types.ApplyPatchType, data, options); err != nil {
 		return fmt.Errorf("apply %s/%s: %w", u.GetKind(), u.GetName(), err)
 	}
 	return nil
+}
+
+// handOverReplicas keeps a Deployment at the size it is while an autoscaler
+// takes it over.
+//
+// The panel stops writing spec.replicas when an autoscaler owns it (see
+// AppSpec.ReplicasAreSomebodyElses), and server-side apply removes a field
+// whose last owner stops writing it — after which Kubernetes defaults it to
+// one. An app running three instances dropped to one the moment autoscaling was
+// switched on, until the autoscaler noticed. This is Kubernetes' own handover:
+// a second field manager claims the current value first, so the field still
+// has an owner when the panel lets go of it, and the autoscaler's first change
+// takes it from there.
+//
+// Only when it is needed: the object is being applied without a size, it
+// exists, and the panel's own apply is what owns its size now.
+func handOverReplicas(ctx context.Context, client dynamic.ResourceInterface, u *unstructured.Unstructured) error {
+	if _, found, _ := unstructured.NestedFieldNoCopy(u.Object, "spec", "replicas"); found {
+		return nil
+	}
+	live, err := client.Get(ctx, u.GetName(), metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	replicas, found, err := unstructured.NestedInt64(live.Object, "spec", "replicas")
+	if err != nil {
+		return fmt.Errorf("read its size: %w", err)
+	}
+	if !found || !ownsReplicas(live.GetManagedFields()) {
+		return nil
+	}
+	claim, err := json.Marshal(map[string]any{
+		"apiVersion": u.GetAPIVersion(),
+		"kind":       u.GetKind(),
+		"metadata":   map[string]any{"name": u.GetName(), "namespace": u.GetNamespace()},
+		"spec":       map[string]any{"replicas": replicas},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = client.Patch(ctx, u.GetName(), types.ApplyPatchType, claim,
+		metav1.PatchOptions{FieldManager: ReplicasHandoffManager, Force: ptr(true)})
+	return err
+}
+
+// ownsReplicas reports whether the panel's own apply is an owner of
+// spec.replicas.
+func ownsReplicas(entries []metav1.ManagedFieldsEntry) bool {
+	for _, entry := range entries {
+		if entry.Manager != FieldManager || entry.Operation != metav1.ManagedFieldsOperationApply || entry.FieldsV1 == nil {
+			continue
+		}
+		var fields map[string]any
+		if json.Unmarshal(entry.FieldsV1.GetRawBytes(), &fields) != nil {
+			continue
+		}
+		spec, _ := fields["f:spec"].(map[string]any)
+		if _, ok := spec["f:replicas"]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ApplyAll applies objects in order, stopping at the first failure.
