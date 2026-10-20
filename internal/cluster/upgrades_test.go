@@ -98,3 +98,15 @@ func TestAComponentIsNotDowngradedOrMovedSeveralMinorsAtOnce(t *testing.T) {
 		}
 	}
 }
+
+// TestTheHTTPAddOnIsNamedAsItsReleaseNamesIt: the add-on's release asset is
+// keda-add-ons-http-<version>.yaml, and the default named a file no release
+// has, so scale to zero could not be installed until a real cluster tried.
+func TestTheHTTPAddOnIsNamedAsItsReleaseNamesIt(t *testing.T) {
+	tag := defaultKEDAHTTPURL[strings.Index(defaultKEDAHTTPURL, "/download/")+len("/download/"):]
+	tag = tag[:strings.Index(tag, "/")]
+	want := "/keda-add-ons-http-" + strings.TrimPrefix(tag, "v") + ".yaml"
+	if !strings.HasSuffix(defaultKEDAHTTPURL, want) {
+		t.Errorf("the add-on is fetched from %s, and release %s names its manifest %s", defaultKEDAHTTPURL, tag, want)
+	}
+}

@@ -27,8 +27,12 @@ const (
 	defaultCertManagerURL   = "https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml"
 	defaultCloudNativePGURL = "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.29/releases/cnpg-1.29.0.yaml"
 	defaultKEDAURL          = "https://github.com/kedacore/keda/releases/download/v2.20.0/keda-2.20.0.yaml"
-	defaultKEDAHTTPURL      = "https://github.com/kedacore/http-add-on/releases/download/v0.15.0/keda-http-add-on-0.15.0.yaml"
-	defaultLonghornURL      = "https://raw.githubusercontent.com/longhorn/longhorn/v1.10.0/deploy/longhorn.yaml"
+	// The add-on's release asset is keda-add-ons-http-<version>.yaml. This said
+	// keda-http-add-on-0.15.0.yaml, a file no release has, and scale to zero
+	// could never be installed: the fourth run on a real cluster was the first
+	// thing to try.
+	defaultKEDAHTTPURL = "https://github.com/kedacore/http-add-on/releases/download/v0.15.0/keda-add-ons-http-0.15.0.yaml"
+	defaultLonghornURL = "https://raw.githubusercontent.com/longhorn/longhorn/v1.10.0/deploy/longhorn.yaml"
 )
 
 // manifestSettingFor maps a component to the setting holding its manifest URL.
