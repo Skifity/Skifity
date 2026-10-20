@@ -122,7 +122,7 @@ func TestNoEngineRendersAPasswordIntoAContainer(t *testing.T) {
 		pod := statefulSetOf(t, objects).Spec.Template.Spec
 		for _, container := range append(append([]corev1.Container{}, pod.InitContainers...), pod.Containers...) {
 			for _, env := range container.Env {
-				if strings.Contains(strings.ToLower(env.Name), "password") || env.Name == "DFLY_PASSWORD" {
+				if strings.Contains(strings.ToLower(env.Name), "password") || env.Name == dragonflyPasswordVariable {
 					if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil || env.ValueFrom.SecretKeyRef.Key != "password" {
 						t.Errorf("%s: %s does not come from the Secret's password", name, env.Name)
 					}
@@ -286,8 +286,14 @@ func TestDragonflyManifest(t *testing.T) {
 	objects := mustBuild(t, specFor(EngineDragonfly))
 	pod := statefulSetOf(t, objects).Spec.Template.Spec
 	container := pod.Containers[0]
-	if env := envNames(container)["DFLY_PASSWORD"]; env.ValueFrom == nil || env.ValueFrom.SecretKeyRef.Key != "password" {
-		t.Error("Dragonfly's password does not come from the Secret, through its own variable")
+	if env := envNames(container)["DFLY_requirepass"]; env.ValueFrom == nil || env.ValueFrom.SecretKeyRef.Key != "password" {
+		t.Error("Dragonfly's password does not come from the Secret, through its requirepass flag")
+	}
+	// Dragonfly stops at any DFLY_ variable that is not one of its flags.
+	for _, env := range container.Env {
+		if strings.HasPrefix(env.Name, "DFLY_") && env.Name != "DFLY_requirepass" {
+			t.Errorf("Dragonfly is given %s, which is not one of its flags, and will not start", env.Name)
+		}
 	}
 	args := strings.Join(container.Args, " ")
 	for _, want := range []string{"--dir=/data", "--dbfilename=dump", "--snapshot_cron=*/5 * * * *"} {

@@ -450,6 +450,10 @@ func BuildValkey(s Spec) []any {
 	return []any{statefulSet(s, 999, container, "/data"), buildService(s, servicePort("valkey", s.Port()))}
 }
 
+// dragonflyPasswordVariable is the requirepass flag, as Dragonfly reads flags
+// from the environment. The case is the flag's own.
+const dragonflyPasswordVariable = "DFLY_requirepass"
+
 // BuildDragonfly renders Dragonfly, a multi-threaded server that speaks the
 // Redis protocol.
 //
@@ -467,9 +471,13 @@ func BuildDragonfly(s Spec) []any {
 	container := corev1.Container{
 		Name:  "dragonfly",
 		Image: s.Image(),
-		// DFLY_PASSWORD is Dragonfly's own variable for the password
-		// (GetPassword in src/server/server_family.cc), so it never appears
-		// in the arguments.
+		// The password goes in as the requirepass flag, through the
+		// environment, so it never appears in the arguments: Dragonfly reads
+		// every DFLY_<flag> variable as that flag (ParseFlagsFromEnv in
+		// src/server/dfly_main.cc). It reads any other DFLY_ variable as a
+		// mistake and stops, DFLY_PASSWORD included, though its help still
+		// names it: that is what every Dragonfly the panel made did, the
+		// first time one ran (v1.40.2).
 		Args: []string{
 			"dragonfly", "--logtostderr",
 			"--dir=/data", "--dbfilename=dump",
@@ -477,10 +485,10 @@ func BuildDragonfly(s Spec) []any {
 			"--maxmemory=" + strconv.Itoa(maxMemoryMB*1024*1024),
 			"--proactor_threads=" + strconv.Itoa(threads),
 		},
-		Env:   []corev1.EnvVar{secretEnv("DFLY_PASSWORD", s.SecretName(), "password")},
+		Env:   []corev1.EnvVar{secretEnv(dragonflyPasswordVariable, s.SecretName(), "password")},
 		Ports: []corev1.ContainerPort{{Name: "redis", ContainerPort: int32(s.Port())}},
 		// The image ships redis-cli for exactly this.
-		ReadinessProbe: pingProbe("redis-cli", "DFLY_PASSWORD"),
+		ReadinessProbe: pingProbe("redis-cli", dragonflyPasswordVariable),
 	}
 	set := statefulSet(s, 999, container, "/data")
 	// Time for the snapshot it takes as it stops.
