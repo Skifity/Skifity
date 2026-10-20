@@ -47,6 +47,36 @@ logs of every part of the platform and of every build — and the workflow
 uploads it with the installer's and this script's logs as the `cluster-report`
 artifact. Secrets are left out entirely.
 
+The workflow has a second job, on a runner of its own, and a second workflow
+runs beside it.
+
+**Upgrade from the last release** runs `upgrade.sh`. A fresh install is not
+what most servers see: an earlier release installed them, and they get a new
+one by running the newer installer over the top. So it installs the newest
+published release with the installer published with it, sets the panel up,
+deploys an app with a variable and asks for a PostgreSQL database, then runs
+this commit's installer over it while asking the app for an answer twice a
+second. The new panel has to work on the old database (the account signs in,
+the old API token works, the app and its variable are there, the database was
+copied first, k3s has what a fresh install gives it, and the new panel deploys
+the old panel's app); then the four commands the installer printed for going
+back are run as printed, and the old version has to come back on the copy. The
+app's answers are counted the whole way through. Its report is `upgrade-report`.
+
+**Two servers**, `.github/workflows/servers.yml`, runs `verify.sh` across
+two. A runner is one machine that nothing outside can reach, but it can run a
+virtual machine: `second-server.sh` boots Ubuntu's cloud image as a KVM guest
+on a bridge, with
+root reachable over SSH by a key made for it. Given `VERIFY_SECOND_SERVER` and
+`VERIFY_SECOND_SERVER_KEY`, `verify.sh` has the panel add that server through
+its API after first-run setup, the way a person does, and every phase then runs
+across both: an instance of the app built on the first server has to run on
+the second, which pulls it through its own registry port; the second server's
+ingress has to answer for it; phase 4 drains a server instead of skipping; and
+at the end the panel takes the second server out with the app being asked
+throughout. Its report is `servers-report`, with the guest's console and its
+k3s agent's journal.
+
 The same collector works on a server of your own:
 
 ```sh
