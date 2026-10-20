@@ -121,8 +121,10 @@ REPORT="/var/log/skifity-verify.log"
 # VERIFY_GIT_HOST_TOKEN is a token of the repository's owner on that host, for
 # the panel's connection to it and for the pushes and the pull request that
 # check its webhooks. The host has to be a Gitea that delivers to loopback
-# addresses (ALLOWED_HOST_LIST), since the panel's address is pointed at this
-# machine for it. Without the token those checks skip.
+# addresses ([security] ALLOWED_HOST_LIST = loopback; "*" is refused since
+# Gitea 28), since the panel's address is pointed at this
+# machine for it, and, unless the panel's certificate is one it trusts,
+# without checking it (SKIP_TLS_VERIFY). Without the token those checks skip.
 : "${VERIFY_GIT_HOST_TOKEN:=}"
 # A Dex binary, for single sign-on through a real OpenID Connect provider:
 # phase 3 writes its configuration and starts it on this machine's address.
@@ -308,6 +310,14 @@ api() {
 	else
 		curl -fsS -X "$method" "$PANEL$path" ${TOKEN:+-H "Authorization: Bearer $TOKEN"}
 	fi
+}
+
+# api_any is api that hands back the answer whatever its status, for a step
+# whose failure should say what the panel said.
+api_any() {
+	local method="$1" path="$2" body="${3:-}"
+	curl -sS -X "$method" "$PANEL$path" -H 'Content-Type: application/json' \
+		${TOKEN:+-H "Authorization: Bearer $TOKEN"} ${body:+-d "$body"}
 }
 
 # api_code answers with the HTTP status and nothing else, for the checks that
@@ -1158,18 +1168,20 @@ else
 		rm -rf "$work"
 	}
 	PANEL_URL=$(panel_public_url)
-	SOURCE=$(api POST "/api/teams/$TEAM_ID/git-sources" \
-		"{\"kind\":\"gitea\",\"name\":\"home-gitea\",\"base_url\":\"$GITEA_BASE\",\"token\":\"$VERIFY_GIT_HOST_TOKEN\"}" \
-		| pick id 2>/dev/null || echo "")
+	CONNECTED=$(api_any POST "/api/teams/$TEAM_ID/git-sources" \
+		"{\"kind\":\"gitea\",\"name\":\"home-gitea\",\"base_url\":\"$GITEA_BASE\",\"token\":\"$VERIFY_GIT_HOST_TOKEN\"}" || true)
+	SOURCE=$(printf '%s' "$CONNECTED" | pick source.id 2>/dev/null || echo "")
 	CREATED=""
-	[ -z "$SOURCE" ] || CREATED=$(api POST "/api/environments/$ENV_ID/apps" "$(cat <<JSON
+	[ -z "$SOURCE" ] || CREATED=$(api_any POST "/api/environments/$ENV_ID/apps" "$(cat <<JSON
 {"name":"fromgitea","source_type":"git","git_source_id":"$SOURCE","repo_url":"$VERIFY_GIT_HOST_REPO","branch":"main",
  "builder":"dockerfile","dockerfile_path":"Dockerfile","port":$VERIFY_APP_PORT,"health_path":"/healthz","deploy":true}
 JSON
-)" 2>/dev/null || echo "")
+)" || true)
 	PUSHED_APP=$(printf '%s' "$CREATED" | pick app.id 2>/dev/null || echo "")
-	if [ -z "$PANEL_URL" ] || [ -z "$PUSHED_APP" ]; then
-		no "an app could not be made through a connection to the Git host: ${CREATED:-no answer}"
+	if [ -z "$SOURCE" ]; then
+		no "the panel would not connect to the Git host: $(printf '%s' "${CONNECTED:-no answer}" | head -c 300)"
+	elif [ -z "$PANEL_URL" ] || [ -z "$PUSHED_APP" ]; then
+		no "an app could not be made through a connection to the Git host: $(printf '%s' "${CREATED:-no answer}" | head -c 300)"
 	else
 		[ "$(printf '%s' "$CREATED" | pick webhook.registered 2>/dev/null)" = "True" ] \
 			&& ok "making the app registered a webhook on the Git host through the connection's token" \
@@ -1788,10 +1800,14 @@ print(json.dumps({"values": {
 	elif ! api PUT /api/settings "$SSO_SETTINGS" >/dev/null; then
 		no "the single sign-on settings were refused"
 	else
+		# The panel's own address has a certificate from Let's Encrypt's
+		# staging server, which cannot reach this machine to issue one, so
+		# Traefik serves its own there; the browser here takes it, as a
+		# person would click past it. Dex is plain HTTP on this machine.
 		BROWSER=$(mktemp)
-		LANDED=$(curl -s -L --max-redirs 10 -c "$BROWSER" -b "$BROWSER" -o /dev/null -w '%{url_effective}' \
+		LANDED=$(curl -s -k -L --max-redirs 10 -c "$BROWSER" -b "$BROWSER" -o /dev/null -w '%{url_effective}' \
 			"$SSO_URL/api/auth/sso/start" || true)
-		SIGNED_IN=$(curl -s -b "$BROWSER" "$SSO_URL/api/me" || true)
+		SIGNED_IN=$(curl -s -k -b "$BROWSER" "$SSO_URL/api/me" || true)
 		case "$SIGNED_IN" in
 		*kilgore@kilgore.trout*) ok "a sign-in through Dex made an account for the person it vouched for, and signed them in" ;;
 		*)

@@ -143,7 +143,9 @@ jobs:
       # is. It holds the sample app phase 1 also builds from GitHub, and gives
       # the crosscheck a token for the panel's connection to it. Its webhooks
       # may go to a loopback address, as the panel's address is made one for
-      # it. Gitea will not run as root, and this step is not.
+      # it, and to a certificate nobody signed, which is what the panel's
+      # address has on a runner Let's Encrypt cannot reach. Gitea will not run
+      # as root, and this step is not.
       - name: Start a Git host on this server
         run: |
           address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
@@ -178,10 +180,11 @@ jobs:
           PATH = /tmp/gitea/data/gitea.db
           [security]
           INSTALL_LOCK = true
+          ALLOWED_HOST_LIST = loopback
           [service]
           DISABLE_REGISTRATION = true
           [webhook]
-          ALLOWED_HOST_LIST = *
+          SKIP_TLS_VERIFY = true
           EOF
           nohup ./gitea web --config /tmp/gitea/app.ini >/tmp/gitea.log 2>&1 &
           for _ in $(seq 1 60); do
