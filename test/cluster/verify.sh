@@ -261,6 +261,96 @@ through_ingress() {
 	curl -s -o /dev/null -w '%{http_code}' --max-time "${2:-15}" -H "Host: $1" "http://127.0.0.1/"
 }
 
+# backup_field LIST ID FIELD reads one field of one backup in a list of them,
+# found by its id rather than by its place in the list.
+backup_field() {
+	api GET "$1" 2>/dev/null | python3 -c '
+import json, sys
+for item in json.load(sys.stdin).get("items") or []:
+    if item.get("id") == sys.argv[1]:
+        print(item.get(sys.argv[2], ""))
+' "$2" "$3" 2>/dev/null || true
+}
+
+# backup_ended LIST ID waits up to ten minutes for a backup to finish and
+# prints how it ended; operation_ended ID does the same for a restore.
+backup_ended() {
+	local state=""
+	for _ in $(seq 1 60); do
+		state=$(backup_field "$1" "$2" status)
+		case "$state" in succeeded | failed) break ;; esac
+		sleep 10
+	done
+	printf '%s' "$state"
+}
+operation_ended() {
+	local state=""
+	for _ in $(seq 1 60); do
+		state=$(api GET "/api/operations/$1" 2>/dev/null | pick status 2>/dev/null || echo "")
+		case "$state" in succeeded | failed) break ;; esac
+		sleep 10
+	done
+	printf '%s' "$state"
+}
+
+# read_through LIST ID asks the panel to read a backup through, as the Verify
+# button does: downloaded from the bucket, its checksum compared, and opened
+# when it is sealed. It prints nothing when that worked, and why not when not.
+read_through() {
+	local at=""
+	api POST "$1/$2/verify" >/dev/null || { echo "the panel refused to read it"; return; }
+	for _ in $(seq 1 60); do
+		at=$(backup_field "$1" "$2" verified_at)
+		[ -n "$at" ] && break
+		sleep 5
+	done
+	if [ -z "$at" ]; then
+		echo "the panel never finished reading it"
+	else
+		backup_field "$1" "$2" verify_error
+	fi
+}
+
+# job_logs ID puts what a backup's or a restore's job said into the report.
+job_logs() {
+	kubectl -n "$NAMESPACE" logs -l "skifity.com/backup-id=$1" --all-containers --tail=40 >>"$REPORT" 2>&1 || true
+}
+
+# engine_client ENGINE STATEMENT runs one statement through an engine's own
+# client, inside the database's own pod, as the app's user where the engine
+# has one, and prints the answer: what is checked is the data, not anything
+# the panel says about it. The statement travels as a variable and the
+# password never leaves the pod, where the single quotes below are expanded.
+# shellcheck disable=SC2016
+engine_client() {
+	local client=""
+	case "$1" in
+	mysql) client='MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -B -u"$MYSQL_USER" "$MYSQL_DATABASE" -e "$STATEMENT"' ;;
+	mariadb) client='MYSQL_PWD="$MARIADB_PASSWORD" mariadb -N -B -u"$MARIADB_USER" "$MARIADB_DATABASE" -e "$STATEMENT"' ;;
+	mongodb) client='mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin "$MONGO_INITDB_DATABASE" --eval "$STATEMENT"' ;;
+	redis) client='REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli $STATEMENT' ;;
+	valkey) client='REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli $STATEMENT' ;;
+	esac
+	kubectl -n "$NAMESPACE" exec "verify-$1-0" -- env STATEMENT="$2" sh -c "$client" 2>>"$REPORT"
+}
+
+# engine_set ENGINE VALUE puts VALUE in the database, in a table, a
+# collection or a key; engine_get ENGINE reads it back.
+engine_set() {
+	case "$1" in
+	mysql | mariadb) engine_client "$1" "create table if not exists verify_restore (value varchar(32)); delete from verify_restore; insert into verify_restore values ('$2')" ;;
+	mongodb) engine_client "$1" "db.verify_restore.deleteMany({}); db.verify_restore.insertOne({value: '$2'}); print('stored')" ;;
+	redis | valkey) engine_client "$1" "set verify_restore $2" ;;
+	esac
+}
+engine_get() {
+	case "$1" in
+	mysql | mariadb) engine_client "$1" "select value from verify_restore" ;;
+	mongodb) engine_client "$1" "print((db.verify_restore.findOne() || {}).value)" ;;
+	redis | valkey) engine_client "$1" "get verify_restore" ;;
+	esac | tr -d '[:space:]'
+}
+
 api GET /api/health >/dev/null || die "the panel's own health endpoint does not answer"
 ok "/api/health answers"
 
@@ -746,11 +836,12 @@ phase "Phase 2 — the data, and getting it back"
 
 step "A volume that survives a restart (checklist 5)"
 
+VOLUME_ID=""
 if [ -z "$APP_ID" ]; then
 	skip "the volume" "phase 1 did not run, so there is no app to attach one to"
 else
-	api POST "/api/apps/$APP_ID/volumes" '{"name":"data","mount_path":"/data","size_gb":1}' >/dev/null \
-		|| no "a volume could not be created"
+	VOLUME_ID=$(api POST "/api/apps/$APP_ID/volumes" '{"name":"data","mount_path":"/data","size_gb":1}' | pick id 2>/dev/null || echo "")
+	[ -n "$VOLUME_ID" ] || no "a volume could not be created"
 	# One instance: a ReadWriteOnce volume cannot be mounted by two, and the
 	# panel switches to Recreate for exactly this reason.
 	api PUT "/api/apps/$APP_ID/scaling" '{"replicas":1,"autoscale":false}' >/dev/null
@@ -812,6 +903,7 @@ fi
 step "The other database engines (checklist 6)"
 
 OTHER_DBS=""
+UP_DBS=""
 for engine in mysql mariadb mongodb redis valkey dragonfly clickhouse memcached; do
 	id=$(api POST "/api/environments/$ENV_ID/databases" "{\"name\":\"verify-$engine\",\"engine\":\"$engine\",\"storage_gb\":1}" | pick id 2>/dev/null || echo "")
 	if [ -n "$id" ]; then
@@ -829,7 +921,10 @@ for _ in $(seq 1 60); do
 		id=${pair#*=}
 		state=$(api GET "/api/databases/$id" | pick database.status 2>/dev/null || echo "")
 		case "$state" in
-		ready | running) ok "a $engine database came up on its own" ;;
+		ready | running)
+			ok "a $engine database came up on its own"
+			UP_DBS="$UP_DBS $pair"
+			;;
 		failed)
 			no "the $engine database failed: $(api GET "/api/databases/$id" | pick database.status_detail 2>/dev/null || echo "no reason given")"
 			kubectl -n "$NAMESPACE" describe statefulset "verify-$engine" >>"$REPORT" 2>&1 || true
@@ -850,25 +945,36 @@ for pair in $PENDING_DBS; do
 	} >>"$REPORT"
 done
 # Removed again, so what the rest of the run measures and drains is what it
-# did before.
+# did before. The five the panel backs up stay until their backups have been
+# taken and restored, below, when there is a bucket to take them to.
+BACKUP_DBS=""
 for pair in $OTHER_DBS; do
-	api DELETE "/api/databases/${pair#*=}" >/dev/null 2>&1 || true
+	case "${pair%%=*}" in mysql | mariadb | mongodb | redis | valkey) backed_up=1 ;; *) backed_up=0 ;; esac
+	case " $UP_DBS " in *" $pair "*) up=1 ;; *) up=0 ;; esac
+	if [ "$backed_up$up" = 11 ] && [ -n "$VERIFY_S3_BUCKET" ] && [ -n "$VERIFY_S3_ENDPOINT" ]; then
+		BACKUP_DBS="$BACKUP_DBS $pair"
+	else
+		api DELETE "/api/databases/${pair#*=}" >/dev/null 2>&1 || true
+	fi
 done
 
 step "A backup that restores (checklist 7)"
 
+STORAGE_SET=""
 if [ -z "$VERIFY_S3_BUCKET" ] || [ -z "$VERIFY_S3_ENDPOINT" ]; then
 	skip "backup and restore" "no object storage is configured. Set VERIFY_S3_ENDPOINT, VERIFY_S3_BUCKET, VERIFY_S3_ACCESS_KEY and VERIFY_S3_SECRET_KEY — a backup with nowhere to go is not a backup, and this check refuses to pretend otherwise."
-elif [ -z "$DB_ID" ]; then
-	skip "backup and restore" "there is no database to back up"
 else
 	api PUT /api/settings "$(cat <<JSON
 {"values":{"storage.s3_endpoint":"$VERIFY_S3_ENDPOINT","storage.s3_bucket":"$VERIFY_S3_BUCKET",
  "storage.s3_access_key":"$VERIFY_S3_ACCESS_KEY","storage.s3_secret_key":"$VERIFY_S3_SECRET_KEY",
  "storage.s3_path_style":"true"}}
 JSON
-)" >/dev/null || no "the storage settings were refused"
+)" >/dev/null && STORAGE_SET=1 || no "the storage settings were refused"
+fi
 
+if [ -n "$STORAGE_SET" ] && [ -z "$DB_ID" ]; then
+	skip "backup and restore" "there is no database to back up"
+elif [ -n "$STORAGE_SET" ]; then
 	# Something to lose, and something to get back: a row written before the
 	# backup, changed after it, and expected back as it was once the backup is
 	# restored. Through the database's own pod, as its superuser, so what is
@@ -887,26 +993,24 @@ JSON
 	if [ -z "$BACKUP_ID" ]; then
 		no "a backup could not be started"
 	else
-		for _ in $(seq 1 60); do
-			B_STATE=$(api GET "/api/databases/$DB_ID/backups" | pick items.0.status 2>/dev/null || echo "")
-			case "$B_STATE" in succeeded|failed) break ;; esac
-			sleep 10
-		done
+		B_STATE=$(backup_ended "/api/databases/$DB_ID/backups" "$BACKUP_ID")
 		if [ "$B_STATE" = "succeeded" ]; then
 			ok "a backup ran and was uploaded to $VERIFY_S3_ENDPOINT"
+			# The Verify button's check, which is the half of a restore that
+			# needs no database: the panel downloads it and reads it through.
+			WHY=$(read_through "/api/databases/$DB_ID/backups" "$BACKUP_ID")
+			[ -z "$WHY" ] \
+				&& ok "the panel downloaded the backup from the bucket and read it through" \
+				|| no "the panel could not read the backup through: $WHY"
 			db_sql "update verify_restore set value = 'after'" >/dev/null || true
 			OP=$(api POST "/api/databases/$DB_ID/restore/$BACKUP_ID?overwrite=true" | pick id 2>/dev/null || echo "")
 			if [ -z "$OP" ]; then
 				no "the restore was refused"
 			else
-				for _ in $(seq 1 60); do
-					R_STATE=$(api GET "/api/operations/$OP" | pick status 2>/dev/null || echo "")
-					case "$R_STATE" in succeeded|failed) break ;; esac
-					sleep 10
-				done
+				R_STATE=$(operation_ended "$OP")
 				[ "$R_STATE" = "succeeded" ] \
 					&& ok "the backup restored over the live database without an error" \
-					|| no "the restore ended as '${R_STATE:-unknown}'. A backup that has never been restored is a file, not a backup."
+					|| { no "the restore ended as '${R_STATE:-unknown}'. A backup that has never been restored is a file, not a backup."; job_logs "$BACKUP_ID"; }
 				RESTORED=$(db_sql "select value from verify_restore" | tr -d '[:space:]')
 				[ "$RESTORED" = "before" ] \
 					&& ok "and what is in the database is what was there when the backup was taken" \
@@ -915,11 +1019,211 @@ JSON
 		else
 			no "the backup ended as '${B_STATE:-unknown}'; the bucket, the keys, the path style, or the way from the backup job to the bucket is wrong"
 			kubectl -n "$NAMESPACE" get networkpolicy -o wide >>"$REPORT" 2>&1 || true
+			job_logs "$BACKUP_ID"
 		fi
 	fi
 	say "  Restoring into a *different* cluster is the half a script cannot do on one"
 	say "  machine. The backup is in your bucket: install Skifity elsewhere, point it"
 	say "  at the same bucket, and restore. That is the drill worth running once."
+fi
+
+# The five other engines the panel backs up, each with its own tools: a
+# mysqldump or a mariadb-dump, a MongoDB archive, and a Redis or Valkey
+# snapshot, which goes back by the database replicating from a server the
+# restore starts on it. None of it had ever run. All five at once, so the run
+# waits for the slowest rather than for each in turn.
+step "The other engines' backups restore (checklist 7)"
+
+if [ -z "$BACKUP_DBS" ]; then
+	skip "the other engines' backups" "no bucket is configured, or none of the engines it backs up came up"
+else
+	TAKEN=""
+	for pair in $BACKUP_DBS; do
+		engine=${pair%%=*}
+		id=${pair#*=}
+		# Read back before anything else, so a backup is only ever asked of a
+		# database that is holding what the check expects of it.
+		engine_set "$engine" before >/dev/null || true
+		if [ "$(engine_get "$engine")" != before ]; then
+			no "the $engine database did not keep what was written to it before its backup"
+			continue
+		fi
+		backup=$(api POST "/api/databases/$id/backups" '{}' | pick id 2>/dev/null || echo "")
+		if [ -n "$backup" ]; then
+			TAKEN="$TAKEN $engine=$id=$backup"
+		else
+			no "a backup of the $engine database could not be started"
+		fi
+	done
+	RESTORING=""
+	for taken in $TAKEN; do
+		IFS='=' read -r engine id backup <<<"$taken"
+		state=$(backup_ended "/api/databases/$id/backups" "$backup")
+		if [ "$state" != succeeded ]; then
+			no "the $engine backup ended as '${state:-unknown}': $(backup_field "/api/databases/$id/backups" "$backup" error_message)"
+			job_logs "$backup"
+			continue
+		fi
+		ok "a $engine backup ran and was uploaded"
+		engine_set "$engine" after >/dev/null || true
+		op=$(api POST "/api/databases/$id/restore/$backup?overwrite=true" | pick id 2>/dev/null || echo "")
+		if [ -n "$op" ]; then
+			RESTORING="$RESTORING $engine=$id=$backup=$op"
+		else
+			no "the $engine restore was refused"
+		fi
+	done
+	for restoring in $RESTORING; do
+		IFS='=' read -r engine id backup op <<<"$restoring"
+		state=$(operation_ended "$op")
+		if [ "$state" != succeeded ]; then
+			no "the $engine restore ended as '${state:-unknown}': $(api GET "/api/operations/$op" | pick error_message 2>/dev/null || echo "no reason given")"
+			job_logs "$backup"
+			continue
+		fi
+		value=$(engine_get "$engine")
+		[ "$value" = before ] \
+			&& ok "the $engine backup restored over the live database, which holds what it held when the backup was taken" \
+			|| no "after the $engine restore the database holds '${value:-nothing}', not what the backup was taken of ('before')"
+	done
+fi
+# Removed now, so what the rest of the run measures and drains is what it did
+# before they were asked for.
+for pair in $BACKUP_DBS; do
+	api DELETE "/api/databases/${pair#*=}" >/dev/null 2>&1 || true
+done
+
+# An app's volume: its files archived beside the app and sent to the bucket,
+# and a restore that stops the app, puts the archive back over what is there,
+# and starts the app again as it was.
+step "A volume's backup restores (checklist 7)"
+
+if [ -z "$STORAGE_SET" ]; then
+	skip "the volume's backup" "no bucket is configured"
+elif [ -z "$VOLUME_ID" ] || [ -z "$APP_HOST" ]; then
+	skip "the volume's backup" "there is no volume to back up"
+else
+	VOLUME_PATH="/api/apps/$APP_ID/volumes/$VOLUME_ID"
+	curl -s --max-time 15 -H "Host: $APP_HOST" "http://127.0.0.1/write?written-before-the-backup" >/dev/null || true
+	V_BACKUP=$(api POST "$VOLUME_PATH/backups" '{}' | pick id 2>/dev/null || echo "")
+	if [ -z "$V_BACKUP" ]; then
+		no "a backup of the volume could not be started"
+	else
+		state=$(backup_ended "$VOLUME_PATH/backups" "$V_BACKUP")
+		if [ "$state" != succeeded ]; then
+			no "the volume's backup ended as '${state:-unknown}': $(backup_field "$VOLUME_PATH/backups" "$V_BACKUP" error_message)"
+			job_logs "$V_BACKUP"
+		else
+			ok "the volume was archived beside the app and uploaded"
+			curl -s --max-time 15 -H "Host: $APP_HOST" "http://127.0.0.1/write?written-after-the-backup" >/dev/null || true
+			op=$(api POST "$VOLUME_PATH/restore/$V_BACKUP?overwrite=true" | pick id 2>/dev/null || echo "")
+			if [ -z "$op" ]; then
+				no "the volume's restore was refused"
+			else
+				state=$(operation_ended "$op")
+				if [ "$state" != succeeded ]; then
+					no "the volume's restore ended as '${state:-unknown}': $(api GET "/api/operations/$op" | pick error_message 2>/dev/null || echo "no reason given")"
+					job_logs "$V_BACKUP"
+				else
+					# The app is started again by the restore; the first
+					# answers can be from before it is ready.
+					AFTER=""
+					for _ in $(seq 1 30); do
+						AFTER=$(curl -s --max-time 15 -H "Host: $APP_HOST" "http://127.0.0.1/data" || true)
+						case "$AFTER" in *written-*-the-backup*) break ;; esac
+						sleep 5
+					done
+					case "$AFTER" in
+					*written-before-the-backup*) ok "the app was started again, and reads its volume as it was when the backup was taken" ;;
+					*) no "after the volume's restore the app reads '${AFTER:-nothing}', not what the backup was taken of" ;;
+					esac
+				fi
+			fi
+		fi
+	fi
+fi
+
+# Sealed with a passphrase before it leaves the cluster, so whoever holds the
+# bucket holds ciphertext: the panel's own image seals the dump inside the
+# backup's job and opens it inside the restore's. Last of the databases'
+# checks, because from here on every backup is sealed.
+step "A backup sealed with a passphrase (checklist 7)"
+
+if [ -z "$STORAGE_SET" ] || [ -z "$DB_ID" ]; then
+	skip "a sealed backup" "no bucket is configured, or there is no database to back up"
+else
+	api PUT /api/settings '{"values":{"storage.backup_passphrase":"not-a-real-passphrase-for-the-crosscheck"}}' >/dev/null \
+		|| no "the backup passphrase was refused"
+	db_sql "update verify_restore set value = 'sealed'" >/dev/null || true
+	S_BACKUP=$(api POST "/api/databases/$DB_ID/backups" '{}' | pick id 2>/dev/null || echo "")
+	if [ -z "$S_BACKUP" ]; then
+		no "a sealed backup could not be started"
+	else
+		state=$(backup_ended "/api/databases/$DB_ID/backups" "$S_BACKUP")
+		if [ "$state" != succeeded ]; then
+			no "the sealed backup ended as '${state:-unknown}': $(backup_field "/api/databases/$DB_ID/backups" "$S_BACKUP" error_message)"
+			job_logs "$S_BACKUP"
+		else
+			[ "$(backup_field "/api/databases/$DB_ID/backups" "$S_BACKUP" encrypted)" = True ] \
+				&& ok "a backup taken with a passphrase set is recorded as sealed" \
+				|| no "a backup taken with a passphrase set is not recorded as sealed"
+			# Read from the bucket directly, as its owner would, with the
+			# bucket's own keys: the first bytes are the sealed format's, not
+			# gzip's.
+			LOCATION=$(backup_field "/api/databases/$DB_ID/backups" "$S_BACKUP" location)
+			HEAD=$(curl -s --max-time 15 -r 0-7 --aws-sigv4 "aws:amz:us-east-1:s3" \
+				--user "$VERIFY_S3_ACCESS_KEY:$VERIFY_S3_SECRET_KEY" \
+				"$VERIFY_S3_ENDPOINT/$VERIFY_S3_BUCKET/$LOCATION" 2>>"$REPORT" | head -c 8 | tr -d '\0' || true)
+			[ "$HEAD" = SKFSEAL1 ] \
+				&& ok "what the bucket holds is sealed: it starts with SKFSEAL1, not with a dump" \
+				|| no "what the bucket holds for the sealed backup starts with '${HEAD:-nothing}', not SKFSEAL1"
+			WHY=$(read_through "/api/databases/$DB_ID/backups" "$S_BACKUP")
+			[ -z "$WHY" ] \
+				&& ok "the panel opened the sealed backup with the passphrase and read it through" \
+				|| no "the panel could not read the sealed backup through: $WHY"
+			db_sql "update verify_restore set value = 'after'" >/dev/null || true
+			op=$(api POST "/api/databases/$DB_ID/restore/$S_BACKUP?overwrite=true" | pick id 2>/dev/null || echo "")
+			if [ -z "$op" ]; then
+				no "the sealed backup's restore was refused"
+			else
+				state=$(operation_ended "$op")
+				RESTORED=$(db_sql "select value from verify_restore" | tr -d '[:space:]')
+				if [ "$state" = succeeded ] && [ "$RESTORED" = sealed ]; then
+					ok "the sealed backup was opened inside the restore and put back"
+				else
+					no "the sealed backup's restore ended as '${state:-unknown}' and the row reads '${RESTORED:-nothing}', not 'sealed'"
+					job_logs "$S_BACKUP"
+				fi
+			fi
+		fi
+	fi
+fi
+
+# The panel's own database, copied to the same bucket: what `skifity
+# restore-db` brings back after the server it ran on is gone. The master key
+# is never in it, on purpose.
+step "The panel's own database, in the bucket"
+
+if [ -z "$STORAGE_SET" ]; then
+	skip "the panel's own backup" "no bucket is configured"
+else
+	# Read whatever the answer is, so a refusal says why.
+	P_OUT=$(curl -sS -X POST "$PANEL/api/panel/backups" ${TOKEN:+-H "Authorization: Bearer $TOKEN"} 2>&1 || true)
+	P_BACKUP=$(printf '%s' "$P_OUT" | pick id 2>/dev/null || echo "")
+	if [ -z "$P_BACKUP" ]; then
+		no "the panel could not copy its own database to the bucket: $(printf '%s' "$P_OUT" | head -c 400)"
+	else
+		state=$(backup_field /api/panel/backups "$P_BACKUP" status)
+		if [ "$state" = succeeded ]; then
+			ok "the panel copied its own database to the bucket"
+			WHY=$(read_through /api/panel/backups "$P_BACKUP")
+			[ -z "$WHY" ] \
+				&& ok "and read the copy back through" \
+				|| no "the panel could not read its own copy back through: $WHY"
+		else
+			no "the panel's copy of its own database ended as '${state:-unknown}': $(backup_field /api/panel/backups "$P_BACKUP" error_message)"
+		fi
+	fi
 fi
 
 step "Leaving with the data (checklist 16)"
