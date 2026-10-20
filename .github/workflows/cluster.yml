@@ -104,6 +104,8 @@ jobs:
             https://github.com/letsencrypt/pebble/releases/download/v2.10.1/pebble-linux-amd64.tar.gz
           tar -xzf pebble.tar.gz
           pebble=$(find "$PWD" -type f -name pebble | head -1)
+          # The archive does not keep the binary's execute bit.
+          chmod +x "$pebble"
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=Crosscheck ACME authority" \
             -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
             -keyout ca.key -out ca.pem
@@ -125,7 +127,10 @@ jobs:
             curl -fsS --cacert ca.pem -o /dev/null "https://${address}:14000/dir" && break
             sleep 1
           done
-          curl -fsS --cacert ca.pem "https://${address}:14000/dir"
+          curl -fsS --cacert ca.pem "https://${address}:14000/dir" || {
+            cat /tmp/pebble.log
+            exit 1
+          }
           {
             echo "ACME_DIRECTORY=https://${address}:14000/dir"
             echo "ACME_ADDRESS=${address}"
