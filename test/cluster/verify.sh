@@ -400,10 +400,17 @@ SECRET_IN_LOG=$(kubectl -n "$PANEL_NS" logs deploy/skifity-panel --tail=500 2>/d
 
 step "Deploying again, and rolling back (checklist 8)"
 
+# What a rollback promises (docs/concepts.md, Deployments and rollback): the old
+# version's image and the settings it ran with — instances, resources, port,
+# health check, start command — and not its variables, which may be a key
+# rotated since. The second deployment runs two instances and VERSION=3; going
+# back to the first has to bring back one instance and leave VERSION alone.
+#
+# A variable and a size are applied without a deployment of their own (ADR-0007),
+# which is why this was skipped on every run until it made a second one itself:
+# a deploy of the same commit, which builds nothing.
 api PUT "/api/apps/$APP_ID/variables" '{"key":"VERSION","value":"3"}' >/dev/null
-# A variable is applied without a deployment of its own (ADR-0007), so there was
-# only ever one to roll back to and this was skipped. A deploy of the same
-# commit makes the second, with the new value, and builds nothing.
+api PUT "/api/apps/$APP_ID/scaling" '{"replicas":2,"autoscale":false}' >/dev/null
 SECOND=$(api POST "/api/apps/$APP_ID/deploy" | pick id 2>/dev/null || echo "")
 for _ in $(seq 1 60); do
 	STATE=$(api GET "/api/apps/$APP_ID/deployments/$SECOND" | pick status 2>/dev/null || echo "")
@@ -415,15 +422,23 @@ FIRST=$(api GET "/api/apps/$APP_ID/deployments" | pick items.1.id 2>/dev/null ||
 if [ -z "$FIRST" ]; then
 	skip "the rollback" "there is only one deployment to roll back to"
 else
-	api POST "/api/apps/$APP_ID/rollback/$FIRST" >/dev/null || no "the rollback was refused"
-	for _ in $(seq 1 30); do
-		BODY=$(curl -s --max-time 10 -H "Host: $APP_HOST" "http://127.0.0.1/" || true)
-		case "$BODY" in *version=2*) break ;; esac
+	ROLLBACK=$(api POST "/api/apps/$APP_ID/rollback/$FIRST" | pick id 2>/dev/null || echo "")
+	[ -n "$ROLLBACK" ] || no "the rollback was refused"
+	for _ in $(seq 1 60); do
+		STATE=$(api GET "/api/apps/$APP_ID/deployments/$ROLLBACK" | pick status 2>/dev/null || echo "")
+		case "$STATE" in succeeded | failed) break ;; esac
 		sleep 5
 	done
+	SIZE=$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "?")
+	BODY=$(curl -s --max-time 10 -H "Host: $APP_HOST" "http://127.0.0.1/" || true)
+	if [ "$STATE" = "succeeded" ] && [ "$SIZE" = "1" ]; then
+		ok "one call rolled the app back to the version before, with the one instance it ran"
+	else
+		no "a rollback ended '${STATE:-unknown}' with ${SIZE} instance(s); the version it went back to ran one"
+	fi
 	case "$BODY" in
-		*version=2*) ok "one call rolled the app back to what it was serving before" ;;
-		*) no "after a rollback the app answers '${BODY:-nothing}'. A rollback restores the settings the old version ran with, not only its image." ;;
+		*version=3*) ok "the rollback left the variables as they are now, as it says it will" ;;
+		*) no "after a rollback the app answers '${BODY:-nothing}', not the VERSION it was last given; a rollback is not meant to take variables back" ;;
 	esac
 fi
 
