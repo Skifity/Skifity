@@ -240,3 +240,35 @@ func TestAnIssuerWithAClusterIPSolverIsLeftAlone(t *testing.T) {
 		t.Errorf("an issuer that needed nothing was written again: %v", acme)
 	}
 }
+
+// cert-manager with no issuer is given the panel's at start. cert-manager is
+// only ever installed here for it, and an install that ran out of time
+// waiting for cert-manager's webhook left a server like that, with every
+// domain waiting for a certificate nothing would ask for. A cluster with no
+// cert-manager is left as it is.
+func TestCertManagerLeftWithoutAnIssuerIsGivenOne(t *testing.T) {
+	certManager := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "cert-manager", "namespace": "cert-manager"},
+	}}
+	c, _, calls := issuerCluster(t, certManager)
+	if err := c.AdoptClusterIssuer(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	acme := appliedIssuer(t, calls)
+	if acme == nil {
+		t.Fatal("cert-manager with no issuer was left without one")
+	}
+	if acme["server"] != letsEncryptProduction {
+		t.Errorf("the issuer made asks %v, want Let's Encrypt, which an empty setting means", acme["server"])
+	}
+
+	c, _, calls = issuerCluster(t)
+	if err := c.AdoptClusterIssuer(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if acme := appliedIssuer(t, calls); acme != nil {
+		t.Errorf("a cluster with no cert-manager was given an issuer: %v", acme)
+	}
+}

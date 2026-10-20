@@ -101,10 +101,11 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 				log.Info("connected to the cluster", "kubernetes_version", clusterVersion)
 			}
 			// What the installer set up for certificates, recorded where the
-			// panel shows and changes it. Not being able to read it is no
-			// reason not to start.
+			// panel shows and changes it, and the issuer made for a
+			// cert-manager that has none. Not being able to is no reason not
+			// to start; the next start tries again.
 			if err := clusterAdapter.AdoptClusterIssuer(ctx); err != nil {
-				log.Warn("could not read the certificate issuer the installer made", "error", err)
+				log.Warn("could not read or make the certificate issuer", "error", err)
 			}
 		}
 	}

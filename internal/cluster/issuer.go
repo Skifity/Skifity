@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"time"
 
@@ -134,6 +135,26 @@ func (c *Cluster) RefreshClusterIssuer(ctx context.Context) error {
 	return c.EnsureClusterIssuer(ctx)
 }
 
+// issuerCertManagerWasLeftWithout makes the issuer for a cluster that has
+// cert-manager and none: cert-manager is only ever installed here for it, and
+// without it every domain waits for a certificate nothing asks for. An install
+// that ran out of time waiting for cert-manager's webhook left a server like
+// that, and nothing later made the issuer. A cluster with no cert-manager is
+// left as it is.
+func (c *Cluster) issuerCertManagerWasLeftWithout(ctx context.Context) error {
+	if _, err := c.client.Applier().Get(ctx, "apps/v1", "Deployment", "cert-manager", "cert-manager"); err != nil {
+		if kube.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if err := c.EnsureClusterIssuer(ctx); err != nil {
+		return fmt.Errorf("make the certificate issuer cert-manager has none of: %w", err)
+	}
+	c.log.Info("made the certificate issuer that cert-manager was installed without")
+	return nil
+}
+
 // AdoptClusterIssuer records the issuer the installer made as the panel's own
 // settings: its ACME server, its email and the authority its server's address
 // is signed by, each only where the setting is still empty, so an operator's
@@ -158,7 +179,7 @@ func (c *Cluster) AdoptClusterIssuer(ctx context.Context) error {
 	}
 	live, err := c.client.Applier().Get(ctx, "cert-manager.io/v1", "ClusterIssuer", "", ClusterIssuerName)
 	if kube.IsNotFound(err) || meta.IsNoMatchError(err) {
-		return nil
+		return c.issuerCertManagerWasLeftWithout(ctx)
 	}
 	if err != nil {
 		return err
