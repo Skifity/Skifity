@@ -2890,6 +2890,12 @@
         "impact": "Nothing was changed.",
         "fix": "Take a different backup. The newest one in the bucket's skifity/panel/ folder is usually the one to use."
       },
+      "admin_restore_owner": {
+        "title": "The backup could not be given the database's owner",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed. Put in place as it is, the panel would not have been able to open it.",
+        "fix": "Run the restore as root, with sudo, on the server the panel's database is on."
+      },
       "auth_scoped_to_projects": {
         "title": "Your access is limited to some projects",
         "cause": "You are in this team for some of its projects only, and this belongs to the whole team.",

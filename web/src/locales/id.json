@@ -2870,6 +2870,12 @@
         "impact": "Tidak ada yang diubah.",
         "fix": "Gunakan cadangan lain. Yang terbaru di folder skifity/panel/ pada bucket biasanya yang tepat."
       },
+      "admin_restore_owner": {
+        "title": "Cadangan itu tidak bisa diberi pemilik database",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah. Jika dipasang apa adanya, panel tidak akan bisa membukanya.",
+        "fix": "Jalankan pemulihan sebagai root, dengan sudo, di server tempat database panel berada."
+      },
       "auth_scoped_to_projects": {
         "title": "Akses Anda terbatas pada beberapa proyek",
         "cause": "Anda berada di tim ini hanya untuk sebagian proyeknya, dan ini milik seluruh tim.",
