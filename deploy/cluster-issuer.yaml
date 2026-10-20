@@ -4,6 +4,10 @@
 # it works the moment a domain points at the server. The panel can switch to
 # DNS-01 later, which is what wildcard certificates need.
 #
+# The solver's Service is a ClusterIP. cert-manager makes a NodePort one
+# unless told, and every environment's quota allows no NodePort, so no app's
+# certificate could ever be asked for: the solver's Service was refused.
+#
 # Placeholders: __EMAIL__, __ACME_SERVER__, __ISSUER__
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -21,3 +25,4 @@ spec:
       - http01:
           ingress:
             class: traefik
+            serviceType: ClusterIP

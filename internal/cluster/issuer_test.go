@@ -126,6 +126,15 @@ func TestTheIssuerIsMadeFromTheSettings(t *testing.T) {
 	if acme["server"] != letsEncryptProduction {
 		t.Errorf("the issuer asks %v, want Let's Encrypt's production server", acme["server"])
 	}
+	// Every environment's quota allows no NodePort, which is what
+	// cert-manager makes the challenge's Service unless told otherwise.
+	solvers, _ := acme["solvers"].([]any)
+	if len(solvers) != 1 {
+		t.Fatalf("the issuer has %d solvers, want one", len(solvers))
+	}
+	if kind, _, _ := unstructured.NestedString(solvers[0].(map[string]any), "http01", "ingress", "serviceType"); kind != "ClusterIP" {
+		t.Errorf("the challenge's Service is a %q, which an environment's quota refuses unless it is a ClusterIP", kind)
+	}
 	if _, ok := acme["email"]; ok {
 		t.Errorf("an empty email was written into the issuer: %v", acme["email"])
 	}
@@ -174,7 +183,7 @@ func TestTheInstallersIssuerIsAdopted(t *testing.T) {
 			"containers": []any{map[string]any{"name": "cert-manager-controller", "image": "quay.io/jetstack/cert-manager-controller:v1.21.2"}},
 		}}},
 	}}
-	c, db, _ := issuerCluster(t, installersIssuer(staging, "ops@example.org"), certManager)
+	c, db, calls := issuerCluster(t, installersIssuer(staging, "ops@example.org"), certManager)
 	if err := db.SetSetting(t.Context(), settings.KeyACMEEmail, "chosen@example.org", false, "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +204,15 @@ func TestTheInstallersIssuerIsAdopted(t *testing.T) {
 	if component.Status != "installed" || component.Version != "1.21.2" {
 		t.Errorf("cert-manager is recorded as %q at %q, want installed at 1.21.2", component.Status, component.Version)
 	}
+	// The installer's issuer asked for a NodePort for its challenges; it is
+	// written again, with what was recorded, asking for a ClusterIP.
+	acme := appliedIssuer(t, calls)
+	if acme == nil {
+		t.Fatal("an issuer asking for a NodePort was left as it was")
+	}
+	if acme["server"] != staging || acme["email"] != "chosen@example.org" {
+		t.Errorf("the issuer written again asks %v as %v, want the staging server and the chosen email", acme["server"], acme["email"])
+	}
 
 	// Production is what an empty setting means already, so it is not
 	// written down as if somebody had chosen it.
@@ -204,5 +222,21 @@ func TestTheInstallersIssuerIsAdopted(t *testing.T) {
 	}
 	if server, _, _ := db.GetSetting(t.Context(), settings.KeyACMEServer); server != "" {
 		t.Errorf("Let's Encrypt's production server was recorded as a choice: %q", server)
+	}
+}
+
+// An issuer already answering its challenges through a ClusterIP is left as it
+// is at start.
+func TestAnIssuerWithAClusterIPSolverIsLeftAlone(t *testing.T) {
+	issuer := installersIssuer(letsEncryptProduction, "")
+	_ = unstructured.SetNestedSlice(issuer.Object, []any{map[string]any{
+		"http01": map[string]any{"ingress": map[string]any{"class": "traefik", "serviceType": "ClusterIP"}},
+	}}, "spec", "acme", "solvers")
+	c, _, calls := issuerCluster(t, issuer)
+	if err := c.AdoptClusterIssuer(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if acme := appliedIssuer(t, calls); acme != nil {
+		t.Errorf("an issuer that needed nothing was written again: %v", acme)
 	}
 }

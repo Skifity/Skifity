@@ -26,6 +26,15 @@ const ClusterIssuerName = "skifity-letsencrypt"
 // is set.
 const letsEncryptProduction = "https://acme-v02.api.letsencrypt.org/directory"
 
+// solverServiceType is the kind of Service cert-manager makes for the pod
+// that answers an HTTP-01 challenge, in the namespace of the app the
+// certificate is for. Left to itself it makes a NodePort, and every
+// environment's quota allows no NodePort (kube.BuildResourceQuota), so the
+// Service was refused and no app's certificate could ever be asked for: the
+// first run with an ACME server to ask showed it. The ingress reaches a
+// ClusterIP just as well.
+const solverServiceType = "ClusterIP"
+
 // CertificateIssuer is the issuer an app's certificates are asked of: the
 // panel's, when it exists, whoever made it. Empty when there is none, because
 // cert-manager is not installed or has no issuer yet. A name that is not
@@ -84,9 +93,10 @@ func (c *Cluster) EnsureClusterIssuer(ctx context.Context) error {
 		},
 		"solvers": []any{map[string]any{
 			// HTTP-01 works for anyone with a domain pointing at the
-			// cluster, with no DNS credentials to configure.
+			// cluster, with no DNS credentials to configure. The solver's
+			// Service is a ClusterIP; see solverServiceType.
 			"http01": map[string]any{
-				"ingress": map[string]any{"class": "traefik"},
+				"ingress": map[string]any{"class": "traefik", "serviceType": solverServiceType},
 			},
 		}},
 	}
@@ -137,6 +147,11 @@ func (c *Cluster) RefreshClusterIssuer(ctx context.Context) error {
 // The installer installs cert-manager itself, too, and the list of components
 // did not know: it offered to install what was already running. That is
 // recorded here as well, at the version it runs.
+//
+// And an issuer made before the challenge's Service was a ClusterIP, by the
+// installer or by the panel, still asks for a NodePort, which no environment
+// allows (solverServiceType). It is written again from the settings just
+// recorded, so a server upgraded by any means gets certificates for its apps.
 func (c *Cluster) AdoptClusterIssuer(ctx context.Context) error {
 	if c.client == nil {
 		return nil
@@ -181,6 +196,12 @@ func (c *Cluster) AdoptClusterIssuer(ctx context.Context) error {
 		}
 		c.log.Info("recorded what the certificate issuer the installer made says", "setting", adopted.key)
 	}
+	if !solverIsClusterIP(live) {
+		if err := c.EnsureClusterIssuer(ctx); err != nil {
+			return err
+		}
+		c.log.Info("the certificate issuer's challenges are answered through a ClusterIP now, which every environment allows")
+	}
 
 	recorded, err := c.db.GetComponent(ctx, "cert-manager")
 	if err != nil {
@@ -207,6 +228,28 @@ func (c *Cluster) AdoptClusterIssuer(ctx context.Context) error {
 	return c.db.SetComponent(ctx, store.ClusterComponent{
 		Name: "cert-manager", Status: "installed", InstalledAt: time.Now(), Version: running,
 	})
+}
+
+// solverIsClusterIP reports whether every HTTP-01 solver of an issuer asks
+// for a ClusterIP Service.
+func solverIsClusterIP(issuer *unstructured.Unstructured) bool {
+	solvers, _, _ := unstructured.NestedSlice(issuer.Object, "spec", "acme", "solvers")
+	if len(solvers) == 0 {
+		return false
+	}
+	for _, raw := range solvers {
+		solver, ok := raw.(map[string]any)
+		if !ok {
+			return false
+		}
+		if _, http := solver["http01"]; !http {
+			continue
+		}
+		if kind, _, _ := unstructured.NestedString(solver, "http01", "ingress", "serviceType"); kind != solverServiceType {
+			return false
+		}
+	}
+	return true
 }
 
 // plainSetting reads a setting that is not sealed.
