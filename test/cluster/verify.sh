@@ -389,8 +389,15 @@ done
 if [ "$STATE" = "succeeded" ]; then
 	ok "the app was built from source and deployed"
 else
-	api GET "/api/apps/$APP_ID/deployments/$DEPLOY_ID/logs" >>"$REPORT" 2>&1 || true
-	die "the deployment ended as '${STATE:-unknown}'. The build log is in $REPORT. This is checklist item 1, and nothing after it means much."
+	# The end of the build's own log, here as well as in the report: it is the
+	# one thing that says why, and a run that dies here leaves nothing else.
+	api GET "/api/apps/$APP_ID/deployments/$DEPLOY_ID/logs" 2>/dev/null | python3 -c '
+import json, sys
+for line in json.load(sys.stdin).get("lines", [])[-40:]:
+    print("    " + line.get("line", ""))
+' 2>/dev/null | tee -a "$REPORT" || true
+	kubectl -n skifity-builds get pods -o wide 2>/dev/null | tee -a "$REPORT" || true
+	die "the deployment ended as '${STATE:-unknown}'; the end of its log is above. This is checklist item 1, and nothing after it means much."
 fi
 
 READY=$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)

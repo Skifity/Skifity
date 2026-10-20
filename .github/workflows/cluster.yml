@@ -244,6 +244,9 @@ jobs:
           sudo ssh -i /mnt/second/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=5 root@192.168.100.10 'journalctl -u k3s-agent --no-pager | tail -n 400' \
             | sudo tee "$RUNNER_TEMP/servers-report/second-server-k3s-agent.log" >/dev/null || true
+          # The upload runs as the runner's user; what root copied in has to be
+          # readable by it, or the whole report is lost.
+          sudo chmod -R a+rX "$RUNNER_TEMP/servers-report"
 
       - uses: actions/upload-artifact@v7
         if: always()
