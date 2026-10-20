@@ -3632,6 +3632,12 @@
         "impact": "Tidak ada yang diubah.",
         "fix": "Beri paling sedikit {{0}} MB."
       },
+      "database_kernel_refused": {
+        "title": "MongoDB ini tidak bisa berjalan di server-server ini",
+        "cause": "MongoDB {{0}} berhenti saat mulai di Linux 6.19 dan yang lebih baru, dan salah satu server di sini menjalankan {{1}}: alokator memori yang dibawanya rusak di kernel-kernel itu (SERVER-121912 milik MongoDB).",
+        "impact": "Tidak ada yang dibuat. Database dengan versi itu tidak akan pernah berjalan.",
+        "fix": "Pilih MongoDB {{0}}, yang berjalan di server-server ini, atau jalankan server dengan kernel yang lebih lama dari 6.19."
+      },
       "database_password_not_offered": {
         "title": "Database ini tidak punya kata sandi",
         "cause": "{{0}} menjalankan {{1}}, yang tidak punya kata sandi untuk diubah.",

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"slices"
@@ -170,4 +171,53 @@ func TestABackupIsRefusedWhereNoneIsOffered(t *testing.T) {
 	if status == http.StatusConflict || strings.Contains(body, "backup.not_offered") {
 		t.Errorf("a MongoDB backup was refused as not offered: %d %s", status, body)
 	}
+}
+
+// kernelCluster is a cluster whose servers run these kernels.
+type kernelCluster struct {
+	Cluster
+	kernels []string
+}
+
+func (c kernelCluster) NodeKernels(context.Context) []string { return c.kernels }
+
+// The form to create a database preselects what the list says a new database
+// gets, so on a cluster where a server runs a kernel MongoDB 8 stops on, the
+// list says 7.0, and every other engine keeps its own default.
+func TestTheListedDefaultIsAVersionTheServersStart(t *testing.T) {
+	h := newHarness(t)
+	h.api.cluster = kernelCluster{kernels: []string{"6.8.0-45-generic", "7.0.0-1017-azure"}}
+	acme := h.newTenant("acme")
+	status, body := h.do(acme, http.MethodGet, "/api/database-engines", nil)
+	if status != http.StatusOK {
+		t.Fatalf("got %d: %s", status, body)
+	}
+	var list struct {
+		Items []engine.Engine `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range list.Items {
+		want := mustLookup(t, e.Name).DefaultVersion
+		if e.Name == engine.MongoDB {
+			want = "7.0"
+		}
+		if e.DefaultVersion != want {
+			t.Errorf("%s is listed with %s as its default, want %s", e.Name, e.DefaultVersion, want)
+		}
+	}
+	// What the list says is not what the catalogue says everywhere else.
+	if mustLookup(t, engine.MongoDB).DefaultVersion != "8.0" {
+		t.Error("listing the engines changed the catalogue's own default")
+	}
+}
+
+func mustLookup(t *testing.T, name string) engine.Engine {
+	t.Helper()
+	e, ok := engine.Lookup(name)
+	if !ok {
+		t.Fatalf("no engine %s", name)
+	}
+	return e
 }

@@ -104,8 +104,14 @@ func (m *Manager) Create(ctx context.Context, env store.Environment, req api.Cre
 		MemRequestMB:  kind.MemRequestMB,
 		MemLimitMB:    kind.MemLimitMB,
 	}
+	// The servers' kernels decide what starts on them: a version that would
+	// stop as it starts on one is not the default there, and is refused when
+	// asked for, rather than left in a crash loop that says nothing.
+	kernels := m.cluster.NodeKernels(ctx)
 	if record.EngineVersion == "" {
-		record.EngineVersion = kind.DefaultVersion
+		record.EngineVersion = kind.DefaultFor(kernels)
+	} else if kernel := kind.RefusingKernel(record.EngineVersion, kernels); kernel != "" {
+		return store.Database{}, errdoc.MongoDBKernelRefused(record.EngineVersion, kernel, kind.DefaultFor(kernels))
 	}
 
 	spec := Spec{

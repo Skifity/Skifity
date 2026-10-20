@@ -259,8 +259,18 @@ func defaultVarNameFor(name string) string {
 // of each, and what the panel does for each: the form to create a database is
 // built from it, and the database's page reads from it whether backups are
 // offered.
-func (s *Server) handleListDatabaseEngines(w http.ResponseWriter, _ *http.Request) {
-	writeList(w, engine.All())
+// handleListDatabaseEngines lists the engines, each with the version a new
+// database of it gets on these servers: MongoDB's is 7.0 on a cluster where a
+// server runs a kernel MongoDB 8 will not start on.
+func (s *Server) handleListDatabaseEngines(w http.ResponseWriter, r *http.Request) {
+	engines := engine.All()
+	if s.cluster != nil {
+		kernels := s.cluster.NodeKernels(r.Context())
+		for i := range engines {
+			engines[i].DefaultVersion = engines[i].DefaultFor(kernels)
+		}
+	}
+	writeList(w, engines)
 }
 
 // refuseUnbackedEngine answers for a database whose engine the panel does not

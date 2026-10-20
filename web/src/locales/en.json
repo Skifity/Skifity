@@ -3652,6 +3652,12 @@
         "impact": "Nothing was changed.",
         "fix": "Give it at least {{0}} MB."
       },
+      "database_kernel_refused": {
+        "title": "This MongoDB does not start on these servers",
+        "cause": "MongoDB {{0}} stops as it starts on Linux 6.19 and newer, and a server here runs {{1}}: the memory allocator it ships with breaks on those kernels (MongoDB's SERVER-121912).",
+        "impact": "Nothing was created. A database at that version would never start.",
+        "fix": "Choose MongoDB {{0}}, which starts on these servers, or run them on a kernel older than 6.19."
+      },
       "database_password_not_offered": {
         "title": "This database has no password",
         "cause": "{{0}} runs {{1}}, which has no password to change.",

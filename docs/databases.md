@@ -12,7 +12,7 @@ nine — [backed up](backups.md) on a schedule.
 | **PostgreSQL** | 18, **17**, 16 | Relational data; the one to pick when unsure | 5432 | Yes |
 | **MySQL** | 9.7, **8.4** | Software that asks for MySQL by name | 3306 | Yes |
 | **MariaDB** | 12.3, **11.8**, 11.4, 10.11 | MySQL-compatible; most PHP software is tested with it | 3306 | Yes |
-| **MongoDB** | **8.0**, 7.0 | Documents rather than tables | 27017 | Yes |
+| **MongoDB** | **8.0**, 7.0 ([7.0 on new kernels](#mongodb-and-new-linux-kernels)) | Documents rather than tables | 27017 | Yes |
 | **Redis** | **7** | Caches, queues and sessions | 6379 | Yes |
 | **Valkey** | 9.1, **9.0**, 8.1 | Redis's open-source continuation, used exactly like Redis | 6379 | Yes |
 | **Dragonfly** | **1.40** | The Redis protocol on every core of the server | 6379 | [No](backups.md#what-is-not-backed-up) |
@@ -46,6 +46,26 @@ app that uses it is offered MariaDB, and one that uses `mysql2` is offered
 MySQL. A `skifity.yaml` written before the change that says `engine: mysql` for
 an existing database gets a note from `skifity plan` that the database is a
 MariaDB here; change the file to `engine: mariadb`.
+
+### MongoDB and new Linux kernels
+
+MongoDB 8 does not start on Linux 6.19 or newer. It ships a memory allocator
+whose per-CPU caches break on those kernels, and rather than crash later it
+stops as it starts, saying so in its log
+([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). It reads the
+kernel's version from the system, so an Ubuntu kernel that reports itself as
+7.0.0 is refused whatever was fixed in it; that is the kernel Ubuntu 24.04
+moves to, and the one 26.04 ships.
+
+So the panel reads the kernel of every server. Where one of them runs 6.19 or
+newer, a new MongoDB database gets **7.0**, which has the older allocator and
+starts on any of them; asking for 8.0 there is refused with this reason, rather
+than leaving a database that never starts. A MongoDB 8 created before a server
+moved to such a kernel stops at its next restart, and MongoDB does not support
+restoring a dump into an older major version: keep such a server on a kernel
+older than 6.19 until MongoDB ships a fixed allocator, or move the data into a
+7.0 database with `mongoexport` and `mongoimport`, which copy documents rather
+than files.
 
 ## Connecting an app
 

@@ -99,6 +99,9 @@ type Engine struct {
 	// offered, and a database made then still has to be copied into a
 	// preview and backed up with its own client.
 	open func(version string) string
+	// refusesKernel, when set, reports whether a version will not start on a
+	// server with this Linux kernel, as uname gives it.
+	refusesKernel func(version, kernel string) bool
 }
 
 // openVersion is what an open engine accepts: numbers and dots, so a version
@@ -166,6 +169,7 @@ var catalogue = []Engine{
 			"8.0": "mongo:8.0.32",
 			"7.0": "mongo:7.0.43",
 		},
+		refusesKernel: mongoRefusesKernel,
 	},
 	{
 		Name: Redis, Title: "Redis", Port: 6379,
@@ -306,6 +310,83 @@ func (e Engine) CheckVersion(version string) error {
 	}
 	return fmt.Errorf("%s %s is not a version Skifity runs; it runs %s",
 		e.Title, version, strings.Join(e.Versions, ", "))
+}
+
+// StartsOn reports whether a version of this engine starts on a server with
+// this Linux kernel, as uname gives it. A kernel nobody knows is taken as one
+// it starts on.
+func (e Engine) StartsOn(version, kernel string) bool {
+	if version == "" {
+		version = e.DefaultVersion
+	}
+	return e.refusesKernel == nil || kernel == "" || !e.refusesKernel(version, kernel)
+}
+
+// DefaultFor is the version a database gets when nobody picks one, on a
+// cluster whose servers run these kernels: the default, unless it will not
+// start on one of them, and then the newest offered version that starts on
+// all of them. When none does, it is the default still, and the refusal is
+// what says why.
+func (e Engine) DefaultFor(kernels []string) string {
+	if e.refusesKernel == nil || e.startsOnAll(e.DefaultVersion, kernels) {
+		return e.DefaultVersion
+	}
+	for _, version := range e.Versions {
+		if e.startsOnAll(version, kernels) {
+			return version
+		}
+	}
+	return e.DefaultVersion
+}
+
+// RefusingKernel is a kernel among these that a version of this engine will
+// not start on, or empty when it starts on all of them.
+func (e Engine) RefusingKernel(version string, kernels []string) string {
+	for _, kernel := range kernels {
+		if !e.StartsOn(version, kernel) {
+			return kernel
+		}
+	}
+	return ""
+}
+
+func (e Engine) startsOnAll(version string, kernels []string) bool {
+	return e.RefusingKernel(version, kernels) == ""
+}
+
+// mongoRefusesKernel is MongoDB's own refusal. From 8.0 it ships Google's
+// TCMalloc, whose per-CPU caches break on Linux 6.19 and newer, and the 8.0
+// image pinned here stops as it starts on such a kernel rather than crash
+// later (SERVER-121912). It reads the kernel's version from uname, so an
+// Ubuntu kernel that reports 7.0.0 is refused whatever was backported into
+// it. 7.0 has the older allocator and starts on any of them.
+func mongoRefusesKernel(version, kernel string) bool {
+	if major, _ := leadingVersion(version); major < 8 {
+		return false
+	}
+	major, minor := leadingVersion(kernel)
+	return major > 6 || (major == 6 && minor >= 19)
+}
+
+// leadingVersion reads the major and minor numbers a version starts with:
+// 7 and 0 from "7.0.0-1017-azure". What does not start with a number is 0.0.
+func leadingVersion(text string) (major, minor int) {
+	parts := strings.SplitN(text, ".", 3)
+	number := func(part string) int {
+		n := 0
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				break
+			}
+			n = n*10 + int(r-'0')
+		}
+		return n
+	}
+	major = number(parts[0])
+	if len(parts) > 1 {
+		minor = number(parts[1])
+	}
+	return major, minor
 }
 
 // Image is the image a version of this engine runs, pinned to its release

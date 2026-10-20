@@ -230,6 +230,9 @@ type Cluster interface {
 	// DeleteVolumeClaim deletes an app's volume claim, and with it the disk.
 	// One that is not there is already deleted.
 	DeleteVolumeClaim(ctx context.Context, namespace, name string) error
+	// NodeKernels is the Linux kernel every server runs, as uname gives it,
+	// and nothing when the cluster cannot be asked.
+	NodeKernels(ctx context.Context) []string
 	// SetNodeGPULabel marks a server as having an NVIDIA card, or unmarks
 	// it, which decides whether the device plugin runs there.
 	SetNodeGPULabel(ctx context.Context, node string, nvidia bool) error

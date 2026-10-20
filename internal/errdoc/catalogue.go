@@ -2217,6 +2217,18 @@ func DatabaseMemoryTooSmall(engine string, minimumMB int) *Problem {
 		With("engine", engine)
 }
 
+// MongoDBKernelRefused is a MongoDB version asked for on a cluster where a
+// server runs a kernel it stops on as it starts.
+func MongoDBKernelRefused(version, kernel, instead string) *Problem {
+	return New("database.kernel_refused", "This MongoDB does not start on these servers").
+		WithCause("MongoDB %s stops as it starts on Linux 6.19 and newer, and a server here runs %s: the memory allocator it ships with breaks on those kernels (MongoDB's SERVER-121912).", version, kernel).
+		WithImpact("Nothing was created. A database at that version would never start.").
+		WithFix("Choose MongoDB %s, which starts on these servers, or run them on a kernel older than 6.19.", instead).
+		WithDocs("/docs/databases#mongodb-and-new-linux-kernels").
+		WithStatus(http.StatusConflict).
+		With("version", version).With("kernel", kernel)
+}
+
 // DatabasePasswordNotOffered is a new password asked of an engine that has
 // none.
 func DatabasePasswordNotOffered(database, engine string) *Problem {

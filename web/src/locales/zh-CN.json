@@ -3632,6 +3632,12 @@
         "impact": "没有做任何改动。",
         "fix": "至少给它 {{0}} MB。"
       },
+      "database_kernel_refused": {
+        "title": "这个 MongoDB 无法在这些服务器上启动",
+        "cause": "MongoDB {{0}} 在 Linux 6.19 及更新的内核上一启动就会停止，而这里有一台服务器运行的是 {{1}}：它自带的内存分配器在这些内核上会出错（MongoDB 的 SERVER-121912）。",
+        "impact": "没有创建任何东西。这个版本的数据库永远无法启动。",
+        "fix": "请选择 MongoDB {{0}}，它可以在这些服务器上启动；或者让服务器运行早于 6.19 的内核。"
+      },
       "database_password_not_offered": {
         "title": "这个数据库没有密码",
         "cause": "{{0}} 运行的是 {{1}}，没有可以更换的密码。",

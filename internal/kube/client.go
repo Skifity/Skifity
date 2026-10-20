@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1104,6 +1105,23 @@ func (c *Client) NodeAddresses(ctx context.Context) ([]string, error) {
 			if address.Type == corev1.NodeInternalIP || address.Type == corev1.NodeExternalIP {
 				out = append(out, address.Address)
 			}
+		}
+	}
+	return out, nil
+}
+
+// NodeKernels is the Linux kernel every node runs, as uname gives it, once
+// each. A database engine that will not start on one of them is not offered
+// at a version that would sit in a crash loop there.
+func (c *Client) NodeKernels(ctx context.Context) ([]string, error) {
+	nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list the cluster's nodes: %w", err)
+	}
+	var out []string
+	for _, node := range nodes.Items {
+		if kernel := node.Status.NodeInfo.KernelVersion; kernel != "" && !slices.Contains(out, kernel) {
+			out = append(out, kernel)
 		}
 	}
 	return out, nil

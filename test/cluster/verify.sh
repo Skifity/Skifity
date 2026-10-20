@@ -941,6 +941,27 @@ for _ in $(seq 1 60); do
 	PENDING_DBS="$STILL"
 	[ -z "$PENDING_DBS" ] || sleep 10
 done
+# MongoDB 8 stops as it starts on Linux 6.19 and newer, which is the kernel
+# Ubuntu 24.04 moves to, and some of GitHub's runners already have. On a
+# cluster with such a server a new MongoDB gets 7.0, and 8.0 is refused with
+# the reason rather than left in a crash loop.
+KERNELS=$(kubectl get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.kernelVersion}{"\n"}{end}' 2>/dev/null || true)
+NEW_KERNEL=$(printf '%s\n' "$KERNELS" | awk -F. '$1 > 6 || ($1 == 6 && $2 + 0 >= 19)' | head -n 1)
+for pair in $OTHER_DBS; do
+	[ "${pair%%=*}" = mongodb ] || continue
+	MONGO_VERSION=$(api GET "/api/databases/${pair#*=}" | pick database.engine_version 2>/dev/null || echo "")
+	if [ -n "$NEW_KERNEL" ]; then
+		[ "$MONGO_VERSION" = "7.0" ] \
+			&& ok "a server here runs Linux $NEW_KERNEL, which MongoDB 8 stops on, and the new MongoDB was given 7.0" \
+			|| no "a server here runs Linux $NEW_KERNEL, which MongoDB 8 stops on, and the new MongoDB was given ${MONGO_VERSION:-nothing}"
+		REFUSED=$(api_code POST "/api/environments/$ENV_ID/databases" '{"name":"verify-mongodb-8","engine":"mongodb","version":"8.0","storage_gb":1}')
+		[ "$REFUSED" = "409" ] \
+			&& ok "and asking for MongoDB 8.0 there was refused with the reason" \
+			|| no "asking for MongoDB 8.0 on Linux $NEW_KERNEL answered $REFUSED, not a refusal"
+	else
+		say "  the servers here run Linux $(printf '%s' "$KERNELS" | tr '\n' ' '), and the new MongoDB was given ${MONGO_VERSION:-nothing}"
+	fi
+done
 for pair in $PENDING_DBS; do
 	engine=${pair%%=*}
 	no "the $engine database is not ready after ten minutes; what the cluster says is below"

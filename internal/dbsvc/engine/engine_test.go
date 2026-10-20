@@ -119,3 +119,55 @@ func TestTheCatalogueCannotBeChangedFromOutside(t *testing.T) {
 		t.Fatal("Lookup shares the catalogue's own slices")
 	}
 }
+
+// MongoDB 8 stops as it starts on Linux 6.19 and newer (SERVER-121912), and
+// reads the kernel's version as uname gives it, so Ubuntu's 7.0.0 kernels are
+// refused whatever was backported into them. 7.0 starts on any of them, and is
+// what a new database gets on a cluster where a server runs one.
+func TestMongoDB8IsNotTheDefaultWhereItWillNotStart(t *testing.T) {
+	mongo, _ := Lookup(MongoDB)
+	for _, tc := range []struct {
+		version, kernel string
+		starts          bool
+	}{
+		{"8.0", "6.8.0-45-generic", true},
+		{"8.0", "6.18.9", true},
+		{"8.0", "6.19.1", false},
+		{"8.0", "7.0.0-1017-azure", false},
+		{"8.0", "7.0.14", false},
+		{"7.0", "7.0.0-1017-azure", true},
+		{"", "7.0.0-1017-azure", false},
+		// A kernel nobody knows is not a reason to refuse.
+		{"8.0", "", true},
+	} {
+		if got := mongo.StartsOn(tc.version, tc.kernel); got != tc.starts {
+			t.Errorf("MongoDB %q on %q starts: %v, want %v", tc.version, tc.kernel, got, tc.starts)
+		}
+	}
+
+	for _, tc := range []struct {
+		kernels []string
+		want    string
+	}{
+		{nil, "8.0"},
+		{[]string{"6.8.0-45-generic"}, "8.0"},
+		{[]string{"6.8.0-45-generic", "7.0.0-1017-azure"}, "7.0"},
+	} {
+		if got := mongo.DefaultFor(tc.kernels); got != tc.want {
+			t.Errorf("on %v a new MongoDB gets %s, want %s", tc.kernels, got, tc.want)
+		}
+	}
+	if got := mongo.RefusingKernel("8.0", []string{"6.8.0-45-generic", "7.0.0-1017-azure"}); got != "7.0.0-1017-azure" {
+		t.Errorf("the kernel that refuses MongoDB 8 is %q", got)
+	}
+
+	// No other engine minds the kernel.
+	for _, e := range All() {
+		if e.Name == MongoDB {
+			continue
+		}
+		if got := e.DefaultFor([]string{"7.0.0-1017-azure"}); got != e.DefaultVersion {
+			t.Errorf("%s defaults to %s on a 7.0 kernel, want %s", e.Name, got, e.DefaultVersion)
+		}
+	}
+}

@@ -676,6 +676,17 @@ func (c *Cluster) VolumesOnNode(ctx context.Context, nodeName string) ([]string,
 	return c.client.VolumesPinnedToNode(ctx, nodeName)
 }
 
+// NodeKernels is the Linux kernel every server runs, as uname gives it. A
+// cluster that cannot be asked has none to say, which no engine refuses.
+func (c *Cluster) NodeKernels(ctx context.Context) []string {
+	kernels, err := c.client.NodeKernels(ctx)
+	if err != nil {
+		c.log.Debug("could not read the servers' kernels", "error", err)
+		return nil
+	}
+	return kernels
+}
+
 // DeleteVolumeClaim deletes a volume claim, which with the storage k3s ships
 // deletes the disk and what is on it. A claim a pod still mounts is held by
 // Kubernetes until the pod has gone.
