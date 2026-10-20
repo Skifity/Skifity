@@ -600,7 +600,10 @@ if [ -z "$DB_ID" ]; then
 else
 	ok "a PostgreSQL database was asked for, which installs CloudNativePG on first use"
 	for _ in $(seq 1 60); do
-		DB_STATE=$(api GET "/api/databases/$DB_ID" | pick status 2>/dev/null || echo "")
+		# The answer is {"database": {...}, "links": [...]}. This read a
+		# "status" at the top, which is not there, for two runs: the database
+		# was running and this said "unknown".
+		DB_STATE=$(api GET "/api/databases/$DB_ID" | pick database.status 2>/dev/null || echo "")
 		case "$DB_STATE" in ready|running) break ;; failed) break ;; esac
 		sleep 10
 	done
@@ -846,15 +849,48 @@ case "$BUILD_IMAGE" in
 esac
 FORGED=$(printf 'skifity:v1.eyJyIjoiKiIsImUiOjQxMDI0NDQ4MDB9.forged' | base64 | tr -d '\n')
 REGISTRY_URL="http://skifity-registry.skifity-builds.svc.cluster.local:5000"
+# The probe starts the way a build does, behind the fence borrowed from a build
+# Job, and reads until the registry answers. The third run had a bare pod ask
+# the moment it started, before the policy controller had put its address in
+# the set the registry lets in, and every request was refused in the first
+# second — which says nothing about the guard. Its output is read from the log
+# afterwards, which loses nothing, where attaching to it lost three lines.
+REGISTRY_FENCE=$(kubectl -n skifity-builds get jobs -l app.kubernetes.io/component=build -o json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    jobs = json.load(sys.stdin)["items"]
+    init = jobs[0]["spec"]["template"]["spec"].get("initContainers") or [] if jobs else []
+except Exception:
+    init = []
+print(json.dumps(init[0]) if init and init[0].get("name") == "fence" else "")
+' 2>/dev/null || true)
 REGISTRY_SCRIPT="code() { label=\$1; shift; printf '%s %s\\n' \"\$label\" \"\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \"\$@\" 2>/dev/null)\"; }
+for _ in \$(seq 1 30); do [ \"\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 $REGISTRY_URL/v2/)\" = 200 ] && break; sleep 2; done
 code read -X GET $REGISTRY_URL/v2/
 code anonymous-upload -X POST $REGISTRY_URL/v2/$NAMESPACE/hello/blobs/uploads/
 code forged-upload -X POST -H 'Authorization: Basic $FORGED' $REGISTRY_URL/v2/$NAMESPACE/hello/blobs/uploads/
 code anonymous-manifest -X PUT -H 'Content-Type: application/vnd.oci.image.manifest.v1+json' --data '{}' $REGISTRY_URL/v2/$NAMESPACE/hello/manifests/latest
 code anonymous-delete -X DELETE $REGISTRY_URL/v2/$NAMESPACE/hello/manifests/sha256:0000000000000000000000000000000000000000000000000000000000000000
 code anonymous-catalog -X GET $REGISTRY_URL/v2/_catalog"
-REGISTRY_OUT=$(kubectl -n skifity-builds run verify-registry --rm -i --quiet --restart=Never --timeout=180s \
-	--image=curlimages/curl:8.11.1 --command -- sh -c "$REGISTRY_SCRIPT" 2>&1 || true)
+REGISTRY_OVERRIDES=$(python3 - "$REGISTRY_SCRIPT" "${REGISTRY_FENCE:-}" <<'PYEOF'
+import json, sys
+fence = [json.loads(sys.argv[2])] if sys.argv[2] else []
+print(json.dumps({"spec": {
+    "initContainers": fence,
+    "containers": [{
+        "name": "verify-registry",
+        "image": "curlimages/curl:8.11.1",
+        "command": ["sh", "-c", sys.argv[1]],
+    }],
+}}))
+PYEOF
+)
+kubectl -n skifity-builds delete pod verify-registry --ignore-not-found >/dev/null 2>&1 || true
+kubectl -n skifity-builds run verify-registry --restart=Never --image=curlimages/curl:8.11.1 \
+	--overrides="$REGISTRY_OVERRIDES" >/dev/null 2>&1 || true
+kubectl -n skifity-builds wait pod/verify-registry --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s >/dev/null 2>&1 || true
+REGISTRY_OUT=$(kubectl -n skifity-builds logs verify-registry -c verify-registry 2>&1 || true)
+kubectl -n skifity-builds delete pod verify-registry --ignore-not-found >/dev/null 2>&1 || true
 say "$(printf '%s\n' "$REGISTRY_OUT" | sed 's/^/    /')"
 registry_code() { printf '%s\n' "$REGISTRY_OUT" | awk -v want="$1" '$1 == want {print $2}' | tail -n 1; }
 if [ -z "$(registry_code read)" ]; then
