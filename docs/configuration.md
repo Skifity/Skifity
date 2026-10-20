@@ -599,6 +599,14 @@ developers      = acme:member
 clients         = acme:viewer
 ```
 
+The groups have to be in the ID token. Skifity asks for the `groups` scope
+whenever the provider lists one in its discovery document, which is what Dex
+and Okta need to put them there; Authentik sends them with the profile scope,
+Keycloak needs a group membership mapper on the client, and Entra the groups
+claim in the app registration's token configuration. A provider that sends no groups is a provider whose
+people are in none of them, so check that a sign-in brings them before naming
+a team here.
+
 A team named there follows the groups for everybody who signs in through the
 provider, at every sign-in: they get the highest role their groups give, and
 leave the team when no group gives one. So taking somebody out of a group at

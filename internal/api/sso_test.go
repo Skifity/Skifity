@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -158,6 +159,27 @@ func TestSingleSignOnNeedsThePanelToKnowItsOwnAddress(t *testing.T) {
 	}
 	if !strings.Contains(body, "sso.no_panel_url") {
 		t.Errorf("the failure does not say the Panel URL is missing:\n%s", body)
+	}
+}
+
+// The installer starts the panel with its address and writes no Panel URL
+// setting, and single sign-on read the setting alone: on a fresh install it
+// said the panel did not know its own address. The address the panel was
+// started with is its own, as a reset link already used; the setting, when an
+// operator has saved one, still wins. Neither is ever the request's Host.
+func TestSingleSignOnReturnsToTheAddressThePanelWasStartedWith(t *testing.T) {
+	h := newHarness(t)
+	h.api.cfg.PublicURL = "https://panel.example.test/"
+	req := httptest.NewRequest(http.MethodGet, "https://attacker.example/api/auth/sso/start", nil)
+	got, err := h.api.ssoRedirectURL(req)
+	if err != nil || got != "https://panel.example.test/api/auth/sso/callback" {
+		t.Fatalf("with only the installer's address the redirect is %q (%v)", got, err)
+	}
+	if err := h.db.SetSetting(t.Context(), settings.KeyPanelURL, "https://login.acme.test", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := h.api.ssoRedirectURL(req); got != "https://login.acme.test/api/auth/sso/callback" {
+		t.Errorf("with a Panel URL saved the redirect is %q, want the saved one", got)
 	}
 }
 

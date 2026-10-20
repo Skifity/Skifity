@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -164,8 +165,26 @@ func (o *OIDC) oauth(provider *oidc.Provider, redirectURL string) *oauth2.Config
 		ClientSecret: o.config.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  redirectURL,
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       scopesFor(provider),
 	}
+}
+
+// scopesFor is what a sign-in asks the provider for: who the person is, and
+// their groups when the provider has a scope by that name. Dex and Okta put a
+// person's groups in the ID token only when it is asked for, so without it the
+// groups claim was missing and "Groups to teams" took everybody it names out
+// of every team it names. A provider that does not list the scope is not asked
+// for it: Google and Entra refuse a scope they do not know, and put groups in
+// the token, where they do at all, without one.
+func scopesFor(provider *oidc.Provider) []string {
+	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
+	var discovery struct {
+		ScopesSupported []string `json:"scopes_supported"`
+	}
+	if err := provider.Claims(&discovery); err == nil && slices.Contains(discovery.ScopesSupported, "groups") {
+		scopes = append(scopes, "groups")
+	}
+	return scopes
 }
 
 // Start returns the URL to send the browser to, and the state and nonce that

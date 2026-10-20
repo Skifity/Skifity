@@ -86,15 +86,14 @@ func (s *Server) ssoConfig(r *http.Request) (auth.OIDCConfig, error) {
 
 // ssoRedirectURL is the address the provider sends the browser back to. It has
 // to match the one registered with the provider exactly, so it is built from
-// the panel's configured URL rather than from the request's Host — which a
-// caller controls, and which would otherwise let somebody register their own
-// hostname as a redirect target.
+// the panel's own address — the Panel URL setting, or the address the
+// installer started it with, as a reset link is — rather than from the
+// request's Host, which a caller controls, and which would otherwise let
+// somebody register their own hostname as a redirect target. It used to read
+// the setting alone, which the installer never writes, so on a panel nobody
+// had set it on, single sign-on said the panel did not know its own address.
 func (s *Server) ssoRedirectURL(r *http.Request) (string, error) {
-	configured, _, err := s.db.GetSetting(r.Context(), settings.KeyPanelURL)
-	if err != nil {
-		return "", err
-	}
-	base := strings.TrimSuffix(strings.TrimSpace(configured), "/")
+	base := s.panelAddress(r.Context())
 	if base == "" {
 		return "", errdoc.New("sso.no_panel_url", "This panel does not know its own address").
 			WithCause("Single sign-on sends people back to a fixed address, and the Panel URL setting is empty.").
