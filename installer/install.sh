@@ -1850,6 +1850,12 @@ TRAEFIK
 		rm -f "${ours}.new"
 		return 0
 	fi
+	# A Traefik that is running takes the change by being replaced. One that a
+	# release before 0.1.1 configured closes its ports at once when it is.
+	if [ -f "$ours" ] && ! grep -q requestAcceptGraceTimeout "$ours"; then
+		note "Traefik is replaced to take its new configuration. The one being replaced stops accepting"
+		note "at once, so your apps may refuse connections for about a second while it hands over."
+	fi
 	mv "${ours}.new" "$ours"
 	ok "the ingress keeps each visitor's own address"
 }
