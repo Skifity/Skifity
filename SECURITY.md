@@ -127,6 +127,15 @@ managed Postgres can have several instances; the other engines have one. There i
 no point-in-time recovery. etcd is snapshotted every six hours onto the same disk,
 which is not a backup of the server.
 
+**Backup jobs reach the bucket, wherever it is.** Apps are kept off private
+addresses and off the servers themselves. The panel's own backup and restore
+jobs run in the same namespace as the apps, and when the bucket is on a private
+address or on one of the servers they get one more policy: out to that address,
+on that port. They are selected by labels only the panel writes, they run the
+panel's commands and nothing a team chose, and the URL they upload to is one
+the panel signed. Anything else listening on that address and port is
+reachable from those jobs, so give the bucket a port of its own.
+
 **The host firewall is yours.** The installer opens ports on a firewall that is
 already running and turns none on. On a server with none, the Kubernetes API and
 the kubelet are reachable from the internet behind their own authentication unless

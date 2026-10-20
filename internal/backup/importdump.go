@@ -466,6 +466,10 @@ func (m *Manager) runImport(ctx context.Context, storage *Storage, job importJob
 		fail("import", err)
 		return
 	}
+	if err := openPathToStorage(ctx, m.cluster.Client(), job.env.Namespace, storage); err != nil {
+		fail("import", err)
+		return
+	}
 	spec, err := BuildJob(ImportJobSpec(jobName, job.env.Namespace, record, secretName, op.ID, job.format,
 		job.plan.image, job.workspaceGB))
 	if err != nil {

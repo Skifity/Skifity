@@ -181,6 +181,10 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 		fail(err)
 		return
 	}
+	if err := openPathToStorage(ctx, m.cluster.Client(), env.Namespace, storage); err != nil {
+		fail(err)
+		return
+	}
 
 	job, err := BuildJob(JobSpec{
 		Name:              jobName,
@@ -387,6 +391,10 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 	}()
 	if err := m.cluster.Client().Applier().Apply(ctx,
 		JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
+		fail("prepare", err)
+		return
+	}
+	if err := openPathToStorage(ctx, m.cluster.Client(), env.Namespace, storage); err != nil {
 		fail("prepare", err)
 		return
 	}
@@ -737,6 +745,10 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 
 	if err := m.cluster.Client().Applier().Apply(ctx,
 		JobSecret(secretName, env.Namespace, presigned, plan.passphrase)); err != nil {
+		fail(err)
+		return
+	}
+	if err := openPathToStorage(ctx, m.cluster.Client(), env.Namespace, storage); err != nil {
 		fail(err)
 		return
 	}

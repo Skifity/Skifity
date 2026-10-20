@@ -13,6 +13,14 @@ Backups go to S3, or to anything that speaks S3 — MinIO, Backblaze B2,
 Cloudflare R2, Hetzner Object Storage. Set it up under **Settings → Backup
 storage**: an endpoint, a region, a bucket, and a key pair.
 
+The bucket can be on a private address too: MinIO on one of the cluster's own
+servers, at home, on the office network or over a VPN. Apps are kept away from
+private addresses and from the servers themselves, and so were backups, until
+the panel learned to open a way for its own backup and restore jobs alone: to
+the addresses the endpoint's name resolves to, on its port, and nowhere else.
+Keeping a backup on the same server as what it backs up protects against a
+mistake, not against losing the server; somewhere else is still the point.
+
 Use a bucket and a key that can do nothing else. If the server is compromised,
 the blast radius should stop at "the attacker can write backups".
 

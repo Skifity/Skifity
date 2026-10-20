@@ -167,6 +167,10 @@ func (m *Manager) runVolumeRestore(ctx context.Context, op store.Operation, back
 		fail("restore", err)
 		return
 	}
+	if err := openPathToStorage(ctx, client, env.Namespace, storage); err != nil {
+		fail("restore", err)
+		return
+	}
 
 	job, err := BuildVolumeJob(VolumeJobSpec{
 		Name:      jobName,

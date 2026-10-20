@@ -1229,6 +1229,25 @@ func (c *Client) RefreshEnvironmentPolicies(ctx context.Context, namespace strin
 	return nil
 }
 
+// AllowBackupStorage lets the panel's backup and restore jobs in a namespace
+// reach a bucket the environment's own policy would keep them from, at the
+// addresses StorageAddresses picked, on the bucket's port. None means the
+// bucket is on the public internet, which every pod reaches already, and a
+// policy left from an earlier bucket is taken away.
+func (c *Client) AllowBackupStorage(ctx context.Context, namespace string, addresses []string, port int) error {
+	if len(addresses) == 0 {
+		err := c.applier.Delete(ctx, "networking.k8s.io/v1", "NetworkPolicy", namespace, StoragePolicyName)
+		if err != nil && !IsNotFound(err) {
+			return fmt.Errorf("remove the backup storage policy of %s: %w", namespace, err)
+		}
+		return nil
+	}
+	if err := c.applier.Apply(ctx, BackupStoragePolicy(namespace, addresses, port)); err != nil {
+		return fmt.Errorf("let the backups of %s reach their storage: %w", namespace, err)
+	}
+	return nil
+}
+
 // RefreshPluginPolicies is the same for a plugin's namespace.
 func (c *Client) RefreshPluginPolicies(ctx context.Context, namespace string, nodeAddresses []string) error {
 	var objects []any
