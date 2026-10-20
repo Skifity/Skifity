@@ -200,7 +200,12 @@ start_forward() {
 	FORWARD=$!
 	sleep 3
 }
-stop_forward() { kill "${FORWARD:-0}" 2>/dev/null || true; }
+# Never `kill 0`: with no port-forward started, that is every process in this
+# group, the CI runner's own step included.
+stop_forward() {
+	[ -z "${FORWARD:-}" ] || kill "$FORWARD" 2>/dev/null || true
+	FORWARD=""
+}
 trap 'stop_forward' EXIT
 start_forward
 PANEL="http://127.0.0.1:18080"
