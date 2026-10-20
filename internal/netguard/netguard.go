@@ -27,6 +27,16 @@
 // is for, and refusing them to say something about security would break the
 // ordinary case to defend against the administrator who configured it.
 //
+// Except one: the cluster's own pod and Service networks, for an address a
+// team gave the panel rather than its administrator — a webhook, a Git host,
+// a secret manager, a registry, a template catalogue. Every environment's
+// namespace lets the panel in, because the panel has to reach the apps, so a
+// team admin who could point the panel at 10.43.x.x could send requests to
+// another team's internal Services that nothing else in the cluster may reach.
+// TenantClient and TenantDialer refuse those too. An app a team runs here is
+// reached at the address it is published at, the same as from anywhere else;
+// a build could not reach an address inside the cluster either.
+//
 // The check runs on the resolved address immediately before the connection is
 // made, rather than on the hostname. A name that resolves to a public address
 // when it is validated and a link-local one when it is dialled is the oldest
@@ -67,6 +77,9 @@ func (e *Blocked) Error() string {
 			"which hands out this machine's credentials", e.IP)
 	case e.IP.IsLoopback():
 		return fmt.Sprintf("refusing to connect to %s: that is this machine itself", e.IP)
+	case InCluster(e.IP):
+		return fmt.Sprintf("refusing to connect to %s: that is inside this cluster, where every team's "+
+			"apps run. Use the address the service is published at instead", e.IP)
 	default:
 		return fmt.Sprintf("refusing to connect to %s: that is not an address a service lives at", e.IP)
 	}
@@ -108,6 +121,52 @@ var metadataAddresses = []net.IP{
 	net.ParseIP("192.0.0.192"),
 }
 
+// clusterNetworks are the cluster's own: every pod's address and every
+// Service's. They are k3s's defaults, which Skifity does not override;
+// internal/kube names the same two, and a test there keeps them the same.
+var clusterNetworks = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, cidr := range []string{"10.42.0.0/16", "10.43.0.0/16"} {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
+		out = append(out, network)
+	}
+	return out
+}()
+
+// ClusterNetworks are the cluster's pod and Service networks, as written.
+func ClusterNetworks() []string {
+	out := make([]string, 0, len(clusterNetworks))
+	for _, network := range clusterNetworks {
+		out = append(out, network.String())
+	}
+	return out
+}
+
+// InCluster reports whether an address belongs to a pod or a Service of this
+// cluster.
+func InCluster(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	for _, network := range clusterNetworks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// TenantAllowed reports whether the panel may connect to an address a team
+// gave it: what Allowed allows, apart from the cluster's own networks. See the
+// package comment for why a team's address is held to more than an
+// administrator's.
+func TenantAllowed(ip net.IP) bool {
+	return Allowed(ip) && !InCluster(ip)
+}
+
 // Dialer is a net.Dialer that refuses the addresses above.
 //
 // Control is the hook that matters: it runs after the name has been resolved
@@ -115,6 +174,16 @@ var metadataAddresses = []net.IP{
 // dialled. Checking the hostname instead would be checking something the other
 // side can change between the check and the connection.
 func Dialer(timeout time.Duration) *net.Dialer {
+	return guardedDialer(timeout, Allowed)
+}
+
+// TenantDialer is Dialer for an address a team gave the panel: it refuses the
+// cluster's own networks as well.
+func TenantDialer(timeout time.Duration) *net.Dialer {
+	return guardedDialer(timeout, TenantAllowed)
+}
+
+func guardedDialer(timeout time.Duration, allowed func(net.IP) bool) *net.Dialer {
 	return &net.Dialer{
 		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
@@ -124,7 +193,7 @@ func Dialer(timeout time.Duration) *net.Dialer {
 				return fmt.Errorf("refusing to connect to %q", address)
 			}
 			ip := net.ParseIP(host)
-			if !Allowed(ip) {
+			if !allowed(ip) {
 				return &Blocked{IP: ip}
 			}
 			return nil
@@ -134,10 +203,20 @@ func Dialer(timeout time.Duration) *net.Dialer {
 
 // Client returns an HTTP client that will not reach a refused address.
 //
-// timeout bounds the whole exchange, which is right for the two callers: both
-// make one small request while somebody waits for the answer.
+// timeout bounds the whole exchange, which is right for every caller: each
+// makes one small request while somebody waits for the answer.
 func Client(timeout time.Duration) *http.Client {
-	dialer := Dialer(10 * time.Second)
+	return guardedClient(timeout, Dialer(10*time.Second))
+}
+
+// TenantClient is Client for an address a team gave the panel: a webhook, a
+// Git host, a secret manager, a registry. It refuses the cluster's own
+// networks as well.
+func TenantClient(timeout time.Duration) *http.Client {
+	return guardedClient(timeout, TenantDialer(10*time.Second))
+}
+
+func guardedClient(timeout time.Duration, dialer *net.Dialer) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{

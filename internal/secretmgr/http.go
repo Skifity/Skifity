@@ -25,7 +25,7 @@ type caller struct {
 
 // guarded is the client every request goes through: netguard's, which will
 // not dial the metadata service or the panel itself, with a timeout.
-func guarded() *http.Client { return netguard.Client(requestTimeout) }
+func guarded() *http.Client { return netguard.TenantClient(requestTimeout) }
 
 // sameHost answers a redirect to another host with an error rather than
 // following it.

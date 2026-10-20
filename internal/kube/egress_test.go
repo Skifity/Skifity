@@ -1,7 +1,10 @@
 package kube
 
 import (
+	"strings"
 	"testing"
+
+	"skifity/internal/netguard"
 )
 
 // TestAPodCannotReachTheMachineItRunsOn is the hole this file exists for: the
@@ -95,5 +98,15 @@ func TestThePluginPolicyKeepsPodsOffTheNode(t *testing.T) {
 		if !EgressAllows(policy.Spec.Egress, "1.1.1.1", 443) {
 			t.Error("a plugin cannot reach the internet")
 		}
+	}
+}
+
+// The panel refuses a team's addresses inside the cluster by these two
+// networks, and netguard cannot import this package to read them.
+func TestTheGuardKnowsTheClusterNetworks(t *testing.T) {
+	want := []string{PodCIDR, ServiceCIDR}
+	got := netguard.ClusterNetworks()
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("internal/netguard fences %v off, and the cluster's networks are %v", got, want)
 	}
 }

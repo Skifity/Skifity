@@ -133,3 +133,59 @@ func TestAddressAcceptsAddressesAndNothingElse(t *testing.T) {
 		}
 	}
 }
+
+// A team admin sets the address of a webhook, a Git host, a secret manager, a
+// registry and a template catalogue. Every environment's namespace lets the
+// panel in, so an address inside the cluster would be the panel reaching, on
+// one team's behalf, another team's Services that nothing else may reach.
+func TestATeamsAddressMayNotBeInsideTheCluster(t *testing.T) {
+	cases := []struct {
+		ip      string
+		allowed bool
+		why     string
+	}{
+		{"10.42.0.17", false, "a pod"},
+		{"10.42.255.254", false, "a pod on another server"},
+		{"10.43.0.1", false, "the Kubernetes API's Service"},
+		{"10.43.200.9", false, "another team's Service"},
+		{"169.254.169.254", false, "still the metadata service"},
+		{"127.0.0.1", false, "still the panel itself"},
+
+		{"10.0.0.5", true, "a private Git server on the LAN"},
+		{"10.41.255.255", true, "just below the pod network"},
+		{"10.44.0.1", true, "just above the Service network"},
+		{"192.168.1.10", true, "a webhook receiver on the LAN"},
+		{"140.82.121.4", true, "github.com"},
+	}
+	for _, c := range cases {
+		if got := TenantAllowed(net.ParseIP(c.ip)); got != c.allowed {
+			t.Errorf("TenantAllowed(%s) = %v, want %v — %s", c.ip, got, c.allowed, c.why)
+		}
+	}
+
+	// The administrator's own settings are not held to it: the panel's own
+	// components live in the cluster.
+	if !Allowed(net.ParseIP("10.43.0.1")) {
+		t.Error("an address inside the cluster is refused for the administrator too")
+	}
+}
+
+func TestTheTenantClientRefusesAServiceInsideTheCluster(t *testing.T) {
+	resp, err := TenantClient(5 * time.Second).Get("http://10.43.0.1:443/api")
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("the panel connected to an address inside the cluster for a team")
+	}
+	var blocked *Blocked
+	if !errors.As(err, &blocked) {
+		t.Fatalf("the request failed for the wrong reason: %v", err)
+	}
+	if !strings.Contains(blocked.Error(), "inside this cluster") {
+		t.Errorf("the refusal does not say why: %v", blocked)
+	}
+
+	// The dialler a mail server is reached through holds to the same rule.
+	if _, err := TenantDialer(time.Second).Dial("tcp", "10.42.3.4:25"); !errors.As(err, &blocked) {
+		t.Errorf("the tenant dialler reached a pod: %v", err)
+	}
+}

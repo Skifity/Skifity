@@ -109,7 +109,7 @@ var optIn = map[string]bool{EventBackupSucceeded: true}
 // Guarded, because a webhook address is a setting: a team administrator could
 // otherwise point it at the cloud metadata service and read the answer back out
 // of the error this returns. See internal/netguard.
-var client = netguard.Client(15 * time.Second)
+var client = netguard.TenantClient(15 * time.Second)
 
 // ValidateConfig checks a channel's configuration before it is stored, so a typo
 // is caught while the person is still looking at the form.
@@ -569,7 +569,7 @@ func sendEmail(ctx context.Context, config map[string]string, msg Message) error
 	// The panel's own server is where its administrator said; one a channel
 	// named is dialled the way every other address a team gives the panel
 	// is, never the metadata service or the panel's own machine.
-	dialer := netguard.Dialer(15 * time.Second)
+	dialer := netguard.TenantDialer(15 * time.Second)
 	if ctx.Value(panelServer{}) != nil {
 		dialer = &net.Dialer{Timeout: 15 * time.Second}
 	}

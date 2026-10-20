@@ -129,9 +129,16 @@ has a default limit on what it may write to disk. Nothing stops a tenant from
 requesting limits larger than the machine, and a full registry volume fails every
 team's pushes. Disk and memory alerts notify; they do not act.
 
-**A panel administrator is root everywhere** (above), and the panel can be made to
-request any address a private network answers, including the Kubernetes API, by
-the URL of a webhook or a log drain that an administrator of a team sets.
+**A panel administrator is root everywhere** (above). A team's administrator sets
+addresses the panel then requests — a webhook, a Git host, a secret manager, a
+registry, a log drain, a template catalogue — and those may be anywhere a private
+network answers, because a Gitea or a receiver on your own network is the
+ordinary case. They may not be inside the cluster, where every team's apps run
+and which every environment lets the panel into, nor the panel's own machine or
+the cloud metadata service. A server's own address is not refused: the
+Kubernetes API and the kubelet there answer only to credentials the panel does
+not send, and the registry's port drops anything that is not from the machine
+itself.
 
 ## In scope
 

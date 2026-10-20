@@ -265,8 +265,9 @@ on the catalogue, shown on its entry, and changes nothing else: its templates ar
 still installed from the copy downloaded before.
 
 The download is the panel's own request, so it goes through the same guard as
-every other address you give the panel: the cloud metadata service and the
-panel's own machine are refused. It is limited to 5 MB and 30 seconds, and an
+every other address a team gives the panel: the cloud metadata service, the
+panel's own machine and anything inside the cluster, where every team's apps
+run, are refused. It is limited to 5 MB and 30 seconds, and an
 archive to 32 MB unpacked, 1 MB a template and a thousand templates. A redirect
 must stay on https, stops after five, and may not lead to a private address the
 catalogue's own address did not: a Gitea on your network is fine when that is the

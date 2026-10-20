@@ -27,7 +27,7 @@ var checkRegistryLogin = func(ctx context.Context, host, username, password stri
 	return registry.CheckLogin(ctx, registryLoginClient, host, username, password)
 }
 
-var registryLoginClient = netguard.Client(15 * time.Second)
+var registryLoginClient = netguard.TenantClient(15 * time.Second)
 
 func (s *Server) handleListRegistries(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")

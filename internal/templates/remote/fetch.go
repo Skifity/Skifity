@@ -54,7 +54,8 @@ const maxRedirects = 5
 // panel uses.
 type Fetcher struct {
 	// Allowed decides which addresses may be dialled at all. Nil is
-	// netguard.Allowed; a test sets it to reach its own server on loopback.
+	// netguard.TenantAllowed, because a catalogue is a team's; a test sets it
+	// to reach its own server on loopback.
 	Allowed func(net.IP) bool
 	// Private decides which addresses a redirect may not lead to unless the
 	// first request already reached them. Nil is the private ranges.
@@ -146,7 +147,7 @@ func (f *Fetcher) Fetch(ctx context.Context, address string, header Header, limi
 func (f *Fetcher) client(target *url.URL, header Header) *http.Client {
 	allowed := f.Allowed
 	if allowed == nil {
-		allowed = netguard.Allowed
+		allowed = netguard.TenantAllowed
 	}
 	private := f.Private
 	if private == nil {

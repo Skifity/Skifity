@@ -104,7 +104,7 @@ type FileTree struct {
 //
 // Guarded, because a Git connection's base URL is a setting and this request is
 // made by the panel's own process. See internal/netguard.
-var client = netguard.Client(15 * time.Second)
+var client = netguard.TenantClient(15 * time.Second)
 
 // ReadTree lists a repository's files and reads the ones that matter.
 func ReadTree(ctx context.Context, req TreeRequest) (FileTree, error) {

@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/netguard"
 	"skifity/internal/version"
@@ -68,28 +67,8 @@ type Tester struct {
 // networks, so a drain pointed at an app or a Service here — another team's
 // included — would pass a test from the panel and never receive a line.
 func Reachable(ip net.IP) bool {
-	if !netguard.Allowed(ip) {
-		return false
-	}
-	for _, network := range clusterNetworks {
-		if network.Contains(ip) {
-			return false
-		}
-	}
-	return true
+	return netguard.TenantAllowed(ip)
 }
-
-var clusterNetworks = func() []*net.IPNet {
-	var out []*net.IPNet
-	for _, cidr := range []string{kube.PodCIDR, kube.ServiceCIDR} {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic(err)
-		}
-		out = append(out, network)
-	}
-	return out
-}()
 
 // TestFailed is a test the service did not accept, and why.
 type TestFailed struct {
