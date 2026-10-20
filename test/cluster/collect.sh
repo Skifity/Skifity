@@ -92,8 +92,10 @@ kube get pods -A --no-headers -l 'job-name' 2>/dev/null | awk '{print $1, $2}' |
 		run "job-$namespace-$pod" kube -n "$namespace" logs "$pod" --all-containers --tail=500
 	done
 
-# What Skifity wrote about itself.
-for file in /var/log/skifity-install.log /var/log/skifity-verify.log /var/log/skifity-upgrade.log; do
+# What Skifity wrote about itself, and what the stand-ins for a bucket and an
+# ACME server said, where a run had them.
+for file in /var/log/skifity-install.log /var/log/skifity-verify.log /var/log/skifity-upgrade.log \
+	/tmp/moto.log /tmp/pebble.log; do
 	[ -f "$file" ] && cp "$file" "$OUT/" 2>/dev/null
 done
 

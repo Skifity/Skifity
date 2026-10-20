@@ -89,10 +89,53 @@ jobs:
           address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
           echo "BUCKET_ENDPOINT=http://${address}:9000" >>"$GITHUB_ENV"
 
-      # Let's Encrypt's staging server: nothing on the internet can reach this
-      # runner, so no certificate will be issued, and the production server is
-      # not the place to fail a challenge on every push. The installer says
-      # so and carries on, which is part of what is being checked.
+      # An ACME server on this server's address, for phase 1's certificate.
+      # Nothing on the internet can reach this runner, so Let's Encrypt cannot
+      # validate a domain here; Pebble, Let's Encrypt's own test server, can,
+      # from here and through the same ingress. Its address is signed by an
+      # authority made for this run, which the crosscheck gives the panel the
+      # way an ACME server of one's own is given to it.
+      - name: Start an ACME server on this server
+        run: |
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          mkdir -p /tmp/pebble
+          cd /tmp/pebble
+          curl -fsSL -o pebble.tar.gz \
+            https://github.com/letsencrypt/pebble/releases/download/v2.10.1/pebble-linux-amd64.tar.gz
+          tar -xzf pebble.tar.gz
+          pebble=$(find "$PWD" -type f -name pebble | head -1)
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=Crosscheck ACME authority" \
+            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -keyout ca.key -out ca.pem
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=pebble" -keyout key.pem -out server.csr
+          printf 'basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:%s,IP:127.0.0.1,DNS:localhost\n' \
+            "$address" >server.ext
+          openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 \
+            -extfile server.ext -out cert.pem
+          cat >config.json <<'JSON'
+          {"pebble": {
+            "listenAddress": "0.0.0.0:14000", "managementListenAddress": "127.0.0.1:15000",
+            "certificate": "/tmp/pebble/cert.pem", "privateKey": "/tmp/pebble/key.pem",
+            "httpPort": 80, "tlsPort": 443, "ocspResponderURL": "", "externalAccountBindingRequired": false,
+            "profiles": {"default": {"description": "The crosscheck's", "validityPeriod": 7776000}}
+          }}
+          JSON
+          PEBBLE_VA_NOSLEEP=1 PEBBLE_WFE_NONCEREJECT=0 nohup "$pebble" -config config.json >/tmp/pebble.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS --cacert ca.pem -o /dev/null "https://${address}:14000/dir" && break
+            sleep 1
+          done
+          curl -fsS --cacert ca.pem "https://${address}:14000/dir"
+          {
+            echo "ACME_DIRECTORY=https://${address}:14000/dir"
+            echo "ACME_ADDRESS=${address}"
+          } >>"$GITHUB_ENV"
+
+      # Let's Encrypt's staging server for the panel's own address: nothing on
+      # the internet can reach this runner, so no certificate will be issued
+      # for it, and the production server is not the place to fail a challenge
+      # on every push. The installer says so and carries on, which is part of
+      # what is being checked.
       - name: Install Skifity and run the crosscheck
         env:
           PHASES: ${{ inputs.phases || '1 2 3 4 5' }}
@@ -109,6 +152,10 @@ jobs:
             VERIFY_S3_BUCKET=skifity-backups \
             VERIFY_S3_ACCESS_KEY=not-a-real-key \
             VERIFY_S3_SECRET_KEY=not-a-real-secret \
+            VERIFY_ACME_DIRECTORY="$ACME_DIRECTORY" \
+            VERIFY_ACME_CA=/tmp/pebble/ca.pem \
+            VERIFY_ACME_ADDRESS="$ACME_ADDRESS" \
+            VERIFY_ACME_ROOT=https://127.0.0.1:15000/roots/0 \
             bash test/cluster/verify.sh
 
       - name: Collect what the cluster says

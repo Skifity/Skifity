@@ -68,6 +68,20 @@ REPORT="/var/log/skifity-verify.log"
 # Without it those checks skip and say so.
 : "${VERIFY_SECOND_SERVER:=}"
 : "${VERIFY_SECOND_SERVER_KEY:=}"
+# An ACME server, for a certificate: the free address is plain HTTP on purpose
+# (ADR-0015), so a certificate needs a domain of the app's own, and nothing on
+# the internet can reach a machine like a CI runner to validate one. An ACME
+# server on the machine itself can, through the same ingress: Pebble, Let's
+# Encrypt's own test server, at VERIFY_ACME_DIRECTORY, whose address is signed
+# by the authority in VERIFY_ACME_CA, given to the panel the way an ACME server
+# of one's own is. VERIFY_ACME_ADDRESS is this machine's address on the
+# network the ACME server validates from, which the app's domain is made to
+# resolve to; VERIFY_ACME_ROOT is where the server hands out the root it
+# issues from. Without them the certificate check skips and says so.
+: "${VERIFY_ACME_DIRECTORY:=}"
+: "${VERIFY_ACME_CA:=}"
+: "${VERIFY_ACME_ADDRESS:=}"
+: "${VERIFY_ACME_ROOT:=}"
 
 PASS=0
 FAIL=0
@@ -426,8 +440,81 @@ else
 		kubectl -n "$NAMESPACE" get secret hello-tls >/dev/null 2>&1 \
 			&& ok "cert-manager issued a certificate for it" \
 			|| no "no certificate after two minutes; kubectl -n $NAMESPACE describe certificate says what Let's Encrypt said"
+	elif [ -z "$VERIFY_ACME_DIRECTORY" ]; then
+		skip "the HTTPS certificate" "the free address is on sslip.io, which is served over plain HTTP on purpose (ADR-0015). Set SKIFITY_DOMAIN to a domain you own, or VERIFY_ACME_DIRECTORY to an ACME server of your own, to check this."
+	fi
+fi
+
+if [ -n "$APP_HOST" ] && [ -n "$VERIFY_ACME_DIRECTORY" ]; then
+	step "A certificate for a domain of the app's own (checklist 3)"
+
+	# The panel is pointed at the ACME server the way a person points it at
+	# one of their own: the directory, and the authority its address is signed
+	# by, under Settings. Saving them has to reach the issuer.
+	ACME_SETTINGS=$(python3 -c '
+import json, sys
+print(json.dumps({"values": {"domains.acme_server": sys.argv[1], "domains.acme_ca_bundle": open(sys.argv[2]).read()}}))
+' "$VERIFY_ACME_DIRECTORY" "$VERIFY_ACME_CA")
+	api PUT /api/settings "$ACME_SETTINGS" >/dev/null || no "the ACME settings were refused"
+	ISSUER_SERVER=$(kubectl get clusterissuer skifity-letsencrypt -o jsonpath='{.spec.acme.server}' 2>/dev/null || echo "")
+	[ "$ISSUER_SERVER" = "$VERIFY_ACME_DIRECTORY" ] \
+		&& ok "saving the ACME server in Settings changed the issuer the certificates come from" \
+		|| no "the issuer still asks '${ISSUER_SERVER:-nothing}' after the panel was given $VERIFY_ACME_DIRECTORY"
+
+	# A domain of the app's own that resolves to this machine for anybody
+	# who asks, the ACME server included, and that is not on the free
+	# address's name.
+	SECURE_HOST="secure-hello.$(printf '%s' "$VERIFY_ACME_ADDRESS" | tr . -).sslip.io"
+	api POST "/api/apps/$APP_ID/domains" "{\"hostname\":\"$SECURE_HOST\",\"tls\":true}" >/dev/null \
+		|| no "$SECURE_HOST could not be added to the app"
+	ISSUED=""
+	for _ in $(seq 1 60); do
+		[ "$(kubectl -n "$NAMESPACE" get certificate hello-tls -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" = "True" ] \
+			&& { ISSUED=1; break; }
+		sleep 5
+	done
+	if [ -z "$ISSUED" ]; then
+		no "no certificate for $SECURE_HOST after five minutes; what cert-manager said is below"
+		{
+			kubectl -n "$NAMESPACE" describe certificate,certificaterequest,order,challenge 2>&1 | tail -60
+			kubectl -n "$NAMESPACE" get ingress,pods -o wide 2>&1
+		} >>"$REPORT"
 	else
-		skip "the HTTPS certificate" "the free address is on sslip.io, which is served over plain HTTP on purpose (ADR-0015). Set SKIFITY_DOMAIN to a domain you own to check this."
+		ok "cert-manager was issued a certificate for $SECURE_HOST, validated over HTTP through the ingress"
+		ROOT_PEM=$(mktemp)
+		curl -fsS --cacert "$VERIFY_ACME_CA" "$VERIFY_ACME_ROOT" -o "$ROOT_PEM" 2>>"$REPORT" || true
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --cacert "$ROOT_PEM" \
+			--resolve "$SECURE_HOST:443:127.0.0.1" "https://$SECURE_HOST/" 2>>"$REPORT" || true)
+		[ "$CODE" = "200" ] \
+			&& ok "https://$SECURE_HOST answers with that certificate, trusted from the ACME server's own root" \
+			|| no "https://$SECURE_HOST answered '$CODE' when checked against the ACME server's root; the ingress is not serving the issued certificate"
+		rm -f "$ROOT_PEM"
+	fi
+	REDIRECT=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 \
+		--resolve "$SECURE_HOST:80:127.0.0.1" "http://$SECURE_HOST/path?q=1" 2>/dev/null || true)
+	case "$REDIRECT" in
+	30[18]" https://$SECURE_HOST/path?q=1") ok "plain HTTP on that domain is sent to HTTPS, path and all" ;;
+	*) no "plain HTTP on $SECURE_HOST answered '$REDIRECT', not a redirect to https://$SECURE_HOST/path?q=1" ;;
+	esac
+	CODE=$(through_ingress "$APP_HOST" 15)
+	[ "$CODE" = "200" ] \
+		&& ok "the free address still answers over plain HTTP, and is not sent to an HTTPS it has no certificate for" \
+		|| no "the free address answered $CODE once the app had a domain with a certificate; it is plain HTTP on purpose and must stay that way"
+	if [ -n "$ISSUED" ]; then
+		STATUS=""
+		for _ in $(seq 1 18); do
+			STATUS=$(api GET "/api/apps/$APP_ID/domains" | python3 -c '
+import json, sys
+for domain in json.load(sys.stdin).get("items", []):
+    if domain.get("hostname") == sys.argv[1]:
+        print(domain.get("status", ""))
+' "$SECURE_HOST" 2>/dev/null || echo "")
+			[ "$STATUS" = "active" ] && break
+			sleep 10
+		done
+		[ "$STATUS" = "active" ] \
+			&& ok "and the panel shows the domain as active" \
+			|| no "the certificate was issued, but the panel shows the domain as '${STATUS:-nothing}'"
 	fi
 fi
 
