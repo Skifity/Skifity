@@ -353,8 +353,9 @@ START=$(date +%s)
 # image and the manifests are this checkout's because that is what is being
 # upgraded to. Staging, as before: nothing on the internet can reach this
 # machine for a certificate.
+ROUTE_BEFORE=$(kubectl -n "$PANEL_NS" get ingress skifity-panel -o jsonpath='{.spec.rules[0].host}{" "}{.spec.tls[*].secretName}' 2>/dev/null || true)
 if SKIFITY_IMAGE="$SKIFITY_IMAGE" SKIFITY_ASSUME_YES=1 SKIFITY_ACME_STAGING=1 \
-	SKIFITY_PUBLIC_IP="$PUBLIC_IP" SKIFITY_MANIFEST_BASE="file://$HERE/deploy" \
+	SKIFITY_MANIFEST_BASE="file://$HERE/deploy" \
 	sh "$HERE/installer/install.sh" >"$UPGRADE_OUT" 2>&1; then
 	ok "the installer upgraded the panel in $(($(date +%s) - START))s"
 else
@@ -379,6 +380,10 @@ phase "The new version, on the same database"
 	&& ok "the panel runs $SKIFITY_IMAGE" \
 	|| no "the panel runs $(panel_image), not $SKIFITY_IMAGE"
 panel_ready && ok "the new panel answers" || die "the new panel never answered"
+ROUTE_AFTER=$(kubectl -n "$PANEL_NS" get ingress skifity-panel -o jsonpath='{.spec.rules[0].host}{" "}{.spec.tls[*].secretName}' 2>/dev/null || true)
+[ -n "$ROUTE_BEFORE" ] && [ "$ROUTE_AFTER" = "$ROUTE_BEFORE" ] \
+	&& ok "the panel kept its address and its certificate: ${ROUTE_AFTER% *}" \
+	|| no "the panel's address moved from '${ROUTE_BEFORE}' to '${ROUTE_AFTER}'"
 
 [ "$(api GET "/api/apps/$APP_ID" 2>/dev/null | pick id 2>/dev/null || echo "")" = "$APP_ID" ] \
 	&& ok "the API token $UPGRADE_FROM issued still works, and finds the app" \
