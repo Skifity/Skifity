@@ -401,7 +401,16 @@ SECRET_IN_LOG=$(kubectl -n "$PANEL_NS" logs deploy/skifity-panel --tail=500 2>/d
 step "Deploying again, and rolling back (checklist 8)"
 
 api PUT "/api/apps/$APP_ID/variables" '{"key":"VERSION","value":"3"}' >/dev/null
-sleep 25
+# A variable is applied without a deployment of its own (ADR-0007), so there was
+# only ever one to roll back to and this was skipped. A deploy of the same
+# commit makes the second, with the new value, and builds nothing.
+SECOND=$(api POST "/api/apps/$APP_ID/deploy" | pick id 2>/dev/null || echo "")
+for _ in $(seq 1 60); do
+	STATE=$(api GET "/api/apps/$APP_ID/deployments/$SECOND" | pick status 2>/dev/null || echo "")
+	case "$STATE" in succeeded | failed) break ;; esac
+	sleep 5
+done
+[ "$STATE" = "succeeded" ] || no "deploying the same commit again ended '${STATE:-unknown}'"
 FIRST=$(api GET "/api/apps/$APP_ID/deployments" | pick items.1.id 2>/dev/null || echo "")
 if [ -z "$FIRST" ]; then
 	skip "the rollback" "there is only one deployment to roll back to"
@@ -1150,6 +1159,67 @@ JSON
 		fi
 	fi
 	kill "$LISTENER" 2>/dev/null || true
+fi
+
+step "An app that sleeps wakes for a visitor and for its own deploy"
+
+# Scale to zero turns an app down to no instances when nobody uses it, and KEDA's
+# interceptor wakes it for the next request. A rollout of no instances finishes
+# the moment it starts, so every deploy of a sleeping app used to succeed,
+# whatever it deployed; a deploy now wakes it first. The app is put to sleep by
+# hand rather than by waiting out the five quiet minutes: KEDA leaves an app at
+# no instances until a request asks for it, whoever put it there.
+if [ -z "$APP_HOST" ]; then
+	skip "scale to zero" "phase 1 did not run or the app was given no address, and a sleeping app is woken by its address"
+elif ! api POST /api/components/keda/install >/dev/null 2>&1; then
+	no "the scale-to-zero component could not be installed"
+else
+	ok "the scale-to-zero component installed"
+	api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":true,"autoscale":false,"replicas":1}' >/dev/null \
+		|| no "scale to zero could not be switched on"
+	sleep_app() {
+		kubectl -n "$NAMESPACE" scale deploy hello --replicas=0 >/dev/null 2>&1 || return 1
+		for _ in $(seq 1 60); do
+			[ -z "$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello -o name 2>/dev/null)" ] && return 0
+			sleep 2
+		done
+		return 1
+	}
+	for _ in $(seq 1 30); do
+		kubectl -n "$NAMESPACE" get httpscaledobject hello >/dev/null 2>&1 && break
+		sleep 2
+	done
+	if ! sleep_app; then
+		no "the app could not be put to sleep to try waking it"
+	else
+		WOKE=""
+		for _ in $(seq 1 12); do
+			[ "$(through_ingress "$APP_HOST" 20)" = "200" ] && { WOKE=1; break; }
+			sleep 5
+		done
+		[ -n "$WOKE" ] \
+			&& ok "a visitor's request woke the sleeping app and was answered" \
+			|| no "a request to a sleeping app's address was never answered; the interceptor did not wake it"
+	fi
+	if ! sleep_app; then
+		no "the app could not be put to sleep again to deploy it"
+	else
+		SLEPT_DEPLOY=$(api POST "/api/apps/$APP_ID/deploy" | pick id 2>/dev/null || echo "")
+		STATE=""
+		for _ in $(seq 1 60); do
+			STATE=$(api GET "/api/apps/$APP_ID/deployments/$SLEPT_DEPLOY" | pick status 2>/dev/null || echo "")
+			case "$STATE" in succeeded | failed) break ;; esac
+			sleep 10
+		done
+		SLEPT_LOG=$(api GET "/api/apps/$APP_ID/deployments/$SLEPT_DEPLOY/logs" 2>/dev/null || echo "")
+		READY=$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+		if [ "$STATE" = "succeeded" ] && printf '%s' "$SLEPT_LOG" | grep -q "is asleep, so it is woken" && [ "${READY:-0}" -ge 1 ] 2>/dev/null; then
+			ok "a deploy of the sleeping app woke it, and succeeded once the new version was ready"
+		else
+			no "a deploy of the sleeping app ended '${STATE:-unknown}' with ${READY:-0} instance(s) ready, and its log $(printf '%s' "$SLEPT_LOG" | grep -q 'is asleep' && echo says || echo does not say) it was woken"
+		fi
+	fi
+	api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":false,"autoscale":false,"replicas":1}' >/dev/null 2>&1 || true
 fi
 fi
 
