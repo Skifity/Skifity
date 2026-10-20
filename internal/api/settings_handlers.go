@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/gitsrc"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 )
@@ -112,6 +113,14 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		// The key is audited; the value never is.
 		s.audit(r, "", "settings.updated", "setting", key, def.Label)
+	}
+
+	// Requests to Git hosts trust what was saved from now on, not from the
+	// panel's next start.
+	if bundle, changed := req.Values[settings.KeyGitCABundle]; changed {
+		if err := gitsrc.TrustAuthorities(bundle); err != nil {
+			s.log.Warn("the Git authorities could not be read", "error", err)
+		}
 	}
 
 	// Where the team's domains point has moved: the records the panel keeps

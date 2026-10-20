@@ -2,13 +2,16 @@ package gitsrc
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"skifity/internal/netguard"
@@ -97,14 +100,39 @@ type FileTree struct {
 	Truncated bool
 }
 
+// requestTimeout bounds every request to a Git host: this runs while
+// somebody is looking at a form, and a provider that has not answered in
+// fifteen seconds has effectively said no.
+const requestTimeout = 15 * time.Second
+
 // client is shared so lookups reuse connections and always time out.
 //
-// Fifteen seconds: this runs while somebody is looking at a form, and a
-// provider that has not answered by then has effectively said no.
-//
 // Guarded, because a Git connection's base URL is a setting and this request is
-// made by the panel's own process. See internal/netguard.
-var client = netguard.TenantClient(15 * time.Second)
+// made by the panel's own process. See internal/netguard. Swapped whole when
+// the operator's own authorities change; see TrustAuthorities.
+var client atomic.Pointer[http.Client]
+
+func init() { client.Store(netguard.TenantClient(requestTimeout)) }
+
+// TrustAuthorities makes the panel's requests to Git hosts trust the PEM
+// certificates in bundle beside the public authorities
+// (settings.KeyGitCABundle), or the public ones alone when it is empty. A
+// bundle with no certificate in it leaves them as they were.
+func TrustAuthorities(bundle string) error {
+	if strings.TrimSpace(bundle) == "" {
+		client.Store(netguard.TenantClient(requestTimeout))
+		return nil
+	}
+	roots, err := x509.SystemCertPool()
+	if err != nil || roots == nil {
+		roots = x509.NewCertPool()
+	}
+	if !roots.AppendCertsFromPEM([]byte(bundle)) {
+		return errors.New("no certificate in the Git authorities could be read")
+	}
+	client.Store(netguard.TenantClientTrusting(requestTimeout, roots))
+	return nil
+}
 
 // ReadTree lists a repository's files and reads the ones that matter.
 func ReadTree(ctx context.Context, req TreeRequest) (FileTree, error) {
@@ -368,7 +396,7 @@ func get(ctx context.Context, endpoint, token, scheme string) ([]byte, error) {
 	req.Header.Set("User-Agent", version.UserAgent())
 	authorize(req, token, scheme)
 
-	resp, err := client.Do(req)
+	resp, err := client.Load().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ask the Git provider about this repository: %w", err)
 	}

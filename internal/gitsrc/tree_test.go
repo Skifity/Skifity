@@ -238,7 +238,7 @@ func wrap(s string) string {
 // 127.0.0.1, so without this the whole package would be testing the guard
 // rather than the protocol handling it is about.
 func TestMain(m *testing.M) {
-	client = &http.Client{Timeout: 5 * time.Second}
+	client.Store(&http.Client{Timeout: 5 * time.Second})
 	os.Exit(m.Run())
 }
 

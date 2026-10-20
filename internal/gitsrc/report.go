@@ -330,7 +330,7 @@ func send(ctx context.Context, method, endpoint, token, scheme string, body map[
 	request.Header.Set("User-Agent", version.UserAgent())
 	authorize(request, token, scheme)
 
-	resp, err := client.Do(request)
+	resp, err := client.Load().Do(request)
 	if err != nil {
 		return 0, nil, fmt.Errorf("reach the Git host: %w", err)
 	}

@@ -28,12 +28,12 @@ func TestABucketTheEnvironmentKeepsPodsFromIsNamed(t *testing.T) {
 		"fd00::1",
 		"not an address",
 	}
-	got := StorageAddresses(resolved, nodes)
+	got := FencedAddresses(resolved, nodes)
 	want := []string{"10.0.0.5", "10.1.2.3", "100.101.102.103", "192.168.1.20", "203.0.113.10"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("StorageAddresses = %v, want %v", got, want)
+		t.Fatalf("FencedAddresses = %v, want %v", got, want)
 	}
-	if got := StorageAddresses([]string{"8.8.8.8", "93.184.216.34"}, nodes); len(got) != 0 {
+	if got := FencedAddresses([]string{"8.8.8.8", "93.184.216.34"}, nodes); len(got) != 0 {
 		t.Fatalf("a bucket on the internet needs no hole, got %v", got)
 	}
 }

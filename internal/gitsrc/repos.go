@@ -295,7 +295,7 @@ func getList(ctx context.Context, endpoint, token, scheme string, into any) erro
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
 	authorize(req, token, scheme)
-	resp, err := client.Do(req)
+	resp, err := client.Load().Do(req)
 	if err != nil {
 		return fmt.Errorf("could not reach the Git host: %w", err)
 	}

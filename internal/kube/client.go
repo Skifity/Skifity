@@ -1249,7 +1249,7 @@ func (c *Client) RefreshEnvironmentPolicies(ctx context.Context, namespace strin
 
 // AllowBackupStorage lets the panel's backup and restore jobs in a namespace
 // reach a bucket the environment's own policy would keep them from, at the
-// addresses StorageAddresses picked, on the bucket's port. None means the
+// addresses FencedAddresses picked, on the bucket's port. None means the
 // bucket is on the public internet, which every pod reaches already, and a
 // policy left from an earlier bucket is taken away.
 func (c *Client) AllowBackupStorage(ctx context.Context, namespace string, addresses []string, port int) error {

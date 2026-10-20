@@ -2,6 +2,7 @@ package errdoc
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1387,6 +1388,30 @@ func NixpacksUnavailable(app string) *Problem {
 		WithFix("Set the app's builder to Automatic, which uses Railpack, or to Dockerfile, under the app's Settings.").
 		WithStatus(http.StatusBadRequest).
 		With("app", app)
+}
+
+// GitHostPrivate is a build of a repository on a Git host at a private
+// address, or at one of the servers', which no administrator has let builds
+// reach. Said before the build starts: the clone would otherwise wait two
+// minutes for a connection the policy drops, and then say only that it timed
+// out.
+func GitHostPrivate(host, address string, port int) *Problem {
+	return New("build.git_host_private", "Builds cannot reach this repository's host").
+		WithCause("%s is at %s, on a private network or on one of the servers, and builds are kept off those.", host, address).
+		WithImpact("Nothing was built or deployed. The version running now keeps running.").
+		WithFix("An administrator can let builds reach it: add %s under Settings → Git, in Git hosts on your own network, and deploy again.", hostAndPort(host, port)).
+		WithDocs("/docs/configuration#git-hosts-on-your-own-network").
+		WithStatus(http.StatusConflict).
+		With("host", host).With("address", address).With("port", fmt.Sprint(port))
+}
+
+// hostAndPort is a host as a person would type it into a list of hosts: with
+// its port when that is not HTTPS's own.
+func hostAndPort(host string, port int) string {
+	if port == 443 || port == 0 {
+		return host
+	}
+	return net.JoinHostPort(host, fmt.Sprint(port))
 }
 
 // UploadNotFound reports a deploy that names an upload the panel does not have.

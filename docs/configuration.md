@@ -71,12 +71,40 @@ to get started.
 | **Sign-in** | An OpenID Connect provider, so people sign in with the account they already have. See below. |
 | **Plugins** | The store the Plugins page reads, and the public key its index has to be signed by. See [Writing a Skifity plugin](plugins.md). |
 
-**Git** is a tab rather than a group of settings: a connection to GitHub, GitLab,
-Gitea or Bitbucket is a row you add, with a personal access token — for
-Bitbucket an API token or an access token, see
-[Connecting Bitbucket](concepts.md#connecting-bitbucket). There was a group here
-for a GitHub App — an app id, a client id, a client secret, a private key — and
-nothing ever read one of them, so it is gone until the code behind it exists.
+**Git** is a tab: a connection to GitHub, GitLab, Gitea or Bitbucket is a row
+you add, with a personal access token — for Bitbucket an API token or an access
+token, see [Connecting Bitbucket](concepts.md#connecting-bitbucket). Below the
+connections are the two settings for a Git host of your own, described next.
+There was a group here for a GitHub App — an app id, a client id, a client
+secret, a private key — and nothing ever read one of them, so it is gone until
+the code behind it exists.
+
+### Git hosts on your own network
+
+A build runs somebody's install scripts, so builds are kept off private
+networks — `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` —
+and off the servers themselves. A repository on a Gitea at home, a GitLab on
+the office network or over a VPN, or a Git host on one of the servers on a port
+other than 80 and 443, is somewhere a build cannot clone from until an
+administrator says so.
+
+Under **Settings → Git**, **Git hosts on your own network** is that list: a
+host per line, with the port when the repository's address has one —
+`git.home.arpa`, or `192.168.1.10:3443`. A build of a repository on a listed
+host may reach that host on the repository's port, and nothing else there, for
+as long as the build runs; every team's builds of repositories on it may. A
+build of a repository on a host that is not listed is refused before it starts,
+saying which host and where it resolved to, rather than waiting two minutes for
+a connection that was never going to open.
+
+A host whose certificate your own authority signed also needs
+**Certificate authorities for Git hosts**: the authority's certificate, in
+PEM. The clone trusts it beside the public authorities, so a submodule on
+GitHub is still checked as before, and so does the panel when it reads a
+repository, lists one or registers its webhook.
+
+A repository's address is `https://`, wherever it is: a token is sent with
+every clone of a private repository, and nothing is sent over plain HTTP.
 
 **Notifications** is a tab rather than a group of settings: a channel is a row
 you add, and Skifity sends to Telegram, Discord, Slack, Mattermost, Microsoft

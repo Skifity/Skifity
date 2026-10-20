@@ -105,6 +105,13 @@ type JobSpec struct {
 	// variable. Required when there are any.
 	BuildVarsSecret string
 
+	// GitAuthorities are the PEM certificates of the authorities that sign
+	// the operator's own Git hosts' certificates (settings.KeyGitCABundle).
+	// The clone trusts them beside the public ones. They reach it from
+	// GitAuthoritiesConfigMap, which is required when there are any.
+	GitAuthorities          string
+	GitAuthoritiesConfigMap string
+
 	// FenceImage is the panel's own image, which holds the build back until
 	// its network policy is in place; see kube.FenceContainer. Empty for a
 	// panel outside the cluster.
@@ -217,6 +224,9 @@ func (s JobSpec) Validate() error {
 	if s.Builder == BuilderNixpacks && s.NixpacksImage == "" {
 		return fmt.Errorf("the Nixpacks builder needs an image with the nixpacks command in it")
 	}
+	if s.GitAuthorities != "" && s.GitAuthoritiesConfigMap == "" {
+		return fmt.Errorf("a build given Git authorities needs the ConfigMap they are in")
+	}
 	if len(s.BuildArgs) > 0 && s.BuildVarsSecret == "" {
 		return fmt.Errorf("a build with variables needs the Secret that holds their values")
 	}
@@ -318,6 +328,16 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 	mounts := []corev1.VolumeMount{{Name: "workspace", MountPath: workspace}}
 
 	initContainers := []corev1.Container{cloneContainer(s, mounts)}
+	if s.cloneTrustsAuthorities() {
+		volumes = append(volumes, corev1.Volume{
+			Name: "git-authorities",
+			VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: s.GitAuthoritiesConfigMap},
+			}},
+		})
+		initContainers[0].VolumeMounts = append(append([]corev1.VolumeMount{}, initContainers[0].VolumeMounts...),
+			corev1.VolumeMount{Name: "git-authorities", MountPath: gitAuthoritiesDir, ReadOnly: true})
+	}
 	switch s.Builder {
 	case BuilderRailpack:
 		initContainers = append(initContainers, prepareContainer(s, mounts))
@@ -489,6 +509,13 @@ func cloneScript(s JobSpec) string {
 	b.WriteString("set -e\n")
 	b.WriteString("echo '==> Fetching the repository'\n")
 
+	if s.cloneTrustsAuthorities() {
+		// Beside the public authorities rather than instead of them: a
+		// submodule on a public host still has to be verified. Outside the
+		// workspace, which becomes the build's context.
+		fmt.Fprintf(&b, "cat %s %s/%s > %s\n", systemAuthorities, gitAuthoritiesDir, GitAuthoritiesKey, cloneAuthorities)
+		fmt.Fprintf(&b, "export GIT_SSL_CAINFO=%s\n", cloneAuthorities)
+	}
 	b.WriteString("cd " + workspace + "\n")
 	b.WriteString("git init -q .\n")
 	// The remote is the address as given, with no credential in it.
@@ -531,6 +558,49 @@ func cloneScript(s JobSpec) string {
 	b.WriteString(`authed_git submodule update --init --recursive --depth 1 -q 2>/dev/null || true` + "\n")
 	b.WriteString(`echo "==> Checked out $(git rev-parse --short HEAD)"` + "\n")
 	return b.String()
+}
+
+// Where the operator's Git authorities are in the clone container, and the
+// bundle the clone verifies with: the public authorities the Git image
+// carries, and those.
+const (
+	gitAuthoritiesDir = "/etc/skifity/git-authorities"
+	systemAuthorities = "/etc/ssl/certs/ca-certificates.crt"
+	cloneAuthorities  = "/tmp/git-authorities.pem"
+	// GitAuthoritiesKey is the key the certificates are under in the
+	// ConfigMap.
+	GitAuthoritiesKey = "ca.pem"
+)
+
+// cloneTrustsAuthorities says whether the clone is given the operator's Git
+// authorities: when there are any, and there is a repository to clone.
+func (s JobSpec) cloneTrustsAuthorities() bool {
+	return s.GitAuthorities != "" && !s.SourceUpload
+}
+
+// GitAuthoritiesConfigMapObject is the ConfigMap a build's clone reads the
+// operator's Git authorities from. Nil when the build is given none.
+//
+// A ConfigMap rather than a Secret: a certificate authority's certificate is
+// public, and is what every client of that host is handed anyway.
+func GitAuthoritiesConfigMapObject(s JobSpec) *corev1.ConfigMap {
+	if !s.cloneTrustsAuthorities() || s.GitAuthoritiesConfigMap == "" {
+		return nil
+	}
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      s.GitAuthoritiesConfigMap,
+			Namespace: s.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by":    version.Binary,
+				"app.kubernetes.io/component":     "build",
+				version.LabelKey("app-id"):        s.AppID,
+				version.LabelKey("deployment-id"): s.DeploymentID,
+			},
+		},
+		Data: map[string]string{GitAuthoritiesKey: s.GitAuthorities},
+	}
 }
 
 // Receiving an upload.

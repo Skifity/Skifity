@@ -227,3 +227,38 @@ func TestTheACMEAuthorityIsCertificatesOnly(t *testing.T) {
 		}
 	}
 }
+
+// The Git hosts builds may reach are hosts, each with a port or without one;
+// an entry with a port is that port alone.
+func TestGitHostsOnTheOperatorsNetwork(t *testing.T) {
+	for _, bad := range []string{"https://git.home.arpa", "git.home.arpa/acme", "git.home.arpa:0", "git.home.arpa:70000", "fe80::1", "-bad-.lan", "bad_host.lan"} {
+		if validateGitHosts(bad) == nil {
+			t.Errorf("%q was accepted as a Git host", bad)
+		}
+	}
+	listed := "git.home.arpa\n192.168.1.10:3443, Other.LAN"
+	if err := validateGitHosts(listed); err != nil {
+		t.Fatalf("a valid list was refused: %v", err)
+	}
+	for _, tc := range []struct {
+		host string
+		port int
+		want bool
+	}{
+		{"git.home.arpa", 443, true},
+		{"git.home.arpa", 3443, true},
+		{"GIT.HOME.ARPA", 443, true},
+		{"other.lan", 443, true},
+		{"192.168.1.10", 3443, true},
+		{"192.168.1.10", 443, false},
+		{"git.home.arpa.evil.example", 443, false},
+		{"home.arpa", 443, false},
+	} {
+		if got := GitHostListed(listed, tc.host, tc.port); got != tc.want {
+			t.Errorf("%s:%d listed is %v, want %v", tc.host, tc.port, got, tc.want)
+		}
+	}
+	if GitHostListed("", "git.home.arpa", 443) {
+		t.Error("an empty list lets a build reach a host")
+	}
+}

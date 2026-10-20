@@ -68,5 +68,5 @@ func openPathToStorage(ctx context.Context, client *kube.Client, namespace strin
 	if err != nil {
 		return err
 	}
-	return client.AllowBackupStorage(ctx, namespace, kube.StorageAddresses(resolved, nodes), port)
+	return client.AllowBackupStorage(ctx, namespace, kube.FencedAddresses(resolved, nodes), port)
 }

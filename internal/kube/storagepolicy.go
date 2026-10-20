@@ -21,24 +21,24 @@ const StoragePolicyName = "allow-backup-storage"
 // imported dump. Only the panel writes it.
 const BackupJobComponent = "backup"
 
-// notStorage are addresses no bucket is at, whatever its name resolves to: the
-// link-local range with the usual metadata service on it, Oracle Cloud's,
-// Azure's wire server and Alibaba Cloud's. Each answers whatever asks it with
-// the machine's own credentials or configuration.
-var notStorage = []netip.Prefix{
+// neverOpened are addresses no bucket or Git host is at, whatever a name
+// resolves to: the link-local range with the usual metadata service on it,
+// Oracle Cloud's, Azure's wire server and Alibaba Cloud's. Each answers
+// whatever asks it with the machine's own credentials or configuration.
+var neverOpened = []netip.Prefix{
 	netip.MustParsePrefix("169.254.0.0/16"),
 	netip.MustParsePrefix("192.0.0.0/24"),
 	netip.MustParsePrefix("168.63.129.16/32"),
 	netip.MustParsePrefix("100.100.100.200/32"),
 }
 
-// StorageAddresses picks, from the addresses a bucket's host resolves to, the
-// ones an environment's own policy keeps its pods away from: the private and
-// reserved ranges, and the servers' public addresses (InternetEgress). A
-// bucket on the public internet needs nothing more and gets nothing; one at
-// home, on the office network or on a server of the cluster's own gets its
-// addresses named here. IPv4 only, like the rest of the policies.
-func StorageAddresses(resolved, nodeAddresses []string) []string {
+// FencedAddresses picks, from the addresses a bucket's or a Git host's name
+// resolves to, the ones the policies keep pods away from: the private and
+// reserved ranges, and the servers' public addresses (InternetEgress). A host
+// on the public internet needs nothing more and gets nothing; one at home, on
+// the office network or on a server of the cluster's own gets its addresses
+// named here. IPv4 only, like the rest of the policies.
+func FencedAddresses(resolved, nodeAddresses []string) []string {
 	servers := map[string]bool{}
 	for _, address := range PublicNodeAddresses(nodeAddresses) {
 		servers[address] = true
@@ -51,7 +51,7 @@ func StorageAddresses(resolved, nodeAddresses []string) []string {
 			continue
 		}
 		ip = ip.Unmap()
-		if !ip.Is4() || ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() || isNotStorage(ip) {
+		if !ip.Is4() || ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() || isNeverOpened(ip) {
 			continue
 		}
 		key := ip.String()
@@ -65,8 +65,8 @@ func StorageAddresses(resolved, nodeAddresses []string) []string {
 	return out
 }
 
-func isNotStorage(ip netip.Addr) bool {
-	for _, prefix := range notStorage {
+func isNeverOpened(ip netip.Addr) bool {
+	for _, prefix := range neverOpened {
 		if prefix.Contains(ip) {
 			return true
 		}
@@ -84,7 +84,7 @@ func isNotStorage(ip netip.Addr) bool {
 // public internet, and anything else failed after a timeout. The pods it
 // selects are the panel's own jobs, by labels no tenant writes, and the hole
 // is the bucket's own addresses on the bucket's port. The metadata services are
-// never named, whatever the bucket's name resolves to (StorageAddresses).
+// never named, whatever the bucket's name resolves to (FencedAddresses).
 func BackupStoragePolicy(namespace string, addresses []string, port int) *networkingv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	target := intstr.FromInt32(int32(port))

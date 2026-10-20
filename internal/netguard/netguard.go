@@ -45,6 +45,8 @@ package netguard
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -214,6 +216,16 @@ func Client(timeout time.Duration) *http.Client {
 // networks as well.
 func TenantClient(timeout time.Duration) *http.Client {
 	return guardedClient(timeout, TenantDialer(10*time.Second))
+}
+
+// TenantClientTrusting is TenantClient verifying certificates against roots
+// rather than the system's alone: a Git host whose certificate the
+// operator's own authority signed, with that authority added to the public
+// ones.
+func TenantClientTrusting(timeout time.Duration, roots *x509.CertPool) *http.Client {
+	client := guardedClient(timeout, TenantDialer(10*time.Second))
+	client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	return client
 }
 
 func guardedClient(timeout time.Duration, dialer *net.Dialer) *http.Client {

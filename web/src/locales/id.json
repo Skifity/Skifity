@@ -1861,6 +1861,14 @@
       "domains_cluster_ipv6": {
         "label": "Alamat IPv6 publik kluster",
         "help": "Alamat IPv6 yang juga harus dituju domain Anda, jika kluster memilikinya. Record DNS yang dibuat panel mendapat record AAAA dengan alamat ini di samping record A, dan pemeriksaan DNS menganggapnya milik kluster ini."
+      },
+      "git_private_hosts": {
+        "label": "Host Git di jaringan Anda sendiri",
+        "help": "Host, satu per baris, beserta port bila alamat repositori mencantumkannya: git.home.arpa atau 192.168.1.10:3443. Build dijauhkan dari jaringan privat dan dari server itu sendiri, sehingga repositori di host semacam itu tidak bisa di-clone sampai host-nya dicantumkan di sini. Build dari repositori di host yang tercantum boleh menjangkau host itu di port repositorinya, dan tidak ada hal lain di sana. Build semua tim boleh."
+      },
+      "git_ca_bundle": {
+        "label": "Otoritas sertifikat untuk host Git",
+        "help": "Hanya untuk host Git yang sertifikatnya tidak ditandatangani otoritas publik: sertifikat, dalam PEM, dari otoritas yang menandatanganinya. Build memercayainya di samping otoritas publik saat melakukan clone, begitu pula panel saat membaca repositori."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -3979,6 +3987,12 @@
         "cause": "{{0}} menyimpan {{1}} volume yang tidak ada di tempat lain: {{2}}.",
         "impact": "Menghapus server tidak memindahkannya. Aplikasi yang memakainya tidak bisa berjalan di server lain, dan datanya hilang begitu mesin dibersihkan atau dihapus. Tidak ada yang diubah.",
         "fix": "Cadangkan datanya dulu, atau hapus aplikasi yang memakainya. Jika datanya tidak penting, hapus server lagi dan centang \"Tetap hapus\", atau tambahkan accept_data_loss=true pada permintaan."
+      },
+      "build_git_host_private": {
+        "title": "Build tidak bisa menjangkau host repositori ini",
+        "cause": "{{0}} berada di {{1}}, di jaringan privat atau di salah satu server, dan build dijauhkan dari keduanya.",
+        "impact": "Tidak ada yang di-build atau di-deploy. Versi yang sedang berjalan tetap berjalan.",
+        "fix": "Administrator bisa mengizinkan build menjangkaunya: tambahkan {{0}} di Pengaturan → Git, pada Host Git di jaringan Anda sendiri, lalu deploy lagi."
       }
     }
   },

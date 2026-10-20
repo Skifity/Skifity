@@ -169,6 +169,8 @@ const (
 	KeyAPIAllowedNetworks    = "signin.api_allowed_networks"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
+	KeyGitPrivateHosts       = "git.private_hosts"
+	KeyGitCABundle           = "git.ca_bundle"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
 	KeyScanEnabled           = "scanning.enabled"
 	KeyScanSchedule          = "scanning.schedule"
@@ -295,6 +297,21 @@ var Definitions = []Definition{
 		Placeholder: "2",
 		Kind:        KindNumber,
 		Validate:    validateBuildConcurrency,
+	},
+	{
+		Key: KeyGitPrivateHosts, Label: "Git hosts on your own network", Group: GroupGit, Multiline: true,
+		Help: "Hosts, one per line, with the port when the repository's address has one: git.home.arpa or 192.168.1.10:3443. " +
+			"Builds are kept off private networks and off the servers themselves, so a repository on a host there cannot be cloned until the host is here. " +
+			"A build of a repository on a listed host may reach that host on the repository's port, and nothing else there. Every team's builds may.",
+		Placeholder: "git.home.arpa",
+		Validate:    validateGitHosts,
+	},
+	{
+		Key: KeyGitCABundle, Label: "Certificate authorities for Git hosts", Group: GroupGit, Multiline: true,
+		Help: "Only for a Git host whose certificate no public authority signed: the certificate, in PEM, of the authority that did. " +
+			"Builds trust it beside the public ones when they clone, and so does the panel when it reads a repository.",
+		Placeholder: "-----BEGIN CERTIFICATE-----",
+		Validate:    validateCertificateBundle,
 	},
 	{
 		Key: KeyScanEnabled, Label: "Scan images for known vulnerabilities", Group: GroupScanning,
@@ -845,6 +862,77 @@ func validateEmail(value string) error {
 		return errors.New("that does not look like an email address")
 	}
 	return nil
+}
+
+// GitHost is one entry of KeyGitPrivateHosts: a host, and the port its
+// repositories are on, or 0 for any.
+type GitHost struct {
+	Host string
+	Port int
+}
+
+// GitHosts reads the list of Git hosts on the operator's own network, one per
+// line or separated by commas. An entry that does not read is left out; the
+// setting's validator refuses those when they are saved.
+func GitHosts(value string) []GitHost {
+	var out []GitHost
+	for _, entry := range Networks(value) {
+		if host, err := parseGitHost(entry); err == nil {
+			out = append(out, host)
+		}
+	}
+	return out
+}
+
+// GitHostListed reports whether a repository on host, on port, is one a build
+// may reach.
+func GitHostListed(value, host string, port int) bool {
+	for _, entry := range GitHosts(value) {
+		if strings.EqualFold(entry.Host, host) && (entry.Port == 0 || entry.Port == port) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateGitHosts accepts host names and IPv4 addresses, each with a port or
+// without one.
+func validateGitHosts(value string) error {
+	for _, entry := range Networks(value) {
+		if _, err := parseGitHost(entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hostnamePattern is a host name: labels of letters, digits and hyphens,
+// separated by dots. One label is a name too, as a host on a home network
+// often has.
+var hostnamePattern = regexp.MustCompile(`^(?i)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
+
+func parseGitHost(entry string) (GitHost, error) {
+	host, port := entry, 0
+	if strings.Contains(entry, "://") || strings.Contains(entry, "/") {
+		return GitHost{}, fmt.Errorf("%q is an address with a path; enter the host alone, such as git.home.arpa", entry)
+	}
+	if h, p, err := net.SplitHostPort(entry); err == nil {
+		number, convErr := strconv.Atoi(p)
+		if convErr != nil || number < 1 || number > 65535 {
+			return GitHost{}, fmt.Errorf("%q has a port that is not one", entry)
+		}
+		host, port = h, number
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if !ip.Is4() {
+			return GitHost{}, fmt.Errorf("%q is not an IPv4 address; the cluster's networks are IPv4", entry)
+		}
+		return GitHost{Host: ip.String(), Port: port}, nil
+	}
+	if !hostnamePattern.MatchString(host) {
+		return GitHost{}, fmt.Errorf("%q is not a host name such as git.home.arpa, or an address such as 192.168.1.10", entry)
+	}
+	return GitHost{Host: strings.ToLower(host), Port: port}, nil
 }
 
 // validateNetworks accepts addresses and CIDR networks, one per line or

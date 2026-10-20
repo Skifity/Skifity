@@ -25,6 +25,7 @@ import (
 	"skifity/internal/deploy"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/metrics"
@@ -68,6 +69,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
 		return err
 	}
+	trustGitAuthorities(ctx, db, log)
 
 	hub := events.NewHub(256)
 	// Secure cookies are decided from the address people reach the panel on,
@@ -262,6 +264,20 @@ func watchCluster(c *cluster.Cluster) watch.Cluster {
 		return nil
 	}
 	return c
+}
+
+// trustGitAuthorities hands the panel's requests to Git hosts the
+// authorities an administrator added for hosts of their own. Saving the
+// setting does the same while the panel runs; this is the start.
+func trustGitAuthorities(ctx context.Context, db *store.DB, log *slog.Logger) {
+	bundle, _, err := db.GetSetting(ctx, settings.KeyGitCABundle)
+	if err != nil {
+		log.Warn("could not read the Git authorities", "error", err)
+		return
+	}
+	if err := gitsrc.TrustAuthorities(bundle); err != nil {
+		log.Warn("the Git authorities could not be read; Git hosts are verified against the public ones alone", "error", err)
+	}
 }
 
 // seedPodNetwork records the pod network the installer started this cluster

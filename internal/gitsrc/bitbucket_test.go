@@ -611,9 +611,9 @@ func TestBitbucketIsWhereItsAddressSays(t *testing.T) {
 // refuses the panel's own machine and the cloud metadata address.
 func TestBitbucketRequestsGoThroughTheGuard(t *testing.T) {
 	fake := newFakeBitbucket(t)
-	previous := client
-	client = netguard.Client(5 * time.Second)
-	t.Cleanup(func() { client = previous })
+	previous := client.Load()
+	client.Store(netguard.Client(5 * time.Second))
+	t.Cleanup(func() { client.Store(previous) })
 
 	req := ListRequest{Kind: "bitbucket", BaseURL: fake.server.URL, Token: bbToken, Email: bbEmail}
 	calls := map[string]error{}

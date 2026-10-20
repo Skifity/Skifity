@@ -238,7 +238,7 @@ func sendHook(ctx context.Context, method, endpoint, token, scheme string, body 
 	request.Header.Set("User-Agent", version.UserAgent())
 	authorize(request, token, scheme)
 
-	resp, err := client.Do(request)
+	resp, err := client.Load().Do(request)
 	if err != nil {
 		return HookResult{Reason: err.Error()}
 	}

@@ -1881,6 +1881,14 @@
       "domains_cluster_ipv6": {
         "label": "Cluster public IPv6 address",
         "help": "The IPv6 address your domains should point at as well, when the cluster has one. A DNS record the panel creates gets an AAAA record with it beside the A record, and the DNS check counts it as this cluster's."
+      },
+      "git_private_hosts": {
+        "label": "Git hosts on your own network",
+        "help": "Hosts, one per line, with the port when the repository's address has one: git.home.arpa or 192.168.1.10:3443. Builds are kept off private networks and off the servers themselves, so a repository on a host there cannot be cloned until the host is here. A build of a repository on a listed host may reach that host on the repository's port, and nothing else there. Every team's builds may."
+      },
+      "git_ca_bundle": {
+        "label": "Certificate authorities for Git hosts",
+        "help": "Only for a Git host whose certificate no public authority signed: the certificate, in PEM, of the authority that did. Builds trust it beside the public ones when they clone, and so does the panel when it reads a repository."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -3999,6 +4007,12 @@
         "cause": "{{0}} holds {{1}} volume(s) that exist nowhere else: {{2}}.",
         "impact": "Removing the server does not move them. The apps that use them cannot start on another server, and the data is gone once the machine is wiped or deleted. Nothing was changed.",
         "fix": "Back the data up first, or delete the apps that use it. If it does not matter, remove the server again and tick \"Remove anyway\", or add accept_data_loss=true to the request."
+      },
+      "build_git_host_private": {
+        "title": "Builds cannot reach this repository's host",
+        "cause": "{{0}} is at {{1}}, on a private network or on one of the servers, and builds are kept off those.",
+        "impact": "Nothing was built or deployed. The version running now keeps running.",
+        "fix": "An administrator can let builds reach it: add {{0}} under Settings → Git, in Git hosts on your own network, and deploy again."
       }
     }
   },

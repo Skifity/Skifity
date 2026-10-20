@@ -123,6 +123,14 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	if len(buildArgs) > 0 {
 		spec.BuildVarsSecret = kube.ResourceName(spec.Name, "vars")
 	}
+	// The authorities an administrator added for Git hosts of their own,
+	// which the clone trusts beside the public ones.
+	if authorities, _, err := d.db.GetSetting(ctx, settings.KeyGitCABundle); err != nil {
+		return "", err
+	} else if strings.TrimSpace(authorities) != "" && !spec.SourceUpload {
+		spec.GitAuthorities = authorities
+		spec.GitAuthoritiesConfigMap = kube.ResourceName(spec.Name, "git-ca")
+	}
 	// A Dockerfile whose FROM is the team's own private image pulls it with
 	// the team's credentials, which live beside the panel's for this build
 	// only: the build namespace is every team's, and a Secret left there would
@@ -153,6 +161,16 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", fmt.Errorf("clear the previous build: %w", err)
 	}
 
+	// Before anything else is made for the build: a repository on a host no
+	// administrator listed is refused here, with nothing to clean up.
+	sourcePolicy, err := d.openPathToSource(ctx, deployment, spec)
+	if err != nil {
+		return "", err
+	}
+	if sourcePolicy != nil {
+		defer d.removeForBuild(ctx, "networking.k8s.io/v1", "NetworkPolicy", spec.Namespace, sourcePolicy.Name)
+	}
+
 	// The variables' values go in a Secret of their own for as long as the
 	// build runs, never into the Job: anybody who can list Jobs in the build
 	// namespace can read a Job's spec.
@@ -168,6 +186,13 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		}
 		defer d.removeBuildSecret(ctx, spec.Namespace, auth.Name)
 	}
+	authorities := builder.GitAuthoritiesConfigMapObject(spec)
+	if authorities != nil {
+		if err := d.cluster.Client().Applier().Apply(ctx, authorities); err != nil {
+			return "", fmt.Errorf("hand the build the Git authorities: %w", err)
+		}
+		defer d.removeForBuild(ctx, "v1", "ConfigMap", spec.Namespace, authorities.Name)
+	}
 
 	d.warnAboutAdvisories(ctx, deployment, app)
 	d.appendLog(ctx, deployment.ID, fmt.Sprintf("Building %s with the %s builder.", app.Name, chosen))
@@ -177,6 +202,12 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	d.ownBuildVars(ctx, spec)
 	if auth != nil {
 		d.ownBuildSecret(ctx, spec, auth)
+	}
+	if authorities != nil {
+		d.ownByBuild(ctx, spec, authorities)
+	}
+	if sourcePolicy != nil {
+		d.ownByBuild(ctx, spec, sourcePolicy)
 	}
 	// A build cancelled or replaced stops here, and its Job has to stop with
 	// it: left running, it finished later and pushed an image nobody asked

@@ -70,7 +70,10 @@ These are the lines the code defends, and the ones it does not.
   profile, because rootless BuildKit needs it (ADR-0016); a build escaping to the
   node is a known limit of that, not a surprise — but reaching the panel's
   secrets, another build, or another team's images in the registry for writing
-  is a vulnerability.
+  is a vulnerability. A build is kept off private networks and the servers,
+  except a Git host a panel administrator listed, which a build of a repository
+  on it reaches on the repository's port alone; a build reaching any other
+  address there is a vulnerability.
 * **A pod's own code starts behind its fence.** Every pod that runs a team's
   code — an app, a command, a build, a plugin — first waits in a container of
   the panel's until its network policy is in place (ADR-0027). Code of a team's
@@ -80,9 +83,10 @@ These are the lines the code defends, and the ones it does not.
 
 What follows is what Skifity does not do, or does only in part, today. It is
 here so that nobody finds it out the hard way. The tenant boundaries above are
-checked on a real, single-server k3s cluster by `test/cluster/verify.sh`, which
-CI runs on every push to `main`; `docs/progress.md` says what each run found.
-None of it has run on more than one server, and none of it has been attacked by
+checked on a real k3s cluster by `test/cluster/verify.sh`, which CI runs on
+every push to `main` on one server and again across two; `docs/progress.md`
+says what each run found. Two servers there are two on one machine, never
+apart on a network that misbehaves, and none of it has been attacked by
 anybody who meant it.
 
 **What builds still share.**
