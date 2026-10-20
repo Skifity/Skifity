@@ -730,8 +730,16 @@ print(json.dumps({"values": {"domains.acme_server": sys.argv[1], "domains.acme_c
 		ok "cert-manager was issued a certificate for $SECURE_HOST, validated over HTTP through the ingress"
 		ROOT_PEM=$(mktemp)
 		curl -fsS --cacert "$VERIFY_ACME_CA" "$VERIFY_ACME_ROOT" -o "$ROOT_PEM" 2>>"$REPORT" || true
-		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --cacert "$ROOT_PEM" \
-			--resolve "$SECURE_HOST:443:127.0.0.1" "https://$SECURE_HOST/" 2>>"$REPORT" || true)
+		# The certificate is Ready once its secret is written; Traefik reads
+		# the secret a moment later, and until then serves its own. The run
+		# on 11cfbfb asked within the same 20 ms and got that one.
+		CODE=""
+		for _ in $(seq 1 12); do
+			CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --cacert "$ROOT_PEM" \
+				--resolve "$SECURE_HOST:443:127.0.0.1" "https://$SECURE_HOST/" 2>>"$REPORT" || true)
+			[ "$CODE" = "200" ] && break
+			sleep 5
+		done
 		[ "$CODE" = "200" ] \
 			&& ok "https://$SECURE_HOST answers with that certificate, trusted from the ACME server's own root" \
 			|| no "https://$SECURE_HOST answered '$CODE' when checked against the ACME server's root; the ingress is not serving the issued certificate"
