@@ -8,7 +8,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"skifity/internal/api"
@@ -188,22 +187,27 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 		return 0, fmt.Errorf("list what is running on this server: %w", err)
 	}
 
-	evicted := 0
+	// The apps with no ready instance anywhere else start one elsewhere
+	// first; see moveSoleInstances. What is left is evicted.
+	movedFirst := moveSoleInstances(ctx, clientset, p.log, pods.Items, server.NodeName, moveWait)
+	pods, err = clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + server.NodeName,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("list what is running on this server: %w", err)
+	}
+
+	evicted := movedFirst
+	evictBy := time.Now().Add(2 * time.Minute)
 	for _, pod := range pods.Items {
 		// DaemonSet pods come back immediately and mirror pods cannot be
 		// evicted at all, so skipping them is correct rather than lenient.
-		if isDaemonSetPod(pod) || isMirrorPod(pod) {
+		if isDaemonSetPod(pod) || isMirrorPod(pod) || pod.DeletionTimestamp != nil {
 			continue
 		}
-		eviction := &policyv1.Eviction{
-			ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace},
-		}
-		if err := clientset.PolicyV1().Evictions(pod.Namespace).Evict(ctx, eviction); err != nil {
-			if kubeIsNotFound(err) {
-				continue
-			}
-			// A budget that refuses the eviction means removing this server
-			// would take an app down. That is worth stopping for.
+		if err := evict(ctx, clientset, pod, evictBy); err != nil {
+			// A budget that still refuses the eviction means removing this
+			// server would take an app down. That is worth stopping for.
 			return evicted, errdoc.New("cluster.drain_blocked", "An app would go down if this server is removed").
 				WithCause("%s in %s could not be moved: %s", pod.Name, pod.Namespace, err.Error()).
 				WithImpact("The server was not removed and is still running your apps.").
