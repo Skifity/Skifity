@@ -143,6 +143,68 @@ func TestRestoringPutsTheBackupInPlaceAndKeepsWhatItReplaced(t *testing.T) {
 	}
 }
 
+// The restored database is the panel's to open: it takes the owner, group and
+// mode of the one it replaces, not those of whoever ran the restore. Root put
+// a file only root could read in place of the panel's, and the panel, which
+// runs as a user of its own, could not open its database after going back.
+func TestRestoringKeepsTheDatabasesOwnerAndMode(t *testing.T) {
+	_, target, keyPath, keyring := restoreHarness(t)
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	// Only root can give a file away. Run as root, the database belongs to
+	// the user the panel runs as, the way it does on a server.
+	panelUID, panelGID := os.Getuid(), os.Getgid()
+	if panelUID == 0 {
+		panelUID, panelGID = 65532, 65532
+		if err := os.Chown(target, panelUID, panelGID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source := filepath.Join(t.TempDir(), "backup.db")
+	panelDatabase(t, source, "from-backup@example.test", keyring)
+	backup := gzipped(t, source)
+
+	var out bytes.Buffer
+	if err := adminRestoreDatabase(context.Background(),
+		[]string{backup, "--database", target, "--master-key", keyPath, "--yes"}, &out); err != nil {
+		t.Fatalf("restore-db: %v\n%s", err, out.String())
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Errorf("the restored database is %v, want the mode of the one it replaced, -rw-r-----", info.Mode().Perm())
+	}
+	if uid, gid, ok := fileOwner(info); ok && (uid != panelUID || gid != panelGID) {
+		t.Errorf("the restored database belongs to %d:%d, want %d:%d like the one it replaced", uid, gid, panelUID, panelGID)
+	}
+
+	// With no database there yet, the directory's owner stands in for it.
+	dir := t.TempDir()
+	if panelUID != os.Getuid() {
+		if err := os.Chown(dir, panelUID, panelGID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fresh := filepath.Join(dir, "panel.db")
+	out.Reset()
+	if err := adminRestoreDatabase(context.Background(),
+		[]string{backup, "--database", fresh, "--master-key", keyPath, "--yes"}, &out); err != nil {
+		t.Fatalf("restore-db with no database yet: %v\n%s", err, out.String())
+	}
+	if info, err = os.Stat(fresh); err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("a database restored where there was none is %v, want -rw-------", info.Mode().Perm())
+	}
+	if uid, gid, ok := fileOwner(info); ok && (uid != panelUID || gid != panelGID) {
+		t.Errorf("a database restored where there was none belongs to %d:%d, want the directory's %d:%d", uid, gid, panelUID, panelGID)
+	}
+}
+
 // Without --yes it only says what it would do, and leaves no file behind.
 func TestRestoringWithoutYesChangesNothing(t *testing.T) {
 	dir, target, keyPath, keyring := restoreHarness(t)

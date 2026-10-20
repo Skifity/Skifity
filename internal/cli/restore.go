@@ -112,6 +112,14 @@ func adminRestoreDatabase(ctx context.Context, args []string, out io.Writer) err
 		return nil
 	}
 
+	if err := takeOverFrom(candidate, target); err != nil {
+		removeCandidate(candidate)
+		return errdoc.New("admin.restore_owner", "The backup could not be given the database's owner").
+			WithCause("%s", err.Error()).
+			WithImpact("Nothing was changed. Put in place as it is, the panel would not have been able to open it.").
+			WithFix("Run the restore as root, with sudo, on the server the panel's database is on.")
+	}
+
 	kept := target + ".before-restore-" + time.Now().UTC().Format("20060102-150405")
 	moved := []string{}
 	for _, suffix := range []string{"", "-wal", "-shm"} {
@@ -154,6 +162,40 @@ func adminRestoreDatabase(ctx context.Context, args []string, out io.Writer) err
 	}
 	fmt.Fprintf(out, "Start the panel again.\n\n")
 	return nil
+}
+
+// takeOverFrom gives the restored file the owner, group and mode of the
+// database it is about to replace.
+//
+// The panel runs as a user of its own and the restore runs as root, so a
+// restored file kept as root's was one the panel could not open ("unable to
+// open database file") until someone changed its owner by hand: going back
+// after a failed upgrade, the one time it matters, ended in a panel that did
+// not start. Where there is no database yet, the directory's owner stands in
+// for it, and the file is for its owner alone to read.
+func takeOverFrom(candidate, target string) error {
+	mode := os.FileMode(0o600)
+	owner, err := os.Stat(target)
+	if err == nil {
+		mode = owner.Mode().Perm()
+	} else if owner, err = os.Stat(filepath.Dir(target)); err != nil {
+		return err
+	}
+	if err := os.Chmod(candidate, mode); err != nil {
+		return err
+	}
+	uid, gid, ok := fileOwner(owner)
+	if !ok {
+		return nil
+	}
+	current, err := os.Stat(candidate)
+	if err != nil {
+		return err
+	}
+	if have, haveGroup, _ := fileOwner(current); have == uid && haveGroup == gid {
+		return nil
+	}
+	return os.Chown(candidate, uid, gid)
 }
 
 // removeCandidate removes an unpacked backup and whatever reading it left
