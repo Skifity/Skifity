@@ -48,13 +48,16 @@ with nothing deployed:
 firewall and KEDA installed and the run's apps and database still running. The
 latest runs also issue a certificate, start and remove again a database of
 each of the other eight engines, and run a stack, a template, a worker and a
-second environment's copy of the app, and read at the top of each range:
+second environment's copy of the app, and read at the top of each range; the
+ones on `0da8540` and `63611d6` also ran a preview of the whole environment, a
+log drain, and a Gitea, a Mattermost, an OpenBao and a Dex on the runner
+beside it:
 
 | | Measured |
 |---|---|
 | k3s server process, resident | 922–1,040 MiB |
-| The panel's pod, working set | 19–31 MiB |
-| The whole machine in use, the runner's own services included | 2.2–3.0 GB |
+| The panel's pod, working set | 19–47 MiB |
+| The whole machine in use, the runner's own services included | 2.2–3.4 GB |
 
 The panel reads smaller in its pod than on a laptop: the kubelet reports the
 working set, which leaves out file pages the kernel can drop, and the laptop

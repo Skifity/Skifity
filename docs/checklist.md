@@ -29,13 +29,13 @@ Nothing is marked Works because it looks right.
 | 8 | One-click rollback | **Works** | Cluster workflow, phase 1 |
 | 9 | Zero-downtime deploys | **Works** | Cluster workflow, phases 1 and 5 |
 | 10 | Application logs and metrics | **Works** | Cluster workflow, phase 5 |
-| 11 | Safe sign-in (2FA/SSO) and roles | **Works** | Go tests, `make smoke` |
+| 11 | Safe sign-in (2FA/SSO) and roles | **Works** | Go tests, `make smoke`; cluster workflow, phase 3, with Dex on the runner |
 | 12 | Isolation between projects | **Works** | Go tests; cluster workflow, phase 3 |
 | 13 | Resource limits and quotas | **Works** | Cluster workflow, phase 3 |
 | 14 | Apps keep running when the panel is down | **Works** | Cluster workflow, phase 4; Two servers workflow |
 | 15 | Easy install and upgrade | **Works** | `make smoke`; the Cluster workflow installs with the real installer, upgrades the last release with an app serving, and replaces the panel under one, phase 5 |
 | 16 | Export, no lock-in | **Works** | Go tests, `make smoke` |
-| 17 | Notification on failure | Works (webhook, email, ntfy, Gotify) / Written (the other six services) | Cluster workflow, phase 5, with Mailpit, ntfy and Gotify on the runner |
+| 17 | Notification on failure | Works (webhook, email, ntfy, Gotify, Mattermost) / Written (the other five services) | Cluster workflow, phase 5, with Mailpit, ntfy, Gotify and Mattermost on the runner |
 | 18 | Documentation | Works (it is served and its links resolve) | Go tests; Phase 6 is a person |
 
 Sixteen are Works end to end and two in part. What is left is what no
@@ -47,9 +47,12 @@ Microsoft Teams and Pushover — and the person phase 6 is.
 
 **1. Git → build → deploy.** `internal/builder` detects the language and builds
 with Railpack or a Dockerfile, in a Job in the cluster, pushing to an
-in-cluster registry. `internal/gitsrc` connects GitHub, GitLab and Gitea, and a
-webhook deploys on push. The build fingerprint (ADR-0007) means a variable
-change never rebuilds.
+in-cluster registry. `internal/gitsrc` connects GitHub, GitLab, Gitea and
+Bitbucket, and a webhook deploys on push. The build fingerprint (ADR-0007) means
+a variable change never rebuilds. Phase 1 connects the panel to a Gitea on the
+runner: making an app registers its webhook, a push to it is built and
+deployed, and a pull request is previewed and its preview removed when it
+closes.
 
 **2. Live build logs.** Lines are stored as they arrive and streamed over SSE,
 with the last twenty builds kept per app. The Cluster workflow reads a real
@@ -127,6 +130,9 @@ anonymous request (13 are open on purpose), 91 team-scoped ones must answer
 change something and answered by every read but six named ones, and a member
 limited to one project must get 404 on all 69 routes for another project in the
 same team and 403 on the 25 team-wide ones not named as open to them. An API token is bound to one team and its scopes are enforced.
+Phase 3 signs a person in through Dex, a real OpenID Connect provider: the
+account is made at the first sign-in, and the group in the ID token makes them
+a member of the team it names.
 
 **12. Isolation between projects.** An environment is a namespace with a
 default-deny NetworkPolicy, a ResourceQuota, a LimitRange and the `restricted`
@@ -148,7 +154,9 @@ scales the panel to zero and the app answers every request. With two servers,
 it drains one with the app answering, the panel takes one out with the app
 answering throughout, and a second job switches one off without warning: the
 app answers from the server that is left once the cluster knows, and the
-panel can remove the server that is gone.
+panel can remove the server that is gone. A third puts a link between the two
+that delays every packet 40 ms each way and drops 0.3% of them, and the same
+holds across it.
 
 **15. Install and upgrade.** One POSIX shell script, no bashisms, with a
 preflight that refuses before it changes anything and an uninstaller that can be
@@ -176,13 +184,15 @@ or lost, a backup failing, a certificate failing. A channel can be changed
 after it is added, and limited to some projects; what each event belongs to is
 in [Configuration](configuration.md#limiting-a-channel-to-some-projects). The
 payloads are checked against a local listener in Go tests. Phase 5 runs a
-webhook listener, Mailpit, an ntfy server that refuses anybody without a token
-and Gotify on the runner, makes a channel of each, and reads each test message
-back through that server's own API; then it breaks a deployment on purpose,
-and the failure arrives at all four. Email goes through the panel's own Email
-settings, and so does a password reset, whose link sets a new password and
-works once. Delivery to the six services the crosscheck runs no server for has
-never been seen end to end.
+webhook listener, Mailpit, an ntfy server that refuses anybody without a token,
+Gotify and Mattermost on the runner, makes a channel of each, and reads each
+test message back through that server's own API; then it breaks a deployment
+on purpose, and the failure arrives at all five. Email goes through the panel's
+own Email settings, and so does a password reset, whose link sets a new
+password and works once. Delivery to the five services the crosscheck runs no
+server for — Telegram, Discord, Slack, Microsoft Teams and Pushover, each a
+service on the internet rather than something to run — has never been seen
+end to end.
 
 **18. Documentation.** Thirteen pages, served from inside the binary so they work on
 a machine with no other browser and no outbound network — which is exactly when
@@ -223,7 +233,8 @@ maintainer's decision. The run has happened since, on every push: the `Cluster`
 workflow installs the commit on a fresh GitHub-hosted Ubuntu server with the
 real installer and works through `test/cluster/verify.sh`, with a bucket and
 an ACME server beside it, and upgrades the last release to the commit; the
-`Two servers` workflow runs the same across two servers and switches one off.
+`Two servers` workflow runs the same across two servers, again across a link
+that delays and drops packets, and switches one off.
 Their runs found what the fakes could not — an empty storage class, a database
 kept off the API, an app with no address on a cloud machine, a new pod's
 unfenced first moment, a scale-to-zero add-on fetched by a name no release
@@ -231,8 +242,10 @@ has, a certificate no app could be issued, a database engine that crashed on
 its password and another that refused a new kernel, an upgrade that dropped
 the panel's domain, a server that could not be removed once it had failed, a
 restart that put both of an app's instances on one server, builds that could
-not clone from a Git host on one's own network — and v0.1.1 is the tag with
-all of it fixed.
+not clone from a Git host on one's own network, a removed server taking its
+ingress away mid-request, single sign-on refused on a fresh install and never
+given Dex's or Okta's groups, an app made from a clone URL that no push ever
+deployed — and v0.1.1 is the tag with all of it fixed.
 
 What is left, in order:
 
@@ -240,13 +253,13 @@ What is left, in order:
    and its links resolve, which is not the same as it being followed.
    `docs/walkthrough.md` is the sheet they fill in.
 2. **Servers of one's own.** Everything above runs on machines GitHub lends
-   for an hour: two servers on one runner, a stand-in bucket, Let's Encrypt's
-   test server. A network between servers that drops packets, a real bucket,
-   Let's Encrypt itself and a restore into a different cluster are owed by
-   somebody running it.
-3. **The six notification services the crosscheck runs no server for** —
-   Telegram, Discord, Slack, Mattermost, Microsoft Teams and Pushover. Each
-   needs an account, or for Mattermost a server, to deliver to.
+   for an hour: two servers on one runner with a link that only imitates a
+   long one, a stand-in bucket, a test ACME server. Servers in different
+   places, a real bucket, Let's Encrypt itself and a restore into a different
+   cluster are owed by somebody running it.
+3. **The five notification services the crosscheck runs no server for** —
+   Telegram, Discord, Slack, Microsoft Teams and Pushover. Each is a service on
+   the internet and needs an account to deliver to.
 
 Everything else on the roadmap is smaller than any of these.
 

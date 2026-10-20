@@ -185,6 +185,9 @@ none of that can show, and so has not been seen:
 * **Two servers far apart for real**: the third job's link delays and drops
   packets as a long one does, but both servers are still on one runner, and a
   link that goes down for minutes and comes back has not been tried.
+* **Services that only exist on the internet**: GitHub's and GitLab's own
+  webhooks (Gitea's are run), Bitbucket, servers made at Hetzner, and
+  delivery to Telegram, Discord, Slack, Microsoft Teams and Pushover.
 * **A person**, which is phase 6.
 
 ## What to send back

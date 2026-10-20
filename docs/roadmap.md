@@ -109,15 +109,20 @@ In the order it matters.
    with the real installer and works through `test/cluster/verify.sh`, with a
    bucket and an ACME server standing in beside it, and upgrades the last
    release to the commit with an app serving; the `Two servers` workflow runs
-   the same across two servers, and switches one off without warning. Their
+   the same across two servers, once more across a link that delays and drops
+   packets, and switches one off without warning. Their
    runs found a database volume asking for a storage class that is not there, a
    database kept off the Kubernetes API, an app on a cloud machine given no
    address, a new pod unfenced for its first moment, a scale-to-zero add-on
    fetched by a name no release has, a certificate no app could ever be
    issued, a database engine that never started, an upgrade that dropped the
    panel's domain, a server that could not be removed once it had failed, a
-   restart that put both of an app's instances on one server, and builds that
-   could not clone from a Git host on one's own network; all are fixed. `docs/progress.md` has each run.
+   restart that put both of an app's instances on one server, builds that
+   could not clone from a Git host on one's own network, a removed server
+   taking its ingress away mid-request, single sign-on refused on a fresh
+   install and never given Dex's or Okta's groups, and an app made from a
+   clone URL that no push ever deployed; all are fixed. `docs/progress.md` has
+   each run.
 2. **Tag a release** — *done.* v0.1.0 was cut before the cluster run, by the
    maintainer's decision; v0.1.1 is the first tag cut after it, with everything
    it found fixed. `docs/releasing.md` is the procedure.
@@ -155,10 +160,11 @@ In the order it matters.
 ## The one thing none of this fixes
 
 Every run is on machines GitHub lends for an hour. Two servers there are two
-on one runner, a bucket is a stand-in, and the ACME server is Let's Encrypt's
-test server on the same machine. So a network between servers that drops or
-delays packets, a bucket that is not a stand-in, a certificate from Let's
-Encrypt itself for a domain on the internet, and restoring into a different
-cluster are still owed by somebody running it on servers of their own. So is
+on one runner, with a link between them that only imitates a long one, a
+bucket is a stand-in, and the ACME server is a test server on the same
+machine. So servers in different places, a bucket that is not a stand-in, a
+certificate from Let's Encrypt itself for a domain on the internet, and
+restoring into a different cluster are still owed by somebody running it on
+servers of their own. So is
 the check no script can do, phase 6: a person, the documentation, and nothing
 else.

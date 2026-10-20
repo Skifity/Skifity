@@ -14,8 +14,11 @@ clientset and golden manifests, and that is said plainly rather than glossed ove
 That stopped being the whole story in October 2026: the `Cluster` workflow
 installs every push to `main` on a fresh GitHub-hosted Ubuntu server and runs
 `test/cluster/verify.sh` against the k3s it made. What it found and what it
-proves is under [A real cluster, at last](#a-real-cluster-at-last). It is one
-server: anything that needs a second one has still never run.
+proves is under [A real cluster, at last](#a-real-cluster-at-last). The
+`Two servers` workflow adds a second server, a virtual machine on the runner,
+through the panel, and runs the same across both, across a link that delays
+and drops packets, and with one switched off; see [What one throwaway server
+could not show](#what-one-throwaway-server-could-not-show).
 
 ## Phase status
 
@@ -25,10 +28,10 @@ server: anything that needs a second one has still never run.
 | 1 | Repository foundation | done |
 | 2 | One-command installer | done; installs a fresh server on every push |
 | 3 | Panel core: accounts, security, encryption | code complete, tested |
-| 4 | Server and cluster management | one server exercised on every push; more than one never run |
+| 4 | Server and cluster management | exercised on every push: one server, two, two across a slow link, and one switched off |
 | 5 | App deployment | done; built and deployed on a real cluster on every push |
-| 6 | Scaling | autoscaling and scale to zero exercised on one server |
-| 7 | Databases, storage, backups | volumes and PostgreSQL exercised; a backup to a real bucket never run |
+| 6 | Scaling | autoscaling and scale to zero exercised on every push |
+| 7 | Databases, storage, backups | volumes and all nine engines exercised, and backups restored from a stand-in bucket, on every push; a real bucket never |
 | 8 | Developer experience and vibe coding | done |
 | 9 | Differentiating features | done |
 | 10 | Hardening and release | done; the tenant fences checked on a real cluster on every push |
@@ -6794,7 +6797,9 @@ a server that is only slow to report is not taken for one that is gone, and
 `docs/troubleshooting.md` says so.
 
 What two servers on one runner cannot show is two servers apart: a network
-between them that drops or delays packets rather than vanishing.
+between them that drops or delays packets rather than vanishing. A link that
+does both is now put between them; see [Two servers
+apart](#what-had-only-ever-run-against-fakes) below.
 
 **A backup to a bucket, and back.** A bucket is the one thing a backup needs
 that a runner does not have, and the easiest to stand in for: moto answers
@@ -7002,12 +7007,120 @@ and all passing:
 * *A server's usage*: the panel had the server's memory, processor and disk,
   the disk read from its kubelet through the API server's proxy (phase 99).
 
-Still only against fakes, because a runner cannot stand in for them: a seed Job
-for a whole-environment preview, which needs a pull request from a Git host
-that can reach the panel; a sign-in against a real SSO provider, a passkey on a
-real authenticator, a GPU, servers made at Hetzner, Bitbucket, and the Git
-hosts' own webhooks; and delivery to Telegram, Discord, Slack, Microsoft Teams
-and Pushover.
+**A secret manager, Mattermost, previews, drift and drains**, on `11cfbfb`,
+all for the first time and all passing:
+
+* *A variable read from a secret manager*: an OpenBao, which speaks Vault's
+  API, in development mode on the runner's address. The panel signed in before
+  it kept the connection; the app ran with the value OpenBao held; a refresh
+  found the value changed and rolled the app out with the image it had, since
+  a value from a secret manager is configuration; the app's variables said
+  where the value is read from and never what it is; and the panel's log held
+  neither the value nor the token it was read with.
+* *Mattermost*: Mattermost 11, from its own tarball on the runner's
+  PostgreSQL, since Docker is stopped there before the install. The test
+  notification and a deployment's failure arrived in a channel through its
+  incoming webhook, read back through Mattermost's API.
+* *A preview of the whole environment, seeded*: a preview of a branch was
+  built and deployed in a namespace of its own, its copy of the environment's
+  other app ran at that app's image and was seeded once, after its first
+  deploy, with the seed's output in its log, and closing the preview removed
+  its namespace (phase 107).
+* *Changed outside the panel*: an app nobody changed was in step with what the
+  panel applied, with the cluster's own controllers writing beside it; a limit
+  changed with kubectl was reported as changed, by `kubectl-patch`; and
+  putting the app back restored the limit the panel set.
+* *A log drain*: the drain's test line, and then an app's own log lines read
+  from the server's pod logs by the collector, arrived at a listener.
+* *Across two servers*: an app with nothing on any server's disk had an
+  instance on each and answered throughout while the second was drained; the
+  app whose volume was there waited for it and answered once it was back; and
+  the panel refused to take out a server holding data, naming both volumes,
+  and took it out when told the data could go.
+
+**Two servers apart.** A third job in the `Two servers` workflow puts a link
+between the runner and the guest that delays every packet 40 ms each way and
+drops 0.3% of them — netem on the guest's tap, and on an ifb device for what
+comes back — so the round trip is 80 ms. Adding the server over SSH, joining
+it, building on one server and running on the other, and draining it were all
+unaffected. What failed there, and in the `Two servers` job beside it with no
+delay at all, was one request while the panel took the second server out, with
+none of the app's instances on it by then. A drain leaves what runs on every
+server, the ingress among it, and the node was deleted with the ingress still
+running there: it went mid-request, with whatever had just been sent to it and
+the route to it. The removal now taints the server `NoExecute` once its apps
+have moved, which stops those pods the way a drain stops an app's — the rest
+of the cluster stops sending the ingress new requests and it finishes the ones
+it holds — and deletes the node when they have stopped, or after a minute and
+a half. The probe asks twice a second from before the removal until after it,
+writing each answer down with its time, so a failure says when it happened.
+The run on `6c26148` was the first with it: across the slow link the removal
+took 12 seconds rather than 5, the ingress's own stop being the difference,
+and the app answered all 44 requests asked while it went; on `0da8540` both
+jobs passed it, with no delay and with.
+
+Losing a server rather than removing it was counted once more on `0da8540`:
+one request of twenty failed ten seconds after the cluster marked the server
+Unknown, in a check that had passed on the three runs before it. The check now
+waits for the app's address and the ingress's on that server to be taken out,
+which is what a visitor depends on, says how long that took, and writes each
+answer down with its time. On `63611d6` both addresses went in the same second
+the cluster marked the server Unknown, 50 seconds after it stopped, and every
+request after that was answered; so what that one request met is not known
+yet, and the next run that meets it will say when it was and what it got.
+
+**What else writing these found.** An app's log asked for while its one
+instance waited for a server answered "Something went wrong"; it says what the
+instance is waiting for now (`app.not_started`), and the scheduler's reason —
+the app's volume is on one server's own disk and that server is not taking it
+— has words in the panel. A certificate is Ready once its secret is written,
+and Traefik reads the secret a moment later: the check now gives it a minute
+rather than asking within the same 20 ms. And an app made from a clone URL —
+the address a Git host's clone button gives, ending in `.git` — was never
+deployed by a push and never previewed by a pull request: the host's events
+name the repository without `.git`, and the panel compared the two exactly. It
+compares them in one form now, without `.git` or a trailing slash and with case
+aside, as every Git host treats a repository's name. Webhooks were also
+registered at the address the installer gave the panel even after Settings →
+General was given another, which invitations, resets and sign-in links already
+used; they use it too now.
+
+**A Git host's own webhooks, and a sign-in through a real provider**, on
+`0da8540`, for the first time and passing:
+
+* *Gitea's webhooks.* The Gitea on the runner hands out a token, and phase 1
+  connects the panel to it. Making an app through that connection registered
+  the webhook on the repository with the connection's token; a commit pushed
+  to it reached the panel by that webhook, signed with the connection's own
+  secret, and was built and deployed; a pull request opened on Gitea was
+  previewed, the branch's commit built and deployed in an environment of its
+  own; and closing the pull request took the preview away. Getting there, the
+  crosscheck had to learn two things about its own setup: Gitea 28 ignores
+  `*` in `ALLOWED_HOST_LIST`, which belongs under `[security]` now, so
+  loopback is listed there; and the panel's address on a runner is HTTPS with
+  Traefik's own certificate, since Let's Encrypt's staging server cannot reach
+  the runner to issue one, so Gitea delivers without checking it.
+* *Single sign-on through Dex*, built from its own tag, with a connector that
+  vouches for one person in one group. The sign-in made an account for that
+  person and signed them in, and the group in the ID token made them a member
+  of the team Groups to teams names. Writing the check found both fixes in
+  `db3cb60`: a fresh install, with no Panel URL saved under Settings, refused
+  to start a sign-in at all, saying it did not know its own address; and a
+  sign-in never asked for the `groups` scope, so Dex and Okta sent no groups
+  and Groups to teams took everybody it names out of their teams.
+
+The tenth run on one server, on `0da8540`, passed 167 checks, failed none and
+skipped one, the node check that runs in the `Two servers` workflow; the
+eleventh, on `63611d6`, passed 169 and failed none. On that commit every job
+passed: the upgrade from the last release, and in the `Two servers` workflow
+the full run across two servers, the one across the slow link, and the one
+that switches a server off.
+
+Still only against fakes, because a runner cannot stand in for them: a passkey
+on a real authenticator, a GPU, servers made at Hetzner, Bitbucket, the
+webhooks of GitHub and GitLab themselves, and delivery to Telegram, Discord,
+Slack, Microsoft Teams and Pushover — each a service on the internet rather
+than something a runner can start.
 
 ## Idle resource usage
 
