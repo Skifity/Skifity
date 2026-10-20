@@ -27,6 +27,10 @@ on:
         description: "Which phases of verify.sh to run"
         required: false
         default: "1 2 3 4 5"
+      from:
+        description: "The release the upgrade starts from (the newest when empty)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -98,4 +102,63 @@ jobs:
         with:
           name: cluster-report
           path: ${{ runner.temp }}/cluster-report
+          retention-days: 14
+
+  # Most servers are not fresh installs: an earlier release installed them, and
+  # they get this commit by running the newer installer over the top.
+  # upgrade.sh installs the newest published release with that release's own
+  # installer, keeps an app serving, upgrades to the image built from this
+  # commit, and goes back with the commands the installer printed.
+  upgrade:
+    name: Upgrade from the last release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the panel image from this commit, and the app kept serving
+        run: |
+          docker build \
+            --build-arg VERSION="cluster-${GITHUB_SHA::7}" \
+            --build-arg COMMIT="${GITHUB_SHA::7}" \
+            --build-arg CLI_PLATFORMS="" \
+            -t skifity:local .
+          docker build -t skifity-sample:upgrade test/cluster/sample-app
+
+      - name: Hand both images to k3s before k3s exists
+        run: |
+          sudo mkdir -p /var/lib/rancher/k3s/agent/images
+          docker save skifity:local skifity-sample:upgrade | sudo tee /var/lib/rancher/k3s/agent/images/skifity.tar >/dev/null
+
+      - name: Make the runner a fresh server
+        run: |
+          sudo systemctl stop docker.socket docker.service containerd.service || true
+          sudo iptables -P FORWARD ACCEPT
+
+      - name: Find the newest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" >>"$GITHUB_OUTPUT"
+
+      - name: Install it, upgrade it to this commit, and go back
+        env:
+          UPGRADE_FROM: ${{ inputs.from || steps.release.outputs.tag }}
+        run: |
+          sudo env \
+            KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+            SKIFITY_IMAGE=skifity:local \
+            SKIFITY_ASSUME_YES=1 \
+            UPGRADE_FROM="$UPGRADE_FROM" \
+            bash test/cluster/upgrade.sh
+
+      - name: Collect what the cluster says
+        if: always()
+        run: sudo bash test/cluster/collect.sh "$RUNNER_TEMP/upgrade-report"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: upgrade-report
+          path: ${{ runner.temp }}/upgrade-report
           retention-days: 14

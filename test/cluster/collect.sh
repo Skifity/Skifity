@@ -93,7 +93,7 @@ kube get pods -A --no-headers -l 'job-name' 2>/dev/null | awk '{print $1, $2}' |
 	done
 
 # What Skifity wrote about itself.
-for file in /var/log/skifity-install.log /var/log/skifity-verify.log; do
+for file in /var/log/skifity-install.log /var/log/skifity-verify.log /var/log/skifity-upgrade.log; do
 	[ -f "$file" ] && cp "$file" "$OUT/" 2>/dev/null
 done
 
