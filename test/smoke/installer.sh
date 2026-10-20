@@ -1185,6 +1185,7 @@ run_install() {
       K3S_UNIT_PATH="$UNIT_DIR/k3s.service"
       K3S_TOKEN_PATH="$R/var/lib/rancher/k3s/server/token"
       K3S_MANIFESTS_DIR="$R/var/lib/rancher/k3s/server/manifests"
+      K3S_ETCD_DIR="$R/var/lib/rancher/k3s/server/db/etcd"
       CLI_PATH="$R/usr/local/bin/skifity"
       UNINSTALLER_PATH="$R/usr/local/bin/skifity-uninstall"
       LOCK_DIR="$R/run/skifity-install.lock"
@@ -1301,6 +1302,11 @@ case "$out" in
 *"Upgrading the panel from registry.example.test/skifity:0.0.0-old"*) t_pass "an upgrade says what it is upgrading from" ;;
 *) t_fail "the second run should say it is upgrading the panel" ;;
 esac
+if grep -q "systemctl restart k3s" "$FAKE/stub/calls.log"; then
+  t_fail "a second run restarted k3s although none of its configuration changed"
+else
+  t_pass "a second run that changes none of k3s's configuration leaves k3s running"
+fi
 if grep -q 'value: "wireguard-native"' "$FAKE/stub/applied-panel.yaml" 2>/dev/null; then
   t_pass "a second run tells the panel the pod network k3s was installed with"
 else
@@ -1317,7 +1323,7 @@ fi
 # upgrade_root DIR lays out a server that already runs an older release.
 upgrade_root() {
   fake_root "$1"
-  mkdir -p "$1/var/lib/skifity" "$1/var/lib/rancher/k3s/server" "$1/etc/rancher/k3s"
+  mkdir -p "$1/var/lib/skifity" "$1/var/lib/rancher/k3s/server/db/etcd" "$1/etc/rancher/k3s"
   printf 'the database\n' >"$1/var/lib/skifity/panel.db"
   printf 'K10fake::server:not-a-real-token\n' >"$1/var/lib/rancher/k3s/server/token"
   printf 'apiVersion: v1\n' >"$1/etc/rancher/k3s/k3s.yaml"
@@ -1372,6 +1378,22 @@ case "$out" in
 *) t_fail "the way back should be printed, got:
 $out" ;;
 esac
+
+# A server an earlier release installed has none of what this one writes for
+# k3s at install time: the kubelet's reservations and the etcd snapshot
+# schedule. An upgrade writes them, and k3s reads them only when it starts.
+if [ -s "$UP/etc/rancher/k3s/config.yaml.d/10-skifity-kubelet.yaml" ] &&
+  [ -s "$UP/etc/rancher/k3s/config.yaml.d/20-skifity-etcd.yaml" ]; then
+  t_pass "an upgrade gives k3s the kubelet's reservations and the snapshot schedule a fresh install has"
+else
+  t_fail "an upgrade left k3s without what a fresh install writes: $(ls "$UP/etc/rancher/k3s/config.yaml.d" 2>&1)"
+fi
+restarts=$(grep -c "systemctl restart k3s" "$UP/stub/calls.log" || true)
+if [ "$restarts" = 1 ]; then
+  t_pass "and restarts k3s once for all of it, not once for each file"
+else
+  t_fail "k3s should be restarted exactly once after its configuration changed, was $restarts times"
+fi
 
 # The copy is what going back needs, so an upgrade that cannot take one does
 # not start.

@@ -107,6 +107,9 @@ K3S_UNIT_PATH="$UNIT_DIR/k3s.service"
 K3S_TOKEN_PATH="/var/lib/rancher/k3s/server/token"
 # k3s applies every file here, and applies one again when it changes.
 K3S_MANIFESTS_DIR="/var/lib/rancher/k3s/server/manifests"
+# There when k3s keeps the cluster's state in embedded etcd, which is what this
+# installer starts it with; a k3s installed some other way may use SQLite.
+K3S_ETCD_DIR="/var/lib/rancher/k3s/server/db/etcd"
 # Where the command line tool and the uninstaller go.
 CLI_PATH="/usr/local/bin/skifity"
 UNINSTALLER_PATH="/usr/local/bin/skifity-uninstall"
@@ -1558,7 +1561,8 @@ write_etcd_config() {
 	mkdir -p "$etcd_dir"
 	printf '%s\n' '# Written by Skifity. Do not edit: the installer writes it again.' \
 		'etcd-snapshot-schedule-cron: "0 */6 * * *"' \
-		'etcd-snapshot-retention: 12' >"$etcd_dir/20-skifity-etcd.yaml"
+		'etcd-snapshot-retention: 12' >"$etcd_dir/20-skifity-etcd.yaml.new"
+	replace_k3s_config "$etcd_dir/20-skifity-etcd.yaml" || return 0
 	ok "the cluster's state is snapshotted every six hours, and the last twelve are kept"
 }
 
@@ -1568,8 +1572,37 @@ write_kubelet_config() {
 	kubelet_kb=$(awk '/^MemTotal:/ {print $2}' "$MEMINFO" 2>/dev/null || true)
 	case "$kubelet_kb" in '' | *[!0-9]*) return 0 ;; esac
 	mkdir -p "$kubelet_dir"
-	kubelet_config "$kubelet_kb" >"$kubelet_dir/10-skifity-kubelet.yaml"
+	kubelet_config "$kubelet_kb" >"$kubelet_dir/10-skifity-kubelet.yaml.new"
+	replace_k3s_config "$kubelet_dir/10-skifity-kubelet.yaml" || return 0
 	ok "the node keeps memory back for k3s itself, and evicts a runaway app early"
+}
+
+# replace_k3s_config moves FILE.new over FILE when the two differ, and fails
+# when they do not, so a run that changes nothing says nothing. k3s reads these
+# files only when it starts, so a change is remembered for
+# restart_k3s_if_changed.
+replace_k3s_config() {
+	if cmp -s "$1.new" "$1" 2>/dev/null; then
+		rm -f "$1.new"
+		return 1
+	fi
+	mv "$1.new" "$1"
+	K3S_CONFIG_CHANGED=1
+}
+
+# restart_k3s_if_changed restarts a running k3s once, after any of the files it
+# reads only at start-up has changed: the registry mirror, the kubelet's
+# reservations, the etcd snapshot schedule. On a server installed by an earlier
+# release, which wrote fewer of them, this is what brings it to what a fresh
+# install of this one has. The apps keep running through it — k3s's unit stops
+# its own process and leaves the containers be — and what pauses is the
+# Kubernetes API, for the half a minute k3s takes to come back.
+restart_k3s_if_changed() {
+	[ "${K3S_CONFIG_CHANGED:-0}" = "1" ] || return 0
+	systemctl is-active --quiet k3s 2>/dev/null || return 0
+	note "k3s reads what changed only when it starts, so it is restarted; the apps keep running"
+	with_progress "Restarting k3s" "" systemctl restart k3s ||
+		warn "k3s could not be restarted. Run: systemctl restart k3s"
 }
 
 install_k3s() {
@@ -1579,17 +1612,30 @@ install_k3s() {
 	# one onto a k3s somebody else installed, still has to end up with the
 	# mirror and the ingress configured. Without the mirror no image the panel
 	# builds can ever be pulled, and SKIFITY_SKIP_K3S used to return first.
+	K3S_CONFIG_CHANGED=0
 	configure_registry_mirror
 	configure_ingress
 	pick_pod_network
 
 	if [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
+		if [ "$K3S_CONFIG_CHANGED" = "1" ] && ! systemctl is-active --quiet k3s 2>/dev/null; then
+			# Not ours to start: it was installed some other way.
+			warn "k3s reads $K3S_CONFIG_DIR/registries.yaml only when it starts."
+			note "Restart it the way you started it, or the apps the panel builds cannot be pulled."
+		fi
+		restart_k3s_if_changed
 		note "Skipped installing k3s: --skip-k3s is set"
 		return 0
 	fi
 
 	if have k3s && systemctl is-active --quiet k3s 2>/dev/null; then
 		ok "k3s is already installed and running"
+		# Run again to upgrade, on a server an earlier release installed: what
+		# this release writes for k3s at install time, that one may not have.
+		# The snapshot schedule only means something to embedded etcd.
+		write_kubelet_config
+		[ ! -d "$K3S_ETCD_DIR" ] || write_etcd_config
+		restart_k3s_if_changed
 		return 0
 	fi
 
@@ -1694,23 +1740,10 @@ mirrors:
     endpoint:
       - "http://127.0.0.1:${REGISTRY_NODE_PORT}"
 EOF
-	if cmp -s "$K3S_CONFIG_DIR/registries.yaml.new" "$K3S_CONFIG_DIR/registries.yaml" 2>/dev/null; then
-		rm -f "$K3S_CONFIG_DIR/registries.yaml.new"
-		return 0
-	fi
-	mv "$K3S_CONFIG_DIR/registries.yaml.new" "$K3S_CONFIG_DIR/registries.yaml"
+	# k3s reads this at start-up only: a running k3s is restarted once the
+	# rest of its configuration is written too (restart_k3s_if_changed).
+	replace_k3s_config "$K3S_CONFIG_DIR/registries.yaml" || return 0
 	ok "the container runtime knows where the panel's registry is"
-
-	# k3s reads this at start-up only, so a change to a running node needs a
-	# restart. A fresh install has not started yet and skips this.
-	if systemctl is-active --quiet k3s 2>/dev/null; then
-		note "Restarting k3s so it picks up the registry configuration"
-		systemctl restart k3s >>"$LOG_FILE" 2>&1 || warn "k3s could not be restarted; do it by hand"
-	elif [ "${SKIFITY_SKIP_K3S:-}" = "1" ]; then
-		# Not ours to restart: it was started some other way.
-		warn "k3s reads $K3S_CONFIG_DIR/registries.yaml only when it starts."
-		note "Restart it the way you started it, or the apps the panel builds cannot be pulled."
-	fi
 }
 
 # k3s's load balancer, ServiceLB, hands a visitor to Traefik from an address
