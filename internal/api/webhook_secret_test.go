@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -113,5 +114,22 @@ func TestANewValueKeepsAVariableInTheBuild(t *testing.T) {
 	h.do(acme, http.MethodPut, path, map[string]any{"key": "NEXT_PUBLIC_API_URL", "value": "https://d.example.test", "build_time": false})
 	if buildTime() {
 		t.Fatal("saying so did not take it out of the build")
+	}
+}
+
+// A panel moved to a domain of its own under Settings kept registering its
+// webhooks at the address the installer gave it.
+func TestAWebhookIsDeliveredToThePanelURLInSettings(t *testing.T) {
+	h := newHarness(t)
+	h.api.cfg.PublicURL = "http://10-0-0-5.sslip.io"
+	request := httptest.NewRequest(http.MethodPost, "http://elsewhere.test/api/apps", nil)
+	if got := h.api.webhookURL(request, "gs_1"); got != "http://10-0-0-5.sslip.io/api/webhooks/git/gs_1" {
+		t.Fatalf("with only the installer's address the webhook goes to %q", got)
+	}
+	if err := h.db.SetSetting(t.Context(), settings.KeyPanelURL, "https://panel.acme.test/", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.api.webhookURL(request, "gs_1"); got != "https://panel.acme.test/api/webhooks/git/gs_1" {
+		t.Errorf("with a Panel URL saved the webhook goes to %q, want the saved address", got)
 	}
 }

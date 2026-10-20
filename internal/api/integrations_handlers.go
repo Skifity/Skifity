@@ -209,8 +209,13 @@ func (s *Server) handleDeleteGitSource(w http.ResponseWriter, r *http.Request) {
 	writeOK(w)
 }
 
+// webhookURL is where a Git host delivers a connection's events: the panel's
+// address as Settings → General has it, as invitations and sign-in links use
+// it, else the one the installer gave. Built from the installer's address
+// alone, a panel moved to a domain of its own kept registering webhooks at the
+// old one.
 func (s *Server) webhookURL(r *http.Request, sourceID string) string {
-	base := s.cfg.PublicURL
+	base := s.panelAddress(r.Context())
 	if base == "" {
 		scheme := "https"
 		if r.TLS == nil && s.cfg.DevMode {
