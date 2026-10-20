@@ -80,6 +80,12 @@ func (f Fetcher) Fetch(ctx context.Context, name, urlTemplate string, now time.T
 	for _, url := range attempts {
 		err := f.download(ctx, url, path)
 		if err == nil {
+			// Dated by the clock the freshness check above reads, not by the
+			// filesystem's. They are the same clock in the panel; a test that
+			// passes its own "now" used to compare it with the real time the
+			// file was written, and started failing the week the real date
+			// passed the one written into it.
+			_ = os.Chtimes(path, now, now)
 			return path, nil
 		}
 		lastErr = err
