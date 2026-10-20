@@ -1664,18 +1664,6 @@
         "label": "多久后移除预览环境",
         "help": "拉取请求的预览环境在多少天没有部署后被移除。仍在被推送的预览会一直存在，直到拉取请求关闭。填 0 表示保留到拉取请求关闭 —— 这也是通常的移除方式 —— 但一个始终没有送达的 webhook 会让它永远运行下去。"
       },
-      "dns_api_token": {
-        "label": "DNS API 令牌",
-        "help": "仅限编辑某一个区域记录的令牌。不要使用全局账户密钥。"
-      },
-      "dns_provider": {
-        "label": "DNS 服务商",
-        "help": "让 Skifity 在你添加域名时替你创建 DNS 记录。留空则自行创建。"
-      },
-      "dns_zone": {
-        "label": "DNS 区域",
-        "help": "记录创建在哪个区域。"
-      },
       "domains_acme_email": {
         "label": "Let's Encrypt 邮箱",
         "help": "Let's Encrypt 发送证书到期提醒的地址。签发 HTTPS 证书前必须填写。"

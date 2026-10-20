@@ -22,8 +22,8 @@ You give it a server. It gives you URLs.
 </p>
 
 Skifity turns the servers you rent into a platform for your own apps. Push a Git
-repository and it builds it, deploys it, gives it a URL with a certificate, and
-keeps it running. Add more servers and they become one pool: apps spread across
+repository and it builds it, deploys it, gives it a URL — with a certificate as
+soon as it has a domain of yours — and keeps it running. Add more servers and they become one pool: apps spread across
 them, and an app whose server dies comes back on another.
 
 The panel talks about **Apps**, **Instances**, **Servers**, **Domains** and

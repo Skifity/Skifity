@@ -84,7 +84,7 @@ make verify      The end-to-end check against a real cluster. Installs k3s and
 make e2e         The Playwright interface test, against the real binary.
 make audit       Known vulnerabilities, Go and npm.
 make image       The panel's container image.
-make release     Static binaries for linux and darwin, amd64 and arm64.
+make release     Static binaries for linux, darwin and windows, amd64 and arm64.
 ```
 
 `CGO_ENABLED=0` everywhere: the SQLite driver is pure Go, so a release binary is

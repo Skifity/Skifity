@@ -203,6 +203,12 @@ jobs:
         # the uninstaller is only ever run with --dry-run.
         run: ./test/smoke/installer.sh
 
+      # `make smoke` ran this and CI did not, which is a gate with a hole in it:
+      # the scripts that run on a real cluster parse, refuse what they should,
+      # and send the image where k3s will look for it.
+      - name: Smoke test the crosscheck
+        run: ./test/smoke/verify.sh
+
       - name: Build the container image
         run: |
           docker build \

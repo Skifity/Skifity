@@ -138,7 +138,14 @@ ok "the panel image to install is $SKIFITY_IMAGE"
 
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 say "  this machine has ${MEM_MB} MB of memory"
-[ "$MEM_MB" -ge 1800 ] || no "under 2 GB; the README says 2 GB and this is the first chance to find out whether that is true"
+# The README's minimum is 1 GB and its comfortable size 2 GB. Below the minimum
+# is a machine the README says will not do; between the two is the run that
+# finds out whether the minimum is true, which is worth having, not a failure.
+if [ "$MEM_MB" -lt 900 ]; then
+	no "under 1 GB, which is less than the minimum the README gives"
+elif [ "$MEM_MB" -lt 1800 ]; then
+	say "  that is the README's minimum rather than its comfortable 2 GB, so this run is the check of whether the minimum is true"
+fi
 
 PUBLIC_IP="${SKIFITY_PUBLIC_IP:-$(curl -fsS --max-time 10 https://api.ipify.org || true)}"
 [ -n "$PUBLIC_IP" ] || die "could not work out this machine's public IP; set SKIFITY_PUBLIC_IP"

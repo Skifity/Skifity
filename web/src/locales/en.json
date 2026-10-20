@@ -1684,18 +1684,6 @@
         "label": "Remove preview environments after",
         "help": "Days with no deployment before a pull request's preview environment is removed. A preview that is still being pushed to survives however long the pull request stays open. Set to 0 to keep them until their pull request closes, which is how previews are normally removed — but a webhook that never arrives then leaves one running forever."
       },
-      "dns_api_token": {
-        "label": "DNS API token",
-        "help": "A token scoped to edit records in one zone. Do not use a global account key."
-      },
-      "dns_provider": {
-        "label": "DNS provider",
-        "help": "Lets Skifity create DNS records for you when you add a domain. Leave empty to create them yourself."
-      },
-      "dns_zone": {
-        "label": "DNS zone",
-        "help": "The zone records are created in."
-      },
       "domains_acme_email": {
         "label": "Let's Encrypt email",
         "help": "Where Let's Encrypt sends certificate expiry warnings. Required before HTTPS certificates can be issued."

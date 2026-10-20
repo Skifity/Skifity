@@ -1664,18 +1664,6 @@
         "label": "Hapus environment pratinjau setelah",
         "help": "Jumlah hari tanpa deployment sebelum environment pratinjau sebuah pull request dihapus. Pratinjau yang masih menerima push bertahan selama pull request-nya terbuka. Isi 0 untuk menahannya sampai pull request ditutup — cara normalnya — tetapi webhook yang tidak pernah datang akan membiarkannya berjalan selamanya."
       },
-      "dns_api_token": {
-        "label": "Token API DNS",
-        "help": "Token yang hanya berhak menyunting catatan di satu zona. Jangan memakai kunci akun global."
-      },
-      "dns_provider": {
-        "label": "Penyedia DNS",
-        "help": "Membuat Skifity bisa membuat catatan DNS untuk Anda saat menambah domain. Kosongkan untuk membuatnya sendiri."
-      },
-      "dns_zone": {
-        "label": "Zona DNS",
-        "help": "Zona tempat catatan dibuat."
-      },
       "domains_acme_email": {
         "label": "Email Let's Encrypt",
         "help": "Tujuan peringatan kedaluwarsa sertifikat dari Let's Encrypt. Wajib diisi sebelum sertifikat HTTPS bisa diterbitkan."

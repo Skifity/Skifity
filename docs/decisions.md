@@ -102,8 +102,9 @@ running while it restarts. Documented in `docs/architecture.md`.
 **Decision.** SSE for install progress, build logs, app logs and cluster events.
 
 **Reason.** All of it is server to client. SSE is plain HTTP, reconnects on its own, and passes through
-Traefik and corporate proxies without an upgrade dance. The one bidirectional feature (container exec)
-uses a WebSocket, because it has to.
+Traefik and corporate proxies without an upgrade dance. Nothing in the panel is bidirectional: there
+is no shell into a container (see docs/roadmap.md for why), and the one stream that goes the other way,
+`skifity db connect`, is an HTTP Upgrade to a plain byte stream rather than an event stream.
 
 ---
 
@@ -188,9 +189,10 @@ real interfaces, and keep the cluster-dependent smoke tests as runnable scripts.
 * The SSH provisioning flow is tested against a real in-process SSH server (`golang.org/x/crypto/ssh`)
   that records the commands it receives, so command construction, idempotency and error handling are
   genuinely verified.
-* `test/smoke/` holds two scripts, `panel.sh` and `installer.sh`. Neither touches a cluster: one runs
-  the real binary through first-run setup, sign-in, tokens and the CLI, the other checks the
-  installer's logic without installing anything.
+* `test/smoke/` holds three scripts, `panel.sh`, `installer.sh` and `verify.sh`. None touches a
+  cluster: the first runs the real binary through first-run setup, sign-in, tokens and the CLI, the
+  second checks the installer's logic without installing anything, and the third checks that the
+  scripts which do run on a cluster parse and send the image where k3s will look for it.
 
   This bullet used to say four cluster smoke tests lived there and that `docs/progress.md` recorded
   which had been run. Neither was true — they were never written — and the claim survived because
@@ -790,7 +792,7 @@ nothing once rotated. An image whose cloud-init ignored `ssh_keys` would fail at
 the identity step rather than be trusted — a failure, never a hole. The
 provider interface (`Provider`, in `internal/cloud`) is five nouns — token check,
 catalogue, SSH key, firewall, machine — which DigitalOcean and Vultr both have
-under other names; only Hetzner is implemented. None of this has run against
-Hetzner itself or on a real machine: it is tested against a fake of the API
-built from Hetzner's published reference, with the in-process SSH server as the
-machine (ADR-0010).
+under other names; Hetzner and DigitalOcean are implemented, Vultr is not. None
+of this has run against either provider or on a real machine: each is tested
+against a fake of its API built from the provider's published reference, with
+the in-process SSH server as the machine (ADR-0010).
