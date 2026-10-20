@@ -778,9 +778,32 @@ func (c *Client) WaitForNoPods(ctx context.Context, namespace, name string, time
 	}
 }
 
+// ImagePullError is a rollout that cannot finish because a new instance's
+// image cannot be pulled, for a reason that waiting will not change.
+type ImagePullError struct {
+	Image  string
+	Reason string
+}
+
+func (e *ImagePullError) Error() string {
+	return fmt.Sprintf("the image %s could not be pulled: %s", e.Image, e.Reason)
+}
+
+// pullCheckAfter is how long a rollout runs before its instances are asked
+// whether their image can be pulled at all: long enough for a pull that is
+// merely slow to start, and a pull that cannot work says so on its first try.
+var pullCheckAfter = 30 * time.Second
+
 // WaitForRollout blocks until a Deployment's new revision is fully available.
+//
+// It gives up early, with an ImagePullError, when a new instance's image cannot
+// be pulled for a reason waiting will not change. A name that does not resolve
+// or a tag that does not exist used to be waited on until the rollout timed
+// out — five minutes and more of a deployment that could only ever fail, and a
+// timeout message where the node had said exactly what was wrong.
 func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+	started := time.Now()
+	deadline := started.Add(timeout)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
@@ -789,6 +812,11 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		deployment, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("read the rollout status: %w", err)
+		}
+		if time.Since(started) >= pullCheckAfter {
+			if refused := c.pullRefused(ctx, deployment); refused != nil {
+				return refused
+			}
 		}
 		desired := int32(1)
 		if deployment.Spec.Replicas != nil {
@@ -826,7 +854,73 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 	}
 }
 
-// DeleteApp removes everything an app owns in its namespace.
+// pullRefused reads a rolling Deployment's instances for one whose image,
+// the one the new version runs, cannot be pulled and will not become pullable
+// by waiting.
+func (c *Client) pullRefused(ctx context.Context, deployment *appsv1.Deployment) *ImagePullError {
+	images := map[string]bool{}
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		images[container.Image] = true
+	}
+	for _, container := range deployment.Spec.Template.Spec.InitContainers {
+		images[container.Image] = true
+	}
+	selector := labels.SelectorFromSet(deployment.Spec.Selector.MatchLabels).String()
+	// A list that fails says nothing either way, and the rollout keeps waiting
+	// as it did before there was anything to ask.
+	pods, err := c.clientset.CoreV1().Pods(deployment.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil || pods == nil {
+		pods = &corev1.PodList{}
+	}
+	for _, pod := range pods.Items {
+		statuses := append(append([]corev1.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...)
+		for _, status := range statuses {
+			waiting := status.State.Waiting
+			if waiting == nil || !images[status.Image] {
+				continue
+			}
+			if PermanentPullFailure(waiting.Reason, waiting.Message) {
+				return &ImagePullError{Image: status.Image, Reason: waiting.Message}
+			}
+		}
+	}
+	return nil
+}
+
+// PermanentPullFailure reports whether a container waiting with this reason
+// and message will never get its image by being given longer.
+//
+// Only what the registry or the resolver said for certain counts: the name does
+// not resolve, the image or the tag does not exist, the reference is not one,
+// or the credentials were turned down. A timeout, a rate limit or a reset
+// connection is a pull that may yet work, and is waited on as before.
+func PermanentPullFailure(reason, message string) bool {
+	switch reason {
+	case "InvalidImageName":
+		return true
+	case "ErrImagePull", "ImagePullBackOff":
+	default:
+		return false
+	}
+	message = strings.ToLower(message)
+	for _, transient := range []string{"toomanyrequests", "too many requests", "timeout", "temporary", "connection reset", "connection refused", "eof"} {
+		if strings.Contains(message, transient) {
+			return false
+		}
+	}
+	for _, permanent := range []string{
+		"not found", "no such host", "manifest unknown", "name unknown", "repository does not exist",
+		"unauthorized", "authentication required", "access denied", "denied:", "403 forbidden",
+		"invalid reference format",
+	} {
+		if strings.Contains(message, permanent) {
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteApp removes everything an app owns in its namespace.// DeleteApp removes everything an app owns in its namespace.
 func (c *Client) DeleteApp(ctx context.Context, namespace, appSlug string) error {
 	// Ordered so that traffic stops before the workload does.
 	for _, target := range []struct {

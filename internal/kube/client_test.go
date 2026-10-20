@@ -301,6 +301,81 @@ func TestWaitForRolloutWaitsForObservedGeneration(t *testing.T) {
 	}
 }
 
+func TestAPullThatCanNeverWorkIsNotWaitedOn(t *testing.T) {
+	for _, c := range []struct {
+		reason, message string
+		permanent       bool
+	}{
+		{"ErrImagePull", `failed to pull and unpack image "example.invalid/nothing:0": dial tcp: lookup example.invalid: no such host`, true},
+		{"ImagePullBackOff", `Back-off pulling image "ghcr.io/acme/web:v9": ghcr.io/acme/web:v9: not found`, true},
+		{"ErrImagePull", `rpc error: code = Unknown desc = failed to resolve reference: unexpected status 401 Unauthorized`, true},
+		{"ErrImagePull", `pull access denied, repository does not exist or may require authorization`, true},
+		{"InvalidImageName", `Failed to apply default image tag "Web:Latest": couldn't parse image name`, true},
+
+		{"ErrImagePull", `toomanyrequests: You have reached your pull rate limit`, false},
+		{"ErrImagePull", `dial tcp 104.18.123.25:443: i/o timeout`, false},
+		{"ImagePullBackOff", `failed to copy: read tcp: connection reset by peer`, false},
+		{"CrashLoopBackOff", `back-off 5m0s restarting failed container: not found`, false},
+	} {
+		if got := PermanentPullFailure(c.reason, c.message); got != c.permanent {
+			t.Errorf("PermanentPullFailure(%s, %q) = %v, want %v", c.reason, c.message, got, c.permanent)
+		}
+	}
+}
+
+// The first real cluster this ran on waited five minutes for an image whose
+// registry did not exist, and called it a version that "did not start".
+func TestWaitForRolloutGivesUpOnAnImageThatCannotBePulled(t *testing.T) {
+	previous := pullCheckAfter
+	pullCheckAfter = 0
+	t.Cleanup(func() { pullCheckAfter = previous })
+
+	labels := map[string]string{"app.kubernetes.io/name": "web"}
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns", Generation: 2},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr(int32(1)),
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "web", Image: "example.invalid/nothing:0"}},
+			}},
+		},
+		Status: appsv1.DeploymentStatus{ObservedGeneration: 2},
+	}
+	pod := func(message string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-1", Namespace: "ns", Labels: labels},
+			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+				Name: "web", Image: "example.invalid/nothing:0",
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+					Reason: "ErrImagePull", Message: message,
+				}},
+			}}},
+		}
+	}
+
+	c := &Client{clientset: fake.NewSimpleClientset(deployment, pod("dial tcp: lookup example.invalid: no such host")), systemNamespace: "skifity-system"}
+	started := time.Now()
+	err := c.WaitForRollout(t.Context(), "ns", "web", time.Minute)
+	var pull *ImagePullError
+	if !errors.As(err, &pull) {
+		t.Fatalf("the rollout ended with %v, want an ImagePullError", err)
+	}
+	if pull.Image != "example.invalid/nothing:0" || !strings.Contains(pull.Reason, "no such host") {
+		t.Errorf("the error names %q and says %q", pull.Image, pull.Reason)
+	}
+	if time.Since(started) > 10*time.Second {
+		t.Errorf("it took %s to give up on an image that can never be pulled", time.Since(started))
+	}
+
+	// A rate limit is a pull that may yet work, and is waited on.
+	c = &Client{clientset: fake.NewSimpleClientset(deployment, pod("toomanyrequests: rate limit")), systemNamespace: "skifity-system"}
+	err = c.WaitForRollout(t.Context(), "ns", "web", 3*time.Second)
+	if err == nil || errors.As(err, &pull) {
+		t.Errorf("a rate-limited pull was given up on as permanent: %v", err)
+	}
+}
+
 func TestDescribeNodeReadsRolesAndAddresses(t *testing.T) {
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{

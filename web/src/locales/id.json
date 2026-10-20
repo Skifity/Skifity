@@ -2232,7 +2232,7 @@
         "title": "Image tidak bisa ditarik",
         "cause": "Menarik {{0}} gagal: {{1}}",
         "impact": "Instance baru tidak bisa mulai. Versi sebelumnya masih jalan.",
-        "fix": "Kalau ini image privat, tambahkan kredensial registry di Pengaturan. Kalau ini hasil build internal, registry di dalam cluster mungkin tidak terjangkau dari node ini: pastikan node-nya sudah bergabung ke jaringan cluster."
+        "fix": "Periksa dulu nama dan tag image-nya: nama yang tidak dikenali dan tag yang tidak ada sama-sama berakhir di sini. Kalau ini image privat, tambahkan kredensial registry di Pengaturan. Kalau ini hasil build internal, registry di dalam cluster mungkin tidak terjangkau dari node ini: pastikan node-nya sudah bergabung ke jaringan cluster."
       },
       "deploy_interrupted": {
         "title": "Panel dimulai ulang dua kali selama deployment ini",

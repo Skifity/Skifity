@@ -1227,7 +1227,7 @@ func ImagePullFailed(image, reason string) *Problem {
 	return New("deploy.image_pull_failed", "The image could not be pulled").
 		WithCause("Pulling %s failed: %s", image, reason).
 		WithImpact("The new instances cannot start. The previous version is still running.").
-		WithFix("If this is a private image, add the registry credentials in Settings. If it is an internal build, the in-cluster registry may not be reachable from this node: check that the node joined the cluster network.").
+		WithFix("Check the image's name and tag first: a name that does not resolve and a tag that does not exist both end here. If this is a private image, add the registry credentials in Settings. If it is an internal build, the in-cluster registry may not be reachable from this node: check that the node joined the cluster network.").
 		WithStatus(http.StatusBadGateway).
 		Retry().
 		With("image", image)

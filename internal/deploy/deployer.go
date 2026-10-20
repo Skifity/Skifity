@@ -486,6 +486,13 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 			d.appendLog(ctx, deployment.ID, "The panel lost its connection to the cluster while waiting for the new version: "+err.Error())
 			return nil, errdoc.ClusterUnreachable(err)
 		}
+		// Said as what it is, as soon as it is certain, rather than five minutes
+		// later as a version that "did not start".
+		var pull *kube.ImagePullError
+		if errors.As(err, &pull) {
+			d.appendLog(ctx, deployment.ID, "The new version's image cannot be pulled: "+pull.Reason)
+			return nil, errdoc.ImagePullFailed(pull.Image, pull.Reason)
+		}
 		ready, wanted := 0, int(spec.DesiredReplicas())
 		reason := err.Error()
 		if statusErr == nil {
