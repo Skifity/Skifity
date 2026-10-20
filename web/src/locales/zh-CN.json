@@ -2046,7 +2046,7 @@
         "title": "构建没有启动",
         "cause": "五分钟内没有任何构建 Pod 就绪。",
         "impact": "既没有构建，也没有部署。",
-        "fix": "检查集群还有没有空闲的 CPU 和内存，以及构建组件是否在运行。"
+        "fix": "检查集群还有没有空闲的 CPU 和内存，以及构建所需的镜像能否拉取：kubectl -n skifity-builds describe pod 会说明是哪一种情况。"
       },
       "build_timeout": {
         "title": "构建太久，已被中止",

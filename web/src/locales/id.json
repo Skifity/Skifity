@@ -2046,7 +2046,7 @@
         "title": "Build tidak jadi dimulai",
         "cause": "Tidak ada pod build yang siap dalam lima menit.",
         "impact": "Tidak ada yang di-build atau dideploy.",
-        "fix": "Pastikan cluster masih punya CPU dan memori tersisa, dan komponen builder-nya berjalan."
+        "fix": "Pastikan cluster masih punya CPU dan memori tersisa, dan image build dapat ditarik: kubectl -n skifity-builds describe pod menunjukkan yang mana dari keduanya."
       },
       "build_timeout": {
         "title": "Build terlalu lama dan dihentikan",

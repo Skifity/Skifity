@@ -361,7 +361,7 @@ func buildNotStarted() *errdoc.Problem {
 	return errdoc.New("build.pod_not_started", "The build did not start").
 		WithCause("No build pod became ready within five minutes.").
 		WithImpact("Nothing was built or deployed.").
-		WithFix("Check that the cluster has free CPU and memory, and that the builder component is running.").
+		WithFix("Check that the cluster has free CPU and memory, and that the build's images can be pulled: kubectl -n skifity-builds describe pod says which of the two it is.").
 		Retry()
 }
 

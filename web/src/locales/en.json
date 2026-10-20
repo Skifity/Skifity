@@ -2066,7 +2066,7 @@
         "title": "The build did not start",
         "cause": "No build pod became ready within five minutes.",
         "impact": "Nothing was built or deployed.",
-        "fix": "Check that the cluster has free CPU and memory, and that the builder component is running."
+        "fix": "Check that the cluster has free CPU and memory, and that the build's images can be pulled: kubectl -n skifity-builds describe pod says which of the two it is."
       },
       "build_timeout": {
         "title": "The build took too long and was stopped",
