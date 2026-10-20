@@ -450,6 +450,55 @@ else
 	no "$MISSES of $((HITS + MISSES)) requests failed during a rolling restart. maxUnavailable: 0 keeps the capacity; the preStop pause is what stops a proxy sending to a pod that has begun shutting down. $(sort /tmp/skifity-zero-downtime.txt | uniq -c | tr '\n' ' ')"
 fi
 
+step "Switching autoscaling on keeps the instances there are"
+
+# Phase 111 found Kubernetes dropping an app to one instance for a moment when
+# autoscaling was switched on: the panel stops writing the size, and a field
+# nobody owns defaults to one. The size is sampled while it is switched on, and
+# the smallest it ever was is the answer.
+(
+	for _ in $(seq 1 60); do
+		kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.replicas}' 2>/dev/null || printf '?'
+		echo
+		sleep 0.5
+	done
+) >/tmp/skifity-autoscale-sizes.txt &
+SAMPLER=$!
+sleep 2
+api PUT "/api/apps/$APP_ID/scaling" '{"autoscale":true,"min_replicas":2,"max_replicas":4,"cpu_target":80}' >/dev/null \
+	|| no "autoscaling could not be switched on"
+wait "$SAMPLER" || true
+SMALLEST=$(grep -E '^[0-9]+$' /tmp/skifity-autoscale-sizes.txt | sort -n | head -1)
+if [ "${SMALLEST:-0}" -ge 2 ] 2>/dev/null; then
+	ok "the app kept its two instances while autoscaling took over (the smallest it was is $SMALLEST)"
+else
+	no "the app went down to ${SMALLEST:-nothing} instances when autoscaling was switched on. Sizes seen: $(sort /tmp/skifity-autoscale-sizes.txt | uniq -c | tr '\n' ' ')"
+fi
+if kubectl -n "$NAMESPACE" get hpa hello-hpa >/dev/null 2>&1; then
+	ok "a HorizontalPodAutoscaler owns the app's size"
+	CPU_NOW=""
+	for _ in $(seq 1 24); do
+		CPU_NOW=$(kubectl -n "$NAMESPACE" get hpa hello-hpa -o jsonpath='{.status.currentMetrics[0].resource.current.averageUtilization}' 2>/dev/null || true)
+		[ -n "$CPU_NOW" ] && break
+		sleep 5
+	done
+	[ -n "$CPU_NOW" ] \
+		&& ok "the autoscaler reads the app's CPU use ($CPU_NOW% of what it asked for)" \
+		|| no "the autoscaler has no reading of the app's CPU after two minutes; metrics-server is what supplies it"
+else
+	no "autoscaling was switched on and no HorizontalPodAutoscaler exists"
+fi
+# Back to a fixed size, so what follows starts from a known one.
+api PUT "/api/apps/$APP_ID/scaling" '{"replicas":2,"autoscale":false}' >/dev/null
+for _ in $(seq 1 30); do
+	[ "$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.replicas}' 2>/dev/null)" = "2" ] \
+		&& ! kubectl -n "$NAMESPACE" get hpa hello-hpa >/dev/null 2>&1 && break
+	sleep 2
+done
+kubectl -n "$NAMESPACE" get hpa hello-hpa >/dev/null 2>&1 \
+	&& no "the autoscaler was left behind after autoscaling was switched off" \
+	|| ok "switching autoscaling off removes the autoscaler and leaves the size the panel's"
+
 step "A folder with no repository (ADR-0022)"
 
 # The same sample app, sent as `skifity up` sends it rather than cloned. The
@@ -630,9 +679,17 @@ phase "Phase 3 — what one tenant cannot do to another"
 
 step "One team cannot see another's (checklist 12)"
 
-OTHER_TEAM=$(api POST /api/teams '{"name":"Other"}' | pick id 2>/dev/null || echo "")
+# Made signed in, the way a person makes one: a token issued for one team is
+# refused when it asks for another team to be created, on purpose, and that
+# refusal is not what this check is about.
+OTHER_TEAM=$(curl -fsS -b "$COOKIE" -H "X-Skifity-CSRF: $CSRF" -H 'Content-Type: application/json' \
+	-X POST "$PANEL/api/teams" -d '{"name":"Other"}' | pick id 2>/dev/null || echo "")
+CODE=$(api_code POST /api/teams '{"name":"By token"}')
+[ "$CODE" = "403" ] \
+	&& ok "a token issued for one team cannot create another" \
+	|| no "a token issued for one team answered $CODE when asked to create a team; it should be 403"
 if [ -z "$OTHER_TEAM" ]; then
-	skip "the cross-team check" "a second team could not be created"
+	skip "the cross-team check" "a second team could not be created while signed in"
 else
 	# The token was issued for the first team. A token bound to one team is
 	# supposed to be useless against another, even for its own owner.
@@ -696,6 +753,47 @@ else
 fi
 kubectl delete namespace "$OTHER_NS" --wait=false >/dev/null 2>&1 || true
 
+step "An app cannot reach the machine it runs on, or the registry"
+
+# What the egress policy is for: a tenant's pod reaching the Kubernetes API,
+# the kubelet, the registry's NodePort on the node, or the registry itself,
+# where every team's images are. The probe runs in the app's own namespace,
+# under its policies and its pod security profile, and every one of these has
+# to fail at the network: an HTTP answer of any kind, a 401 included, means the
+# packet got there.
+EGRESS_NODE=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+if [ -z "$EGRESS_NODE" ]; then
+	skip "the egress check" "the node reports no internal address to aim at"
+else
+	EGRESS_SCRIPT="for target in https://$EGRESS_NODE:6443/version https://$EGRESS_NODE:10250/pods http://$EGRESS_NODE:30500/v2/ http://skifity-registry.skifity-builds.svc.cluster.local:5000/v2/ https://kubernetes.default.svc/version; do if curl -sk -o /dev/null --max-time 6 \"\$target\"; then echo \"reached \$target\"; else echo \"refused \$target\"; fi; done"
+	EGRESS_OVERRIDES=$(python3 - "$EGRESS_SCRIPT" <<'PYEOF'
+import json, sys
+print(json.dumps({"spec": {
+    "securityContext": {"runAsNonRoot": True, "runAsUser": 100, "seccompProfile": {"type": "RuntimeDefault"}},
+    "containers": [{
+        "name": "verify-egress",
+        "image": "curlimages/curl:8.11.1",
+        "command": ["sh", "-c", sys.argv[1]],
+        # `kubectl run -i` attaches to the container's stdin, and the merge
+        # replaces the container kubectl would have made with this one.
+        "stdin": True, "stdinOnce": True,
+        "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
+    }],
+}}))
+PYEOF
+)
+	EGRESS_OUT=$(kubectl -n "$NAMESPACE" run verify-egress --rm -i --quiet --restart=Never --timeout=180s \
+		--image=curlimages/curl:8.11.1 --overrides="$EGRESS_OVERRIDES" 2>&1 || true)
+	say "$(printf '%s\n' "$EGRESS_OUT" | sed 's/^/    /')"
+	if ! printf '%s' "$EGRESS_OUT" | grep -q '^refused \|^reached '; then
+		no "the probe did not run in the app's namespace, so the egress policy could not be checked: ${EGRESS_OUT:-no output}"
+	elif printf '%s' "$EGRESS_OUT" | grep -q '^reached '; then
+		no "a pod in an app's namespace reached $(printf '%s' "$EGRESS_OUT" | grep '^reached ' | cut -d' ' -f2 | tr '\n' ' '). The egress policy (internal/kube/egress.go) is what is supposed to stop it."
+	else
+		ok "an app's pod reaches neither the Kubernetes API, the kubelet, the registry's port on the node, nor the registry"
+	fi
+fi
+
 step "A quota is a real ceiling (checklist 13)"
 
 QUOTA=$(api GET "/api/environments/$ENV_ID/quota" 2>/dev/null || echo "{}")
@@ -713,8 +811,36 @@ kubectl -n "$NAMESPACE" get limitrange defaults >/dev/null 2>&1 \
 
 # And it has to be a ceiling rather than a label. Asking for 64 cores in an
 # environment allowed 8 must be refused by the cluster, not queued forever.
-kubectl -n "$NAMESPACE" create deployment quota-probe --image=registry.k8s.io/pause:3.10 >/dev/null 2>&1
-kubectl -n "$NAMESPACE" set resources deployment/quota-probe --requests=cpu=64,memory=64Gi >/dev/null 2>&1
+# A pod the namespace's pod security profile admits, so that what turns it down
+# is the quota and not the profile: a bare `kubectl create deployment` is
+# refused by "restricted" before the quota is ever asked.
+kubectl -n "$NAMESPACE" apply -f - >/dev/null 2>&1 <<YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quota-probe
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: quota-probe}
+  template:
+    metadata:
+      labels: {app: quota-probe}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests: {cpu: "64", memory: 64Gi}
+            limits: {cpu: "64", memory: 64Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+YAML
 sleep 10
 QUOTA_SAID=$(kubectl -n "$NAMESPACE" get deploy quota-probe -o jsonpath='{.status.conditions[?(@.type=="ReplicaFailure")].message}' 2>/dev/null || true)
 case "$QUOTA_SAID" in
@@ -734,7 +860,7 @@ phase "Phase 4 — what survives the panel"
 step "The apps keep serving with the panel switched off (checklist 14)"
 
 if [ -z "$APP_HOST" ]; then
-	skip "the panel-down check" "phase 1 did not run, so there is no app to keep serving"
+	skip "the panel-down check" "phase 1 did not run or the app was given no address, so there is no app to keep serving"
 else
 	kubectl -n "$PANEL_NS" scale deploy skifity-panel --replicas=0 >/dev/null
 	for _ in $(seq 1 24); do
@@ -803,10 +929,24 @@ if [ -n "$APP_ID" ]; then
 	api GET "/api/apps/$APP_ID/logs?tail=20" 2>/dev/null | head -c 200 >/dev/null \
 		&& ok "an app's own logs can be read through the panel" \
 		|| no "the app's logs could not be read"
-	STATUS=$(api GET "/api/apps/$APP_ID/status" 2>/dev/null || echo "{}")
-	printf '%s' "$STATUS" | grep -q "cpu_used_m" \
+	# metrics-server reports a pod once it has scraped it at least once, which
+	# is up to a minute after the pod started.
+	KNOWN=no
+	for _ in $(seq 1 18); do
+		KNOWN=$(api GET "/api/apps/$APP_ID/status" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    status = json.load(sys.stdin)
+except Exception:
+    print("no"); sys.exit()
+print("yes" if any(i.get("usage_known") for i in status.get("instances") or []) else "no")
+' 2>/dev/null || echo no)
+		[ "$KNOWN" = "yes" ] && break
+		sleep 10
+	done
+	[ "$KNOWN" = "yes" ] \
 		&& ok "each instance reports what it is using, not only what it reserved" \
-		|| no "the app's status carries no per-instance usage; metrics-server may not be answering"
+		|| no "no instance of the app reports what it is using after three minutes; metrics-server may not be answering"
 fi
 api GET /api/metrics 2>/dev/null | grep -q "^skifity_" \
 	&& ok "the panel serves its own Prometheus metrics, behind the same authentication as everything else" \
@@ -818,7 +958,7 @@ UP=$(api GET /api/upgrade 2>/dev/null || echo "{}")
 CURRENT=$(printf '%s' "$UP" | pick current_version 2>/dev/null || echo "")
 say "  the panel reports version ${CURRENT:-unknown}"
 if [ -z "$APP_HOST" ]; then
-	skip "the upgrade check" "phase 1 did not run, so there is no app to keep serving through it"
+	skip "the upgrade check" "phase 1 did not run or the app was given no address, so there is no app to keep serving through it"
 else
 	UP_FAILS=0
 	(
@@ -887,7 +1027,10 @@ JSON
 			'{"name":"broken","source_type":"image","image":"example.invalid/nothing:0","port":8080,"deploy":true}' \
 			| pick app.id 2>/dev/null || echo "")
 		if [ -n "$BROKEN" ]; then
-			for _ in $(seq 1 60); do
+			# Long enough for the deployment to be given up on: the first run
+			# on a real cluster sent this one five seconds after a five-minute
+			# wait had ended.
+			for _ in $(seq 1 120); do
 				[ -s "$HOOK_LOG" ] && break
 				sleep 5
 			done
