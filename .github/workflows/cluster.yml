@@ -136,6 +136,69 @@ jobs:
             echo "ACME_ADDRESS=${address}"
           } >>"$GITHUB_ENV"
 
+      # Somewhere for phase 5's notifications to arrive besides a webhook, on
+      # this server's address as a team's own servers would be, each read
+      # back through its own API: Mailpit, a mail server that keeps what it
+      # is sent; ntfy, refusing anybody without a token; and Gotify, which
+      # takes an application's token and is read with a client's.
+      - name: Start the services notifications go to
+        run: |
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          mkdir -p /tmp/notify
+          cd /tmp/notify
+          healthy() {
+            for _ in $(seq 1 30); do
+              curl -fs -o /dev/null "$1" && return 0
+              sleep 1
+            done
+            cat "$2"
+            return 1
+          }
+
+          curl -fsSL -o mailpit.tar.gz \
+            https://github.com/axllent/mailpit/releases/download/v1.31.6/mailpit-linux-amd64.tar.gz
+          tar -xzf mailpit.tar.gz mailpit
+          nohup ./mailpit --smtp 0.0.0.0:1025 --listen 0.0.0.0:8025 --disable-version-check \
+            >/tmp/mailpit.log 2>&1 &
+          healthy http://127.0.0.1:8025/api/v1/messages /tmp/mailpit.log
+
+          curl -fsSL -o ntfy.tar.gz \
+            https://github.com/binwiederhier/ntfy/releases/download/v2.32.0/ntfy_2.32.0_linux_amd64.tar.gz
+          tar -xzf ntfy.tar.gz --strip-components=1 ntfy_2.32.0_linux_amd64/ntfy
+          export NTFY_AUTH_FILE=/tmp/notify/ntfy-users.db NTFY_AUTH_DEFAULT_ACCESS=deny-all
+          nohup ./ntfy serve --listen-http :8090 --cache-file /tmp/notify/ntfy-cache.db >/tmp/ntfy.log 2>&1 &
+          healthy http://127.0.0.1:8090/v1/health /tmp/ntfy.log
+          NTFY_PASSWORD=not-a-real-password ./ntfy user add --role=admin crosscheck
+          ntfy_token=$(./ntfy token add crosscheck | grep -oE 'tk_[A-Za-z0-9]+')
+
+          curl -fsSL -o gotify.zip https://github.com/gotify/server/releases/download/v3.1.1/gotify-linux-amd64.zip
+          unzip -q gotify.zip gotify-linux-amd64
+          GOTIFY_SERVER_PORT=8070 GOTIFY_DATABASE_DIALECT=sqlite3 GOTIFY_DATABASE_CONNECTION=/tmp/notify/gotify.db \
+            GOTIFY_DEFAULTUSER_NAME=admin GOTIFY_DEFAULTUSER_PASS=not-a-real-password \
+            GOTIFY_UPLOADEDIMAGESDIR=/tmp/notify/gotify-images GOTIFY_PLUGINSDIR=/tmp/notify/gotify-plugins \
+            nohup ./gotify-linux-amd64 serve >/tmp/gotify.log 2>&1 &
+          healthy http://127.0.0.1:8070/health /tmp/gotify.log
+          gotify() {
+            curl -fsS -u admin:not-a-real-password -X POST "http://127.0.0.1:8070/$1" \
+              -H 'Content-Type: application/json' -d "{\"name\":\"$2\"}" | jq -r '.token // empty'
+          }
+          gotify_app=$(gotify application Skifity)
+          gotify_client=$(gotify client "The crosscheck")
+
+          if [ -z "$ntfy_token" ] || [ -z "$gotify_app" ] || [ -z "$gotify_client" ]; then
+            echo "ntfy or Gotify did not hand out a token" >&2
+            exit 1
+          fi
+          {
+            echo "SMTP_SERVER=${address}:1025"
+            echo "MAILPIT=http://127.0.0.1:8025"
+            echo "NTFY_SERVER=http://${address}:8090"
+            echo "NTFY_TOKEN=${ntfy_token}"
+            echo "GOTIFY_SERVER=http://${address}:8070"
+            echo "GOTIFY_TOKEN=${gotify_app}"
+            echo "GOTIFY_CLIENT_TOKEN=${gotify_client}"
+          } >>"$GITHUB_ENV"
+
       # Let's Encrypt's staging server for the panel's own address: nothing on
       # the internet can reach this runner, so no certificate will be issued
       # for it, and the production server is not the place to fail a challenge
@@ -161,6 +224,13 @@ jobs:
             VERIFY_ACME_CA=/tmp/pebble/ca.pem \
             VERIFY_ACME_ADDRESS="$ACME_ADDRESS" \
             VERIFY_ACME_ROOT=https://127.0.0.1:15000/roots/0 \
+            VERIFY_SMTP_SERVER="$SMTP_SERVER" \
+            VERIFY_MAILPIT="$MAILPIT" \
+            VERIFY_NTFY_SERVER="$NTFY_SERVER" \
+            VERIFY_NTFY_TOKEN="$NTFY_TOKEN" \
+            VERIFY_GOTIFY_SERVER="$GOTIFY_SERVER" \
+            VERIFY_GOTIFY_TOKEN="$GOTIFY_TOKEN" \
+            VERIFY_GOTIFY_CLIENT_TOKEN="$GOTIFY_CLIENT_TOKEN" \
             bash test/cluster/verify.sh
 
       - name: Collect what the cluster says

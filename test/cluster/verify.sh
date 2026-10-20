@@ -88,6 +88,22 @@ REPORT="/var/log/skifity-verify.log"
 : "${VERIFY_ACME_CA:=}"
 : "${VERIFY_ACME_ADDRESS:=}"
 : "${VERIFY_ACME_ROOT:=}"
+# Somewhere for notifications to arrive besides a webhook, each read back
+# through its own API rather than taken on the panel's word. Email goes
+# through the panel's Email settings to VERIFY_SMTP_SERVER, a host:port that
+# takes mail without signing in, and is read back from the Mailpit at
+# VERIFY_MAILPIT; a password reset goes the same way. ntfy is a server at
+# VERIFY_NTFY_SERVER that refuses anybody without the token in
+# VERIFY_NTFY_TOKEN. Gotify is a server at VERIFY_GOTIFY_SERVER, pushed to with
+# the application token in VERIFY_GOTIFY_TOKEN and read with the client token
+# in VERIFY_GOTIFY_CLIENT_TOKEN. Each one missing skips its own checks.
+: "${VERIFY_SMTP_SERVER:=}"
+: "${VERIFY_MAILPIT:=}"
+: "${VERIFY_NTFY_SERVER:=}"
+: "${VERIFY_NTFY_TOKEN:=}"
+: "${VERIFY_GOTIFY_SERVER:=}"
+: "${VERIFY_GOTIFY_TOKEN:=}"
+: "${VERIFY_GOTIFY_CLIENT_TOKEN:=}"
 
 PASS=0
 FAIL=0
@@ -355,6 +371,44 @@ engine_get() {
 	mongodb) engine_client "$1" "print((db.verify_restore.findOne() || {}).value)" ;;
 	redis | valkey) engine_client "$1" "get verify_restore" ;;
 	esac | tr -d '[:space:]'
+}
+
+# mail_text ADDRESS SUBJECT prints the text of the newest mail the Mailpit at
+# VERIFY_MAILPIT holds for ADDRESS with SUBJECT in its subject, and nothing
+# while it holds none; mail_has says whether there is one.
+mail_text() {
+	local id
+	id=$(curl -fsS "$VERIFY_MAILPIT/api/v1/messages?limit=200" 2>/dev/null | python3 -c '
+import json, sys
+for message in json.load(sys.stdin).get("messages") or []:
+    to = [address.get("Address") for address in message.get("To") or []]
+    if sys.argv[1] in to and sys.argv[2] in message.get("Subject", ""):
+        print(message["ID"])
+        break
+' "$1" "$2" 2>/dev/null || true)
+	[ -n "$id" ] || return 0
+	curl -fsS "$VERIFY_MAILPIT/api/v1/message/$id" 2>/dev/null | pick Text 2>/dev/null || true
+}
+mail_has() { [ -n "$(mail_text "$1" "$2")" ]; }
+
+# ntfy_has TOPIC TITLE and gotify_has TITLE say whether the server holds a
+# message with that title, read with the server's own credentials: what is
+# checked is what arrived, not that the panel said it sent something.
+ntfy_has() {
+	curl -fsS -H "Authorization: Bearer $VERIFY_NTFY_TOKEN" "$VERIFY_NTFY_SERVER/$1/json?poll=1" 2>/dev/null |
+		python3 -c '
+import json, sys
+titles = [json.loads(line).get("title") for line in sys.stdin if line.strip()]
+sys.exit(0 if sys.argv[1] in titles else 1)
+' "$2"
+}
+gotify_has() {
+	curl -fsS -H "X-Gotify-Key: $VERIFY_GOTIFY_CLIENT_TOKEN" "$VERIFY_GOTIFY_SERVER/message?limit=200" 2>/dev/null |
+		python3 -c '
+import json, sys
+titles = [message.get("title") for message in json.load(sys.stdin).get("messages") or []]
+sys.exit(0 if sys.argv[1] in titles else 1)
+' "$1"
 }
 
 api GET /api/health >/dev/null || die "the panel's own health endpoint does not answer"
@@ -1760,9 +1814,96 @@ JSON
 		[ -s "$HOOK_LOG" ] \
 			&& ok "a test notification arrived at the webhook" \
 			|| no "the test notification never arrived. The panel dials out through internal/netguard, which refuses loopback and the metadata service; $NODE_IP is a private address and should be allowed."
+	fi
 
-		# And a real failure, which is the one that matters.
+	# The services people read, each on a server of its own and read back
+	# through that server's API. Each channel hears only of a failed deploy,
+	# which is the one sent below.
+	TEST_TITLE="Skifity test notification"
+	NTFY_TOPIC="skifity-crosscheck"
+	MAIL_CHANNEL="" NTFY_CHANNEL="" GOTIFY_CHANNEL=""
+	if [ -z "$VERIFY_SMTP_SERVER" ] || [ -z "$VERIFY_MAILPIT" ]; then
+		skip "email notifications" "no mail server was given. Set VERIFY_SMTP_SERVER and VERIFY_MAILPIT"
+	elif ! api PUT /api/settings "$(cat <<JSON
+{"values":{"email.smtp_host":"${VERIFY_SMTP_SERVER%:*}","email.smtp_port":"${VERIFY_SMTP_SERVER##*:}",
+ "email.smtp_tls":"false","email.smtp_from":"skifity@example.test"}}
+JSON
+)" >/dev/null; then
+		no "the panel's Email settings were refused"
+	else
+		MAIL_SET=1
+		# A channel that names only who it goes to, which takes the server
+		# from the panel's Email settings.
+		MAIL_CHANNEL=$(api POST "/api/teams/$TEAM_ID/notifications" \
+			'{"kind":"email","name":"verify-email","config":{"to":"ops@example.test"},"events":["deploy.failed"]}' \
+			| pick id 2>/dev/null || echo "")
+		if [ -z "$MAIL_CHANNEL" ]; then
+			no "an email notification channel could not be created"
+		else
+			CODE=$(api_code POST "/api/teams/$TEAM_ID/notifications/$MAIL_CHANNEL/test")
+			for _ in $(seq 1 15); do
+				mail_has ops@example.test "$TEST_TITLE" && break
+				sleep 2
+			done
+			mail_has ops@example.test "$TEST_TITLE" \
+				&& ok "a test email arrived at the mail server under Settings → Email" \
+				|| no "the test email never arrived (the panel answered $CODE); see the panel's log for what the mail server said"
+		fi
+	fi
+	if [ -z "$VERIFY_NTFY_SERVER" ] || [ -z "$VERIFY_NTFY_TOKEN" ]; then
+		skip "ntfy notifications" "no ntfy server was given. Set VERIFY_NTFY_SERVER and VERIFY_NTFY_TOKEN"
+	else
+		NTFY_CHANNEL=$(api POST "/api/teams/$TEAM_ID/notifications" "$(cat <<JSON
+{"kind":"ntfy","name":"verify-ntfy","events":["deploy.failed"],
+ "config":{"server":"$VERIFY_NTFY_SERVER","topic":"$NTFY_TOPIC","token":"$VERIFY_NTFY_TOKEN"}}
+JSON
+)" | pick id 2>/dev/null || echo "")
+		if [ -z "$NTFY_CHANNEL" ]; then
+			no "an ntfy notification channel could not be created"
+		else
+			CODE=$(api_code POST "/api/teams/$TEAM_ID/notifications/$NTFY_CHANNEL/test")
+			ntfy_has "$NTFY_TOPIC" "$TEST_TITLE" \
+				&& ok "a test notification arrived at an ntfy server that takes nobody without a token" \
+				|| no "the test notification never arrived at ntfy (the panel answered $CODE)"
+		fi
+	fi
+	if [ -z "$VERIFY_GOTIFY_SERVER" ] || [ -z "$VERIFY_GOTIFY_TOKEN" ] || [ -z "$VERIFY_GOTIFY_CLIENT_TOKEN" ]; then
+		skip "Gotify notifications" "no Gotify server was given. Set VERIFY_GOTIFY_SERVER, VERIFY_GOTIFY_TOKEN and VERIFY_GOTIFY_CLIENT_TOKEN"
+	else
+		GOTIFY_CHANNEL=$(api POST "/api/teams/$TEAM_ID/notifications" "$(cat <<JSON
+{"kind":"gotify","name":"verify-gotify","events":["deploy.failed"],
+ "config":{"server":"$VERIFY_GOTIFY_SERVER","app_token":"$VERIFY_GOTIFY_TOKEN"}}
+JSON
+)" | pick id 2>/dev/null || echo "")
+		if [ -z "$GOTIFY_CHANNEL" ]; then
+			no "a Gotify notification channel could not be created"
+		else
+			CODE=$(api_code POST "/api/teams/$TEAM_ID/notifications/$GOTIFY_CHANNEL/test")
+			gotify_has "$TEST_TITLE" \
+				&& ok "a test notification arrived at Gotify" \
+				|| no "the test notification never arrived at Gotify (the panel answered $CODE)"
+		fi
+	fi
+	if [ -n "$NTFY_CHANNEL$GOTIFY_CHANNEL" ]; then
+		LISTED=$(api GET "/api/teams/$TEAM_ID/notifications" 2>/dev/null || echo "")
+		LEAKED=""
+		for secret in "$VERIFY_NTFY_TOKEN" "$VERIFY_GOTIFY_TOKEN"; do
+			case "$LISTED" in *"$secret"*) [ -z "$secret" ] || LEAKED=1 ;; esac
+		done
+		if [ -z "$LISTED" ]; then
+			no "the notification channels could not be listed"
+		elif [ -n "$LEAKED" ]; then
+			no "listing the channels gave back a token stored in one; a secret is never returned once set"
+		else
+			ok "listing the channels gives back none of the tokens stored in them"
+		fi
+	fi
+
+	# And a real failure, which is the one that matters, to every channel at
+	# once.
+	if [ -n "$CHANNEL$MAIL_CHANNEL$NTFY_CHANNEL$GOTIFY_CHANNEL" ]; then
 		: >"$HOOK_LOG"
+		FAILED_TITLE="Deploying broken failed"
 		BROKEN=$(api POST "/api/environments/$ENV_ID/apps" \
 			'{"name":"broken","source_type":"image","image":"example.invalid/nothing:0","port":8080,"deploy":true}' \
 			| pick app.id 2>/dev/null || echo "")
@@ -1771,16 +1912,92 @@ JSON
 			# on a real cluster sent this one five seconds after a five-minute
 			# wait had ended.
 			for _ in $(seq 1 120); do
-				[ -s "$HOOK_LOG" ] && break
+				{ [ -z "$CHANNEL" ] || [ -s "$HOOK_LOG" ]; } &&
+					{ [ -z "$MAIL_CHANNEL" ] || mail_has ops@example.test "$FAILED_TITLE"; } &&
+					{ [ -z "$NTFY_CHANNEL" ] || ntfy_has "$NTFY_TOPIC" "$FAILED_TITLE"; } &&
+					{ [ -z "$GOTIFY_CHANNEL" ] || gotify_has "$FAILED_TITLE"; } &&
+					break
 				sleep 5
 			done
-			[ -s "$HOOK_LOG" ] \
-				&& ok "a deployment that could not pull its image sent a notification" \
-				|| no "a deployment failed and nothing was sent. A failure nobody is told about is an outage that starts whenever somebody next looks."
+			UNTOLD="a deployment failed and nothing was sent. A failure nobody is told about is an outage that starts whenever somebody next looks."
+			if [ -n "$CHANNEL" ]; then
+				[ -s "$HOOK_LOG" ] \
+					&& ok "a deployment that could not pull its image sent a notification" \
+					|| no "$UNTOLD"
+			fi
+			if [ -n "$MAIL_CHANNEL" ]; then
+				mail_has ops@example.test "$FAILED_TITLE" \
+					&& ok "the same failure arrived by email" \
+					|| no "by email, $UNTOLD"
+			fi
+			if [ -n "$NTFY_CHANNEL" ]; then
+				ntfy_has "$NTFY_TOPIC" "$FAILED_TITLE" \
+					&& ok "the same failure arrived at ntfy" \
+					|| no "at ntfy, $UNTOLD"
+			fi
+			if [ -n "$GOTIFY_CHANNEL" ]; then
+				gotify_has "$FAILED_TITLE" \
+					&& ok "the same failure arrived at Gotify" \
+					|| no "at Gotify, $UNTOLD"
+			fi
 			api DELETE "/api/apps/$BROKEN" >/dev/null 2>&1 || true
 		fi
 	fi
+	for id in $MAIL_CHANNEL $NTFY_CHANNEL $GOTIFY_CHANNEL; do
+		api DELETE "/api/teams/$TEAM_ID/notifications/$id" >/dev/null 2>&1 || true
+	done
 	kill "$LISTENER" 2>/dev/null || true
+fi
+
+step "A forgotten password, reset through the link the panel emails"
+
+# The panel's own mail, which is not a channel: the reset link goes through the
+# server under Settings → Email, and the link is the only way in it gives. The
+# member from phase 3 forgets their password.
+if [ -z "${MAIL_SET:-}" ]; then
+	skip "the password reset" "the panel was given no mail server above, so it has nowhere to send a link"
+elif [ -z "${MEMBER_TOKEN:-}" ]; then
+	skip "the password reset" "phase 3 did not run, so there is no member whose password to forget"
+else
+	SESSION=$(curl -s -o /dev/null -w '%{http_code}' -b "$MEMBER_COOKIE" "$PANEL/api/me")
+	CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PANEL/api/auth/password-reset" \
+		-H 'Content-Type: application/json' -d '{"email":"member@example.test"}')
+	LINK=""
+	for _ in $(seq 1 30); do
+		LINK=$(mail_text member@example.test "Reset your password" |
+			grep -oE '[^[:space:]]*/reset-password#token=[A-Za-z0-9_-]+' | head -1 || true)
+		[ -n "$LINK" ] && break
+		sleep 2
+	done
+	if [ -z "$LINK" ]; then
+		no "no reset link arrived for member@example.test (asking for one answered $CODE)"
+	else
+		ok "asking for a reset link sent one to the member's address"
+		RESET="{\"token\":\"${LINK##*#token=}\",\"password\":\"a new member passphrase, after a reset\"}"
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PANEL/api/auth/password-reset/confirm" \
+			-H 'Content-Type: application/json' -d "$RESET")
+		[ "$CODE" = "200" ] \
+			&& ok "the link set a new password" \
+			|| no "setting a new password through the link answered $CODE"
+		NEW=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PANEL/api/auth/login" -H 'Content-Type: application/json' \
+			-d '{"email":"member@example.test","password":"a new member passphrase, after a reset"}')
+		OLD=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PANEL/api/auth/login" -H 'Content-Type: application/json' \
+			-d '{"email":"member@example.test","password":"a reasonable member passphrase"}')
+		[ "$NEW" = "200" ] && [ "$OLD" = "401" ] \
+			&& ok "the member signs in with the new password, and not with the old one" \
+			|| no "after the reset, the new password answered $NEW and the old one $OLD; want 200 and 401"
+		if [ "$SESSION" = "200" ]; then
+			CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$MEMBER_COOKIE" "$PANEL/api/me")
+			[ "$CODE" = "401" ] \
+				&& ok "the session the member had before the reset is over" \
+				|| no "the member's session from before the reset still answers $CODE; a reset ends every session, in case the password was what leaked"
+		fi
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PANEL/api/auth/password-reset/confirm" \
+			-H 'Content-Type: application/json' -d "$RESET")
+		[ "$CODE" != "200" ] \
+			&& ok "the link works once" \
+			|| no "the same reset link set a password a second time"
+	fi
 fi
 
 step "An app that sleeps wakes for a visitor and for its own deploy"
