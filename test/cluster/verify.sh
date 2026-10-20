@@ -816,6 +816,56 @@ PYEOF
 	fi
 fi
 
+step "A build cannot write over another team's image"
+
+# Each build starts a BuildKit of its own, and the registry's guard lets a
+# build write to its own app's repository with the token the panel gave it and
+# to nothing else. Reading stays open: every server's container runtime pulls
+# this way. The probe stands where a hostile build step would, in the build
+# namespace beside the registry, with no token or a forged one.
+if kubectl -n skifity-builds get deploy skifity-buildkit >/dev/null 2>&1; then
+	no "the BuildKit every team once shared is still running in skifity-builds"
+else
+	ok "there is no builder shared between teams"
+fi
+BUILD_IMAGE=$(kubectl -n skifity-builds get jobs -l app.kubernetes.io/component=build \
+	-o jsonpath='{.items[0].spec.template.spec.containers[0].image}' 2>/dev/null || true)
+case "$BUILD_IMAGE" in
+	*-rootless*) ok "a build runs its own rootless BuildKit ($(printf '%s' "$BUILD_IMAGE" | cut -d@ -f1))" ;;
+	"") skip "the build's own builder" "no build Job is left to read; they are kept for an hour" ;;
+	*) no "a build runs $BUILD_IMAGE, which is not a BuildKit of its own" ;;
+esac
+FORGED=$(printf 'skifity:v1.eyJyIjoiKiIsImUiOjQxMDI0NDQ4MDB9.forged' | base64 | tr -d '\n')
+REGISTRY_URL="http://skifity-registry.skifity-builds.svc.cluster.local:5000"
+REGISTRY_SCRIPT="code() { label=\$1; shift; printf '%s %s\\n' \"\$label\" \"\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \"\$@\" 2>/dev/null)\"; }
+code read -X GET $REGISTRY_URL/v2/
+code anonymous-upload -X POST $REGISTRY_URL/v2/$NAMESPACE/hello/blobs/uploads/
+code forged-upload -X POST -H 'Authorization: Basic $FORGED' $REGISTRY_URL/v2/$NAMESPACE/hello/blobs/uploads/
+code anonymous-manifest -X PUT -H 'Content-Type: application/vnd.oci.image.manifest.v1+json' --data '{}' $REGISTRY_URL/v2/$NAMESPACE/hello/manifests/latest
+code anonymous-delete -X DELETE $REGISTRY_URL/v2/$NAMESPACE/hello/manifests/sha256:0000000000000000000000000000000000000000000000000000000000000000
+code anonymous-catalog -X GET $REGISTRY_URL/v2/_catalog"
+REGISTRY_OUT=$(kubectl -n skifity-builds run verify-registry --rm -i --quiet --restart=Never --timeout=180s \
+	--image=curlimages/curl:8.11.1 --command -- sh -c "$REGISTRY_SCRIPT" 2>&1 || true)
+say "$(printf '%s\n' "$REGISTRY_OUT" | sed 's/^/    /')"
+registry_code() { printf '%s\n' "$REGISTRY_OUT" | awk -v want="$1" '$1 == want {print $2}' | tail -n 1; }
+if [ -z "$(registry_code read)" ]; then
+	no "the probe did not run in the build namespace, so the registry's guard could not be checked: ${REGISTRY_OUT:-no output}"
+else
+	[ "$(registry_code read)" = "200" ] \
+		&& ok "anybody in the build namespace can read the registry, as every server pulls" \
+		|| no "reading the registry answered $(registry_code read); the servers could not pull what the builds push"
+	REFUSED=1
+	for attempt in anonymous-upload forged-upload anonymous-manifest anonymous-delete anonymous-catalog; do
+		case "$(registry_code "$attempt")" in
+			401 | 403) ;;
+			*) REFUSED=0; no "the registry answered $(registry_code "$attempt") to $attempt; only a build's own token may write" ;;
+		esac
+	done
+	[ "$REFUSED" = "1" ] \
+		&& ok "a write with no token or a forged one, a delete and the list of every repository are all refused" \
+		|| true
+fi
+
 step "A rate limit is a ceiling at the ingress"
 
 # Through the real Traefik and the real guard: a rule that allows three requests

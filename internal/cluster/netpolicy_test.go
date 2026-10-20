@@ -56,6 +56,7 @@ func policyCluster(t *testing.T, objects ...runtime.Object) (*Cluster, *fake.Cli
 	calls := &collectorCalls{}
 	dynamic := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamic.PrependReactor("patch", "*", calls.react)
+	dynamic.PrependReactor("delete", "*", calls.react)
 	clientset := fake.NewSimpleClientset(objects...)
 	client := kube.NewClientWith(clientset, dynamic, "")
 	return New(client, db, keyring, slog.New(slog.NewTextHandler(io.Discard, nil))), clientset, calls

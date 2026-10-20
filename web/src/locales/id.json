@@ -3098,6 +3098,12 @@
         "impact": "Tidak ada yang di-backup, dipulihkan, atau diubah, dan tidak ada yang dikirim ke bucket tanpa enkripsi.",
         "fix": "Ini berfungsi bila panel berjalan di dalam klaster yang dikelolanya, seperti yang disiapkan installer. Panel di luarnya hanya dapat mem-backup tanpa passphrase, sehingga backup dikirim tanpa enkripsi."
       },
+      "registry_no_panel_image": {
+        "title": "Registry image tidak dapat dipasang",
+        "cause": "Penjaga registry menjalankan image panel sendiri, dan Deployment panel tidak dapat dibaca untuk menemukannya: {{0}}",
+        "impact": "Tidak ada yang di-build atau di-deploy, dan tidak ada yang diubah di klaster.",
+        "fix": "Ini berfungsi bila panel berjalan di dalam klaster yang dikelolanya, seperti yang disiapkan installer. Panel di luarnya dapat men-deploy image yang sudah jadi, atau mendorong ke registry Anda sendiri yang diatur di Pengaturan."
+      },
       "plugin_manifest_changed": {
         "title": "Manifest itu bukan yang ditandatangani toko",
         "cause": "Toko mencantumkan manifest dengan digest {{0}}, dan file di {{1}} sekarang memiliki digest {{2}}.",
@@ -4489,10 +4495,6 @@
     "registry": {
       "title": "Registri image",
       "description": "Menyimpan image yang dibangun Skifity, di dalam cluster."
-    },
-    "buildkit": {
-      "title": "Builder",
-      "description": "Membangun aplikasi Anda menjadi image, tanpa perlu Docker di host."
     },
     "cloudnative-pg": {
       "title": "PostgreSQL",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/netip"
 	"sort"
 	"strings"
 	"time"
@@ -1070,6 +1071,47 @@ func (c *Client) NodeAddresses(ctx context.Context) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// NodePodGateways is, for every node, the first address of the pod network it
+// was given: the address a node's own traffic to a pod on another node leaves
+// with. A server's container runtime pulls an image through the registry's
+// NodePort on itself, and when the registry runs on another server that pull
+// arrives from this address, not from a pod and not from the server's own
+// address, so the registry's policy names it. IPv4 only, like the networks.
+func (c *Client) NodePodGateways(ctx context.Context) ([]string, error) {
+	nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list the cluster's nodes: %w", err)
+	}
+	var cidrs []string
+	for _, node := range nodes.Items {
+		cidrs = append(cidrs, node.Spec.PodCIDRs...)
+		if len(node.Spec.PodCIDRs) == 0 && node.Spec.PodCIDR != "" {
+			cidrs = append(cidrs, node.Spec.PodCIDR)
+		}
+	}
+	return PodGateways(cidrs), nil
+}
+
+// PodGateways is the first address of each IPv4 network, once each and in
+// order.
+func PodGateways(cidrs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, cidr := range cidrs {
+		prefix, err := netip.ParsePrefix(cidr)
+		if err != nil || !prefix.Addr().Is4() {
+			continue
+		}
+		address := prefix.Masked().Addr().String()
+		if !seen[address] {
+			seen[address] = true
+			out = append(out, address)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // DeleteNamespace removes an environment and everything in it.

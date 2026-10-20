@@ -155,7 +155,7 @@ func TestABuildNobodyDeliversToGivesUp(t *testing.T) {
 func TestAnUploadBuildHasNoRepository(t *testing.T) {
 	spec := JobSpec{
 		Name: "build-web-1", Namespace: "skifity-builds", Image: "registry/web:abc",
-		BuildKitAddress: "tcp://buildkit:1234", Builder: BuilderRailpack,
+		Builder:      BuilderRailpack,
 		SourceUpload: true, CommitSHA: strings.Repeat("ab", 32),
 	}
 	job, err := BuildJob(spec)

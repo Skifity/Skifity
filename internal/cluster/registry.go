@@ -12,6 +12,7 @@ import (
 
 	"skifity/internal/kube"
 	"skifity/internal/registry"
+	"skifity/internal/registryguard"
 	"skifity/internal/settings"
 	"skifity/internal/version"
 )
@@ -50,7 +51,13 @@ func (c *Cluster) BeginBuild() func() {
 // sweep that says it did nothing for weeks and then a full disk is the failure
 // this exists to prevent, and a number in the log is how somebody notices.
 func (c *Cluster) PruneRegistry(ctx context.Context) (int, error) {
-	client := registry.New(kube.RegistryHost())
+	// Listing every repository and deleting are the panel's alone, and the
+	// registry's guard lets nobody else do either.
+	token, err := c.RegistryToken(ctx, registryguard.AnyRepository, 30*time.Minute)
+	if err != nil {
+		return 0, err
+	}
+	client := registry.New(kube.RegistryHost()).WithToken(token)
 
 	images, err := c.db.ImagesWorthKeeping(ctx, registry.KeptPerApp)
 	if err != nil {

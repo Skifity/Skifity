@@ -466,6 +466,18 @@ func BackupNoPanelImage(detail string) *Problem {
 		WithDocs("/docs/backups#encryption")
 }
 
+// RegistryNoPanelImage is the in-cluster registry with no image to run its
+// guard from: the guard is the panel's own image, found from the panel's
+// Deployment.
+func RegistryNoPanelImage(detail string) *Problem {
+	return New("registry.no_panel_image", "The image registry could not be installed").
+		WithCause("The registry's guard runs the panel's own image, and the panel's Deployment could not be read to find it: %s", detail).
+		WithImpact("Nothing was built or deployed, and nothing was changed in the cluster.").
+		WithFix("This works when the panel runs inside the cluster it manages, as the installer sets it up. " +
+			"A panel outside it can deploy images that are already built, or push to a registry of your own set under Settings.").
+		WithStatus(http.StatusConflict)
+}
+
 // BackupWrongPassphrase is a sealed backup the current passphrase does not open.
 func BackupWrongPassphrase() *Problem {
 	return New("backup.wrong_passphrase", "The backup passphrase does not open this backup").

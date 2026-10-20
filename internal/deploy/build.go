@@ -11,11 +11,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"skifity/internal/builder"
-	"skifity/internal/cluster"
 	"skifity/internal/errdoc"
 	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
+	registrypkg "skifity/internal/registry"
+	"skifity/internal/registryguard"
 	"skifity/internal/settings"
 	"skifity/internal/store"
 )
@@ -26,18 +27,11 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		return "", errdoc.ClusterUnreachable(nil)
 	}
 
-	// Held for the whole build, including the push. The registry sweep takes
-	// the same lock exclusively, so it never deletes a blob out from under a
-	// layer that is still being written.
-	defer d.cluster.BeginBuild()()
-
-	// The registry and the builder are installed on first use, which is what
-	// keeps a fresh install small.
+	// The registry is installed on first use, which is what keeps a fresh
+	// install small. Each build brings its own BuildKit, so there is no
+	// builder to install.
 	d.appendLog(ctx, deployment.ID, "Preparing the builder.")
 	if err := d.cluster.EnsureComponent(ctx, "registry"); err != nil {
-		return "", err
-	}
-	if err := d.cluster.EnsureComponent(ctx, "buildkit"); err != nil {
 		return "", err
 	}
 
@@ -45,6 +39,23 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	if err != nil {
 		return "", err
 	}
+	if registrySecret == "" {
+		// A registry installed before it had a guard, or with an older
+		// panel's, is given this one's. Before the lock below: it restarts
+		// the registry, which waits for no build to be holding it.
+		if err := d.cluster.ReconcileRegistry(ctx); err != nil {
+			return "", err
+		}
+	}
+	// What every team's builds once shared is not left running for nobody.
+	if err := d.cluster.RetireSharedBuilder(ctx); err != nil {
+		d.log.Warn("could not remove the shared builder", "error", err)
+	}
+
+	// Held for the rest of the build, including the push. The registry sweep
+	// takes the same lock exclusively, so it never deletes a blob out from
+	// under a layer that is still being written.
+	defer d.cluster.BeginBuild()()
 
 	image := builder.ImageName(registry, env.Namespace, app.Slug, imageTag(*deployment))
 
@@ -92,7 +103,7 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 		RegistrySecret:   registrySecret,
 		BuildArgs:        buildArgs,
 		SecretBuildArgs:  secretArgs,
-		BuildKitAddress:  d.buildKitAddress(),
+		FenceImage:       d.cluster.FenceImage(ctx),
 	}
 	if app.SourceType == "upload" {
 		spec.SourceUpload = true
@@ -115,8 +126,9 @@ func (d *Deployer) build(ctx context.Context, deployment *store.Deployment, app 
 	// A Dockerfile whose FROM is the team's own private image pulls it with
 	// the team's credentials, which live beside the panel's for this build
 	// only: the build namespace is every team's, and a Secret left there would
-	// be one team's password where another's build runs.
-	auth, err := d.buildAuth(ctx, app, registry, registrySecret)
+	// be one team's password where another's build runs. The same goes for
+	// the token the build pushes to the in-cluster registry with.
+	auth, err := d.buildAuth(ctx, app, registry, registrySecret, image)
 	if err != nil {
 		return "", err
 	}
@@ -247,11 +259,6 @@ func (d *Deployer) defaultBuilder(ctx context.Context) builder.Builder {
 		d.log.Info("the default builder is set to Nixpacks, which is not available; using Railpack")
 	}
 	return builder.BuilderRailpack
-}
-
-func (d *Deployer) buildKitAddress() string {
-	return fmt.Sprintf("tcp://%s.%s.svc.cluster.local:%d",
-		cluster.BuildKitService, d.cluster.Client().BuildNamespace(), cluster.BuildKitPort)
 }
 
 // streamBuild follows the build pod's logs and reports the outcome.
@@ -596,33 +603,58 @@ func (d *Deployer) ownBuildVars(ctx context.Context, spec builder.JobSpec) {
 	}
 }
 
-// buildAuth is the Docker config a build pulls and pushes with when the team
-// has registry credentials of its own: theirs, and the panel's external
-// registry's when there is one, so the push keeps working. Nil when the team
-// has none, and the build mounts the panel's Secret as before.
-func (d *Deployer) buildAuth(ctx context.Context, app store.App, registry, registrySecret string) (*corev1.Secret, error) {
+// buildTokenTTL is how long a build's registry token lasts: the longest a
+// build is waited for, with its pod's start, and some to spare.
+const buildTokenTTL = time.Hour
+
+// buildAuth is the Docker config a build pulls and pushes with.
+//
+// The team's own registry credentials, when it has some. For the in-cluster
+// registry, a token that lets this build write to its own app's repository and
+// to no other, for as long as a build can take: the registry's guard refuses
+// any write without one. For an external registry, the panel's credentials
+// beside the team's, so the push keeps working. Nil when there is nothing but
+// an external registry's, and the build mounts the panel's Secret as before.
+func (d *Deployer) buildAuth(ctx context.Context, app store.App, registry, registrySecret, image string) (*corev1.Secret, error) {
 	teamID, err := d.db.TeamIDForApp(ctx, app.ID)
 	if err != nil {
 		return nil, err
 	}
 	logins, err := d.teamLogins(ctx, teamID)
-	if err != nil || len(logins) == 0 {
+	if err != nil {
 		return nil, err
 	}
-	if registrySecret != "" {
-		username, err := d.settingValue(ctx, settings.KeyRegistryUser)
+	if registrySecret == "" {
+		repository, _, ok := registrypkg.RepoAndTag(image)
+		if !ok {
+			return nil, fmt.Errorf("%s does not name a repository in the registry", image)
+		}
+		token, err := d.cluster.RegistryToken(ctx, repository, buildTokenTTL)
 		if err != nil {
 			return nil, err
 		}
-		password, err := d.settingValue(ctx, settings.KeyRegistryPassword)
-		if err != nil {
-			return nil, err
-		}
-		if username != "" || password != "" {
-			// Last, so the panel's own registry wins over a team's credential
-			// for the same host: it is where the image is pushed.
-			logins = append(logins, kube.RegistryLogin{Host: registryHost(registry), Username: username, Password: password})
-		}
+		// Last, so it wins over a team's credential for the same host: it is
+		// where the image is pushed.
+		logins = append(logins, kube.RegistryLogin{
+			Host: registryHost(registry), Username: registryguard.User, Password: token,
+		})
+		return kube.PullSecret("build-auth", "", logins)
+	}
+	if len(logins) == 0 {
+		return nil, nil
+	}
+	username, err := d.settingValue(ctx, settings.KeyRegistryUser)
+	if err != nil {
+		return nil, err
+	}
+	password, err := d.settingValue(ctx, settings.KeyRegistryPassword)
+	if err != nil {
+		return nil, err
+	}
+	if username != "" || password != "" {
+		// Last, so the panel's own registry wins over a team's credential for
+		// the same host: it is where the image is pushed.
+		logins = append(logins, kube.RegistryLogin{Host: registryHost(registry), Username: username, Password: password})
 	}
 	return kube.PullSecret("build-auth", "", logins)
 }

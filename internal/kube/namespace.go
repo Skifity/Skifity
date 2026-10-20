@@ -278,7 +278,7 @@ func databasePolicy(namespace string, nodeAddresses []string) *networkingv1.Netw
 	// addresses, on the API's port only. With no address known there is no
 	// rule at all: a rule with ports and no peers allows that port anywhere.
 	var servers []networkingv1.NetworkPolicyPeer
-	for _, address := range nodeIPv4(nodeAddresses) {
+	for _, address := range NodeIPv4(nodeAddresses) {
 		servers = append(servers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: address + "/32"}})
 	}
 	if len(servers) > 0 {
@@ -291,10 +291,10 @@ func databasePolicy(namespace string, nodeAddresses []string) *networkingv1.Netw
 	return policy
 }
 
-// nodeIPv4 is every IPv4 address the nodes report, private ones included,
+// NodeIPv4 is every IPv4 address the nodes report, private ones included,
 // once each and in order. The cluster's networks are IPv4, and a policy with
 // an IPv6 block in it is one the policy controller may refuse whole.
-func nodeIPv4(addresses []string) []string {
+func NodeIPv4(addresses []string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, address := range addresses {
@@ -317,7 +317,7 @@ func nodeIPv4(addresses []string) []string {
 // the environments' policies would notice: the public ones, which every pod is
 // kept from, and every IPv4 one, which a database is let through to the API on.
 func PolicyAddressKey(addresses []string) string {
-	return strings.Join(PublicNodeAddresses(addresses), ",") + ";" + strings.Join(nodeIPv4(addresses), ",")
+	return strings.Join(PublicNodeAddresses(addresses), ",") + ";" + strings.Join(NodeIPv4(addresses), ",")
 }
 
 func itoaResource(n int) string {

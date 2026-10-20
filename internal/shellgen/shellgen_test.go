@@ -153,7 +153,6 @@ func builderSpec() builder.JobSpec {
 		Builder:          builder.BuilderRailpack,
 		Image:            "skifity-registry.skifity-system.svc.cluster.local:5000/acme-shop-production/web:a1b2c3d",
 		RegistryInsecure: true,
-		BuildKitAddress:  "tcp://skifity-buildkit.skifity-system.svc.cluster.local:1234",
 	}
 }
 

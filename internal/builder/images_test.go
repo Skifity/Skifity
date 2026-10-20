@@ -13,9 +13,8 @@ func TestEveryBuildImageIsPinned(t *testing.T) {
 	spec := baseJob()
 	spec.Defaults()
 	for name, image := range map[string]string{
-		"git": spec.GitImage, "buildctl": spec.BuildKitImage,
+		"git": spec.GitImage, "buildkit": spec.BuildKitImage,
 		"railpack prepare": spec.RailpackImage, "railpack frontend": spec.RailpackFrontend,
-		"buildkit daemon": BuildKitDaemonImage,
 	} {
 		tag := image
 		if at := strings.Index(image, "@"); at >= 0 {
@@ -44,14 +43,12 @@ func TestThePlanIsWrittenAndReadByTheSameRailpack(t *testing.T) {
 	}
 }
 
-// buildctl and the daemon it talks to are the same release.
-func TestBuildctlMatchesTheDaemon(t *testing.T) {
-	version := func(image string) string {
-		image = image[:strings.Index(image, "@")]
-		return strings.TrimSuffix(image[strings.LastIndex(image, ":")+1:], "-rootless")
-	}
-	if version(BuildKitClientImage) != version(BuildKitDaemonImage) {
-		t.Fatalf("buildctl is %s and the daemon %s", BuildKitClientImage, BuildKitDaemonImage)
+// The build container runs the daemon and buildctl, so its image has to be
+// the rootless one, of the version the panel reports.
+func TestTheBuildRunsTheRootlessBuildKit(t *testing.T) {
+	image := BuildKitImage[:strings.Index(BuildKitImage, "@")]
+	if !strings.HasSuffix(image, ":"+BuildKitVersion+"-rootless") {
+		t.Fatalf("the build runs %s, not BuildKit %s rootless", BuildKitImage, BuildKitVersion)
 	}
 }
 

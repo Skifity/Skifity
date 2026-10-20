@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"skifity/internal/api"
-	"skifity/internal/builder"
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
 	"skifity/internal/settings"
@@ -52,8 +51,6 @@ func (c *Cluster) ComponentVersion(ctx context.Context, name string) string {
 	switch name {
 	case "registry":
 		return imageTag(registryImage)
-	case "buildkit":
-		return builder.BuildKitVersion
 	case "cloudflare-tunnel":
 		return imageTag(TunnelImage)
 	case UpgradeComponent:

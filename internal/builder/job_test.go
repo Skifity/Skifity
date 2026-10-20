@@ -7,6 +7,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func baseJob() JobSpec {
@@ -20,7 +21,6 @@ func baseJob() JobSpec {
 		Builder:          BuilderRailpack,
 		Image:            "skifity-registry.skifity-system.svc.cluster.local:5000/acme-shop-production/web:a1b2c3d",
 		RegistryInsecure: true,
-		BuildKitAddress:  "tcp://skifity-buildkit.skifity-system.svc.cluster.local:1234",
 	}
 }
 
@@ -61,15 +61,71 @@ func TestBuildJobStructure(t *testing.T) {
 		t.Fatal("a build with no memory limit can take a node down")
 	}
 
-	// BUILDKIT_HOST is how buildctl finds the shared builder.
-	var sawHost bool
-	for _, env := range pod.Containers[0].Env {
-		if env.Name == "BUILDKIT_HOST" && env.Value == baseJob().BuildKitAddress {
-			sawHost = true
+}
+
+// TestABuildRunsItsOwnBuildKit: one BuildKit served every team, and a step of
+// one team's build ran beside the daemon holding another's. Each build now
+// starts a daemon of its own and talks to nothing else.
+func TestABuildRunsItsOwnBuildKit(t *testing.T) {
+	for _, b := range []Builder{BuilderRailpack, BuilderDockerfile, BuilderStatic} {
+		spec := baseJob()
+		spec.Builder = b
+		job, err := BuildJob(spec)
+		if err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		pod := job.Spec.Template.Spec
+		build := pod.Containers[0]
+		if build.Image != BuildKitImage {
+			t.Errorf("%s: the build runs %s, not the rootless BuildKit", b, build.Image)
+		}
+		script := build.Args[0]
+		if !strings.Contains(script, "buildctl-daemonless.sh build") || strings.Contains(script, "\nbuildctl build") {
+			t.Errorf("%s: the build does not start its own daemon:\n%s", b, script)
+		}
+		env := map[string]string{}
+		for _, e := range build.Env {
+			env[e.Name] = e.Value
+		}
+		if _, shared := env["BUILDKIT_HOST"]; shared {
+			t.Errorf("%s: the build is pointed at a builder outside its pod: %s", b, env["BUILDKIT_HOST"])
+		}
+		if env["BUILDKITD_FLAGS"] != "--oci-worker-no-process-sandbox" {
+			t.Errorf("%s: the daemon is started with %q", b, env["BUILDKITD_FLAGS"])
+		}
+		var state bool
+		for _, mount := range build.VolumeMounts {
+			state = state || (mount.Name == "buildkit" && mount.MountPath == builderState)
+		}
+		if !state {
+			t.Errorf("%s: the daemon keeps its layers in the container's own writable layer", b)
+		}
+		if job.Spec.Template.Annotations["container.apparmor.security.beta.kubernetes.io/build"] != "unconfined" {
+			t.Errorf("%s: a cluster before 1.30 would hold the daemon to the default AppArmor profile", b)
 		}
 	}
-	if !sawHost {
-		t.Fatal("BUILDKIT_HOST is not set, so buildctl would look for a local daemon")
+}
+
+// TestTheFenceComesBeforeTheClone: a repository's address is the team's to
+// choose, and git follows it wherever it points, so not even the clone starts
+// before the build's network policy is in place.
+func TestTheFenceComesBeforeTheClone(t *testing.T) {
+	spec := baseJob()
+	spec.FenceImage = "ghcr.io/skifity/skifity:v0.1.1"
+	job, err := BuildJob(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	init := job.Spec.Template.Spec.InitContainers
+	if len(init) != 3 || init[0].Name != "fence" || init[1].Name != SourceContainer {
+		names := []string{}
+		for _, c := range init {
+			names = append(names, c.Name)
+		}
+		t.Fatalf("the build starts with %v", names)
+	}
+	if init[0].Image != spec.FenceImage {
+		t.Errorf("the fence runs %s", init[0].Image)
 	}
 }
 
@@ -331,7 +387,6 @@ func TestCacheRef(t *testing.T) {
 func TestValidateRejectsDangerousInput(t *testing.T) {
 	cases := map[string]func(*JobSpec){
 		"no image":        func(s *JobSpec) { s.Image = "" },
-		"no builder addr": func(s *JobSpec) { s.BuildKitAddress = "" },
 		"no repo":         func(s *JobSpec) { s.RepoURL = "" },
 		"prebuilt image":  func(s *JobSpec) { s.Builder = BuilderImage },
 		"unknown builder": func(s *JobSpec) { s.Builder = Builder("magic") },
@@ -593,10 +648,31 @@ func TestABuildCannotFillTheNodesDisk(t *testing.T) {
 	if pod.Containers[0].Resources.Limits.StorageEphemeral().IsZero() {
 		t.Error("the build container has no ephemeral-storage limit")
 	}
+	// The build's own BuildKit keeps every layer it pulls and makes, which
+	// is the bigger of the two.
+	var state bool
+	for _, volume := range pod.Volumes {
+		if volume.Name == "buildkit" {
+			state = volume.EmptyDir != nil && volume.EmptyDir.SizeLimit != nil && !volume.EmptyDir.SizeLimit.IsZero()
+		}
+	}
+	if !state {
+		t.Error("the build's BuildKit has no ceiling on what it keeps")
+	}
+	ceilings, all := resource.MustParse(WorkspaceSizeLimit), resource.MustParse(BuildEphemeralLimit)
+	ceilings.Add(resource.MustParse(BuilderStateLimit))
+	if all.Cmp(ceilings) <= 0 {
+		t.Errorf("the pod may write %s, and the two ceilings come to %s: the pod's would trip before either of them",
+			all.String(), ceilings.String())
+	}
 }
 
 // TestBuildContainersCannotForgePacketsOrGainPrivilege: the code being built is
 // somebody's repository, in a pod on the node's bridge.
+//
+// The container that runs the build's own BuildKit is the one that may gain
+// privilege, because newuidmap is setuid and rootless BuildKit cannot make its
+// namespace without it; it runs as an ordinary user, and nothing is privileged.
 func TestBuildContainersCannotForgePacketsOrGainPrivilege(t *testing.T) {
 	for _, builder := range []Builder{BuilderRailpack, BuilderNixpacks, BuilderDockerfile} {
 		spec := baseJob()
@@ -609,7 +685,15 @@ func TestBuildContainersCannotForgePacketsOrGainPrivilege(t *testing.T) {
 		pod := job.Spec.Template.Spec
 		for _, container := range append(append([]corev1.Container{}, pod.InitContainers...), pod.Containers...) {
 			security := container.SecurityContext
-			if security == nil || security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation {
+			if security == nil {
+				t.Errorf("%s: %s has no security context", builder, container.Name)
+				continue
+			}
+			if container.Name == "build" {
+				if security.RunAsUser == nil || *security.RunAsUser == 0 {
+					t.Errorf("%s: the build's BuildKit runs as root", builder)
+				}
+			} else if security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation {
 				t.Errorf("%s: %s can gain privilege", builder, container.Name)
 				continue
 			}

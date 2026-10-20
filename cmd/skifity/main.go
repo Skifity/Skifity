@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"skifity/internal/logging"
 	"skifity/internal/mcpserver"
 	"skifity/internal/netfence"
+	"skifity/internal/registryguard"
 	"skifity/internal/sealed"
 	"skifity/internal/serverapp"
 	"skifity/internal/version"
@@ -62,6 +64,14 @@ func main() {
 	case "edge-guard":
 		if err := runGuard(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s edge-guard: %s\n\n", version.Binary, err)
+			os.Exit(1)
+		}
+
+	// The in-cluster registry's guard, in the registry's own pod. See
+	// internal/registryguard.
+	case "registry-guard":
+		if err := runRegistryGuard(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "\n%s registry-guard: %s\n\n", version.Binary, err)
 			os.Exit(1)
 		}
 
@@ -177,6 +187,33 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// runRegistryGuard stands in front of the in-cluster registry: anybody may
+// read, and writing needs a token the panel signed.
+//
+// Like the edge guard, it is not a command anybody types: the panel puts it in
+// the registry's pod and sets the environment it reads there. The key arrives
+// as a file from a Secret only this container mounts.
+func runRegistryGuard(ctx context.Context) error {
+	keyFile := os.Getenv("SKIFITY_REGISTRY_KEY_FILE")
+	if keyFile == "" {
+		return errors.New("SKIFITY_REGISTRY_KEY_FILE is not set, so there is no key to check tokens against")
+	}
+	key, err := os.ReadFile(keyFile)
+	if err != nil {
+		return fmt.Errorf("read the key tokens are checked against: %w", err)
+	}
+	upstream, err := url.Parse(envOr("SKIFITY_REGISTRY_UPSTREAM", "http://127.0.0.1:5080"))
+	if err != nil || upstream.Host == "" {
+		return fmt.Errorf("SKIFITY_REGISTRY_UPSTREAM is not the registry's address: %q", os.Getenv("SKIFITY_REGISTRY_UPSTREAM"))
+	}
+	log := logging.New(os.Stdout, os.Getenv("SKIFITY_LOG_LEVEL"), os.Getenv("SKIFITY_LOG_FORMAT"))
+	g, err := registryguard.New(key, upstream, log)
+	if err != nil {
+		return err
+	}
+	return g.Run(ctx, envOr("SKIFITY_REGISTRY_ADDRESS", ":5000"))
 }
 
 // fencePatience is how long a new pod waits for its network policy before it

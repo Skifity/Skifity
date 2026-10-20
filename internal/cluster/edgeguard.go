@@ -89,9 +89,7 @@ func (c *Cluster) PanelImage(ctx context.Context) (string, error) { return c.pan
 // would be a second place for the version to be written and a second place for
 // it to be wrong after an upgrade.
 func (c *Cluster) panelImage(ctx context.Context) (string, error) {
-	namespace := c.client.SystemNamespace()
-	deployment, err := c.client.Clientset().AppsV1().
-		Deployments(namespace).Get(ctx, "skifity-panel", metav1.GetOptions{})
+	image, err := c.ownImage(ctx)
 	if err != nil {
 		return "", errdoc.New("guard.no_panel_image", "The firewall could not be installed").
 			WithCause("The panel's own Deployment could not be read, so there is no image to run the guard from: %s", err).
@@ -99,6 +97,17 @@ func (c *Cluster) panelImage(ctx context.Context) (string, error) {
 			WithFix("This works when the panel is running inside the cluster it manages, which is how the installer sets it up. " +
 				"A panel running outside the cluster cannot install this component.").
 			WithStatus(http.StatusBadRequest)
+	}
+	return image, nil
+}
+
+// ownImage is the image of the panel's own Deployment, which the firewall, the
+// registry's guard and the network fence all run.
+func (c *Cluster) ownImage(ctx context.Context) (string, error) {
+	deployment, err := c.client.Clientset().AppsV1().
+		Deployments(c.client.SystemNamespace()).Get(ctx, "skifity-panel", metav1.GetOptions{})
+	if err != nil {
+		return "", err
 	}
 	if len(deployment.Spec.Template.Spec.Containers) == 0 {
 		return "", fmt.Errorf("the panel's Deployment has no containers")
@@ -123,7 +132,7 @@ func (c *Cluster) FenceImage(ctx context.Context) string {
 	if c.fenceImage != "" {
 		return c.fenceImage
 	}
-	image, err := c.panelImage(ctx)
+	image, err := c.ownImage(ctx)
 	if err != nil {
 		c.log.Debug("no image for the network fence, so pods start without it", "error", err)
 		return ""

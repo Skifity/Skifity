@@ -59,6 +59,10 @@ var manifestTypes = strings.Join([]string{
 type Client struct {
 	base string
 	http *http.Client
+	// token is sent with every request when it is set. The in-cluster
+	// registry's guard lets anybody read and only a token write; the panel's
+	// sweep lists and deletes, so it carries one for every repository.
+	token string
 }
 
 // New builds a client for a registry reached at host, for example
@@ -73,6 +77,22 @@ func New(host string) *Client {
 		base = "http://" + base
 	}
 	return &Client{base: base, http: &http.Client{Timeout: 30 * time.Second}}
+}
+
+// WithToken returns a client that sends a registry guard token with every
+// request. See internal/registryguard.
+func (c *Client) WithToken(token string) *Client {
+	copied := *c
+	copied.token = token
+	return &copied
+}
+
+func (c *Client) do(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", version.UserAgent())
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	return c.http.Do(req)
 }
 
 // Repositories lists every repository the registry holds.
@@ -116,9 +136,8 @@ func (c *Client) Digest(ctx context.Context, repo, tag string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", manifestTypes)
-	req.Header.Set("User-Agent", version.UserAgent())
 
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return "", fmt.Errorf("read the manifest for %s:%s: %w", repo, tag, err)
 	}
@@ -147,9 +166,7 @@ func (c *Client) DeleteManifest(ctx context.Context, repo, digest string) error 
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", version.UserAgent())
-
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return fmt.Errorf("delete %s@%s: %w", repo, digest, err)
 	}
@@ -175,9 +192,8 @@ func (c *Client) getJSON(ctx context.Context, path string, into any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", version.UserAgent())
 
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return fmt.Errorf("ask the registry for %s: %w", path, err)
 	}

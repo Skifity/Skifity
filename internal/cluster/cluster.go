@@ -51,6 +51,11 @@ type Cluster struct {
 	logsMu      sync.Mutex
 	logsApplied string
 
+	// registryKey is the key registry tokens are signed with, read once from
+	// its Secret; see RegistryKey.
+	registryKeyMu sync.Mutex
+	registryKey   []byte
+
 	// policiesFor is the set of node addresses the tenant network policies
 	// were last applied for; see MaintainNetworkPolicies.
 	policiesMu      sync.Mutex

@@ -1,13 +1,14 @@
 package cluster
 
 import (
-	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"skifity/internal/kube"
 )
@@ -21,16 +22,27 @@ func TestBuildsAreNotInThePanelsNamespace(t *testing.T) {
 	}
 }
 
-// TestBuildNetworkPolicyLetsBuildsOutButNotIn: a build needs the repository
-// and the packages, and nothing else on the node network.
-func TestBuildNetworkPolicyLetsBuildsOutButNotIn(t *testing.T) {
-	policies := buildNetworkPolicies(kube.BuildsNamespace, "skifity-system", []string{"203.0.113.10"})
-	if len(policies) != 2 {
-		t.Fatalf("got %d policies, want a deny-all and an allow", len(policies))
+func policyNamed(t *testing.T, policies []*networkingv1.NetworkPolicy, name string) *networkingv1.NetworkPolicy {
+	t.Helper()
+	for _, policy := range policies {
+		if policy.Name == name {
+			return policy
+		}
 	}
-	if len(policies[0].Spec.Ingress) != 0 || len(policies[0].Spec.Egress) != 0 {
+	t.Fatalf("there is no %s policy", name)
+	return nil
+}
+
+// TestBuildNetworkPolicyLetsBuildsOutButNotIn: a build needs the repository,
+// the packages and the registry, and nothing else on the node network — not
+// another build, and nothing comes in to it.
+func TestBuildNetworkPolicyLetsBuildsOutButNotIn(t *testing.T) {
+	policies := buildNetworkPolicies(kube.BuildsNamespace, "skifity-system", []string{"203.0.113.10"}, []string{"10.42.1.0"})
+	deny := policyNamed(t, policies, "default-deny")
+	if len(deny.Spec.Ingress) != 0 || len(deny.Spec.Egress) != 0 {
 		t.Fatal("the first policy is not a deny-all baseline")
 	}
+	allow := policyNamed(t, policies, "allow-builds")
 
 	// The metadata service hands out the provider's credentials to anything
 	// that asks, and a build is the last thing that should; the registry's
@@ -40,28 +52,105 @@ func TestBuildNetworkPolicyLetsBuildsOutButNotIn(t *testing.T) {
 		{"169.254.169.254", 80}, {"10.0.0.5", 80}, {"172.16.0.1", 80}, {"192.168.0.1", 80},
 		{"203.0.113.10", 30500}, {"203.0.113.10", 6443}, {"203.0.113.10", 10250},
 	} {
-		if kube.EgressAllows(policies[1].Spec.Egress, blocked[0].(string), blocked[1].(int)) {
+		if kube.EgressAllows(allow.Spec.Egress, blocked[0].(string), blocked[1].(int)) {
 			t.Errorf("a build can reach %s:%d", blocked[0], blocked[1])
 		}
 	}
-	if !kube.EgressAllows(policies[1].Spec.Egress, "140.82.121.4", 443) {
+	if !kube.EgressAllows(allow.Spec.Egress, "140.82.121.4", 443) {
 		t.Fatal("a build cannot reach the internet, so it cannot clone anything")
 	}
+
+	// Inside the namespace, the registry's guard on its port and nothing else:
+	// no other build, and not the registry's own listener behind the guard.
+	var toPods int
+	for _, rule := range allow.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.PodSelector == nil {
+				continue
+			}
+			toPods++
+			if peer.PodSelector.MatchLabels["app.kubernetes.io/name"] != RegistryService {
+				t.Errorf("a build can reach the pods %+v", peer.PodSelector)
+			}
+			if len(rule.Ports) != 1 || rule.Ports[0].Port.IntValue() != RegistryPort {
+				t.Errorf("a build can reach the registry's pod on %+v", rule.Ports)
+			}
+		}
+	}
+	if toPods != 1 {
+		t.Errorf("a build reaches %d kinds of pod, want the registry alone", toPods)
+	}
+	if len(allow.Spec.Ingress) != 0 || !slices.Contains(allow.Spec.PolicyTypes, networkingv1.PolicyTypeIngress) {
+		t.Error("something may connect to a build")
+	}
+}
+
+// TestEveryServerCanPullFromTheRegistry: a server's container runtime pulls
+// through the registry's NodePort on itself, and a pull on a server the
+// registry does not run on arrives from that server's pod-network gateway. The
+// registry's policy has to let it in, or a second server can run nothing the
+// panel built.
+func TestEveryServerCanPullFromTheRegistry(t *testing.T) {
+	policies := buildNetworkPolicies(kube.BuildsNamespace, "skifity-system",
+		[]string{"203.0.113.10", "10.0.0.2", "2001:db8::1"}, []string{"10.42.0.0", "10.42.1.0"})
+	registry := policyNamed(t, policies, "allow-registry")
+	if registry.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"] != RegistryService {
+		t.Fatalf("the registry's policy selects %+v", registry.Spec.PodSelector)
+	}
+	if len(registry.Spec.Ingress) != 1 || len(registry.Spec.Ingress[0].Ports) != 1 ||
+		registry.Spec.Ingress[0].Ports[0].Port.IntValue() != RegistryPort {
+		t.Fatalf("the registry is let in on %+v", registry.Spec.Ingress)
+	}
+	var blocks []string
+	var panel, builds bool
+	for _, peer := range registry.Spec.Ingress[0].From {
+		switch {
+		case peer.IPBlock != nil:
+			blocks = append(blocks, peer.IPBlock.CIDR)
+		case peer.NamespaceSelector != nil:
+			panel = peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "skifity-system"
+		case peer.PodSelector != nil:
+			builds = len(peer.PodSelector.MatchLabels) == 0
+		}
+	}
+	for _, want := range []string{"203.0.113.10/32", "10.0.0.2/32", "10.42.0.0/32", "10.42.1.0/32"} {
+		if !slices.Contains(blocks, want) {
+			t.Errorf("a pull from %s is not let in: %v", want, blocks)
+		}
+	}
+	for _, block := range blocks {
+		if strings.Contains(block, ":") || !strings.HasSuffix(block, "/32") {
+			t.Errorf("the registry lets in %s", block)
+		}
+	}
+	if !panel || !builds {
+		t.Errorf("the panel (%v) or the builds beside it (%v) cannot reach the registry", panel, builds)
+	}
+}
+
+func registryParts(t *testing.T) (*appsv1.Deployment, *corev1.Service) {
+	t.Helper()
+	var deployment *appsv1.Deployment
+	var service *corev1.Service
+	for _, object := range registryObjects(kube.BuildsNamespace, "ghcr.io/skifity/skifity:v0.1.1") {
+		switch typed := object.(type) {
+		case *appsv1.Deployment:
+			deployment = typed
+		case *corev1.Service:
+			service = typed
+		}
+	}
+	if deployment == nil || service == nil {
+		t.Fatal("the registry has no Deployment or no Service")
+	}
+	return deployment, service
 }
 
 // TestRegistryIsReachableByEveryNodesContainerRuntime is the bug this shape
 // exists for: an image pushed to a Service name that containerd cannot resolve
 // is an image no node can ever pull.
 func TestRegistryIsReachableByEveryNodesContainerRuntime(t *testing.T) {
-	var service *corev1.Service
-	for _, object := range registryObjects(kube.BuildsNamespace) {
-		if s, ok := object.(*corev1.Service); ok {
-			service = s
-		}
-	}
-	if service == nil {
-		t.Fatal("the registry has no Service")
-	}
+	_, service := registryParts(t)
 	if service.Spec.Type != corev1.ServiceTypeNodePort {
 		t.Fatalf("the registry Service is %s; a node's container runtime cannot reach a ClusterIP by name",
 			service.Spec.Type)
@@ -72,82 +161,104 @@ func TestRegistryIsReachableByEveryNodesContainerRuntime(t *testing.T) {
 	}
 }
 
-// TestBuildKitProbeKnowsWhereBuildKitIs: buildkitd is started with --addr,
-// which replaces the default socket rather than adding to it, so a bare
-// `buildctl debug workers` looks for a socket that does not exist and the
-// builder never becomes ready.
-func TestBuildKitProbeKnowsWhereBuildKitIs(t *testing.T) {
-	var deployment *appsv1.Deployment
-	for _, object := range buildKitObjects(kube.BuildsNamespace) {
-		if d, ok := object.(*appsv1.Deployment); ok {
-			deployment = d
+// TestTheRegistryIsOnlyReachedThroughItsGuard: the guard is what refuses a
+// write without a token, so nothing may reach the registry around it.
+func TestTheRegistryIsOnlyReachedThroughItsGuard(t *testing.T) {
+	deployment, service := registryParts(t)
+	pod := deployment.Spec.Template.Spec
+	var registry, guard *corev1.Container
+	for i := range pod.Containers {
+		switch pod.Containers[i].Name {
+		case "registry":
+			registry = &pod.Containers[i]
+		case registryGuardContainer:
+			guard = &pod.Containers[i]
 		}
 	}
-	if deployment == nil {
-		t.Fatal("BuildKit has no Deployment")
+	if registry == nil || guard == nil {
+		t.Fatalf("the registry's pod has %d containers and not the two it needs", len(pod.Containers))
 	}
-	container := deployment.Spec.Template.Spec.Containers[0]
 
-	probe := container.ReadinessProbe
-	if probe == nil || probe.Exec == nil {
-		t.Fatal("BuildKit has no readiness probe")
+	env := func(c *corev1.Container, name string) string {
+		for _, e := range c.Env {
+			if e.Name == name {
+				return e.Value
+			}
+		}
+		return ""
 	}
-	command := strings.Join(probe.Exec.Command, " ")
-	if !strings.Contains(command, "--addr") {
-		t.Fatalf("the probe does not say where buildkitd is: %q", command)
-	}
-	// The address it probes has to be the one buildkitd was told to listen on.
-	var listen string
-	for i, arg := range container.Args {
-		if arg == "--addr" && i+1 < len(container.Args) {
-			listen = container.Args[i+1]
+	for _, name := range []string{"REGISTRY_HTTP_ADDR", "REGISTRY_HTTP_DEBUG_ADDR"} {
+		if got := env(registry, name); !strings.HasPrefix(got, "127.0.0.1:") {
+			t.Errorf("%s is %q, where the pod's other address reaches it past the guard", name, got)
 		}
 	}
-	if listen == "" {
-		t.Fatal("buildkitd is not told where to listen")
+	// The image's own configuration starts the debug server on 5001.
+	if env(registry, "REGISTRY_HTTP_ADDR") == env(registry, "REGISTRY_HTTP_DEBUG_ADDR") ||
+		strings.HasSuffix(env(registry, "REGISTRY_HTTP_ADDR"), ":5001") {
+		t.Errorf("the registry and its debug server would both listen on %s", env(registry, "REGISTRY_HTTP_ADDR"))
 	}
-	if !strings.HasSuffix(listen, buildKitLocalAddress[strings.LastIndexByte(buildKitLocalAddress, ':'):]) {
-		t.Fatalf("the probe uses %q and buildkitd listens on %q", buildKitLocalAddress, listen)
+	if len(registry.Ports) != 0 {
+		t.Errorf("the registry names a port of its own: %+v", registry.Ports)
+	}
+	if env(registry, "REGISTRY_HTTP_RELATIVEURLS") != "true" {
+		t.Error("the registry would tell a client to continue an upload at its own address, past the guard")
+	}
+	if got := env(guard, "SKIFITY_REGISTRY_UPSTREAM"); got != "http://"+env(registry, "REGISTRY_HTTP_ADDR") {
+		t.Errorf("the guard forwards to %q, and the registry listens on %q", got, env(registry, "REGISTRY_HTTP_ADDR"))
+	}
+	if strings.Join(guard.Command, " ") != "/usr/local/bin/skifity registry-guard" {
+		t.Errorf("the guard runs %v", guard.Command)
+	}
+	if len(guard.Ports) != 1 || guard.Ports[0].ContainerPort != RegistryPort || guard.Ports[0].Name != "http" {
+		t.Errorf("the guard listens on %+v", guard.Ports)
+	}
+	if service.Spec.Ports[0].TargetPort.StrVal != "http" {
+		t.Errorf("the Service sends to %v, not the guard's port", service.Spec.Ports[0].TargetPort)
 	}
 
-	// A moving tag means a builder that changes under an operator, and a build
-	// that breaks for no reason they can see.
-	if strings.HasSuffix(container.Image, ":latest") || strings.Contains(container.Image, ":master") {
-		t.Errorf("BuildKit is pinned to a moving tag: %q", container.Image)
+	// The key is the guard's alone.
+	for _, mount := range registry.VolumeMounts {
+		if mount.Name == "key" {
+			t.Error("the registry's container can read the key tokens are signed with")
+		}
+	}
+	var keyMounted bool
+	for _, mount := range guard.VolumeMounts {
+		keyMounted = keyMounted || (mount.Name == "key" && mount.ReadOnly)
+	}
+	if !keyMounted {
+		t.Error("the guard has no key to check tokens against")
+	}
+	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
+		t.Error("the registry's pod is given a Kubernetes token it has no use for")
+	}
+	sc := guard.SecurityContext
+	if sc == nil || sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot || sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
+		t.Error("the guard is not confined")
 	}
 }
 
-// TestTheSharedBuilderCannotFillTheNodesDisk: one BuildKit serves every team and
-// keeps its cache on the node's disk. Left alone the cache grows until the disk
-// is full, and a full disk is the kubelet evicting pods from the whole machine.
-func TestTheSharedBuilderCannotFillTheNodesDisk(t *testing.T) {
-	var deployment *appsv1.Deployment
-	for _, object := range buildKitObjects(kube.BuildsNamespace) {
-		if d, ok := object.(*appsv1.Deployment); ok {
-			deployment = d
-		}
+// TestTheSharedBuilderIsRetired: every build runs its own BuildKit now, and
+// the one every team shared is removed from a cluster that has it.
+func TestTheSharedBuilderIsRetired(t *testing.T) {
+	shared := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: legacyBuilder, Namespace: kube.BuildsNamespace}}
+	c, _, calls := policyCluster(t, shared)
+	if err := c.RetireSharedBuilder(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	if deployment == nil {
-		t.Fatal("BuildKit has no Deployment")
+	calls.mu.Lock()
+	deleted := append([]string{}, calls.deleted...)
+	calls.mu.Unlock()
+	if !slices.Contains(deleted, "deployments/"+legacyBuilder) || !slices.Contains(deleted, "services/"+legacyBuilder) {
+		t.Fatalf("the shared builder was not removed: %v", deleted)
 	}
-	pod := deployment.Spec.Template.Spec
-	args := strings.Join(pod.Containers[0].Args, " ")
-	if !strings.Contains(args, "--oci-worker-gc-keepstorage "+fmt.Sprint(BuildKitKeepStorageMB)) {
-		t.Errorf("BuildKit is not told how much cache to keep: %s", args)
+
+	// Gone already: nothing to do, and no error.
+	empty, _, calls := policyCluster(t)
+	if err := empty.RetireSharedBuilder(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	for _, volume := range pod.Volumes {
-		if volume.Name == "cache" && (volume.EmptyDir == nil || volume.EmptyDir.SizeLimit == nil) {
-			t.Error("the builder's cache has no ceiling")
-		}
-	}
-	if pod.Containers[0].Resources.Limits.StorageEphemeral().IsZero() {
-		t.Error("the builder has no ephemeral-storage limit")
-	}
-	// The collector is what keeps the cache down; the ceiling is for a runaway.
-	keep := resource.MustParse(fmt.Sprintf("%dM", BuildKitKeepStorageMB))
-	ceiling := resource.MustParse(BuildKitCacheLimit)
-	if ceiling.Cmp(keep) <= 0 {
-		t.Errorf("the cache ceiling %s is not above what the collector keeps (%s), so it would be evicted in normal use",
-			BuildKitCacheLimit, keep.String())
+	if len(calls.deleted) != 0 {
+		t.Errorf("a cluster with no shared builder had %v deleted", calls.deleted)
 	}
 }

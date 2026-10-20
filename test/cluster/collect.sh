@@ -35,6 +35,9 @@ kube() { command -v kubectl >/dev/null 2>&1 && kubectl --request-timeout=20s "$@
 
 # The machine.
 run machine sh -c 'uname -a; echo; uptime; echo; free -m; echo; df -h; echo; cat /etc/os-release'
+# What decides whether a rootless BuildKit may make its user namespace: Ubuntu
+# from 23.10 restricts it for unconfined programs unless a profile allows it.
+run userns sh -c 'sysctl kernel.apparmor_restrict_unprivileged_userns kernel.unprivileged_userns_clone user.max_user_namespaces 2>&1; ls /etc/apparmor.d 2>&1 | grep -i -e rootless -e buildkit'
 run memory-pressure sh -c 'dmesg 2>/dev/null | grep -iE "out of memory|oom|killed process" | tail -50'
 run listening sh -c 'ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null'
 run iptables sh -c 'iptables-save 2>/dev/null | grep -vE "^#" | head -2000'
@@ -76,7 +79,6 @@ logs() {
 	run "logs-$name-previous" kube -n "$namespace" logs -l "$selector" --all-containers --tail=500 --prefix --previous
 }
 logs skifity-system app.kubernetes.io/component=panel panel
-logs skifity-builds app.kubernetes.io/name=skifity-buildkit buildkit
 logs skifity-builds app.kubernetes.io/name=skifity-registry registry
 logs cert-manager app.kubernetes.io/instance=cert-manager cert-manager
 logs kube-system app.kubernetes.io/name=traefik traefik

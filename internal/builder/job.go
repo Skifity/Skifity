@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/kube"
 	"skifity/internal/shellsafe"
 	"skifity/internal/version"
 )
@@ -25,11 +26,19 @@ import (
 //  1. an init container clones the repository at an exact commit;
 //  2. for the zero-config builder, a second init container runs
 //     `railpack prepare` to produce a build plan;
-//  3. the main container runs buildctl against the shared BuildKit service and
+//  3. the main container starts a BuildKit of its own, builds with it, and
 //     pushes the result to the in-cluster registry.
 //
 // Nothing here needs Docker on the host, and nothing runs privileged: BuildKit
-// is rootless and lives in its own pod.
+// is rootless, and it lives as long as the one build it was started for.
+//
+// It was one BuildKit for every team, with its process sandbox off, because
+// rootless BuildKit needs that in Kubernetes. A step of one team's build ran
+// beside the daemon holding another team's, could talk to it, and could read
+// what it held. A daemon per build has nothing in it but the build it serves.
+// What it costs is the shared cache: a build starts cold, and what makes the
+// second build of an app fast is the cache it pushed to the registry beside
+// its image.
 
 // JobSpec describes one build.
 type JobSpec struct {
@@ -72,7 +81,10 @@ type JobSpec struct {
 	// RegistryInsecure is true for the in-cluster registry, which speaks plain
 	// HTTP inside the cluster network.
 	RegistryInsecure bool
-	// RegistrySecret holds credentials for an external registry.
+	// RegistrySecret is the Docker config the build pulls and pushes with: the
+	// team's own registries, an external registry's credentials, and for the
+	// in-cluster registry a token that writes to this app's repository and no
+	// other.
 	RegistrySecret string
 
 	// BuildArgs are build-time variables, which are part of the fingerprint.
@@ -93,12 +105,15 @@ type JobSpec struct {
 	// variable. Required when there are any.
 	BuildVarsSecret string
 
-	// BuildKitAddress is the shared builder, for example
-	// tcp://skifity-buildkit.skifity-system.svc.cluster.local:1234.
-	BuildKitAddress string
+	// FenceImage is the panel's own image, which holds the build back until
+	// its network policy is in place; see kube.FenceContainer. Empty for a
+	// panel outside the cluster.
+	FenceImage string
 
 	// Images used by the build itself, overridable for an air-gapped install.
-	GitImage      string
+	GitImage string
+	// BuildKitImage is the rootless BuildKit image, which has the daemon and
+	// buildctl in it: the build container runs both.
 	BuildKitImage string
 	RailpackImage string
 	// RailpackFrontend is the BuildKit gateway frontend image.
@@ -123,7 +138,7 @@ func (s *JobSpec) Defaults() {
 		s.GitImage = GitImage
 	}
 	if s.BuildKitImage == "" {
-		s.BuildKitImage = BuildKitClientImage
+		s.BuildKitImage = BuildKitImage
 	}
 	if s.RailpackImage == "" {
 		s.RailpackImage = RailpackImage
@@ -160,9 +175,6 @@ func (s JobSpec) Validate() error {
 	}
 	if s.Image == "" {
 		return fmt.Errorf("a build needs an image to push to")
-	}
-	if s.BuildKitAddress == "" {
-		return fmt.Errorf("a build needs the address of the builder")
 	}
 	switch s.Builder {
 	case BuilderDockerfile, BuilderRailpack, BuilderNixpacks, BuilderStatic:
@@ -259,6 +271,17 @@ func secretsHash(vars map[string]string) string {
 // workspace is where the repository is cloned inside the build pod.
 const workspace = "/workspace"
 
+// Where the build container keeps what is its own, outside the workspace: the
+// build's BuildKit's layers, the Docker config it pushes with, and the
+// Dockerfile a static site is built from. The rootless image runs as "user",
+// uid 1000, whose home this is.
+const (
+	builderUser      = int64(1000)
+	builderState     = "/home/user/.local/share/buildkit"
+	dockerConfigDir  = "/home/user/.docker"
+	generatedContext = "/tmp/skifity-build"
+)
+
 // BuildJob renders the Kubernetes Job for a build.
 func BuildJob(s JobSpec) (*batchv1.Job, error) {
 	s.Defaults()
@@ -284,8 +307,13 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 	// disk is not one build failing: the kubelet evicts pods from the whole
 	// machine. Over this size the build's own pod is the one evicted.
 	workspaceLimit := resource.MustParse(WorkspaceSizeLimit)
+	stateLimit := resource.MustParse(BuilderStateLimit)
 	volumes := []corev1.Volume{
 		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		// The build's own BuildKit keeps the layers it pulls and makes here,
+		// for as long as the build runs, with a ceiling of its own for the
+		// same reason the workspace has one.
+		{Name: "buildkit", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &stateLimit}}},
 	}
 	mounts := []corev1.VolumeMount{{Name: "workspace", MountPath: workspace}}
 
@@ -302,18 +330,28 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 	}
 
 	buildContainer := corev1.Container{
-		Name:         "build",
-		Image:        s.BuildKitImage,
-		Command:      []string{"/bin/sh", "-c"},
-		Args:         []string{buildScript(s)},
-		VolumeMounts: mounts,
+		Name:    "build",
+		Image:   s.BuildKitImage,
+		Command: []string{"/bin/sh", "-c"},
+		Args:    []string{buildScript(s)},
+		VolumeMounts: append(append([]corev1.VolumeMount{}, mounts...),
+			corev1.VolumeMount{Name: "buildkit", MountPath: builderState}),
 		Env: append([]corev1.EnvVar{
-			{Name: "BUILDKIT_HOST", Value: s.BuildKitAddress},
+			// Rootless BuildKit cannot give a step a process namespace of its
+			// own inside a Kubernetes pod, whose /proc is masked. With one
+			// daemon per build, the steps it cannot keep apart are one
+			// build's own.
+			{Name: "BUILDKITD_FLAGS", Value: "--oci-worker-no-process-sandbox"},
+			// How long buildctl waits for the daemon it started: the script's
+			// own default is about two seconds, which a busy server misses.
+			{Name: "BUILDCTL_CONNECT_RETRIES_MAX", Value: "60"},
 		}, buildVarEnvs(s)...),
-		Resources: buildResources(s),
+		Resources:       buildResources(s),
+		SecurityContext: builderContainer(),
 	}
 	if s.RegistrySecret != "" {
-		// buildctl reads registry credentials from a Docker config file.
+		// buildctl reads registry credentials from a Docker config file, and
+		// hands them to its daemon when the daemon asks for them.
 		volumes = append(volumes, corev1.Volume{
 			Name: "registry-auth",
 			VolumeSource: corev1.VolumeSource{
@@ -324,16 +362,23 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 			},
 		})
 		buildContainer.VolumeMounts = append(buildContainer.VolumeMounts,
-			corev1.VolumeMount{Name: "registry-auth", MountPath: "/root/.docker", ReadOnly: true})
+			corev1.VolumeMount{Name: "registry-auth", MountPath: dockerConfigDir, ReadOnly: true})
+		buildContainer.Env = append(buildContainer.Env, corev1.EnvVar{Name: "DOCKER_CONFIG", Value: dockerConfigDir})
 	}
 
 	// What the repository's code can do from inside the pod, whichever container
 	// runs it: no raw sockets, which would let it forge packets on the node's
-	// bridge, and no gaining privilege it was not started with.
+	// bridge, and no gaining privilege it was not started with. The build
+	// container is the one exception to the second, and builderContainer says
+	// why.
 	for i := range initContainers {
 		initContainers[i].SecurityContext = confinedContainer()
 	}
-	buildContainer.SecurityContext = confinedContainer()
+	// The fence goes first, before the clone: a repository's address is the
+	// team's to choose, and git follows it wherever it points.
+	if s.FenceImage != "" {
+		initContainers = append([]corev1.Container{kube.FenceContainer(s.FenceImage)}, initContainers...)
+	}
 
 	backoffLimit := int32(0) // a failed build is reported, not retried blindly
 	activeDeadline := int64(s.TimeoutSeconds)
@@ -351,7 +396,15 @@ func BuildJob(s JobSpec) (*batchv1.Job, error) {
 			ActiveDeadlineSeconds:   &activeDeadline,
 			TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+					// The annotation as well as the field: a cluster older
+					// than 1.30 reads only this, and drops the field it does
+					// not know.
+					Annotations: map[string]string{
+						"container.apparmor.security.beta.kubernetes.io/build": "unconfined",
+					},
+				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:                corev1.RestartPolicyNever,
 					InitContainers:               initContainers,
@@ -724,7 +777,7 @@ func buildScript(s JobSpec) string {
 		args = []string{
 			"--frontend dockerfile.v0",
 			flag("--local", "context="+context),
-			flag("--local", "dockerfile="+workspace+"/.skifity"),
+			flag("--local", "dockerfile="+generatedContext),
 			flag("--opt", "filename=Dockerfile"),
 		}
 		// A front end reads its build-time settings — VITE_API_URL and the
@@ -766,7 +819,9 @@ func buildScript(s JobSpec) string {
 		b.WriteString(secretArgWarnings(s, dockerfileFile(s)))
 	}
 	b.WriteString("echo '==> Building the image'\n")
-	b.WriteString("buildctl build \\\n  " + strings.Join(args, " \\\n  ") + "\n")
+	// buildctl-daemonless.sh starts this build's own BuildKit, waits for it,
+	// runs buildctl against it, and stops it when buildctl is done.
+	b.WriteString("buildctl-daemonless.sh build \\\n  " + strings.Join(args, " \\\n  ") + "\n")
 	fmt.Fprintf(&b, "echo '==> Pushed %s'\n", s.Image)
 	return b.String()
 }
@@ -837,9 +892,13 @@ COPY %s /srv
 	// closed it and ran <anything> in this container, which holds the
 	// registry's credentials for every team's images. Base64 is letters,
 	// digits and three symbols, and quoted besides.
+	//
+	// Outside the workspace. It was written to .skifity in the repository's
+	// own checkout, which is the context a site with no build copies whole
+	// into the web server: every such site served its own Dockerfile.
 	encoded := base64.StdEncoding.EncodeToString([]byte(b.String()))
-	return fmt.Sprintf("mkdir -p %s/.skifity\nprintf '%%s' %s | base64 -d > %s/.skifity/Dockerfile\n",
-		workspace, shellsafe.Quote(encoded), workspace)
+	return fmt.Sprintf("mkdir -p %s\nprintf '%%s' %s | base64 -d > %s/Dockerfile\n",
+		generatedContext, shellsafe.Quote(encoded), generatedContext)
 }
 
 // cacheRef is where the build cache lives: the image's own repository, at a
@@ -859,27 +918,52 @@ func buildResources(s JobSpec) corev1.ResourceRequirements {
 		},
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse(fmt.Sprintf("%dMi", s.MemLimitMB)),
-			// The writable layer, logs and workspace together: a little over
-			// the workspace's own ceiling, so that the ceiling is what trips.
+			// The writable layer, logs, the workspace and the builder's
+			// layers together: a little over the two ceilings added up, so
+			// that one of them is what trips.
 			corev1.ResourceEphemeralStorage: resource.MustParse(BuildEphemeralLimit),
 		},
 	}
 }
 
-// WorkspaceSizeLimit is how much a build's workspace may hold, and
-// BuildEphemeralLimit how much its pod may write to the node's disk in all.
+// WorkspaceSizeLimit is how much a build's workspace may hold,
+// BuilderStateLimit how much its BuildKit may keep, and BuildEphemeralLimit how
+// much its pod may write to the node's disk in all.
 const (
 	WorkspaceSizeLimit  = "10Gi"
-	BuildEphemeralLimit = "12Gi"
+	BuilderStateLimit   = "15Gi"
+	BuildEphemeralLimit = "27Gi"
 )
 
-// confinedContainer is the security context every build container gets. The
-// user is left alone: the tools these images ship expect to run as they were
-// built, and the boundary that matters is the pod's.
+// confinedContainer is the security context the steps before the build get.
+// The user is left alone: the tools these images ship expect to run as they
+// were built, and the boundary that matters is the pod's.
 func confinedContainer() *corev1.SecurityContext {
 	return &corev1.SecurityContext{
 		AllowPrivilegeEscalation: ptr(false),
 		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"NET_RAW"}},
+	}
+}
+
+// builderContainer is the security context of the container that runs the
+// build's own BuildKit.
+//
+// Rootless BuildKit is BuildKit in a user namespace, as an ordinary user: uid
+// 1000 here, root only inside a namespace of its own that maps to nobody on the
+// server. Making that namespace is what needs the rest. newuidmap, which maps
+// the namespace's users, is setuid, so the container may not be forbidden to
+// gain privilege — and the setuid program is the one thing that does; and the
+// seccomp and AppArmor profiles a runtime applies by default refuse the system
+// calls that make a namespace, so both are off for this container. No raw
+// sockets, as everywhere else, and nothing privileged: that would be the
+// server's container runtime handed to a build.
+func builderContainer() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsUser:       ptr(builderUser),
+		RunAsGroup:      ptr(builderUser),
+		Capabilities:    &corev1.Capabilities{Drop: []corev1.Capability{"NET_RAW"}},
+		SeccompProfile:  &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined},
+		AppArmorProfile: &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined},
 	}
 }
 

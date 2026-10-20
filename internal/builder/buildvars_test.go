@@ -102,9 +102,10 @@ func TestRailpackIsGivenEachVariableAsASecret(t *testing.T) {
 	}
 }
 
-// One BuildKit serves every team. Railpack's mount caches are shared unless
-// they are given a prefix, and a package cache one team's build wrote would be
-// read by the next team's.
+// Railpack's mount caches are shared unless they are given a prefix. Each
+// build has a BuildKit of its own now, so nothing is shared to begin with; the
+// prefix stays, so that a daemon that ever serves two apps again does not
+// hand one app's package cache to the other.
 func TestEachAppsBuildCacheIsItsOwn(t *testing.T) {
 	a, b := baseJob(), baseJob()
 	b.AppID = "app_2"
@@ -187,14 +188,14 @@ func TestABuildCommandCannotRunInTheBuildContainer(t *testing.T) {
 	// shell, which holds the registry's credentials. A line saying the
 	// heredoc's marker ended it, and what followed ran there.
 	spec := withVariables(BuilderStatic)
-	spec.BuildCommand = "npm run build\nSKIFITY_DOCKERFILE\ncat /root/.docker/config.json\ncat <<'SKIFITY_DOCKERFILE'"
+	spec.BuildCommand = "npm run build\nSKIFITY_DOCKERFILE\ncat " + dockerConfigDir + "/config.json\ncat <<'SKIFITY_DOCKERFILE'"
 	script := mustBuild(t, spec).Spec.Template.Spec.Containers[0].Args[0]
 	for _, line := range strings.Split(script, "\n") {
-		if strings.Contains(line, "/root/.docker/config.json") {
+		if strings.Contains(line, dockerConfigDir+"/config.json") {
 			t.Fatalf("the build command reached the build container's shell:\n%s", script)
 		}
 	}
-	if !strings.Contains(staticDockerfile(t, script), "cat /root/.docker/config.json") {
+	if !strings.Contains(staticDockerfile(t, script), "cat "+dockerConfigDir+"/config.json") {
 		t.Fatal("the build command is not in the Dockerfile, where it runs inside the build")
 	}
 }

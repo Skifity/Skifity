@@ -546,8 +546,6 @@ var Components = []Component{
 		Description: "Issues and renews Let's Encrypt certificates for your domains.", MemoryMB: 120},
 	{Name: "registry", Title: "Image registry", Optional: true,
 		Description: "Stores the images Skifity builds, inside the cluster.", MemoryMB: 60},
-	{Name: "buildkit", Title: "Builder", Optional: true,
-		Description: "Builds your apps into images, without needing Docker on the host.", MemoryMB: 200},
 	{Name: "cloudnative-pg", Title: "PostgreSQL", Optional: true,
 		Description: "Runs and looks after PostgreSQL databases, including backups and failover.", MemoryMB: 150},
 	{Name: "keda", Title: "Scale to zero", Optional: true, Beta: true,

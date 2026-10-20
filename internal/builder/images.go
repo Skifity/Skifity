@@ -31,16 +31,14 @@ const (
 	RailpackImage = "ghcr.io/railwayapp/railpack-frontend:" + railpackVersion +
 		"@sha256:f1973377693af30c9b37a92c97c661c07b277ccdc6be909213c74c771f8d2d6d"
 
-	// BuildKitVersion is the version of both the shared daemon and the
-	// buildctl every build runs, so the two ends of the connection agree.
+	// BuildKitVersion is the version of the BuildKit every build starts for
+	// itself.
 	BuildKitVersion = "v0.33.0"
-	// BuildKitClientImage is where buildctl comes from. Not the rootless
-	// image: buildctl writes into the workspace the clone step left behind,
-	// which is owned by root.
-	BuildKitClientImage = "moby/buildkit:" + BuildKitVersion +
-		"@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3"
-	// BuildKitDaemonImage is the shared, rootless builder.
-	BuildKitDaemonImage = "moby/buildkit:" + BuildKitVersion + "-rootless" +
+	// BuildKitImage is the rootless builder: the daemon and buildctl, which
+	// the build container runs together. It runs as an ordinary user, which
+	// can read the workspace the clone step left behind and write nothing in
+	// it, and does not have to: what the build writes is its own.
+	BuildKitImage = "moby/buildkit:" + BuildKitVersion + "-rootless" +
 		"@sha256:80b15f0735e87bab7bf59ec4d695dfb4a7cfb25521cf56dc75d6f256285b63ef"
 
 	// GitImage fetches the repository.

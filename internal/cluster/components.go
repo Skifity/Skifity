@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"skifity/internal/builder"
+	"skifity/internal/errdoc"
 	"skifity/internal/kube"
 	"skifity/internal/settings"
 	"skifity/internal/version"
@@ -54,10 +54,8 @@ func (c *Cluster) installComponent(ctx context.Context, name string) error {
 		return c.installCertManager(ctx)
 	case "registry":
 		return c.installRegistry(ctx)
-	case "buildkit":
-		return c.installBuildKit(ctx)
 	case "cloudnative-pg":
-		return c.installFromURL(ctx, name, "cnpg-system", "cnpg-controller-manager")
+		return c.installFromURL(ctx, name, kube.DatabaseOperatorNamespace, "cnpg-controller-manager")
 	case "keda":
 		return c.installKEDA(ctx)
 	case "longhorn":
@@ -189,8 +187,6 @@ func (c *Cluster) EnsureClusterIssuer(ctx context.Context) error {
 const (
 	RegistryService = "skifity-registry"
 	RegistryPort    = 5000
-	BuildKitService = "skifity-buildkit"
-	BuildKitPort    = 1234
 )
 
 // RegistryAddress is the in-cluster address images are tagged with.
@@ -198,21 +194,88 @@ func (c *Cluster) RegistryAddress() string {
 	return kube.RegistryHost()
 }
 
-// installRegistry deploys the in-cluster image registry.
+// installRegistry deploys the in-cluster image registry, with its guard in
+// front of it.
 func (c *Cluster) installRegistry(ctx context.Context) error {
 	if err := c.EnsureBuildNamespace(ctx); err != nil {
 		return err
 	}
+	// The key the guard checks tokens against, before the pod that mounts it.
+	if _, err := c.RegistryKey(ctx); err != nil {
+		return err
+	}
+	image, err := c.ownImage(ctx)
+	if err != nil {
+		return errdoc.RegistryNoPanelImage(err.Error())
+	}
 	namespace := c.client.BuildNamespace()
-	if err := c.client.Applier().ApplyAll(ctx, registryObjects(namespace)...); err != nil {
+	if err := c.client.Applier().ApplyAll(ctx, registryObjects(namespace, image)...); err != nil {
 		return err
 	}
 	return c.client.WaitForDeployment(ctx, namespace, RegistryService, 3*time.Minute)
 }
 
+// ReconcileRegistry keeps the registry's guard in step with the panel.
+//
+// The registry is installed once and then left alone, so a panel upgraded to a
+// version with a guard would keep pushing to a registry anybody can write to,
+// with tokens nothing reads; and a panel upgraded again would keep the guard of
+// the version before, which is not the program that signs the tokens. Either
+// is put right here, which restarts the registry for a moment: a pull that
+// lands in that moment is retried by the server that asked.
+//
+// A push does not survive the registry restarting under it, so this happens
+// only while no build is running, and holds the next ones back until the
+// registry is ready again. With builds in flight it is left for a later build:
+// an older guard, or none, still lets the build that is waiting push.
+//
+// It is called before every build, outside BeginBuild, and costs two reads
+// when there is nothing to do.
+func (c *Cluster) ReconcileRegistry(ctx context.Context) error {
+	inStep, err := c.registryInStep(ctx)
+	if err != nil || inStep {
+		return err
+	}
+	if !c.registryMu.TryLock() {
+		c.log.Info("the registry's guard is out of step with the panel, and builds are running; a later build puts it right")
+		return nil
+	}
+	defer c.registryMu.Unlock()
+	c.log.Info("putting the panel's guard in front of the registry")
+	return c.installRegistry(ctx)
+}
+
+// registryInStep reports whether the registry's guard is the panel's own image.
+func (c *Cluster) registryInStep(ctx context.Context) (bool, error) {
+	namespace := c.client.BuildNamespace()
+	deployment, err := c.client.Clientset().AppsV1().Deployments(namespace).Get(ctx, RegistryService, metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("read the registry: %w", err)
+	}
+	image, err := c.ownImage(ctx)
+	if err != nil {
+		return false, errdoc.RegistryNoPanelImage(err.Error())
+	}
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == registryGuardContainer && container.Image == image {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// registryGuardContainer is the guard's container in the registry's pod.
+const registryGuardContainer = "guard"
+
 // registryObjects renders the registry, separately from applying it, so a test
 // can read what would be created.
-func registryObjects(namespace string) []any {
+//
+// Two containers in one pod. The registry listens on the pod's loopback only;
+// the guard, the panel's own image running `skifity registry-guard`, listens on
+// the registry's port and is the only way to it. Reading passes straight
+// through, which is what every server's container runtime does to pull an
+// app; writing needs a token for the repository written to.
+func registryObjects(namespace, guardImage string) []any {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       RegistryService,
 		"app.kubernetes.io/managed-by": version.Binary,
@@ -229,6 +292,7 @@ func registryObjects(namespace string) []any {
 		},
 	}
 
+	keyPath := "/etc/skifity-registry"
 	replicas := int32(1)
 	deployment := &appsv1.Deployment{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
@@ -242,35 +306,85 @@ func registryObjects(namespace string) []any {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "registry",
-						Image: registryImage,
-						Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: RegistryPort}},
-						Env: []corev1.EnvVar{
-							{Name: "REGISTRY_STORAGE_DELETE_ENABLED", Value: "true"},
-							{Name: "REGISTRY_HTTP_ADDR", Value: fmt.Sprintf("0.0.0.0:%d", RegistryPort)},
-						},
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("20m"),
-								corev1.ResourceMemory: resource.MustParse("64Mi"),
+					// The guard reads a file and forwards HTTP; it has no use for
+					// the Kubernetes API.
+					AutomountServiceAccountToken: ptrTo(false),
+					Containers: []corev1.Container{
+						{
+							Name:  "registry",
+							Image: registryImage,
+							Env: []corev1.EnvVar{
+								{Name: "REGISTRY_STORAGE_DELETE_ENABLED", Value: "true"},
+								// Loopback: the guard is the only thing that can reach it.
+								{Name: "REGISTRY_HTTP_ADDR", Value: fmt.Sprintf("127.0.0.1:%d", RegistryUpstreamPort)},
+								// The address an upload is continued at is written
+								// relative, so it is the guard's, whichever name
+								// the client used.
+								{Name: "REGISTRY_HTTP_RELATIVEURLS", Value: "true"},
+								{Name: "REGISTRY_HTTP_DEBUG_ADDR", Value: registryDebugAddress},
 							},
-							Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("512Mi")},
-						},
-						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/var/lib/registry"}},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/v2/", Port: intstr.FromString("http")},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("20m"),
+									corev1.ResourceMemory: resource.MustParse("64Mi"),
+								},
+								Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("512Mi")},
 							},
-							PeriodSeconds: 5,
+							VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/var/lib/registry"}},
 						},
-					}},
-					Volumes: []corev1.Volume{{
-						Name: "data",
-						VolumeSource: corev1.VolumeSource{
-							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: RegistryService},
+						{
+							Name:    registryGuardContainer,
+							Image:   guardImage,
+							Command: []string{"/usr/local/bin/skifity", "registry-guard"},
+							Env: []corev1.EnvVar{
+								{Name: "SKIFITY_REGISTRY_ADDRESS", Value: fmt.Sprintf(":%d", RegistryPort)},
+								{Name: "SKIFITY_REGISTRY_UPSTREAM", Value: fmt.Sprintf("http://127.0.0.1:%d", RegistryUpstreamPort)},
+								{Name: "SKIFITY_REGISTRY_KEY_FILE", Value: keyPath + "/" + registryKeyField},
+								{Name: "SKIFITY_LOG_FORMAT", Value: "json"},
+							},
+							Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: RegistryPort}},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("10m"),
+									corev1.ResourceMemory: resource.MustParse("16Mi"),
+								},
+								Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("128Mi")},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptrTo(false),
+								ReadOnlyRootFilesystem:   ptrTo(true),
+								RunAsNonRoot:             ptrTo(true),
+								RunAsUser:                ptrTo(int64(65532)),
+								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							},
+							// Through the guard to the registry, so a pod is ready
+							// only when both halves answer.
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{Path: "/v2/", Port: intstr.FromString("http")},
+								},
+								PeriodSeconds: 5,
+							},
+							VolumeMounts: []corev1.VolumeMount{{Name: "key", MountPath: keyPath, ReadOnly: true}},
 						},
-					}},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: RegistryService},
+							},
+						},
+						{
+							// Readable by every user: the guard runs as nobody,
+							// and a Secret's files belong to root. Only the
+							// guard's container mounts it.
+							Name: "key",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{SecretName: RegistryKeySecret, DefaultMode: ptrTo(int32(0o444))},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -295,136 +409,29 @@ func registryObjects(namespace string) []any {
 	return []any{claim, deployment, service}
 }
 
-// installBuildKit deploys the rootless builder.
-func (c *Cluster) installBuildKit(ctx context.Context) error {
-	if err := c.EnsureBuildNamespace(ctx); err != nil {
-		return err
-	}
+// legacyBuilder is the one BuildKit every team's builds used to share, before
+// each build had its own.
+const legacyBuilder = "skifity-buildkit"
+
+// RetireSharedBuilder removes the shared BuildKit from a cluster that has one.
+// Nothing talks to it any more, and it held a node's memory and its cache held
+// the node's disk for nobody. Called before a build; it costs a read when the
+// builder is long gone.
+func (c *Cluster) RetireSharedBuilder(ctx context.Context) error {
 	namespace := c.client.BuildNamespace()
-	if err := c.client.Applier().ApplyAll(ctx, buildKitObjects(namespace)...); err != nil {
+	if _, err := c.client.Clientset().AppsV1().Deployments(namespace).Get(ctx, legacyBuilder, metav1.GetOptions{}); err != nil {
+		if kube.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("read the shared builder: %w", err)
+	}
+	c.log.Info("removing the shared builder: every build runs its own now")
+	applier := c.client.Applier()
+	if err := applier.Delete(ctx, "apps/v1", "Deployment", namespace, legacyBuilder); err != nil {
 		return err
 	}
-	return c.client.WaitForDeployment(ctx, namespace, BuildKitService, 5*time.Minute)
+	return applier.Delete(ctx, "v1", "Service", namespace, legacyBuilder)
 }
-
-// buildKitObjects renders the builder, separately from applying it.
-func buildKitObjects(namespace string) []any {
-	labels := map[string]string{
-		"app.kubernetes.io/name":       BuildKitService,
-		"app.kubernetes.io/managed-by": version.Binary,
-	}
-
-	replicas := int32(1)
-	runAsUser := int64(1000)
-	cacheLimit := resource.MustParse(BuildKitCacheLimit)
-	deployment := &appsv1.Deployment{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
-		ObjectMeta: metav1.ObjectMeta{Name: BuildKitService, Namespace: namespace, Labels: labels},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{MatchLabels: labels},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-					// Rootless BuildKit needs these two profiles relaxed to use
-					// user namespaces. This is the whole reason for choosing
-					// rootless: the alternative is a privileged container with
-					// the host's container runtime socket.
-					Annotations: map[string]string{
-						"container.apparmor.security.beta.kubernetes.io/buildkitd": "unconfined",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name: "buildkitd",
-						// Pinned: "master" is whatever was built this morning,
-						// and a builder that changes under an operator is a
-						// build that breaks for no reason they can see.
-						Image: buildKitImage,
-						Args: []string{
-							"--addr", fmt.Sprintf("tcp://0.0.0.0:%d", BuildKitPort),
-							"--oci-worker-no-process-sandbox",
-							// Its own garbage collection, told how much to keep.
-							// Left to itself the cache grows until the disk is
-							// full, and the disk it fills is the node's.
-							"--oci-worker-gc-keepstorage", fmt.Sprint(BuildKitKeepStorageMB),
-						},
-						Ports: []corev1.ContainerPort{{Name: "grpc", ContainerPort: BuildKitPort}},
-						SecurityContext: &corev1.SecurityContext{
-							RunAsUser:      &runAsUser,
-							SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined},
-						},
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("100m"),
-								corev1.ResourceMemory: resource.MustParse("256Mi"),
-							},
-							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("2Gi"),
-								// The cache's ceiling, a little over, plus the
-								// layer being built: see BuildKitCacheLimit.
-								corev1.ResourceEphemeralStorage: resource.MustParse(BuildKitEphemeralLimit),
-							},
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{Command: []string{
-									// The address has to be given. buildkitd is
-									// started with --addr, which replaces the
-									// default socket rather than adding to it,
-									// so a bare `buildctl debug workers` looks
-									// for a socket that does not exist and the
-									// builder never becomes ready.
-									"buildctl", "--addr", buildKitLocalAddress,
-									"debug", "workers",
-								}},
-							},
-							InitialDelaySeconds: 10,
-							PeriodSeconds:       10,
-						},
-						VolumeMounts: []corev1.VolumeMount{{Name: "cache", MountPath: "/home/user/.local/share/buildkit"}},
-					}},
-					Volumes: []corev1.Volume{{
-						Name: "cache",
-						// An emptyDir rather than a volume: the build cache is
-						// worth keeping between builds on one node but is not
-						// worth a PVC that pins the builder to one server.
-						VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &cacheLimit}},
-					}},
-				},
-			},
-		},
-	}
-
-	service := &corev1.Service{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
-		ObjectMeta: metav1.ObjectMeta{Name: BuildKitService, Namespace: namespace, Labels: labels},
-		Spec: corev1.ServiceSpec{
-			Selector: labels,
-			Ports: []corev1.ServicePort{{
-				Name: "grpc", Port: BuildKitPort, TargetPort: intstr.FromString("grpc"),
-			}},
-		},
-	}
-
-	return []any{deployment, service}
-}
-
-// How much disk the shared builder may use. BuildKit keeps its cache, and
-// removes the oldest of it when it holds more than BuildKitKeepStorageMB; the
-// volume holding it is capped a little above that (BuildKitCacheLimit), so that
-// the garbage collector is what keeps it down and the cap is only what stops a
-// runaway. Over the cap the builder's pod is evicted, which fails the builds in
-// flight and nobody else's pods.
-const (
-	BuildKitKeepStorageMB  = 8000
-	BuildKitCacheLimit     = "14Gi"
-	BuildKitEphemeralLimit = "16Gi"
-)
-
-// buildKitImage is the rootless builder, pinned by version and digest in one
-// place with the buildctl that talks to it. See builder/images.go.
-const buildKitImage = builder.BuildKitDaemonImage
 
 // registryImage is the in-cluster registry, and the garbage collection that
 // sweeps it. It was registry:3, a tag that moves, so the registry holding
@@ -432,10 +439,6 @@ const buildKitImage = builder.BuildKitDaemonImage
 // nothing changed here. Pinned by version and index digest, read from Docker
 // Hub on 2026-10-02; move the two together.
 const registryImage = "registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8"
-
-// buildKitLocalAddress is how the readiness probe reaches buildkitd from
-// inside its own container.
-var buildKitLocalAddress = fmt.Sprintf("tcp://127.0.0.1:%d", BuildKitPort)
 
 // installKEDA installs KEDA and its HTTP add-on, which together provide
 // scale-to-zero.

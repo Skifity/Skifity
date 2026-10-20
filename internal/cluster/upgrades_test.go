@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"skifity/internal/builder"
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
 )
@@ -25,7 +24,6 @@ func TestAComponentsVersionIsTheOneThisPanelInstalls(t *testing.T) {
 		"keda":           "2.20.0",
 		"longhorn":       "1.10.0",
 		"registry":       "3.1.2",
-		"buildkit":       builder.BuildKitVersion,
 		"system-upgrade": "0.20.2",
 		GuardComponent:   "",
 	} {
