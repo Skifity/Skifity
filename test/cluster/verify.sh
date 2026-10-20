@@ -138,6 +138,9 @@ ok "the panel image to install is $SKIFITY_IMAGE"
 
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 say "  this machine has ${MEM_MB} MB of memory"
+# What the machine uses before anything is installed, so what the install adds
+# can be told apart from what was already running on it.
+BASE_USED_MB=$(free -m | awk '/^Mem:/ {print $3}')
 # The README's minimum is 1 GB and its comfortable size 2 GB. Below the minimum
 # is a machine the README says will not do; between the two is the run that
 # finds out whether the minimum is true, which is worth having, not a failure.
@@ -234,6 +237,14 @@ through_ingress() {
 
 api GET /api/health >/dev/null || die "the panel's own health endpoint does not answer"
 ok "/api/health answers"
+
+# A fresh install, before anything is deployed or turned on: k3s, its own
+# components, cert-manager and the panel. The end of the run measures the same
+# again with everything installed. Half a minute first, so the install's own
+# jobs have finished rather than being counted.
+sleep 30
+FRESH_K3S_MB=$(ps -o rss= -C k3s-server 2>/dev/null | awk '{s+=$1} END {print int(s/1024)}')
+FRESH_USED_MB=$(free -m | awk '/^Mem:/ {print $3}')
 
 # --- first-run setup -------------------------------------------------------
 
@@ -1290,13 +1301,18 @@ PANEL_MB=""
 [ -n "$PANEL_POD" ] && PANEL_MB=$(kubectl -n "$PANEL_NS" top pod "$PANEL_POD" --no-headers 2>/dev/null | awk 'NR == 1 {print $3}' | tr -d 'Mi')
 USED_MB=$(free -m | awk '/^Mem:/ {print $3}')
 
-say "  k3s server process : ${K3S_MB:-unknown} MB"
-say "  the panel pod      : ${PANEL_MB:-unknown} MB"
-say "  the whole machine  : ${USED_MB:-unknown} MB of ${MEM_MB} MB in use"
+say "  before anything was installed:"
+say "    the whole machine  : ${BASE_USED_MB:-unknown} MB of ${MEM_MB} MB in use"
+say "  just after the install, with nothing deployed:"
+say "    k3s server process : ${FRESH_K3S_MB:-unknown} MB"
+say "    the whole machine  : ${FRESH_USED_MB:-unknown} MB in use"
+say "  at the end, with everything this run turned on still running:"
+say "    k3s server process : ${K3S_MB:-unknown} MB"
+say "    the panel pod      : ${PANEL_MB:-unknown} MB"
+say "    the whole machine  : ${USED_MB:-unknown} MB in use"
 say ""
-say "  docs/performance.md says the panel is 35 MiB idle, measured on a laptop."
-say "  The number above is the first one measured on a cluster. If they disagree,"
-say "  the document is what changes."
+say "  All in MiB. docs/performance.md has these from earlier runs; if they"
+say "  disagree, the document is what changes."
 
 summary
 [ "$FAIL" -eq 0 ]
