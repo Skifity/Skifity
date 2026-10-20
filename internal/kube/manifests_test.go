@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -239,6 +240,25 @@ func TestSpreadAcrossServersToleratesOneNode(t *testing.T) {
 	}
 	if constraints[0].TopologyKey != "kubernetes.io/hostname" {
 		t.Fatalf("spreading by %q, want kubernetes.io/hostname", constraints[0].TopologyKey)
+	}
+}
+
+// A rollout spreads the new version's instances among themselves. Counted
+// with the old version's, they were spread against instances about to go: a
+// restart on two servers put both of an app's instances on one, and the app
+// had none when that server failed.
+func TestARolloutSpreadsItsOwnInstances(t *testing.T) {
+	s := baseSpec()
+	s.Replicas = 2
+	s.SpreadAcrossServers = true
+	spec := BuildDeployment(s).Spec.Template.Spec
+
+	if keys := spec.TopologySpreadConstraints[0].MatchLabelKeys; !slices.Equal(keys, []string{"pod-template-hash"}) {
+		t.Errorf("the spread counts instances by %v, want by the version's pod-template-hash", keys)
+	}
+	terms := spec.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+	if len(terms) != 1 || !slices.Equal(terms[0].PodAffinityTerm.MatchLabelKeys, []string{"pod-template-hash"}) {
+		t.Errorf("the anti-affinity counts instances by %+v, want by the version's pod-template-hash", terms)
 	}
 }
 

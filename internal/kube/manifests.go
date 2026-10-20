@@ -155,19 +155,29 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 		// ScheduleAnyway rather than DoNotSchedule: on a one-node cluster,
 		// which is where most installs start, DoNotSchedule would leave every
 		// instance after the first stuck in Pending.
+		//
+		// Both count the instances of one version only, by the hash the
+		// Deployment gives each of its ReplicaSets. Counting every instance
+		// of the app counted the old version's while a rollout replaced
+		// them, which leaves the servers even at every step and then
+		// removes the old: the cluster runs showed a restart put both of an
+		// app's instances on one server, and when that server failed the
+		// app had none.
 		podSpec.TopologySpreadConstraints = []corev1.TopologySpreadConstraint{{
 			MaxSkew:           1,
 			TopologyKey:       "kubernetes.io/hostname",
 			WhenUnsatisfiable: corev1.ScheduleAnyway,
 			LabelSelector:     &metav1.LabelSelector{MatchLabels: s.SelectorLabels()},
+			MatchLabelKeys:    []string{appsv1.DefaultDeploymentUniqueLabelKey},
 		}}
 		podSpec.Affinity = &corev1.Affinity{
 			PodAntiAffinity: &corev1.PodAntiAffinity{
 				PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
 					Weight: 100,
 					PodAffinityTerm: corev1.PodAffinityTerm{
-						TopologyKey:   "kubernetes.io/hostname",
-						LabelSelector: &metav1.LabelSelector{MatchLabels: s.SelectorLabels()},
+						TopologyKey:    "kubernetes.io/hostname",
+						LabelSelector:  &metav1.LabelSelector{MatchLabels: s.SelectorLabels()},
+						MatchLabelKeys: []string{appsv1.DefaultDeploymentUniqueLabelKey},
 					},
 				}},
 			},
