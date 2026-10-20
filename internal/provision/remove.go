@@ -310,7 +310,10 @@ func abandon(ctx context.Context, clientset kubernetes.Interface, pods []corev1.
 	result := drainResult{unreachable: true}
 	named := map[string]bool{}
 	for _, pod := range pods {
-		if isDaemonSetPod(pod) || isMirrorPod(pod) {
+		// A finished build or command is not an instance, and nothing starts
+		// it again.
+		if isDaemonSetPod(pod) || isMirrorPod(pod) ||
+			pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			continue
 		}
 		if !keptDataOn(ctx, clientset, pod, node) {

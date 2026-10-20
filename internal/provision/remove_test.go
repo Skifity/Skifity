@@ -75,7 +75,13 @@ func TestAServerThatStoppedAnsweringIsTakenOutWithoutWaiting(t *testing.T) {
 		},
 		Spec: corev1.PodSpec{NodeName: "second"},
 	}
-	clientset := fake.NewSimpleClientset(node, app, database, claim, volume, ingress)
+	// A build that finished there, which nothing starts again.
+	build := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "build-shop-1", Namespace: "skifity-builds"},
+		Spec:       corev1.PodSpec{NodeName: "second"},
+		Status:     corev1.PodStatus{Phase: corev1.PodSucceeded},
+	}
+	clientset := fake.NewSimpleClientset(node, app, database, claim, volume, ingress, build)
 	p := &Provisioner{
 		cluster: cluster.New(kube.NewClientWith(clientset, nil, ""), nil, nil, slog.New(slog.DiscardHandler)),
 		log:     slog.New(slog.DiscardHandler),
