@@ -103,8 +103,9 @@ anybody who meant it.
   the daemon. The daemon is that build's alone.
 * What a server allows. Ubuntu from 23.10 refuses a user namespace to an
   unconfined program unless a profile allows it, which is what rootless BuildKit
-  needs. Ubuntu ships one for `rootlesskit`; a server without it fails its
-  builds at the start, saying so in the build's log.
+  needs. Ubuntu ships one for `rootlesskit`, and builds run under the
+  restriction with it (the cluster runs show both); a server without it fails
+  its builds at the start, saying so in the build's log.
 
 **Floods are not handled.** A volumetric attack, from many addresses at once, is
 out of scope above. What the panel does is per address: a limit on its own API, a

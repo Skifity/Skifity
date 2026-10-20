@@ -6578,11 +6578,32 @@ server, which listened on every address of its pod, is on loopback; the build
 namespace's policies let a build reach the registry and nothing else in it, and
 let the other servers' pulls in, which on more than one server they were not.
 
+**The third run** passed 64, failed 7, skipped 4, and every failure was the
+script's. What it showed of the product:
+
+* A build ran its own rootless BuildKit and pushed through the registry's
+  guard. The guard's log has each build's first upload refused for want of a
+  token and every request after it let through with one; the build's own log
+  has the fence saying the policy was in place before the clone began.
+* That was on a runner with `kernel.apparmor_restrict_unprivileged_userns = 1`,
+  Ubuntu's default from 24.04, and Ubuntu's own `rootlesskit` profile in
+  `/etc/apparmor.d`: the restriction does not stop a build.
+* The managed database came up: the initdb job finished and the instance ran,
+  with the API and the operator reachable through the new policy. The script
+  read its status from the wrong field and called it "unknown" — as it had in
+  the second run, on top of the real failure there.
+* An app's pod, behind its fence, reached none of the API, the kubelet, the
+  registry's NodePort or the registry, on any attempt.
+
+The registry checks failed because the probe was a bare pod that asked in its
+first second, before the policy controller had put its address in the set the
+registry lets in: a new pod is refused by the pods it talks to until then, the
+other side of the moment ADR-0027 is about, and harmless in that direction. The
+probe now starts behind a build's fence and is read from its log.
+
 **Not run.** Nothing on more than one server: the pulls through another
 server's NodePort, the gateway addresses the registry's policy names, a server
-going away. Nothing on a stock Ubuntu 24.04 server, whose AppArmor restricts the
-user namespaces rootless BuildKit makes unless Ubuntu's `rootlesskit` profile
-applies; the runner's settings are now in the report.
+going away. A stock Ubuntu 24.04 server only as far as the runner is one.
 
 ## Idle resource usage
 
