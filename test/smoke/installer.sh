@@ -102,6 +102,14 @@ if grep -q 'allowExternalNameServices: true' "$manifests/skifity-traefik.yaml" 2
 else
   t_fail "Traefik refuses ExternalName backends, so an app that scales to zero answers 404"
 fi
+# Replaced, Traefik keeps accepting for a moment after it is told to stop, so
+# the second the cluster takes to stop sending it visitors is not a second in
+# which every app refuses them.
+if [ "$(grep -c 'requestAcceptGraceTimeout: 5s' "$manifests/skifity-traefik.yaml" 2>/dev/null)" = 2 ]; then
+  t_pass "Traefik keeps accepting on both ports for five seconds after it is told to stop"
+else
+  t_fail "Traefik should keep accepting on web and websecure after it is told to stop"
+fi
 # Traefik carries every app's traffic, and was installed with no resources: the
 # first thing stopped when memory runs short, with no ceiling for a flood.
 if grep -q 'memory: 128Mi' "$manifests/skifity-traefik.yaml" 2>/dev/null &&

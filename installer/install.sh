@@ -1780,6 +1780,15 @@ EOF
 # Ingress provider refuses ExternalName backends unless told otherwise: every
 # such app answered 404. Only the panel writes Ingresses, so allowing them
 # lets nobody else point one anywhere.
+#
+# A Traefik being replaced (by a change to this file, or by k3s upgrading it)
+# starts its successor first and is stopped once that one is ready; told to
+# stop, it used to close its ports at once, while the cluster was still sending
+# it visitors for the second it takes to notice. Every app on the server
+# refused connections for that second, on every upgrade from a release that
+# wrote this file differently (test/cluster/upgrade.sh saw it). Five seconds of
+# still accepting after being told covers that second; what is in flight then
+# gets Traefik's own ten to finish.
 configure_ingress() {
 	ours="${K3S_MANIFESTS_DIR}/skifity-traefik.yaml"
 	mkdir -p "$K3S_MANIFESTS_DIR"
@@ -1814,6 +1823,15 @@ spec:
     providers:
       kubernetesIngress:
         allowExternalNameServices: true
+    ports:
+      web:
+        transport:
+          lifeCycle:
+            requestAcceptGraceTimeout: 5s
+      websecure:
+        transport:
+          lifeCycle:
+            requestAcceptGraceTimeout: 5s
     resources:
       requests:
         cpu: 100m
