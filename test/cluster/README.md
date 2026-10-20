@@ -28,6 +28,30 @@ Phase 6 is a person and should not become a script: give somebody
 **It installs k3s and changes the machine permanently.** Use a server you are
 willing to rebuild — a fresh VPS, not something you care about.
 
+### In CI
+
+`.github/workflows/cluster.yml` runs it on every push to `main`, and on demand
+from the Actions tab with a choice of phases. A GitHub-hosted runner is a fresh
+Ubuntu server with systemd that is thrown away afterwards, which is what this
+script asks for: the workflow builds the panel's image from the commit, hands
+it to k3s before k3s exists, stops the runner's Docker so the machine looks like
+a server nobody has touched, and runs the real installer through `verify.sh`.
+Let's Encrypt's staging server is used, because nothing on the internet can
+reach a runner and the production server is not the place to fail a challenge
+on every push.
+
+Whatever happens, `collect.sh` then gathers what the cluster says about itself
+— nodes, pods, events, network policies, certificates, the k3s journal, the
+logs of every part of the platform and of every build — and the workflow
+uploads it with the installer's and this script's logs as the `cluster-report`
+artifact. Secrets are left out entirely.
+
+The same collector works on a server of your own:
+
+```sh
+sudo bash test/cluster/collect.sh /tmp/skifity-report
+```
+
 From a laptop, against a server you are willing to rebuild:
 
 ```sh
@@ -84,6 +108,8 @@ interpreted.
 
 ## Why it is not in `make check`
 
-It needs a machine to destroy, several minutes, and the internet. CI runs on
-every push and must not do any of those. This is a thing a person runs before a
-release, and the release is not tagged until it has passed.
+It needs a machine to destroy, several minutes, and the internet, and `make
+check` runs on a contributor's own computer. The fast checks in CI must not do
+any of those either, so the cluster has a workflow of its own (above) that runs
+beside them on a machine that is destroyed afterwards. A release is not tagged
+until it has passed.

@@ -1,0 +1,96 @@
+name: Cluster
+
+# The crosscheck, test/cluster/verify.sh, on a real k3s cluster.
+#
+# Everything in CI checks Skifity against fakes, golden files and an in-process
+# SSH server. This is the other half. A GitHub-hosted runner is a fresh Ubuntu
+# server with systemd that nobody minds throwing away, which is exactly what
+# verify.sh asks for: it installs Skifity with the real installer, from the
+# image built from this commit, and works through the checklist in
+# docs/checklist.md against the cluster it made.
+#
+# Its own workflow rather than a job in CI: it takes long and needs the
+# internet, so it must not hold up the fast checks, and what it says is a
+# report from a real cluster to act on.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      phases:
+        description: "Which phases of verify.sh to run"
+        required: false
+        default: "1 2 3 4 5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cluster-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Real cluster
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      # Without the cross-compiled CLIs: they are for the panel's download
+      # page, and building five of them costs minutes that nothing here uses.
+      # The panel still serves its own binary for this machine's platform.
+      - name: Build the panel image from this commit
+        run: |
+          docker build \
+            --build-arg VERSION="cluster-${GITHUB_SHA::7}" \
+            --build-arg COMMIT="${GITHUB_SHA::7}" \
+            --build-arg CLI_PLATFORMS="" \
+            -t skifity:local .
+
+      # k3s imports every tarball in this directory when it first starts, so
+      # the image is there before the cluster is and nothing is pushed anywhere.
+      - name: Hand the image to k3s before k3s exists
+        run: |
+          sudo mkdir -p /var/lib/rancher/k3s/agent/images
+          docker save skifity:local | sudo tee /var/lib/rancher/k3s/agent/images/skifity.tar >/dev/null
+
+      # A server somebody installs Skifity on does not run Docker, and Docker
+      # sets the FORWARD chain to DROP: that is a different machine from the
+      # one the installer is written for.
+      - name: Make the runner a fresh server
+        run: |
+          sudo systemctl stop docker.socket docker.service containerd.service || true
+          sudo iptables -P FORWARD ACCEPT
+          free -m
+          df -h /
+
+      # Let's Encrypt's staging server: nothing on the internet can reach this
+      # runner, so no certificate will be issued, and the production server is
+      # not the place to fail a challenge on every push. The installer says
+      # so and carries on, which is part of what is being checked.
+      - name: Install Skifity and run the crosscheck
+        env:
+          PHASES: ${{ inputs.phases || '1 2 3 4 5' }}
+        run: |
+          sudo env \
+            KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+            SKIFITY_IMAGE=skifity:local \
+            SKIFITY_ASSUME_YES=1 \
+            SKIFITY_ACME_STAGING=1 \
+            SKIFITY_PHASES="$PHASES" \
+            VERIFY_GIT_REPO="https://github.com/${GITHUB_REPOSITORY}" \
+            VERIFY_GIT_BRANCH="${GITHUB_REF_NAME}" \
+            bash test/cluster/verify.sh
+
+      - name: Collect what the cluster says
+        if: always()
+        run: sudo bash test/cluster/collect.sh "$RUNNER_TEMP/cluster-report"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cluster-report
+          path: ${{ runner.temp }}/cluster-report
+          retention-days: 14
