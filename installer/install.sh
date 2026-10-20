@@ -2170,11 +2170,23 @@ More detail:
 		ok "cert-manager is ready$(took)"
 	fi
 
-	acme_server="https://acme-v02.api.letsencrypt.org/directory"
+	# A second run keeps what the issuer has: the address the first run
+	# registered, and the ACME server, which the panel's own settings may have
+	# changed since (Settings, Domains and HTTPS). It used to put Let's
+	# Encrypt's production server back on every run, so an upgrade quietly
+	# undid an ACME server chosen in the panel. --email and --staging change
+	# them, as they say.
+	acme_server=$(kubectl get clusterissuer "$ISSUER" -o jsonpath='{.spec.acme.server}' 2>/dev/null || true)
+	case "$acme_server" in
+	*'|'* | *'&'* | *\\*) acme_server="" ;; # what sed below would read as its own
+	esac
+	case "$acme_server" in
+	https://?* | http://?*) ;;
+	*) acme_server="https://acme-v02.api.letsencrypt.org/directory" ;;
+	esac
 	[ "${SKIFITY_ACME_STAGING:-}" = "1" ] &&
 		acme_server="https://acme-staging-v02.api.letsencrypt.org/directory"
 
-	# A second run without --email keeps the address the first one registered.
 	acme_email="${SKIFITY_ACME_EMAIL:-}"
 	if [ -z "$acme_email" ]; then
 		acme_email=$(kubectl get clusterissuer "$ISSUER" -o jsonpath='{.spec.acme.email}' 2>/dev/null || true)
@@ -2193,11 +2205,12 @@ More detail:
 		retry 12 5 kubectl apply -f "$MANIFEST_DIR/cluster-issuer.yaml" || fail \
 		"Could not create the certificate issuer." \
 		"Run the installer again. If it keeps failing, ${LOG_FILE} has the whole of what kubectl said."
-	if [ "${SKIFITY_ACME_STAGING:-}" = "1" ]; then
-		ok "Certificates will be issued by Let's Encrypt's staging server, which browsers do not trust"
-	else
-		ok "Certificates will be issued by Let's Encrypt"
-	fi
+	case "$acme_server" in
+	https://acme-staging-v02.api.letsencrypt.org/*)
+		ok "Certificates will be issued by Let's Encrypt's staging server, which browsers do not trust" ;;
+	https://acme-v02.api.letsencrypt.org/*) ok "Certificates will be issued by Let's Encrypt" ;;
+	*) ok "Certificates will be issued by the ACME server at ${acme_server}" ;;
+	esac
 }
 
 # render prints a manifest with the common placeholders filled in. The manifests

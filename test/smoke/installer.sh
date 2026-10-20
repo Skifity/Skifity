@@ -1108,6 +1108,7 @@ case "$*" in
 *"get ingress skifity-panel"*) [ -n "${STUB_ROUTE:-}" ] || exit 1; printf "%s" "$STUB_ROUTE" ;;
 *"get deployment cert-manager"*) exit "${STUB_CERT_MANAGER:-1}" ;;
 *"get deployment skifity-panel"*) [ -n "${STUB_PANEL_IMAGE:-}" ] || exit 1; printf "%s" "$STUB_PANEL_IMAGE" ;;
+*"get clusterissuer"*"acme.server"*) [ -n "${STUB_ISSUER_SERVER:-}" ] || exit 1; printf "%s" "$STUB_ISSUER_SERVER" ;;
 *"get clusterissuer"*) [ -n "${STUB_ISSUER_EMAIL:-}" ] || exit 1; printf "%s" "$STUB_ISSUER_EMAIL" ;;
 "apply -f "*)
   file=$3
@@ -1535,6 +1536,31 @@ if [ "$status" = 0 ] && grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" 2>/dev/
 else
   t_fail "a second run without --domain lost the panel's domain ($status):
 $out"
+fi
+
+# The ACME server is the panel's to change (Settings, Domains and HTTPS), and
+# every run used to put Let's Encrypt's production one back. A second run keeps
+# the one the issuer has; --staging still moves it to staging.
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_ROUTE="panel.example.test skifity-panel-tls" \
+  STUB_ISSUER_EMAIL=ops@example.test STUB_ISSUER_SERVER=https://acme.example.test/directory
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "server: https://acme.example.test/directory" "$FAKE/stub/applied-cluster-issuer.yaml" 2>/dev/null; then
+  t_pass "a second run keeps the ACME server the panel set"
+else
+  t_fail "a second run replaced the issuer's ACME server ($status): $(grep 'server:' "$FAKE/stub/applied-cluster-issuer.yaml" 2>&1)"
+fi
+case "$out" in
+*"issued by the ACME server at https://acme.example.test/directory"*) t_pass "and says which server certificates come from" ;;
+*) t_fail "the install did not say certificates come from acme.example.test:
+$out" ;;
+esac
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_ROUTE="panel.example.test skifity-panel-tls" \
+  STUB_ISSUER_EMAIL=ops@example.test STUB_ISSUER_SERVER=https://acme.example.test/directory
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --staging 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "server: https://acme-staging-v02.api.letsencrypt.org/directory" "$FAKE/stub/applied-cluster-issuer.yaml" 2>/dev/null; then
+  t_pass "--staging moves it to Let's Encrypt's staging server"
+else
+  t_fail "--staging did not move the issuer to staging ($status)"
 fi
 
 # --public-ip says where the server is, not what the panel is called: given on
