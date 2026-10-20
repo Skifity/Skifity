@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/json"
@@ -162,7 +163,7 @@ type webhookResult struct {
 func (s *Server) dispatchGitEvent(r *http.Request, source store.GitSource, event gitsrc.PushEvent) webhookResult {
 	result := webhookResult{Status: "accepted"}
 
-	apps, err := s.db.ListAppsByRepo(r.Context(), event.RepoURL)
+	apps, err := s.appsOfRepo(r.Context(), event.RepoURL)
 	if err != nil {
 		s.log.Error("could not find apps for a webhook", "repo", event.RepoURL, "error", err)
 		result.Status = "error"
@@ -458,6 +459,19 @@ func (s *Server) findPreview(r *http.Request, projectID string, event gitsrc.Pus
 	return old, nil
 }
 
+// appsOfRepo finds every app built from a repository, however its address was
+// typed: an app created from "https://host/acme/web.git" is the one a push to
+// "https://host/acme/web" is for.
+func (s *Server) appsOfRepo(ctx context.Context, repoURL string) ([]store.App, error) {
+	candidates, err := s.db.ListAppsByRepo(ctx, gitsrc.RepoName(repoURL))
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(candidates, func(app store.App) bool {
+		return !gitsrc.SameRepo(app.RepoURL, repoURL)
+	}), nil
+}
+
 // repoTag is a short, stable name for a repository, for a preview's ref.
 func repoTag(repoURL string) string {
 	normal := strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(repoURL), "/"), ".git"))
@@ -658,7 +672,7 @@ func (s *Server) previewStack(r *http.Request, sourceEnv, env store.Environment,
 	for _, app := range apps {
 		// The previewed app is there already, and an app its pull request
 		// builds is copied by that app's own delivery of the same event.
-		if app.ID == previewed.ID || (app.RepoURL != "" && app.RepoURL == previewed.RepoURL && app.AutoDeploy && app.PreviewDeploys) {
+		if app.ID == previewed.ID || (gitsrc.SameRepo(app.RepoURL, previewed.RepoURL) && app.AutoDeploy && app.PreviewDeploys) {
 			continue
 		}
 		request := DeployRequest{Trigger: "preview", CreatedBy: "webhook"}

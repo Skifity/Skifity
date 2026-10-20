@@ -115,3 +115,24 @@ func TestValidateBaseURLClosesTheSameDoor(t *testing.T) {
 		}
 	}
 }
+
+// An app keeps its address as it was typed, and a host's event spells it its
+// own way; deploy on push depends on the two being recognised as one.
+func TestOneRepositoryIsRecognisedHoweverItIsSpelled(t *testing.T) {
+	for _, tc := range []struct {
+		app, event string
+		same       bool
+	}{
+		{"https://git.example.test/acme/web.git", "https://git.example.test/acme/web", true},
+		{"https://git.example.test/acme/web/", "https://git.example.test/acme/web.git", true},
+		{"https://Git.Example.Test/Acme/Web", "https://git.example.test/acme/web", true},
+		{"git@git.example.test:acme/web.git", "https://git.example.test/acme/web", true},
+		{"https://git.example.test/acme/web", "https://git.example.test/acme/web-admin", false},
+		{"https://git.example.test/acme/web", "https://other.example.test/acme/web", false},
+		{"", "", false},
+	} {
+		if got := SameRepo(tc.app, tc.event); got != tc.same {
+			t.Errorf("SameRepo(%q, %q) = %v, want %v", tc.app, tc.event, got, tc.same)
+		}
+	}
+}

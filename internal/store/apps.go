@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"skifity/internal/kube"
@@ -192,10 +193,14 @@ func (db *DB) ImagesWorthKeeping(ctx context.Context, perApp int) ([]string, err
 	return out, rows.Err()
 }
 
-// ListAppsByRepo finds every app built from a repository, which is how a webhook
-// knows what to deploy.
-func (db *DB) ListAppsByRepo(ctx context.Context, repoURL string) ([]App, error) {
-	return db.queryApps(ctx, `SELECT `+appColumns+` FROM apps WHERE repo_url = ? ORDER BY created_at`, repoURL)
+// ListAppsByRepo finds the apps whose address mentions a repository's name,
+// case aside, which is how a webhook knows what to deploy. One repository has
+// several spellings — with ".git" or without, a slash at the end, the host in
+// capitals — so this only narrows the search: the caller compares the
+// addresses it gets back.
+func (db *DB) ListAppsByRepo(ctx context.Context, name string) ([]App, error) {
+	pattern := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(name) + "%"
+	return db.queryApps(ctx, `SELECT `+appColumns+` FROM apps WHERE repo_url != '' AND repo_url LIKE ? ESCAPE '\' ORDER BY created_at`, pattern)
 }
 
 func (db *DB) queryApps(ctx context.Context, query string, args ...any) ([]App, error) {

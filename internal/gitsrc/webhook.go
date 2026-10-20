@@ -564,6 +564,17 @@ func NormaliseRepoURL(raw string) string {
 	return parsed.String()
 }
 
+// SameRepo reports whether two addresses name the same repository.
+//
+// An app keeps its address as it was typed, often a clone URL ending in ".git",
+// while a host's events carry their own spelling of it. Case is ignored as
+// well: GitHub, GitLab, Gitea and Bitbucket all treat "Acme/Web" and "acme/web"
+// as one repository, and send the first while the app was given the second.
+func SameRepo(a, b string) bool {
+	a, b = NormaliseRepoURL(a), NormaliseRepoURL(b)
+	return a != "" && strings.EqualFold(a, b)
+}
+
 // RepoName returns "owner/repo" from a repository URL, for display.
 func RepoName(repoURL string) string {
 	parsed, err := url.Parse(NormaliseRepoURL(repoURL))

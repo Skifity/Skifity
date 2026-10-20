@@ -142,3 +142,31 @@ func TestAnAppIsSkippedByEveryPushThatTouchesNothingOfIt(t *testing.T) {
 		t.Fatal("an app deployed since the last skipped push was skipped against a commit it does not run")
 	}
 }
+
+// An app created from a clone URL ends in ".git", and a host's events name the
+// repository without it; such an app was never deployed by a push.
+func TestAPushFindsAnAppHoweverItsRepositoryWasTyped(t *testing.T) {
+	h := newHarness(t)
+	h.api.deployer = &fakeDeployer{log: &recorder{}}
+	acme := h.newTenant("acme")
+	for name, repo := range map[string]string{
+		"clone-url": "https://git.example.test/acme/web.git",
+		"slash":     "https://git.example.test/acme/web/",
+		"capitals":  "https://Git.Example.Test/Acme/Web",
+		"neighbour": "https://git.example.test/acme/web-admin.git",
+		"elsewhere": "https://other.example.test/acme/web.git",
+	} {
+		app := store.App{EnvironmentID: acme.env.ID, Name: name, Slug: name, Replicas: 1,
+			RepoURL: repo, Branch: "main", AutoDeploy: true}
+		if err := h.db.CreateApp(t.Context(), &app); err != nil {
+			t.Fatal(err)
+		}
+	}
+	event := gitsrc.PushEvent{Kind: "push", RepoURL: gitsrc.NormaliseRepoURL("https://git.example.test/acme/web.git"),
+		Branch: "main", CommitSHA: "abc"}
+	result := h.api.dispatchGitEvent(httptest.NewRequest(http.MethodPost, "/api/webhooks/git/src", nil),
+		store.GitSource{TeamID: acme.team.ID}, event)
+	if len(result.Deployments) != 3 {
+		t.Fatalf("a push to acme/web deployed %d apps, want the three built from it: %+v", len(result.Deployments), result)
+	}
+}
