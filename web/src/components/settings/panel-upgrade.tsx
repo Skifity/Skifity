@@ -24,6 +24,10 @@ import type { UpgradeCheck, UpgradeStarted } from "@/lib/types"
  * button to upgrade to it, with what the upgrade will do said first, and the
  * way back printed once it has started, because the panel is gone for a moment
  * and cannot be asked again.
+ *
+ * What it will not do is said too. The button changes the panel's image; what
+ * a release changes on the server itself (k3s's configuration, Traefik's, the
+ * firewall) only the installer can reach, so the card says to run it again.
  */
 export function PanelUpgradeCard() {
   const { t } = useTranslation()
@@ -88,6 +92,7 @@ export function PanelUpgradeCard() {
                     </a>
                   )}
                 </p>
+                <p className="text-xs text-muted-foreground">{t("panelUpgrade.panelOnly")}</p>
                 <Button
                   size="sm"
                   disabled={upgrade.isPending}

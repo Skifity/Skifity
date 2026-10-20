@@ -4432,6 +4432,7 @@
     "unknown": "This version is not a release number, so it cannot be compared with the newest release, {{version}}.",
     "noRelease": "No release has been published yet.",
     "upgradeTo": "Upgrade to {{version}}",
+    "panelOnly": "This upgrades the panel and nothing else. When a release also changes the server itself — k3s, Traefik or the firewall — its release notes say so, and running the install command on the server again brings those changes too.",
     "confirmTitle": "Upgrade to {{version}}?",
     "confirm": "The panel copies its database first, then restarts on the new version, which takes a moment. Your apps keep running. If the new version does not come up, the commands that go back are shown afterwards.",
     "started": "The upgrade has started and the panel is restarting. Reload this page in a minute.",

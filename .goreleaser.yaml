@@ -156,3 +156,7 @@ release:
     Already running Skifity? Run the same command again. It copies the
     panel's database first, keeps your domain and certificates, and prints the
     commands that go back if this release does not come up.
+
+    The Upgrade button in the panel's Settings changes the panel and nothing
+    else. What a release changes on the server itself (k3s's configuration,
+    Traefik's, the firewall) arrives only by running the command again.

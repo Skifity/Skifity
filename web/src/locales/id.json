@@ -4409,6 +4409,7 @@
     "unknown": "Versi ini bukan nomor rilis, jadi tidak bisa dibandingkan dengan rilis terbaru, {{version}}.",
     "noRelease": "Belum ada rilis yang dipublikasikan.",
     "upgradeTo": "Perbarui ke {{version}}",
+    "panelOnly": "Ini hanya meng-upgrade panel. Jika sebuah rilis juga mengubah server itu sendiri — k3s, Traefik, atau firewall — catatan rilisnya menyebutkannya, dan menjalankan lagi perintah instalasi di server akan membawa perubahan itu juga.",
     "confirmTitle": "Perbarui ke {{version}}?",
     "confirm": "Panel menyalin databasenya dulu, lalu restart pada versi baru, yang butuh sebentar. Aplikasi Anda tetap berjalan. Kalau versi baru tidak bisa naik, perintah untuk kembali ditampilkan sesudahnya.",
     "started": "Pembaruan sudah dimulai dan panel sedang restart. Muat ulang halaman ini satu menit lagi.",
