@@ -6601,6 +6601,16 @@ registry lets in: a new pod is refused by the pods it talks to until then, the
 other side of the moment ADR-0027 is about, and harmless in that direction. The
 probe now starts behind a build's fence and is read from its log.
 
+**The fourth run** passed 67, failed 2, skipped 3. The managed database came up
+and said so; a pod in the build namespace, behind a build's fence, read the
+registry and had a write with no token, one with a forged token, a manifest, a
+delete and the list of every repository all refused. It found one more thing no
+fake could: **scale to zero could never be installed.** The KEDA HTTP add-on was
+fetched from `keda-http-add-on-0.15.0.yaml`, a file no release has; the asset is
+`keda-add-ons-http-0.15.0.yaml`. The other failure was the script's: the first
+rollback that ran expected the variables back, which the product says, in its
+documentation and in the rollback dialog, it does not do.
+
 **Not run.** Nothing on more than one server: the pulls through another
 server's NodePort, the gateway addresses the registry's policy names, a server
 going away. A stock Ubuntu 24.04 server only as far as the runner is one.
