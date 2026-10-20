@@ -316,6 +316,48 @@ const mongoConfig = `mongo_config="${TMPDIR:-/tmp}/.mongodb.yaml"
 const mongoFlags = `--host="$DB_HOST" --port="$DB_PORT" --username="$DB_USER" ` +
 	`--authenticationDatabase=admin --config="$mongo_config"`
 
+// databaseAnswers is a command that succeeds once the database takes a
+// connection from this pod, from each engine's own client, with the password
+// where every other command here puts it and never on the command line.
+func databaseAnswers(engine string) string {
+	switch engine {
+	case dbsvc.EnginePostgres:
+		return `PGPASSWORD="$DB_PASSWORD" pg_isready --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USER" --dbname="$DB_NAME"`
+	case dbsvc.EngineMySQL:
+		return `MYSQL_PWD="$DB_PASSWORD" mysqladmin ping --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER"`
+	case dbsvc.EngineMariaDB:
+		return `MYSQL_PWD="$DB_PASSWORD" mariadb-admin ping --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER"`
+	case dbsvc.EngineMongoDB:
+		// ping is one of the commands MongoDB answers before authentication.
+		return `mongosh --quiet --host="$DB_HOST" --port="$DB_PORT" --eval 'db.adminCommand({ping: 1})'`
+	case dbsvc.EngineRedis, dbsvc.EngineValkey:
+		_, client, _ := redisTools(engine)
+		return `REDISCLI_AUTH="$DB_PASSWORD" ` + client + ` -h "$DB_HOST" -p "$DB_PORT" ping`
+	}
+	return "true"
+}
+
+// waitForDatabase holds a job until the database takes its connection, for a
+// minute at most.
+//
+// A pod that has just started is refused by the pods it talks to until the
+// policy controller has put its address in the set they let in: the other
+// side of the moment ADR-0027 is about. A backup's dump is the first thing its
+// pod does, so the first backup taken on a real cluster was refused within its
+// first second, against a database that was up the whole time, and failed.
+func waitForDatabase(engine string) string {
+	return fmt.Sprintf(`tries=0
+until %s >/dev/null 2>&1; do
+  tries=$((tries + 1))
+  if [ "$tries" -ge 60 ]; then
+    echo "$DB_NAME did not take a connection from this job within a minute." >&2
+    exit 1
+  fi
+  sleep 1
+done
+`, databaseAnswers(engine))
+}
+
 // backupScript dumps a database to the shared workspace.
 func backupScript(s JobSpec) string {
 	var prepare, dump string
@@ -355,7 +397,7 @@ func backupScript(s JobSpec) string {
 	return fmt.Sprintf(`set -eu
 
 echo "==> Backing up $DB_NAME"
-%s
+%s%s
 # A pipeline hides a failing dump behind a successful gzip, and a dump that
 # failed halfway still compresses cleanly. Without one, the dump's own exit
 # status is the command's, and set -e stops here.
@@ -378,7 +420,7 @@ gzip -c %s.raw > %s
 rm -f %s.raw
 
 echo "==> Dumped $(wc -c < %s) compressed bytes"
-`, prepare, dump, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile)
+`, waitForDatabase(s.Engine), prepare, dump, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile, dumpFile)
 }
 
 // uploadScript sends the staged dump to the storage service.
@@ -456,7 +498,7 @@ func restoreScript(s JobSpec) string {
 	return fmt.Sprintf(`set -eu
 
 echo "==> Restoring $DB_NAME"
-
+%s
 gzip -dc %s > %s
 
 if [ ! -s %s ]; then
@@ -469,7 +511,7 @@ fi
 rm -f %s
 
 echo "==> Restore finished"
-`, dumpFile, unpacked, unpacked, load, unpacked)
+`, waitForDatabase(s.Engine), dumpFile, unpacked, unpacked, load, unpacked)
 }
 
 // redisRestorePort is where the temporary server listens, inside the job's

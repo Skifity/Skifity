@@ -43,6 +43,7 @@ func runDumpScript(t *testing.T, engine, tool, output string) (ok bool, combined
 	if err := os.WriteFile(filepath.Join(bin, tool), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeAnsweringDatabase(t, bin)
 
 	script := backupScript(JobSpec{Engine: engine})
 	// The script writes beside dumpFile, so give it somewhere writable.
@@ -64,6 +65,15 @@ func runDumpScript(t *testing.T, engine, tool, output string) (ok bool, combined
 }
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// writeAnsweringDatabase stands in for pg_isready, which every script asks
+// before it dumps or loads: a database that is up.
+func writeAnsweringDatabase(t *testing.T, bin string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(bin, "pg_isready"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // An empty dump has to stop the backup, not become one.
 func TestADumpThatProducedNothingIsRefused(t *testing.T) {
@@ -116,6 +126,7 @@ func runRestoreScript(t *testing.T, engine, tool string, archive []byte) (ok boo
 	if err := os.WriteFile(filepath.Join(bin, tool), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeAnsweringDatabase(t, bin)
 
 	if err := os.MkdirAll(filepath.Dir(dumpFile), 0o755); err != nil {
 		t.Skipf("cannot create %s here: %v", filepath.Dir(dumpFile), err)
@@ -362,6 +373,7 @@ func (r stubRun) called(tool string) bool {
 var stubTools = []string{
 	"pg_dump", "psql", "mysqldump", "mysql", "mariadb-dump", "mariadb", "mongodump", "mongorestore",
 	"redis-cli", "valkey-cli", "redis-server", "valkey-server",
+	"pg_isready", "mysqladmin", "mariadb-admin", "mongosh",
 }
 
 // stubScript records each call — its arguments, the password variables it
@@ -391,6 +403,8 @@ case "$tool" in
     printf 'header and some data' ; exit 0 ;;
   psql|mysql|mariadb|mongorestore)
     cat > /dev/null ; exit 0 ;;
+  pg_isready|mysqladmin|mariadb-admin|mongosh)
+    echo "accepting connections" ; exit 0 ;;
 esac
 # redis-cli and valkey-cli.
 target=live

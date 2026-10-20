@@ -275,6 +275,7 @@ func TestAnImportedSQLDumpReachesPsqlWithoutItsPassword(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "psql"), []byte(stub), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeAnsweringDatabase(t, dir)
 	// The job's workspace, here.
 	work := filepath.Join(dir, "work")
 	if err := os.MkdirAll(work, 0o755); err != nil {
