@@ -209,6 +209,9 @@ jobs:
             "https://${address}:3443/api/v1/users/crosscheck/tokens" -H 'Content-Type: application/json' \
             -d '{"name":"skifity","scopes":["write:repository","write:user"]}' | jq -r '.sha1 // empty')
           [ -n "$token" ] || { echo "Gitea handed out no token" >&2; exit 1; }
+          # A token for a Gitea that ends with the runner is nobody's secret,
+          # but the log is public and a token in it looks like one.
+          echo "::add-mask::${token}"
           {
             echo "GIT_HOST_REPO=https://${address}:3443/crosscheck/sample.git"
             echo "GIT_HOST_TOKEN=${token}"
@@ -267,6 +270,9 @@ jobs:
             echo "ntfy or Gotify did not hand out a token" >&2
             exit 1
           fi
+          echo "::add-mask::${ntfy_token}"
+          echo "::add-mask::${gotify_app}"
+          echo "::add-mask::${gotify_client}"
           {
             echo "SMTP_SERVER=${address}:1025"
             echo "MAILPIT=http://127.0.0.1:8025"
@@ -323,6 +329,8 @@ jobs:
             echo "Mattermost handed out no token or no webhook" >&2
             false
           fi
+          echo "::add-mask::${token}"
+          echo "::add-mask::${hook}"
           {
             echo "MATTERMOST_HOOK=http://${address}:8065/hooks/${hook}"
             echo "MATTERMOST_API=${mm}"
