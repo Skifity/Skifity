@@ -205,14 +205,6 @@ func (c *Cluster) EnsureNamespace(ctx context.Context, env store.Environment, te
 		kube.NormalizePodSecurity(env.PodSecurity), withPorts); err != nil {
 		return err
 	}
-	// Best effort, and separate from the namespace's own guards: this is a
-	// Traefik CRD, and a cluster running a different ingress controller does
-	// not have the type at all. An app there still deploys; it just does not
-	// get an automatic redirect from plain HTTP.
-	if err := c.client.Applier().Apply(ctx, kube.BuildRedirectMiddleware(env.Namespace)); err != nil {
-		c.log.Warn("could not create the HTTPS redirect middleware",
-			"namespace", env.Namespace, "error", err)
-	}
 	return nil
 }
 
@@ -246,7 +238,7 @@ func (c *Cluster) Manifests(ctx context.Context, app store.App, env store.Enviro
 	for _, claim := range kube.BuildPVCs(spec) {
 		objects = append(objects, claim)
 	}
-	for _, redirect := range kube.BuildHostRedirects(spec) {
+	for _, redirect := range kube.BuildRedirects(spec) {
 		objects = append(objects, redirect)
 	}
 	processes, err := c.db.ListProcesses(ctx, app.ID)

@@ -427,35 +427,6 @@ func quantityValue(name corev1.ResourceName, q resource.Quantity) int64 {
 	}
 }
 
-// RedirectMiddleware is the name of the Traefik middleware that sends a plain
-// HTTP request to HTTPS.
-const RedirectMiddleware = "redirect-https"
-
-// BuildRedirectMiddleware renders that middleware into one namespace.
-//
-// One per namespace rather than one shared: Traefik refuses a cross-namespace
-// middleware reference unless allowCrossNamespace is turned on, and it is off
-// by default. A single copy in the panel's namespace, which is what this used
-// to be, was referenced by every app's Ingress and loaded by none of them.
-//
-// Unstructured because it is a Traefik CRD, which is not in client-go's scheme
-// and which a cluster running a different ingress controller will not have at
-// all.
-func BuildRedirectMiddleware(namespace string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "traefik.io/v1alpha1",
-		"kind":       "Middleware",
-		"metadata": map[string]any{
-			"name":      RedirectMiddleware,
-			"namespace": namespace,
-			"labels":    map[string]any{"app.kubernetes.io/managed-by": version.Binary},
-		},
-		"spec": map[string]any{
-			"redirectScheme": map[string]any{"scheme": "https", "permanent": true},
-		},
-	}}
-}
-
 // GuardMiddleware is the name of the Traefik middleware that asks the guard
 // whether a request may go through.
 const GuardMiddleware = "firewall"
@@ -471,7 +442,8 @@ const (
 // The address is a URL rather than a Kubernetes reference, so pointing it at a
 // Service in the panel's namespace is not a cross-namespace object reference
 // and needs nothing turned on. The middleware object itself does have to be
-// beside the Ingress that names it; see BuildRedirectMiddleware.
+// beside the Ingress that names it: Traefik refuses a middleware from another
+// namespace unless allowCrossNamespace is turned on, and it is off by default.
 //
 // authResponseHeaders is deliberately empty. The guard answers yes or no and
 // has nothing to add to the request, and a header it did set would be one an

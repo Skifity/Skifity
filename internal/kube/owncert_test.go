@@ -99,7 +99,7 @@ func TestBothIngressesRunTheSameMiddlewaresInTheSameOrder(t *testing.T) {
 	wantOrder := []string{
 		"acme-shop-prod-firewall@kubernetescrd",
 		"acme-shop-prod-" + HostRedirectMiddlewareName("shop", "www.example.com") + "@kubernetescrd",
-		"acme-shop-prod-redirect-https@kubernetescrd",
+		"acme-shop-prod-shop-https@kubernetescrd",
 		"acme-shop-prod-shop-password@kubernetescrd",
 	}
 	if !slices.Equal(chain, wantOrder) {
@@ -114,7 +114,7 @@ func TestBothIngressesRunTheSameMiddlewaresInTheSameOrder(t *testing.T) {
 	if BuildIngress(s) != nil {
 		t.Error("an app with every hostname on its own certificates still has a first Ingress")
 	}
-	if got := BuildOwnCertIngress(s).Annotations[key]; !strings.Contains(got, RedirectMiddleware) {
+	if got := BuildOwnCertIngress(s).Annotations[key]; !strings.Contains(got, HTTPSRedirectMiddlewareName("shop")) {
 		t.Errorf("HTTP is not sent to HTTPS: %s", got)
 	}
 }

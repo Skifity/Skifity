@@ -2,6 +2,7 @@ package kube
 
 import (
 	"regexp"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -92,6 +93,71 @@ func BuildHostRedirects(s AppSpec) []*unstructured.Unstructured {
 				},
 			},
 		}})
+	}
+	return out
+}
+
+// HTTPSRedirectMiddlewareName is the Middleware that sends plain HTTP to
+// HTTPS on an app's hostnames that have a certificate.
+func HTTPSRedirectMiddlewareName(app string) string {
+	return ResourceName(app, "https")
+}
+
+// BuildHTTPSRedirect sends plain HTTP to HTTPS on the app's hostnames that have
+// a certificate coming, from cert-manager or from the team's own, and on no
+// others. Nil when none has.
+//
+// It used to be one redirectScheme middleware per namespace, and Traefik runs
+// a middleware for every hostname of the Ingress that names it. An app's free
+// sslip.io address has no certificate and is plain HTTP on purpose (ADR-0015),
+// and the moment a domain of the app's own with a certificate was added, that
+// address sent every visitor, permanently, to HTTPS served with Traefik's own
+// certificate, which every browser refuses. Anchored to the hostnames that
+// have a certificate, like the redirects above, it leaves the others alone.
+func BuildHTTPSRedirect(s AppSpec) *unstructured.Unstructured {
+	var hosts []string
+	seen := map[string]bool{}
+	for _, d := range s.Domains {
+		if !d.TLS || (d.Certificate == "" && s.ClusterIssuer == "") || seen[d.Hostname] {
+			continue
+		}
+		seen[d.Hostname] = true
+		hosts = append(hosts, regexp.QuoteMeta(d.Hostname))
+	}
+	if len(hosts) == 0 {
+		return nil
+	}
+	labels := map[string]any{hostRedirectLabel: s.Name}
+	for key, value := range s.Labels() {
+		labels[key] = value
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "Middleware",
+		"metadata": map[string]any{
+			"name":      HTTPSRedirectMiddlewareName(s.Name),
+			"namespace": s.Namespace,
+			"labels":    labels,
+		},
+		"spec": map[string]any{
+			"redirectRegex": map[string]any{
+				// Plain HTTP only: a request that came in over HTTPS does
+				// not match, so there is no loop. The port goes, since
+				// HTTPS is on its own; the path and query go along.
+				"regex":       `^http://(` + strings.Join(hosts, "|") + `)(?::[0-9]+)?(/.*)?$`,
+				"replacement": "https://${1}${2}",
+				"permanent":   true,
+			},
+		},
+	}}
+}
+
+// BuildRedirects is every redirect middleware the app's Ingresses name: one
+// per hostname that redirects, and the one to HTTPS.
+func BuildRedirects(s AppSpec) []*unstructured.Unstructured {
+	out := BuildHostRedirects(s)
+	if https := BuildHTTPSRedirect(s); https != nil {
+		out = append(out, https)
 	}
 	return out
 }

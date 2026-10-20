@@ -650,7 +650,7 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 	// A redirect somebody took off, or whose hostname went, is not left to
 	// answer for a name the Ingress no longer routes.
 	wanted := map[string]bool{}
-	for _, redirect := range kube.BuildHostRedirects(spec) {
+	for _, redirect := range kube.BuildRedirects(spec) {
 		wanted[redirect.GetName()] = true
 	}
 	if middlewares, err := applier.List(ctx, "traefik.io/v1alpha1", "Middleware", spec.Namespace); err == nil {

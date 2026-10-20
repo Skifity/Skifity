@@ -24,7 +24,7 @@ func TestThePasswordIsAskedForAfterTheRedirectToHTTPS(t *testing.T) {
 	spec.Protected = true
 	got := BuildIngress(spec).Annotations["traefik.ingress.kubernetes.io/router.middlewares"]
 	want := "acme-shop-production-firewall@kubernetescrd," +
-		"acme-shop-production-redirect-https@kubernetescrd," +
+		"acme-shop-production-web-https@kubernetescrd," +
 		"acme-shop-production-web-password@kubernetescrd"
 	if got != want {
 		t.Errorf("middlewares = %q\nwant        %q", got, want)

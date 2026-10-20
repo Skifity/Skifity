@@ -172,8 +172,10 @@ func (c *Cluster) RefreshFirewall(ctx context.Context) error {
 // ensureGuardMiddlewares puts a forwardAuth middleware in every namespace that
 // holds a protected app.
 //
-// One per namespace rather than one shared, because Traefik will not load a
-// middleware from another namespace; see kube.BuildRedirectMiddleware.
+// One per namespace rather than one shared, because Traefik refuses a
+// cross-namespace middleware reference unless allowCrossNamespace is turned
+// on, and it is off by default: a single copy in the panel's namespace was
+// referenced by every app's Ingress and loaded by none of them.
 func (c *Cluster) ensureGuardMiddlewares(ctx context.Context) error {
 	namespaces, err := c.db.ProtectedNamespaces(ctx)
 	if err != nil {
@@ -182,9 +184,9 @@ func (c *Cluster) ensureGuardMiddlewares(ctx context.Context) error {
 	system := c.client.SystemNamespace()
 	for _, namespace := range namespaces {
 		if err := c.client.Applier().Apply(ctx, kube.BuildGuardMiddleware(namespace, system)); err != nil {
-			// Best effort, the same as the redirect: a cluster running a
-			// different ingress controller has no Traefik CRDs at all, and the
-			// panel says on the page that the firewall needs Traefik.
+			// Best effort: a cluster running a different ingress controller
+			// has no Traefik CRDs at all, and the panel says on the page that
+			// the firewall needs Traefik.
 			c.log.Warn("could not create the firewall middleware",
 				"namespace", namespace, "error", err)
 		}

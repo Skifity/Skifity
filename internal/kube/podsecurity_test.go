@@ -333,18 +333,18 @@ func TestTheRedirectMiddlewareIsInTheAppsOwnNamespace(t *testing.T) {
 		t.Fatal("an app with a domain rendered no Ingress")
 	}
 	got := ingress.Annotations["traefik.ingress.kubernetes.io/router.middlewares"]
-	want := "acme-shop-production-redirect-https@kubernetescrd"
+	want := "acme-shop-production-web-https@kubernetescrd"
 	if got != want {
 		t.Errorf("middleware reference = %q, want %q", got, want)
 	}
 
 	// And the middleware it names is rendered into that same namespace.
-	middleware := BuildRedirectMiddleware(spec.Namespace)
+	middleware := BuildHTTPSRedirect(spec)
 	if ns := middleware.GetNamespace(); ns != spec.Namespace {
 		t.Errorf("the middleware was created in %q, not beside the app in %q", ns, spec.Namespace)
 	}
-	if name := middleware.GetName(); name != RedirectMiddleware {
-		t.Errorf("the middleware is named %q, and the annotation names %q", name, RedirectMiddleware)
+	if name := middleware.GetName(); "acme-shop-production-"+name+"@kubernetescrd" != want {
+		t.Errorf("the middleware is named %q, and the annotation names %q", name, want)
 	}
 }
 
@@ -359,7 +359,7 @@ func TestTheFirewallMiddlewareComesFirstAndIsLocal(t *testing.T) {
 		Domains: []DomainSpec{{Hostname: "shop.example.com", Path: "/", TLS: true}},
 	}
 	got := BuildIngress(spec).Annotations["traefik.ingress.kubernetes.io/router.middlewares"]
-	want := "acme-shop-production-firewall@kubernetescrd,acme-shop-production-redirect-https@kubernetescrd"
+	want := "acme-shop-production-firewall@kubernetescrd,acme-shop-production-web-https@kubernetescrd"
 	if got != want {
 		t.Errorf("middlewares = %q, want %q", got, want)
 	}
@@ -367,7 +367,7 @@ func TestTheFirewallMiddlewareComesFirstAndIsLocal(t *testing.T) {
 	// An app with no rules carries only the redirect.
 	spec.Protected = false
 	got = BuildIngress(spec).Annotations["traefik.ingress.kubernetes.io/router.middlewares"]
-	if got != "acme-shop-production-redirect-https@kubernetescrd" {
+	if got != "acme-shop-production-web-https@kubernetescrd" {
 		t.Errorf("an unprotected app got %q", got)
 	}
 }

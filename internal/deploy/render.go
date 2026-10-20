@@ -93,7 +93,7 @@ func (d *Deployer) renderWith(ctx context.Context, deployment store.Deployment, 
 		kube.BuildPasswordSecret(spec),
 		kube.BuildPasswordMiddleware(spec),
 	}
-	for _, redirect := range kube.BuildHostRedirects(spec) {
+	for _, redirect := range kube.BuildRedirects(spec) {
 		objects = append(objects, redirect)
 	}
 	// Before the Ingress that names them, too: one whose certificate is not

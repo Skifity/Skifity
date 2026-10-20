@@ -68,7 +68,7 @@ func TestTheIngressRunsRedirectsAfterTheFirewallAndBeforeHTTPS(t *testing.T) {
 		position[name] = i
 	}
 	guard := position[spec.Namespace+"-"+GuardMiddleware+"@kubernetescrd"]
-	https := position[spec.Namespace+"-"+RedirectMiddleware+"@kubernetescrd"]
+	https := position[spec.Namespace+"-"+HTTPSRedirectMiddlewareName("shop")+"@kubernetescrd"]
 	www, ok := position[spec.Namespace+"-"+HostRedirectMiddlewareName("shop", "www.example.com")+"@kubernetescrd"]
 	if !ok || !(guard < www && www < https) {
 		t.Errorf("the middlewares run in the order %v", chain)
@@ -96,5 +96,71 @@ func TestABrokenRedirectIsNotRendered(t *testing.T) {
 		if !IsHostRedirectOf(*r, "shop") || IsHostRedirectOf(*r, "shop-api") {
 			t.Errorf("%s cannot be told apart as the app's redirect", name)
 		}
+	}
+}
+
+// Plain HTTP goes to HTTPS on the hostnames that have a certificate, and only
+// on those. One middleware for the whole namespace sent every hostname of the
+// Ingress, so the free sslip.io address, plain HTTP on purpose, began sending
+// visitors to an HTTPS address with no certificate the moment the app was
+// given a domain of its own.
+func TestOnlyTheHostnamesWithACertificateGoToHTTPS(t *testing.T) {
+	spec := AppSpec{
+		Name: "shop", Namespace: "acme-shop-prod", AppID: "app_1", Port: 3000,
+		ClusterIssuer: "letsencrypt",
+		Domains: []DomainSpec{
+			{Hostname: "shop-prod.203-0-113-10.sslip.io", Path: "/"},
+			{Hostname: "shop.example.com", Path: "/", TLS: true},
+			{Hostname: "own.example.net", Path: "/", TLS: true, Certificate: "crt_1"},
+		},
+	}
+	middleware := BuildHTTPSRedirect(spec)
+	if middleware == nil {
+		t.Fatal("no redirect to HTTPS for an app with hostnames that have a certificate")
+	}
+	if !IsHostRedirectOf(*middleware, "shop") {
+		t.Error("the redirect cannot be told apart as the app's, so it is never removed")
+	}
+	redirect := middleware.Object["spec"].(map[string]any)["redirectRegex"].(map[string]any)
+	pattern := regexp.MustCompile(redirect["regex"].(string))
+	replacement := redirect["replacement"].(string)
+
+	for url, want := range map[string]string{
+		"http://shop.example.com/cart?id=7": "https://shop.example.com/cart?id=7",
+		"http://shop.example.com":           "https://shop.example.com",
+		"http://shop.example.com:80/a":      "https://shop.example.com/a",
+		"http://own.example.net/":           "https://own.example.net/",
+	} {
+		if !pattern.MatchString(url) {
+			t.Errorf("%s is not sent to HTTPS", url)
+			continue
+		}
+		if got := pattern.ReplaceAllString(url, replacement); got != want {
+			t.Errorf("%s goes to %s, want %s", url, got, want)
+		}
+	}
+	for _, url := range []string{
+		"http://shop-prod.203-0-113-10.sslip.io/",
+		"https://shop.example.com/",
+		"http://shop.example.com.evil.test/",
+		"http://xshop.example.com/",
+	} {
+		if pattern.MatchString(url) {
+			t.Errorf("%s is sent to HTTPS", url)
+		}
+	}
+	if redirect["permanent"] != true {
+		t.Error("the redirect to HTTPS is not permanent")
+	}
+
+	// With no certificate coming for any hostname there is nothing to
+	// redirect to, and the Ingress names no redirect.
+	spec.ClusterIssuer = ""
+	spec.Domains = spec.Domains[:2]
+	if BuildHTTPSRedirect(spec) != nil {
+		t.Error("a redirect to HTTPS was rendered with no certificate to serve it")
+	}
+	if got := BuildIngress(spec).Annotations["traefik.ingress.kubernetes.io/router.middlewares"]; got != "" {
+		t.Errorf("an app with no certificate names %q", got)
 	}
 }

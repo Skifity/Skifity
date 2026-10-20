@@ -350,7 +350,7 @@ func ingressMiddlewares(s AppSpec) []string {
 		middlewares = append(middlewares, s.Namespace+"-"+HostRedirectMiddlewareName(s.Name, d.Hostname)+"@kubernetescrd")
 	}
 	if redirectsToHTTPS(s) {
-		middlewares = append(middlewares, s.Namespace+"-"+RedirectMiddleware+"@kubernetescrd")
+		middlewares = append(middlewares, s.Namespace+"-"+HTTPSRedirectMiddlewareName(s.Name)+"@kubernetescrd")
 	}
 	// The password after the redirect, never before it. A browser answers a
 	// password prompt with the password, so asking on plain HTTP when HTTPS
@@ -364,14 +364,9 @@ func ingressMiddlewares(s AppSpec) []string {
 // redirectsToHTTPS reports whether plain HTTP is sent to HTTPS: when one of
 // the app's hostnames has a certificate coming, from cert-manager or from the
 // team's own. Without either there is nothing on the other side of the
-// redirect.
+// redirect. Which hostnames are sent is BuildHTTPSRedirect's to say.
 func redirectsToHTTPS(s AppSpec) bool {
-	for _, d := range s.Domains {
-		if d.TLS && (d.Certificate != "" || s.ClusterIssuer != "") {
-			return true
-		}
-	}
-	return false
+	return BuildHTTPSRedirect(s) != nil
 }
 
 // letsEncryptDomains are the app's domains that are not served with a
