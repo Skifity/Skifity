@@ -1136,6 +1136,8 @@
       "cordoned": "不会再往这里安排新实例",
       "drained": "已把 {{0}} 个实例迁到其他服务器",
       "drainedFirst": "先把 {{0}} 个实例从这台服务器挪走了",
+      "drainedUnreachable": "这台服务器没有响应：它上面的 {{0}} 个实例正在其他服务器上启动",
+      "drainedUnreachableStranded": "这台服务器没有响应：它上面的 {{0}} 个实例正在其他服务器上启动。{{1}} 的数据存在这台服务器上，无法在别处启动，请从备份恢复",
       "firewallFirstServer": "还没有别的服务器，所以只开了 80 和 443 端口",
       "firewallIptables": "用 iptables 只对其他服务器开放了集群端口",
       "firewallUfw": "用 ufw 只对其他服务器开放了集群端口",

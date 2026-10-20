@@ -1136,6 +1136,8 @@
       "cordoned": "Tidak akan ada instance baru yang ditaruh di sini",
       "drained": "Memindahkan {{0}} instance ke server lain",
       "drainedFirst": "Memindahkan {{0}} instance keluar dari server ini lebih dulu",
+      "drainedUnreachable": "Server tidak menjawab: {{0}} instance di dalamnya sedang dijalankan di server lain",
+      "drainedUnreachableStranded": "Server tidak menjawab: {{0}} instance di dalamnya sedang dijalankan di server lain. {{1}} menyimpan datanya di server itu dan tidak bisa dijalankan di tempat lain; pulihkan dari backup",
       "firewallFirstServer": "Belum ada server lain, jadi hanya port 80 dan 443 yang dibuka",
       "firewallIptables": "Membuka port cluster hanya untuk server lain, memakai iptables",
       "firewallUfw": "Membuka port cluster hanya untuk server lain, memakai ufw",

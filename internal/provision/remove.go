@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"skifity/internal/api"
 	"skifity/internal/errdoc"
@@ -75,14 +77,12 @@ func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, s
 
 	// Drain: move what is running to the other servers.
 	p.setStep(ctx, op, "drain", store.StepRunning, store.StepNote{}, "")
-	moved, err := p.drain(ctx, server)
+	drained, err := p.drain(ctx, server)
 	if err != nil {
 		p.failStep(ctx, op, server.ID, "drain", err)
 		return
 	}
-	moveMessage, moveArgs := errdoc.Sprintf("Moved %d instance(s) to the other servers", moved)
-	p.setStep(ctx, op, "drain", store.StepSucceeded,
-		store.StepNote{Message: moveMessage, Key: "drained", Args: moveArgs}, "")
+	p.setStep(ctx, op, "drain", store.StepSucceeded, drained.note(), "")
 
 	// Delete the node object.
 	p.setStep(ctx, op, "delete-node", store.StepRunning, store.StepNote{}, "")
@@ -174,9 +174,36 @@ func (p *Provisioner) cordon(ctx context.Context, server store.Server, unschedul
 //
 // Eviction rather than deletion, so PodDisruptionBudgets are respected: that is
 // what stops draining one node taking an app's last instance with it.
-func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, error) {
+// drainResult is what emptying a server did.
+type drainResult struct {
+	// moved is how many instances went to the other servers or, from a
+	// server that had stopped answering, are being started on them.
+	moved int
+	// unreachable is a server whose node had stopped reporting.
+	unreachable bool
+	// stranded names what kept its data on the server's own disk, and so
+	// cannot be started anywhere else.
+	stranded []string
+}
+
+// note is the line under the drain step.
+func (d drainResult) note() store.StepNote {
+	switch {
+	case d.unreachable && len(d.stranded) > 0:
+		message, args := errdoc.Sprintf("The server was not answering: %d instance(s) on it are being started on the other servers. %s kept their data on it and cannot be; restore them from a backup",
+			d.moved, strings.Join(d.stranded, ", "))
+		return store.StepNote{Message: message, Key: "drainedUnreachableStranded", Args: args}
+	case d.unreachable:
+		message, args := errdoc.Sprintf("The server was not answering: %d instance(s) on it are being started on the other servers", d.moved)
+		return store.StepNote{Message: message, Key: "drainedUnreachable", Args: args}
+	}
+	message, args := errdoc.Sprintf("Moved %d instance(s) to the other servers", d.moved)
+	return store.StepNote{Message: message, Key: "drained", Args: args}
+}
+
+func (p *Provisioner) drain(ctx context.Context, server store.Server) (drainResult, error) {
 	if p.cluster == nil || server.NodeName == "" {
-		return 0, nil
+		return drainResult{}, nil
 	}
 	clientset := p.cluster.Client().Clientset()
 
@@ -184,7 +211,19 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 		FieldSelector: "spec.nodeName=" + server.NodeName,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("list what is running on this server: %w", err)
+		return drainResult{}, fmt.Errorf("list what is running on this server: %w", err)
+	}
+
+	// A server that has stopped answering cannot be emptied. An eviction
+	// asks the server to stop an instance, nothing there is listening, and
+	// the instance stays "terminating" for as long as the node is listed: the
+	// removal waited five minutes for that and stopped with "some instances
+	// would not move", so a server that was gone for good could not be
+	// removed at all. Its instances stopped when it did. Deleting its node,
+	// the next step, is what has Kubernetes start them on the other servers.
+	node, err := clientset.CoreV1().Nodes().Get(ctx, server.NodeName, metav1.GetOptions{})
+	if err == nil && unreachable(node) {
+		return abandon(ctx, clientset, pods.Items, node), nil
 	}
 
 	// The apps with no ready instance anywhere else start one elsewhere
@@ -194,7 +233,7 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 		FieldSelector: "spec.nodeName=" + server.NodeName,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("list what is running on this server: %w", err)
+		return drainResult{}, fmt.Errorf("list what is running on this server: %w", err)
 	}
 
 	evicted := movedFirst
@@ -208,7 +247,7 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 		if err := evict(ctx, clientset, pod, evictBy); err != nil {
 			// A budget that still refuses the eviction means removing this
 			// server would take an app down. That is worth stopping for.
-			return evicted, errdoc.New("cluster.drain_blocked", "An app would go down if this server is removed").
+			return drainResult{moved: evicted}, errdoc.New("cluster.drain_blocked", "An app would go down if this server is removed").
 				WithCause("%s in %s could not be moved: %s", pod.Name, pod.Namespace, err.Error()).
 				WithImpact("The server was not removed and is still running your apps.").
 				WithFix("Add another server first, or scale the app that is blocking this to more than one instance so it can move.").
@@ -224,7 +263,7 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 			FieldSelector: "spec.nodeName=" + server.NodeName,
 		})
 		if err != nil {
-			return evicted, fmt.Errorf("check what is left on this server: %w", err)
+			return drainResult{moved: evicted}, fmt.Errorf("check what is left on this server: %w", err)
 		}
 		outstanding := 0
 		for _, pod := range remaining.Items {
@@ -233,10 +272,10 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 			}
 		}
 		if outstanding == 0 {
-			return evicted, nil
+			return drainResult{moved: evicted}, nil
 		}
 		if time.Now().After(deadline) {
-			return evicted, errdoc.New("cluster.drain_timeout", "Some instances would not move").
+			return drainResult{moved: evicted}, errdoc.New("cluster.drain_timeout", "Some instances would not move").
 				WithCause("%d instance(s) were still running on %s after five minutes.", outstanding, server.Name).
 				WithImpact("The server was not removed.").
 				WithFix("An app with a volume cannot move to another server unless cross-node storage is enabled. Stop that app, or enable Longhorn under Settings, then try again.").
@@ -244,10 +283,88 @@ func (p *Provisioner) drain(ctx context.Context, server store.Server) (int, erro
 		}
 		select {
 		case <-ctx.Done():
-			return evicted, ctx.Err()
+			return drainResult{moved: evicted}, ctx.Err()
 		case <-time.After(5 * time.Second):
 		}
 	}
+}
+
+// unreachable reports whether a node has stopped reporting, which the node
+// controller says with a Ready condition of Unknown. A node that reports
+// itself not ready is still answering, and can still stop what runs on it.
+func unreachable(node *corev1.Node) bool {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			return condition.Status == corev1.ConditionUnknown
+		}
+	}
+	return false
+}
+
+// abandon is what taking out a server that has stopped answering does with
+// what was on it: nothing, here. Its instances are started on the other
+// servers once its node is deleted. What kept its data on the server's own
+// disk cannot be, wherever it is started, and is named so that nobody finds
+// out by waiting.
+func abandon(ctx context.Context, clientset kubernetes.Interface, pods []corev1.Pod, node *corev1.Node) drainResult {
+	result := drainResult{unreachable: true}
+	named := map[string]bool{}
+	for _, pod := range pods {
+		if isDaemonSetPod(pod) || isMirrorPod(pod) {
+			continue
+		}
+		if !keptDataOn(ctx, clientset, pod, node) {
+			result.moved++
+			continue
+		}
+		if name := workloadName(pod); !named[name] {
+			named[name] = true
+			result.stranded = append(result.stranded, name)
+		}
+	}
+	slices.Sort(result.stranded)
+	return result
+}
+
+// keptDataOn reports whether a pod has a volume that lives on this node's own
+// disk: a claim bound to a volume only this node can mount, which is what the
+// storage k3s ships gives every claim.
+func keptDataOn(ctx context.Context, clientset kubernetes.Interface, pod corev1.Pod, node *corev1.Node) bool {
+	names := []string{node.Name, node.Labels[corev1.LabelHostname]}
+	for _, volume := range pod.Spec.Volumes {
+		if volume.PersistentVolumeClaim == nil {
+			continue
+		}
+		claim, err := clientset.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(ctx, volume.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
+		if err != nil || claim.Spec.VolumeName == "" {
+			continue
+		}
+		pv, err := clientset.CoreV1().PersistentVolumes().Get(ctx, claim.Spec.VolumeName, metav1.GetOptions{})
+		if err != nil || pv.Spec.NodeAffinity == nil || pv.Spec.NodeAffinity.Required == nil {
+			continue
+		}
+		for _, term := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms {
+			for _, expression := range term.MatchExpressions {
+				for _, value := range expression.Values {
+					if value != "" && slices.Contains(names, value) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// workloadName is what a person called the app or database a pod belongs to,
+// as near as its labels say.
+func workloadName(pod corev1.Pod) string {
+	for _, key := range []string{"cnpg.io/cluster", "app.kubernetes.io/name"} {
+		if name := pod.Labels[key]; name != "" {
+			return name
+		}
+	}
+	return pod.Name
 }
 
 func (p *Provisioner) deleteNode(ctx context.Context, server store.Server) error {
@@ -360,12 +477,12 @@ func (p *Provisioner) runPromote(ctx context.Context, op store.Operation, server
 		p.failStep(ctx, op, server.ID, "drain", err)
 		return
 	}
-	moved, err := p.drain(ctx, server)
+	drained, err := p.drain(ctx, server)
 	if err != nil {
 		p.failStep(ctx, op, server.ID, "drain", err)
 		return
 	}
-	movedMessage, movedArgs := errdoc.Sprintf("Moved %d instance(s) off this server first", moved)
+	movedMessage, movedArgs := errdoc.Sprintf("Moved %d instance(s) off this server first", drained.moved)
 	p.setStep(ctx, op, "drain", store.StepSucceeded,
 		store.StepNote{Message: movedMessage, Key: "drainedFirst", Args: movedArgs}, "")
 

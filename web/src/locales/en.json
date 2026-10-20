@@ -1147,6 +1147,8 @@
       "cordoned": "No new instances will be placed here",
       "drained": "Moved {{0}} instance(s) to the other servers",
       "drainedFirst": "Moved {{0}} instance(s) off this server first",
+      "drainedUnreachable": "The server was not answering: {{0}} instance(s) on it are being started on the other servers",
+      "drainedUnreachableStranded": "The server was not answering: {{0}} instance(s) on it are being started on the other servers. {{1}} kept their data on it and cannot be; restore them from a backup",
       "firewallFirstServer": "No other servers yet, so only ports 80 and 443 were opened",
       "firewallIptables": "Opened the cluster ports to the other servers only, using iptables",
       "firewallUfw": "Opened the cluster ports to the other servers only, using ufw",
