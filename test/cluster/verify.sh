@@ -68,6 +68,12 @@ REPORT="/var/log/skifity-verify.log"
 # Without it those checks skip and say so.
 : "${VERIFY_SECOND_SERVER:=}"
 : "${VERIFY_SECOND_SERVER_KEY:=}"
+# A server that fails rather than being taken out. VERIFY_SECOND_SERVER_FAILS
+# is a file holding the id of the process that is the second server, a
+# virtual machine's; with it, that process is killed at the end, which to the
+# cluster is a power cut, and the server is then removed the way somebody
+# removes one that is gone, instead of being emptied and taken out.
+: "${VERIFY_SECOND_SERVER_FAILS:=}"
 # An ACME server, for a certificate: the free address is plain HTTP on purpose
 # (ADR-0015), so a certificate needs a domain of the app's own, and nothing on
 # the internet can reach a machine like a CI runner to validate one. An ACME
@@ -1830,7 +1836,124 @@ else
 fi
 fi
 
-if [ -n "$SECOND_ID" ]; then
+if [ -n "$SECOND_ID" ] && [ -n "$VERIFY_SECOND_SERVER_FAILS" ]; then
+	step "A server that fails without warning (checklist 14)"
+
+	# Two instances, so the app has one left when a server goes; the spread
+	# puts them on both servers when it can.
+	if [ -n "$APP_ID" ]; then
+		api PUT "/api/apps/$APP_ID/scaling" '{"replicas":2,"autoscale":false,"scale_to_zero":false}' >/dev/null 2>&1 \
+			|| no "the app could not be given two instances"
+		on_second() {
+			kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello \
+				-o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' 2>/dev/null | grep -cx "$SECOND_NODE" || true
+		}
+		two_ready() {
+			for _ in $(seq 1 36); do
+				[ "$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)" = "2" ] && return 0
+				sleep 5
+			done
+			return 1
+		}
+		two_ready || true
+		# Phase 4 emptied the second server, so both may be on the first; a
+		# restart places them again, and the spread puts one on each.
+		if [ "$(on_second)" = "0" ]; then
+			api POST "/api/apps/$APP_ID/restart" >/dev/null 2>&1 || true
+			sleep 10
+			two_ready || true
+		fi
+		say "  the app runs $(on_second) of its instances on the second server"
+	fi
+
+	kill -9 "$(cat "$VERIFY_SECOND_SERVER_FAILS")" 2>>"$REPORT" \
+		|| die "the second server's process could not be killed; VERIFY_SECOND_SERVER_FAILS has to name it"
+	FAILED_AT=$(date +%s)
+	ok "the second server's machine was switched off without warning"
+
+	# The cluster finds out when the server stops reporting: the node is
+	# Unknown, its instances stop being given visitors, and until then some
+	# requests go to an instance that is not there any more.
+	ASKED=0
+	MISSED=0
+	NOTICED=""
+	while [ $(($(date +%s) - FAILED_AT)) -lt 300 ]; do
+		if [ -n "$APP_HOST" ]; then
+			ASKED=$((ASKED + 1))
+			[ "$(through_ingress "$APP_HOST" 5)" = "200" ] || MISSED=$((MISSED + 1))
+		fi
+		if [ "$(kubectl get node "$SECOND_NODE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" = "Unknown" ]; then
+			NOTICED=$(($(date +%s) - FAILED_AT))
+			break
+		fi
+		sleep 1
+	done
+	if [ -n "$NOTICED" ]; then
+		ok "the cluster knew the server was gone after ${NOTICED}s"
+	else
+		no "five minutes after the second server stopped, the cluster still did not say so"
+	fi
+	[ -z "$APP_HOST" ] || say "  until then, $MISSED of $ASKED requests through the first server went unanswered"
+
+	# Once it knows, the instance that was there is out of the app's
+	# addresses, and every request is answered by the one that is left. A
+	# few seconds for the ingress to hear it.
+	if [ -n "$APP_HOST" ] && [ -n "$NOTICED" ]; then
+		sleep 10
+		AFTER_FAILS=0
+		for _ in $(seq 1 20); do
+			[ "$(through_ingress "$APP_HOST" 5)" = "200" ] || AFTER_FAILS=$((AFTER_FAILS + 1))
+			sleep 1
+		done
+		[ "$AFTER_FAILS" = "0" ] \
+			&& ok "from then on the app answered every request, from the instance it had left" \
+			|| no "$AFTER_FAILS of 20 requests failed after the cluster knew the server was gone"
+	fi
+
+	# The panel's own watch, which is what sends "stopped answering".
+	SERVER_STATE=""
+	for _ in $(seq 1 36); do
+		SERVER_STATE=$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")
+		[ "$SERVER_STATE" = "not_ready" ] && break
+		sleep 5
+	done
+	[ "$SERVER_STATE" = "not_ready" ] \
+		&& ok "the panel marked the server as not responding, $(($(date +%s) - FAILED_AT))s after it stopped" \
+		|| no "the panel still shows the second server as '${SERVER_STATE:-unknown}' three minutes after it stopped"
+
+	# And taken out, the way somebody takes out a server that is gone: it
+	# cannot be emptied, so it is not waited on, and what was on it starts on
+	# the server that is left.
+	REMOVE_STARTED=$(date +%s)
+	api DELETE "/api/servers/$SECOND_ID" >/dev/null 2>&1 || no "the panel refused to remove the server that had gone"
+	GONE=""
+	for _ in $(seq 1 60); do
+		[ "$(api_code GET "/api/servers/$SECOND_ID")" = "404" ] && { GONE=1; break; }
+		[ "$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")" = "failed" ] && break
+		sleep 5
+	done
+	if [ -n "$GONE" ]; then
+		ok "the panel removed the server that had gone, in $(($(date +%s) - REMOVE_STARTED))s"
+	else
+		api GET "/api/servers/$SECOND_ID" >>"$REPORT" 2>&1 || true
+		no "the server that had gone could not be removed; the operation's steps are above in $REPORT"
+	fi
+	kubectl get node "$SECOND_NODE" >/dev/null 2>&1 \
+		&& no "the cluster still lists $SECOND_NODE after the server was removed" \
+		|| ok "and the cluster no longer lists it"
+
+	if [ -n "$APP_ID" ]; then
+		READY=""
+		for _ in $(seq 1 36); do
+			READY=$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+			[ "$READY" = "2" ] && break
+			sleep 5
+		done
+		[ "$READY" = "2" ] \
+			&& ok "the app is back to two instances, on the server that is left, $(($(date +%s) - FAILED_AT))s after the other one stopped" \
+			|| no "the app has ${READY:-0} of its two instances ready three minutes after the server was removed"
+	fi
+elif [ -n "$SECOND_ID" ]; then
 	step "Taking the second server out, through the panel"
 
 	REMOVE_FAILS=0
