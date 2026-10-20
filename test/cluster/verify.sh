@@ -273,10 +273,21 @@ ok "the panel pod is ready"
 
 # A port-forward rather than the NodePort: the NodePort is not guaranteed, and a
 # check should not depend on something the installer is free to change.
+# A forward started a moment after the panel is ready can fail to bind or find
+# no endpoint yet and exit, which a run on 6c26148 met three seconds in; it is
+# started again until the panel answers through it, for a minute and a half.
 start_forward() {
-	kubectl -n "$PANEL_NS" port-forward svc/skifity-panel 18080:80 >/dev/null 2>&1 &
-	FORWARD=$!
-	sleep 3
+	for _ in $(seq 1 12); do
+		kubectl -n "$PANEL_NS" port-forward svc/skifity-panel 18080:80 >/dev/null 2>&1 &
+		FORWARD=$!
+		for _ in $(seq 1 10); do
+			curl -fs -o /dev/null --max-time 2 http://127.0.0.1:18080/api/health && return 0
+			kill -0 "$FORWARD" 2>/dev/null || break
+			sleep 0.5
+		done
+		stop_forward
+		sleep 2
+	done
 }
 # Never `kill 0`: with no port-forward started, that is every process in this
 # group, the CI runner's own step included.
