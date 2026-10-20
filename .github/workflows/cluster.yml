@@ -16,6 +16,11 @@ name: Cluster
 on:
   push:
     branches: [main]
+    # A change to the documentation alone changes nothing a cluster can see,
+    # and a push cancels the run in progress.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
     inputs:
       phases:

@@ -79,8 +79,8 @@ flowchart TB
         APIsrv["kube-apiserver"]
         TRAEFIK["Traefik ingress"]
         CM["cert-manager"]
-        REG["in-cluster registry"]
-        BK["BuildKit (rootless)"]
+        REG["in-cluster registry, behind its guard"]
+        BK["build Jobs, each with its own rootless BuildKit"]
         APPS["User apps"]
         DBS["CloudNativePG / StatefulSets: MySQL, MariaDB, MongoDB, Redis-family, ClickHouse, Memcached"]
     end
@@ -106,7 +106,7 @@ sequenceDiagram
     participant U as User / webhook
     participant A as Panel API
     participant D as Deploy orchestrator
-    participant B as BuildKit
+    participant B as Build Job and its BuildKit
     participant R as Registry
     participant K as Kubernetes
 
@@ -116,9 +116,9 @@ sequenceDiagram
     alt fingerprint unchanged
         D->>K: patch Deployment (rollout only)
     else new fingerprint
-        D->>B: build job (Railpack or Dockerfile)
+        D->>B: build job (Railpack or Dockerfile), with a push token for its own repository
         B-->>D: log stream (SSE to the UI)
-        B->>R: push image
+        B->>R: push image, through the registry's guard
         D->>K: apply Deployment/Service/Ingress/HPA
     end
     K-->>D: rollout status
@@ -213,7 +213,7 @@ kubeconfigs.
 | When | What |
 |---|---|
 | `install.sh` | k3s server, the panel, cert-manager, and the panel's own directories on the host: its database and its master key |
-| First build | in-cluster registry + rootless BuildKit |
+| First build | in-cluster registry, with its guard; each build brings a rootless BuildKit of its own and takes it away again |
 | First image scan | a volume for Trivy's vulnerability database, in the build namespace; each scan is a Job that ends |
 | First PostgreSQL | CloudNativePG operator |
 | First MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached | nothing: each is a StatefulSet from the engine's official image |

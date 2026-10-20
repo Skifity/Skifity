@@ -53,6 +53,10 @@ internal/
                     the process that enforces it in front of an app.
   cron/             The five-field parser backups and scheduled commands share.
   registry/         The in-cluster registry's HTTP API, for the sweep.
+  registryguard/    The guard in front of that registry: anybody reads, only a
+                    build's own token writes.
+  netfence/         What a new pod waits on before its code runs: its network
+                    policy being in place.
   serverapp/        Wiring: the HTTP server, the minute tick, startup recovery.
   docsite/          Serves docs/ in the panel and checks every link resolves.
   netguard/, shellsafe/, runsafe/
@@ -129,5 +133,7 @@ binary serving the embedded frontend, not a dev server, so what is tested is
 what ships. Set `CHROMIUM_PATH` to use a browser already on the machine.
 
 The sandbox this was built in refuses privileged containers, so a real k3s
-cluster could never be started here (ADR-0010). Where something has not been
-executed, `docs/progress.md` says so plainly.
+cluster could never be started here (ADR-0010). The `Cluster` workflow runs
+`test/cluster/verify.sh` on a GitHub runner, a real single-server k3s, on every
+push to `main`, and uploads what `test/cluster/collect.sh` gathers. Where
+something has not been executed, `docs/progress.md` says so plainly.

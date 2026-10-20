@@ -109,7 +109,7 @@ root alone.
 | Open ports | TCP 80 and 443 | |
 
 A fresh install is deliberately small: Kubernetes and the panel, nothing else.
-Certificates, the builder, the PostgreSQL operator and the rest install
+Certificates, the image registry, the PostgreSQL operator and the rest install
 themselves the first time you use them, and each one says what it costs first.
 
 If your provider has a firewall of its own in front of the server, allow TCP 80
@@ -243,11 +243,13 @@ assumes it is alone — and says how to fix it.
 API and the MCP server, says what happened, what it means and how to fix it,
 with a button that copies the whole thing for an AI assistant.
 
-**Builds run unprivileged.** Images are built by rootless BuildKit, as an
-unprivileged user, in a namespace of their own with default-deny networking: no
-privileged container and no Docker socket. The builds' namespace is the one
-place that admits an unconfined seccomp profile, which rootless BuildKit needs,
-and [ADR-0016](docs/decisions.md) says why.
+**Builds run unprivileged, and apart.** Each build starts a rootless BuildKit of
+its own, as an unprivileged user, in a namespace of its own with default-deny
+networking: no privileged container, no Docker socket, and no builder shared
+between teams. A build can write to its own app's images in the registry and to
+nobody else's, with a token that lasts an hour. The builds' namespace is the one
+place that admits an unconfined seccomp profile, which rootless BuildKit needs;
+[ADR-0016](docs/decisions.md) and ADR-0026 say why.
 
 **Secrets are sealed to where they are stored.** Envelope encryption with a
 master key you can rotate without downtime, a recovery key shown once, and a

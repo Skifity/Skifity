@@ -348,7 +348,9 @@ one builder in it, and that builder still runs as an unprivileged user.
 **Consequences.** The namespace's name is fixed rather than derived from the
 panel's, because every node's container runtime is configured to reach the
 registry inside it and that configuration is written before the panel exists. A
-cluster runs one Skifity panel, which was already true of the registry.
+cluster runs one Skifity panel, which was already true of the registry. Since
+ADR-0026 there is no builder in the namespace between builds: each build brings
+its own.
 
 ---
 
@@ -796,3 +798,94 @@ under other names; Hetzner and DigitalOcean are implemented, Vultr is not. None
 of this has run against either provider or on a real machine: each is tested
 against a fake of its API built from the provider's published reference, with
 the in-process SSH server as the machine (ADR-0010).
+
+---
+
+## ADR-0026 - Each build runs its own BuildKit, and only its token writes to the registry
+
+**Context.** One rootless BuildKit served every team's builds, from the build
+namespace, with its process sandbox off: a Kubernetes pod masks the `/proc` that
+BuildKit's sandbox needs, so rootless BuildKit in Kubernetes runs without it.
+A step of one team's build therefore ran beside the daemon that held another
+team's build, could connect to it on its port, and could read what it held. The
+in-cluster registry took no password, because every server's container runtime
+pulls from it, and so a build step could also push over any team's image — the
+one thing a hostile Dockerfile could do to somebody else's running app.
+SECURITY.md said both, and said the fix could not be tested without a cluster.
+The cluster workflow (`.github/workflows/cluster.yml`) can test it.
+
+**Decision.** Two halves.
+
+* *A daemon per build.* The build container runs the rootless BuildKit image
+  and starts a daemon of its own with `buildctl-daemonless.sh`, which stops when
+  the build does. It runs as uid 1000 with its seccomp and AppArmor profiles off
+  and may gain privilege, because newuidmap is setuid — exactly what the shared
+  daemon had — and the steps before it keep no-new-privileges. Its layers go to
+  an emptyDir with a ceiling. The shared daemon is removed from a cluster that
+  has one.
+* *A guard in front of the registry.* The registry listens on its pod's
+  loopback; beside it, the panel's own image runs `skifity registry-guard` on the
+  registry's port. Reading passes. Writing needs a token: an HMAC over a
+  repository and an expiry, signed with a key in a Secret only the guard mounts.
+  A build is given one for its own app's repository, for an hour, in the Docker
+  config it already pushes with. Deleting and listing every repository need the
+  panel's own token, which the weekly sweep carries.
+
+**Reason.** A daemon per build puts the boundary where the policy already was:
+one build, one pod, one network policy. The alternatives were worse: a daemon
+per team is a long-lived process per tenant to schedule and size, and BuildKit's
+own TLS authentication would have authenticated builds to a daemon they still
+shared. The registry cannot take a password, because a password every server
+needs is a password every server holds; but writing is the harm, and writing
+needs nothing on the servers. A token that names its repository and its expiry
+needs no table to look up, so the guard needs nothing but the key and stays
+correct across a restart.
+
+**Consequences.** A build starts cold. What makes an app's second build fast is
+the cache its first one pushed beside its image (`mode=max`), which was already
+what the shared daemon read; package caches inside a step (`--mount=type=cache`)
+no longer survive between builds. Each build pulls its base images and, for
+Railpack, the frontend, which costs bandwidth the shared daemon's cache saved.
+Reading the registry stays open to the builds and the servers: a build can pull
+another team's image. The guard runs the panel's image and follows it — a
+registry with an older guard, or none, is given the panel's before a build, but
+only while no build is pushing, because the registry restarts. A server whose
+AppArmor refuses user namespaces to unconfined programs (Ubuntu from 23.10) needs
+the profile for `rootlesskit` that Ubuntu ships.
+
+---
+
+## ADR-0027 - A pod's code waits for its network policy
+
+**Context.** The second run on a real cluster sent a pod in an app's namespace to
+the Kubernetes API on its server's own address, which the environment's policy
+forbids, and it got there; every target it tried after the first was refused.
+The policy controller k3s runs, kube-router, writes a pod's rules once the pod
+has an address, not before its containers start. For that moment nothing fences
+the pod, and a connection opened in it outlives it, because the rules let an
+established connection be. The cloud's metadata service is one request away.
+
+**Decision.** Every pod that runs a team's code starts with an init container,
+`fence`: the panel's own image running `skifity wait-for-fence`. It connects to
+the kubelet on the pod's own server, which every server runs and no tenant
+policy allows, until it is refused, and only then do the pod's other containers
+start. A timeout counts as refused, since other policy controllers drop rather
+than refuse. After a minute it gives up and lets the pod start, saying so in its
+log. Apps and their processes, one-off, release and scheduled commands, builds
+and plugins all have it; a panel running outside the cluster it manages, whose
+Deployment may run an older program, gives its pods none.
+
+**Reason.** Nothing at the node level can tell a tenant's pod from the system's
+in the moment before its rules exist; only the pod can wait for them. The probe
+needs nothing the pod does not already have — its server's address comes from
+the downward API — and the kubelet is the one listener that is on every server
+and in no tenant's policy. Giving up after a minute keeps a cluster that enforces
+no policy at all from never starting a pod again; waiting longer would not fence
+it.
+
+**Consequences.** Every such pod starts a second or so later, and every server
+pulls the panel's image once per version. The fence is small enough to cost an
+environment nothing against its quota and passes the restricted profile. A pod
+created some other way — with kubectl, in a namespace the panel manages — has
+no fence, and the window is still there for it.
+

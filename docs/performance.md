@@ -51,16 +51,19 @@ shows the figure before you agree to it.
 |---|---|---|
 | cert-manager | 120 MiB | You add a domain |
 | Image registry | 60 MiB | You first deploy from source |
-| Builder (BuildKit) | 200 MiB | You first deploy from source |
 | CloudNativePG | 150 MiB | You create a PostgreSQL database |
 | KEDA (scale to zero) | 180 MiB | You turn it on |
 | Longhorn | 700 MiB **per server** | You turn it on |
 | Prometheus and Grafana | 900 MiB | You turn it on |
 
-A build is the most memory-hungry thing that happens, and it is transient: the
-builder needs room to unpack and compile, and on a 1 GB server a large
-JavaScript project will run out. The error says so, and says to add a server or
-raise the build limit, rather than failing with an exit code.
+There is no builder in the table, because none runs between builds: each build
+starts a BuildKit of its own and it goes with the build. A build is the most
+memory-hungry thing that happens, and it is transient: its BuildKit and the work
+it does share the build's limit, 3 GiB by default, and need room to unpack and
+compile, so on a 1 GB server a large JavaScript project will run out. The error
+says so, and says to add a server or raise the build limit, rather than failing
+with an exit code. A build starts cold, with no cache on the server; what makes
+an app's second build fast is the cache its first one pushed to the registry.
 
 ## Reproducing the panel figures
 

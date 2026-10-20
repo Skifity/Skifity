@@ -65,33 +65,46 @@ These are the lines the code defends, and the ones it does not.
   environment, the `restricted` pod security profile. An app reaching the
   panel, another environment, or a secret that is not its own is a
   vulnerability.
-* **A build is untrusted**, and runs in a namespace of its own. It is at the
-  `privileged` profile, because BuildKit needs it (ADR-0016); a build escaping
-  to the node is a known limit of that, not a surprise — but reaching the
-  panel's secrets from one is a vulnerability.
+* **A build is untrusted**, and runs in a namespace of its own, with a BuildKit
+  of its own that lives as long as it does (ADR-0026). It is at the `privileged`
+  profile, because rootless BuildKit needs it (ADR-0016); a build escaping to the
+  node is a known limit of that, not a surprise — but reaching the panel's
+  secrets, another build, or another team's images in the registry for writing
+  is a vulnerability.
+* **A pod's own code starts behind its fence.** Every pod that runs a team's
+  code — an app, a command, a build, a plugin — first waits in a container of
+  the panel's until its network policy is in place (ADR-0027). Code of a team's
+  that runs before its policy is a vulnerability.
 
 ## Known limits
 
 What follows is what Skifity does not do, or does only in part, today. It is
-here so that nobody finds it out the hard way. Nothing below, or above, has been
-run against a real cluster by the people who wrote it: `docs/progress.md` says
-what has been executed and what has only been written and tested against fakes.
+here so that nobody finds it out the hard way. The tenant boundaries above are
+checked on a real, single-server k3s cluster by `test/cluster/verify.sh`, which
+CI runs on every push to `main`; `docs/progress.md` says what each run found.
+None of it has run on more than one server, and none of it has been attacked by
+anybody who meant it.
 
-**Builds are not isolated from each other.**
+**What builds still share.**
 
-* One BuildKit serves every team. It listens inside the build namespace without a
-  password, and a build step runs beside it with its process sandbox off, because
-  rootless BuildKit needs that in Kubernetes. A hostile build step can read what
-  another team's build holds in that daemon, and push over images in the registry.
-* The registry takes no password and tags are mutable. What keeps the world and the
-  apps away from it is a firewall rule that drops its port from outside the
-  machine and a network policy that keeps pods off the machine's own address; a
-  build in the build namespace is not stopped by either, because it needs the
-  registry to work.
-* The fix is a daemon and a short-lived push token per build. It is the boundary
-  that matters, and it cannot be tested without a cluster, so it has not been
-  done. Until it is, treat a team that can build as able to affect every
-  team's images, and do not host teams that do not trust each other.
+* Reading the registry. Every server's container runtime pulls without a
+  password, and so may anything in the build namespace: a build can pull
+  another team's image, which is that team's code. Secret build variables never
+  enter an image, and runtime variables never do either; anything a team puts
+  into its image itself is readable by every team that builds here. Writing,
+  deleting and listing the repositories need a token the panel signed, and a
+  build's token is for its own app's repository, for an hour.
+* The server. The build namespace is at the `privileged` profile, and a build's
+  BuildKit runs with its seccomp and AppArmor profiles off so that it can make a
+  user namespace. A build that escapes that namespace is on the server, beside
+  every team's apps there. That is a kernel bug away, not a setting.
+* Inside one build, BuildKit's process sandbox is off, because a Kubernetes pod
+  masks the `/proc` it would need; the steps of a build can see each other and
+  the daemon. The daemon is that build's alone.
+* What a server allows. Ubuntu from 23.10 refuses a user namespace to an
+  unconfined program unless a profile allows it, which is what rootless BuildKit
+  needs. Ubuntu ships one for `rootlesskit`; a server without it fails its
+  builds at the start, saying so in the build's log.
 
 **Floods are not handled.** A volumetric attack, from many addresses at once, is
 out of scope above. What the panel does is per address: a limit on its own API, a
@@ -129,6 +142,12 @@ for k3s and evicts a pod that grows past what it asked for, and every container
 has a default limit on what it may write to disk. Nothing stops a tenant from
 requesting limits larger than the machine, and a full registry volume fails every
 team's pushes. Disk and memory alerts notify; they do not act.
+
+**A pod that waits a minute for its fence starts without it.** The fence holds a
+pod's code back until the policy controller has written the pod's rules, and
+gives up after a minute rather than keep every pod from starting on a cluster
+that enforces no policy at all. It says so in its own log. On a cluster Skifity
+installed, the rules arrive within a second or two.
 
 **A panel administrator is root everywhere** (above). A team's administrator sets
 addresses the panel then requests — a webhook, a Git host, a secret manager, a

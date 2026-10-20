@@ -35,7 +35,7 @@ clientset and golden manifests, and that is said plainly rather than glossed ove
 * `docs/research/stack.md` — component versions verified 2026-09-16, reconciled
   with the code 2026-09-17.
 * `docs/architecture.md` — layers, deploy path, add-server state machine, data model, isolation.
-* `docs/decisions.md` — ADR-0001 onwards; there are twenty-one.
+* `docs/decisions.md` — ADR-0001 onwards; there are twenty-seven.
 
 ### Phase 1 — done
 
@@ -6519,6 +6519,70 @@ The page is exercised by a test that narrows by category, by search and on a
 phone, and by the layout test at 375, 768 and 1440 px. An app installed from a
 template whose name changed gets the new name's slug the next time one is
 installed; ones already installed keep theirs.
+
+## A real cluster, at last
+
+Everything above that needed a cluster was written against fakes, because the
+sandbox this was built in refuses privileged containers (ADR-0010). A GitHub
+runner does not: it is a fresh Ubuntu 24.04 server with systemd that is thrown
+away afterwards, which is what `test/cluster/verify.sh` asks for. The `Cluster`
+workflow (`.github/workflows/cluster.yml`) builds the panel's image from the
+commit, installs it with the real installer, runs the whole crosscheck against
+the k3s it made, and uploads what `test/cluster/collect.sh` gathers — nodes,
+pods, events, policies, iptables, the k3s journal, every platform log — whatever
+the result. It runs on every push to `main`.
+
+**The first run** passed 37 checks, failed 9 and skipped 7. Five failures were
+the product's:
+
+* every PostgreSQL database asked for `storageClass: ""`, which to Kubernetes is
+  "no class", so its volume never bound on a stock k3s;
+* an app on a cloud machine got no address at all: the public IP is not on the
+  network card there, and the panel only looked at the node; the installer now
+  tells it (`SKIFITY_PUBLIC_IP`);
+* a deploy whose image could not exist was waited on for minutes, and now stops
+  at the node's own reason;
+* switching autoscaling on dropped an app to one instance (found by the new
+  check, fixed by handing the field to a second manager);
+* a team's URL could point inside the cluster (`internal/netguard`, fixed
+  beside it).
+
+Four were the script's, and are corrected in it.
+
+**The second run** passed 58, failed 2, skipped 4.
+
+* *A managed database stayed "unknown".* CloudNativePG's instance manager reads
+  its Cluster from the Kubernetes API before PostgreSQL starts, and the
+  environment's policy keeps every pod off the servers' addresses, where the
+  API is once its Service address is translated. Each environment now has a
+  policy for CloudNativePG's own pods: out to the API's port on the servers'
+  addresses, and in from the operator on the status port. This is very likely
+  what the owner saw on their own server as a database that never left
+  "Missing", with the storage class.
+* *An app's pod reached the API on its server's address.* The first target the
+  probe tried got there; every one after was refused. kube-router writes a
+  pod's rules once it has an address, and for that moment nothing fences it. A
+  pod running a team's code now starts behind a `fence` container that waits
+  until its connection to the kubelet is refused (ADR-0027), and the probe
+  borrows that container from the app's own Deployment.
+
+The second run measured k3s at 922 MB and the whole 16 GB machine at 2.2 GB in
+use. Its figure for the panel read two pods at once, an ACME solver's and the
+panel's, and the script now asks for the panel's alone.
+
+**Builds, apart.** With a cluster to test on, the change SECURITY.md had put off
+was made (ADR-0026): each build starts a rootless BuildKit of its own, and the
+registry sits behind a guard that lets a build write to its own app's
+repository with an hour's token and to nothing else. The registry's debug
+server, which listened on every address of its pod, is on loopback; the build
+namespace's policies let a build reach the registry and nothing else in it, and
+let the other servers' pulls in, which on more than one server they were not.
+
+**Not run.** Nothing on more than one server: the pulls through another
+server's NodePort, the gateway addresses the registry's policy names, a server
+going away. Nothing on a stock Ubuntu 24.04 server, whose AppArmor restricts the
+user namespaces rootless BuildKit makes unless Ubuntu's `rootlesskit` profile
+applies; the runner's settings are now in the report.
 
 ## Idle resource usage
 

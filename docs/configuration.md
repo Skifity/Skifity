@@ -737,7 +737,7 @@ applies every migration it has that the database does not.
 ### Upgrading components
 
 The components the panel installs — HTTPS certificates, PostgreSQL, scale to
-zero, the builder, the registry, cross-node storage, the Cloudflare tunnel —
+zero, the registry, cross-node storage, the Cloudflare tunnel —
 each record the version they were installed at, under **Settings → Components**.
 A panel release that ships a newer version of one says so beside it, with an
 **Upgrade to …** button: the newer release's manifest is applied over the one
