@@ -6,8 +6,9 @@ to download: on a fresh cloud server the installer takes about three minutes
 
 ## What you need
 
-* A server running Ubuntu 24.04 or Debian 12, with at least 1 GB of memory and
-  8 GB of free disk, and root access over SSH. Any VPS will do.
+* A server running Ubuntu 24.04 or Debian 12, with at least 2 GB of memory and
+  8 GB of free disk, and root access over SSH. Any VPS will do. Kubernetes and
+  the panel use about 1 GB of the memory before your first app.
 * Optionally, a domain name. Skifity works without one.
 
 ### Which systems

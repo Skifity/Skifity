@@ -6658,7 +6658,7 @@ been seen.
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,
-38 MiB after 400 requests, 39 MiB of binary, and 19–24 MiB in its pod on a real
-cluster. k3s is measured on the Cluster workflow's runner, at 922–988 MiB with
-every component this checks installed, on a machine with 16 GB; on a small
-server it has not been measured.
+38 MiB after 400 requests, 39 MiB of binary, and 19–29 MiB in its pod on a real
+cluster. k3s is measured on the Cluster workflow's runner: 758 MiB just after a
+fresh install, which adds about 1 GB to the machine in all, and 922–988 MiB with
+every component this checks installed, on a machine with 16 GB.

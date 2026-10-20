@@ -48,8 +48,11 @@ rents you the servers.
 
 ## How much memory does it need?
 
-1 GB works for a small app. 2 GB is comfortable. Kubernetes and the panel take
-roughly 700 MB between them on a fresh install; everything else is your apps.
+2 GB for the first server, which is the least that leaves your apps room:
+Kubernetes and the panel use about 1 GB between them on a fresh install, measured
+on a real server on every push ([What it costs](performance.md)). 4 GB is
+comfortable, and is what a large build from source wants. A server added later
+runs no control plane and needs 1 GB. The installer starts on less, and says so.
 
 Each optional component says what it costs before you install it.
 

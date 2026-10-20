@@ -116,10 +116,10 @@ In the order it matters.
 2. **Tag a release** — *done.* v0.1.0 was cut before the cluster run, by the
    maintainer's decision; v0.1.1 is the first tag cut after it, with everything
    it found fixed. `docs/releasing.md` is the procedure.
-3. **Measure k3s's own footprint** — *done on a large machine.*
-   `docs/performance.md` has k3s at 922–988 MiB on a 16 GB runner with every
-   component installed. What a 1 GB server can hold, which is what the README's
-   minimum promises, is still a claim nobody has measured.
+3. **Measure k3s's own footprint** — *done.* A fresh install takes about 1 GB
+   of memory before the first app, k3s 758 MiB of it, measured on every push
+   (`docs/performance.md`). That is why the first server's minimum is now 2 GB
+   and not the 1 GB the README used to promise.
 4. **A second pair of eyes on the security model.** Phase 17 below was the
    first pass and found three things. It was still the same eyes. Tenant
    isolation is the one class of bug where being wrong is not recoverable, and

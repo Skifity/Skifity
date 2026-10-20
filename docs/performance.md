@@ -31,35 +31,44 @@ route to the internet.
 
 **Measured** by the `Cluster` workflow, which installs every push to `main` on
 a fresh GitHub-hosted Ubuntu 24.04 server (4 cores, 16 GB) and runs
-`test/cluster/verify.sh` against it. The figures are taken at the end of the
-run, with cert-manager, the registry, CloudNativePG and the firewall installed
-(and KEDA, in the last of them) and the apps the run deployed still running, so
-they are a busy server rather than an idle one. Four runs:
+`test/cluster/verify.sh` against it. It reads the machine three times: before
+anything is installed, half a minute after the panel first answers, and at the
+end of the run.
+
+**A fresh install**, Kubernetes, its own components, cert-manager and the panel,
+with nothing deployed:
 
 | | Measured |
 |---|---|
-| k3s server process (API server, etcd, controllers), resident | 922–988 MiB |
-| The panel's pod, working set | 19–24 MiB |
-| The whole machine in use, the runner's own services included | 2.2–2.6 GB |
+| k3s server process (API server, etcd, controllers), resident | 758 MiB |
+| What the install added to the machine | about 1,000 MiB |
 | The installer, from nothing to a panel answering | 161–169 seconds |
+
+**A busy server**, at the end of a run, with the registry, CloudNativePG, the
+firewall and KEDA installed and the run's apps and database still running:
+
+| | Measured |
+|---|---|
+| k3s server process, resident | 922–988 MiB |
+| The panel's pod, working set | 19–29 MiB |
+| The whole machine in use, the runner's own services included | 2.2–2.9 GB |
 
 The panel reads smaller in its pod than on a laptop: the kubelet reports the
 working set, which leaves out file pages the kernel can drop, and the laptop
 figure is everything resident.
 
-k3s is the large one. Every component above brings resource definitions and
-controllers of its own, and the API server holds all of them. On a 16 GB
-machine nothing asks it to give memory back, so this is the most it took rather
-than the least it needs. k3s's own documentation gives
-[2 GB](https://docs.k3s.io/installation/requirements#hardware) as the minimum
-for a server, and measures
+k3s is the large one, and the reason for the requirements. A fresh install
+takes about 1 GB before the first app, so **the first server needs 2 GB**, and
+4 GB is comfortable once builds from source are in the picture. k3s's own
+documentation agrees: [2 GB](https://docs.k3s.io/installation/requirements#hardware)
+is its minimum for a server, and it measures
 [about 1.6 GB](https://docs.k3s.io/reference/resource-profiling) for one
-running a workload and a monitoring stack.
+running a workload and a monitoring stack. A server added later runs only the
+k3s agent, which k3s measures at under 300 MB, and needs 1 GB.
 
-**What a 1 GB server can hold has not been measured.** The installer accepts
-900 MB and warns below 1.8 GB without swap, and the README asks for 1 GB at
-least and recommends 2 GB, or 1 GB with swap. Every optional component below
-makes a small server tighter.
+These are a 16 GB machine's numbers, where nothing asks k3s to give memory
+back; on a smaller one it holds less. The installer still starts on 900 MB, and
+below 1.8 GB it says how little that leaves.
 
 ## Components, when you install them
 

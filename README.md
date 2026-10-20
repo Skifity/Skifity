@@ -103,7 +103,7 @@ root alone.
 |---|---|---|
 | Operating system | Ubuntu 24.04 or Debian 12 | |
 | Architecture | amd64 or arm64 | |
-| Memory | 1 GB | 2 GB, or 1 GB with swap |
+| Memory | 2 GB | 4 GB, if you build from source |
 | Free disk | 8 GB | |
 | Access | root over SSH | |
 | Open ports | TCP 80 and 443 | |
@@ -111,6 +111,9 @@ root alone.
 A fresh install is deliberately small: Kubernetes and the panel, nothing else.
 Certificates, the image registry, the PostgreSQL operator and the rest install
 themselves the first time you use them, and each one says what it costs first.
+Small is still about 1 GB of memory before the first app, measured on every push
+([what it costs](docs/performance.md)), which is why the first server needs 2 GB;
+a server added later runs no control plane and needs 1 GB.
 
 If your provider has a firewall of its own in front of the server, allow TCP 80
 and 443 there too; the installer cannot see it.

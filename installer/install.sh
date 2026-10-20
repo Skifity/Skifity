@@ -141,10 +141,12 @@ CERT_MANAGER_URL="https://github.com/cert-manager/cert-manager/releases/download
 RUN_UID=65532
 RUN_GID=65532
 
-# Minimums, chosen so that a 1 GB VPS is usable rather than technically bootable.
+# Below MIN_MEMORY_MB k3s and the panel cannot start at all. A fresh install
+# uses about 1 GB before the first app (the Cluster workflow measures it on
+# every push, docs/performance.md), so below COMFORTABLE_MEMORY_MB there is
+# little left for apps and a build can take the server down with it.
 MIN_MEMORY_MB=900
 MIN_DISK_GB=8
-# Below this, with no swap, one build can take the server down with it.
 COMFORTABLE_MEMORY_MB=1800
 
 # State the steps below hand to each other. Set here so that every one of them
@@ -1021,18 +1023,23 @@ preflight() {
 	SWAP_MB=${SWAP_MB:-0}
 	if [ "$MEMORY_MB" -lt "$MIN_MEMORY_MB" ]; then
 		fail \
-			"This server has ${MEMORY_MB} MB of memory, and Kubernetes plus the panel need about ${MIN_MEMORY_MB} MB before your apps get anything." \
-			"Use a server with at least 1 GB of memory. 2 GB is a comfortable starting point."
+			"This server has ${MEMORY_MB} MB of memory, and Kubernetes plus the panel use about 1 GB before your apps get anything." \
+			"Use a server with at least 2 GB of memory. 4 GB is comfortable, and is what a large build from source wants."
 	fi
 	ok "Memory ${MEMORY_MB} MB"
-	# Not a refusal: a 1 GB server runs the panel and small apps. But a build
-	# is the hungriest thing it will do, and without swap the kernel's answer
-	# to running out is to kill something — possibly the panel.
-	if [ "$MEMORY_MB" -lt "$COMFORTABLE_MEMORY_MB" ] && [ "$SWAP_MB" -eq 0 ]; then
-		warn "With ${MEMORY_MB} MB of memory and no swap, building an app can run this server out of memory."
-		note "Two gigabytes of swap is cheap insurance:"
-		note "  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
-		note "  echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+	# Not a refusal: it starts, and with swap a small app runs. But Kubernetes
+	# and the panel take about 1 GB of it, a build is the hungriest thing the
+	# server does, and without swap the kernel's answer to running out is to
+	# kill something — possibly the panel.
+	if [ "$MEMORY_MB" -lt "$COMFORTABLE_MEMORY_MB" ]; then
+		if [ "$SWAP_MB" -eq 0 ]; then
+			warn "With ${MEMORY_MB} MB of memory and no swap, Kubernetes and the panel leave little for apps, and building one can run this server out of memory."
+			note "2 GB of memory is the least that leaves room. Two gigabytes of swap is cheap insurance:"
+			note "  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
+			note "  echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+		else
+			note "With ${MEMORY_MB} MB of memory, Kubernetes and the panel take about 1 GB; apps will lean on the swap."
+		fi
 	fi
 
 	DISK_GB=$(df -P -k / | awk 'NR==2 {print int($4 / 1024 / 1024)}')
