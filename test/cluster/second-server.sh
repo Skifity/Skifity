@@ -16,6 +16,12 @@
 # in with (DIR/id_ed25519) into DIR, and prints the guest's address last.
 # Needs /dev/kvm, qemu-system-x86_64, qemu-img and cloud-localds.
 #
+# SECOND_SERVER_IMAGES names an image archive (docker save) to put where k3s
+# imports from before k3s exists, as the Cluster workflow does on the first
+# server. An image built on the runner is on no registry, and every pod that
+# runs the panel's image, the fence in front of each app's code among them,
+# would wait for a pull that can never happen.
+#
 #   THIS CHANGES THE MACHINE IT RUNS ON: a bridge, a NAT rule and a route.
 set -euo pipefail
 
@@ -30,6 +36,7 @@ GUEST_MAC="52:54:00:5c:1f:10"
 : "${SECOND_SERVER_CPUS:=2}"
 : "${SECOND_SERVER_DISK:=30G}"
 : "${SECOND_SERVER_IMAGE:=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
+: "${SECOND_SERVER_IMAGES:=}"
 
 say() { printf '%s\n' "$*" >&2; }
 die() {
@@ -131,6 +138,12 @@ for _ in $(seq 1 60); do
 		# shellcheck disable=SC2086
 		ABOUT=$($SSH "root@$GUEST_ADDRESS" 'uname -sr; nproc; grep MemTotal /proc/meminfo' | tr -s ' \n' ' ')
 		say "The guest is up: $ABOUT"
+		if [ -n "$SECOND_SERVER_IMAGES" ]; then
+			# shellcheck disable=SC2086
+			$SSH "root@$GUEST_ADDRESS" 'mkdir -p /var/lib/rancher/k3s/agent/images && cat >/var/lib/rancher/k3s/agent/images/preloaded.tar' \
+				<"$SECOND_SERVER_IMAGES" || die "the images could not be copied to the guest"
+			say "Images from $SECOND_SERVER_IMAGES are where k3s will import them on the guest"
+		fi
 		printf '%s\n' "$GUEST_ADDRESS"
 		exit 0
 	fi

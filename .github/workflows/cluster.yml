@@ -211,7 +211,9 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 qemu-utils cloud-image-utils >/dev/null
-          sudo bash test/cluster/second-server.sh /mnt/second
+          sudo mkdir -p /mnt/second
+          sudo cp /var/lib/rancher/k3s/agent/images/skifity.tar /mnt/second/skifity.tar
+          sudo SECOND_SERVER_IMAGES=/mnt/second/skifity.tar bash test/cluster/second-server.sh /mnt/second
 
       - name: Make the runner a fresh server
         run: |
