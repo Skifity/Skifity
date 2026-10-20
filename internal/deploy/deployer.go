@@ -689,6 +689,14 @@ const letGoWait = time.Minute
 func (d *Deployer) letGoOfScaleToZero(ctx context.Context, spec kube.AppSpec, app store.App) bool {
 	applier := d.cluster.Client().Applier()
 	if _, err := applier.Get(ctx, "http.keda.sh/v1alpha1", "HTTPScaledObject", spec.Namespace, spec.Name); err != nil {
+		if !kube.IsNotFound(err) {
+			// Not known either way: it is deleted as it always was, and the
+			// app's size is left to the next apply.
+			if err := applier.Delete(ctx, "http.keda.sh/v1alpha1", "HTTPScaledObject",
+				spec.Namespace, spec.Name); err != nil {
+				d.log.Warn("could not remove the scale-to-zero object", "app", app.ID, "error", err)
+			}
+		}
 		return false
 	}
 	// The add-on's own object and the KEDA one it made from it, which is
