@@ -3,6 +3,8 @@ package kube
 import (
 	"context"
 	"fmt"
+	"net/netip"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -218,7 +220,104 @@ func BuildNetworkPolicies(namespace, systemNamespace string, nodeAddresses []str
 	// networks, the cloud metadata services, or the nodes themselves, which is
 	// where the Kubernetes API, the kubelet, SSH and the registry are.
 	allow.Spec.Egress = append(allow.Spec.Egress, InternetEgress(nodeAddresses)...)
-	return []*networkingv1.NetworkPolicy{denyAll, allow}
+	return []*networkingv1.NetworkPolicy{denyAll, allow, databasePolicy(namespace, nodeAddresses)}
+}
+
+// The managed databases' operator, and the port the Kubernetes API listens on
+// on a server.
+const (
+	DatabaseOperatorNamespace = "cnpg-system"
+	APIServerPort             = 6443
+	// databaseStatusPort is where a database pod's instance manager answers
+	// the operator.
+	databaseStatusPort = 8000
+)
+
+// databasePolicy opens what a managed database's own pods need beyond what
+// every pod in the environment has.
+//
+// CloudNativePG's instance manager runs inside each database pod and talks to
+// the Kubernetes API: it reads its Cluster before PostgreSQL is initialised,
+// and gives up when it cannot. The API is on the servers' own addresses, which
+// the environment's policy keeps every pod away from, so a database was asked
+// for, its first pod spent half a minute refused by an API it would never
+// reach, and the database stayed "unknown" for good. The operator, in its own
+// namespace, asks each instance how it is on its status port, and without that
+// it cannot tell that a primary is up.
+//
+// Both are opened for the database's pods only, chosen by the labels
+// CloudNativePG gives them. No app's pod carries those: an app's labels are
+// the panel's, never the team's.
+func databasePolicy(namespace string, nodeAddresses []string) *networkingv1.NetworkPolicy {
+	tcp := corev1.ProtocolTCP
+	status := intstr.FromInt32(databaseStatusPort)
+	policy := &networkingv1.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "NetworkPolicy"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "allow-databases", Namespace: namespace,
+			Labels: map[string]string{"app.kubernetes.io/managed-by": version.Binary},
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"app.kubernetes.io/managed-by": "cloudnative-pg"},
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{Key: "cnpg.io/cluster", Operator: metav1.LabelSelectorOpExists},
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{{
+				From: []networkingv1.NetworkPolicyPeer{{NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"kubernetes.io/metadata.name": DatabaseOperatorNamespace},
+				}}},
+				Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcp, Port: &status}},
+			}},
+		},
+	}
+	// The API is reached through its Service, which is translated to a
+	// server's own address before the policy looks; so it is named by those
+	// addresses, on the API's port only. With no address known there is no
+	// rule at all: a rule with ports and no peers allows that port anywhere.
+	var servers []networkingv1.NetworkPolicyPeer
+	for _, address := range nodeIPv4(nodeAddresses) {
+		servers = append(servers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: address + "/32"}})
+	}
+	if len(servers) > 0 {
+		api := intstr.FromInt32(APIServerPort)
+		policy.Spec.Egress = []networkingv1.NetworkPolicyEgressRule{{
+			To:    servers,
+			Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcp, Port: &api}},
+		}}
+	}
+	return policy
+}
+
+// nodeIPv4 is every IPv4 address the nodes report, private ones included,
+// once each and in order. The cluster's networks are IPv4, and a policy with
+// an IPv6 block in it is one the policy controller may refuse whole.
+func nodeIPv4(addresses []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, address := range addresses {
+		ip, err := netip.ParseAddr(address)
+		if err != nil {
+			continue
+		}
+		ip = ip.Unmap()
+		if !ip.Is4() || ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() || seen[ip.String()] {
+			continue
+		}
+		seen[ip.String()] = true
+		out = append(out, ip.String())
+	}
+	sort.Strings(out)
+	return out
+}
+
+// PolicyAddressKey says whether the nodes' addresses have changed in a way
+// the environments' policies would notice: the public ones, which every pod is
+// kept from, and every IPv4 one, which a database is let through to the API on.
+func PolicyAddressKey(addresses []string) string {
+	return strings.Join(PublicNodeAddresses(addresses), ",") + ";" + strings.Join(nodeIPv4(addresses), ",")
 }
 
 func itoaResource(n int) string {

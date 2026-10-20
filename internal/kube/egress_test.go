@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	networkingv1 "k8s.io/api/networking/v1"
+
 	"skifity/internal/netguard"
 )
 
@@ -81,6 +83,73 @@ func TestTheEnvironmentPolicyKeepsPodsOffTheNode(t *testing.T) {
 	}
 	if !EgressAllows(allow.Spec.Egress, "1.1.1.1", 443) {
 		t.Error("an app cannot reach the internet")
+	}
+}
+
+// TestADatabaseReachesTheAPIAndNothingElseDoes is the first real cluster's
+// finding: CloudNativePG's instance manager reads its Cluster from the
+// Kubernetes API before PostgreSQL starts, the environment's policy kept it off
+// the servers' addresses, and every managed database stayed "unknown".
+func TestADatabaseReachesTheAPIAndNothingElseDoes(t *testing.T) {
+	nodes := []string{"10.1.0.216", "203.0.113.10", "2001:db8::1"}
+	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system", nodes)
+	var database *networkingv1.NetworkPolicy
+	for _, policy := range policies {
+		if policy.Name == "allow-databases" {
+			database = policy
+		}
+	}
+	if database == nil {
+		t.Fatal("there is no policy for the databases' own pods")
+	}
+	for _, address := range []string{"10.1.0.216", "203.0.113.10"} {
+		if !EgressAllows(database.Spec.Egress, address, APIServerPort) {
+			t.Errorf("a database cannot reach the Kubernetes API on %s", address)
+		}
+		for _, port := range []int{10250, 22, 30500} {
+			if EgressAllows(database.Spec.Egress, address, port) {
+				t.Errorf("a database can reach %s:%d", address, port)
+			}
+		}
+	}
+	for _, rule := range database.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.IPBlock == nil || strings.Contains(peer.IPBlock.CIDR, ":") {
+				t.Errorf("the databases' policy names %+v", peer)
+			}
+		}
+	}
+
+	// Chosen by CloudNativePG's labels, which no app's pod has.
+	selector := database.Spec.PodSelector
+	if selector.MatchLabels["app.kubernetes.io/managed-by"] != "cloudnative-pg" || len(selector.MatchExpressions) != 1 ||
+		selector.MatchExpressions[0].Key != "cnpg.io/cluster" {
+		t.Errorf("the databases' policy selects %+v", selector)
+	}
+	app := AppSpec{Name: "web", AppID: "app_1", Environment: "production", TeamID: "team_1", ProjectID: "proj_1"}
+	for key, value := range selector.MatchLabels {
+		if app.Labels()[key] == value {
+			t.Errorf("an app's pod carries %s=%s, so it would be given the database's way out", key, value)
+		}
+	}
+	if allow := policies[1]; EgressAllows(allow.Spec.Egress, "203.0.113.10", APIServerPort) ||
+		EgressAllows(allow.Spec.Egress, "10.1.0.216", APIServerPort) {
+		t.Error("every pod in the environment can reach the Kubernetes API")
+	}
+
+	// The operator asks each instance how it is, on its status port only.
+	if len(database.Spec.Ingress) != 1 || len(database.Spec.Ingress[0].Ports) != 1 ||
+		database.Spec.Ingress[0].Ports[0].Port.IntValue() != 8000 {
+		t.Fatalf("the operator is let in as %+v", database.Spec.Ingress)
+	}
+	if got := database.Spec.Ingress[0].From[0].NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]; got != DatabaseOperatorNamespace {
+		t.Errorf("the databases let in %q, not the operator's namespace", got)
+	}
+
+	// No address known, no egress rule: one with a port and no peers would
+	// open that port to everywhere.
+	if empty := databasePolicy("acme-shop-production", nil); len(empty.Spec.Egress) != 0 {
+		t.Errorf("with no nodes the databases' policy has %+v", empty.Spec.Egress)
 	}
 }
 

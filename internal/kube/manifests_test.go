@@ -676,8 +676,8 @@ func TestNamespaceIsolation(t *testing.T) {
 
 func TestNetworkPoliciesDenyByDefaultAndBlockMetadata(t *testing.T) {
 	policies := BuildNetworkPolicies("acme-shop-production", "skifity-system", nil)
-	if len(policies) != 2 {
-		t.Fatalf("got %d policies, want a deny-all and an allow", len(policies))
+	if len(policies) != 3 {
+		t.Fatalf("got %d policies, want a deny-all, an allow and the databases' own", len(policies))
 	}
 
 	deny := policies[0]

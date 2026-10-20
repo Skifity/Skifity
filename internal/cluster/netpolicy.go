@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"strings"
 
 	"skifity/internal/kube"
 	"skifity/internal/version"
@@ -28,7 +27,7 @@ func (c *Cluster) MaintainNetworkPolicies(ctx context.Context) {
 		c.log.Debug("could not read the nodes' addresses", "error", err)
 		return
 	}
-	key := strings.Join(kube.PublicNodeAddresses(nodes), ",")
+	key := kube.PolicyAddressKey(nodes)
 
 	// A pass still running is not started twice.
 	if !c.policiesMu.TryLock() {
