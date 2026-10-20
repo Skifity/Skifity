@@ -1514,6 +1514,27 @@ else
 $out"
 fi
 
+# --public-ip says where the server is, not what the panel is called: given on
+# an upgrade, it used to drop the domain and its certificate for sslip.io.
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_ROUTE="panel.example.test skifity-panel-tls" \
+  STUB_ISSUER_EMAIL=ops@example.test
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --public-ip 198.51.100.20 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "host: panel.example.test" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null &&
+  grep -q "tls:" "$FAKE/stub/applied-ingress.yaml"; then
+  t_pass "a second run with --public-ip keeps the domain and its certificate"
+else
+  t_fail "a second run with --public-ip lost the panel's domain ($status):
+$out"
+fi
+# The sslip.io name is the installer's own, made from the old address, and
+# the one thing --public-ip may move.
+out=$(export STUB_K3S_ACTIVE=0 STUB_NEEDS_SETUP=false STUB_ROUTE="203-0-113-10.sslip.io "
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --public-ip 198.51.100.20 2>&1) && status=0 || status=$?
+case "$status:$out" in
+0:*"198-51-100-20.sslip.io"*) t_pass "and with an sslip.io name, --public-ip moves it to the new address" ;;
+*) t_fail "--public-ip should move an sslip.io name to the new address, got $status: $out" ;;
+esac
+
 # A server that is not ready is told so before anything on it changes, with what
 # is wrong and what to do about it. This is what the first real server said:
 # "something is already listening on port 80", and nothing about what.

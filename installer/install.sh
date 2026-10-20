@@ -2024,7 +2024,7 @@ choose_hostname() {
 	# none of the options the first run had — moved a panel that had a domain
 	# and a certificate back to plain HTTP on an sslip.io name.
 	route=""
-	if [ -z "${SKIFITY_DOMAIN:-}" ] && [ -z "${SKIFITY_PUBLIC_IP:-}" ]; then
+	if [ -z "${SKIFITY_DOMAIN:-}" ]; then
 		route=$(existing_panel_route)
 	fi
 	existing_host=${route%% *}
@@ -2032,6 +2032,16 @@ choose_hostname() {
 	case "$route" in
 	*" "*) existing_tls=${route#* } ;;
 	esac
+	# --public-ip says where the server is, not what the panel is called. It
+	# used to be read as "told otherwise" too, and an upgrade run with it moved
+	# a panel with a domain and a certificate to an sslip.io name over plain
+	# HTTP (test/cluster/upgrade.sh did exactly that). The one address it may
+	# change is the sslip.io one the installer made up from the old address.
+	if [ -n "${SKIFITY_PUBLIC_IP:-}" ]; then
+		case "$existing_host" in
+		*.sslip.io) existing_host="" existing_tls="" ;;
+		esac
+	fi
 
 	if [ -n "${SKIFITY_DOMAIN:-}" ]; then
 		PANEL_HOST="$SKIFITY_DOMAIN"
