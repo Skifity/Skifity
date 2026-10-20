@@ -695,6 +695,16 @@ address, domain and certificate:
 curl -fsSL https://github.com/Skifity/Skifity/releases/latest/download/install.sh | sudo sh
 ```
 
+**The button, `skifity upgrade` and the API change the panel and nothing
+else.** What a release changes on the server itself — k3s's configuration,
+Traefik's, the firewall — only the install command can reach, so when a
+release's notes say it changes the server, upgrade with the command. 0.1.1 is
+such a release: it gives k3s the memory reservations and the etcd snapshot
+schedule a fresh install has, and Traefik a configuration it hands over
+with. An upgrade from the newest release to the code being changed, and the
+way back from it, run on a real server for every change to the code
+(`test/cluster/upgrade.sh`).
+
 **Through the API**, as a panel administrator — the panel changes the image of
 its own Deployment and Kubernetes rolls it out:
 
@@ -704,10 +714,15 @@ curl -X POST https://panel.example.com/api/upgrade \
 ```
 
 Your apps keep running throughout; the panel itself is down for the moment it
-takes the new version to start.
+takes the new version to start. The one exception is the first upgrade from a
+release before 0.1.1 with the install command: the Traefik those releases
+configured stops accepting the moment it is replaced, so apps can refuse
+connections for about a second while it hands over. The installer says so
+before it happens, and upgrades after that do not do it.
 
 **Before anything changes, the panel copies its database** (the installer does
-the same, through the CLI of the version that is running) beside itself, as
+the same, through the CLI of the version that is running, which it fetches from
+the panel when the server has none) beside itself, as
 `panel.db.before-upgrade-<time>-to-<version>`, and keeps the last three. If
 backup storage is set up it also puts a copy in the bucket. An upgrade that
 cannot take the local copy does not start.
@@ -727,7 +742,9 @@ kubectl -n skifity-system scale deploy/skifity-panel --replicas=1
 ```
 
 `restore-db` puts a copy back exactly as it was taken; it never migrates it, so
-any version of the binary can restore a copy for any other. Anything you
+any version of the binary can restore a copy for any other. The file it puts
+back takes the owner and mode of the database it replaces, so a restore run as
+root leaves one the panel, which runs as a user of its own, can open. Anything you
 changed in the panel between the upgrade and going back is lost with it —
 which is another reason to go back soon or not at all.
 
