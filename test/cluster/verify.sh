@@ -3179,19 +3179,43 @@ if [ -n "$SECOND_ID" ] && [ -n "$VERIFY_SECOND_SERVER_FAILS" ]; then
 	fi
 	[ -z "$APP_HOST" ] || say "  until then, $MISSED of $ASKED requests through the first server went unanswered"
 
-	# Once it knows, the instance that was there is out of the app's
-	# addresses, and every request is answered by the one that is left. A
-	# few seconds for the ingress to hear it.
+	# Once it knows, the instance that was there is taken out of the app's
+	# addresses, and every request is answered by the one that is left. What
+	# a visitor depends on is the address going, so that is waited for, and
+	# then a few seconds for the ingress to hear it. Each answer is written
+	# down with its time, so a failure says when it was and what it was.
 	if [ -n "$APP_HOST" ] && [ -n "$NOTICED" ]; then
-		sleep 10
-		AFTER_FAILS=0
-		for _ in $(seq 1 20); do
-			[ "$(through_ingress "$APP_HOST" 5)" = "200" ] || AFTER_FAILS=$((AFTER_FAILS + 1))
+		# The app's own address there, and the ingress's: a request reaching
+		# the first server can be handed to the ingress on the other.
+		serving_on_second() {
+			{
+				kubectl -n "$NAMESPACE" get endpointslices -l kubernetes.io/service-name=hello \
+					-o jsonpath='{range .items[*].endpoints[*]}{.nodeName} {.conditions.ready}{"\n"}{end}' 2>/dev/null
+				kubectl -n kube-system get endpointslices -l kubernetes.io/service-name=traefik \
+					-o jsonpath='{range .items[*].endpoints[*]}{.nodeName} {.conditions.ready}{"\n"}{end}' 2>/dev/null
+			} | grep -c "^$SECOND_NODE true$" || true
+		}
+		OUT_AFTER=""
+		for _ in $(seq 1 60); do
+			[ "$(serving_on_second)" = "0" ] && { OUT_AFTER=$(($(date +%s) - FAILED_AT)); break; }
 			sleep 1
 		done
-		[ "$AFTER_FAILS" = "0" ] \
-			&& ok "from then on the app answered every request, from the instance it had left" \
-			|| no "$AFTER_FAILS of 20 requests failed after the cluster knew the server was gone"
+		[ -n "$OUT_AFTER" ] \
+			&& say "  the app's and the ingress's addresses on the server that went were gone ${OUT_AFTER}s after it stopped" \
+			|| no "a minute after the cluster knew, the app's or the ingress's addresses still had the server that went"
+		sleep 5
+		AFTER_LOG=$(mktemp)
+		for _ in $(seq 1 20); do
+			printf '%s %s\n' "$(date +%T.%N | cut -c1-12)" "$(through_ingress "$APP_HOST" 5)" >>"$AFTER_LOG"
+			sleep 1
+		done
+		AFTER_MISSED=$(awk '$2 != "200"' "$AFTER_LOG")
+		if [ -z "$AFTER_MISSED" ]; then
+			ok "from then on the app answered every request, from the instance it had left"
+		else
+			kubectl -n "$NAMESPACE" get endpointslices,pods -o wide >>"$REPORT" 2>&1 || true
+			no "$(printf '%s\n' "$AFTER_MISSED" | wc -l | tr -d ' ') of 20 requests failed once the server that went was out of the app's and the ingress's addresses: $(printf '%s' "$AFTER_MISSED" | tr '\n' ' ')"
+		fi
 	fi
 
 	# The panel's own watch, which is what sends "stopped answering".
