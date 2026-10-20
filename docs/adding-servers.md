@@ -377,7 +377,10 @@ the likeliest reason to remove a server is that it has died.
 Instances are moved off first, then the server leaves the cluster. An app whose
 only instances are on the server is started on another one before they are
 stopped, as a deploy does, so it keeps answering; the others move one instance
-at a time, as their disruption budgets allow. Nothing is lost.
+at a time, as their disruption budgets allow. What runs on every server, the
+ingress among it, is then stopped the same way: the other servers stop sending
+it requests and it finishes the ones it holds, for up to a minute and a half,
+before the server leaves. Nothing is lost.
 
 A server that has stopped answering — switched off, or gone — cannot be asked
 to stop anything, so it is not waited on: it leaves the cluster straight away,

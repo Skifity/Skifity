@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -374,11 +375,86 @@ func (p *Provisioner) deleteNode(ctx context.Context, server store.Server) error
 	if p.cluster == nil || server.NodeName == "" {
 		return nil
 	}
-	err := p.cluster.Client().Clientset().CoreV1().Nodes().Delete(ctx, server.NodeName, metav1.DeleteOptions{})
+	clientset := p.cluster.Client().Clientset()
+	stopServing(ctx, clientset, p.log, server.NodeName, leaveWait)
+	err := clientset.CoreV1().Nodes().Delete(ctx, server.NodeName, metav1.DeleteOptions{})
 	if err != nil && !kubeIsNotFound(err) {
 		return fmt.Errorf("remove the node from the cluster: %w", err)
 	}
 	return nil
+}
+
+// leavingTaint is put on a server once its apps have moved, just before its
+// node is deleted.
+//
+// What a drain leaves is what runs on every server, the ingress among it, and
+// a node deleted with the ingress still on it takes it away mid-request:
+// whatever the other servers had just sent there, and the route to it, go at
+// once. A run with the second server across a slow link lost a request that
+// way. NoExecute stops those pods the way a drain stops an app's: the ingress
+// is told to stop, the rest of the cluster stops sending it new requests, and
+// it finishes the ones it holds.
+var leavingTaint = corev1.Taint{Key: "skifity.io/leaving", Effect: corev1.TaintEffectNoExecute}
+
+// leaveWait is how long the node's own pods are given to stop. The ingress
+// takes about fifteen seconds; the node is deleted after this either way.
+const leaveWait = 90 * time.Second
+
+// stopServing taints a node that is about to be deleted and waits for the
+// pods that do not tolerate it to stop. It is best effort: a server that is
+// not answering cannot stop anything, and is deleted as it is.
+func stopServing(ctx context.Context, clientset kubernetes.Interface, log *slog.Logger, nodeName string, wait time.Duration) {
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil || unreachable(node) {
+		return
+	}
+	if !slices.ContainsFunc(node.Spec.Taints, func(t corev1.Taint) bool { return t.Key == leavingTaint.Key }) {
+		node.Spec.Taints = append(node.Spec.Taints, leavingTaint)
+		if _, err := clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+			log.Warn("could not stop the ingress on a server being removed", "node", nodeName, "error", err)
+			return
+		}
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		pods, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + nodeName})
+		if err != nil {
+			return
+		}
+		left := 0
+		for _, pod := range pods.Items {
+			if pod.Spec.NodeName == nodeName && isDaemonSetPod(pod) && !toleratesLeaving(pod) &&
+				pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+				left++
+			}
+		}
+		if left == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			log.Warn("pods on a server being removed had not stopped; removing it anyway", "node", nodeName, "pods", left)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+// toleratesLeaving reports whether a pod stays on a node with leavingTaint:
+// one that tolerates every taint, or this one by name.
+func toleratesLeaving(pod corev1.Pod) bool {
+	for _, t := range pod.Spec.Tolerations {
+		if t.Effect != "" && t.Effect != leavingTaint.Effect {
+			continue
+		}
+		if (t.Key == "" && t.Operator == corev1.TolerationOpExists) || t.Key == leavingTaint.Key {
+			return true
+		}
+	}
+	return false
 }
 
 // uninstall removes k3s from the machine so it can be reused.

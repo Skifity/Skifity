@@ -8,7 +8,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"skifity/internal/cluster"
 	"skifity/internal/kube"
@@ -138,5 +140,78 @@ func TestOnlyANodeThatStoppedReportingIsUnreachable(t *testing.T) {
 	gone := drainResult{moved: 2, unreachable: true}.note()
 	if gone.Key != "drainedUnreachable" || !slices.Equal(gone.Args, []string{"2"}) {
 		t.Errorf("a server that did not answer says %q with %v", gone.Key, gone.Args)
+	}
+}
+
+// A node deleted with the ingress still on it took the ingress away
+// mid-request. The server is tainted first, and the node is deleted once what
+// the taint stops has stopped; a pod that tolerates every taint is not waited
+// for, and a server that is not answering is not asked.
+func TestAServerStopsItsIngressBeforeItsNodeIsDeleted(t *testing.T) {
+	controller := true
+	ready := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "second"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+	}
+	daemon := func(name string, tolerations ...corev1.Toleration) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "kube-system",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "DaemonSet", Name: name, Controller: &controller}},
+			},
+			Spec: corev1.PodSpec{NodeName: "second", Tolerations: tolerations},
+		}
+	}
+	ingress := daemon("traefik-xyz", corev1.Toleration{Key: "CriticalAddonsOnly", Operator: corev1.TolerationOpExists})
+	everywhere := daemon("agent-abc", corev1.Toleration{Operator: corev1.TolerationOpExists})
+	clientset := fake.NewSimpleClientset(ready, ingress, everywhere)
+	// The taint manager: a pod that does not tolerate a NoExecute taint is
+	// stopped once the node has it.
+	clientset.PrependReactor("update", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		node := action.(k8stesting.UpdateAction).GetObject().(*corev1.Node)
+		if slices.ContainsFunc(node.Spec.Taints, func(t corev1.Taint) bool { return t == leavingTaint }) {
+			_ = clientset.Tracker().Delete(corev1.SchemeGroupVersion.WithResource("pods"), "kube-system", "traefik-xyz")
+		}
+		return false, nil, nil
+	})
+	p := &Provisioner{
+		cluster: cluster.New(kube.NewClientWith(clientset, nil, ""), nil, nil, slog.New(slog.DiscardHandler)),
+		log:     slog.New(slog.DiscardHandler),
+	}
+
+	started := time.Now()
+	if err := p.deleteNode(t.Context(), store.Server{ID: "srv_2", Name: "second", NodeName: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	if waited := time.Since(started); waited > 10*time.Second {
+		t.Errorf("waited %s, for a pod that tolerates every taint", waited)
+	}
+	var verbs []string
+	for _, action := range clientset.Actions() {
+		if action.GetResource().Resource == "nodes" && action.GetVerb() != "get" {
+			verbs = append(verbs, action.GetVerb())
+		}
+	}
+	if !slices.Equal(verbs, []string{"update", "delete"}) {
+		t.Errorf("the node was asked to %v, want it tainted and then deleted", verbs)
+	}
+
+	// Not answering: nothing there can stop, so nothing is waited for.
+	gone := ready.DeepCopy()
+	gone.Status.Conditions[0].Status = corev1.ConditionUnknown
+	clientset = fake.NewSimpleClientset(gone, daemon("traefik-xyz"))
+	stopServing(t.Context(), clientset, slog.New(slog.DiscardHandler), "second", time.Minute)
+	for _, action := range clientset.Actions() {
+		if action.GetVerb() == "update" {
+			t.Error("a server that is not answering was tainted")
+		}
+	}
+
+	// A pod that never stops does not keep the server for ever.
+	clientset = fake.NewSimpleClientset(ready.DeepCopy(), daemon("traefik-xyz"))
+	started = time.Now()
+	stopServing(t.Context(), clientset, slog.New(slog.DiscardHandler), "second", 100*time.Millisecond)
+	if waited := time.Since(started); waited > 5*time.Second {
+		t.Errorf("waited %s for a pod that did not stop", waited)
 	}
 }
