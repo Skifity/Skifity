@@ -136,6 +136,70 @@ jobs:
             echo "ACME_ADDRESS=${address}"
           } >>"$GITHUB_ENV"
 
+      # A Git host on this server's own address, as a Gitea at home or a
+      # GitLab on the office network is: builds are kept off such addresses
+      # until an administrator lists the host. Its certificate is signed by an
+      # authority made for the run, which the panel is given the way one's own
+      # is. It holds the sample app phase 1 also builds from GitHub. Gitea will
+      # not run as root, and this step is not.
+      - name: Start a Git host on this server
+        run: |
+          address=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+          mkdir -p /tmp/gitea/data /tmp/gitea/sample
+          cd /tmp/gitea
+          curl -fsSL -o gitea https://dl.gitea.com/gitea/28.2.0/gitea-28.2.0-linux-amd64
+          curl -fsSL -o gitea.sha256 https://dl.gitea.com/gitea/28.2.0/gitea-28.2.0-linux-amd64.sha256
+          echo "$(cut -d' ' -f1 gitea.sha256)  gitea" | sha256sum -c -
+          chmod +x gitea
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=Crosscheck Git authority" \
+            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -keyout ca.key -out ca.pem
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=gitea" -keyout key.pem -out server.csr
+          printf 'basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:%s,IP:127.0.0.1\n' \
+            "$address" >server.ext
+          openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 \
+            -extfile server.ext -out cert.pem
+          cat >app.ini <<EOF
+          APP_NAME = Crosscheck
+          WORK_PATH = /tmp/gitea/data
+          [server]
+          PROTOCOL = https
+          HTTP_ADDR = 0.0.0.0
+          HTTP_PORT = 3443
+          ROOT_URL = https://${address}:3443/
+          CERT_FILE = /tmp/gitea/cert.pem
+          KEY_FILE = /tmp/gitea/key.pem
+          DISABLE_SSH = true
+          OFFLINE_MODE = true
+          [database]
+          DB_TYPE = sqlite3
+          PATH = /tmp/gitea/data/gitea.db
+          [security]
+          INSTALL_LOCK = true
+          [service]
+          DISABLE_REGISTRATION = true
+          EOF
+          nohup ./gitea web --config /tmp/gitea/app.ini >/tmp/gitea.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -fs --cacert ca.pem -o /dev/null "https://${address}:3443/api/healthz" && break
+            sleep 1
+          done
+          curl -fsS --cacert ca.pem -o /dev/null "https://${address}:3443/api/healthz" || {
+            cat /tmp/gitea.log
+            exit 1
+          }
+          ./gitea admin user create --config /tmp/gitea/app.ini --admin --username crosscheck \
+            --password not-a-real-password --email crosscheck@example.test --must-change-password=false
+          curl -fsS --cacert ca.pem -u crosscheck:not-a-real-password -X POST "https://${address}:3443/api/v1/user/repos" \
+            -H 'Content-Type: application/json' -d '{"name":"sample","default_branch":"main"}' >/dev/null
+          cp "$GITHUB_WORKSPACE"/test/cluster/sample-app/* sample/
+          cd sample
+          git init -q -b main
+          git add -A
+          git -c user.name=Crosscheck -c user.email=crosscheck@example.test commit -q -m "The sample app"
+          GIT_SSL_CAINFO=/tmp/gitea/ca.pem git push -q "https://crosscheck:not-a-real-password@${address}:3443/crosscheck/sample.git" main
+          echo "GIT_HOST_REPO=https://${address}:3443/crosscheck/sample.git" >>"$GITHUB_ENV"
+
       # Somewhere for phase 5's notifications to arrive besides a webhook, on
       # this server's address as a team's own servers would be, each read
       # back through its own API: Mailpit, a mail server that keeps what it
@@ -231,6 +295,8 @@ jobs:
             VERIFY_GOTIFY_SERVER="$GOTIFY_SERVER" \
             VERIFY_GOTIFY_TOKEN="$GOTIFY_TOKEN" \
             VERIFY_GOTIFY_CLIENT_TOKEN="$GOTIFY_CLIENT_TOKEN" \
+            VERIFY_GIT_HOST_REPO="$GIT_HOST_REPO" \
+            VERIFY_GIT_HOST_CA=/tmp/gitea/ca.pem \
             bash test/cluster/verify.sh
 
       - name: Collect what the cluster says

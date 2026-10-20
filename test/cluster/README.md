@@ -15,11 +15,11 @@ push to `main` (below), and `docs/progress.md` says what each run found.
 
 | Phase | What it settles | Checklist |
 |---|---|---|
-| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a variable change restarts it without rebuilding, one call rolls it back, a rolling restart under continuous traffic drops nothing, switching autoscaling on keeps the instances there are, and a folder with no repository is built and deployed. | 1, 2, 3, 4, 8, 9 |
-| **2 — the data** | A volume keeps what was written to it across a restart, a managed database comes up on its own, a backup restores, and the export carries every app's Kubernetes objects and none of its secrets. | 5, 6, 7, 16 |
+| **1 — the basic path** | An app is built *from Git*, its log can be read while it is building, it gets an address that answers, a domain of its own gets a certificate from an ACME server and sends visitors to HTTPS while the free address stays plain HTTP, a variable change restarts it without rebuilding, one call rolls it back, a rolling restart under continuous traffic drops nothing, switching autoscaling on keeps the instances there are, a folder with no repository is built and deployed, and a repository on a Git host at a private address is refused until an administrator lists the host and its authority, and then built. | 1, 2, 3, 4, 8, 9 |
+| **2 — the data** | A volume keeps what was written to it across a restart; a managed PostgreSQL comes up on its own, and so does each of the eight other engines; a backup of every engine the panel backs up is restored over the live database and holds what it held when the backup was taken, and so does a volume's; a backup sealed with a passphrase is ciphertext in the bucket and still restores; the panel reads a backup through and copies its own database to the bucket; and the export carries every app's Kubernetes objects and none of its secrets. | 5, 6, 7, 16 |
 | **3 — security and isolation** | A token for one team answers 404 on another, a member cannot run the panel, a pod in one namespace cannot reach another's app, an app's pod starts behind its fence and reaches neither the Kubernetes API, the kubelet nor the registry, a build runs its own BuildKit and cannot write to the registry without its token, a rate limit answers 429 at the ingress, and asking for sixty-four cores is refused by a real quota. | 11, 12, 13 |
-| **4 — what survives** | The panel is scaled to zero and the app keeps answering every request. A node is drained and the work moves, with the disruption budget letting it move one instance at a time. | 14, 9 |
-| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, a deployment that cannot pull its image actually sends a notification, and an app asleep at zero instances wakes for a visitor and for its own deploy. | 10, 15, 17 |
+| **4 — what survives** | The panel is scaled to zero and the app keeps answering every request. With a second server, a node is drained and the work moves, with the disruption budget letting it move one instance at a time; and at the end of the run the panel takes the second server out with the app answering throughout, or a restart is seen to leave one of the app's instances on each server, the server is switched off without warning, and it is removed as one that is gone. | 14, 9 |
+| **5 — running it** | Logs and per-instance usage can be read, the panel serves its own metrics, an app serves every request while the panel is replaced under it, a deployment that cannot pull its image actually sends a notification — to a webhook, and, given servers for them, by email, to ntfy and to Gotify, each read back from the server it went to — a forgotten password is reset through the link the panel emails, a maintenance notice is answered in front of an app, a worker, a command run once and one on a schedule run from an app's image, a Compose file is deployed as a stack whose services reach each other by name, a template is installed from the catalogue, a version is promoted to another environment, a server reports its disk, a database is reached from the machine through the panel and through Traefik, and an app asleep at zero instances wakes for a visitor and for its own deploy. | 10, 15, 17 |
 
 Phase 6 is a person and should not become a script: give somebody
 `docs/quick-start.md` and nothing else, and write down where they get stuck.
@@ -37,9 +37,20 @@ Ubuntu server with systemd that is thrown away afterwards, which is what this
 script asks for: the workflow builds the panel's image from the commit, hands
 it to k3s before k3s exists, stops the runner's Docker so the machine looks like
 a server nobody has touched, and runs the real installer through `verify.sh`.
-Let's Encrypt's staging server is used, because nothing on the internet can
-reach a runner and the production server is not the place to fail a challenge
-on every push.
+Let's Encrypt's staging server is used for the panel's own address, because
+nothing on the internet can reach a runner and the production server is not
+the place to fail a challenge on every push.
+
+Two stand-ins run on the runner beside it, on its own address, which is a
+private one: a bucket (moto, which answers presigned URLs as S3 does) for the
+backups, and an ACME server (Pebble, Let's Encrypt's own test server, its
+address signed by an authority made for the run) for the certificate. The
+crosscheck gives both to the panel under Settings, the way a bucket and an ACME
+server of one's own are given, and points the app's domain at the runner. What
+they stand in for is checked against them exactly as it would be against the
+real thing: the backup jobs reach a bucket on a private address through their
+own network policy, and the certificate is validated through the same ingress
+visitors use.
 
 Whatever happens, `collect.sh` then gathers what the cluster says about itself
 — nodes, pods, events, network policies, certificates, the k3s journal, the
@@ -76,6 +87,15 @@ ingress has to answer for it; phase 4 drains a server instead of skipping; and
 at the end the panel takes the second server out with the app being asked
 throughout. Its report is `servers-report`, with the guest's console and its
 k3s agent's journal.
+
+The same workflow has a second job, **A server that fails**, which runs phases
+1 and 4 and then, given `VERIFY_SECOND_SERVER_FAILS`, kills the virtual
+machine's process: to the cluster, a power cut. With the app on both servers it
+checks how long the cluster takes to know, that the app answers every request
+from the instance it has left once it does, that the panel marks the server as
+not responding, that the panel can remove a server that is gone, and that the
+app is back to two instances on the server that is left. Its report is
+`server-fails-report`.
 
 The same collector works on a server of your own:
 
@@ -118,7 +138,14 @@ of them failed and you are fixing it.
 | `HOST` | For `make verify-remote`: the server to run on, `root@1.2.3.4`. |
 | `SKIFITY_ASSUME_YES` | `1` to skip the confirmation. |
 | `VERIFY_GIT_REPO` / `VERIFY_GIT_BRANCH` / `VERIFY_GIT_ROOT` | The application phase 1 builds. Defaults to this repository's own `test/cluster/sample-app`: one Go file and a Dockerfile with nothing to download, so a build failure is the builder's and not the network's. |
-| `VERIFY_S3_ENDPOINT` / `VERIFY_S3_BUCKET` / `VERIFY_S3_ACCESS_KEY` / `VERIFY_S3_SECRET_KEY` | Where backups go. Without them phase 2 skips the backup check and says so — a backup with nowhere to put it is not a backup. |
+| `VERIFY_S3_ENDPOINT` / `VERIFY_S3_BUCKET` / `VERIFY_S3_ACCESS_KEY` / `VERIFY_S3_SECRET_KEY` | Where backups go. Without them phase 2 skips the backup checks and says so — a backup with nowhere to put it is not a backup. |
+| `VERIFY_ACME_DIRECTORY` / `VERIFY_ACME_CA` / `VERIFY_ACME_ADDRESS` / `VERIFY_ACME_ROOT` | An ACME server for the app's certificate: its directory, the authority that signs its address, this machine's address on the network it validates from, and where it hands out the root it issues from. Without them the certificate check skips. |
+| `VERIFY_SECOND_SERVER` / `VERIFY_SECOND_SERVER_KEY` | A second server for the panel to add over SSH as root, and the key to it. Without them everything that needs two servers skips. |
+| `VERIFY_SECOND_SERVER_FAILS` | A file holding the id of the process that is the second server. With it, the end of the run switches that server off instead of taking it out. |
+| `VERIFY_SMTP_SERVER` / `VERIFY_MAILPIT` | A mail server that takes mail without signing in, as `host:port`, and the address of the [Mailpit](https://mailpit.axllent.org) behind it, where what arrived is read. With them the panel's Email settings point at it, an email channel and a password reset are sent through it. Without them both skip. |
+| `VERIFY_NTFY_SERVER` / `VERIFY_NTFY_TOKEN` | An ntfy server and a token for it. Without them the ntfy check skips. |
+| `VERIFY_GOTIFY_SERVER` / `VERIFY_GOTIFY_TOKEN` / `VERIFY_GOTIFY_CLIENT_TOKEN` | A Gotify server, an application's token to push with and a client's token to read back with. Without them the Gotify check skips. |
+| `VERIFY_GIT_HOST_REPO` / `VERIFY_GIT_HOST_CA` | An `https://` repository holding the sample app on a Git host at a private address, and the authority that signed the host's certificate. Without them the private Git host check skips. |
 
 ## What is already proven, and what is not
 
@@ -128,18 +155,19 @@ export — are also checked by `make smoke` against the real binary on every pus
 That is deliberate: a field renamed in the API shows up in the fast checks
 first, rather than as a cluster run that fails twenty minutes in.
 
-The rest runs on every push to `main`, on one server, and passes. Three checks
-skip there, and each says why rather than pretending:
+The rest runs on every push to `main`: on one server with a bucket and an
+ACME server beside it, on two, and as an upgrade from the last release. What
+none of that can show, and so has not been seen:
 
-* **The HTTPS certificate.** The runner's free address is on sslip.io, served
-  over plain HTTP on purpose (ADR-0015). Set `SKIFITY_DOMAIN` to a domain you
-  own, pointed at the server.
-* **A backup that restores.** It needs a bucket; set the `VERIFY_S3_*`
-  variables.
-* **A server going away.** It needs a second server, and a runner is one.
-
-None of those three has run anywhere yet, and neither has anything else that
-needs more than one server.
+* **A certificate from Let's Encrypt itself, for a domain on the internet.**
+  The ACME conversation is the same with Pebble, and the challenge is answered
+  through the same ingress; what differs is a real DNS record and a validator
+  outside the machine.
+* **A bucket that is not a stand-in**, and restoring into a *different*
+  cluster, which is the drill worth running once by hand.
+* **Two servers apart**: a network between them that drops or delays packets.
+  Both servers here are on one runner.
+* **A person**, which is phase 6.
 
 ## What to send back
 

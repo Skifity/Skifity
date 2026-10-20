@@ -104,6 +104,12 @@ REPORT="/var/log/skifity-verify.log"
 : "${VERIFY_GOTIFY_SERVER:=}"
 : "${VERIFY_GOTIFY_TOKEN:=}"
 : "${VERIFY_GOTIFY_CLIENT_TOKEN:=}"
+# A Git host at a private address, as a Gitea at home is: VERIFY_GIT_HOST_REPO
+# is an https:// repository on it holding the sample app at the root of its
+# main branch, and VERIFY_GIT_HOST_CA the authority that signed the host's
+# certificate. Without them the check skips.
+: "${VERIFY_GIT_HOST_REPO:=}"
+: "${VERIFY_GIT_HOST_CA:=}"
 
 PASS=0
 FAIL=0
@@ -390,6 +396,34 @@ for message in json.load(sys.stdin).get("messages") or []:
 	curl -fsS "$VERIFY_MAILPIT/api/v1/message/$id" 2>/dev/null | pick Text 2>/dev/null || true
 }
 mail_has() { [ -n "$(mail_text "$1" "$2")" ]; }
+
+# wait_deployed APP waits up to five minutes for an app's newest deployment to
+# end, and says whether it succeeded.
+wait_deployed() {
+	local state=""
+	for _ in $(seq 1 60); do
+		state=$(api GET "/api/apps/$1/deployments" 2>/dev/null | pick items.0.status 2>/dev/null || echo "")
+		case "$state" in
+		succeeded) return 0 ;;
+		failed | cancelled | superseded) return 1 ;;
+		esac
+		sleep 5
+	done
+	return 1
+}
+
+# server_usage_known SERVER says whether the panel has the server's memory,
+# processor and disk, which it reads every minute from the server's kubelet.
+server_usage_known() {
+	api GET "/api/servers/$1/usage?range=1h" 2>/dev/null | python3 -c '
+import json, sys
+usage = json.load(sys.stdin)
+disk = usage.get("disk") or {}
+points = [p for p in usage.get("points") or []
+          if None not in (p.get("cpu_pct"), p.get("memory_pct"), p.get("disk_pct"))]
+sys.exit(0 if points and 0 < disk.get("used_mb", 0) < disk.get("capacity_mb", 0) else 1)
+'
+}
 
 # ntfy_has TOPIC TITLE and gotify_has TITLE say whether the server holds a
 # message with that title, read with the server's own credentials: what is
@@ -883,6 +917,59 @@ else
 	else
 		api GET "/api/apps/$FOLDER_ID/deployments/$FOLDER_DEPLOY/logs" >>"$REPORT" 2>&1 || true
 		no "the deployment from a folder ended as '${STATE:-unknown}'; the log is in $REPORT. If it says the code could not be handed to the build, the exec from the panel into the build namespace is what failed."
+	fi
+fi
+
+step "A repository on a Git host on this machine's network"
+
+# A Gitea at home or a GitLab on the office network is at an address builds are
+# kept off, and was a repository no build could clone: the clone waited two
+# minutes for a connection the policy dropped and gave up with a timeout that
+# named nothing. The build is refused before it starts now, saying what an
+# administrator can do; with the host listed and its authority given under
+# Settings, the same build clones it and deploys.
+if [ -z "$VERIFY_GIT_HOST_REPO" ] || [ -z "$VERIFY_GIT_HOST_CA" ]; then
+	skip "a Git host on this network" "none was given. Set VERIFY_GIT_HOST_REPO to a repository with the sample app on a host at a private address, and VERIFY_GIT_HOST_CA to the authority that signed its certificate"
+else
+	HOME_APP=$(api POST "/api/environments/$ENV_ID/apps" "$(cat <<JSON
+{"name":"homegit","source_type":"git","repo_url":"$VERIFY_GIT_HOST_REPO","branch":"main","builder":"dockerfile",
+ "dockerfile_path":"Dockerfile","port":$VERIFY_APP_PORT,"health_path":"/healthz","deploy":true}
+JSON
+)" | pick app.id 2>/dev/null || echo "")
+	if [ -z "$HOME_APP" ]; then
+		no "an app could not be made from $VERIFY_GIT_HOST_REPO"
+	else
+		wait_deployed "$HOME_APP" || true
+		REFUSED=$(api GET "/api/apps/$HOME_APP/deployments" | pick items.0.error_code 2>/dev/null || echo "")
+		[ "$REFUSED" = "build.git_host_private" ] \
+			&& ok "a build of a repository on a host at a private address was refused before it started, saying who can allow it" \
+			|| no "the build from a private Git host nobody listed ended with '${REFUSED:-no reason}', not build.git_host_private"
+		HOST_PORT=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).netloc)' "$VERIFY_GIT_HOST_REPO")
+		ALLOW=$(python3 -c '
+import json, sys
+print(json.dumps({"values": {"git.private_hosts": sys.argv[1], "git.ca_bundle": open(sys.argv[2]).read()}}))
+' "$HOST_PORT" "$VERIFY_GIT_HOST_CA")
+		if ! api PUT /api/settings "$ALLOW" >/dev/null; then
+			no "the Git host and its authority were refused under Settings"
+		else
+			api POST "/api/apps/$HOME_APP/deploy" '{}' >/dev/null 2>&1 || true
+			if wait_deployed "$HOME_APP"; then
+				ok "with $HOST_PORT listed and its authority given, the same build cloned it and deployed"
+				HOME_HOST=$(api GET "/api/apps/$HOME_APP/domains" | pick items.0.hostname 2>/dev/null || echo "")
+				[ -n "$HOME_HOST" ] && [ "$(through_ingress "$HOME_HOST" 30)" = "200" ] \
+					&& ok "the app built from the Git host on this network answers" \
+					|| no "the app built from the Git host on this network does not answer at ${HOME_HOST:-no address}"
+				LEFT=$(kubectl -n skifity-builds get networkpolicy -o name 2>/dev/null | grep -c -- '-source$' || true)
+				[ "${LEFT:-0}" = "0" ] \
+					&& ok "the build's way to the Git host was closed once it finished" \
+					|| no "$LEFT policies letting builds reach a Git host were left after the build"
+			else
+				LAST=$(api GET "/api/apps/$HOME_APP/deployments" 2>/dev/null | pick items.0.id 2>/dev/null || echo "")
+				[ -z "$LAST" ] || api GET "/api/apps/$HOME_APP/deployments/$LAST/logs" >>"$REPORT" 2>&1 || true
+				no "with the host listed and its authority given, the build still failed; its log is in the report"
+			fi
+		fi
+		api DELETE "/api/apps/$HOME_APP" >/dev/null 2>&1 || true
 	fi
 fi
 fi
@@ -1742,6 +1829,19 @@ print("yes" if any(i.get("usage_known") for i in status.get("instances") or []) 
 		&& ok "each instance reports what it is using, not only what it reserved" \
 		|| no "no instance of the app reports what it is using after three minutes; metrics-server may not be answering"
 fi
+# A server's own numbers, which the panel keeps a minute at a time: its memory
+# and processor from metrics-server, and how full its disk is from the
+# kubelet's summary, read through the API server's proxy.
+FIRST_SERVER=$(api GET "/api/teams/$TEAM_ID/servers" 2>/dev/null | pick items.0.id 2>/dev/null || echo "")
+if [ -n "$FIRST_SERVER" ]; then
+	for _ in $(seq 1 12); do
+		server_usage_known "$FIRST_SERVER" && break
+		sleep 10
+	done
+	server_usage_known "$FIRST_SERVER" \
+		&& ok "the server reports its memory, processor and disk, the disk read from its kubelet" \
+		|| no "the server's usage has no disk or no full minute: $(api GET "/api/servers/$FIRST_SERVER/usage?range=1h" 2>/dev/null | head -c 300)"
+fi
 api GET /api/metrics 2>/dev/null | grep -q "^skifity_" \
 	&& ok "the panel serves its own Prometheus metrics, behind the same authentication as everything else" \
 	|| no "/api/metrics returned nothing that looks like Prometheus output"
@@ -2000,6 +2100,325 @@ else
 	fi
 fi
 
+step "A notice in front of an app, for maintenance"
+
+# The guard answers for an app in maintenance. Traefik's forward-auth gives the
+# visitor whatever the guard answers that is not a 2xx, headers and body: that
+# was its documentation, and this is the run.
+if [ -z "$APP_HOST" ]; then
+	skip "maintenance" "phase 1 did not run or the app was given no address"
+elif ! api PUT "/api/apps/$APP_ID/maintenance" '{"message":"Back soon\nThe crosscheck is moving things around."}' >/dev/null; then
+	no "maintenance could not be started"
+else
+	HEADERS=$(mktemp)
+	CODE=""
+	PAGE=""
+	# The kubelet delivers the guard's changed rules within a minute or so.
+	for _ in $(seq 1 36); do
+		PAGE=$(curl -s -D "$HEADERS" --max-time 10 -H "Host: $APP_HOST" "http://127.0.0.1/" 2>/dev/null || true)
+		CODE=$(awk 'NR == 1 {print $2}' "$HEADERS")
+		[ "$CODE" = "503" ] && break
+		sleep 5
+	done
+	if [ "$CODE" = "503" ] && printf '%s' "$PAGE" | grep -q "The crosscheck is moving things around" \
+		&& grep -qi '^retry-after: *300' "$HEADERS"; then
+		ok "a visitor was shown the notice, with 503 and when to come back, through the real Traefik"
+	else
+		no "in maintenance the app answered ${CODE:-nothing}, not the notice"
+	fi
+	if api DELETE "/api/apps/$APP_ID/maintenance" >/dev/null; then
+		for _ in $(seq 1 36); do
+			[ "$(through_ingress "$APP_HOST" 10)" = "200" ] && break
+			sleep 5
+		done
+		[ "$(through_ingress "$APP_HOST" 10)" = "200" ] \
+			&& ok "the app answers again once maintenance ends" \
+			|| no "maintenance ended and the app still does not answer"
+	else
+		no "maintenance could not be ended"
+	fi
+fi
+
+step "A worker, a command run once, and one on a schedule"
+
+# Each runs an app's image with a command of its own, through a shell, the way
+# a Procfile's line is. The sample app's image has no shell, so this is an app
+# whose image has one: nginx as an unprivileged user, from GitHub's registry.
+SHELL_IMAGE="ghcr.io/nginxinc/nginx-unprivileged:1.27-alpine"
+SHELL_APP=$(api POST "/api/environments/$ENV_ID/apps" \
+	"{\"name\":\"shell\",\"source_type\":\"image\",\"image\":\"$SHELL_IMAGE\",\"port\":8080,\"deploy\":true}" \
+	| pick app.id 2>/dev/null || echo "")
+if [ -z "$SHELL_APP" ]; then
+	no "an app could not be created from $SHELL_IMAGE"
+elif ! wait_deployed "$SHELL_APP"; then
+	no "the app from $SHELL_IMAGE did not deploy"
+else
+	ok "an app from $SHELL_IMAGE is running"
+
+	# A worker is a Deployment of its own, from the same image, with no port
+	# and behind no Service.
+	if api PUT "/api/apps/$SHELL_APP/processes/worker" \
+		'{"command":"while true; do echo worker-alive; sleep 5; done","instances":1}' >/dev/null; then
+		LOGS=""
+		for _ in $(seq 1 24); do
+			LOGS=$(kubectl -n "$NAMESPACE" logs deploy/shell--worker --tail=5 2>/dev/null || true)
+			case "$LOGS" in *worker-alive*) break ;; esac
+			sleep 5
+		done
+		case "$LOGS" in
+		*worker-alive*) ok "a worker runs from the app's image with its own command" ;;
+		*) no "the worker never printed anything: $(kubectl -n "$NAMESPACE" get pods -o wide 2>/dev/null | grep shell | tr '\n' ' ')" ;;
+		esac
+		ENDPOINTS=$(kubectl -n "$NAMESPACE" get endpoints shell -o jsonpath='{.subsets[*].addresses[*].targetRef.name}' 2>/dev/null || true)
+		case "$ENDPOINTS" in
+		*worker*) no "the worker is behind the app's Service, so visitors reach it: $ENDPOINTS" ;;
+		"") no "the app's Service has no instance behind it" ;;
+		*) ok "visitors reach the app's instances and never the worker" ;;
+		esac
+		if api DELETE "/api/apps/$SHELL_APP/processes/worker" >/dev/null; then
+			for _ in $(seq 1 12); do
+				kubectl -n "$NAMESPACE" get deploy shell--worker >/dev/null 2>&1 || break
+				sleep 5
+			done
+			kubectl -n "$NAMESPACE" get deploy shell--worker >/dev/null 2>&1 \
+				&& no "the worker was removed and its Deployment is still there" \
+				|| ok "removing the worker removed its Deployment"
+		else
+			no "the worker could not be removed"
+		fi
+	else
+		no "a worker process was refused"
+	fi
+
+	# A command run once, whose output and exit code come back: a migration
+	# that failed has to say so.
+	RUN=$(api POST "/api/apps/$SHELL_APP/run" '{"command":"echo ran-once; exit 3"}' | pick run 2>/dev/null || echo "")
+	if [ -z "$RUN" ]; then
+		no "a command could not be run in the app"
+	else
+		RESULT=""
+		for _ in $(seq 1 24); do
+			RESULT=$(api GET "/api/apps/$SHELL_APP/runs/$RUN/logs?follow=true" 2>/dev/null || echo "")
+			printf '%s' "$RESULT" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("finished") else 1)' \
+				2>/dev/null && break
+			sleep 5
+		done
+		printf '%s' "$RESULT" | python3 -c '
+import json, sys
+run = json.load(sys.stdin)
+sys.exit(0 if run.get("exit_code") == 3 and "ran-once" in run.get("lines", []) else 1)
+' 2>/dev/null \
+			&& ok "a command run once gave back its output and its exit code" \
+			|| no "a command run once did not give back its output and exit code 3: $(printf '%s' "$RESULT" | head -c 300)"
+	fi
+
+	# And on a schedule, which Kubernetes runs rather than the panel.
+	JOB=$(api POST "/api/apps/$SHELL_APP/jobs" '{"name":"tick","schedule":"* * * * *","command":"echo ticked"}' \
+		| pick id 2>/dev/null || echo "")
+	if [ -z "$JOB" ]; then
+		no "a scheduled command was refused"
+	else
+		LAST=""
+		for _ in $(seq 1 30); do
+			LAST=$(kubectl -n "$NAMESPACE" get cronjob shell-job-tick -o jsonpath='{.status.lastSuccessfulTime}' 2>/dev/null || true)
+			[ -n "$LAST" ] && break
+			sleep 5
+		done
+		[ -n "$LAST" ] \
+			&& ok "a command scheduled for every minute ran, and succeeded, at $LAST" \
+			|| no "a command scheduled for every minute did not succeed within two and a half minutes"
+		api DELETE "/api/apps/$SHELL_APP/jobs/$JOB" >/dev/null 2>&1 || true
+	fi
+fi
+[ -z "$SHELL_APP" ] || api DELETE "/api/apps/$SHELL_APP" >/dev/null 2>&1 || true
+
+step "A Compose file, as one stack"
+
+# Two services: one published, as a port in Compose is, and one only the
+# other reaches, by its name, the way it does in Compose.
+STACK=$(api POST "/api/environments/$ENV_ID/stack" "$(cat <<JSON
+{"deploy":true,"services":[
+ {"name":"front","image":"$SHELL_IMAGE","ports":[8080],"depends_on":["back"]},
+ {"name":"back","image":"$SHELL_IMAGE","expose":[8080]}]}
+JSON
+)" 2>/dev/null || echo "")
+FRONT=$(printf '%s' "$STACK" | python3 -c '
+import json, sys
+for app in json.load(sys.stdin).get("apps") or []:
+    print(app["id"], app["slug"])
+' 2>/dev/null || true)
+FRONT_ID=$(printf '%s\n' "$FRONT" | awk '$2 == "front" {print $1}')
+BACK_ID=$(printf '%s\n' "$FRONT" | awk '$2 == "back" {print $1}')
+if [ -z "$FRONT_ID" ] || [ -z "$BACK_ID" ]; then
+	no "the stack was refused: $(printf '%s' "$STACK" | head -c 300)"
+elif ! wait_deployed "$BACK_ID" || ! wait_deployed "$FRONT_ID"; then
+	no "the stack's two apps did not both deploy"
+else
+	ok "a stack of two services was created and deployed together"
+	REACHED=$(kubectl -n "$NAMESPACE" exec deploy/front -c front -- wget -qO- -T 10 http://back:8080/ 2>/dev/null || true)
+	case "$REACHED" in
+	*nginx*) ok "one service reaches the other by its name and port, as in Compose" ;;
+	*) no "front could not reach back at http://back:8080/" ;;
+	esac
+	FRONT_HOST=$(api GET "/api/apps/$FRONT_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+	BACK_HOSTS=$(api GET "/api/apps/$BACK_ID/domains" | pick total 2>/dev/null || echo "")
+	[ -n "$FRONT_HOST" ] && [ "$(through_ingress "$FRONT_HOST" 10)" = "200" ] \
+		&& ok "the published service answers at its address" \
+		|| no "the published service has no address that answers"
+	[ "${BACK_HOSTS:-1}" = "0" ] \
+		&& ok "the service nothing published has no address at all" \
+		|| no "a service only the other reaches was given $BACK_HOSTS addresses"
+fi
+for id in $FRONT_ID $BACK_ID; do
+	api DELETE "/api/apps/$id" >/dev/null 2>&1 || true
+done
+
+step "One click from the catalogue"
+
+# Homer: a page and a disk, which it writes its example settings into on its
+# first start, as whatever user its image runs as.
+TEMPLATE=$(api POST /api/templates/homer/install "{\"environment_id\":\"$ENV_ID\"}" 2>/dev/null || echo "")
+HOMER_ID=$(printf '%s' "$TEMPLATE" | pick apps.0.id 2>/dev/null || echo "")
+if [ -z "$HOMER_ID" ]; then
+	no "the Homer template could not be installed: $(printf '%s' "$TEMPLATE" | head -c 300)"
+elif ! wait_deployed "$HOMER_ID"; then
+	no "the app the Homer template made did not deploy"
+else
+	HOMER_HOST=$(api GET "/api/apps/$HOMER_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+	HOMER_PAGE=$(curl -s --max-time 10 -H "Host: $HOMER_HOST" "http://127.0.0.1/" 2>/dev/null || true)
+	case "$HOMER_PAGE" in
+	*[Hh]omer*) ok "Homer, installed from the catalogue, answers at its address" ;;
+	*) no "Homer's address does not answer with Homer" ;;
+	esac
+	CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Host: $HOMER_HOST" "http://127.0.0.1/assets/config.yml")
+	[ "$CODE" = "200" ] \
+		&& ok "Homer wrote its settings to its disk, as the user its image runs as" \
+		|| no "Homer's settings file is not on its disk ($CODE); the disk may not be writable by the image's user"
+fi
+[ -z "$HOMER_ID" ] || api DELETE "/api/apps/$HOMER_ID" >/dev/null 2>&1 || true
+
+step "Promoting a version to another environment"
+
+# The version phase 1 built, run in a second environment of the same project
+# without building it again: the image another namespace pulls.
+STAGING_ID=$(api POST "/api/projects/$PROJECT_ID/environments" '{"name":"staging"}' | pick id 2>/dev/null || echo "")
+SOURCE_DEPLOY=$(api GET "/api/apps/$APP_ID/deployments" 2>/dev/null | python3 -c '
+import json, sys
+for deployment in json.load(sys.stdin).get("items") or []:
+    if deployment.get("status") == "succeeded" and deployment.get("image"):
+        print(deployment["id"], deployment["image"])
+        break
+' 2>/dev/null || true)
+if [ -z "$APP_ID" ] || [ -z "$STAGING_ID" ] || [ -z "$SOURCE_DEPLOY" ]; then
+	no "there is no second environment or no version to promote (environment ${STAGING_ID:-missing})"
+else
+	PROMOTED=$(api POST "/api/environments/$STAGING_ID/apps" "$(cat <<JSON
+{"name":"hello","source_type":"git","repo_url":"$VERIFY_GIT_REPO","branch":"$VERIFY_GIT_BRANCH",
+ "root_dir":"$VERIFY_GIT_ROOT","port":$VERIFY_APP_PORT,"health_path":"/healthz","deploy":false}
+JSON
+)" | pick app.id 2>/dev/null || echo "")
+	if [ -z "$PROMOTED" ]; then
+		no "the app could not be made in the second environment"
+	elif ! api POST "/api/apps/$PROMOTED/promote" "{\"deployment_id\":\"${SOURCE_DEPLOY%% *}\"}" >/dev/null; then
+		no "promoting phase 1's version was refused"
+	elif ! wait_deployed "$PROMOTED"; then
+		no "the promoted version did not deploy in the second environment"
+	else
+		IMAGE=$(api GET "/api/apps/$PROMOTED/deployments" | pick items.0.image 2>/dev/null || echo "")
+		[ "$IMAGE" = "${SOURCE_DEPLOY#* }" ] \
+			&& ok "the second environment runs the very image phase 1 built, with nothing built again" \
+			|| no "the promoted version runs $IMAGE, not ${SOURCE_DEPLOY#* }"
+		PROMOTED_HOST=$(api GET "/api/apps/$PROMOTED/domains" | pick items.0.hostname 2>/dev/null || echo "")
+		[ -n "$PROMOTED_HOST" ] && [ "$(through_ingress "$PROMOTED_HOST" 10)" = "200" ] \
+			&& ok "it answers there, from another namespace" \
+			|| no "the promoted version does not answer at its address"
+	fi
+	[ -z "$PROMOTED" ] || api DELETE "/api/apps/$PROMOTED" >/dev/null 2>&1 || true
+fi
+[ -z "$STAGING_ID" ] || api DELETE "/api/environments/$STAGING_ID" >/dev/null 2>&1 || true
+
+step "A database reached from this machine, through the panel"
+
+# skifity db connect asks the panel to upgrade a request into a stream to the
+# database. Traefik passes an upgrade of any protocol through, which was its
+# documentation; this goes through it, and then the way a person does it.
+if [ -z "${DB_ID:-}" ]; then
+	skip "the database tunnel" "phase 2 did not run, so there is no database"
+else
+	# PostgreSQL's SSLRequest, answered with S or N by PostgreSQL alone.
+	python3 - "$DOMAIN" "/api/databases/$DB_ID/tunnel" "$TOKEN" >>"$REPORT" 2>&1 <<'PYEOF' \
+		&& ok "a tunnel opened through Traefik in front of the panel, and PostgreSQL answered at its end" \
+		|| no "no tunnel opened through Traefik to the database; the report has what came back"
+import socket, ssl, sys
+host, path, token = sys.argv[1:4]
+
+def tunnel(port):
+    conn = socket.create_connection(("127.0.0.1", port), timeout=20)
+    if port == 443:
+        # Traefik's own certificate, or one from Let's Encrypt's staging
+        # server: what is checked here is the route, not the certificate.
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        conn = context.wrap_socket(conn, server_hostname=host)
+    conn.sendall((f"POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\n"
+                  "Connection: Upgrade\r\nUpgrade: skifity-db-tunnel\r\nContent-Length: 0\r\n\r\n").encode())
+    head = b""
+    while b"\r\n\r\n" not in head:
+        chunk = conn.recv(1)
+        if not chunk:
+            break
+        head += chunk
+    status = head.split(b"\r\n", 1)[0]
+    print(f"  the tunnel through port {port} answered:", status.decode(errors="replace"))
+    if b" 101 " not in status:
+        return False
+    conn.sendall(bytes([0, 0, 0, 8, 4, 210, 22, 47]))
+    answer = conn.recv(1)
+    print("  PostgreSQL answered:", answer)
+    return answer in (b"S", b"N")
+
+def tried(port):
+    try:
+        return tunnel(port)
+    except OSError as err:
+        print(f"  the tunnel through port {port} failed: {err}")
+        return False
+
+sys.exit(0 if tried(80) or tried(443) else 1)
+PYEOF
+	if [ ! -x /usr/local/bin/skifity ]; then
+		skip "skifity db connect" "the installer put no CLI at /usr/local/bin/skifity"
+	else
+		TUNNEL_OUT=$(mktemp)
+		SKIFITY_URL="$PANEL" SKIFITY_TOKEN="$TOKEN" /usr/local/bin/skifity db connect verifydb \
+			--env "$ENV_ID" --port 15432 --json >"$TUNNEL_OUT" 2>&1 &
+		TUNNEL_PID=$!
+		for _ in $(seq 1 20); do
+			grep -q '"url"' "$TUNNEL_OUT" 2>/dev/null && break
+			sleep 1
+		done
+		DB_URL=$(pick url <"$TUNNEL_OUT" 2>/dev/null || echo "")
+		if [ -z "$DB_URL" ]; then
+			no "skifity db connect did not open a port: $(head -c 300 "$TUNNEL_OUT")"
+		elif command -v psql >/dev/null 2>&1; then
+			ANSWER=$(psql "$DB_URL" -tAc 'select 6 * 7' 2>>"$REPORT" || true)
+			[ "$ANSWER" = "42" ] \
+				&& ok "skifity db connect gave psql on this machine the database, and it answered" \
+				|| no "psql through skifity db connect answered '${ANSWER}', not 42"
+		else
+			python3 -c '
+import socket, sys
+conn = socket.create_connection(("127.0.0.1", 15432), timeout=20)
+conn.sendall(bytes([0, 0, 0, 8, 4, 210, 22, 47]))
+sys.exit(0 if conn.recv(1) in (b"S", b"N") else 1)
+' && ok "skifity db connect opened a port on this machine that PostgreSQL answers" \
+				|| no "the port skifity db connect opened does not reach PostgreSQL"
+		fi
+		kill "$TUNNEL_PID" 2>/dev/null || true
+	fi
+fi
+
 step "An app that sleeps wakes for a visitor and for its own deploy"
 
 # Scale to zero turns an app down to no instances when nobody uses it, and KEDA's
@@ -2115,14 +2534,19 @@ if [ -n "$SECOND_ID" ] && [ -n "$VERIFY_SECOND_SERVER_FAILS" ]; then
 			return 1
 		}
 		two_ready || true
-		# Phase 4 emptied the second server, so both may be on the first; a
-		# restart places them again, and the spread puts one on each.
-		if [ "$(on_second)" = "0" ]; then
-			api POST "/api/apps/$APP_ID/restart" >/dev/null 2>&1 || true
-			sleep 10
-			two_ready || true
-		fi
-		say "  the app runs $(on_second) of its instances on the second server"
+		# Phase 4 emptied the second server, so both are likely on the first.
+		# A restart is a rollout, and a rollout has to leave the new version's
+		# instances on both servers: counted together with the old version's,
+		# they were spread against instances about to go, and a run once put
+		# both on the server that then failed.
+		api POST "/api/apps/$APP_ID/restart" >/dev/null 2>&1 || true
+		sleep 5
+		kubectl -n "$NAMESPACE" rollout status deploy/hello --timeout=180s >/dev/null 2>&1 || true
+		two_ready || true
+		ON_SECOND=$(on_second)
+		[ "$ON_SECOND" = "1" ] \
+			&& ok "a restart left one of the app's two instances on each server" \
+			|| no "a restart left $ON_SECOND of the app's two instances on the second server, where one was wanted"
 	fi
 
 	kill -9 "$(cat "$VERIFY_SECOND_SERVER_FAILS")" 2>>"$REPORT" \
