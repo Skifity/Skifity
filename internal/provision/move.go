@@ -34,13 +34,12 @@ var evictRetry = 5 * time.Second
 //
 // Eviction stops an instance first and only then does its Deployment start
 // another, so an app whose one instance, or every instance, was on the
-// server went down while its replacement started: the two-server crosscheck
-// counted the requests that failed while a server was taken out. A rollout
-// starts the new instance first and stops the old one once the new one is
-// ready, which is how every deploy of these apps already goes, and with the
-// server cordoned the new one starts on another. A Deployment that replaces
-// its instances by stopping them first, an app with a volume, is left to the
-// eviction: its instance cannot be anywhere else first.
+// server is down while its replacement starts. A rollout starts the new
+// instance first and stops the old one once the new one is ready, which is
+// how every deploy of these apps already goes, and with the server cordoned
+// the new one starts on another. A Deployment that replaces its instances by
+// stopping them first, an app with a volume, is left to the eviction: its
+// instance cannot be anywhere else first.
 //
 // What it returns is how many of the node's instances belonged to the apps it
 // moved. Whatever it could not move is still on the node, and the eviction
