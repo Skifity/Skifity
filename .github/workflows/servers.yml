@@ -1,0 +1,107 @@
+name: Two servers
+
+# test/cluster/verify.sh across two servers: everything a single server cannot
+# show. The second server is a KVM guest on the runner, added through the
+# panel's API over SSH the way a person adds one (test/cluster/second-server.sh).
+#
+# A workflow of its own rather than a third job in Cluster: it is the newest of
+# the checks and the one with the most moving parts of its own (a virtual
+# machine, a bridge, a route), and what Cluster says about a single server
+# should not wait on it or turn red because of it.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      phases:
+        description: "Which phases of verify.sh to run"
+        required: false
+        default: "1 2 3 4 5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: servers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A second server added through the panel over SSH, an image built on one
+  # server and pulled on the other, the network policies between them, a
+  # server emptied and taken out. A runner is one machine that nothing outside
+  # can reach, but it can run a virtual machine: second-server.sh boots
+  # Ubuntu's cloud image as a KVM guest on a bridge, and verify.sh has the
+  # panel add it before the phases run.
+  servers:
+    name: Two servers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the panel image from this commit
+        run: |
+          docker build \
+            --build-arg VERSION="cluster-${GITHUB_SHA::7}" \
+            --build-arg COMMIT="${GITHUB_SHA::7}" \
+            --build-arg CLI_PLATFORMS="" \
+            -t skifity:local .
+
+      - name: Hand the image to k3s before k3s exists
+        run: |
+          sudo mkdir -p /var/lib/rancher/k3s/agent/images
+          docker save skifity:local | sudo tee /var/lib/rancher/k3s/agent/images/skifity.tar >/dev/null
+
+      - name: Start the second server, a virtual machine on this one
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 qemu-utils cloud-image-utils >/dev/null
+          sudo mkdir -p /mnt/second
+          sudo cp /var/lib/rancher/k3s/agent/images/skifity.tar /mnt/second/skifity.tar
+          sudo SECOND_SERVER_IMAGES=/mnt/second/skifity.tar bash test/cluster/second-server.sh /mnt/second
+
+      - name: Make the runner a fresh server
+        run: |
+          sudo systemctl stop docker.socket docker.service containerd.service || true
+          sudo iptables -P FORWARD ACCEPT
+          free -m
+          df -h / /mnt
+
+      - name: Install Skifity, add the second server through the panel, and run the crosscheck
+        env:
+          PHASES: ${{ inputs.phases || '1 2 3 4 5' }}
+        run: |
+          sudo env \
+            KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
+            SKIFITY_IMAGE=skifity:local \
+            SKIFITY_ASSUME_YES=1 \
+            SKIFITY_ACME_STAGING=1 \
+            SKIFITY_PHASES="$PHASES" \
+            VERIFY_GIT_REPO="https://github.com/${GITHUB_REPOSITORY}" \
+            VERIFY_GIT_BRANCH="${GITHUB_REF_NAME}" \
+            VERIFY_SECOND_SERVER=192.168.100.10 \
+            VERIFY_SECOND_SERVER_KEY=/mnt/second/id_ed25519 \
+            bash test/cluster/verify.sh
+
+      - name: Collect what the cluster says
+        if: always()
+        run: |
+          sudo bash test/cluster/collect.sh "$RUNNER_TEMP/servers-report"
+          sudo cp /mnt/second/serial.log "$RUNNER_TEMP/servers-report/second-server-console.log" || true
+          sudo ssh -i /mnt/second/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=5 root@192.168.100.10 'journalctl -u k3s-agent --no-pager | tail -n 400' \
+            | sudo tee "$RUNNER_TEMP/servers-report/second-server-k3s-agent.log" >/dev/null || true
+          # The upload runs as the runner's user; what root copied in has to be
+          # readable by it, or the whole report is lost.
+          sudo chmod -R a+rX "$RUNNER_TEMP/servers-report"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: servers-report
+          path: ${{ runner.temp }}/servers-report
+          retention-days: 14
