@@ -246,9 +246,14 @@ func (c *Cluster) ReconcileRegistry(ctx context.Context) error {
 }
 
 // registryInStep reports whether the registry's guard is the panel's own image.
+// A registry that is not there at all, though the panel installed it, is out
+// of step too: it is put back rather than pushed to.
 func (c *Cluster) registryInStep(ctx context.Context) (bool, error) {
 	namespace := c.client.BuildNamespace()
 	deployment, err := c.client.Clientset().AppsV1().Deployments(namespace).Get(ctx, RegistryService, metav1.GetOptions{})
+	if kube.IsNotFound(err) {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("read the registry: %w", err)
 	}

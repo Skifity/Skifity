@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"skifity/internal/kube"
 )
@@ -260,5 +261,55 @@ func TestTheSharedBuilderIsRetired(t *testing.T) {
 	}
 	if len(calls.deleted) != 0 {
 		t.Errorf("a cluster with no shared builder had %v deleted", calls.deleted)
+	}
+}
+
+// TestARegistryOutOfStepIsPutRight: a registry installed before it had a
+// guard, or with an older panel's, or not there at all, is applied again — but
+// only while no build holds the registry, because applying it restarts it.
+func TestARegistryOutOfStepIsPutRight(t *testing.T) {
+	panel := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "skifity-panel", Namespace: "skifity-system"},
+		Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "panel", Image: "ghcr.io/skifity/skifity:v0.1.1"}},
+		}}},
+	}
+	registry := func(guard string) *appsv1.Deployment {
+		containers := []corev1.Container{{Name: "registry", Image: registryImage}}
+		if guard != "" {
+			containers = append(containers, corev1.Container{Name: registryGuardContainer, Image: guard})
+		}
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: RegistryService, Namespace: kube.BuildsNamespace},
+			Spec:       appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: containers}}},
+		}
+	}
+	for name, c := range map[string]struct {
+		objects []runtime.Object
+		inStep  bool
+	}{
+		"the panel's own guard": {[]runtime.Object{panel, registry("ghcr.io/skifity/skifity:v0.1.1")}, true},
+		"an older panel's":      {[]runtime.Object{panel, registry("ghcr.io/skifity/skifity:v0.1.0")}, false},
+		"no guard at all":       {[]runtime.Object{panel, registry("")}, false},
+		"no registry at all":    {[]runtime.Object{panel}, false},
+	} {
+		cluster, _, _ := policyCluster(t, c.objects...)
+		got, err := cluster.registryInStep(t.Context())
+		if err != nil || got != c.inStep {
+			t.Errorf("%s: in step = %v, %v; want %v", name, got, err, c.inStep)
+		}
+	}
+
+	// A build holding the registry keeps it from being restarted under it.
+	cluster, _, calls := policyCluster(t, panel, registry(""))
+	release := cluster.BeginBuild()
+	if err := cluster.ReconcileRegistry(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	calls.mu.Lock()
+	defer calls.mu.Unlock()
+	if len(calls.applied) != 0 {
+		t.Errorf("the registry was applied with a build running: %d objects", len(calls.applied))
 	}
 }
