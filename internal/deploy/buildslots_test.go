@@ -63,6 +63,13 @@ func TestBuildsBeyondTheLimitWaitTheirTurn(t *testing.T) {
 	first()
 	first() // freeing a slot twice frees it once
 	(<-releases)()
+	// The slot just freed goes to the second in line, which is given time to
+	// record that it started before the other slot is freed. A build records
+	// its start after it has its slot, so without the wait the third, handed
+	// the other slot a moment later, could record first: the scheduler's
+	// order, not the queue's, which is what this checks. The race detector
+	// found it.
+	waitFor(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(started) == 2 })
 	second()
 	(<-releases)()
 	(<-releases)()
