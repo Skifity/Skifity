@@ -86,6 +86,9 @@ type PluginSpec struct {
 	// NodeAddresses are the cluster's nodes' own addresses, which a plugin is
 	// kept away from (see InternetEgress).
 	NodeAddresses []string
+	// FenceImage is the panel's own image, which holds the plugin back until
+	// its network policy is in place (FenceContainer).
+	FenceImage string
 }
 
 func (s PluginSpec) port() int {
@@ -178,6 +181,9 @@ func BuildPluginObjects(s PluginSpec) []any {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
+					// Somebody else's code, so it waits for its fence like
+					// an app does.
+					InitContainers: withFence(s.FenceImage, nil),
 					Containers: []corev1.Container{{
 						Name:            "plugin",
 						Image:           s.Image,

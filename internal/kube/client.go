@@ -36,6 +36,9 @@ type Client struct {
 	// fetchTraefik reads one Traefik pod's metrics; nil is through the API
 	// server. See traefik.go.
 	fetchTraefik traefikFetch
+	// inCluster is true for a panel running in the cluster it manages, with
+	// the ServiceAccount's token rather than a kubeconfig.
+	inCluster bool
 }
 
 // Options configure a Client.
@@ -108,8 +111,15 @@ func NewClient(opts Options) (*Client, error) {
 		applier:         NewApplier(dyn),
 		systemNamespace: systemNamespace,
 		config:          config,
+		inCluster:       opts.KubeconfigPath == "",
 	}, nil
 }
+
+// InCluster reports whether the panel runs in the cluster it manages. Only then
+// is the image of the panel's Deployment the program that is running: a panel
+// started on somebody's laptop against a cluster with an older panel in it
+// would otherwise hand that older image work it does not know how to do.
+func (c *Client) InCluster() bool { return c.inCluster }
 
 // NewClientWith builds a Client over clients that already exist: fakes, in a
 // test of another package. The panel itself connects with NewClient.

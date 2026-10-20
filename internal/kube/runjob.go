@@ -177,6 +177,8 @@ func BuildRunJob(s RunSpec) (*batchv1.Job, error) {
 	if files := filesPodVolume(s.App); files != nil {
 		podSpec.Volumes = append(podSpec.Volumes, *files)
 	}
+	// A migration is the app's own code as much as the app is.
+	podSpec.InitContainers = withFence(s.App.FenceImage, podSpec.InitContainers)
 
 	// No retries. A migration that half-ran and then ran again is worse than
 	// one that failed and said so.

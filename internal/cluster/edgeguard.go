@@ -106,6 +106,32 @@ func (c *Cluster) panelImage(ctx context.Context) (string, error) {
 	return deployment.Spec.Template.Spec.Containers[0].Image, nil
 }
 
+// FenceImage is what the fence in front of a team's pods runs: the panel's own
+// image (see kube.FenceContainer). It is read once and kept, because it changes
+// only when the panel is upgraded, and that starts a new process.
+//
+// Empty for a panel running outside the cluster it manages, whose Deployment,
+// if there is one, may run an older program that has no fence in it; and empty
+// when the Deployment cannot be read, until a later render reads it. Those pods
+// start as they did before there was a fence.
+func (c *Cluster) FenceImage(ctx context.Context) string {
+	if c.client == nil || !c.client.InCluster() {
+		return ""
+	}
+	c.fenceMu.Lock()
+	defer c.fenceMu.Unlock()
+	if c.fenceImage != "" {
+		return c.fenceImage
+	}
+	image, err := c.panelImage(ctx)
+	if err != nil {
+		c.log.Debug("no image for the network fence, so pods start without it", "error", err)
+		return ""
+	}
+	c.fenceImage = image
+	return image
+}
+
 // RefreshFirewall writes the current rules into the cluster.
 //
 // Called whenever a rule set changes or a domain moves. It does nothing when

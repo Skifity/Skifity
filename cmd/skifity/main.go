@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"skifity/internal/cli"
 	"skifity/internal/config"
@@ -21,6 +22,7 @@ import (
 	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/mcpserver"
+	"skifity/internal/netfence"
 	"skifity/internal/sealed"
 	"skifity/internal/serverapp"
 	"skifity/internal/version"
@@ -62,6 +64,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "\n%s edge-guard: %s\n\n", version.Binary, err)
 			os.Exit(1)
 		}
+
+	// The first container of every pod that runs a team's code, holding the
+	// rest back until the pod's network policy is in place. See
+	// internal/netfence.
+	case "wait-for-fence":
+		os.Exit(runWaitForFence(ctx))
 
 	// A backup job's seal and open steps: the panel's own image, sealing the
 	// dump before it is uploaded and opening it after it is downloaded. The
@@ -169,6 +177,36 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// fencePatience is how long a new pod waits for its network policy before it
+// starts without it.
+const fencePatience = time.Minute
+
+// runWaitForFence waits for the pod's network policy and reports how it went.
+//
+// Only being stopped is a failure. Anything else — no address to test against,
+// a cluster that never fences anything — is said in the pod's log and the pod
+// starts: a container that could keep every pod from starting is a worse hole
+// than the moment it closes.
+func runWaitForFence(ctx context.Context) int {
+	target, err := netfence.Target(os.Getenv("SKIFITY_HOST_IP"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s; starting without waiting for the network policy\n", err)
+		return 0
+	}
+	result, err := netfence.Wait(ctx, target, fencePatience, nil)
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "stopped while waiting for the network policy: %s\n", err)
+		return 1
+	case !result.Fenced:
+		fmt.Fprintf(os.Stderr, "the network policy was not in place after %s, so this pod starts without it\n",
+			result.Waited.Round(time.Second))
+	default:
+		fmt.Printf("the network policy is in place (%s)\n", result.Waited.Round(10*time.Millisecond))
+	}
+	return 0
 }
 
 // runSeal seals or opens one file in place.

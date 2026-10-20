@@ -761,15 +761,37 @@ step "An app cannot reach the machine it runs on, or the registry"
 # under its policies and its pod security profile, and every one of these has
 # to fail at the network: an HTTP answer of any kind, a 401 included, means the
 # packet got there.
+#
+# The probe starts the way every pod the panel runs for a team does: behind the
+# fence container, which holds the pod's own code back until the policy is in
+# place. The second run on a real cluster, before there was one, saw the first
+# target reached in the moment before the policy controller had written the
+# pod's rules, and every other one refused after. So the app's own Deployment
+# is checked for the fence first, and the probe borrows that very container.
 EGRESS_NODE=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+EGRESS_FENCE=$(kubectl -n "$NAMESPACE" get deploy hello -o json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    init = json.load(sys.stdin)["spec"]["template"]["spec"].get("initContainers") or []
+except Exception:
+    init = []
+print(json.dumps(init[0]) if init and init[0].get("name") == "fence" else "")
+' 2>/dev/null || true)
+if [ -n "$EGRESS_FENCE" ]; then
+	ok "an app's pod starts behind the fence that waits for its network policy"
+else
+	no "the app's pods do not start with the fence container, so its code runs before its network policy is in place"
+fi
 if [ -z "$EGRESS_NODE" ]; then
 	skip "the egress check" "the node reports no internal address to aim at"
 else
 	EGRESS_SCRIPT="for target in https://$EGRESS_NODE:6443/version https://$EGRESS_NODE:10250/pods http://$EGRESS_NODE:30500/v2/ http://skifity-registry.skifity-builds.svc.cluster.local:5000/v2/ https://kubernetes.default.svc/version; do if curl -sk -o /dev/null --max-time 6 \"\$target\"; then echo \"reached \$target\"; else echo \"refused \$target\"; fi; done"
-	EGRESS_OVERRIDES=$(python3 - "$EGRESS_SCRIPT" <<'PYEOF'
+	EGRESS_OVERRIDES=$(python3 - "$EGRESS_SCRIPT" "${EGRESS_FENCE:-}" <<'PYEOF'
 import json, sys
+fence = [json.loads(sys.argv[2])] if sys.argv[2] else []
 print(json.dumps({"spec": {
     "securityContext": {"runAsNonRoot": True, "runAsUser": 100, "seccompProfile": {"type": "RuntimeDefault"}},
+    "initContainers": fence,
     "containers": [{
         "name": "verify-egress",
         "image": "curlimages/curl:8.11.1",
@@ -1087,8 +1109,14 @@ phase "What it costs, measured"
 
 sleep 20
 K3S_MB=$(ps -o rss= -C k3s-server 2>/dev/null | awk '{s+=$1} END {print int(s/1024)}')
-PANEL_POD=$(kubectl -n "$PANEL_NS" get pod -l app=skifity-panel -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-PANEL_MB=$(kubectl -n "$PANEL_NS" top pod "$PANEL_POD" --no-headers 2>/dev/null | awk '{print $3}' | tr -d 'Mi')
+# The panel's own labels. A selector that matches nothing leaves the name
+# empty, and `kubectl top pod ""` lists every pod in the namespace: the first
+# run reported the panel as "2" and "16" on two lines, which were an ACME
+# solver's memory and the panel's.
+PANEL_POD=$(kubectl -n "$PANEL_NS" get pod -l app.kubernetes.io/name=skifity,app.kubernetes.io/component=panel \
+	-o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+PANEL_MB=""
+[ -n "$PANEL_POD" ] && PANEL_MB=$(kubectl -n "$PANEL_NS" top pod "$PANEL_POD" --no-headers 2>/dev/null | awk 'NR == 1 {print $3}' | tr -d 'Mi')
 USED_MB=$(free -m | awk '/^Mem:/ {print $3}')
 
 say "  k3s server process : ${K3S_MB:-unknown} MB"

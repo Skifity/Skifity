@@ -76,6 +76,7 @@ func (c *Cluster) InstallPlugin(ctx context.Context, record store.Plugin, manife
 		MemoryMB:        manifest.Runtime.MemoryMB,
 		SystemNamespace: c.client.SystemNamespace(),
 		NodeAddresses:   nodes,
+		FenceImage:      c.FenceImage(ctx),
 	}
 
 	objects := kube.BuildPluginObjects(spec)

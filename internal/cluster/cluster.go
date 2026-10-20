@@ -56,6 +56,10 @@ type Cluster struct {
 	policiesMu      sync.Mutex
 	policiesApplied bool
 	policiesFor     string
+
+	// fenceImage is the panel's own image, read once; see FenceImage.
+	fenceMu    sync.Mutex
+	fenceImage string
 }
 
 // New builds a Cluster.
@@ -465,6 +469,7 @@ func (c *Cluster) SpecFor(ctx context.Context, app store.App, env store.Environm
 	}
 
 	spec := kube.AppSpec{
+		FenceImage:    c.FenceImage(ctx),
 		Name:          app.Slug,
 		Namespace:     env.Namespace,
 		AppID:         app.ID,

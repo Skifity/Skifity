@@ -149,6 +149,7 @@ func BuildDeployment(s AppSpec) *appsv1.Deployment {
 	if files := filesPodVolume(s); files != nil {
 		podSpec.Volumes = append(podSpec.Volumes, *files)
 	}
+	podSpec.InitContainers = withFence(s.FenceImage, podSpec.InitContainers)
 
 	if s.SpreadAcrossServers {
 		// ScheduleAnyway rather than DoNotSchedule: on a one-node cluster,

@@ -47,6 +47,11 @@ type AppSpec struct {
 	Preview     bool
 	PullRequest int
 
+	// FenceImage is the panel's own image, which every pod running the app's
+	// code starts with to wait for its network policy (FenceContainer). Empty
+	// for a panel outside the cluster, whose pods start without it.
+	FenceImage string
+
 	// Workload
 	Image        string
 	Command      []string
