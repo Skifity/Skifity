@@ -178,8 +178,9 @@ again once you have created the record. Once it resolves, the certificate is
 issued automatically and the domain goes green. This is where HTTPS comes from: a domain you control has its
 own rate limit, so cert-manager can ask for a certificate and keep renewing it.
 
-Your app keeps its original address too, so nothing breaks while DNS
-propagates.
+Your app keeps its original address too, on plain HTTP as before, so nothing
+breaks while DNS propagates. Only the hostnames with a certificate are sent to
+HTTPS.
 
 If your domain's DNS is at Cloudflare, Hetzner, DigitalOcean or Route 53,
 connect it under **Settings → DNS providers** first, and the panel creates the
@@ -193,6 +194,22 @@ in one step even from plain HTTP, and search engines keep one address instead
 of two. The same works for an old name you are moving away from. Both names are
 on the app's certificate, so the redirecting one still needs its DNS pointed
 here.
+
+### An ACME server of your own
+
+Certificates come from Let's Encrypt unless you say otherwise. Any ACME server
+does the same job — step-ca on your own network, another public authority —
+and the panel is pointed at one under **Settings**, **Domains and HTTPS**:
+**ACME directory URL** is the server's directory, and **ACME server's
+certificate authority** is the certificate, in PEM, of the authority that signs
+the server's own HTTPS address, when that is not one every system trusts
+already. Saving them changes where every certificate is asked for from then
+on; certificates already issued are kept until they renew. **Let's Encrypt
+email** is optional: certificates are issued without one.
+
+The installer sets the same thing up when it is given a domain, and a later
+run of it keeps whatever server the panel was pointed at since; `--staging`
+moves it to Let's Encrypt's staging server.
 
 ### Your own certificate
 

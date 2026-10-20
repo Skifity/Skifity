@@ -347,7 +347,9 @@ Cloudflare sends visitors is in the record at Cloudflare. The certificate is onl
 once the name points here, so a domain whose DNS is wrong stays waiting.
 
 If DNS is right but the certificate is not issued, cert-manager is still
-working. Watch it:
+working. An app deployed before HTTPS certificates were installed, or before
+the panel had an issuer to ask, is applied again by the panel within a couple
+of minutes to ask for its certificate; nothing needs redeploying. Watch it:
 
 ```sh
 kubectl get certificate -A
