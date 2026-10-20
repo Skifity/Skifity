@@ -87,6 +87,53 @@ func TestThePodNetworkTheInstallerChoseIsRecordedOnce(t *testing.T) {
 	}
 }
 
+// On AWS, Google Cloud, Azure and behind any NAT the node has no external
+// address, and the first real cluster this ran on gave its first app no URL at
+// all. The installer found the address; the panel records it, once.
+func TestThePublicIPTheInstallerFoundIsRecordedOnce(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.OpenMemory(ctx)
+	if err != nil {
+		t.Fatalf("open the database: %v", err)
+	}
+	defer db.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	cfg := config.Default()
+	cfg.PublicIP = "52.188.87.62"
+	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
+		t.Fatalf("seed the public IP: %v", err)
+	}
+	if value, _, _ := db.GetSetting(ctx, settings.KeyClusterIP); value != "52.188.87.62" {
+		t.Fatalf("the cluster's public IP is %q, want the installer's", value)
+	}
+
+	// An operator's own answer stands across restarts.
+	if err := db.SetSetting(ctx, settings.KeyClusterIP, "203.0.113.10", false, "someone"); err != nil {
+		t.Fatalf("change the setting: %v", err)
+	}
+	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
+		t.Fatalf("seed again: %v", err)
+	}
+	if value, _, _ := db.GetSetting(ctx, settings.KeyClusterIP); value != "203.0.113.10" {
+		t.Fatalf("a restart overwrote the operator's address with %q", value)
+	}
+
+	// An IPv6 address goes where IPv6 addresses go, and nothing at all is
+	// written when the installer found none.
+	cfg.PublicIP = "2001:db8::10"
+	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
+		t.Fatalf("seed an IPv6 address: %v", err)
+	}
+	if value, _, _ := db.GetSetting(ctx, settings.KeyClusterIPv6); value != "2001:db8::10" {
+		t.Errorf("the IPv6 address was recorded as %q", value)
+	}
+	cfg.PublicIP = ""
+	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
+		t.Errorf("an empty address was an error: %v", err)
+	}
+}
+
 // A pod network the panel does not understand is a typo that would otherwise
 // reach a k3s command line on a server, where it fails halfway through adding
 // it rather than before the panel starts.

@@ -209,6 +209,7 @@ CONFIG_DIR="/etc/skifity"
 DATA_DIR="/var/lib/skifity"
 ISSUER="skifity-letsencrypt"
 POD_NETWORK=""
+PUBLIC_IP="203.0.113.10"
 
 for manifest in panel.yaml ingress.yaml ingress-tls.yaml; do
   if render "deploy/$manifest" >"$WORKDIR/$manifest" 2>"$WORKDIR/render.err"; then

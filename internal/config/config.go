@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -91,6 +92,16 @@ type Config struct {
 	// starts and every server it adds later is given the same backend. After
 	// that the setting is the answer and this is ignored.
 	PodNetwork string `json:"pod_network" toml:"pod_network"`
+	// PublicIP is the address the internet reaches this cluster on, as the
+	// installer found it.
+	//
+	// The node knows it only when the address is on its own network card. On
+	// AWS, Google Cloud, Azure and Oracle, and behind any NAT, it is not, so
+	// the node has no external address, and an app was given no URL at all:
+	// the sslip.io name is built from this address. The installer asked the
+	// internet what the address is, so it says; the panel stores it as the
+	// cluster's public IP the first time it starts, unless one is set already.
+	PublicIP string `json:"public_ip" toml:"public_ip"`
 	// UpdateRepository is the GitHub repository, as owner/name, whose releases
 	// the panel asks about when somebody presses "Check for updates" in
 	// Settings. The installer fills it in from the repository it was fetched
@@ -181,6 +192,7 @@ func (c *Config) applyEnv(lookup func(string) string) {
 	str("SETUP_TOKEN_PATH", &c.SetupTokenPath)
 	str("CLUSTER_TOKEN_PATH", &c.ClusterTokenPath)
 	str("POD_NETWORK", &c.PodNetwork)
+	str("PUBLIC_IP", &c.PublicIP)
 	str("UPDATE_REPOSITORY", &c.UpdateRepository)
 	str("CLI_DIR", &c.CLIDir)
 
@@ -234,6 +246,11 @@ func (c *Config) Validate() error {
 	// It becomes part of a URL, so it is held to what a repository path is.
 	if c.UpdateRepository != "" && !repositoryPattern.MatchString(c.UpdateRepository) {
 		return fmt.Errorf("update_repository %q must look like owner/name", c.UpdateRepository)
+	}
+	if c.PublicIP != "" {
+		if _, err := netip.ParseAddr(c.PublicIP); err != nil {
+			return fmt.Errorf("public_ip %q is not an address", c.PublicIP)
+		}
 	}
 	switch c.PodNetwork {
 	case "", settings.FlannelWireGuard, settings.FlannelVXLAN:

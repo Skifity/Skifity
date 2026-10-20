@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -62,6 +63,9 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	log.Info("database ready", "path", cfg.DatabasePath, "schema_version", schemaVersion)
 
 	if err := seedPodNetwork(ctx, db, cfg, log); err != nil {
+		return err
+	}
+	if err := seedPublicIP(ctx, db, cfg, log); err != nil {
 		return err
 	}
 
@@ -276,6 +280,40 @@ func seedPodNetwork(ctx context.Context, db *store.DB, cfg config.Config, log *s
 		return fmt.Errorf("record the pod network setting: %w", err)
 	}
 	log.Info("recorded the pod network this cluster was installed with", "backend", cfg.PodNetwork)
+	return nil
+}
+
+// seedPublicIP records the address the installer found the cluster on, once,
+// as the cluster's public IP: the address every app's sslip.io name is built
+// from, and the one a DNS record is pointed at.
+//
+// The node only knows it when it is on its own network card, which on AWS,
+// Google Cloud, Azure, Oracle and behind any NAT it is not — and there the
+// first app ever deployed had no address at all. Like the pod network, it is
+// written only when the setting is empty, so an operator's own answer stands.
+func seedPublicIP(ctx context.Context, db *store.DB, cfg config.Config, log *slog.Logger) error {
+	if cfg.PublicIP == "" {
+		return nil
+	}
+	ip, err := netip.ParseAddr(cfg.PublicIP)
+	if err != nil {
+		return fmt.Errorf("the public IP the installer gave is not an address: %w", err)
+	}
+	key := settings.KeyClusterIP
+	if !ip.Unmap().Is4() {
+		key = settings.KeyClusterIPv6
+	}
+	current, _, err := db.GetSetting(ctx, key)
+	if err != nil {
+		return fmt.Errorf("read the cluster's public IP: %w", err)
+	}
+	if current != "" {
+		return nil
+	}
+	if err := db.SetSetting(ctx, key, ip.Unmap().String(), false, "system"); err != nil {
+		return fmt.Errorf("record the cluster's public IP: %w", err)
+	}
+	log.Info("recorded the address the installer found this cluster on", "setting", key, "address", ip.Unmap().String())
 	return nil
 }
 

@@ -132,6 +132,12 @@ spec:
             # same one, because nodes that disagree never reach each other.
             - name: SKIFITY_POD_NETWORK
               value: "__POD_NETWORK__"
+            # The address the installer found this cluster on. The panel
+            # records it once as the cluster's public IP: every app's free
+            # address is built from it, and a server on AWS, Google Cloud,
+            # Azure or behind NAT does not know its own.
+            - name: SKIFITY_PUBLIC_IP
+              value: "__PUBLIC_IP__"
             # Where "Check for updates" in Settings asks for the newest release,
             # and only when somebody presses it: the panel never asks on its own.
             - name: SKIFITY_UPDATE_REPOSITORY

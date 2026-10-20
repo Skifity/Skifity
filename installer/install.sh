@@ -2145,6 +2145,7 @@ render() {
 		-e "s|__HOST__|${PANEL_HOST}|g" \
 		-e "s|__PUBLIC_URL__|${PUBLIC_URL}|g" \
 		-e "s|__POD_NETWORK__|${POD_NETWORK}|g" \
+		-e "s|__PUBLIC_IP__|${PUBLIC_IP:-}|g" \
 		-e "s|__REPOSITORY__|${PROJECT_REPO}|g" \
 		-e "s|__CONFIG_DIR__|${CONFIG_DIR}|g" \
 		-e "s|__DATA_DIR__|${DATA_DIR}|g" \
