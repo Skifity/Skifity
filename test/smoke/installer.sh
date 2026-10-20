@@ -1106,7 +1106,6 @@ case "$*" in
   [ -s "$file" ] || { echo "error: no objects passed to apply" >&2; exit 1; }
   cp "$file" "$STUB_DIR/applied-$(basename "$file")" ;;
 *"rollout status"*) ;;
-*"get svc skifity-panel"*) printf 30080 ;;
 *"get certificate skifity-panel-tls"*) printf True ;;
 *) printf "UNHANDLED kubectl %s\n" "$*" >>"$STUB_LOG" ;;
 esac
@@ -1244,6 +1243,14 @@ if [ -x "$FAKE/usr/local/bin/skifity" ] && [ -x "$FAKE/usr/local/bin/skifity-uni
   t_pass "the CLI and the uninstaller are on the PATH"
 else
   t_fail "the CLI or the uninstaller was not installed"
+fi
+# The panel's Service has no NodePort, and the CLI was asked for on one: the
+# download was skipped on every real install. It is asked for at the panel's
+# own address, like the health check before it.
+if grep -q "^curl http://203-0-113-10.sslip.io/api/cli/download$" "$FAKE/stub/calls.log"; then
+  t_pass "the CLI is fetched from the panel at its own address"
+else
+  t_fail "the CLI was not fetched from the panel's address: $(grep 'cli/download' "$FAKE/stub/calls.log")"
 fi
 # The panel is told which repository "Check for updates" asks about, from the
 # one the installer itself came from: moving the project is one line.

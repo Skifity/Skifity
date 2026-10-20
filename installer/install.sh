@@ -2222,8 +2222,18 @@ snapshot_before_upgrade() {
 	label=$(printf '%s' "${IMAGE##*[:/@]}" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40)
 	target="${database}.before-upgrade-$(date -u +%Y%m%d-%H%M%S)-to-${label}"
 
-	if [ -x "$CLI_PATH" ] &&
-		"$CLI_PATH" admin backup-db --database "$database" "$target" >>"$LOG_FILE" 2>&1 &&
+	# Every release up to 0.1.1 failed to put the CLI on the server, so a
+	# server one of them installed has none, and an upgrade from it stopped
+	# here. The panel that is running hands out its own binary, which is the
+	# version whose SQLite this copy has to go through.
+	cli="$CLI_PATH"
+	if ! [ -x "$cli" ] || ! "$cli" version >/dev/null 2>&1; then
+		cli="$TMP_DIR/skifity-running"
+		fetch_panel_cli "$cli" || cli=""
+	fi
+
+	if [ -n "$cli" ] &&
+		"$cli" admin backup-db --database "$database" "$target" >>"$LOG_FILE" 2>&1 &&
 		[ -s "$target" ]; then
 		chown "$RUN_UID:$RUN_GID" "$target"
 		chmod 0600 "$target"
@@ -2384,6 +2394,26 @@ check_panel_answers() {
 	fi
 }
 
+# fetch_panel_cli FILE writes the binary the running panel hands out to FILE,
+# and succeeds only when it runs. Asked for through the ingress at this
+# server's own address, as check_panel_answers asks for the health check, and
+# else at the panel's Service address, which a server reaches by itself.
+fetch_panel_cli() {
+	rm -f "$1"
+	port=80
+	[ "$PANEL_SCHEME" = "https" ] && port=443
+	target=$(address_for_resolve "${NODE_IP:-127.0.0.1}")
+	if ! curl -fsSk --retry 3 --retry-delay 2 --max-time 120 --resolve "${PANEL_HOST}:${port}:${target}" \
+		"${PUBLIC_URL}/api/cli/download" -o "$1" 2>>"$LOG_FILE"; then
+		service=$(kubectl -n "$NAMESPACE" get svc skifity-panel -o jsonpath='{.spec.clusterIP}' 2>>"$LOG_FILE" || true)
+		[ -n "$service" ] &&
+			curl -fsS --retry 3 --retry-delay 2 --max-time 120 "http://$(address_for_resolve "$service")/api/cli/download" \
+				-o "$1" 2>>"$LOG_FILE" ||
+			return 1
+	fi
+	[ -s "$1" ] && chmod 0755 "$1" && "$1" version >>"$LOG_FILE" 2>&1
+}
+
 install_cli() {
 	step "Installing the command line tool"
 
@@ -2396,13 +2426,16 @@ install_cli() {
 	#
 	# The panel's image is distroless, so the binary cannot simply be copied
 	# out of the container: there is no shell, no cat and no tar in there.
+	#
+	# It is asked for the way check_panel_answers asked for the health check:
+	# through the ingress, at this server's own address. It used to be asked
+	# on the panel's NodePort, which the panel's Service has never had, so this
+	# step skipped the download and warned on every install there has been,
+	# the cluster runs included. What comes back is run once before it goes on
+	# the PATH: an error page with a 200 would otherwise become the CLI.
 	new="${CLI_PATH}.new"
 	rm -f "$new"
-	port=$(kubectl -n "$NAMESPACE" get svc skifity-panel -o jsonpath='{.spec.ports[0].nodePort}' 2>>"$LOG_FILE" || true)
-	if [ -n "$port" ] &&
-		curl -fsS --retry 3 --retry-delay 2 --max-time 120 "http://127.0.0.1:${port}/api/cli/download" -o "$new" 2>>"$LOG_FILE" &&
-		[ -s "$new" ]; then
-		chmod 0755 "$new"
+	if [ "$PANEL_ANSWERS" = "yes" ] && fetch_panel_cli "$new"; then
 		mv "$new" "$CLI_PATH"
 		ok "skifity is on your PATH, from the panel itself"
 		return 0
