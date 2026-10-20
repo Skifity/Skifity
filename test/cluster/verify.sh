@@ -734,11 +734,15 @@ JSON
 	# Something to lose, and something to get back: a row written before the
 	# backup, changed after it, and expected back as it was once the backup is
 	# restored. Through the database's own pod, as its superuser, so what is
-	# checked is the data and not anything the panel says about it.
+	# checked is the data and not anything the panel says about it. The table
+	# belongs to the database's owner, as one an app made would: the backup
+	# connects as that user, and a table only the superuser could read failed
+	# it with "permission denied", which no app's own table does.
 	DB_POD=$(kubectl -n "$NAMESPACE" get pods -l cnpg.io/cluster=verifydb -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 	DB_NAME=$(kubectl -n "$NAMESPACE" get clusters.postgresql.cnpg.io verifydb -o jsonpath='{.spec.bootstrap.initdb.database}' 2>/dev/null || echo "")
+	DB_OWNER=$(kubectl -n "$NAMESPACE" get clusters.postgresql.cnpg.io verifydb -o jsonpath='{.spec.bootstrap.initdb.owner}' 2>/dev/null || echo "")
 	db_sql() { kubectl -n "$NAMESPACE" exec "$DB_POD" -c postgres -- psql -tAq -d "${DB_NAME:-postgres}" -c "$1" 2>>"$REPORT"; }
-	db_sql "create table if not exists verify_restore (value text); delete from verify_restore; insert into verify_restore values ('before')" >/dev/null \
+	db_sql "create table if not exists verify_restore (value text); alter table verify_restore owner to \"${DB_OWNER:-${DB_NAME:-app}}\"; delete from verify_restore; insert into verify_restore values ('before')" >/dev/null \
 		|| no "a row could not be written to the database before the backup"
 
 	BACKUP_ID=$(api POST "/api/databases/$DB_ID/backups" '{}' | pick id 2>/dev/null || echo "")
@@ -1326,11 +1330,23 @@ else
 	ok "the scale-to-zero component installed"
 	api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":true,"autoscale":false,"replicas":1}' >/dev/null \
 		|| no "scale to zero could not be switched on"
+	# Asked again until it stays asleep: for as long as the request that woke
+	# it is inside KEDA's window, a minute, KEDA counts the app as in use and
+	# puts its instance straight back, which is what it is for. The second
+	# time, right after a visitor, that was every attempt for two minutes on a
+	# fast run. Still at none after one of KEDA's polls, half a minute, it
+	# stays there.
 	sleep_app() {
-		kubectl -n "$NAMESPACE" scale deploy hello --replicas=0 >/dev/null 2>&1 || return 1
-		for _ in $(seq 1 60); do
-			[ -z "$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello -o name 2>/dev/null)" ] && return 0
-			sleep 2
+		for _ in $(seq 1 10); do
+			kubectl -n "$NAMESPACE" scale deploy hello --replicas=0 >/dev/null 2>&1 || return 1
+			for _ in $(seq 1 15); do
+				[ -z "$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello -o name 2>/dev/null)" ] && break
+				sleep 2
+			done
+			sleep 35
+			[ "$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.replicas}' 2>/dev/null)" = "0" ] &&
+				[ -z "$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello -o name 2>/dev/null)" ] &&
+				return 0
 		done
 		return 1
 	}
