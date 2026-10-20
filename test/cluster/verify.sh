@@ -61,6 +61,13 @@ REPORT="/var/log/skifity-verify.log"
 : "${VERIFY_S3_BUCKET:=}"
 : "${VERIFY_S3_ACCESS_KEY:=}"
 : "${VERIFY_S3_SECRET_KEY:=}"
+# A second server, for what one cannot show: an image built on one server and
+# pulled on the other, the network policies between them, a server emptied and
+# taken out. The panel adds it the way a person does, over SSH as root with the
+# key in VERIFY_SECOND_SERVER_KEY, and every phase after that runs across both.
+# Without it those checks skip and say so.
+: "${VERIFY_SECOND_SERVER:=}"
+: "${VERIFY_SECOND_SERVER_KEY:=}"
 
 PASS=0
 FAIL=0
@@ -304,6 +311,37 @@ NAMESPACE=$(api GET "/api/environments/$ENV_ID" | pick namespace)
 [ -n "$NAMESPACE" ] || die "the environment has no namespace"
 ok "a project and an environment exist, in namespace $NAMESPACE"
 
+SECOND_ID=""
+SECOND_NODE=""
+if [ -n "$VERIFY_SECOND_SERVER" ]; then
+	step "A second server, added through the panel"
+
+	[ -r "$VERIFY_SECOND_SERVER_KEY" ] || die "VERIFY_SECOND_SERVER_KEY is not a key file this can read"
+	ADD=$(python3 -c '
+import json, sys
+print(json.dumps({"name": "second", "host": sys.argv[1], "ssh_user": "root", "ssh_port": 22,
+                  "private_key": open(sys.argv[2]).read()}))
+' "$VERIFY_SECOND_SERVER" "$VERIFY_SECOND_SERVER_KEY")
+	SECOND_ID=$(api POST "/api/teams/$TEAM_ID/servers" "$ADD" | pick target_id 2>/dev/null || echo "")
+	[ -n "$SECOND_ID" ] || die "the panel refused to add $VERIFY_SECOND_SERVER"
+	SECOND_STATE=""
+	for _ in $(seq 1 90); do
+		SECOND_STATE=$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")
+		case "$SECOND_STATE" in ready | failed) break ;; esac
+		sleep 10
+	done
+	if [ "$SECOND_STATE" != "ready" ]; then
+		api GET "/api/servers/$SECOND_ID" >>"$REPORT" 2>&1 || true
+		die "adding $VERIFY_SECOND_SERVER ended '${SECOND_STATE:-unknown}'; the operation's steps are above in $REPORT"
+	fi
+	ok "$VERIFY_SECOND_SERVER was added over SSH: checked, keyed, fenced and joined"
+	SECOND_NODE=$(api GET "/api/servers/$SECOND_ID" | pick node_name 2>/dev/null || echo "")
+	READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready"' | wc -l)
+	[ "$READY_NODES" -ge 2 ] \
+		&& ok "the cluster has $READY_NODES servers, all ready, the new one as ${SECOND_NODE:-unknown}" \
+		|| no "only $READY_NODES server(s) are ready after the second joined"
+fi
+
 ##############################################################################
 # Phase 1 — the basic path: Git, build, deploy, HTTPS, a variable, a rollback
 ##############################################################################
@@ -538,6 +576,29 @@ done
 kubectl -n "$NAMESPACE" get hpa hello-hpa >/dev/null 2>&1 \
 	&& no "the autoscaler was left behind after autoscaling was switched off" \
 	|| ok "switching autoscaling off removes the autoscaler and leaves the size the panel's"
+
+if [ -n "$SECOND_NODE" ]; then
+	step "One app on two servers"
+
+	# The image was built into the registry on the first server. An instance
+	# on the second pulls it through that server's own registry port, which
+	# kube-proxy carries across to the registry, and the registry's policy has
+	# to let a pull from another server in: none of that runs on one server.
+	kubectl -n "$NAMESPACE" rollout status deploy/hello --timeout=300s >>"$REPORT" 2>&1 || true
+	ON_SECOND=$(kubectl -n "$NAMESPACE" get pods -l app.kubernetes.io/name=hello \
+		-o jsonpath='{range .items[*]}{.spec.nodeName}{" "}{.status.containerStatuses[0].ready}{"\n"}{end}' 2>/dev/null \
+		| awk -v node="$SECOND_NODE" '$1 == node && $2 == "true"' | wc -l)
+	if [ "${ON_SECOND:-0}" -ge 1 ]; then
+		ok "an instance runs on the second server, from the image built on the first"
+	else
+		no "no instance of the app is ready on the second server; the spread put both elsewhere, or the pull failed"
+		kubectl -n "$NAMESPACE" get pods -o wide >>"$REPORT" 2>&1 || true
+	fi
+	SECOND_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $APP_HOST" "http://$VERIFY_SECOND_SERVER/")
+	[ "$SECOND_CODE" = "200" ] \
+		&& ok "the second server answers for the app too, at its own address" \
+		|| no "the app's address answered $SECOND_CODE at the second server; every server runs the ingress"
+fi
 
 step "A folder with no repository (ADR-0022)"
 
@@ -1288,6 +1349,35 @@ else
 	fi
 	api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":false,"autoscale":false,"replicas":1}' >/dev/null 2>&1 || true
 fi
+fi
+
+if [ -n "$SECOND_ID" ]; then
+	step "Taking the second server out, through the panel"
+
+	REMOVE_FAILS=0
+	api DELETE "/api/servers/$SECOND_ID" >/dev/null 2>&1 || no "the panel refused to remove the second server"
+	GONE=""
+	for _ in $(seq 1 60); do
+		[ -n "$APP_HOST" ] && { [ "$(through_ingress "$APP_HOST" 5)" = "200" ] || REMOVE_FAILS=$((REMOVE_FAILS + 1)); }
+		CODE=$(api_code GET "/api/servers/$SECOND_ID")
+		[ "$CODE" = "404" ] && { GONE=1; break; }
+		[ "$(api GET "/api/servers/$SECOND_ID" | pick status 2>/dev/null || echo "")" = "failed" ] && break
+		sleep 5
+	done
+	if [ -n "$GONE" ]; then
+		ok "the second server was drained and removed"
+	else
+		api GET "/api/servers/$SECOND_ID" >>"$REPORT" 2>&1 || true
+		no "the second server was not removed; the operation's steps are above in $REPORT"
+	fi
+	kubectl get node "$SECOND_NODE" >/dev/null 2>&1 \
+		&& no "the cluster still lists $SECOND_NODE after the server was removed" \
+		|| ok "and the cluster no longer lists it"
+	[ -z "$APP_HOST" ] || {
+		[ "$REMOVE_FAILS" = "0" ] \
+			&& ok "the app answered while its second server was taken away" \
+			|| no "$REMOVE_FAILS requests failed while the second server was taken away"
+	}
 fi
 
 # --- what it costs ---------------------------------------------------------
