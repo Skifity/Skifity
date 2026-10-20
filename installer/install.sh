@@ -67,7 +67,7 @@ PROJECT_REPO="${SKIFITY_REPO:-Skifity/Skifity}"
 # workflow refuses to build a tag whose installer disagrees with it. While it
 # is empty nothing has been published, and check_release says so before
 # anything on this machine changes rather than after k3s is installed.
-RELEASED_VERSION="v0.1.0"
+RELEASED_VERSION="v0.1.1"
 
 # derive_release works out what is installed and where its objects come from.
 # It runs when this file is read and again after the options are parsed,
