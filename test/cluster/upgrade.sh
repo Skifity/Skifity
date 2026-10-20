@@ -225,7 +225,12 @@ curl -fsSL --max-time 60 "https://github.com/$REPO/releases/download/$UPGRADE_FR
 ok "the installer published with $UPGRADE_FROM was downloaded"
 
 START=$(date +%s)
-if SKIFITY_ASSUME_YES=1 SKIFITY_ACME_STAGING=1 SKIFITY_DOMAIN="$DOMAIN" SKIFITY_PUBLIC_IP="$PUBLIC_IP" \
+# The image and the manifests this script upgrades to are in the environment
+# for the second install, and the first must not see them: an installer reads
+# SKIFITY_IMAGE as the image to install, and the first run of this check
+# "installed $UPGRADE_FROM" with the image it was meant to upgrade to.
+if env -u SKIFITY_IMAGE -u SKIFITY_MANIFEST_BASE -u SKIFITY_VERSION \
+	SKIFITY_ASSUME_YES=1 SKIFITY_ACME_STAGING=1 SKIFITY_DOMAIN="$DOMAIN" SKIFITY_PUBLIC_IP="$PUBLIC_IP" \
 	sh "$FROM_INSTALLER" >>"$REPORT" 2>&1; then
 	ok "$UPGRADE_FROM installed in $(($(date +%s) - START))s"
 else
@@ -235,7 +240,10 @@ fi
 need kubectl
 panel_ready || die "the panel $UPGRADE_FROM installed never answered"
 FROM_IMAGE=$(panel_image)
-ok "the panel runs $FROM_IMAGE"
+case "$FROM_IMAGE" in
+*":$UPGRADE_FROM") ok "the panel runs $FROM_IMAGE" ;;
+*) die "the panel runs $FROM_IMAGE, which is not $UPGRADE_FROM: there would be nothing to upgrade from" ;;
+esac
 
 ##############################################################################
 # 2 — something to keep
