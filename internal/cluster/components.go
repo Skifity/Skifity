@@ -259,6 +259,21 @@ func registryObjects(namespace, guardImage string) []any {
 					// The guard reads a file and forwards HTTP; it has no use for
 					// the Kubernetes API.
 					AutomountServiceAccountToken: ptrTo(false),
+					// On a server that runs the control plane, when there is one
+					// to choose. Its disk holds every image the cluster has built,
+					// and its volume keeps it on whichever server it first started
+					// on; a worker is the kind of server that is added and taken
+					// away, and one that fails took every image with it. Preferred
+					// rather than required, so a cluster whose control plane takes
+					// no work still has a registry.
+					Affinity: &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{{
+							Weight: 100,
+							Preference: corev1.NodeSelectorTerm{MatchExpressions: []corev1.NodeSelectorRequirement{{
+								Key: "node-role.kubernetes.io/control-plane", Operator: corev1.NodeSelectorOpExists,
+							}}},
+						}},
+					}},
 					Containers: []corev1.Container{
 						{
 							Name:  "registry",

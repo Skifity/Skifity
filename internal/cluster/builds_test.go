@@ -162,6 +162,33 @@ func TestRegistryIsReachableByEveryNodesContainerRuntime(t *testing.T) {
 	}
 }
 
+// The registry holds every image the cluster has built, and its volume keeps
+// it on the server it first started on. It prefers one that runs the control
+// plane, the servers a cluster keeps, over a worker, which is the kind added
+// and taken away; preferred, so a cluster whose control plane takes no work
+// still gets one.
+func TestTheRegistryPrefersAServerThatRunsTheControlPlane(t *testing.T) {
+	deployment, _ := registryParts(t)
+	affinity := deployment.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.NodeAffinity == nil {
+		t.Fatal("the registry goes on whichever server the scheduler picks first")
+	}
+	if affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+		t.Error("the registry requires a server, and one whose control plane takes no work would have none")
+	}
+	found := false
+	for _, term := range affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		for _, expression := range term.Preference.MatchExpressions {
+			if expression.Key == "node-role.kubernetes.io/control-plane" && expression.Operator == corev1.NodeSelectorOpExists {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("the registry does not prefer a server that runs the control plane")
+	}
+}
+
 // TestTheRegistryIsOnlyReachedThroughItsGuard: the guard is what refuses a
 // write without a token, so nothing may reach the registry around it.
 func TestTheRegistryIsOnlyReachedThroughItsGuard(t *testing.T) {
