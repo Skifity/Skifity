@@ -285,6 +285,11 @@ const (
 	RegistryNodePort = 30500
 )
 
+// ScanCacheClaim is the volume the vulnerability scanner keeps its database
+// on, in BuildsNamespace. It is a cache: the next scan makes it again,
+// wherever that scan runs.
+const ScanCacheClaim = "skifity-scan-cache"
+
 // RegistryHost is the address images are tagged with.
 func RegistryHost() string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", RegistryService, BuildsNamespace, RegistryPort)

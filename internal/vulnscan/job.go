@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/kube"
 	"skifity/internal/version"
 )
 
@@ -34,7 +35,7 @@ const (
 // refreshed by Trivy when it is a day old; downloading it for every scan of
 // every app, every night, is what gets a cluster rate-limited by the registry
 // that serves it.
-const CacheClaim = "skifity-scan-cache"
+const CacheClaim = kube.ScanCacheClaim
 
 // cacheSize is what the claim asks for: the vulnerability database, the Java
 // one when a scanned image has jars in it, and room to spare.

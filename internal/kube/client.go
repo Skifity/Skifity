@@ -1299,6 +1299,12 @@ func (c *Client) VolumesPinnedToNode(ctx context.Context, nodeName string) ([]st
 		if !pinned {
 			continue
 		}
+		// The scanner's cache goes with a server and nothing is lost: the
+		// next scan makes it again. Counted here, it kept a server from being
+		// taken out until somebody agreed to lose data that was nobody's.
+		if claim := volume.Spec.ClaimRef; claim != nil && claim.Namespace == BuildsNamespace && claim.Name == ScanCacheClaim {
+			continue
+		}
 		if claim := volume.Spec.ClaimRef; claim != nil {
 			out = append(out, claim.Namespace+"/"+claim.Name)
 		} else {
