@@ -326,10 +326,7 @@ func BuildPostgres(s Spec) *unstructured.Unstructured {
 					"secret":   map[string]any{"name": s.SecretName()},
 				},
 			},
-			"storage": map[string]any{
-				"size":         fmt.Sprintf("%dGi", s.StorageGB),
-				"storageClass": s.StorageClass,
-			},
+			"storage":   postgresStorage(s),
 			"resources": postgresResources(s),
 			"postgresql": map[string]any{
 				"parameters": postgresParameters(s),
@@ -337,6 +334,21 @@ func BuildPostgres(s Spec) *unstructured.Unstructured {
 			"enableSuperuserAccess": false,
 		},
 	}}
+}
+
+// postgresStorage is the volume each instance gets.
+//
+// The class is left out unless one was chosen, rather than written empty. An
+// empty storageClass is not "the default" to Kubernetes but "no class at all",
+// which no provisioner answers: every PostgreSQL database waited for a volume
+// that would never come, and the first cluster this ran on found it in ten
+// minutes, where no fake API server ever would have.
+func postgresStorage(s Spec) map[string]any {
+	storage := map[string]any{"size": fmt.Sprintf("%dGi", s.StorageGB)}
+	if s.StorageClass != "" {
+		storage["storageClass"] = s.StorageClass
+	}
+	return storage
 }
 
 // postgresResources is what a PostgreSQL cluster's instances reserve and may

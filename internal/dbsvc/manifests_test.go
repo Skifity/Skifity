@@ -99,6 +99,17 @@ func TestPostgresManifest(t *testing.T) {
 	if size != "10Gi" {
 		t.Fatalf("storage is %q, want 10Gi", size)
 	}
+	// No class chosen means none written. An empty storageClass is "no class at
+	// all" to Kubernetes, which no provisioner answers, and every database
+	// waited for ever for a volume on the first real cluster this ran on.
+	if class, found, _ := unstructured.NestedFieldNoCopy(object.Object, "spec", "storage", "storageClass"); found {
+		t.Errorf("an empty storage class was written (%q), so the volume is never provisioned", class)
+	}
+	chosen := postgresSpec()
+	chosen.StorageClass = "longhorn"
+	if class, _, _ := unstructured.NestedString(BuildPostgres(chosen).Object, "spec", "storage", "storageClass"); class != "longhorn" {
+		t.Errorf("a chosen storage class was not written: %q", class)
+	}
 	// Bootstrapping from the panel's own Secret is what ties the stored
 	// credentials to the ones the database actually uses.
 	secret, _, _ := unstructured.NestedString(object.Object, "spec", "bootstrap", "initdb", "secret", "name")
