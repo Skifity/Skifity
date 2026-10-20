@@ -118,6 +118,16 @@ REPORT="/var/log/skifity-verify.log"
 # certificate. Without them the check skips.
 : "${VERIFY_GIT_HOST_REPO:=}"
 : "${VERIFY_GIT_HOST_CA:=}"
+# VERIFY_GIT_HOST_TOKEN is a token of the repository's owner on that host, for
+# the panel's connection to it and for the pushes and the pull request that
+# check its webhooks. The host has to be a Gitea that delivers to loopback
+# addresses (ALLOWED_HOST_LIST), since the panel's address is pointed at this
+# machine for it. Without the token those checks skip.
+: "${VERIFY_GIT_HOST_TOKEN:=}"
+# A Dex binary, for single sign-on through a real OpenID Connect provider:
+# phase 3 writes its configuration and starts it on this machine's address.
+# Without it the check skips.
+: "${VERIFY_DEX:=}"
 # A secret manager a variable is read from: a Vault, or an OpenBao, which
 # speaks the same API, at VERIFY_VAULT_ADDRESS, with a KV version 2 mount at
 # secret/ that the token in VERIFY_VAULT_TOKEN may write to. Without them the
@@ -429,6 +439,19 @@ wait_deployed() {
 		sleep 5
 	done
 	return 1
+}
+
+# panel_public_url prints the address the installer gave the panel, and points
+# its name at this machine for what has to reach the panel by it — a Git
+# host's webhook, a browser back from an identity provider — since the name
+# resolves to a public address nothing on this machine can reach.
+panel_public_url() {
+	local url name
+	url=$(kubectl -n "$PANEL_NS" get deploy skifity-panel \
+		-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SKIFITY_PUBLIC_URL")].value}' 2>/dev/null || true)
+	name=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$url")
+	[ -z "$name" ] || grep -q " $name\$" /etc/hosts || printf '127.0.0.1 %s\n' "$name" >>/etc/hosts
+	printf '%s' "${url%/}"
 }
 
 # volume_node CLAIM prints the server a volume on a server's own disk is kept
@@ -1085,6 +1108,115 @@ print(json.dumps({"values": {"git.private_hosts": sys.argv[1], "git.ca_bundle": 
 fi
 fi
 
+step "A push to that Git host deploys, and a pull request on it is previewed"
+
+# The Git host tells the panel about a push and a pull request with a webhook
+# the panel registered on it through the connection's token, signed with the
+# connection's own secret. The panel's address is a name that resolves to
+# this machine's public address, which nothing on this machine can reach, so
+# for the Git host the name is pointed at this machine itself.
+if [ -z "$VERIFY_GIT_HOST_REPO" ] || [ -z "$VERIFY_GIT_HOST_TOKEN" ] || [ -z "$VERIFY_GIT_HOST_CA" ]; then
+	skip "webhooks from a Git host" "no VERIFY_GIT_HOST_TOKEN for the Git host above"
+else
+	GITEA_BASE=$(python3 -c 'import sys, urllib.parse; u = urllib.parse.urlparse(sys.argv[1]); print(f"{u.scheme}://{u.netloc}")' "$VERIFY_GIT_HOST_REPO")
+	GITEA_REPO=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).path.strip("/").removesuffix(".git"))' "$VERIFY_GIT_HOST_REPO")
+	gitea() {
+		curl -fsS --cacert "$VERIFY_GIT_HOST_CA" -X "$1" "$GITEA_BASE/api/v1$2" \
+			-H "Authorization: token $VERIFY_GIT_HOST_TOKEN" -H 'Content-Type: application/json' ${3:+-d "$3"}
+	}
+	# commit_to BRANCH FILE pushes a commit adding FILE to BRANCH, made from
+	# main, and prints its id.
+	commit_to() {
+		local work
+		work=$(mktemp -d)
+		GIT_SSL_CAINFO="$VERIFY_GIT_HOST_CA" git clone -q -b main \
+			"${GITEA_BASE%%://*}://${GITEA_REPO%%/*}:$VERIFY_GIT_HOST_TOKEN@${GITEA_BASE#*://}/$GITEA_REPO.git" "$work" >/dev/null 2>&1 || return 1
+		date >"$work/$2"
+		git -C "$work" add "$2" &&
+			git -C "$work" -c user.name=Crosscheck -c user.email=crosscheck@example.test commit -q -m "Add $2" &&
+			GIT_SSL_CAINFO="$VERIFY_GIT_HOST_CA" git -C "$work" push -q origin "HEAD:refs/heads/$1" >/dev/null 2>&1 &&
+			git -C "$work" rev-parse HEAD
+		rm -rf "$work"
+	}
+	PANEL_URL=$(panel_public_url)
+	SOURCE=$(api POST "/api/teams/$TEAM_ID/git-sources" \
+		"{\"kind\":\"gitea\",\"name\":\"home-gitea\",\"base_url\":\"$GITEA_BASE\",\"token\":\"$VERIFY_GIT_HOST_TOKEN\"}" \
+		| pick id 2>/dev/null || echo "")
+	CREATED=""
+	[ -z "$SOURCE" ] || CREATED=$(api POST "/api/environments/$ENV_ID/apps" "$(cat <<JSON
+{"name":"fromgitea","source_type":"git","git_source_id":"$SOURCE","repo_url":"$VERIFY_GIT_HOST_REPO","branch":"main",
+ "builder":"dockerfile","dockerfile_path":"Dockerfile","port":$VERIFY_APP_PORT,"health_path":"/healthz","deploy":true}
+JSON
+)" 2>/dev/null || echo "")
+	PUSHED_APP=$(printf '%s' "$CREATED" | pick app.id 2>/dev/null || echo "")
+	if [ -z "$PANEL_URL" ] || [ -z "$PUSHED_APP" ]; then
+		no "an app could not be made through a connection to the Git host: ${CREATED:-no answer}"
+	else
+		[ "$(printf '%s' "$CREATED" | pick webhook.registered 2>/dev/null)" = "True" ] \
+			&& ok "making the app registered a webhook on the Git host through the connection's token" \
+			|| no "no webhook was registered on the Git host: $(printf '%s' "$CREATED" | pick webhook 2>/dev/null)"
+		wait_deployed "$PUSHED_APP" || no "the app from the Git host did not deploy the first time"
+		PUSHED=$(commit_to main pushed.txt || echo "")
+		DEPLOYED=""
+		for _ in $(seq 1 60); do
+			DEPLOYED=$(api GET "/api/apps/$PUSHED_APP/deployments" 2>/dev/null | python3 -c '
+import json, sys
+for d in json.load(sys.stdin).get("items") or []:
+    if d.get("commit_sha") == sys.argv[1]:
+        print(d.get("status", ""), d.get("trigger", ""))
+        break
+' "$PUSHED" 2>/dev/null || echo "")
+			case "$DEPLOYED" in succeeded* | failed*) break ;; esac
+			sleep 5
+		done
+		case "$DEPLOYED" in
+		"succeeded push") ok "a push to the Git host reached the panel by its webhook, and the commit pushed was built and deployed" ;;
+		*) no "after a push of ${PUSHED:-nothing} the app's deployment of it is '${DEPLOYED:-not there}'; the Git host's delivery log has what the panel answered" ;;
+		esac
+
+		api PATCH "/api/apps/$PUSHED_APP" '{"preview_deploys":true}' >/dev/null || no "previews could not be switched on"
+		BRANCHED=$(commit_to change-for-a-preview preview.txt || echo "")
+		PULL=$(gitea POST "/repos/$GITEA_REPO/pulls" \
+			'{"head":"change-for-a-preview","base":"main","title":"A change to preview"}' 2>/dev/null | pick number 2>/dev/null || echo "")
+		# A pull request's preview is named for its number, pr-<number>-…
+		PREVIEW_ENV=""
+		for _ in $(seq 1 60); do
+			[ -n "$PULL" ] || break
+			PREVIEW_ENV=$(api GET "/api/projects/$PROJECT_ID/environments" 2>/dev/null | python3 -c '
+import json, sys
+for env in json.load(sys.stdin).get("items") or []:
+    if env.get("kind") == "preview" and env.get("source_ref", "").startswith("pr-" + sys.argv[1] + "-"):
+        print(env["id"])
+        break
+' "$PULL" 2>/dev/null || echo "")
+			[ -n "$PREVIEW_ENV" ] && break
+			sleep 5
+		done
+		if [ -z "$PULL" ] || [ -z "$BRANCHED" ] || [ -z "$PREVIEW_ENV" ]; then
+			no "a pull request opened on the Git host made no preview (pull ${PULL:-not opened}, commit ${BRANCHED:-not pushed})"
+		else
+			PREVIEW_COPY=$(api GET "/api/environments/$PREVIEW_ENV/apps" | pick items.0.id 2>/dev/null || echo "")
+			if [ -n "$PREVIEW_COPY" ] && wait_deployed "$PREVIEW_COPY"; then
+				ok "a pull request opened on the Git host was previewed: the branch's commit built and deployed in an environment of its own"
+			else
+				no "the preview of the pull request did not deploy"
+			fi
+			PREVIEW_NS=$(api GET "/api/environments/$PREVIEW_ENV" | pick namespace 2>/dev/null || echo "")
+			gitea PATCH "/repos/$GITEA_REPO/pulls/$PULL" '{"state":"closed"}' >/dev/null 2>&1 || true
+			CLOSED=""
+			for _ in $(seq 1 36); do
+				[ -n "$PREVIEW_NS" ] && ! kubectl get namespace "$PREVIEW_NS" >/dev/null 2>&1 && { CLOSED=1; break; }
+				sleep 5
+			done
+			[ -n "$CLOSED" ] \
+				&& ok "closing the pull request on the Git host took its preview away" \
+				|| no "the preview's namespace ${PREVIEW_NS:-unknown} was still there three minutes after its pull request was closed"
+		fi
+		api DELETE "/api/apps/$PUSHED_APP" >/dev/null 2>&1 || true
+	fi
+	[ -z "$SOURCE" ] || api DELETE "/api/teams/$TEAM_ID/git-sources/$SOURCE" >/dev/null 2>&1 || true
+fi
+
 ##############################################################################
 # Phase 2 — data: a volume, a database, a backup that restores, an export
 ##############################################################################
@@ -1584,6 +1716,82 @@ else
 			&& ok "a member cannot invite an admin" \
 			|| no "a member got $CODE when inviting an admin"
 	fi
+fi
+
+step "Single sign-on through an identity provider (checklist 11)"
+
+# Dex, an OpenID Connect provider, with one connector that vouches for one
+# person in one group, so a sign-in needs no form: the panel sends the browser
+# to Dex, Dex sends it back with a code, and the panel checks the ID token,
+# makes the account on its first sign-in, and puts it in the team its group
+# names. Dex puts the groups in the ID token only when they are asked for.
+if [ -z "$VERIFY_DEX" ] || [ ! -x "$VERIFY_DEX" ]; then
+	skip "single sign-on" "no identity provider was given. Set VERIFY_DEX to a Dex binary"
+else
+	SSO_URL=$(panel_public_url)
+	DEX_ADDRESS=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "")
+	DEX_ISSUER="http://$DEX_ADDRESS:5556/dex"
+	DEX_DIR=$(mktemp -d)
+	cat >"$DEX_DIR/config.yaml" <<YAML
+issuer: $DEX_ISSUER
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+staticClients:
+  - id: skifity
+    name: Skifity
+    secret: not-a-real-secret
+    redirectURIs: ["$SSO_URL/api/auth/sso/callback"]
+connectors:
+  - type: mockCallback
+    id: crosscheck
+    name: Crosscheck
+YAML
+	"$VERIFY_DEX" serve "$DEX_DIR/config.yaml" >"$DEX_DIR/dex.log" 2>&1 &
+	DEX_PID=$!
+	for _ in $(seq 1 30); do
+		curl -fs -o /dev/null "$DEX_ISSUER/.well-known/openid-configuration" && break
+		sleep 1
+	done
+	TEAM_SLUG=$(api GET "/api/teams/$TEAM_ID" | pick slug 2>/dev/null || echo "")
+	SSO_SETTINGS=$(python3 -c '
+import json, sys
+print(json.dumps({"values": {
+    "signin.oidc_issuer": sys.argv[1], "signin.oidc_client_id": "skifity",
+    "signin.oidc_client_secret": "not-a-real-secret", "signin.oidc_allowed_domains": "kilgore.trout",
+    "signin.oidc_auto_create": "true", "signin.oidc_group_roles": "authors = " + sys.argv[2] + ":member"}}))
+' "$DEX_ISSUER" "$TEAM_SLUG")
+	if [ -z "$SSO_URL" ] || ! curl -fs -o /dev/null "$DEX_ISSUER/.well-known/openid-configuration"; then
+		no "Dex did not start at $DEX_ISSUER: $(tail -c 300 "$DEX_DIR/dex.log")"
+	elif ! api PUT /api/settings "$SSO_SETTINGS" >/dev/null; then
+		no "the single sign-on settings were refused"
+	else
+		BROWSER=$(mktemp)
+		LANDED=$(curl -s -L --max-redirs 10 -c "$BROWSER" -b "$BROWSER" -o /dev/null -w '%{url_effective}' \
+			"$SSO_URL/api/auth/sso/start" || true)
+		SIGNED_IN=$(curl -s -b "$BROWSER" "$SSO_URL/api/me" || true)
+		case "$SIGNED_IN" in
+		*kilgore@kilgore.trout*) ok "a sign-in through Dex made an account for the person it vouched for, and signed them in" ;;
+		*)
+			no "a sign-in through Dex ended at ${LANDED:-nowhere} with no session: ${SIGNED_IN:-no answer}; Dex's log is in the report"
+			cat "$DEX_DIR/dex.log" >>"$REPORT" 2>/dev/null || true
+			;;
+		esac
+		SSO_ROLE=$(api GET "/api/teams/$TEAM_ID/members" | python3 -c '
+import json, sys
+for member in json.load(sys.stdin).get("items") or []:
+    if (member.get("user") or {}).get("email") == "kilgore@kilgore.trout":
+        print(member.get("role", ""))
+' 2>/dev/null || echo "")
+		[ "$SSO_ROLE" = "member" ] \
+			&& ok "the group the provider put them in made them a member of the team it names" \
+			|| no "after signing in through Dex they are '${SSO_ROLE:-not in the team}', not the member their group gives"
+	fi
+	api PUT /api/settings '{"values":{"signin.oidc_issuer":"","signin.oidc_group_roles":""}}' >/dev/null 2>&1 || true
+	kill "$DEX_PID" 2>/dev/null || true
 fi
 
 step "One namespace cannot reach another (checklist 12)"
@@ -3007,6 +3215,23 @@ elif [ -n "$SECOND_ID" ]; then
 	# phase 1 app where its volume is not on the server going away.
 	PROBE=$MOVER_HOST
 	[ -n "$PROBE" ] || [ "$(volume_node hello-data)" = "$SECOND_NODE" ] || PROBE=$APP_HOST
+	# Asked twice a second from before the removal is asked for until after
+	# it has finished, each answer written down with its time, so a failure
+	# says when it happened and what it was.
+	PROBE_LOG=$(mktemp)
+	PROBING=""
+	if [ -n "$PROBE" ]; then
+		(
+			while :; do
+				printf '%s %s\n' "$(date +%T.%N | cut -c1-12)" "$(through_ingress "$PROBE" 5)"
+				sleep 0.5
+			done
+		) >"$PROBE_LOG" 2>&1 &
+		PROBING=$!
+		sleep 2
+	fi
+	# What was on the server as it went, for the report.
+	kubectl get pods -A -o wide --field-selector "spec.nodeName=$SECOND_NODE" >>"$REPORT" 2>&1 || true
 	REFUSAL=$(mktemp)
 	CODE=$(curl -s -o "$REFUSAL" -w '%{http_code}' -X DELETE "$PANEL/api/servers/$SECOND_ID" -H "Authorization: Bearer $TOKEN" || true)
 	if [ "$CODE" = "409" ] && grep -q server.has_local_volumes "$REFUSAL"; then
@@ -3020,10 +3245,8 @@ elif [ -n "$SECOND_ID" ]; then
 	2??) ;;
 	*) no "the panel refused to remove the second server ($CODE): $(head -c 300 "$REFUSAL")" ;;
 	esac
-	REMOVE_FAILS=0
 	GONE=""
 	for _ in $(seq 1 60); do
-		[ -n "$PROBE" ] && { [ "$(through_ingress "$PROBE" 5)" = "200" ] || REMOVE_FAILS=$((REMOVE_FAILS + 1)); }
 		CODE=$(api_code GET "/api/servers/$SECOND_ID")
 		[ "$CODE" = "404" ] && { GONE=1; break; }
 		[ "$(api GET "/api/servers/$SECOND_ID" 2>/dev/null | pick status 2>/dev/null || echo "")" = "failed" ] && break
@@ -3038,11 +3261,18 @@ elif [ -n "$SECOND_ID" ]; then
 	kubectl get node "$SECOND_NODE" >/dev/null 2>&1 \
 		&& no "the cluster still lists $SECOND_NODE after the server was removed" \
 		|| ok "and the cluster no longer lists it"
-	[ -z "$PROBE" ] || {
-		[ "$REMOVE_FAILS" = "0" ] \
-			&& ok "an app with nothing on that server's disk answered while the server was taken away" \
-			|| no "$REMOVE_FAILS requests failed while the second server was taken away"
-	}
+	if [ -n "$PROBING" ]; then
+		sleep 10
+		kill "$PROBING" 2>/dev/null || true
+		wait "$PROBING" 2>/dev/null || true
+		ASKED=$(wc -l <"$PROBE_LOG" | tr -d ' ')
+		MISSED=$(awk '$2 != "200"' "$PROBE_LOG")
+		if [ -z "$MISSED" ]; then
+			ok "an app with nothing on that server's disk answered all $ASKED requests while the server was taken away"
+		else
+			no "$(printf '%s\n' "$MISSED" | wc -l | tr -d ' ') of $ASKED requests failed while the second server was taken away: $(printf '%s' "$MISSED" | tr '\n' ' ')"
+		fi
+	fi
 fi
 
 # --- what it costs ---------------------------------------------------------
