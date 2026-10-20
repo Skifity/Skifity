@@ -2439,16 +2439,21 @@ check_panel_answers() {
 # and succeeds only when it runs. Asked for through the ingress at this
 # server's own address, as check_panel_answers asks for the health check, and
 # else at the panel's Service address, which a server reaches by itself.
+#
+# A shell function has no variables of its own, and this one is called halfway
+# through others: the names it sets are its own so as not to change theirs. It
+# once set "target", and the copy taken before an upgrade went to a file named
+# after the server's address instead of beside the database.
 fetch_panel_cli() {
 	rm -f "$1"
-	port=80
-	[ "$PANEL_SCHEME" = "https" ] && port=443
-	target=$(address_for_resolve "${NODE_IP:-127.0.0.1}")
-	if ! curl -fsSk --retry 3 --retry-delay 2 --max-time 120 --resolve "${PANEL_HOST}:${port}:${target}" \
+	fetch_port=80
+	[ "$PANEL_SCHEME" = "https" ] && fetch_port=443
+	fetch_address=$(address_for_resolve "${NODE_IP:-127.0.0.1}")
+	if ! curl -fsSk --retry 3 --retry-delay 2 --max-time 120 --resolve "${PANEL_HOST}:${fetch_port}:${fetch_address}" \
 		"${PUBLIC_URL}/api/cli/download" -o "$1" 2>>"$LOG_FILE"; then
-		service=$(kubectl -n "$NAMESPACE" get svc skifity-panel -o jsonpath='{.spec.clusterIP}' 2>>"$LOG_FILE" || true)
-		[ -n "$service" ] &&
-			curl -fsS --retry 3 --retry-delay 2 --max-time 120 "http://$(address_for_resolve "$service")/api/cli/download" \
+		fetch_service=$(kubectl -n "$NAMESPACE" get svc skifity-panel -o jsonpath='{.spec.clusterIP}' 2>>"$LOG_FILE" || true)
+		[ -n "$fetch_service" ] &&
+			curl -fsS --retry 3 --retry-delay 2 --max-time 120 "http://$(address_for_resolve "$fetch_service")/api/cli/download" \
 				-o "$1" 2>>"$LOG_FILE" ||
 			return 1
 	fi

@@ -1136,7 +1136,8 @@ https://get.k3s.io) emit <"$STUB_DIR/fake-k3s-install.sh" ;;
 https://api.ipify.org) printf "%s" "${STUB_OUTSIDE_IP:-203.0.113.10}" | emit ;;
 */api/health) [ "${STUB_PANEL_DOWN:-0}" = 1 ] && exit 7; printf "{\"status\":\"ok\"}" | emit ;;
 */api/setup/status) printf "{\"needs_setup\":%s,\"product\":\"Skifity\"}" "${STUB_NEEDS_SETUP:-true}" | emit ;;
-*/api/cli/download) printf "#!/bin/sh\necho skifity\n" | emit ;;
+*/api/cli/download)
+  if [ -n "${STUB_SERVED_CLI:-}" ]; then emit <"$STUB_SERVED_CLI"; else printf "#!/bin/sh\necho skifity\n" | emit; fi ;;
 */releases/latest) printf "https://github.com/Skifity/Skifity/releases/tag/%s" "${STUB_LATEST:-v9.9.9}" ;;
 *) printf "UNHANDLED curl %s\n" "$url" >>"$STUB_LOG"; exit 22 ;;
 esac
@@ -1432,6 +1433,28 @@ if [ "$status" = 1 ] && [ ! -e "$UP/stub/applied-panel.yaml" ] && ! ls "$UP"/var
 else
   t_fail "a failing copy should stop the upgrade and leave nothing behind ($status)"
 fi
+
+# Every release up to 0.1.1 left its server without the CLI, so an upgrade
+# from one copies the database with the CLI the running panel hands out. The
+# copy goes where every other one goes: beside the database, named for the
+# release. Fetching that CLI once set a variable of the same name as the
+# copy's path, and the copy was written to a file named after the server's
+# address, wherever the installer happened to run.
+upgrade_root "$UP"
+cli_stub "$UP"
+mv "$UP/usr/local/bin/skifity" "$UP/stub/served-cli"
+out=$(upgrade_env; export STUB_SERVED_CLI="$UP/stub/served-cli"; run_install "$UP" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+snapshot=$(find "$UP/var/lib/skifity" -name 'panel.db.before-upgrade-*-to-0.0.0-test' | head -1)
+case "$status:$out" in
+0:*"admin restore-db --yes $snapshot"*)
+  if [ -s "$snapshot" ] && grep -q "^curl .*/api/cli/download$" "$UP/stub/calls.log"; then
+    t_pass "with no CLI on the server, the running panel's copies the database, to where going back looks for it"
+  else
+    t_fail "the copy was not taken with the panel's CLI, or not beside the database: $(ls "$UP/var/lib/skifity")"
+  fi ;;
+*) t_fail "an upgrade with no CLI on the server should copy the database with the panel's, got $status, copy at '${snapshot}':
+$out" ;;
+esac
 
 # --no-snapshot is the way through, and says what it costs.
 upgrade_root "$UP"
