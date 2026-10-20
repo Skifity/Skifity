@@ -17,6 +17,18 @@ var lookupHost = func(ctx context.Context, host string) ([]string, error) {
 	return net.DefaultResolver.LookupHost(ctx, host)
 }
 
+// resolveOrNothing is what a bucket's host resolves to here, or nothing. A
+// name that does not resolve is not this step's failure to report: the job
+// resolves the same name a moment later, and says so in its own log, where
+// whoever reads the failed backup is looking.
+func resolveOrNothing(ctx context.Context, host string) []string {
+	addresses, err := lookupHost(ctx, host)
+	if err != nil {
+		return nil
+	}
+	return addresses
+}
+
 // Address is the host a backup job reaches the bucket at, and the port: the
 // endpoint's own, or the scheme's when it names none.
 func (s *Storage) Address() (string, int, error) {
@@ -43,16 +55,13 @@ func (s *Storage) Address() (string, int, error) {
 // from: on a server of this cluster, at home, on the office network, over a
 // VPN. Done before every job rather than kept in step on a timer, so the bucket
 // a job is handed is one it can reach, however recently the setting changed.
-//
-// A name that does not resolve here is left to the job, which resolves the
-// same name a moment later and says so in its own log.
 func openPathToStorage(ctx context.Context, client *kube.Client, namespace string, storage *Storage) error {
 	host, port, err := storage.Address()
 	if err != nil {
 		return err
 	}
-	resolved, err := lookupHost(ctx, host)
-	if err != nil {
+	resolved := resolveOrNothing(ctx, host)
+	if len(resolved) == 0 {
 		return nil
 	}
 	nodes, err := client.NodeAddresses(ctx)
