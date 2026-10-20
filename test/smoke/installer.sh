@@ -1156,6 +1156,15 @@ STUB
 cat >"$WORKDIR/fake-k3s-install.sh" <<'FAKE'
 #!/bin/sh
 set -eu
+# A download from github.com that fails the first STUB_K3S_DOWNLOAD_FAILS times.
+if [ -n "${STUB_K3S_DOWNLOAD_FAILS:-}" ]; then
+  attempts=$(( $(cat "$STUB_DIR/k3s-attempts" 2>/dev/null || echo 0) + 1 ))
+  echo "$attempts" >"$STUB_DIR/k3s-attempts"
+  if [ "$attempts" -le "$STUB_K3S_DOWNLOAD_FAILS" ]; then
+    echo "[ERROR]  Download failed"
+    exit 1
+  fi
+fi
 printf '%s\n' "$INSTALL_K3S_EXEC" >"$STUB_DIR/k3s-exec"
 printf '%s\n' "$INSTALL_K3S_CHANNEL" >"$STUB_DIR/k3s-channel"
 mkdir -p "$STUB_ROOT/etc/systemd/system" "$STUB_ROOT/var/lib/rancher/k3s/server" "$STUB_ROOT/etc/rancher/k3s"
@@ -1213,11 +1222,30 @@ run_install() {
       TTY_DEV="$R/dev/tty"
       RUN_UID="$REAL_UID"
       RUN_GID="$REAL_GID"
+      K3S_RETRY_WAIT=0
       main "$@"
     ' run-install "$ROOT" "$fake" "$@"
 }
 
 IMAGE_UNDER_TEST="registry.example.test/skifity:0.0.0-test"
+
+# A k3s download from github.com that fails once is tried again; one that
+# keeps failing gives up after three attempts. A cluster run lost a whole run
+# to one failed download.
+FAKE="$WORKDIR/root-k3s-retry"
+fake_root "$FAKE"
+out=$(export STUB_K3S_DOWNLOAD_FAILS=1; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$(cat "$FAKE/stub/k3s-attempts" 2>/dev/null):$out" in
+0:2:*"trying again (attempt 2 of 3)"*) t_pass "a k3s download that fails once is tried again, and the install goes on" ;;
+*) t_fail "a failed k3s download should be tried again ($status, $(cat "$FAKE/stub/k3s-attempts" 2>/dev/null) attempts):
+$out" ;;
+esac
+fake_root "$FAKE"
+out=$(export STUB_K3S_DOWNLOAD_FAILS=9; run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+case "$status:$(cat "$FAKE/stub/k3s-attempts" 2>/dev/null):$out" in
+1:3:*"k3s did not install"*) t_pass "and one that keeps failing stops after three attempts, saying why" ;;
+*) t_fail "a k3s download that keeps failing should stop after three attempts ($status, $(cat "$FAKE/stub/k3s-attempts" 2>/dev/null) attempts)" ;;
+esac
 
 # A fresh server behind NAT, no domain: the common case.
 FAKE="$WORKDIR/root-http"

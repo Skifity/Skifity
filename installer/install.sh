@@ -148,6 +148,8 @@ RUN_GID=65532
 MIN_MEMORY_MB=900
 MIN_DISK_GB=8
 COMFORTABLE_MEMORY_MB=1800
+# Seconds between attempts at a k3s download that failed.
+K3S_RETRY_WAIT=5
 
 # State the steps below hand to each other. Set here so that every one of them
 # exists under `set -u`, whichever steps ran.
@@ -1658,16 +1660,30 @@ install_k3s() {
 	# --cluster-init starts embedded etcd even on one node, so a second and third
 	# control plane server can join later without rebuilding the cluster.
 	# stdin is closed: under `curl | sh` it is the rest of this script.
-	with_progress "Installing Kubernetes (k3s)" k3s_install_detail \
+	#
+	# A download from github.com that fails once, which a cluster run saw, is
+	# tried twice more before the install gives up: k3s's installer starts
+	# from the beginning each time and is safe to run again.
+	k3s_attempt=1
+	until with_progress "Installing Kubernetes (k3s)" k3s_install_detail \
 		env INSTALL_K3S_CHANNEL="$K3S_CHANNEL" \
 		INSTALL_K3S_EXEC="server --cluster-init --flannel-backend=${POD_NETWORK} --write-kubeconfig-mode=0600 --secrets-encryption" \
-		sh "$TMP_DIR/k3s-install.sh" || fail \
-		"k3s did not install." \
-		"The usual causes are no outbound network access to get.k3s.io and github.com, or a kernel without the modules k3s needs. All of what it printed is in ${LOG_FILE}.
+		sh "$TMP_DIR/k3s-install.sh"; do
+		case "$LAST_OUTPUT" in
+		*"Download failed"*) [ "$k3s_attempt" -lt 3 ] || k3s_attempt=0 ;;
+		*) k3s_attempt=0 ;;
+		esac
+		[ "$k3s_attempt" -gt 0 ] || fail \
+			"k3s did not install." \
+			"The usual causes are no outbound network access to get.k3s.io and github.com, or a kernel without the modules k3s needs. All of what it printed is in ${LOG_FILE}.
 
 To see the error on its own, run k3s's installer by hand:
 
   curl -sfL https://get.k3s.io | sh -"
+		k3s_attempt=$((k3s_attempt + 1))
+		note "Downloading k3s failed; trying again (attempt ${k3s_attempt} of 3)."
+		sleep "$K3S_RETRY_WAIT"
+	done
 
 	ok "k3s installed$(took)"
 }
