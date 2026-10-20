@@ -22,6 +22,14 @@
 # runs the panel's image, the fence in front of each app's code among them,
 # would wait for a pull that can never happen.
 #
+# SECOND_SERVER_LINK makes the network between the two servers one that
+# delays and drops packets, as one between two places does, rather than a
+# bridge inside one machine: it is what netem does to every packet between the
+# guest and this machine's own addresses, both ways, such as
+# "delay 40ms loss 0.3%". It starts once the guest has its images, and leaves
+# the guest's own way to the internet alone, which does not cross the link
+# between two servers either.
+#
 #   THIS CHANGES THE MACHINE IT RUNS ON: a bridge, a NAT rule and a route.
 set -euo pipefail
 
@@ -37,6 +45,7 @@ GUEST_MAC="52:54:00:5c:1f:10"
 : "${SECOND_SERVER_DISK:=30G}"
 : "${SECOND_SERVER_IMAGE:=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 : "${SECOND_SERVER_IMAGES:=}"
+: "${SECOND_SERVER_LINK:=}"
 
 say() { printf '%s\n' "$*" >&2; }
 die() {
@@ -49,6 +58,7 @@ die() {
 for tool in qemu-system-x86_64 qemu-img cloud-localds ssh ssh-keygen curl ip iptables; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is not installed"
 done
+[ -z "$SECOND_SERVER_LINK" ] || command -v tc >/dev/null 2>&1 || die "tc is not installed, and SECOND_SERVER_LINK needs it"
 
 mkdir -p "$DIR"
 KEY="$DIR/id_ed25519"
@@ -120,6 +130,35 @@ iptables -C FORWARD -o "$BRIDGE" -j ACCEPT 2>/dev/null || iptables -I FORWARD -o
 # the bridge's and, rightly, refuse it.
 ip route replace "$NETWORK" dev "$BRIDGE" src "$PRIMARY"
 
+# impair_link puts SECOND_SERVER_LINK on the packets between the guest and this
+# machine. Towards the guest, they leave on the tap; from it, they arrive on the
+# tap, and an ifb device is where they can be held up on the way in. A fourth
+# band of a prio qdisc takes only what the filters send it, so whatever else
+# crosses the tap, the guest's downloads among it, goes as it did.
+impair_link() {
+	local ifb="skifity-ifb0" address
+	for module in sch_prio sch_netem cls_u32 act_mirred ifb; do
+		modprobe "$module" 2>/dev/null || true
+	done
+	ip link show "$ifb" >/dev/null 2>&1 || ip link add "$ifb" type ifb || die "an ifb device could not be made"
+	ip link set "$ifb" up
+	# shellcheck disable=SC2086 # SECOND_SERVER_LINK is netem's own words.
+	{
+		tc qdisc replace dev "$TAP" root handle 1: prio bands 4 &&
+			tc qdisc replace dev "$TAP" parent 1:4 handle 40: netem $SECOND_SERVER_LINK &&
+			tc qdisc replace dev "$TAP" handle ffff: ingress &&
+			tc filter add dev "$TAP" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev "$ifb" &&
+			tc qdisc replace dev "$ifb" root handle 1: prio bands 4 &&
+			tc qdisc replace dev "$ifb" parent 1:4 handle 40: netem $SECOND_SERVER_LINK
+	} || die "netem could not be put on the link to the guest"
+	for address in "$PRIMARY" "$HOST_ADDRESS"; do
+		tc filter add dev "$TAP" parent 1: protocol ip prio 1 u32 match ip src "$address/32" flowid 1:4 &&
+			tc filter add dev "$ifb" parent 1: protocol ip prio 1 u32 match ip dst "$address/32" flowid 1:4 ||
+			die "the link's filters could not be added"
+	done
+	say "The link between this machine and the guest: $SECOND_SERVER_LINK, each way"
+}
+
 # --- boot -----------------------------------------------------------------------
 
 say "Starting the guest: $SECOND_SERVER_CPUS CPUs, $SECOND_SERVER_MEMORY_MB MB"
@@ -144,6 +183,7 @@ for _ in $(seq 1 60); do
 				<"$SECOND_SERVER_IMAGES" || die "the images could not be copied to the guest"
 			say "Images from $SECOND_SERVER_IMAGES are where k3s will import them on the guest"
 		fi
+		[ -z "$SECOND_SERVER_LINK" ] || impair_link
 		printf '%s\n' "$GUEST_ADDRESS"
 		exit 0
 	fi

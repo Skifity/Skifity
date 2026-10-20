@@ -41,6 +41,11 @@ jobs:
   # would, and then removes it the way somebody removes a server that is gone.
   # It runs only what that needs: an app built and deployed (phase 1) and the
   # phase that is about what survives (phase 4).
+  #
+  # The third puts the two servers apart: every packet between them is held
+  # up and some are dropped, as on a network between two places, and the
+  # server is added, an app is built on one and pulled and run on the other,
+  # drained and taken out across it.
   servers:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
@@ -52,11 +57,18 @@ jobs:
           - name: Two servers
             phases: "1 2 3 4 5"
             fails: ""
+            link: ""
             report: servers-report
           - name: A server that fails
             phases: "1 4"
             fails: /mnt/second/qemu.pid
+            link: ""
             report: server-fails-report
+          - name: Two servers apart
+            phases: "1 4"
+            fails: ""
+            link: "delay 40ms loss 0.3%"
+            report: servers-apart-report
     steps:
       - uses: actions/checkout@v7
 
@@ -74,12 +86,16 @@ jobs:
           docker save skifity:local | sudo tee /var/lib/rancher/k3s/agent/images/skifity.tar >/dev/null
 
       - name: Start the second server, a virtual machine on this one
+        env:
+          LINK: ${{ matrix.link }}
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 qemu-utils cloud-image-utils >/dev/null
           sudo mkdir -p /mnt/second
           sudo cp /var/lib/rancher/k3s/agent/images/skifity.tar /mnt/second/skifity.tar
-          sudo SECOND_SERVER_IMAGES=/mnt/second/skifity.tar bash test/cluster/second-server.sh /mnt/second
+          sudo SECOND_SERVER_IMAGES=/mnt/second/skifity.tar SECOND_SERVER_LINK="$LINK" \
+            bash test/cluster/second-server.sh /mnt/second
+          ping -c 5 -q 192.168.100.10 || true
 
       - name: Make the runner a fresh server
         run: |
@@ -113,6 +129,8 @@ jobs:
         run: |
           sudo bash test/cluster/collect.sh "$RUNNER_TEMP/$REPORT"
           sudo cp /mnt/second/serial.log "$RUNNER_TEMP/$REPORT/second-server-console.log" || true
+          { sudo tc -s qdisc show dev skifity-tap0; sudo tc -s qdisc show dev skifity-ifb0; } \
+            2>&1 | sudo tee "$RUNNER_TEMP/$REPORT/link.txt" >/dev/null || true
           sudo ssh -i /mnt/second/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=5 root@192.168.100.10 'journalctl -u k3s-agent --no-pager | tail -n 400' \
             | sudo tee "$RUNNER_TEMP/$REPORT/second-server-k3s-agent.log" >/dev/null || true

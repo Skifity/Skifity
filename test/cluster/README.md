@@ -101,6 +101,15 @@ not responding, that the panel can remove a server that is gone, and that the
 app is back to two instances on the server that is left. Its report is
 `server-fails-report`.
 
+A third job, **Two servers apart**, runs phases 1 and 4 with the two servers
+apart: `second-server.sh`, given `SECOND_SERVER_LINK`, has netem hold up every
+packet between the guest and the runner's own addresses by 40 ms each way and
+drop 0.3 % of them, once the guest is up, and leaves the guest's own way to the
+internet alone. The panel adds the server across that link, an app built on one
+server is pulled and run on the other, a server is drained, and the panel takes
+it out, with the app answering throughout. Its report is
+`servers-apart-report`, with what netem counted in `link.txt`.
+
 The same collector works on a server of your own:
 
 ```sh
@@ -171,8 +180,9 @@ none of that can show, and so has not been seen:
   outside the machine.
 * **A bucket that is not a stand-in**, and restoring into a *different*
   cluster, which is the drill worth running once by hand.
-* **Two servers apart**: a network between them that drops or delays packets.
-  Both servers here are on one runner.
+* **Two servers far apart for real**: the third job's link delays and drops
+  packets as a long one does, but both servers are still on one runner, and a
+  link that goes down for minutes and comes back has not been tried.
 * **A person**, which is phase 6.
 
 ## What to send back
