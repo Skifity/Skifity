@@ -804,6 +804,57 @@ else
 		|| no "no credentials came back for the database"
 fi
 
+# The other eight engines are a StatefulSet each, from the engine's own image,
+# under the environment's restricted Pod Security profile and its quota, and
+# none of that had ever run. Asked for at once and waited for together: each
+# has to come up on its own, as PostgreSQL does, which is its own client
+# answering the readiness check.
+step "The other database engines (checklist 6)"
+
+OTHER_DBS=""
+for engine in mysql mariadb mongodb redis valkey dragonfly clickhouse memcached; do
+	id=$(api POST "/api/environments/$ENV_ID/databases" "{\"name\":\"verify-$engine\",\"engine\":\"$engine\",\"storage_gb\":1}" | pick id 2>/dev/null || echo "")
+	if [ -n "$id" ]; then
+		OTHER_DBS="$OTHER_DBS $engine=$id"
+	else
+		no "a $engine database could not be asked for"
+	fi
+done
+PENDING_DBS="$OTHER_DBS"
+for _ in $(seq 1 60); do
+	[ -n "$PENDING_DBS" ] || break
+	STILL=""
+	for pair in $PENDING_DBS; do
+		engine=${pair%%=*}
+		id=${pair#*=}
+		state=$(api GET "/api/databases/$id" | pick database.status 2>/dev/null || echo "")
+		case "$state" in
+		ready | running) ok "a $engine database came up on its own" ;;
+		failed)
+			no "the $engine database failed: $(api GET "/api/databases/$id" | pick database.status_detail 2>/dev/null || echo "no reason given")"
+			kubectl -n "$NAMESPACE" describe statefulset "verify-$engine" >>"$REPORT" 2>&1 || true
+			;;
+		*) STILL="$STILL $pair" ;;
+		esac
+	done
+	PENDING_DBS="$STILL"
+	[ -z "$PENDING_DBS" ] || sleep 10
+done
+for pair in $PENDING_DBS; do
+	engine=${pair%%=*}
+	no "the $engine database is not ready after ten minutes; what the cluster says is below"
+	{
+		kubectl -n "$NAMESPACE" describe statefulset "verify-$engine" 2>&1 | tail -20
+		kubectl -n "$NAMESPACE" describe pod "verify-$engine-0" 2>&1 | tail -30
+		kubectl -n "$NAMESPACE" logs "verify-$engine-0" --all-containers --tail=30 2>&1
+	} >>"$REPORT"
+done
+# Removed again, so what the rest of the run measures and drains is what it
+# did before.
+for pair in $OTHER_DBS; do
+	api DELETE "/api/databases/${pair#*=}" >/dev/null 2>&1 || true
+done
+
 step "A backup that restores (checklist 7)"
 
 if [ -z "$VERIFY_S3_BUCKET" ] || [ -z "$VERIFY_S3_ENDPOINT" ]; then
