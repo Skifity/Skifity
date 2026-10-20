@@ -169,7 +169,9 @@ hammer_start() {
 	HAMMER_PID=$!
 }
 
-# hammer_stop LABEL stops asking, and passes when every answer was a 200.
+# hammer_stop LABEL [WHY] stops asking, and passes when every answer was a
+# 200. WHY, when given, is the one reason a moment of refused connections is
+# expected: it allows the answers of one second, two at most, and says why.
 hammer_stop() {
 	: >"$HAMMER_STOP"
 	wait "$HAMMER_PID" 2>/dev/null || true
@@ -179,6 +181,9 @@ hammer_stop() {
 	missed=$(awk '$2 != "200"' "$HAMMER_LOG" | wc -l | tr -d ' ')
 	if [ "$missed" -eq 0 ] && [ "$total" -gt 0 ]; then
 		ok "the app answered all $total requests $1"
+	elif [ -n "${2:-}" ] && [ "$missed" -le 2 ] && [ "$total" -gt 0 ]; then
+		ok "the app answered $((total - missed)) of $total requests $1; the $missed it did not, $2"
+		awk '$2 != "200"' "$HAMMER_LOG" | sed 's/^/      /' | tee -a "$REPORT"
 	else
 		no "$missed of $total requests $1 did not answer 200; when, and with what:"
 		awk '$2 != "200"' "$HAMMER_LOG" | head -40 | sed 's/^/      /' | tee -a "$REPORT"
@@ -223,6 +228,17 @@ FROM_INSTALLER=$(mktemp)
 curl -fsSL --max-time 60 "https://github.com/$REPO/releases/download/$UPGRADE_FROM/install.sh" -o "$FROM_INSTALLER" \
 	|| die "the installer published with $UPGRADE_FROM could not be downloaded"
 ok "the installer published with $UPGRADE_FROM was downloaded"
+
+# A Traefik configured by a release before 0.1.1 closes its ports the moment
+# it is told to stop, while the cluster sends it visitors for the second it
+# takes to notice (installer/install.sh, configure_ingress). An upgrade from
+# such a release replaces that Traefik once, and nothing on this side of the
+# upgrade can make the old one wait: that second is allowed, and said, for an
+# upgrade from a release whose installer did not configure the wait, and for
+# no other.
+TRAEFIK_HANDOVER=""
+grep -q requestAcceptGraceTimeout "$FROM_INSTALLER" ||
+	TRAEFIK_HANDOVER="in one moment, as the Traefik $UPGRADE_FROM configured, which closes its ports at once when it is replaced, handed over"
 
 START=$(date +%s)
 # The image and the manifests this script upgrades to are in the environment
@@ -351,7 +367,7 @@ cat "$UPGRADE_OUT" >>"$REPORT"
 # controller rolls Traefik when its configuration changed, and the new panel
 # looks at every app once it starts.
 sleep 120
-hammer_stop "while the installer ran, and for two minutes after"
+hammer_stop "while the installer ran, and for two minutes after" "$TRAEFIK_HANDOVER"
 
 ##############################################################################
 # 4 — the new version, on the same database
