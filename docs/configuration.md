@@ -90,7 +90,9 @@ administrator says so.
 
 Under **Settings → Git**, **Git hosts on your own network** is that list: a
 host per line, with the port when the repository's address has one —
-`git.home.arpa`, or `192.168.1.10:3443`. A build of a repository on a listed
+`git.home.arpa`, or `192.168.1.10:3443`. A host without a port is that host on
+443, which is where an `https://` address without one is, and on no other port:
+a repository's address is the team's to type. A build of a repository on a listed
 host may reach that host on the repository's port, and nothing else there, for
 as long as the build runs; every team's builds of repositories on it may. A
 build of a repository on a host that is not listed is refused before it starts,

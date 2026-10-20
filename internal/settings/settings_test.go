@@ -246,7 +246,10 @@ func TestGitHostsOnTheOperatorsNetwork(t *testing.T) {
 		want bool
 	}{
 		{"git.home.arpa", 443, true},
-		{"git.home.arpa", 3443, true},
+		// Without a port it is HTTPS's, not any: https://git.home.arpa:22/
+		// is not a way into the host's SSH.
+		{"git.home.arpa", 3443, false},
+		{"git.home.arpa", 22, false},
 		{"GIT.HOME.ARPA", 443, true},
 		{"other.lan", 443, true},
 		{"192.168.1.10", 3443, true},

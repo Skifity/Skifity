@@ -865,7 +865,7 @@ func validateEmail(value string) error {
 }
 
 // GitHost is one entry of KeyGitPrivateHosts: a host, and the port its
-// repositories are on, or 0 for any.
+// repositories are on, or 0 for HTTPS's own.
 type GitHost struct {
 	Host string
 	Port int
@@ -886,9 +886,17 @@ func GitHosts(value string) []GitHost {
 
 // GitHostListed reports whether a repository on host, on port, is one a build
 // may reach.
+//
+// A host listed without a port is that host on 443, not on every port: a
+// repository's address is the team's to type, and https://host:22/ would
+// otherwise have been a build let into the host's SSH.
 func GitHostListed(value, host string, port int) bool {
 	for _, entry := range GitHosts(value) {
-		if strings.EqualFold(entry.Host, host) && (entry.Port == 0 || entry.Port == port) {
+		listed := entry.Port
+		if listed == 0 {
+			listed = 443
+		}
+		if strings.EqualFold(entry.Host, host) && listed == port {
 			return true
 		}
 	}
