@@ -1390,6 +1390,11 @@ clock enqueueing them, a consumer reading a stream. Each of those is a
   schema, because it is deployed with the app, and rolled back with it. A new
   version reaches the processes once the app itself is serving it; a deploy whose
   web part fails leaves them on the version the web stays on.
+* Its command is a line a shell runs, `/bin/sh -c`, as a Procfile's is, so the
+  image needs a shell. An image built on `scratch` or a distroless base has
+  none: a process, a one-off command or a scheduled command in it does not
+  start, and says `/bin/sh: no such file or directory`. Images Railpack builds
+  have one.
 * It has no port, no address and no health check. Nothing sends it traffic; it
   is running when its container is.
 * It has its own number of instances. `0` stops it and keeps its command, for a

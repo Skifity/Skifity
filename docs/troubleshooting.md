@@ -204,6 +204,22 @@ the app's settings: the path, and **Time to start**, which is two minutes unless
 you raise it. A JVM or an image that migrates its database before it listens
 often needs five to ten. See [Health checks](concepts.md#health-checks).
 
+**"Builds cannot reach this repository's host".** The repository is on a Git
+host at a private address, or on one of the servers at a port other than 80 and
+443, and builds are kept off those. An administrator adds the host under
+**Settings → Git**, in **Git hosts on your own network**; see
+[Git hosts on your own network](configuration.md#git-hosts-on-your-own-network).
+
+**The clone says the certificate is not trusted** (`SSL certificate problem:
+unable to get local issuer certificate`). The Git host's certificate is signed
+by an authority of your own. Add its certificate, in PEM, under
+**Settings → Git**, in **Certificate authorities for Git hosts**.
+
+**A worker, a one-off command or a scheduled command says
+`/bin/sh: no such file or directory`.** Each runs its command through a shell,
+and the image has none: one built on `scratch` or a distroless base. See
+[Processes](concepts.md#processes).
+
 ## Bitbucket refuses the token or a webhook
 
 **Connecting answers that Bitbucket did not accept the token (401).** The token
@@ -547,11 +563,17 @@ free -m; uptime
 ## A server says "not responding"
 
 The node stopped reporting. The server may be off, out of disk, or unreachable.
-Instances that were on it are rescheduled elsewhere automatically if there is
-capacity.
+The cluster notices within a minute, and from then on an app with an instance
+on another server is answered by that one alone. The instances that were on
+the server are started on the others about five minutes after it stopped, if
+there is room; until then an app whose only instance was there is down.
 
-If the server is gone for good, remove it in the panel: its work is already
-elsewhere.
+If the server is gone for good, remove it in the panel. A server that is not
+answering cannot be emptied first, so it is not waited on: its instances start
+on the other servers as soon as it is removed. An app or database that kept
+its data on that server's own disk cannot start anywhere else, and the removal
+says which: restore those from a backup. Cross-node storage (Longhorn, under
+Settings) is what lets a volume outlive the server it was on.
 
 ## Restoring after losing the panel's server
 
