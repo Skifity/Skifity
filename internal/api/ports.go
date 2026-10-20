@@ -227,6 +227,9 @@ type Cluster interface {
 	// namespace/claim: what is lost with it, and what keeps an app from
 	// starting elsewhere while it is gone.
 	VolumesOnNode(ctx context.Context, nodeName string) ([]string, error)
+	// DeleteVolumeClaim deletes an app's volume claim, and with it the disk.
+	// One that is not there is already deleted.
+	DeleteVolumeClaim(ctx context.Context, namespace, name string) error
 	// SetNodeGPULabel marks a server as having an NVIDIA card, or unmarks
 	// it, which decides whether the device plugin runs there.
 	SetNodeGPULabel(ctx context.Context, node string, nvidia bool) error

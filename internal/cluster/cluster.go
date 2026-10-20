@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
@@ -673,6 +674,17 @@ func (c *Cluster) ControlPlaneCount(ctx context.Context) (int, error) {
 // kube.Client.VolumesPinnedToNode), as namespace/claim.
 func (c *Cluster) VolumesOnNode(ctx context.Context, nodeName string) ([]string, error) {
 	return c.client.VolumesPinnedToNode(ctx, nodeName)
+}
+
+// DeleteVolumeClaim deletes a volume claim, which with the storage k3s ships
+// deletes the disk and what is on it. A claim a pod still mounts is held by
+// Kubernetes until the pod has gone.
+func (c *Cluster) DeleteVolumeClaim(ctx context.Context, namespace, name string) error {
+	err := c.client.Clientset().CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !kube.IsNotFound(err) {
+		return fmt.Errorf("delete the volume %s/%s: %w", namespace, name, err)
+	}
+	return nil
 }
 
 // QuotaUsage reports how much of an environment's ceiling is in use.

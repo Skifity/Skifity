@@ -2002,18 +2002,45 @@ func (s *Server) authorizeVolume(r *http.Request, required store.Role) (store.Vo
 	return volume, app, nil
 }
 
+// handleDeleteVolume deletes a volume, and the disk behind it.
+//
+// The dialog says the disk and everything on it is deleted, and that is what
+// was asked for. Only the panel's row used to go: the app kept mounting the
+// disk until its next deploy, and the disk itself stayed for good, taking room
+// and tying the app to the server it was on — a server the panel then refused
+// to take out for a volume nobody could see any more. The app is applied
+// without it now, and then its claim is deleted, which with the storage k3s
+// ships deletes the disk. Kubernetes holds a claim a pod still mounts until
+// that pod has gone, so the instances still using it finish first.
 func (s *Server) handleDeleteVolume(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleAdmin)
+	volume, app, err := s.authorizeVolume(r, store.RoleAdmin)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if err := s.db.DeleteVolume(r.Context(), app.ID, chi.URLParam(r, "volumeID")); err != nil {
+	if err := s.db.DeleteVolume(r.Context(), app.ID, volume.ID); err != nil {
 		writeError(w, r, err)
 		return
 	}
+	detached := true
+	if s.deployer != nil {
+		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
+			// Its claim stays rather than be deleted under an app that still
+			// names it: an instance started from the old template would
+			// wait for a claim that is going.
+			detached = false
+			s.log.Warn("could not take a deleted volume off its app; its disk is kept", "app", app.ID, "volume", volume.Name, "error", err)
+		}
+	}
+	if detached && s.cluster != nil {
+		if env, err := s.db.GetEnvironment(r.Context(), app.EnvironmentID); err == nil && env.Namespace != "" {
+			if err := s.cluster.DeleteVolumeClaim(r.Context(), env.Namespace, kube.ResourceName(app.Slug, volume.Name)); err != nil {
+				s.log.Warn("could not delete a deleted volume's disk", "app", app.ID, "volume", volume.Name, "error", err)
+			}
+		}
+	}
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
-	s.audit(r, teamID, "volume.deleted", "app", app.ID, chi.URLParam(r, "volumeID"))
+	s.audit(r, teamID, "volume.deleted", "app", app.ID, volume.Name)
 	writeOK(w)
 }
 
