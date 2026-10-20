@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"skifity/internal/api"
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
@@ -666,14 +668,67 @@ func (d *Deployer) removeUnwanted(ctx context.Context, spec kube.AppSpec, app st
 	if !kube.ScaleToZeroEnabled(spec) {
 		// Left behind, these would keep routing traffic through an interceptor
 		// for an app that no longer sleeps.
-		if err := applier.Delete(ctx, "http.keda.sh/v1alpha1", "HTTPScaledObject",
-			spec.Namespace, spec.Name); err != nil {
-			d.log.Warn("could not remove the scale-to-zero object", "app", app.ID, "error", err)
+		if d.letGoOfScaleToZero(ctx, spec, app) {
+			d.giveBackSize(ctx, spec, app)
 		}
 		if err := applier.Delete(ctx, "v1", "Service",
 			spec.Namespace, kube.InterceptorServiceName(spec.Name)); err != nil {
 			d.log.Warn("could not remove the wake service", "app", app.ID, "error", err)
 		}
+	}
+}
+
+// letGoWait is how long the scale-to-zero add-on's objects are waited on to
+// go, each.
+const letGoWait = time.Minute
+
+// letGoOfScaleToZero deletes the scale-to-zero add-on's objects for an app
+// that no longer sleeps, and waits until they have gone, so that nothing is
+// still scaling the app once it is given its size. It reports whether the app
+// had any, which is whether it was the add-on's to scale until now.
+func (d *Deployer) letGoOfScaleToZero(ctx context.Context, spec kube.AppSpec, app store.App) bool {
+	applier := d.cluster.Client().Applier()
+	if _, err := applier.Get(ctx, "http.keda.sh/v1alpha1", "HTTPScaledObject", spec.Namespace, spec.Name); err != nil {
+		return false
+	}
+	// The add-on's own object and the KEDA one it made from it, which is
+	// what does the scaling.
+	if err := applier.DeleteAndWait(ctx, "http.keda.sh/v1alpha1", "HTTPScaledObject",
+		spec.Namespace, spec.Name, letGoWait); err != nil {
+		d.log.Warn("could not remove the scale-to-zero object", "app", app.ID, "error", err)
+	}
+	if err := applier.DeleteAndWait(ctx, "keda.sh/v1alpha1", "ScaledObject",
+		spec.Namespace, spec.Name, letGoWait); err != nil {
+		d.log.Warn("could not remove the scaler behind scale to zero", "app", app.ID, "error", err)
+	}
+	return true
+}
+
+// giveBackSize scales an app the scale-to-zero add-on has let go of to the
+// size the panel gives it, when the add-on left it at another.
+//
+// The apply that gives the app its size back comes first, and the add-on goes
+// on scaling the app until its objects are gone: an app with no visitors in
+// that moment was scaled to none again, and once the add-on had let go nothing
+// ever scaled it up. The two-server crosscheck switched scale to zero off and
+// found its app at no instances for the rest of the run. An autoscaler is no
+// help: it leaves a Deployment of none alone, which to it means switched off.
+func (d *Deployer) giveBackSize(ctx context.Context, spec kube.AppSpec, app store.App) {
+	client := d.cluster.Client()
+	live, err := client.Clientset().AppsV1().Deployments(spec.Namespace).Get(ctx, spec.Name, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+	current := int32(1)
+	if live.Spec.Replicas != nil {
+		current = *live.Spec.Replicas
+	}
+	want := spec.DesiredReplicas()
+	if (spec.Autoscale && current > 0) || current == want {
+		return
+	}
+	if _, err := client.ScaleDeployment(ctx, spec.Namespace, spec.Name, want); err != nil {
+		d.log.Warn("could not give an app that stopped scaling to zero its instances back", "app", app.ID, "error", err)
 	}
 }
 

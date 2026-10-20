@@ -1832,7 +1832,28 @@ else
 			no "a deploy of the sleeping app ended '${STATE:-unknown}' with ${READY:-0} instance(s) ready, and its log $(printf '%s' "$SLEPT_LOG" | grep -q 'is asleep' && echo says || echo does not say) it was woken"
 		fi
 	fi
-	api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":false,"autoscale":false,"replicas":1}' >/dev/null 2>&1 || true
+	# And switched off while asleep, which is when it matters: the app has to
+	# be given its instance back, and answer without anything to wake it. The
+	# add-on, on its way out, used to scale it to none after the panel had
+	# given it its size, and nothing scaled it up again.
+	if ! sleep_app; then
+		no "the app could not be put to sleep before switching scale to zero off"
+	else
+		api PUT "/api/apps/$APP_ID/scaling" '{"scale_to_zero":false,"autoscale":false,"replicas":1}' >/dev/null \
+			|| no "scale to zero could not be switched off"
+		BACK=""
+		for _ in $(seq 1 24); do
+			if [ "$(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.status.readyReplicas}' 2>/dev/null)" = "1" ] &&
+				[ "$(through_ingress "$APP_HOST" 10)" = "200" ]; then
+				BACK=1
+				break
+			fi
+			sleep 5
+		done
+		[ -n "$BACK" ] \
+			&& ok "switching scale to zero off gave the sleeping app its instance back, and it answers" \
+			|| no "two minutes after scale to zero was switched off the app has $(kubectl -n "$NAMESPACE" get deploy hello -o jsonpath='{.spec.replicas}' 2>/dev/null || echo '?') instance(s) and does not answer"
+	fi
 fi
 fi
 
