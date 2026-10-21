@@ -11,6 +11,71 @@ import (
 	"skifity/internal/store"
 )
 
+// The sentences a server's status line carries that never vary. They are
+// written here, once, so the view below can name them: the watcher, the
+// provisioner and adoption write them, and the panel reads them back by key.
+const (
+	ServerDetailAdopted      = "Found in the cluster. Skifity did not install this server and has no way in over SSH."
+	ServerDetailNodeGone     = "The node is no longer part of the cluster."
+	ServerDetailNodeNotReady = "The node reports that it is not ready."
+	ServerDetailCancelled    = "Cancelled"
+)
+
+// serverView is a server as the API shows it: the row, and the key its status
+// line is translated by.
+//
+// The status line is stored as the English sentence, which the API, the CLI
+// and an assistant read. The panel has five languages and looks the sentence
+// up by StatusKey, falling back to the English: "problem:" and an error code
+// for a failure, whose title the error catalogue translates, or one of the
+// fixed sentences above. A line only Kubernetes wrote has no key and is shown
+// as it came, as Kubernetes' events are.
+type serverView struct {
+	store.Server
+	StatusKey  string   `json:"status_key,omitempty"`
+	StatusArgs []string `json:"status_args,omitempty"`
+}
+
+// viewServer names a server's status line. latest is its most recent
+// operation, which a failure's sentence came from; nil when there is none.
+func viewServer(server store.Server, latest *store.Operation) serverView {
+	view := serverView{Server: server}
+	switch server.StatusDetail {
+	case "":
+		return view
+	case ServerDetailAdopted:
+		view.StatusKey = "adopted"
+		return view
+	case ServerDetailNodeGone:
+		view.StatusKey = "nodeGone"
+		return view
+	case ServerDetailNodeNotReady:
+		view.StatusKey = "nodeNotReady"
+		return view
+	case ServerDetailCancelled:
+		view.StatusKey = "cancelled"
+		return view
+	}
+	if server.Status != store.ServerFailed || latest == nil {
+		return view
+	}
+	// A step that failed recorded this same sentence with its key and the
+	// values in it.
+	for _, step := range latest.Steps {
+		if step.Status == store.StepFailed && step.Message == server.StatusDetail &&
+			strings.HasPrefix(step.MessageKey, "problem:") {
+			view.StatusKey, view.StatusArgs = step.MessageKey, step.MessageArgs
+			return view
+		}
+	}
+	// One that failed outside a step recorded its code on the operation, and
+	// its message starts with the title.
+	if latest.ErrorCode != "" && strings.HasPrefix(latest.ErrorMsg, server.StatusDetail) {
+		view.StatusKey = "problem:" + latest.ErrorCode
+	}
+	return view
+}
+
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	if _, err := s.authorizeTeam(r, teamID, store.RoleViewer); err != nil {
@@ -22,7 +87,19 @@ func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeList(w, servers)
+	views := make([]serverView, 0, len(servers))
+	for _, server := range servers {
+		// Only a failed server's line comes from an operation, so only that
+		// one is worth the lookup.
+		var latest *store.Operation
+		if server.Status == store.ServerFailed {
+			if op, err := s.db.LatestOperation(r.Context(), "server", server.ID); err == nil {
+				latest = &op
+			}
+		}
+		views = append(views, viewServer(server, latest))
+	}
+	writeList(w, views)
 }
 
 func (s *Server) handleAddServer(w http.ResponseWriter, r *http.Request) {
@@ -113,16 +190,17 @@ func (s *Server) handleGetServer(w http.ResponseWriter, r *http.Request) {
 	// Include the latest operation so a reopened page can resume its progress
 	// view without a second request.
 	type serverDetail struct {
-		store.Server
+		serverView
 		Operation *store.Operation `json:"operation,omitempty"`
 		// Cloud is set for a server the panel created at a provider, which
 		// is the only kind whose machine the panel offers to delete.
 		Cloud *store.CloudServer `json:"cloud,omitempty"`
 	}
-	detail := serverDetail{Server: server}
+	var detail serverDetail
 	if op, err := s.db.LatestOperation(r.Context(), "server", server.ID); err == nil {
 		detail.Operation = &op
 	}
+	detail.serverView = viewServer(server, detail.Operation)
 	if created, err := s.db.GetCloudServer(r.Context(), server.ID); err == nil {
 		detail.Cloud = &created
 	}
@@ -171,6 +249,13 @@ func (s *Server) handleRemoveServer(w http.ResponseWriter, r *http.Request) {
 	// would fail at the connection with a message about SSH.
 	if server.Adopted {
 		writeError(w, r, errdoc.ServerNotOurs(server.Name, "Removing the server"))
+		return
+	}
+	// The provisioner keeps one run per operation, not per server: a second
+	// removal while a drain is slow, or one in the middle of an add, would run
+	// alongside the first.
+	if err := s.refuseBusyServer(r, server); err != nil {
+		writeError(w, r, err)
 		return
 	}
 	// Removing a control plane node can break etcd quorum, which takes the
@@ -294,6 +379,10 @@ func (s *Server) handlePromoteServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if server.Adopted {
 		writeError(w, r, errdoc.ServerNotOurs(server.Name, "Promoting the server"))
+		return
+	}
+	if err := s.refuseBusyServer(r, server); err != nil {
+		writeError(w, r, err)
 		return
 	}
 	if s.provisioner == nil {
@@ -441,6 +530,19 @@ func (s *Server) handleCancelOperation(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, op.TeamID, "operation.cancelled", op.TargetType, op.TargetID, op.Kind)
 	writeOK(w)
+}
+
+// refuseBusyServer refuses a change while something else is being done to a
+// server: it is being added, removed or promoted.
+func (s *Server) refuseBusyServer(r *http.Request, server store.Server) error {
+	running, err := s.db.OperationRunningFor(r.Context(), "server", server.ID)
+	if err != nil {
+		return err
+	}
+	if running {
+		return errdoc.ServerBusy(server.Name)
+	}
+	return nil
 }
 
 // validUnixName reports whether a string is shaped like a Unix account.

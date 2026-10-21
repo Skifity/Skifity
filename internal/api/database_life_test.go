@@ -238,3 +238,24 @@ func TestAPasswordChangeIsAnAdministratorsAndSaysNothingOfThePassword(t *testing
 		t.Errorf("a cache's password: %d %s", status, body)
 	}
 }
+
+// "Back up now" during a restore or an import would take a copy that holds
+// half of each, and that copy is the one somebody restores next.
+func TestABackupIsNotTakenWhileSomethingElseIsBeingDone(t *testing.T) {
+	h, _, _ := lifeHarness(t)
+	acme := h.newTenant("acme")
+	record := h.database(acme, "orders")
+	path := "/api/databases/" + record.ID + "/backups"
+	if status, body := h.do(acme, http.MethodPost, path, nil); status != http.StatusAccepted {
+		t.Fatalf("a backup of a database nothing is being done to: %d %s", status, body)
+	}
+	op := store.Operation{TeamID: acme.team.ID, Kind: "database.restore", TargetType: "database", TargetID: record.ID,
+		Status: store.OpRunning}
+	if err := h.db.CreateOperation(t.Context(), &op, []string{"restore"}); err != nil {
+		t.Fatal(err)
+	}
+	if status, body := h.do(acme, http.MethodPost, path, nil); status != http.StatusConflict ||
+		!strings.Contains(body, "database.busy") {
+		t.Fatalf("a backup during a restore: %d %s", status, body)
+	}
+}

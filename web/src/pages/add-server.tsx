@@ -13,12 +13,13 @@ import {
 } from "lucide-react"
 
 import { CloudServerForm } from "@/components/cloud-server-form"
+import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress } from "@/components/operation-progress"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Field,
@@ -26,7 +27,6 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldTitle,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -34,7 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
-import { api } from "@/lib/api"
+import { ApiError, api, type Problem } from "@/lib/api"
 import type { Operation } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -282,7 +282,9 @@ export function AddServerPage() {
                       </Field>
                       <Field orientation="horizontal">
                         <FieldContent>
-                          <FieldTitle>{t("servers.controlPlane")}</FieldTitle>
+                          <FieldLabel htmlFor="control-plane">
+                            {t("servers.controlPlane")}
+                          </FieldLabel>
                           <FieldDescription>{t("servers.controlPlaneHelp")}</FieldDescription>
                         </FieldContent>
                         <Switch
@@ -329,6 +331,12 @@ function ProvisioningView({
   onDone: (serverId: string) => void
 }) {
   const { t } = useTranslation()
+  const { team } = useSession()
+  const confirm = useConfirm()
+  // The whole problem — cause, impact, fix — arrives on the event stream as
+  // the operation fails; the operation itself keeps only its code and one
+  // English line. Nothing else holds it, so it is kept from the event.
+  const [problem, setProblem] = useState<Problem | null>(null)
 
   const operation = useQuery({
     queryKey: ["operation", operationId],
@@ -348,18 +356,25 @@ function ProvisioningView({
       // change to a step arrives on it. There was a "step" handler here too,
       // listening for an event nothing has ever published.
       operation: () => void operation.refetch(),
-      failed: () => void operation.refetch(),
+      failed: (data) => {
+        setProblem(data as Problem)
+        void operation.refetch()
+      },
       log: (data) => {
         const line = (data as { line?: string }).line
         if (line) onLogLine(line)
       },
     },
-    true,
+    // A server's operation is refused to a member limited to projects.
+    !team?.scoped,
   )
 
   const retry = useMutation({
     mutationFn: () => api.post(`/api/servers/${operation.data!.target_id}/retry`),
-    onSuccess: () => void operation.refetch(),
+    onSuccess: () => {
+      setProblem(null)
+      void operation.refetch()
+    },
   })
 
   const cancel = useMutation({
@@ -370,6 +385,22 @@ function ProvisioningView({
   const status = operation.data?.status
   const finished = status === "succeeded"
   const failed = status === "failed" || status === "cancelled"
+  // Shown only while it has failed, so a retry under way does not carry the
+  // last attempt's failure. Without the event — it came before this page was
+  // listening — the operation's own code still finds the title's words.
+  const failure =
+    status !== "failed"
+      ? null
+      : (problem ??
+        (operation.data?.error_code
+          ? ({
+              code: operation.data.error_code,
+              title: operation.data.error_message ?? operation.data.error_code,
+              severity: "error",
+              retryable: false,
+              at: operation.data.finished_at ?? operation.data.created_at,
+            } satisfies Problem)
+          : null))
 
   return (
     <Page width="narrow">
@@ -382,14 +413,12 @@ function ProvisioningView({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("servers.addServer")}</CardTitle>
-          {operation.data?.error_message && (
-            <CardDescription className="text-destructive">
-              {operation.data.error_message}
-            </CardDescription>
-          )}
         </CardHeader>
         <CardContent className="space-y-4">
+          {failure && <ErrorDisplay error={new ApiError(failure, 0)} />}
           {operation.data && <OperationProgress operation={operation.data} logs={logLines} />}
+          {retry.error != null && <ErrorDisplay error={retry.error} compact />}
+          {cancel.error != null && <ErrorDisplay error={cancel.error} compact />}
 
           <div className="flex flex-wrap gap-2 border-t pt-4">
             {finished && (
@@ -405,9 +434,30 @@ function ProvisioningView({
                 </Button>
               </>
             )}
+            {/* Stopping is all it does: what was done on the machine stays,
+                and a machine already ordered keeps running. The dialog says
+                so rather than the button promising a clean-up. */}
             {!finished && !failed && (
-              <Button variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
-                {t("servers.cancelAndClean")}
+              <Button
+                variant="outline"
+                disabled={cancel.isPending}
+                onClick={() => {
+                  void confirm({
+                    title: t("servers.stopAddingTitle", { name: serverName }),
+                    description: t("servers.stopAddingConfirm"),
+                    consequence:
+                      operation.data?.kind === "server.create"
+                        ? t("servers.stopAddingCloud")
+                        : undefined,
+                    confirmLabel: t("servers.stopAdding"),
+                    destructive: true,
+                  }).then((yes) => {
+                    if (yes) cancel.mutate()
+                  })
+                }}
+              >
+                {cancel.isPending && <Spinner />}
+                {t("servers.stopAdding")}
               </Button>
             )}
           </div>

@@ -15,7 +15,7 @@ import {
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
-import { OperationProgress } from "@/components/operation-progress"
+import { OperationProgress, sayServerStatus } from "@/components/operation-progress"
 import { ServerGPUCard } from "@/components/server-gpus"
 import { ServerHardening } from "@/components/server-hardening"
 import { ServerUsageCard } from "@/components/server-usage-card"
@@ -25,6 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -36,6 +37,16 @@ import { formatCPU, formatDateTime, formatMemory, formatRelative } from "@/lib/f
 import { queryClient } from "@/lib/query"
 import type { NodeInfo, Operation, Server } from "@/lib/types"
 
+/**
+ * What Retry runs is adding the server. After a removal or a promotion that
+ * failed it would join the server back to the cluster, so it is offered only
+ * after an add; the panel refuses the rest.
+ */
+const RETRIED_KINDS = ["server.add", "server.create"]
+
+/** A server in these states is being changed already, by somebody else's hand. */
+const BUSY_STATUSES: Server["status"][] = ["pending", "provisioning", "removing"]
+
 export function ServerDetailPage() {
   const { t } = useTranslation()
   const { serverId = "" } = useParams()
@@ -43,6 +54,8 @@ export function ServerDetailPage() {
   const { team, user } = useSession()
   // Which machines are in the cluster is the panel administrator's to change.
   const canChangeServers = user?.is_admin === true
+  // Renaming one and setting its alerts are a team administrator's.
+  const teamAdmin = team?.role === "admin" || team?.role === "owner"
   const confirm = useConfirm()
   const [wipe, setWipe] = useState(true)
   const [deleteMachine, setDeleteMachine] = useState(true)
@@ -72,7 +85,8 @@ export function ServerDetailPage() {
       // somebody on this page is watching for.
       server: () => void queryClient.invalidateQueries({ queryKey: ["server", serverId] }),
     },
-    Boolean(team),
+    // Refused to a member limited to projects, who cannot open a server at all.
+    Boolean(team) && !team?.scoped,
   )
 
   const rename = useMutation({
@@ -96,17 +110,25 @@ export function ServerDetailPage() {
   const remove = useMutation({
     // A machine the panel created can go with it; the name typed into the
     // dialog is sent as the confirmation the API asks for.
-    mutationFn: (machine: { name: string } | null) =>
+    mutationFn: ({
+      machine,
+      acceptLoss,
+    }: {
+      machine: { name: string } | null
+      acceptLoss: boolean
+    }) =>
       api.delete<Operation>(
         (machine
           ? `/api/servers/${serverId}?delete_machine=true&confirm=${encodeURIComponent(machine.name)}`
-          : `/api/servers/${serverId}?wipe=${wipe}`) + (acceptDataLoss ? "&accept_data_loss=true" : ""),
+          : `/api/servers/${serverId}?wipe=${wipe}`) + (acceptLoss ? "&accept_data_loss=true" : ""),
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] })
       navigate("/servers")
     },
   })
+  // The volumes the panel said exist only here, from its refusal to remove it.
+  const localVolumes = localVolumesIn(remove.error)
 
   if (server.error)
     return <ErrorDisplay error={server.error} onRetry={() => void server.refetch()} />
@@ -117,6 +139,32 @@ export function ServerDetailPage() {
   const cloud = current.cloud
   const cloudTitle = cloud ? cloudProviderTitle(cloud.provider_kind) : ""
   const deletingMachine = Boolean(cloud) && deleteMachine
+  const latest = current.operation
+  // Being added, removed or promoted: a promotion leaves the status alone, so
+  // the operation says so too.
+  const busy =
+    BUSY_STATUSES.includes(current.status) ||
+    latest?.status === "pending" ||
+    latest?.status === "running"
+  const canRetry =
+    canChangeServers &&
+    current.status === "failed" &&
+    !current.adopted &&
+    latest != null &&
+    RETRIED_KINDS.includes(latest.kind)
+  // The one started here, or what was being done when the page opened: a
+  // reload in the middle of a ten-minute add resumes its progress, and one
+  // that failed shows the step, its cause and its fix.
+  const liveOperationId =
+    operationId ?? (latest && latest.status !== "succeeded" ? latest.id : null)
+  // Ticking "Remove anyway" counts only while the panel's list of volumes is
+  // on screen, so what the dialog says and what is sent agree.
+  const acceptingLoss = acceptDataLoss && localVolumes.length > 0
+  const machineConsequence = deletingMachine
+    ? t("servers.cloud.deleteMachineConsequence", { provider: cloudTitle })
+    : wipe
+      ? t("servers.wipeServer")
+      : undefined
 
   return (
     <Page>
@@ -128,7 +176,11 @@ export function ServerDetailPage() {
             rename.mutate(name.trim())
           }}
         >
+          <FieldLabel htmlFor="server-rename" className="sr-only">
+            {t("servers.serverName")}
+          </FieldLabel>
           <Input
+            id="server-rename"
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
@@ -162,7 +214,7 @@ export function ServerDetailPage() {
               status={current.status}
               label={t(`servers.status.${current.status}`, { defaultValue: current.status })}
             />
-            {name === null && (
+            {name === null && teamAdmin && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -177,7 +229,7 @@ export function ServerDetailPage() {
         }
         actions={
           <>
-            {canChangeServers && current.status === "failed" && !current.adopted && (
+            {canRetry && (
               <Button variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
                 <RefreshCwIcon className="size-4" />
                 {t("common.retry")}
@@ -186,6 +238,7 @@ export function ServerDetailPage() {
             {canChangeServers &&
               current.role === "worker" &&
               current.status === "ready" &&
+              !busy &&
               !current.adopted && (
                 <Button
                   variant="outline"
@@ -209,14 +262,20 @@ export function ServerDetailPage() {
       />
 
       {current.status_detail && (
-        <p className="-mt-3 text-sm text-muted-foreground">{current.status_detail}</p>
+        <p className="-mt-3 text-sm text-muted-foreground">{sayServerStatus(t, current)}</p>
       )}
 
       {retry.error != null && <ErrorDisplay error={retry.error} />}
       {promote.error != null && <ErrorDisplay error={promote.error} />}
       {rename.error != null && <ErrorDisplay error={rename.error} />}
 
-      {operationId && <LiveOperation operationId={operationId} />}
+      {liveOperationId && (
+        <LiveOperation
+          key={liveOperationId}
+          operationId={liveOperationId}
+          live={Boolean(team) && !team?.scoped}
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -284,7 +343,7 @@ export function ServerDetailPage() {
               />
             )}
             <Fact label={t("apps.instances")} value={String(metrics.data.pod_count)} />
-            <Fact label="Kubelet" value={metrics.data.kubelet_version} mono />
+            <Fact label={t("servers.kubeletVersion")} value={metrics.data.kubelet_version} mono />
           </CardContent>
         </Card>
       )}
@@ -298,10 +357,7 @@ export function ServerDetailPage() {
       {/* History outlives the node: a server that stopped answering is the
           one whose last hours somebody wants to see. */}
       {(current.status === "ready" || current.status === "not_ready") && (
-        <ServerUsageCard
-          serverId={serverId}
-          canEdit={team?.role === "admin" || team?.role === "owner"}
-        />
+        <ServerUsageCard serverId={serverId} canEdit={teamAdmin} />
       )}
 
       {/* It signs in over SSH with the key Skifity installed, so it is for a
@@ -323,7 +379,9 @@ export function ServerDetailPage() {
         </Alert>
       )}
 
-      {canChangeServers && !current.adopted && (
+      {/* Not while it is being added, removed or promoted: the panel refuses
+          a second change on top of one that is running. */}
+      {canChangeServers && !current.adopted && !busy && (
         <Card className="border-destructive/30">
           <CardHeader>
             <CardTitle className="text-base text-destructive">
@@ -331,7 +389,11 @@ export function ServerDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{t("servers.removeServerWarning")}</p>
+            <p className="text-sm text-muted-foreground">
+              {localVolumes.length > 0
+                ? t("servers.removeServerDataLoss")
+                : t("servers.removeServerWarning")}
+            </p>
             {cloud && (
               <label className="flex items-center gap-2.5 text-sm">
                 <Checkbox
@@ -353,8 +415,18 @@ export function ServerDetailPage() {
               </label>
             )}
             {remove.error != null && <ErrorDisplay error={remove.error} compact />}
-            {remove.error instanceof ApiError &&
-              remove.error.problem.code === "server.has_local_volumes" && (
+            {/* The refusal's title and fix are above; which volumes it means
+                is what somebody needs before ticking the box. */}
+            {localVolumes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm">
+                  {t("servers.localVolumes", { count: localVolumes.length })}
+                </p>
+                <ul className="list-disc space-y-0.5 pl-5 font-mono text-xs">
+                  {localVolumes.map((volume) => (
+                    <li key={volume}>{volume}</li>
+                  ))}
+                </ul>
                 <label className="flex items-center gap-2.5 text-sm text-destructive">
                   <Checkbox
                     checked={acceptDataLoss}
@@ -362,24 +434,36 @@ export function ServerDetailPage() {
                   />
                   {t("servers.acceptDataLoss")}
                 </label>
-              )}
+              </div>
+            )}
             <Button
               variant="destructive"
               disabled={remove.isPending}
               onClick={() => {
+                const acceptLoss = acceptingLoss
                 void confirm({
                   title: t("servers.removeServer"),
-                  description: t("servers.removeServerWarning"),
-                  consequence: deletingMachine
-                    ? t("servers.cloud.deleteMachineConsequence", { provider: cloudTitle })
-                    : wipe
-                      ? t("servers.wipeServer")
-                      : undefined,
+                  description: acceptLoss
+                    ? t("servers.removeServerDataLoss")
+                    : t("servers.removeServerWarning"),
+                  consequence:
+                    [
+                      acceptLoss &&
+                        t("servers.dataLossConsequence", { volumes: localVolumes.join(", ") }),
+                      machineConsequence,
+                    ]
+                      .filter(Boolean)
+                      .join(" ") || undefined,
                   confirmLabel: t("servers.removeServer"),
                   destructive: true,
                   typeToConfirm: current.name,
                 }).then((yes) => {
-                  if (yes) remove.mutate(deletingMachine ? { name: current.name } : null)
+                  if (yes) {
+                    remove.mutate({
+                      machine: deletingMachine ? { name: current.name } : null,
+                      acceptLoss,
+                    })
+                  }
                 })
               }}
             >
@@ -393,25 +477,47 @@ export function ServerDetailPage() {
   )
 }
 
-function LiveOperation({ operationId }: { operationId: string }) {
-  const [operation, setOperation] = useState<Operation | null>(null)
+/**
+ * Reads the volumes out of the panel's refusal to remove a server that holds
+ * the only copy of them. Its cause names five; the context has them all.
+ */
+function localVolumesIn(error: unknown): string[] {
+  if (!(error instanceof ApiError) || error.problem.code !== "server.has_local_volumes") return []
+  return (error.problem.context?.volumes ?? "").split(", ").filter(Boolean)
+}
 
-  const query = useQuery({
+/**
+ * One operation, step by step, as it happens.
+ *
+ * The event stream writes each new state into the query the card reads, so
+ * there is one copy of the operation: a refetch after a missed event replaces
+ * it, and a poll covers a stream that dropped. Keyed by the operation, so a
+ * retry or a promotion does not show the last one's steps first.
+ */
+function LiveOperation({ operationId, live }: { operationId: string; live: boolean }) {
+  const operation = useQuery({
     queryKey: ["operation", operationId],
     queryFn: () => api.get<Operation>(`/api/operations/${operationId}`),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === "pending" || status === "running" ? 5_000 : false
+    },
   })
 
-  useEvents([`operation:${operationId}`], {
-    operation: (data) => setOperation(data as Operation),
-  })
+  useEvents(
+    [`operation:${operationId}`],
+    {
+      operation: (data) => queryClient.setQueryData(["operation", operationId], data as Operation),
+    },
+    live,
+  )
 
-  const current = operation ?? query.data
-  if (!current) return null
+  if (!operation.data) return null
 
   return (
     <Card>
       <CardContent className="pt-6">
-        <OperationProgress operation={current} />
+        <OperationProgress operation={operation.data} />
       </CardContent>
     </Card>
   )

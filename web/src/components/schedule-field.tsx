@@ -58,11 +58,14 @@ export function ScheduleField({
   value,
   onChange,
   description,
+  disabled,
 }: {
   id: string
   value: string
   onChange: (value: string) => void
   description?: string
+  /** Shown, and not to be changed by whoever is looking. */
+  disabled?: boolean
 }) {
   const { t } = useTranslation()
 
@@ -77,6 +80,7 @@ export function ScheduleField({
     <Field>
       <FieldLabel htmlFor={id}>{t("schedule.label")}</FieldLabel>
       <Select
+        disabled={disabled}
         value={custom ? CUSTOM : preset!.value}
         onValueChange={(next) => {
           if (next === CUSTOM) {
@@ -103,6 +107,7 @@ export function ScheduleField({
       {custom && (
         <Input
           aria-label={t("schedule.customLabel")}
+          disabled={disabled}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           className="mt-2 font-mono"

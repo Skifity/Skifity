@@ -1111,7 +1111,6 @@
     "removeServerWarning": "这里运行的实例会先迁移到你的其他服务器上，不会丢失任何东西。",
     "wipeServer": "同时从这台机器上卸载 Kubernetes",
     "acceptDataLoss": "仍然移除，并丢失此服务器卷上的数据",
-    "cancelAndClean": "取消并清理",
     "cpu": "CPU",
     "memory": "内存",
     "disk": "磁盘",
@@ -1352,7 +1351,22 @@
       "deleteMachine": "同时删除 {{provider}} 上的机器",
       "deleteMachineConsequence": "{{provider}} 上的机器会连同磁盘上的所有内容一起被删除，无法撤销。",
       "keepsRunning": "机器会在 {{provider}} 继续运行并计费，直到你在那里删除它。"
-    }
+    },
+    "statusDetail": {
+      "adopted": "在集群中发现。这台服务器不是 Skifity 装的，Skifity 也无法通过 SSH 登录它。",
+      "nodeGone": "该节点已不再属于集群。",
+      "nodeNotReady": "该节点报告自己尚未就绪。",
+      "cancelled": "已取消"
+    },
+    "kubeletVersion": "Kubelet 版本",
+    "localVolumes_other": "以下 {{count}} 个卷只存在于这台服务器上：",
+    "removeServerDataLoss": "这里运行的实例会先迁移到你的其他服务器上，但数据只存在于这台服务器上的实例除外：它们无法在别处启动。",
+    "dataLossConsequence": "这些卷上的数据会丢失：{{volumes}}。",
+    "stopAdding": "停止添加",
+    "stopAddingTitle": "停止添加 {{name}}？",
+    "stopAddingConfirm": "正在运行的步骤会被停止，服务器会被标记为失败。机器上已经完成的操作不会被撤销：重试会从停下的地方继续，移除则会把服务器移出。",
+    "stopAddingCloud": "已经在服务商处订购的机器会继续运行并计费，直到你连同机器一起移除这台服务器。",
+    "alertsSaved": "警告阈值已保存。"
   },
   "databases": {
     "title": "数据库",
@@ -1517,7 +1531,14 @@
         "failed": "失败",
         "cancelled": "已取消"
       }
-    }
+    },
+    "credentialsAdminOnly": "只有团队所有者或管理员才能查看这个数据库的凭据。已连接的应用会以变量的形式拿到连接字符串，无需任何人读取。",
+    "deleteLinked": "这些应用正在使用它，将失去数据库：{{apps}}。所有表、数据行和备份计划都会一并消失。存储中已有的备份会保留，但面板将不再知道它们。",
+    "restoreTitle": "恢复 {{name}}？",
+    "restoreLinked": "使用 {{date}} 的备份。这些应用正在使用该数据库，恢复期间将无法访问它：{{apps}}。",
+    "restoreUnlinked": "使用 {{date}} 的备份。没有应用连接到它。",
+    "retentionInvalid": "请输入要保留的备份数量，须为不小于 1 的整数。",
+    "backupPolicySaved": "备份计划已保存。"
   },
   "templates": {
     "title": "模板",
@@ -3999,6 +4020,18 @@
         "cause": "{{0}} 位于 {{1}}，在私有网络中或在某台服务器上，而构建无法访问这些地址。",
         "impact": "没有构建或部署任何内容。当前运行的版本会继续运行。",
         "fix": "管理员可以允许构建访问它：在 设置 → Git 的“你自己网络中的 Git 主机”中添加 {{0}}，然后重新部署。"
+      },
+      "server_busy": {
+        "title": "这台服务器正在进行其他操作",
+        "cause": "{{0}} 正在被添加、移除或升级，而且尚未完成。",
+        "impact": "没有做任何改动。",
+        "fix": "等它完成后再试一次。服务器页面会显示每个正在运行的步骤。"
+      },
+      "server_retry_not_add": {
+        "title": "只有添加服务器才能重试",
+        "cause": "对 {{0}} 做的最后一件事不是添加它，而重试执行的是添加服务器的步骤。",
+        "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
+        "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
       }
     }
   },

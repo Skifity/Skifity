@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldContent, FieldDescription, FieldTitle } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
@@ -175,10 +175,11 @@ export function ServerGPUCard({
         {isAdmin && (node.gpu_labelled || (gpus.length === 0 && node.gpu_hardware == null)) && (
           <Field orientation="horizontal">
             <FieldContent>
-              <FieldTitle>{t("servers.gpu.mark")}</FieldTitle>
+              <FieldLabel htmlFor={`gpu-mark-${serverId}`}>{t("servers.gpu.mark")}</FieldLabel>
               <FieldDescription>{t("servers.gpu.markHelp")}</FieldDescription>
             </FieldContent>
             <Switch
+              id={`gpu-mark-${serverId}`}
               checked={node.gpu_labelled === true}
               disabled={mark.isPending}
               onCheckedChange={(checked) => mark.mutate(checked)}

@@ -42,6 +42,9 @@ const (
 	StepWaitReady    = "wait-ready"
 )
 
+// opAddServer is the operation that joins a machine somebody already has.
+const opAddServer = "server.add"
+
 // addServerSteps is the plan the UI draws before anything runs.
 var addServerSteps = []string{
 	StepConnect, StepPreflight, StepInstallKey, StepFirewall,
@@ -174,7 +177,7 @@ func (p *Provisioner) AddServer(ctx context.Context, req api.AddServerRequest) (
 	}
 
 	op := store.Operation{
-		TeamID: req.TeamID, Kind: "server.add",
+		TeamID: req.TeamID, Kind: opAddServer,
 		TargetType: "server", TargetID: server.ID, CreatedBy: req.CreatedBy,
 	}
 	if err := p.db.CreateOperation(ctx, &op, addServerSteps); err != nil {
@@ -199,6 +202,12 @@ func (p *Provisioner) RetryServer(ctx context.Context, serverID string) (store.O
 			WithCause("No previous attempt to add this server was recorded.").
 			WithImpact("Nothing was changed.").
 			WithFix("Remove the server and add it again.")
+	}
+	// What runs below is adding the server. After a removal or a promotion
+	// that failed, it would reinstall k3s and join the server back to the
+	// cluster it was leaving, and the removal would end "succeeded".
+	if op.Kind != opAddServer && op.Kind != opCreateCloudServer {
+		return store.Operation{}, errdoc.RetryNotAnAdd(server.Name, op.Kind)
 	}
 	if op.Status == store.OpRunning {
 		return op, nil
@@ -264,7 +273,7 @@ func (p *Provisioner) runJoin(ctx context.Context, op store.Operation, serverID 
 
 	done, err := p.completedSteps(ctx, op.ID)
 	if err != nil {
-		p.failOperation(ctx, op, serverID, "internal", err)
+		p.failOperation(ctx, op, serverID, err)
 		return
 	}
 

@@ -1111,7 +1111,6 @@
     "removeServerWarning": "Instance yang berjalan di sini dipindahkan ke server lain terlebih dahulu. Tidak ada yang hilang.",
     "wipeServer": "Hapus juga Kubernetes dari mesinnya",
     "acceptDataLoss": "Tetap hapus, dan relakan data di volume server ini",
-    "cancelAndClean": "Batalkan dan bersihkan",
     "cpu": "CPU",
     "memory": "Memori",
     "disk": "Disk",
@@ -1352,7 +1351,22 @@
       "deleteMachine": "Hapus juga mesinnya di {{provider}}",
       "deleteMachineConsequence": "Mesin dihapus di {{provider}} beserta seluruh isi disknya. Ini tidak bisa dibatalkan.",
       "keepsRunning": "Mesin tetap berjalan di {{provider}} dan tetap ditagih sampai Anda menghapusnya di sana."
-    }
+    },
+    "statusDetail": {
+      "adopted": "Ditemukan di cluster. Skifity tidak memasang server ini dan tidak punya jalan masuk lewat SSH.",
+      "nodeGone": "Node ini tidak lagi menjadi bagian dari cluster.",
+      "nodeNotReady": "Node ini melaporkan bahwa ia belum siap.",
+      "cancelled": "Dibatalkan"
+    },
+    "kubeletVersion": "Versi kubelet",
+    "localVolumes_other": "{{count}} volume ini hanya ada di server ini:",
+    "removeServerDataLoss": "Instance yang berjalan di sini dipindahkan ke server lain terlebih dahulu, kecuali yang datanya hanya ada di server ini: instance itu tidak bisa berjalan di tempat lain.",
+    "dataLossConsequence": "Data di volume-volume ini hilang: {{volumes}}.",
+    "stopAdding": "Hentikan penambahan",
+    "stopAddingTitle": "Hentikan penambahan {{name}}?",
+    "stopAddingConfirm": "Langkah yang sedang berjalan dihentikan dan server ditandai gagal. Apa yang sudah dilakukan di mesin tidak dibatalkan: Coba lagi melanjutkan dari titik berhenti, dan Keluarkan server mengeluarkannya.",
+    "stopAddingCloud": "Mesin yang sudah dipesan di penyedia tetap berjalan dan tetap ditagih sampai Anda mengeluarkan server beserta mesinnya.",
+    "alertsSaved": "Ambang peringatan sudah disimpan."
   },
   "databases": {
     "title": "Database",
@@ -1517,7 +1531,14 @@
         "failed": "Gagal",
         "cancelled": "Dibatalkan"
       }
-    }
+    },
+    "credentialsAdminOnly": "Hanya pemilik atau admin tim yang bisa melihat kredensial database ini. Aplikasi yang terhubung menerima string koneksinya sebagai variabel tanpa ada yang perlu membacanya.",
+    "deleteLinked": "Aplikasi-aplikasi ini memakainya dan kehilangan database-nya: {{apps}}. Semua tabel, baris, dan jadwal pencadangan ikut terhapus. Cadangan yang sudah ada di penyimpanan tetap tersimpan, tetapi panel tidak akan mengenalinya lagi.",
+    "restoreTitle": "Pulihkan {{name}}?",
+    "restoreLinked": "Dari cadangan yang diambil pada {{date}}. Aplikasi-aplikasi ini memakai database tersebut dan kehilangannya selama pemulihan berjalan: {{apps}}.",
+    "restoreUnlinked": "Dari cadangan yang diambil pada {{date}}. Tidak ada aplikasi yang terhubung dengannya.",
+    "retentionInvalid": "Masukkan jumlah cadangan yang disimpan sebagai bilangan bulat, minimal 1.",
+    "backupPolicySaved": "Jadwal pencadangan sudah disimpan."
   },
   "templates": {
     "title": "Template",
@@ -3999,6 +4020,18 @@
         "cause": "{{0}} berada di {{1}}, di jaringan privat atau di salah satu server, dan build dijauhkan dari keduanya.",
         "impact": "Tidak ada yang di-build atau di-deploy. Versi yang sedang berjalan tetap berjalan.",
         "fix": "Administrator bisa mengizinkan build menjangkaunya: tambahkan {{0}} di Pengaturan → Git, pada Host Git di jaringan Anda sendiri, lalu deploy lagi."
+      },
+      "server_busy": {
+        "title": "Server ini sedang dikerjakan",
+        "cause": "{{0}} sedang ditambahkan, dikeluarkan, atau dipromosikan, dan prosesnya belum selesai.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tunggu sampai selesai, lalu coba lagi. Halaman server menunjukkan setiap langkah saat berjalan."
+      },
+      "server_retry_not_add": {
+        "title": "Hanya penambahan server yang bisa dicoba lagi",
+        "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
+        "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
+        "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
       }
     }
   },

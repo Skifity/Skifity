@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useDatabaseEngines } from "@/hooks/use-database-engines"
+import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatDateTime, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
@@ -38,9 +39,23 @@ import type { App, Database, DatabaseEngine, DatabaseLink, Operation } from "@/l
 /** The largest dump an import takes, as the panel says in its API. */
 const IMPORT_LIMIT_BYTES = 5 * 1024 ** 3
 
-function refresh(databaseId: string) {
+export function refresh(databaseId: string) {
   void queryClient.invalidateQueries({ queryKey: ["database", databaseId] })
   void queryClient.invalidateQueries({ queryKey: ["database-operations", databaseId] })
+}
+
+/**
+ * The names of the apps a database is linked to, for a confirmation that has
+ * to say who is affected. An app not loaded yet is named by its id.
+ */
+export function useLinkedAppNames(database: Database, links: DatabaseLink[]): string {
+  const apps = useQuery({
+    queryKey: ["apps", database.environment_id],
+    queryFn: () => api.get<List<App>>(`/api/environments/${database.environment_id}/apps`),
+  })
+  return links
+    .map((link) => apps.data?.items.find((app) => app.id === link.app_id)?.name ?? link.app_id)
+    .join(", ")
 }
 
 /**
@@ -50,6 +65,12 @@ function refresh(databaseId: string) {
  */
 export function DatabaseLife({ database, links }: { database: Database; links: DatabaseLink[] }) {
   const engines = useDatabaseEngines()
+  const { team } = useSession()
+  // Stopping, starting and resizing are a member's, as scaling an app is; a
+  // new password and an import replace what apps rely on, and are an
+  // administrator's, as a restore is. The API answers the rest with a 403.
+  const canChange = team != null && team.role !== "viewer"
+  const isAdmin = team?.role === "admin" || team?.role === "owner"
 
   if (engines.error) {
     return <ErrorDisplay error={engines.error} onRetry={() => void engines.refetch()} />
@@ -60,24 +81,26 @@ export function DatabaseLife({ database, links }: { database: Database; links: D
 
   return (
     <div className="space-y-6">
-      <PowerCard database={database} links={links} />
-      <SizeCard database={database} kind={kind} />
-      {kind.password && <PasswordCard database={database} kind={kind} links={links} />}
-      {kind.imports.length > 0 && <ImportCard database={database} kind={kind} />}
+      <PowerCard database={database} links={links} canChange={canChange} />
+      <SizeCard database={database} kind={kind} canChange={canChange} />
+      {isAdmin && kind.password && <PasswordCard database={database} kind={kind} links={links} />}
+      {isAdmin && kind.imports.length > 0 && <ImportCard database={database} kind={kind} />}
     </div>
   )
 }
 
-function PowerCard({ database, links }: { database: Database; links: DatabaseLink[] }) {
+function PowerCard({
+  database,
+  links,
+  canChange,
+}: {
+  database: Database
+  links: DatabaseLink[]
+  canChange: boolean
+}) {
   const { t } = useTranslation()
   const confirm = useConfirm()
-  const apps = useQuery({
-    queryKey: ["apps", database.environment_id],
-    queryFn: () => api.get<List<App>>(`/api/environments/${database.environment_id}/apps`),
-  })
-  const names = links
-    .map((link) => apps.data?.items.find((app) => app.id === link.app_id)?.name ?? link.app_id)
-    .join(", ")
+  const names = useLinkedAppNames(database, links)
 
   const stop = useMutation({
     // Asked with the linked apps named, so the refusal the panel would
@@ -107,14 +130,14 @@ function PowerCard({ database, links }: { database: Database; links: DatabaseLin
         {stop.error != null && <ErrorDisplay error={stop.error} compact />}
         {start.error != null && <ErrorDisplay error={start.error} compact />}
         {stopped ? (
-          <Button disabled={start.isPending} onClick={() => start.mutate()}>
+          <Button disabled={!canChange || start.isPending} onClick={() => start.mutate()}>
             {start.isPending ? <Spinner /> : <PlayIcon className="size-4" />}
             {t("databases.life.start")}
           </Button>
         ) : (
           <Button
             variant="outline"
-            disabled={stop.isPending || database.status === "creating"}
+            disabled={!canChange || stop.isPending || database.status === "creating"}
             onClick={() => {
               void confirm({
                 title: t("databases.life.stopTitle", { name: database.name }),
@@ -148,7 +171,15 @@ type SizeFields = {
   storage_gb: string
 }
 
-function SizeCard({ database, kind }: { database: Database; kind: DatabaseEngine }) {
+function SizeCard({
+  database,
+  kind,
+  canChange,
+}: {
+  database: Database
+  kind: DatabaseEngine
+  canChange: boolean
+}) {
   const { t } = useTranslation()
   const confirm = useConfirm()
   // What was typed, over what the database has: nothing is copied from the
@@ -188,6 +219,7 @@ function SizeCard({ database, kind }: { database: Database; kind: DatabaseEngine
         type="number"
         inputMode="numeric"
         min={min ?? 0}
+        disabled={!canChange}
         value={value(name)}
         onChange={(event) => setEdits({ ...edits, [name]: event.target.value })}
       />
@@ -223,7 +255,7 @@ function SizeCard({ database, kind }: { database: Database; kind: DatabaseEngine
         {resize.error != null && <ErrorDisplay error={resize.error} compact />}
         <div className="flex justify-end">
           <Button
-            disabled={changed.length === 0 || resize.isPending}
+            disabled={!canChange || changed.length === 0 || resize.isPending}
             onClick={() => {
               void confirm({
                 title: t("databases.life.resizeTitle", { name: database.name }),
@@ -322,6 +354,9 @@ function ImportCard({ database, kind }: { database: Database; kind: DatabaseEngi
   const { t } = useTranslation()
   const confirm = useConfirm()
   const [file, setFile] = useState<File | null>(null)
+  // A file input cannot be emptied from React; a new one replaces it, so the
+  // name of a dump already imported does not sit next to a disabled button.
+  const [fileInput, setFileInput] = useState(0)
   const [format, setFormat] = useState("auto")
   const tooLarge = file != null && file.size > IMPORT_LIMIT_BYTES
 
@@ -335,6 +370,7 @@ function ImportCard({ database, kind }: { database: Database; kind: DatabaseEngi
     onSuccess: () => {
       toast.success(t("databases.life.importStarted"))
       setFile(null)
+      setFileInput((previous) => previous + 1)
       refresh(database.id)
     },
   })
@@ -350,6 +386,7 @@ function ImportCard({ database, kind }: { database: Database; kind: DatabaseEngi
           <Field>
             <FieldLabel htmlFor="import-file">{t("databases.life.importFile")}</FieldLabel>
             <Input
+              key={fileInput}
               id="import-file"
               type="file"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}

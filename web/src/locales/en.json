@@ -1121,7 +1121,6 @@
     "removeServerWarning": "Instances running here move to your other servers first. Nothing is lost.",
     "wipeServer": "Also remove Kubernetes from the machine",
     "acceptDataLoss": "Remove anyway, and lose the data on this server's volumes",
-    "cancelAndClean": "Cancel and clean up",
     "cpu": "CPU",
     "memory": "Memory",
     "disk": "Disk",
@@ -1363,7 +1362,23 @@
       "deleteMachine": "Also delete the machine at {{provider}}",
       "deleteMachineConsequence": "The machine is deleted at {{provider}}, with everything on its disk. This cannot be undone.",
       "keepsRunning": "The machine keeps running at {{provider}}, and is still billed, until you delete it there."
-    }
+    },
+    "statusDetail": {
+      "adopted": "Found in the cluster. Skifity did not install this server and has no way in over SSH.",
+      "nodeGone": "The node is no longer part of the cluster.",
+      "nodeNotReady": "The node reports that it is not ready.",
+      "cancelled": "Cancelled"
+    },
+    "kubeletVersion": "Kubelet version",
+    "localVolumes_one": "This volume exists only on this server:",
+    "localVolumes_other": "These {{count}} volumes exist only on this server:",
+    "removeServerDataLoss": "Instances running here move to your other servers first, except those whose data lives only on this server: they cannot start anywhere else.",
+    "dataLossConsequence": "The data on these volumes is lost: {{volumes}}.",
+    "stopAdding": "Stop adding",
+    "stopAddingTitle": "Stop adding {{name}}?",
+    "stopAddingConfirm": "The step that is running is stopped and the server is marked as failed. Nothing already done on the machine is undone: Retry carries on from where it stopped, and Remove takes the server out.",
+    "stopAddingCloud": "A machine already ordered at the provider keeps running, and is billed, until you remove the server and its machine.",
+    "alertsSaved": "The alert thresholds are saved."
   },
   "databases": {
     "title": "Databases",
@@ -1528,7 +1543,14 @@
         "failed": "Failed",
         "cancelled": "Cancelled"
       }
-    }
+    },
+    "credentialsAdminOnly": "Only a team owner or admin can see this database's credentials. A connected app is given its connection string as a variable without anybody reading it.",
+    "deleteLinked": "These apps use it and lose their database: {{apps}}. Every table, row and backup schedule goes with it. Existing backups in your storage are kept, but the panel will no longer know about them.",
+    "restoreTitle": "Restore {{name}}?",
+    "restoreLinked": "From the backup taken on {{date}}. These apps use the database and lose it while the restore runs: {{apps}}.",
+    "restoreUnlinked": "From the backup taken on {{date}}. No app is linked to it.",
+    "retentionInvalid": "Enter a whole number of backups to keep, at least 1.",
+    "backupPolicySaved": "The backup schedule is saved."
   },
   "templates": {
     "title": "Templates",
@@ -4019,6 +4041,18 @@
         "cause": "{{0}} is at {{1}}, on a private network or on one of the servers, and builds are kept off those.",
         "impact": "Nothing was built or deployed. The version running now keeps running.",
         "fix": "An administrator can let builds reach it: add {{0}} under Settings → Git, in Git hosts on your own network, and deploy again."
+      },
+      "server_busy": {
+        "title": "Something is already being done to this server",
+        "cause": "{{0}} is being added, removed or promoted, and that has not finished.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for it to finish, then try again. The server's page shows each step as it runs."
+      },
+      "server_retry_not_add": {
+        "title": "Only adding a server can be retried",
+        "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
+        "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
+        "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
       }
     }
   },

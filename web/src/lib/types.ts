@@ -106,6 +106,12 @@ export type Server = {
   role: "control-plane" | "worker"
   status: ServerStatus
   status_detail: string
+  /**
+   * Names the sentence in status_detail: "problem:" and an error code, or a
+   * key under servers.statusDetail. Absent for Kubernetes' own words.
+   */
+  status_key?: string
+  status_args?: string[]
   node_name: string
   external_ip: string
   internal_ip: string
@@ -120,6 +126,8 @@ export type Server = {
   last_seen_at?: string
   /** Set on one server's own page when the panel created it at a provider. */
   cloud?: CloudServer
+  /** Set on one server's own page: the latest thing done to it. */
+  operation?: Operation
 }
 
 /** A server the panel ordered from a cloud provider. */

@@ -300,11 +300,11 @@ func (w *Watcher) checkServers(ctx context.Context) {
 			})
 
 		default:
-			detail := "The node is no longer part of the cluster."
+			detail := api.ServerDetailNodeGone
 			if present {
 				detail = node.Reason
 				if detail == "" {
-					detail = "The node reports that it is not ready."
+					detail = api.ServerDetailNodeNotReady
 				}
 			}
 			// A server that is already known to be down is not news.

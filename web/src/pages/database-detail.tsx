@@ -20,7 +20,12 @@ import { EmptyState } from "@/components/empty-state"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
 import { BackupVerification } from "@/components/backup-verification"
-import { DatabaseHistory, DatabaseLife } from "@/components/database-life"
+import {
+  DatabaseHistory,
+  DatabaseLife,
+  refresh,
+  useLinkedAppNames,
+} from "@/components/database-life"
 import { ErrorDisplay } from "@/components/error-display"
 import { EventsCard } from "@/components/events-card"
 import { ScheduleField } from "@/components/schedule-field"
@@ -30,7 +35,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -69,9 +74,13 @@ import type {
 export function DatabaseDetailPage() {
   const { t } = useTranslation()
   const { databaseId = "" } = useParams()
-  const navigate = useNavigate()
-  const confirmDelete = useDeleteConfirm()
   const { team } = useSession()
+  // What the API asks of each action: deleting, restoring, reading the
+  // credentials and changing the backup schedule are an administrator's;
+  // linking and backing up are a member's. A button that can only end in a
+  // 403 is not offered.
+  const isAdmin = team?.role === "admin" || team?.role === "owner"
+  const canChange = team != null && team.role !== "viewer"
 
   // The poll below stops once the database is running, which is right; these
   // are what make the page move before that, and what catches a backup
@@ -94,15 +103,16 @@ export function DatabaseDetailPage() {
     queryKey: ["database", databaseId],
     queryFn: () =>
       api.get<{ database: Database; links: DatabaseLink[] }>(`/api/databases/${databaseId}`),
-    // Settled is running, or stopped on purpose; anything else is on its way
-    // to one of them.
-    refetchInterval: (query) =>
-      ["running", "stopped"].includes(query.state.data?.database.status ?? "") ? false : 5_000,
-  })
-
-  const remove = useMutation({
-    mutationFn: () => api.delete(`/api/databases/${databaseId}`),
-    onSuccess: () => navigate("/databases"),
+    // Settled is running, or stopped on purpose. Creating and starting are on
+    // their way to one of them and are watched closely. Failed, missing,
+    // unknown and degraded do not change by the second, and every look asks
+    // the cluster, so they are looked at now and then.
+    refetchInterval: (query) => {
+      const status = query.state.data?.database.status
+      if (status === "running" || status === "stopped") return false
+      if (status === "creating" || status === "starting") return 5_000
+      return 30_000
+    },
   })
 
   if (database.error) {
@@ -152,15 +162,23 @@ export function DatabaseDetailPage() {
         </TabsList>
 
         <TabsContent value="connection" className="pt-4">
-          <ConnectionPanel databaseId={databaseId} slug={record.slug} />
+          {isAdmin ? (
+            <ConnectionPanel databaseId={databaseId} slug={record.slug} />
+          ) : (
+            <Alert>
+              <EyeOffIcon />
+              <AlertTitle>{t("databases.connectionDetails")}</AlertTitle>
+              <AlertDescription>{t("databases.credentialsAdminOnly")}</AlertDescription>
+            </Alert>
+          )}
         </TabsContent>
 
         <TabsContent value="apps" className="pt-4">
-          <LinkedApps database={record} links={links} />
+          <LinkedApps database={record} links={links} canChange={canChange} />
         </TabsContent>
 
         <TabsContent value="backups" className="pt-4">
-          <BackupsPanel databaseId={databaseId} engine={record.engine} />
+          <BackupsPanel database={record} links={links} isAdmin={isAdmin} canChange={canChange} />
         </TabsContent>
 
         <TabsContent value="manage" className="pt-4">
@@ -182,32 +200,53 @@ export function DatabaseDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-base text-destructive">{t("common.delete")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("databases.restoreWarning")}</p>
-          {remove.error != null && <ErrorDisplay error={remove.error} compact />}
-          <Button
-            variant="destructive"
-            disabled={remove.isPending}
-            onClick={() => {
-              void confirmDelete(
-                record.name,
-                t("databases.deleteWarning"),
-                t("common.cannotBeUndone"),
-              ).then((yes) => {
-                if (yes) remove.mutate()
-              })
-            }}
-          >
-            <Trash2Icon className="size-4" />
-            {t("common.delete")}
-          </Button>
-        </CardContent>
-      </Card>
+      {isAdmin && <DeleteCard database={record} links={links} />}
     </Page>
+  )
+}
+
+function DeleteCard({ database, links }: { database: Database; links: DatabaseLink[] }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const confirmDelete = useDeleteConfirm()
+  const names = useLinkedAppNames(database, links)
+
+  const remove = useMutation({
+    // Asked with the linked apps named, so the refusal the panel would
+    // otherwise give is already answered.
+    mutationFn: () =>
+      api.delete(`/api/databases/${database.id}${links.length > 0 ? "?force=true" : ""}`),
+    onSuccess: () => navigate("/databases"),
+  })
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader>
+        <CardTitle className="text-base text-destructive">{t("common.delete")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t("databases.deleteWarning")}</p>
+        {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+        <Button
+          variant="destructive"
+          disabled={remove.isPending}
+          onClick={() => {
+            void confirmDelete(
+              database.name,
+              links.length > 0
+                ? t("databases.deleteLinked", { apps: names })
+                : t("databases.deleteWarning"),
+              t("common.cannotBeUndone"),
+            ).then((yes) => {
+              if (yes) remove.mutate()
+            })
+          }}
+        >
+          <Trash2Icon className="size-4" />
+          {t("common.delete")}
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -351,11 +390,23 @@ function CredentialRow({
   )
 }
 
-function LinkedApps({ database, links }: { database: Database; links: DatabaseLink[] }) {
+function LinkedApps({
+  database,
+  links,
+  canChange,
+}: {
+  database: Database
+  links: DatabaseLink[]
+  canChange: boolean
+}) {
   const { t } = useTranslation()
   const confirmUnlink = useConfirm()
   const [appId, setAppId] = useState("")
   const [varName, setVarName] = useState("")
+  // What an app reads when the name is left empty is the engine's, not
+  // always DATABASE_URL: MYSQL_URL, MONGODB_URI, REDIS_URL...
+  const engines = useDatabaseEngines()
+  const defaultVariable = engines.data?.find((item) => item.name === database.engine)?.variable
 
   const apps = useQuery({
     queryKey: ["apps", database.environment_id],
@@ -403,7 +454,7 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
                 <TableRow>
                   <TableHead>{t("nav.apps")}</TableHead>
                   <TableHead>{t("databases.variableName")}</TableHead>
-                  <TableHead className="w-10" />
+                  {canChange && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -415,31 +466,33 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
                       </Link>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{entry.var_name}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("databases.unlink")}
-                        disabled={unlink.isPending}
-                        // The variable goes with it, so the app stops being
-                        // able to reach this database on its next deployment.
-                        onClick={() =>
-                          void confirmUnlink({
-                            title: t("databases.unlink"),
-                            description: t("databases.unlinkConfirm", {
-                              app: byId.get(entry.app_id)?.name ?? entry.app_id,
-                              variable: entry.var_name,
-                            }),
-                            confirmLabel: t("databases.unlink"),
-                            destructive: true,
-                          }).then((yes) => {
-                            if (yes) unlink.mutate(entry.app_id)
-                          })
-                        }
-                      >
-                        <UnlinkIcon className="size-4 text-muted-foreground" />
-                      </Button>
-                    </TableCell>
+                    {canChange && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("databases.unlink")}
+                          disabled={unlink.isPending}
+                          // The variable goes with it, so the app stops being
+                          // able to reach this database on its next deployment.
+                          onClick={() =>
+                            void confirmUnlink({
+                              title: t("databases.unlink"),
+                              description: t("databases.unlinkConfirm", {
+                                app: byId.get(entry.app_id)?.name ?? entry.app_id,
+                                variable: entry.var_name,
+                              }),
+                              confirmLabel: t("databases.unlink"),
+                              destructive: true,
+                            }).then((yes) => {
+                              if (yes) unlink.mutate(entry.app_id)
+                            })
+                          }
+                        >
+                          <UnlinkIcon className="size-4 text-muted-foreground" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -448,7 +501,7 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
         </Card>
       )}
 
-      {available.length > 0 && (
+      {canChange && available.length > 0 && (
         <Card>
           <CardContent className="pt-6">
             <form
@@ -483,7 +536,7 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
                     id="link-var"
                     value={varName}
                     onChange={(event) => setVarName(event.target.value)}
-                    placeholder="DATABASE_URL"
+                    placeholder={defaultVariable}
                     className="font-mono"
                   />
                 </Field>
@@ -513,7 +566,17 @@ function LinkedApps({ database, links }: { database: Database; links: DatabaseLi
  * API and the backup jobs read it too: a Back up now button for an engine the
  * panel refuses to back up would be a button that always fails.
  */
-function BackupsPanel({ databaseId, engine }: { databaseId: string; engine: string }) {
+function BackupsPanel({
+  database,
+  links,
+  isAdmin,
+  canChange,
+}: {
+  database: Database
+  links: DatabaseLink[]
+  isAdmin: boolean
+  canChange: boolean
+}) {
   const { t } = useTranslation()
   const engines = useDatabaseEngines()
 
@@ -521,7 +584,7 @@ function BackupsPanel({ databaseId, engine }: { databaseId: string; engine: stri
     return <ErrorDisplay error={engines.error} onRetry={() => void engines.refetch()} />
   }
   if (!engines.data) return <Skeleton className="h-40" />
-  const kind = engines.data.find((item) => item.name === engine)
+  const kind = engines.data.find((item) => item.name === database.engine)
   if (kind && !kind.backups) {
     return (
       <Alert variant="info">
@@ -535,12 +598,26 @@ function BackupsPanel({ databaseId, engine }: { databaseId: string; engine: stri
       </Alert>
     )
   }
-  return <DatabaseBackups databaseId={databaseId} />
+  return (
+    <DatabaseBackups database={database} links={links} isAdmin={isAdmin} canChange={canChange} />
+  )
 }
 
-function DatabaseBackups({ databaseId }: { databaseId: string }) {
+function DatabaseBackups({
+  database,
+  links,
+  isAdmin,
+  canChange,
+}: {
+  database: Database
+  links: DatabaseLink[]
+  isAdmin: boolean
+  canChange: boolean
+}) {
   const { t } = useTranslation()
   const confirmRestore = useConfirm()
+  const databaseId = database.id
+  const names = useLinkedAppNames(database, links)
   // A member limited to projects has no live stream to hear of a new backup.
   const scoped = Boolean(useSession().team?.scoped)
 
@@ -568,16 +645,23 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
   const scheduleValue = schedule ?? current?.schedule ?? "0 3 * * *"
   const retentionValue = retention ?? String(current?.retention ?? 7)
   const enabledValue = enabled ?? current?.enabled ?? false
+  // Said here rather than turned into 7: "0" and "" used to save as a week's
+  // worth without a word.
+  const retentionNumber = Number(retentionValue)
+  const retentionValid =
+    retentionValue.trim() !== "" && Number.isInteger(retentionNumber) && retentionNumber >= 1
 
   const savePolicy = useMutation({
     mutationFn: () =>
       api.put(`/api/databases/${databaseId}/backup-policy`, {
         schedule: scheduleValue,
-        retention: Number(retentionValue) || 7,
+        retention: retentionNumber,
         enabled: enabledValue,
       }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ["backup-policy", databaseId] }),
+    onSuccess: () => {
+      toast.success(t("databases.backupPolicySaved"))
+      void queryClient.invalidateQueries({ queryKey: ["backup-policy", databaseId] })
+    },
   })
 
   const backupNow = useMutation({
@@ -586,11 +670,24 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
   })
 
   const restore = useMutation({
-    mutationFn: (backupID: string) => api.post(`/api/databases/${databaseId}/restore/${backupID}`),
-    onSuccess: () => toast.success(t("databases.restoreStarted")),
+    // overwrite is explicit: the panel refuses a restore over a database apps
+    // use without it, and the typed name in the dialog is that consent.
+    mutationFn: (backupID: string) =>
+      api.post(`/api/databases/${databaseId}/restore/${backupID}?overwrite=true`),
+    onSuccess: () => {
+      toast.success(t("databases.restoreStarted"))
+      refresh(databaseId)
+      void queryClient.invalidateQueries({ queryKey: ["backups", databaseId] })
+    },
   })
 
   const items = backups.data?.items ?? []
+  const backUpButton = (size?: "sm") => (
+    <Button size={size} disabled={backupNow.isPending} onClick={() => backupNow.mutate()}>
+      {backupNow.isPending ? <Spinner /> : <DatabaseBackupIcon className="size-4" />}
+      {t("databases.backupNow")}
+    </Button>
+  )
 
   return (
     <div className="space-y-6">
@@ -601,10 +698,11 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("databases.backupScheduleHelp")}</p>
           {/* Three controls used to be labelled "Automatic backups": the card,
-              the switch and the schedule. Each says what it is now. */}
+              the switch and the schedule. Each says what it is now. Changing
+              them is an administrator's, as the API has it; the rest read them. */}
           <label className="flex items-center justify-between gap-4">
             <span className="text-sm">{t("databases.backupsOn")}</span>
-            <Switch checked={enabledValue} onCheckedChange={setEnabled} />
+            <Switch checked={enabledValue} onCheckedChange={setEnabled} disabled={!isAdmin} />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <ScheduleField
@@ -612,35 +710,46 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
               value={scheduleValue}
               onChange={setSchedule}
               description={t("databases.backupScheduleFieldHelp")}
+              disabled={!isAdmin}
             />
-            <Field>
+            <Field data-invalid={!retentionValid || undefined}>
               <FieldLabel htmlFor="backup-retention">{t("databases.retention")}</FieldLabel>
               <Input
                 id="backup-retention"
                 type="number"
+                inputMode="numeric"
                 min={1}
+                step={1}
+                disabled={!isAdmin}
                 value={retentionValue}
+                aria-invalid={!retentionValid}
                 onChange={(event) => setRetention(event.target.value)}
               />
-              <FieldDescription>{t("databases.retentionHelp")}</FieldDescription>
+              {retentionValid ? (
+                <FieldDescription>{t("databases.retentionHelp")}</FieldDescription>
+              ) : (
+                <FieldError>{t("databases.retentionInvalid")}</FieldError>
+              )}
             </Field>
           </div>
           {savePolicy.error != null && <ErrorDisplay error={savePolicy.error} compact />}
-          <div className="flex justify-end">
-            <Button disabled={savePolicy.isPending} onClick={() => savePolicy.mutate()}>
-              {savePolicy.isPending && <Spinner />}
-              {savePolicy.isPending ? t("common.saving") : t("common.save")}
-            </Button>
-          </div>
+          {isAdmin && (
+            <div className="flex justify-end">
+              <Button
+                disabled={savePolicy.isPending || !retentionValid}
+                onClick={() => savePolicy.mutate()}
+              >
+                {savePolicy.isPending && <Spinner />}
+                {savePolicy.isPending ? t("common.saving") : t("common.save")}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-medium">{t("databases.backups")}</h2>
-        <Button size="sm" disabled={backupNow.isPending} onClick={() => backupNow.mutate()}>
-          <DatabaseBackupIcon className="size-4" />
-          {t("databases.backupNow")}
-        </Button>
+        {canChange && backUpButton("sm")}
       </div>
 
       {backupNow.error != null && <ErrorDisplay error={backupNow.error} />}
@@ -653,7 +762,7 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
           icon={DatabaseBackupIcon}
           title={t("databases.noBackups")}
           description={t("databases.backupScheduleHelp")}
-          action={<Button onClick={() => backupNow.mutate()}>{t("databases.backupNow")}</Button>}
+          action={canChange ? backUpButton() : undefined}
         />
       ) : (
         <Card>
@@ -664,7 +773,7 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
                   <TableHead>{t("common.created")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t("common.size")}</TableHead>
-                  <TableHead className="w-10" />
+                  {isAdmin && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -707,30 +816,39 @@ function DatabaseBackups({ databaseId }: { databaseId: string }) {
                     <TableCell className="hidden tabular-nums sm:table-cell">
                       {backup.size_bytes ? formatBytes(backup.size_bytes) : "—"}
                     </TableCell>
-                    <TableCell>
-                      {backup.status === "succeeded" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={restore.isPending}
-                          onClick={() => {
-                            void confirmRestore({
-                              title: t("databases.restore"),
-                              description: t("databases.restoreWarning"),
-                              consequence: t("common.cannotBeUndone"),
-                              confirmLabel: t("databases.restoreConfirm"),
-                              destructive: true,
-                              typeToConfirm: t("databases.restore"),
-                            }).then((yes) => {
-                              if (yes) restore.mutate(backup.id)
-                            })
-                          }}
-                        >
-                          <ArchiveRestoreIcon className="size-4" />
-                          {t("databases.restore")}
-                        </Button>
-                      )}
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        {backup.status === "succeeded" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={restore.isPending}
+                            onClick={() => {
+                              const date = formatDateTime(backup.created_at)
+                              void confirmRestore({
+                                title: t("databases.restoreTitle", { name: database.name }),
+                                description:
+                                  links.length > 0
+                                    ? t("databases.restoreLinked", { date, apps: names })
+                                    : t("databases.restoreUnlinked", { date }),
+                                consequence: t("databases.restoreWarning"),
+                                confirmLabel: t("databases.restoreConfirm"),
+                                destructive: true,
+                                // The database's own name, as every other
+                                // typed confirmation: a translated word is
+                                // one some keyboards cannot type.
+                                typeToConfirm: database.name,
+                              }).then((yes) => {
+                                if (yes) restore.mutate(backup.id)
+                              })
+                            }}
+                          >
+                            <ArchiveRestoreIcon className="size-4" />
+                            {t("databases.restore")}
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

@@ -109,6 +109,10 @@ export function DatabasesPage() {
     projects.isLoading ||
     environmentQueries.some((query) => query.isLoading) ||
     databaseQueries.some((query) => query.isLoading)
+  // An environment or a list that did not load is said, not dropped: with all
+  // of them failing the page read "No databases yet" and offered to make one,
+  // which is how duplicates are made.
+  const failed = [...environmentQueries, ...databaseQueries].filter((query) => query.error)
 
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -171,9 +175,18 @@ export function DatabasesPage() {
         actions={environments.length > 0 && newDatabaseButton}
       />
 
+      {failed.length > 0 && (
+        <ErrorDisplay
+          error={failed[0].error}
+          onRetry={() => {
+            for (const query of failed) void query.refetch()
+          }}
+        />
+      )}
+
       {loading ? (
         <Skeleton className="h-48" />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && failed.length > 0 ? null : rows.length === 0 ? (
         <EmptyState
           icon={DatabaseIcon}
           title={t("databases.empty")}

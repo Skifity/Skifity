@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ActivityIcon, BellIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { UsageChart } from "@/components/usage-chart"
@@ -141,19 +142,23 @@ function ServerAlertSettings({
   canEdit: boolean
 }) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<Record<(typeof FIELDS)[number], string>>({
-    disk_pct: String(alerts.disk_pct),
-    memory_pct: String(alerts.memory_pct),
-    cpu_pct: String(alerts.cpu_pct),
-  })
+  // What was typed, over what the server has: nothing is copied from the
+  // thresholds into state, so a change saved elsewhere shows through in every
+  // field nobody has touched here.
+  const [edits, setEdits] = useState<Partial<Record<(typeof FIELDS)[number], string>>>({})
+  const value = (field: (typeof FIELDS)[number]) => edits[field] ?? String(alerts[field])
   const save = useMutation({
     mutationFn: () =>
       api.put(`/api/servers/${serverId}/alerts`, {
-        disk_pct: Number(draft.disk_pct) || 0,
-        memory_pct: Number(draft.memory_pct) || 0,
-        cpu_pct: Number(draft.cpu_pct) || 0,
+        disk_pct: Number(value("disk_pct")) || 0,
+        memory_pct: Number(value("memory_pct")) || 0,
+        cpu_pct: Number(value("cpu_pct")) || 0,
       }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["server-alerts", serverId] }),
+    onSuccess: () => {
+      toast.success(t("servers.alertsSaved"))
+      setEdits({})
+      void queryClient.invalidateQueries({ queryKey: ["server-alerts", serverId] })
+    },
   })
 
   return (
@@ -189,8 +194,8 @@ function ServerAlertSettings({
               min={0}
               max={100}
               disabled={!canEdit}
-              value={draft[field]}
-              onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+              value={value(field)}
+              onChange={(event) => setEdits({ ...edits, [field]: event.target.value })}
             />
           </div>
         ))}

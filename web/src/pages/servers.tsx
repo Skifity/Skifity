@@ -7,6 +7,7 @@ import { CpuIcon, PlusIcon, SearchIcon, ServerIcon } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
+import { sayServerStatus } from "@/components/operation-progress"
 import { EnableGPUsButton, GPUSummary, useGPUComponent } from "@/components/server-gpus"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -54,7 +55,8 @@ export function ServersPage() {
       operation: () => void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] }),
       server: () => void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] }),
     },
-    Boolean(team),
+    // Refused to a member limited to projects, who is refused the servers too.
+    Boolean(team) && !team?.scoped,
   )
 
   // The live side of each server — its GPUs — keyed by node. The same
@@ -242,7 +244,7 @@ export function ServersPage() {
                           />
                           {server.status_detail && (
                             <span className="mt-1 block max-w-48 truncate text-xs text-muted-foreground">
-                              {server.status_detail}
+                              {sayServerStatus(t, server)}
                             </span>
                           )}
                         </TableCell>

@@ -16,7 +16,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { translated } from "@/lib/say"
-import type { Operation, OperationStep, StepDetail } from "@/lib/types"
+import type { Operation, OperationStep, Server, StepDetail } from "@/lib/types"
 
 /**
  * Shows a long-running operation step by step.
@@ -124,13 +124,38 @@ export function OperationProgress({
  * catalogue already translates — the "problem:" prefix says to look there.
  */
 function sayStep(t: TFunction, step: OperationStep): string {
-  const key = step.message_key
-  if (!key) return step.message
+  return sayKeyed(t, step.message_key, step.message, step.message_args, "servers.stepMessage")
+}
+
+/**
+ * A server's status line, in the reader's language, by the same rule as a
+ * step's: the API names the sentence it stored in English. A line Kubernetes
+ * wrote has no name and is shown as it came.
+ */
+export function sayServerStatus(t: TFunction, server: Server): string {
+  return sayKeyed(
+    t,
+    server.status_key,
+    server.status_detail,
+    server.status_args,
+    "servers.statusDetail",
+  )
+}
+
+/** A keyed sentence: "problem:" and an error code, or a key under namespace. */
+function sayKeyed(
+  t: TFunction,
+  key: string | undefined,
+  english: string,
+  args: string[] | undefined,
+  namespace: string,
+): string {
+  if (!key) return english
   if (key.startsWith("problem:")) {
     const code = key.slice("problem:".length).replaceAll(".", "_")
-    return translated(t, `errors.catalogue.${code}.title`, step.message, step.message_args)
+    return translated(t, `errors.catalogue.${code}.title`, english, args)
   }
-  return translated(t, `servers.stepMessage.${key}`, step.message, step.message_args)
+  return translated(t, `${namespace}.${key}`, english, args)
 }
 
 /**

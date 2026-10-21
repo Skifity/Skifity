@@ -315,6 +315,12 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// A backup taken during a restore or an import holds half of each, and is
+	// the copy somebody restores next.
+	if err := s.refuseBusyDatabase(r, record); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if s.backups == nil {
 		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
 		return

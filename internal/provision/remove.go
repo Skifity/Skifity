@@ -136,7 +136,7 @@ func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, s
 	}
 
 	if err := p.db.DeleteServer(ctx, server.ID); err != nil {
-		p.failOperation(ctx, op, server.ID, "internal", err)
+		p.failOperation(ctx, op, server.ID, err)
 		return
 	}
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
@@ -580,7 +580,7 @@ func (p *Provisioner) runPromote(ctx context.Context, op store.Operation, server
 	server.Role = "control-plane"
 	server.NodeName = ""
 	if err := p.db.UpdateServer(ctx, &server); err != nil {
-		p.failOperation(ctx, op, server.ID, "internal", err)
+		p.failOperation(ctx, op, server.ID, err)
 		return
 	}
 

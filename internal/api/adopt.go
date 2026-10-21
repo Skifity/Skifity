@@ -86,7 +86,7 @@ func (s *Server) adoptClusterNodes(ctx context.Context, teamID string) int {
 			Adopted:    true,
 		}
 		if server.Status == store.ServerReady {
-			server.StatusDetail = "Found in the cluster. Skifity did not install this server and has no way in over SSH."
+			server.StatusDetail = ServerDetailAdopted
 		}
 		if err := s.db.CreateServer(ctx, &server); err != nil {
 			s.log.Warn("could not adopt a node the cluster already has",

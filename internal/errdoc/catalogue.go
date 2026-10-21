@@ -815,6 +815,33 @@ func ServerHasVolumes(server string, volumes []string) *Problem {
 		With("volumes", strings.Join(volumes, ", "))
 }
 
+// ServerBusy is a change asked of a server something else is already being
+// done to. Two removals at once drain the same node twice, and a removal in
+// the middle of an add deletes the node while k3s is still installing on it.
+func ServerBusy(server string) *Problem {
+	return New("server.busy", "Something is already being done to this server").
+		WithCause("%s is being added, removed or promoted, and that has not finished.", server).
+		WithImpact("Nothing was changed.").
+		WithFix("Wait for it to finish, then try again. The server's page shows each step as it runs.").
+		WithStatus(http.StatusConflict).
+		With("server", server)
+}
+
+// RetryNotAnAdd is a retry asked of a server whose last operation was not
+// adding it. Retry runs the steps that add a server, so after a removal or a
+// promotion that failed it would join the server back to the cluster and mark
+// the removal done.
+func RetryNotAnAdd(server, kind string) *Problem {
+	return New("server.retry_not_add", "Only adding a server can be retried").
+		WithCause("The last thing done to %s was not adding it, and Retry runs the steps that add a server.", server).
+		WithImpact("Nothing was changed. Retrying would have joined the server to the cluster again.").
+		WithFix("If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server.").
+		WithDocs("/docs/adding-servers#removing-a-server").
+		WithStatus(http.StatusConflict).
+		With("server", server).
+		With("operation", kind)
+}
+
 // --- SSH and provisioning ---
 
 // SSHUnreachable means the TCP connection to the SSH port failed.

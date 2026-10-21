@@ -5934,6 +5934,8 @@ components:
         role: {type: string, description: 'control-plane or worker.'}
         status: {type: string, enum: [pending, provisioning, ready, not_ready, failed, removing]}
         status_detail: {type: string}
+        status_key: {type: string, description: 'Names the sentence in status_detail so it can be translated: "problem:" and an error code for a failure, or adopted, nodeGone, nodeNotReady or cancelled. Absent for a sentence Kubernetes wrote.'}
+        status_args: {type: array, items: {type: string}, description: 'The values in status_detail, in order.'}
         node_name: {type: string}
         external_ip: {type: string}
         internal_ip: {type: string}

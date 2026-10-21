@@ -11,6 +11,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/crypto"
+	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/settings"
 	"skifity/internal/sshx"
@@ -374,6 +375,43 @@ func TestRetryResumesFromTheFailedStep(t *testing.T) {
 	lastAuth := sshServer.AuthAttempts()[len(sshServer.AuthAttempts())-1]
 	if lastAuth != "publickey" {
 		t.Fatalf("the retry authenticated with %q; the password was not stored, so it must use the key", lastAuth)
+	}
+}
+
+// Retry runs the steps that add a server. After a removal that failed at the
+// drain, running them would reinstall k3s, join the server back to the
+// cluster it was leaving and mark the removal succeeded.
+func TestOnlyAddingAServerIsRetried(t *testing.T) {
+	p, db, _, teamID := testHarness(t)
+	server := store.Server{TeamID: teamID, Name: "worker-1", Host: "203.0.113.20", SSHPort: 22,
+		SSHUser: "root", Role: "worker", Status: store.ServerFailed}
+	if err := db.CreateServer(t.Context(), &server); err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+	for _, kind := range []string{"server.remove", "server.promote"} {
+		op := store.Operation{TeamID: teamID, Kind: kind, TargetType: "server", TargetID: server.ID}
+		if err := db.CreateOperation(t.Context(), &op, removeServerSteps); err != nil {
+			t.Fatalf("CreateOperation: %v", err)
+		}
+		if err := db.SetStepStatus(t.Context(), op.ID, "drain", store.StepFailed, store.StepNote{}, ""); err != nil {
+			t.Fatalf("SetStepStatus: %v", err)
+		}
+		if err := db.SetOperationStatus(t.Context(), op.ID, store.OpFailed, "drain.failed", "The drain failed"); err != nil {
+			t.Fatalf("SetOperationStatus: %v", err)
+		}
+
+		_, err := p.RetryServer(t.Context(), server.ID)
+		var problem *errdoc.Problem
+		if !errors.As(err, &problem) || problem.Code != "server.retry_not_add" {
+			t.Fatalf("retrying a failed %s: %v", kind, err)
+		}
+		after, err := db.GetOperation(t.Context(), op.ID)
+		if err != nil {
+			t.Fatalf("GetOperation: %v", err)
+		}
+		if after.Status != store.OpFailed {
+			t.Fatalf("a refused retry of %s left it %s", kind, after.Status)
+		}
 	}
 }
 

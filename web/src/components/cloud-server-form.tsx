@@ -261,7 +261,7 @@ export function CloudServerForm({
 
             <Field orientation="horizontal">
               <FieldContent>
-                <FieldTitle>{t("servers.cloud.sshCluster")}</FieldTitle>
+                <FieldLabel htmlFor="cloud-ssh-cluster">{t("servers.cloud.sshCluster")}</FieldLabel>
                 <FieldDescription>{t("servers.cloud.sshClusterHelp")}</FieldDescription>
               </FieldContent>
               <Switch
@@ -272,7 +272,7 @@ export function CloudServerForm({
             </Field>
             <Field orientation="horizontal">
               <FieldContent>
-                <FieldTitle>{t("servers.controlPlane")}</FieldTitle>
+                <FieldLabel htmlFor="cloud-control-plane">{t("servers.controlPlane")}</FieldLabel>
                 <FieldDescription>{t("servers.controlPlaneHelp")}</FieldDescription>
               </FieldContent>
               <Switch

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"skifity/internal/api"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/runsafe"
@@ -108,7 +109,7 @@ func (p *Provisioner) failStep(ctx context.Context, op store.Operation, serverID
 	if errors.Is(err, context.Canceled) {
 		p.setStep(ctx, op, key, store.StepFailed, store.StepNote{Message: "Cancelled", Key: "cancelled"}, "")
 		_ = p.db.SetOperationStatus(ctx, op.ID, store.OpCancelled, "cancelled", "Cancelled by a user.")
-		_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, "Cancelled")
+		_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, api.ServerDetailCancelled)
 		p.publishOperation(ctx, op.ID)
 		return
 	}
@@ -140,9 +141,13 @@ func (p *Provisioner) failStep(ctx context.Context, op store.Operation, serverID
 }
 
 // failOperation records a failure that is not tied to a particular step.
-func (p *Provisioner) failOperation(ctx context.Context, op store.Operation, serverID, code string, err error) {
+//
+// The code recorded is the problem's own, not a fixed one: the server's status
+// line is the problem's title, and the panel finds that title's translation by
+// this code.
+func (p *Provisioner) failOperation(ctx context.Context, op store.Operation, serverID string, err error) {
 	problem := errdoc.From(err)
-	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, code, problem.Error())
+	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, problem.Code, problem.Error())
 	if serverID != "" {
 		_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, problem.Title)
 	}
