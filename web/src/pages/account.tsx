@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
+import { downloadText } from "@/components/settings/recovery-key"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -67,6 +68,8 @@ type TwoFactorSetup = {
   secret: string
   uri: string
   recovery_codes: string[]
+  /** The URI drawn as a QR code, an SVG document. */
+  qr_svg?: string
 }
 
 export function AccountPage() {
@@ -109,14 +112,7 @@ function RecoveryReminder({ onAcknowledged }: { onAcknowledged: () => void }) {
   })
 
   const download = () => {
-    if (!key) return
-    const blob = new Blob([`${key}\n`], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = "skifity-recovery-key.txt"
-    anchor.click()
-    URL.revokeObjectURL(url)
+    if (key) downloadText("skifity-recovery-key.txt", `${key}\n`)
   }
 
   return (
@@ -139,9 +135,12 @@ function RecoveryReminder({ onAcknowledged }: { onAcknowledged: () => void }) {
                 disabled={acknowledge.isPending}
                 onClick={() => acknowledge.mutate()}
               >
+                {acknowledge.isPending && <Spinner />}
                 {t("auth.recoveryKeyConfirm")}
               </Button>
             </div>
+            {/* A failure here was silent, and the reminder simply stayed. */}
+            {acknowledge.error != null && <ErrorDisplay error={acknowledge.error} compact />}
           </>
         ) : (
           <Button
@@ -167,7 +166,10 @@ function ProfileCard() {
 
   const save = useMutation({
     mutationFn: () => api.patch("/api/me", { name: name.trim() }),
-    onSuccess: () => void refresh(),
+    onSuccess: () => {
+      toast.success(t("auth.profileSaved"))
+      void refresh()
+    },
   })
 
   return (
@@ -197,6 +199,14 @@ function ProfileCard() {
 }
 
 function PasswordCard() {
+  const { hasPassword } = useSession()
+  // An account that signs in only through the identity provider has no
+  // current password to type. It was shown this form anyway, told elsewhere
+  // to set a password here, and each try counted as a wrong guess.
+  return hasPassword ? <ChangePasswordCard /> : <SetPasswordCard />
+}
+
+function ChangePasswordCard() {
   const { t } = useTranslation()
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
@@ -207,7 +217,9 @@ function PasswordCard() {
     onSuccess: () => {
       setCurrent("")
       setNext("")
-      toast.success(t("common.save"))
+      toast.success(t("auth.passwordChanged"))
+      // The server signed every other device out; the list should say so.
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
     },
   })
 
@@ -259,33 +271,153 @@ function PasswordCard() {
   )
 }
 
+/**
+ * A first password, for an account that signs in through single sign-on.
+ *
+ * It asks for no current one, because there is none. The panel wants a
+ * recent sign-in instead, which such an account has for a few minutes after
+ * coming back from the provider — the help says so, because the step-up
+ * dialog that opens otherwise asks for a password this account does not have.
+ */
+function SetPasswordCard() {
+  const { t } = useTranslation()
+  const { refresh } = useSession()
+  const [next, setNext] = useState("")
+  const [again, setAgain] = useState("")
+  const differ = again.length > 0 && again !== next
+
+  const set = useMutation({
+    mutationFn: () => api.put("/api/me/password", { new_password: next }),
+    onSuccess: () => {
+      setNext("")
+      setAgain("")
+      toast.success(t("auth.passwordSet"))
+      void refresh()
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+      // Unlinking the provider is possible now there is another way in.
+      void queryClient.invalidateQueries({ queryKey: ["me-sso"] })
+    },
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("auth.setPasswordTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            set.mutate()
+          }}
+        >
+          <p className="text-sm text-muted-foreground">{t("auth.setPasswordHelp")}</p>
+          <Field>
+            <FieldLabel htmlFor="set-password">{t("auth.newPassword")}</FieldLabel>
+            <Input
+              id="set-password"
+              type="password"
+              autoComplete="new-password"
+              value={next}
+              onChange={(event) => setNext(event.target.value)}
+              required
+            />
+          </Field>
+          <Field data-invalid={differ || undefined}>
+            <FieldLabel htmlFor="set-password-again">{t("auth.newPasswordAgain")}</FieldLabel>
+            <Input
+              id="set-password-again"
+              type="password"
+              autoComplete="new-password"
+              value={again}
+              aria-invalid={differ || undefined}
+              onChange={(event) => setAgain(event.target.value)}
+              required
+            />
+            {differ && <FieldError>{t("auth.passwordsDiffer")}</FieldError>}
+          </Field>
+          {set.error != null && <ErrorDisplay error={set.error} compact />}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={set.isPending || !next || next !== again}>
+              {set.isPending && <Spinner />}
+              {set.isPending ? t("common.saving") : t("auth.setPassword")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
 function TwoFactorCard() {
   const { t } = useTranslation()
-  const { user, recoveryCodesLeft, refresh } = useSession()
+  const { user, teams, recoveryCodesLeft, refresh } = useSession()
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null)
   const [code, setCode] = useState("")
+  // The recovery codes the panel has just made, on screen until the person
+  // says they have them. They used to go the moment the first code was
+  // confirmed, which was the only copy there would ever be.
+  const [codes, setCodes] = useState<string[] | null>(null)
   const confirmReplace = useConfirm()
+  const confirmDisable = useConfirm()
 
   const start = useMutation({
     mutationFn: () => api.post<TwoFactorSetup>("/api/me/totp"),
-    onSuccess: (data) => setSetup(data),
+    onSuccess: (data) => {
+      setSetup(data)
+      setCodes(data.recovery_codes)
+    },
   })
 
-  const confirm = useMutation({
+  const turnOn = useMutation({
     mutationFn: () => api.post("/api/me/totp/confirm", { code: code.trim() }),
     onSuccess: () => {
       setSetup(null)
       setCode("")
+      void refresh()
+      // Turning it on signs every other device out.
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] })
+    },
+  })
+
+  const regenerate = useMutation({
+    mutationFn: () => api.post<{ recovery_codes: string[] }>("/api/me/totp/recovery-codes"),
+    onSuccess: (data) => {
+      setCodes(data.recovery_codes)
       void refresh()
     },
   })
 
   const disable = useMutation({
     mutationFn: () => api.delete("/api/me/totp"),
-    onSuccess: () => void refresh(),
+    onSuccess: () => {
+      setCodes(null)
+      void refresh()
+    },
   })
 
-  const codesLeft = recoveryCodesLeft
+  // Teams that would refuse this account the moment it signs in with a
+  // password alone. Named, because "you may be locked out of something" is a
+  // sentence nobody acts on.
+  const strict = teams.filter((candidate) => candidate.require_strong_auth)
+
+  const askDisable = () => {
+    void confirmDisable({
+      title: t("auth.twoFactorDisableTitle"),
+      description: t("auth.twoFactorDisableConfirm"),
+      consequence:
+        strict.length > 0
+          ? t("auth.twoFactorDisableStrongTeams", {
+              teams: strict.map((candidate) => candidate.name).join(", "),
+            })
+          : undefined,
+      confirmLabel: t("auth.twoFactorDisable"),
+      destructive: true,
+    }).then((yes) => {
+      if (yes) disable.mutate()
+    })
+  }
 
   return (
     <Card>
@@ -298,7 +430,7 @@ function TwoFactorCard() {
       <CardContent className="space-y-4">
         {/* Codes are shown whenever the panel has just generated them, on or
             off: this is the only moment they exist in readable form. */}
-        {setup?.recovery_codes?.length ? <RecoveryCodes codes={setup.recovery_codes} /> : null}
+        {codes?.length ? <RecoveryCodes codes={codes} onDone={() => setCodes(null)} /> : null}
 
         {user?.totp_enabled ? (
           <>
@@ -306,19 +438,19 @@ function TwoFactorCard() {
               <ShieldCheckIcon className="size-4 shrink-0" />
               {t("auth.twoFactorEnabled")}
             </p>
-            {codesLeft > 0 ? (
+            {recoveryCodesLeft > 0 ? (
               <p className="text-sm text-muted-foreground">
-                {t("auth.recoveryCodesLeft", { count: codesLeft })}
+                {t("auth.recoveryCodesLeft", { count: recoveryCodesLeft })}
               </p>
             ) : (
               <p className="text-sm text-warning">{t("auth.recoveryCodesNone")}</p>
             )}
             {disable.error != null && <ErrorDisplay error={disable.error} compact />}
-            {start.error != null && <ErrorDisplay error={start.error} compact />}
+            {regenerate.error != null && <ErrorDisplay error={regenerate.error} compact />}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                disabled={start.isPending}
+                disabled={regenerate.isPending}
                 onClick={() => {
                   void confirmReplace({
                     title: t("auth.recoveryCodesRegenerate"),
@@ -326,14 +458,15 @@ function TwoFactorCard() {
                     consequence: t("auth.recoveryCodesReplaced"),
                     confirmLabel: t("auth.recoveryCodesRegenerate"),
                   }).then((yes) => {
-                    if (yes) start.mutate()
+                    if (yes) regenerate.mutate()
                   })
                 }}
               >
-                {start.isPending && <Spinner />}
+                {regenerate.isPending && <Spinner />}
                 {t("auth.recoveryCodesRegenerate")}
               </Button>
-              <Button variant="ghost" disabled={disable.isPending} onClick={() => disable.mutate()}>
+              <Button variant="ghost" disabled={disable.isPending} onClick={askDisable}>
+                {disable.isPending && <Spinner />}
                 {t("auth.twoFactorDisable")}
               </Button>
             </div>
@@ -343,10 +476,27 @@ function TwoFactorCard() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault()
-              confirm.mutate()
+              turnOn.mutate()
             }}
           >
             <p className="text-sm text-muted-foreground">{t("auth.twoFactorIntro")}</p>
+            {setup.qr_svg && (
+              <img
+                src={`data:image/svg+xml;utf8,${encodeURIComponent(setup.qr_svg)}`}
+                alt={t("auth.twoFactorQRAlt")}
+                // White whatever the theme: an authenticator reads dark on
+                // light, and the drawing carries its own quiet zone.
+                className="size-48 rounded-md border bg-white"
+              />
+            )}
+            {/* On a phone there is nothing to scan with: the same URI opens
+                the authenticator app directly. */}
+            <a
+              href={setup.uri}
+              className="inline-flex min-h-6 items-center text-sm underline underline-offset-4"
+            >
+              {t("auth.twoFactorOpenApp")}
+            </a>
             <div className="space-y-2">
               <Label>{t("auth.twoFactorSecret")}</Label>
               <pre className="rounded-md border bg-muted p-3 font-mono text-xs break-all">
@@ -366,13 +516,22 @@ function TwoFactorCard() {
                 required
               />
             </Field>
-            {confirm.error != null && <ErrorDisplay error={confirm.error} compact />}
+            {turnOn.error != null && <ErrorDisplay error={turnOn.error} compact />}
             <div className="flex gap-2">
-              <Button type="submit" disabled={confirm.isPending || code.length < 6}>
-                {confirm.isPending && <Spinner />}
+              <Button type="submit" disabled={turnOn.isPending || code.length < 6}>
+                {turnOn.isPending && <Spinner />}
                 {t("auth.twoFactorConfirm")}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setSetup(null)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  // The codes do nothing until two-factor is on, and starting
+                  // again makes a new set.
+                  setSetup(null)
+                  setCodes(null)
+                }}
+              >
                 {t("common.cancel")}
               </Button>
             </div>
@@ -773,18 +932,10 @@ function SingleSignOnCard() {
   )
 }
 
-function RecoveryCodes({ codes }: { codes: string[] }) {
+function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   const { t } = useTranslation()
 
-  const download = () => {
-    const blob = new Blob([`${codes.join("\n")}\n`], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = "skifity-recovery-codes.txt"
-    anchor.click()
-    URL.revokeObjectURL(url)
-  }
+  const download = () => downloadText("skifity-recovery-codes.txt", `${codes.join("\n")}\n`)
 
   const copy = () => {
     void navigator.clipboard.writeText(codes.join("\n")).then(
@@ -814,6 +965,9 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
           <Button variant="outline" size="sm" onClick={copy}>
             <CopyIcon className="size-4" />
             {t("common.copy")}
+          </Button>
+          <Button size="sm" onClick={onDone}>
+            {t("auth.recoveryCodesConfirm")}
           </Button>
         </div>
       </AlertDescription>
@@ -887,7 +1041,7 @@ function SessionsCard() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("common.type")}</TableHead>
-                <TableHead className="hidden sm:table-cell">IP</TableHead>
+                <TableHead className="hidden sm:table-cell">{t("common.ipAddress")}</TableHead>
                 <TableHead>{t("servers.lastSeen")}</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -1003,15 +1157,41 @@ function TokensCard() {
         {secret && (
           <Alert>
             <AlertTitle>{t("auth.tokenShownOnce")}</AlertTitle>
-            <AlertDescription>
+            <AlertDescription className="space-y-2">
               <pre className="mt-2 w-full rounded-md border bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap">
                 {secret}
               </pre>
+              {/* "Copy it now", with something to copy it with, and a way
+                  to put it away once it has been. */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard
+                      .writeText(secret)
+                      .then(() => toast.success(t("common.copied")))
+                      .catch(() => toast.error(t("common.copyFailed")))
+                  }}
+                >
+                  <CopyIcon className="size-4" />
+                  {t("common.copy")}
+                </Button>
+                <Button size="sm" onClick={() => setSecret(null)}>
+                  {t("common.done")}
+                </Button>
+              </div>
             </AlertDescription>
           </Alert>
         )}
 
-        {(tokens.data?.items.length ?? 0) > 0 && (
+        {tokens.isLoading ? (
+          <Skeleton className="h-16" />
+        ) : tokens.error ? (
+          <ErrorDisplay error={tokens.error} onRetry={() => void tokens.refetch()} />
+        ) : (tokens.data?.items.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("auth.tokensNone")}</p>
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -1027,10 +1207,24 @@ function TokensCard() {
                   <TableCell>
                     <div className="font-medium">
                       {token.name}
-                      {token.scopes === "read" && (
+                      {/* A token limited some other way — a plugin's
+                          apps:read — says what it is limited to, in the
+                          scopes' own words. */}
+                      {token.scopes === "read" ? (
                         <Badge variant="secondary" className="ml-2 text-[10px]">
                           {t("auth.tokenAccessRead")}
                         </Badge>
+                      ) : (
+                        token.scopes &&
+                        token.scopes.split(",").map((scope) => (
+                          <Badge
+                            key={scope}
+                            variant="secondary"
+                            className="ml-2 font-mono text-[10px]"
+                          >
+                            {scope.trim()}
+                          </Badge>
+                        ))
                       )}
                     </div>
                     <div className="font-mono text-xs text-muted-foreground">

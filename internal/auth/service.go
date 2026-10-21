@@ -505,8 +505,34 @@ func (s *Service) RecoveryCodesLeft(ctx context.Context, userID string) (int, er
 	return s.db.CountRecoveryCodes(ctx, userID)
 }
 
+// RecoveryCodeCount is how many recovery codes a set has.
+const RecoveryCodeCount = 8
+
+// RegenerateRecoveryCodes replaces a user's recovery codes with a new set and
+// returns it, the only time the new codes exist in readable form.
+//
+// Only while two-factor is on: the codes get past the second factor, and an
+// account without one has nothing for them to get past. Turning it on gives a
+// set of its own.
+func (s *Service) RegenerateRecoveryCodes(ctx context.Context, user store.User) ([]string, error) {
+	if !user.TOTPEnabled {
+		return nil, ErrTOTPOff
+	}
+	codes, err := GenerateRecoveryCodes(RecoveryCodeCount)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.StoreRecoveryCodes(ctx, user.ID, codes); err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
 // ErrTOTPAlreadyOn is setting two-factor up on an account that has it.
 var ErrTOTPAlreadyOn = errors.New("two-factor authentication is already on; turn it off first to set it up again")
+
+// ErrTOTPOff is asking for what only an account with two-factor has.
+var ErrTOTPOff = errors.New("two-factor authentication is not on for this account")
 
 // ConfirmTOTP enables two-factor once the user proves they can generate a code,
 // and signs out every other session. A session somebody else took before now
@@ -533,16 +559,7 @@ func (s *Service) ConfirmTOTP(ctx context.Context, user *store.User, code, keepS
 	if err := s.db.UpdateUser(ctx, user); err != nil {
 		return err
 	}
-	sessions, err := s.db.ListSessions(ctx, user.ID)
-	if err != nil {
-		return err
-	}
-	for _, session := range sessions {
-		if session.ID != keepSessionID {
-			_ = s.db.DeleteSession(ctx, session.ID)
-		}
-	}
-	return nil
+	return s.signOutOthers(ctx, user.ID, keepSessionID)
 }
 
 // DisableTOTP turns two-factor off and forgets the secret.
@@ -559,6 +576,13 @@ func (s *Service) DisableTOTP(ctx context.Context, user *store.User) error {
 
 // ChangePassword sets a new password and signs every other session out.
 func (s *Service) ChangePassword(ctx context.Context, user *store.User, current, next, keepSessionID, ip string) error {
+	// An account that signs in through the identity provider has no current
+	// password to type. Checking one anyway failed on the hash and counted as
+	// a wrong guess, so somebody setting their first password walked towards
+	// a lockout. SetPassword is that path.
+	if user.PasswordHash == "" {
+		return ErrNoPassword
+	}
 	// Metered like signing in and stepping up. Without it a stolen session or
 	// a narrow token was an unmetered way to guess the password — and a right
 	// guess set a new one.
@@ -582,7 +606,42 @@ func (s *Service) ChangePassword(ctx context.Context, user *store.User, current,
 		return err
 	}
 	// A password change must invalidate anything an attacker already holds.
-	sessions, err := s.db.ListSessions(ctx, user.ID)
+	return s.signOutOthers(ctx, user.ID, keepSessionID)
+}
+
+// SetPassword gives an account that has no password its first one, and signs
+// every other session out.
+//
+// There is no current password to ask for, so the caller has to have made the
+// person prove who they are some other way a moment ago — a fresh single
+// sign-on, or a step-up — which is requireRecentAuth in internal/api. An
+// account that has a password is refused: changing one asks for it, and this
+// must not be a way around that.
+func (s *Service) SetPassword(ctx context.Context, user *store.User, next, keepSessionID string) error {
+	if user.PasswordHash != "" {
+		return ErrPasswordExists
+	}
+	if err := DefaultPasswordPolicy().Check(next); err != nil {
+		return err
+	}
+	hash, err := s.hashPassword(ctx, next)
+	if err != nil {
+		return err
+	}
+	// Only the hash: the row was read at the start of the request, and the
+	// rest of it is not this call's to write back.
+	if err := s.db.UpdatePasswordHash(ctx, user.ID, hash); err != nil {
+		return err
+	}
+	user.PasswordHash = hash
+	// A new way in is the moment to close the ones nobody is using: a session
+	// somebody else holds would otherwise outlive the account being secured.
+	return s.signOutOthers(ctx, user.ID, keepSessionID)
+}
+
+// signOutOthers ends every session of a user but one.
+func (s *Service) signOutOthers(ctx context.Context, userID, keepSessionID string) error {
+	sessions, err := s.db.ListSessions(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -594,6 +653,12 @@ func (s *Service) ChangePassword(ctx context.Context, user *store.User, current,
 	}
 	return nil
 }
+
+// ErrNoPassword is changing the password of an account that has none.
+var ErrNoPassword = errors.New("this account has no password yet; set one instead")
+
+// ErrPasswordExists is setting a first password on an account that has one.
+var ErrPasswordExists = errors.New("this account already has a password; change it with the current one")
 
 // ErrNoSecondProof is returned when an account has neither a password nor a
 // second factor to re-check, which is the one case where a step-up cannot be

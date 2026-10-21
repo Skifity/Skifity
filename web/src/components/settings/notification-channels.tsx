@@ -103,10 +103,13 @@ function useKindLabel() {
  */
 function useChannelKinds() {
   const { team } = useSession()
+  // Listing the kinds is for adding a channel, which only an owner or an
+  // admin may; anybody else would be asking for a refusal.
+  const canChange = team?.role === "owner" || team?.role === "admin"
   return useQuery({
     queryKey: ["notification-kinds", team?.id],
     queryFn: () => api.get<List<NotificationKind>>(`/api/teams/${team!.id}/notifications/kinds`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && canChange,
   })
 }
 
@@ -114,6 +117,8 @@ export function NotificationChannels() {
   const { t } = useTranslation()
   const confirmRemove = useConfirm()
   const { team } = useSession()
+  // Every change here, a test message included, is an owner's or an admin's.
+  const canChange = team?.role === "owner" || team?.role === "admin"
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const kinds = useChannelKinds()
@@ -166,10 +171,12 @@ export function NotificationChannels() {
           title={t("notifications.empty")}
           description={t("notifications.help")}
           action={
-            <Button onClick={() => setAdding(true)}>
-              <PlusIcon className="size-4" />
-              {t("notifications.add")}
-            </Button>
+            canChange && (
+              <Button onClick={() => setAdding(true)}>
+                <PlusIcon className="size-4" />
+                {t("notifications.add")}
+              </Button>
+            )
           }
         />
       ) : (
@@ -210,47 +217,51 @@ export function NotificationChannels() {
                       <p className="truncate text-xs text-muted-foreground">{reach(channel)}</p>
                     )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={sendTest.isPending}
-                    onClick={() => sendTest.mutate(channel.id)}
-                  >
-                    <SendIcon className="size-4" />
-                    {t("notifications.test")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("common.edit")}
-                    onClick={() => setEditing(channel.id)}
-                  >
-                    <PencilIcon className="size-4 text-muted-foreground" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("common.remove")}
-                    disabled={remove.isPending}
-                    onClick={() =>
-                      void confirmRemove({
-                        title: t("common.remove"),
-                        description: t("notifications.removeConfirm", { name: channel.name }),
-                        confirmLabel: t("common.remove"),
-                        destructive: true,
-                      }).then((yes) => {
-                        if (yes) remove.mutate(channel.id)
-                      })
-                    }
-                  >
-                    <Trash2Icon className="size-4 text-muted-foreground" />
-                  </Button>
+                  {canChange && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={sendTest.isPending}
+                        onClick={() => sendTest.mutate(channel.id)}
+                      >
+                        <SendIcon className="size-4" />
+                        {t("notifications.test")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("common.edit")}
+                        onClick={() => setEditing(channel.id)}
+                      >
+                        <PencilIcon className="size-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("common.remove")}
+                        disabled={remove.isPending}
+                        onClick={() =>
+                          void confirmRemove({
+                            title: t("common.remove"),
+                            description: t("notifications.removeConfirm", { name: channel.name }),
+                            confirmLabel: t("common.remove"),
+                            destructive: true,
+                          }).then((yes) => {
+                            if (yes) remove.mutate(channel.id)
+                          })
+                        }
+                      >
+                        <Trash2Icon className="size-4 text-muted-foreground" />
+                      </Button>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ),
           )}
 
-          {!adding && (
+          {canChange && !adding && (
             <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
               <PlusIcon className="size-4" />
               {t("notifications.add")}
@@ -259,7 +270,7 @@ export function NotificationChannels() {
         </div>
       )}
 
-      {adding && <ChannelForm onDone={() => setAdding(false)} />}
+      {canChange && adding && <ChannelForm onDone={() => setAdding(false)} />}
       {remove.error != null && <ErrorDisplay error={remove.error} />}
       {sendTest.error != null && <ErrorDisplay error={sendTest.error} />}
     </div>

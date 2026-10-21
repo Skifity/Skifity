@@ -28,6 +28,11 @@ type SessionState = {
    * or single sign-on, so the panel can say why such a team refuses.
    */
   strongAuth: boolean
+  /**
+   * False for an account that signs in only through the identity provider,
+   * which sets a first password rather than changing one.
+   */
+  hasPassword: boolean
   setTeam: (team: Team) => void
   refresh: () => Promise<void>
   signOut: () => Promise<void>
@@ -45,6 +50,7 @@ type Bootstrap = {
   teams: Team[]
   recoveryCodesLeft: number
   strongAuth: boolean
+  hasPassword: boolean
 }
 
 async function loadSession(): Promise<Bootstrap> {
@@ -60,6 +66,7 @@ async function loadSession(): Promise<Bootstrap> {
       teams: [],
       recoveryCodesLeft: 0,
       strongAuth: false,
+      hasPassword: true,
     }
   }
   try {
@@ -68,6 +75,7 @@ async function loadSession(): Promise<Bootstrap> {
       teams: Team[]
       recovery_codes_left?: number
       strong_auth?: boolean
+      has_password?: boolean
     }>("/api/me")
     return {
       needsSetup: false,
@@ -76,6 +84,7 @@ async function loadSession(): Promise<Bootstrap> {
       teams: me.teams,
       recoveryCodesLeft: me.recovery_codes_left ?? 0,
       strongAuth: me.strong_auth ?? false,
+      hasPassword: me.has_password ?? true,
     }
   } catch {
     // Not signed in. That is an answer, not a failure.
@@ -86,6 +95,7 @@ async function loadSession(): Promise<Bootstrap> {
       teams: [],
       recoveryCodesLeft: 0,
       strongAuth: false,
+      hasPassword: true,
     }
   }
 }
@@ -159,6 +169,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       meta: session.data?.meta ?? null,
       recoveryCodesLeft: session.data?.recoveryCodesLeft ?? 0,
       strongAuth: session.data?.strongAuth ?? false,
+      hasPassword: session.data?.hasPassword ?? true,
       setTeam,
       refresh,
       signOut,

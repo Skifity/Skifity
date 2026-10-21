@@ -51,6 +51,26 @@ export const SECRET_MANAGER_KINDS: SecretManagerKind[] = ["vault", "infisical", 
 /** How often the apps that read a connection are refreshed on their own. */
 const REFRESH_MINUTES = [0, 15, 60, 360, 1440]
 
+/**
+ * The presets, and the interval a connection already has when it is not one
+ * of them. The server takes any number of minutes from 5 to 1440, and the CLI
+ * passes whatever it is given, so `--refresh 30` drew an empty select.
+ */
+function refreshChoices(current: number): number[] {
+  return REFRESH_MINUTES.includes(current)
+    ? REFRESH_MINUTES
+    : [...REFRESH_MINUTES, current].sort((a, b) => a - b)
+}
+
+/** What an interval is called: a preset's own words, or its minutes. */
+function useRefreshLabel() {
+  const { t } = useTranslation()
+  return (minutes: number) =>
+    REFRESH_MINUTES.includes(minutes)
+      ? t(`secretManagers.refreshOption.${minutes}`)
+      : t("secretManagers.refreshEvery", { count: minutes })
+}
+
 type SettingField = { name: string; placeholder?: string; optional?: boolean }
 
 /** What each kind's form asks for that is not secret. */
@@ -144,6 +164,7 @@ export function SecretManagersCard() {
   const { team } = useSession()
   const confirm = useConfirm()
   const isAdmin = team?.role === "admin" || team?.role === "owner"
+  const refreshLabel = useRefreshLabel()
   const path = `/api/teams/${team?.id}/secret-managers`
   const managers = useQuery({
     queryKey: ["secret-managers", team?.id],
@@ -264,15 +285,15 @@ export function SecretManagersCard() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {REFRESH_MINUTES.map((minutes) => (
+                        {refreshChoices(manager.refresh_minutes).map((minutes) => (
                           <SelectItem key={minutes} value={String(minutes)}>
-                            {t(`secretManagers.refreshOption.${minutes}`)}
+                            {refreshLabel(minutes)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span>{t(`secretManagers.refreshOption.${manager.refresh_minutes}`)}</span>
+                    <span>{refreshLabel(manager.refresh_minutes)}</span>
                   )}
                   {manager.last_refresh_at && (
                     <span>

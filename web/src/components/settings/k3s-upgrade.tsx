@@ -63,7 +63,7 @@ export function K3sUpgradeCard() {
   const data = current.data!
   const releases = data.releases
   const target = typed ?? releases.find((r) => r.stable)?.version ?? releases[0]?.version ?? ""
-  const shown = checked === target ? plan.data?.plan : undefined
+  const shown = checked === target.trim() ? plan.data?.plan : undefined
 
   const say = (reason: UpgradeReason) =>
     t(`k3s.reason.${reason.code}`, { ...reason.params, defaultValue: reason.text })
@@ -132,7 +132,12 @@ export function K3sUpgradeCard() {
             disabled={!target.trim() || plan.isFetching}
             onClick={() => {
               start.reset()
-              setChecked(target.trim())
+              // The same version again is a question asked again — after a
+              // blocking plan was removed in a terminal, say — and setting
+              // state to what it already is would not ask anything.
+              const version = target.trim()
+              if (checked === version) void plan.refetch()
+              else setChecked(version)
             }}
           >
             {plan.isFetching && <Spinner />}

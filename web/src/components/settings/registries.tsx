@@ -29,6 +29,8 @@ type Saved = { registry: RegistryCredential; checked: boolean; unchecked_because
 export function RegistriesCard() {
   const { t } = useTranslation()
   const { team } = useSession()
+  // Adding and removing one is an owner's or an admin's, as the API says.
+  const canChange = team?.role === "owner" || team?.role === "admin"
   const confirm = useConfirm()
   const path = `/api/teams/${team?.id}/registries`
   const registries = useQuery({
@@ -42,19 +44,25 @@ export function RegistriesCard() {
   const [password, setPassword] = useState("")
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["registries", team?.id] })
+  /** Closes the form and forgets what was typed into it, the password above all. */
+  const close = () => {
+    setAdding(false)
+    setHost("")
+    setUsername("")
+    setPassword("")
+  }
   const save = useMutation({
     mutationFn: () => api.put<Saved>(path, { host, username, password }),
     onSuccess: (saved) => {
       refresh()
-      setAdding(false)
-      setHost("")
-      setUsername("")
-      setPassword("")
-      // Saved either way; only one of them was asked of the registry.
+      close()
+      // Saved either way; only one of them was asked of the registry. Why it
+      // could not be asked is the server's own English, so the panel says
+      // what it means instead.
       if (saved.checked) toast.success(t("registries.checked", { host: saved.registry.host }))
       else
         toast.warning(t("registries.unchecked", { host: saved.registry.host }), {
-          description: saved.unchecked_because,
+          description: t("registries.uncheckedHelp"),
         })
     },
   })
@@ -74,7 +82,7 @@ export function RegistriesCard() {
           </CardTitle>
           <CardDescription>{t("registries.help")}</CardDescription>
         </div>
-        {!adding && (
+        {canChange && !adding && (
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
             <PlusIcon className="size-4" />
             {t("registries.add")}
@@ -100,31 +108,33 @@ export function RegistriesCard() {
                   <span className="text-xs text-muted-foreground">
                     {formatRelative(registry.updated_at)}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("registries.remove", { host: registry.host })}
-                    disabled={remove.isPending}
-                    onClick={() =>
-                      void confirm({
-                        title: t("registries.remove", { host: registry.host }),
-                        description: t("registries.removeConfirm", { host: registry.host }),
-                        confirmLabel: t("common.delete"),
-                        destructive: true,
-                      }).then((yes) => {
-                        if (yes) remove.mutate(registry.id)
-                      })
-                    }
-                  >
-                    <Trash2Icon className="size-4" />
-                  </Button>
+                  {canChange && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("registries.remove", { host: registry.host })}
+                      disabled={remove.isPending}
+                      onClick={() =>
+                        void confirm({
+                          title: t("registries.remove", { host: registry.host }),
+                          description: t("registries.removeConfirm", { host: registry.host }),
+                          confirmLabel: t("common.delete"),
+                          destructive: true,
+                        }).then((yes) => {
+                          if (yes) remove.mutate(registry.id)
+                        })
+                      }
+                    >
+                      <Trash2Icon className="size-4" />
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
           )
         )}
 
-        {adding && (
+        {canChange && adding && (
           <form
             className="grid gap-3 sm:grid-cols-3"
             onSubmit={(event) => {
@@ -178,7 +188,7 @@ export function RegistriesCard() {
                 {save.isPending && <Spinner />}
                 {t("registries.save")}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+              <Button type="button" variant="ghost" onClick={close}>
                 {t("common.cancel")}
               </Button>
             </div>

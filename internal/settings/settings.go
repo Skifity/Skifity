@@ -51,6 +51,16 @@ type Definition struct {
 	// Validate rejects values that would fail later in a confusing way. An
 	// empty value always passes, because clearing a setting is allowed.
 	Validate func(string) error
+	// Default is what the panel does while the setting is unset, written as
+	// the value that would say the same thing: "true" for a switch that is on
+	// until somebody turns it off. Empty when unset means "nothing", or
+	// something no value can say, such as following k3s's stable channel.
+	//
+	// It is not written anywhere. The code that reads the setting decides
+	// what unset means, and this has to agree with it — the panel drew
+	// "Scan images" as off on every panel nobody had touched, beside help text
+	// saying it was on, because the form only knew what was stored.
+	Default string
 }
 
 // Kind is the shape of a setting's value.
@@ -206,11 +216,12 @@ var Definitions = []Definition{
 		Help:     "Which builder to use when a repository has no Dockerfile. Railpack is the one available: Nixpacks was replaced by Railpack, and its command line is not published as an image a build can run.",
 		Options:  []string{"railpack"},
 		Validate: validateOneOf("railpack"),
+		Default:  "railpack",
 	},
 	{
 		Key: KeyTelemetryDisabled, Label: "Disable usage reporting", Group: GroupGeneral,
 		Help: "Skifity sends nothing anywhere by default. This setting exists so that the absence of telemetry is visible rather than assumed.",
-		Kind: KindBool, Validate: validateBool,
+		Kind: KindBool, Validate: validateBool, Default: "false",
 	},
 	{
 		Key: KeySSOIssuer, Label: "Single sign-on issuer", Group: GroupSignIn,
@@ -243,12 +254,13 @@ var Definitions = []Definition{
 		Key: KeySSOAutoCreate, Label: "Create an account on first sign-in", Group: GroupSignIn,
 		Help: "With this off, somebody the provider knows and this panel does not is refused, " +
 			"so accounts are created by invitation rather than by anyone with a company address.",
-		Kind: KindBool, Validate: validateBool,
+		Kind: KindBool, Validate: validateBool, Default: "false",
 	},
 	{
 		Key: KeySSOGroupsClaim, Label: "Groups claim", Group: GroupSignIn,
 		Help:        "The claim in the ID token that lists a person's groups. Empty is groups. The provider has to put it in the ID token.",
 		Placeholder: "groups",
+		Default:     "groups",
 	},
 	{
 		Key: KeySSOGroupRoles, Label: "Groups to teams", Group: GroupSignIn, Multiline: true,
@@ -279,6 +291,7 @@ var Definitions = []Definition{
 		Placeholder: "7",
 		Kind:        KindNumber,
 		Validate:    validateInt,
+		Default:     "7",
 	},
 	{
 		Key: KeyFlannelBackend, Label: "How servers talk to each other", Group: GroupCluster,
@@ -289,6 +302,7 @@ var Definitions = []Definition{
 		Kind:     KindChoice,
 		Options:  []string{FlannelWireGuard, FlannelVXLAN},
 		Validate: validateOneOf(FlannelWireGuard, FlannelVXLAN),
+		Default:  FlannelWireGuard,
 	},
 	{
 		Key: KeyBuildConcurrency, Label: "Builds at once", Group: GroupCluster,
@@ -297,6 +311,7 @@ var Definitions = []Definition{
 		Placeholder: "2",
 		Kind:        KindNumber,
 		Validate:    validateBuildConcurrency,
+		Default:     strconv.Itoa(DefaultBuildConcurrency),
 	},
 	{
 		Key: KeyGitPrivateHosts, Label: "Git hosts on your own network", Group: GroupGit, Multiline: true,
@@ -318,7 +333,7 @@ var Definitions = []Definition{
 		Help: "On by default. Every image an app runs is scanned with Trivy when it is built or deployed, and again on the schedule below, " +
 			"and each app's Security tab lists what was found. Trivy downloads its database of vulnerabilities from mirror.gcr.io or ghcr.io; " +
 			"on a cluster with no way out to the internet, turn this off. A scan never holds up a deploy unless the setting below says so.",
-		Kind: KindBool, Validate: validateBool,
+		Kind: KindBool, Validate: validateBool, Default: "true",
 	},
 	{
 		Key: KeyScanSchedule, Label: "Scan running apps again", Group: GroupScanning,
@@ -327,13 +342,14 @@ var Definitions = []Definition{
 			"Apps are scanned one at a time, and one scanned in the last twelve hours is skipped.",
 		Placeholder: DefaultScanSchedule,
 		Validate:    validatePanelBackupSchedule,
+		Default:     DefaultScanSchedule,
 	},
 	{
 		Key: KeyScanBlockCritical, Label: "Stop deploys with a critical vulnerability that has a fix", Group: GroupScanning,
 		Help: "Off by default. When on, a deploy waits for its image to be scanned and stops if a critical vulnerability in it has a fixed version, " +
 			"naming the packages and the versions to move to. Somebody can still deploy it by accepting the vulnerabilities, which is recorded " +
 			"in the activity log. A scan that cannot run lets the deploy through, and a rollback is never stopped.",
-		Kind: KindBool, Validate: validateBool,
+		Kind: KindBool, Validate: validateBool, Default: "false",
 	},
 	{
 		Key: KeyDeploymentHistory, Label: "Deployment records to keep, per app", Group: GroupCluster,
@@ -344,6 +360,7 @@ var Definitions = []Definition{
 		Placeholder: "50",
 		Kind:        KindNumber,
 		Validate:    validateInt,
+		Default:     "50",
 	},
 	{
 		Key: KeyAuditHistoryDays, Label: "Keep the activity log for", Group: GroupCluster,
@@ -353,6 +370,7 @@ var Definitions = []Definition{
 		Placeholder: "365",
 		Kind:        KindNumber,
 		Validate:    validateInt,
+		Default:     "365",
 	},
 	{
 		Key: KeyWildcardDomain, Label: "Wildcard domain", Group: GroupDomains,
@@ -418,7 +436,7 @@ var Definitions = []Definition{
 		Help: "On by default. The firewall downloads DB-IP's free monthly databases, which need no account, so that a rule " +
 			"can name a country or a network. Turn it off on a cluster with no way out to the internet, or if you would rather " +
 			"nothing was downloaded — a rule about a country cannot then be saved, which is better than one that is quietly skipped.",
-		Kind: KindBool, Validate: validateBool,
+		Kind: KindBool, Validate: validateBool, Default: "true",
 	},
 	{
 		Key: KeyGeoCountryURL, Label: "Country database", Group: GroupDomains,
@@ -443,6 +461,7 @@ var Definitions = []Definition{
 		Placeholder: "https://plugins.skifity.com/index.json",
 		Kind:        KindURL,
 		Validate:    validateURL,
+		Default:     pluginstore.DefaultIndexURL,
 	},
 	{
 		Key: KeyPluginStoreKey, Label: "Plugin store signing key", Group: GroupPlugins,
@@ -483,6 +502,7 @@ var Definitions = []Definition{
 		Help:        "When to copy this panel's own database to the bucket above, as a cron schedule in UTC. Empty copies it every day at 03:17; off turns it off. The master key is never uploaded: keep it somewhere else, because a restore needs both.",
 		Placeholder: "17 3 * * *",
 		Validate:    validatePanelBackupSchedule,
+		Default:     "17 3 * * *",
 	},
 	{
 		Key: KeyBackupPassphrase, Label: "Backup passphrase", Group: GroupStorage, Secret: true,
@@ -494,12 +514,13 @@ var Definitions = []Definition{
 		Help:        "How many copies of this panel's database to keep in the bucket. Older ones are deleted after a new one succeeds, never before. Empty keeps 14.",
 		Placeholder: "14",
 		Kind:        KindNumber, Validate: validatePanelBackupKeep,
+		Default: "14",
 	},
 	{Key: KeySMTPHost, Label: "SMTP host", Group: GroupEmail, Placeholder: "smtp.example.com",
 		Help: "Needed for email notifications and for password reset emails."},
 	{Key: KeySMTPPort, Label: "SMTP port", Group: GroupEmail, Placeholder: "587",
 		Help: "587 for STARTTLS, which is what almost everything uses now. 465 is implicit TLS; 25 is unencrypted and usually blocked by hosting providers.",
-		Kind: KindNumber, Validate: validatePort},
+		Kind: KindNumber, Validate: validatePort, Default: "587"},
 	{Key: KeySMTPUser, Label: "SMTP username", Group: GroupEmail,
 		Help: "Leave empty if your mail server accepts mail from this cluster without signing in."},
 	{Key: KeySMTPPassword, Label: "SMTP password", Group: GroupEmail, Secret: true,
@@ -507,8 +528,11 @@ var Definitions = []Definition{
 	{Key: KeySMTPFrom, Label: "Send email from", Group: GroupEmail, Placeholder: "skifity@example.com",
 		Help: "The address notifications appear to come from. It usually has to be one your mail server is allowed to send as, or the mail is rejected.",
 		Kind: KindEmail, Validate: validateEmail},
+	// Unset is "when the server offers it", which is on in every sense a
+	// person reads a switch in; "true" makes it required.
 	{Key: KeySMTPTLS, Label: "Use STARTTLS", Group: GroupEmail, Kind: KindBool, Validate: validateBool,
-		Help: "Leave on unless your mail server only accepts plain connections."},
+		Default: "true",
+		Help:    "Leave on unless your mail server only accepts plain connections."},
 	{Key: KeyRegistryURL, Label: "External registry", Group: GroupRegistry,
 		Help:        "Where built images are pushed. Leave empty to use the registry inside the cluster, which is the simplest option.",
 		Placeholder: "registry.example.com/skifity",

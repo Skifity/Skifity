@@ -12,11 +12,20 @@
  *
  * Every mutation whose request is a DELETE has to be fired from something that
  * asks first — useConfirm or useDeleteConfirm — or be named here with a reason.
+ *
+ * "Asks first" means in the same handler. This used to look at the 700
+ * characters before each `.mutate(` for anything called confirm-something, and
+ * the "Turn it off" button for two-factor passed because the "Get new codes"
+ * button beside it asked: one click switched the second factor off and
+ * deleted the recovery codes. So the source is parsed, and the question is
+ * asked of the handler the call is actually in — the onClick, the onSubmit, or
+ * the named function around it — not of whatever happens to be nearby.
  */
 
 import { readFileSync, readdirSync } from "node:fs"
 import { join, dirname, relative } from "node:path"
 import { fileURLToPath } from "node:url"
+import ts from "typescript"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(here, "..", "src")
@@ -45,12 +54,52 @@ const ALLOWED = new Map([
   ],
 ])
 
+/** The hooks that ask, and the functions they return are called. */
+const ASKING_HOOKS = new Set(["useConfirm", "useDeleteConfirm"])
+
+/** Hooks whose callback is the handler itself, rather than a step inside one. */
+const HANDLER_HOOKS = new Set(["useCallback", "useMemo", "useEffect"])
+
 function* walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const full = join(directory, entry.name)
     if (entry.isDirectory()) yield* walk(full)
     else yield full
   }
+}
+
+/** Calls fn for every node under root, root included. */
+function visit(root, fn) {
+  const step = (node) => {
+    fn(node)
+    ts.forEachChild(node, step)
+  }
+  step(root)
+}
+
+const isFunction = (node) =>
+  ts.isArrowFunction(node) ||
+  ts.isFunctionExpression(node) ||
+  ts.isFunctionDeclaration(node) ||
+  ts.isMethodDeclaration(node)
+
+/** The name a call is made through: `useMutation(...)` → "useMutation". */
+const calleeName = (call) => (ts.isIdentifier(call.expression) ? call.expression.text : null)
+
+/**
+ * Whether a function is a handler of its own, or one step inside one.
+ *
+ * `.then((yes) => …)`, `.map(…)` and the like are steps: their callback runs
+ * as part of whatever called them, so the search carries on outwards. A
+ * function anywhere else — an onClick, a property, a named const — is the
+ * handler, and the search stops there.
+ */
+function isHandler(fn) {
+  const parent = fn.parent
+  if (parent && ts.isCallExpression(parent) && parent.arguments.includes(fn)) {
+    return HANDLER_HOOKS.has(calleeName(parent) ?? "")
+  }
+  return true
 }
 
 const problems = []
@@ -60,26 +109,91 @@ for (const file of walk(srcDir)) {
   const rel = relative(srcDir, file).split("\\").join("/")
   if (rel.startsWith("components/ui/")) continue
   const source = readFileSync(file, "utf8")
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 
-  // Every mutation whose body calls api.delete.
-  const mutations = [
-    ...source.matchAll(/const (\w+) = useMutation\(\{([\s\S]{0,400}?)\n\s{2}\}\)/g),
-  ]
-  for (const [, name, body] of mutations) {
-    if (!/api\.delete\(/.test(body)) continue
+  // The functions that ask: whatever useConfirm and useDeleteConfirm returned.
+  const askers = new Set()
+  // Every mutation whose body calls api.delete, with the function it lives
+  // in, so a name reused by the next component is not confused with it.
+  const deletes = []
+  visit(sf, (node) => {
+    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) return
+    const init = node.initializer
+    if (!init || !ts.isCallExpression(init)) return
+    const hook = calleeName(init)
+    if (ASKING_HOOKS.has(hook)) askers.add(node.name.text)
+    if (hook !== "useMutation") return
+    let deletes_ = false
+    visit(init, (inner) => {
+      if (
+        ts.isCallExpression(inner) &&
+        ts.isPropertyAccessExpression(inner.expression) &&
+        ts.isIdentifier(inner.expression.expression) &&
+        inner.expression.expression.text === "api" &&
+        inner.expression.name.text === "delete"
+      ) {
+        deletes_ = true
+      }
+    })
+    if (!deletes_) return
+    let scope = node.parent
+    while (scope && !isFunction(scope) && !ts.isSourceFile(scope)) scope = scope.parent
+    deletes.push({ name: node.name.text, scope })
+  })
 
-    // Where is it fired from? Look at what precedes each .mutate( call.
-    for (const call of source.matchAll(new RegExp(`${name}\\.mutate\\(`, "g"))) {
-      const before = source.slice(Math.max(0, call.index - 700), call.index)
-      const asks = /confirm\w*\(|askThen\w*\(|\bconfirmDelete\(/i.test(before)
-      if (asks) continue
-      if (ALLOWED.has(`${rel}:${name}`)) continue
-      const line = source.slice(0, call.index).split("\n").length
-      problems.push(
-        `${rel}:${line} fires ${name}, which DELETEs, without asking first — ` +
-          `use useConfirm or useDeleteConfirm, or add it to ALLOWED in this script with a reason`,
-      )
+  /** Whether a call is to one of the asking functions, or chains off one. */
+  const asks = (call) => {
+    let callee = call.expression
+    // confirm(…).then(…): the call that matters is the one .then hangs off.
+    while (ts.isPropertyAccessExpression(callee) && ts.isCallExpression(callee.expression)) {
+      callee = callee.expression.expression
     }
+    return ts.isIdentifier(callee) && askers.has(callee.text)
+  }
+
+  for (const { name, scope } of deletes) {
+    if (ALLOWED.has(`${rel}:${name}`)) continue
+    visit(scope, (node) => {
+      if (
+        !ts.isCallExpression(node) ||
+        !ts.isPropertyAccessExpression(node.expression) ||
+        !ts.isIdentifier(node.expression.expression) ||
+        node.expression.expression.text !== name ||
+        !["mutate", "mutateAsync"].includes(node.expression.name.text)
+      ) {
+        return
+      }
+
+      // Outwards from the call to its handler: a confirm that this call is
+      // inside the answer of — confirm(…).then((yes) => …) — asks.
+      let handler = null
+      let asked = false
+      for (let up = node.parent; up && up !== scope; up = up.parent) {
+        if (ts.isCallExpression(up) && asks(up)) {
+          asked = true
+          break
+        }
+        if (isFunction(up) && isHandler(up)) {
+          handler = up
+          break
+        }
+      }
+      // Or one the same handler awaited before it: `if (await confirm(…))`.
+      if (!asked && handler) {
+        visit(handler, (inner) => {
+          if (ts.isCallExpression(inner) && inner.getEnd() <= node.getStart() && asks(inner)) {
+            asked = true
+          }
+        })
+      }
+      if (asked) return
+
+      const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1
+      problems.push(
+        `${rel}:${line} fires ${name}, which DELETEs, from a handler that does not ask first — ` +
+          `use useConfirm or useDeleteConfirm in that same handler, or add it to ALLOWED in this script with a reason`,
+      )
+    })
   }
 }
 
@@ -90,4 +204,4 @@ if (problems.length > 0) {
   process.exit(1)
 }
 
-console.log("destructive: every delete asks first.")
+console.log("destructive: every delete asks first, in the handler that fires it.")

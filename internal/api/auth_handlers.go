@@ -94,6 +94,10 @@ type meResponse struct {
 	// a second factor or single sign-on, so the panel can say why a team is
 	// refusing rather than only that it is.
 	StrongAuth bool `json:"strong_auth"`
+	// HasPassword is false for an account that signs in only through the
+	// identity provider, which the account page offers a first password to
+	// rather than asking for a current one it does not have.
+	HasPassword bool `json:"has_password"`
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +125,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, meResponse{
 		User: user, Teams: teams, RecoverySaved: user.RecoverySaved, RecoveryCodesLeft: codesLeft,
-		StrongAuth: s.strongAuth(r, user),
+		StrongAuth: s.strongAuth(r, user), HasPassword: user.PasswordHash != "",
 	})
 }
 
@@ -182,6 +186,14 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		keep = session.ID
 	}
 	if err := s.auth.ChangePassword(r.Context(), &user, req.CurrentPassword, req.NewPassword, keep, clientIPFrom(r.Context())); err != nil {
+		if errors.Is(err, auth.ErrNoPassword) {
+			writeError(w, r, errdoc.New("auth.password_missing", "This account has no password yet").
+				WithCause("It signs in through your identity provider, so there is no current password to change.").
+				WithImpact("Nothing was changed.").
+				WithFix("Set a password on the account page instead; that asks for no current one.").
+				WithStatus(http.StatusConflict))
+			return
+		}
 		if errors.Is(err, auth.ErrLockedOut) {
 			writeError(w, r, errdoc.RateLimited(s.auth.LockoutWindow().String()))
 			return
@@ -195,6 +207,45 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "", "auth.password_changed", "user", user.ID, user.Email)
+	writeOK(w)
+}
+
+type setAccountPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+}
+
+// handleSetAccountPassword gives an account that signs in only through the identity
+// provider its first password.
+//
+// It asks for no current password, because there is none. It is behind
+// requireRecentAuth instead, which such an account passes by having signed in
+// through the provider a moment ago. Without it the account page told those
+// accounts to set a password, and the only form there wanted the current one —
+// and counted each attempt as a wrong guess.
+func (s *Server) handleSetAccountPassword(w http.ResponseWriter, r *http.Request) {
+	user, _ := UserFrom(r.Context())
+	var req setAccountPasswordRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	keep := ""
+	if session, ok := sessionFrom(r.Context()); ok {
+		keep = session.ID
+	}
+	if err := s.auth.SetPassword(r.Context(), &user, req.NewPassword, keep); err != nil {
+		if errors.Is(err, auth.ErrPasswordExists) {
+			writeError(w, r, errdoc.New("auth.password_exists", "This account already has a password").
+				WithCause("A password can only be set without the current one on an account that has none.").
+				WithImpact("Nothing was changed.").
+				WithFix("Change it with the current password instead.").
+				WithStatus(http.StatusConflict))
+			return
+		}
+		writeError(w, r, errdoc.BadRequest(err.Error()))
+		return
+	}
+	s.audit(r, "", "auth.password_set", "user", user.ID, user.Email)
 	writeOK(w)
 }
 
@@ -237,7 +288,7 @@ func (s *Server) handleReauth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.New("auth.no_password", "This account has no password to confirm with").
 			WithCause("It signs in through your identity provider, and two-factor authentication is not turned on here, so there is nothing this panel can ask you for.").
 			WithImpact("Nothing was changed.").
-			WithFix("Turn on two-factor authentication for this account first, or use an account with a password.").
+			WithFix("Sign out and sign in again through your identity provider, then try again within a few minutes. Or turn on two-factor authentication for this account, which this panel can then ask for.").
 			WithStatus(http.StatusBadRequest))
 	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrInvalidTOTP):
 		writeError(w, r, errdoc.New("auth.reauth_failed", "That is not the right password").
@@ -325,6 +376,10 @@ type totpSetupResponse struct {
 	Secret        string   `json:"secret"`
 	URI           string   `json:"uri"`
 	RecoveryCodes []string `json:"recovery_codes"`
+	// QRCode is the URI drawn as a QR code, an SVG document, for the setup
+	// screen to show. Empty when it could not be drawn: the secret and the URI
+	// still work, typed in or opened on the phone.
+	QRCode string `json:"qr_svg,omitempty"`
 }
 
 func (s *Server) handleStartTOTP(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +394,7 @@ func (s *Server) handleStartTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	codes, err := auth.GenerateRecoveryCodes(8)
+	codes, err := auth.GenerateRecoveryCodes(auth.RecoveryCodeCount)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -351,7 +406,43 @@ func (s *Server) handleStartTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, totpSetupResponse{Secret: secret, URI: uri, RecoveryCodes: codes})
+	picture, err := auth.TOTPQRCode(uri)
+	if err != nil {
+		s.log.Warn("could not draw the two-factor QR code", "error", err)
+	}
+	writeJSON(w, http.StatusOK, totpSetupResponse{
+		Secret: secret, URI: uri, RecoveryCodes: codes, QRCode: picture,
+	})
+}
+
+type recoveryCodesResponse struct {
+	RecoveryCodes []string `json:"recovery_codes"`
+}
+
+// handleRegenerateRecoveryCodes replaces the account's recovery codes with a
+// new set, for somebody who has used them up or lost the paper.
+//
+// The account page offered this as "Get new codes" and sent it to the route
+// that starts two-factor setup, which refuses an account that has it on, so
+// the button failed every time. Behind requireRecentAuth like the rest of
+// two-factor: these are a way past the second factor.
+func (s *Server) handleRegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	user, _ := UserFrom(r.Context())
+	codes, err := s.auth.RegenerateRecoveryCodes(r.Context(), user)
+	if errors.Is(err, auth.ErrTOTPOff) {
+		writeError(w, r, errdoc.New("auth.totp_off", "Two-factor authentication is not on").
+			WithCause("Recovery codes get past the second factor, and this account does not have one.").
+			WithImpact("Nothing was changed.").
+			WithFix("Turn on two-factor authentication on the account page. It comes with a set of recovery codes.").
+			WithStatus(http.StatusConflict))
+		return
+	}
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.audit(r, "", "auth.recovery_codes_regenerated", "user", user.ID, user.Email)
+	writeJSON(w, http.StatusOK, recoveryCodesResponse{RecoveryCodes: codes})
 }
 
 type totpConfirmRequest struct {

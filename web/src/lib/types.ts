@@ -814,6 +814,8 @@ export type Setting = {
   options?: string[]
   multiline?: boolean
   placeholder?: string
+  /** What the panel does while nothing is stored, written as a value. */
+  default?: string
 }
 
 export type Component = {

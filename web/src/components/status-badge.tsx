@@ -52,6 +52,7 @@ export function toneFor(status: string): Tone {
     case "deploying":
     case "updating":
     case "removing":
+    case "installing":
       return "busy"
     // "degraded" is up, and one failure away from not being. It is not success
     // and it is not a failure, and showing it as either is the whole reason it

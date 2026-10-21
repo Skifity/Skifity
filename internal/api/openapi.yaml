@@ -570,6 +570,24 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: setAccountPassword
+      tags: [Account]
+      summary: Set a first password on an account that has none
+      description: >-
+        For an account that signs in only through the identity provider, so
+        there is no current password to ask for. Refused for an account that
+        has one. Wants a recent sign-in, and every other session is signed out.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetAccountPasswordRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
 
   /api/me/sessions:
     get:
@@ -846,6 +864,24 @@ paths:
         - sessionCookie: []
       responses:
         '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/me/totp/recovery-codes:
+    post:
+      operationId: regenerateRecoveryCodes
+      tags: [Account]
+      summary: Replace the two-factor recovery codes with a new set
+      description: >-
+        The codes from before stop working. Refused when two-factor
+        authentication is off. Wants a recent sign-in.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The new codes, shown this once.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RecoveryCodes'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/me/totp/confirm:
@@ -4907,7 +4943,8 @@ paths:
       description: >-
         Panel administrators, signed in within the last few minutes; a token
         cannot. The old key is kept when any secret failed to rewrap, so that
-        secret can still be read.
+        secret can still be read. The recovery key changes with it, so every
+        administrator is asked to save it again.
       security:
         - sessionCookie: []
       responses:
@@ -5357,7 +5394,7 @@ components:
 
     Me:
       type: object
-      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth]
+      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth, has_password]
       properties:
         user: {$ref: '#/components/schemas/User'}
         teams:
@@ -5366,6 +5403,7 @@ components:
         recovery_saved: {type: boolean}
         recovery_codes_left: {type: integer, description: 'Unused two-factor recovery codes.'}
         strong_auth: {type: boolean, description: 'Whether this sign-in would satisfy a team that requires a second factor.'}
+        has_password: {type: boolean, description: 'False for an account that signs in only through the identity provider.'}
 
     UpdateMeRequest:
       type: object
@@ -5381,6 +5419,13 @@ components:
       additionalProperties: false
       properties:
         current_password: {type: string, format: password}
+        new_password: {type: string, format: password}
+
+    SetAccountPasswordRequest:
+      type: object
+      required: [new_password]
+      additionalProperties: false
+      properties:
         new_password: {type: string, format: password}
 
     Session:
@@ -5410,6 +5455,13 @@ components:
       properties:
         secret: {type: string}
         uri: {type: string, description: 'An otpauth URI, for a QR code.'}
+        recovery_codes: {type: array, items: {type: string}}
+        qr_svg: {type: string, description: 'The URI drawn as a QR code, an SVG document. Absent if it could not be drawn.'}
+
+    RecoveryCodes:
+      type: object
+      required: [recovery_codes]
+      properties:
         recovery_codes: {type: array, items: {type: string}}
 
     TOTPConfirmRequest:
@@ -8757,6 +8809,7 @@ components:
         options: {type: array, items: {type: string}}
         multiline: {type: boolean}
         placeholder: {type: string}
+        default: {type: string, description: 'What the panel does while the setting is unset, as a value. Absent when unset means nothing.'}
 
     SettingList:
       type: object

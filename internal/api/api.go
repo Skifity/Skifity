@@ -312,7 +312,12 @@ func (s *Server) routes() chi.Router {
 				sensitive.Post("/me/totp", s.handleStartTOTP)
 				sensitive.Post("/me/totp/confirm", s.handleConfirmTOTP)
 				sensitive.Delete("/me/totp", s.handleDisableTOTP)
+				sensitive.Post("/me/totp/recovery-codes", s.handleRegenerateRecoveryCodes)
 				sensitive.Post("/me/tokens", s.handleCreateToken)
+				// A first password, on an account that signs in through the
+				// identity provider: there is no current one to ask for, so
+				// a recent sign-in is what stands in for it.
+				sensitive.Put("/me/password", s.handleSetAccountPassword)
 				// Linking a provider adds a way into the account, and
 				// unlinking one removes it: both are the account's own
 				// front door, so both ask for the password again.

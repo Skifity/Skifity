@@ -112,6 +112,19 @@ func (db *DB) UpdateUser(ctx context.Context, u *User) error {
 	return nil
 }
 
+// ForgetSavedRecoveryKeys asks every administrator to save the recovery key
+// again, because the one they saved no longer opens anything: the master key
+// it is a copy of was rotated away. One statement rather than UpdateUser per
+// row, for the reason UpdatePasswordHash gives.
+func (db *DB) ForgetSavedRecoveryKeys(ctx context.Context) error {
+	if _, err := db.Exec(ctx,
+		`UPDATE users SET recovery_saved = 0, updated_at = ? WHERE is_admin = 1 AND recovery_saved = 1`,
+		Now()); err != nil {
+		return fmt.Errorf("forget saved recovery keys: %w", err)
+	}
+	return nil
+}
+
 // UpdatePasswordHash writes only the password hash.
 //
 // Separate from UpdateUser, which writes eleven columns from whatever the

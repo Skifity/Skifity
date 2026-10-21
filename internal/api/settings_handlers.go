@@ -31,6 +31,9 @@ type settingView struct {
 	Options     []string `json:"options,omitempty"`
 	Multiline   bool     `json:"multiline,omitempty"`
 	Placeholder string   `json:"placeholder,omitempty"`
+	// Default is what the panel does while nothing is stored, so a switch
+	// that is on until somebody turns it off is drawn on.
+	Default string `json:"default,omitempty"`
 }
 
 func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +55,7 @@ func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
 			Options:     def.Options,
 			Multiline:   def.Multiline,
 			Placeholder: def.Placeholder,
+			Default:     def.Default,
 			Configured:  exists && row.Value != "",
 		}
 		if !def.Secret && exists {
@@ -337,6 +341,16 @@ func (s *Server) handleRotateMasterKey(w http.ResponseWriter, r *http.Request) {
 		if err := s.saveKeyring(); err != nil {
 			s.log.Warn("could not save the keyring after dropping retired keys", "error", err)
 		}
+	}
+
+	// The recovery key is the active master key, so every copy an
+	// administrator saved is of a key that no longer opens what was rewrapped
+	// — and, once it is dropped, opens nothing. They are each asked to save
+	// the new one, the one who rotated included: the answer shows them it.
+	// Rotating and keeping the old key on paper was a restore that failed on
+	// the day it was needed, with nothing having said so.
+	if err := s.db.ForgetSavedRecoveryKeys(ctx); err != nil {
+		s.log.Warn("could not ask the administrators to save the new recovery key", "error", err)
 	}
 
 	writeJSON(w, http.StatusOK, rotateResponse{

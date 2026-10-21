@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, Navigate, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -13,6 +13,7 @@ import {
   LinkIcon,
   PackagePlusIcon,
   PlusIcon,
+  RotateCcwIcon,
   ShieldAlertIcon,
   Trash2Icon,
   UserCogIcon,
@@ -26,10 +27,12 @@ import { BackupVerification } from "@/components/backup-verification"
 import { CloudProvidersCard } from "@/components/settings/cloud-providers"
 import { CertificatesCard } from "@/components/settings/certificates"
 import { DNSProvidersCard } from "@/components/settings/dns-providers"
+import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
 import { RegistriesCard } from "@/components/settings/registries"
+import { RecoveryKeyShown, downloadText } from "@/components/settings/recovery-key"
 import {
   AccessSummary,
   ChangeAccessDialog,
@@ -58,7 +61,9 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -75,6 +80,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
@@ -129,93 +135,65 @@ function groupsOf(items: Setting[]): { key: string; label: string }[] {
   return ordered
 }
 
+/**
+ * Who may open a tab, by what its API asks for.
+ *
+ * "admin" is the panel's administrator: panel-wide settings, components,
+ * plugins and the master key, all behind requireAdmin. "team" is anybody the
+ * team's own pages answer — the panel's administrator included, since its
+ * lists only want a viewer — while what they change is limited to the team's
+ * owners and admins inside each card. "teamAdmin" is a tab whose list itself
+ * wants the team's owner or admin: the audit log.
+ */
+type Access = "admin" | "team" | "teamAdmin"
+
+type NavGroup = "panel" | "team" | "integrations"
+
+const TABS: { value: string; label: string; group: NavGroup; access: Access }[] = [
+  { value: "panel", label: "settings.general", group: "panel", access: "admin" },
+  { value: "components", label: "settings.components", group: "panel", access: "admin" },
+  { value: "plugins", label: "settings.plugins", group: "panel", access: "admin" },
+  { value: "security", label: "settings.security", group: "panel", access: "admin" },
+  { value: "members", label: "settings.members", group: "team", access: "team" },
+  { value: "audit", label: "settings.auditLog", group: "team", access: "teamAdmin" },
+  { value: "git", label: "settings.git", group: "integrations", access: "team" },
+  { value: "certificates", label: "settings.certificates", group: "integrations", access: "team" },
+  { value: "dns", label: "settings.dnsProviders", group: "integrations", access: "team" },
+  { value: "cloud", label: "settings.cloudProviders", group: "integrations", access: "team" },
+  {
+    value: "notifications",
+    label: "settings.notifications",
+    group: "integrations",
+    access: "team",
+  },
+  { value: "secrets", label: "settings.secretManagers", group: "integrations", access: "team" },
+  { value: "logs", label: "settings.logDrains", group: "integrations", access: "team" },
+]
+
+const NAV_GROUPS: { key: NavGroup; label: string }[] = [
+  { key: "panel", label: "settings.navPanel" },
+  { key: "team", label: "settings.navTeam" },
+  { key: "integrations", label: "settings.navIntegrations" },
+]
+
+/** Whether the signed-in person is an owner or admin of the team in view. */
+function useTeamAdmin(): boolean {
+  const { team } = useSession()
+  return team?.role === "owner" || team?.role === "admin"
+}
+
 export function SettingsPage() {
   const { t } = useTranslation()
+  const { user, team } = useSession()
+  const teamAdmin = useTeamAdmin()
+  const isMobile = useIsMobile()
   // The tab is in the address, so a notification can link to the one it is
   // about: a certificate running out links to the certificates.
   const [params, setParams] = useSearchParams()
-  const tab = params.get("tab") ?? "panel"
-
-  return (
-    <Page>
-      <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
-
-      <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="panel">{t("settings.general")}</TabsTrigger>
-          <TabsTrigger value="git">{t("settings.git")}</TabsTrigger>
-          <TabsTrigger value="certificates">{t("settings.certificates")}</TabsTrigger>
-          <TabsTrigger value="dns">{t("settings.dnsProviders")}</TabsTrigger>
-          <TabsTrigger value="cloud">{t("settings.cloudProviders")}</TabsTrigger>
-          <TabsTrigger value="notifications">{t("settings.notifications")}</TabsTrigger>
-          <TabsTrigger value="secrets">{t("settings.secretManagers")}</TabsTrigger>
-          <TabsTrigger value="logs">{t("settings.logDrains")}</TabsTrigger>
-          <TabsTrigger value="components">{t("settings.components")}</TabsTrigger>
-          <TabsTrigger value="plugins">{t("settings.plugins")}</TabsTrigger>
-          <TabsTrigger value="members">{t("settings.members")}</TabsTrigger>
-          <TabsTrigger value="security">{t("settings.security")}</TabsTrigger>
-          <TabsTrigger value="audit">{t("settings.auditLog")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="panel" className="space-y-6 pt-4">
-          {/* Git and plugins have tabs of their own, below. */}
-          <SettingGroups except={["git", "plugins"]} />
-          <PanelBackupsCard />
-          <ExportCard />
-          <PanelUpgradeCard />
-        </TabsContent>
-        <TabsContent value="git" className="space-y-6 pt-4">
-          <GitSources />
-          <RegistriesCard />
-          <SettingGroups only={["git"]} />
-        </TabsContent>
-        <TabsContent value="certificates" className="pt-4">
-          <CertificatesCard />
-        </TabsContent>
-        <TabsContent value="dns" className="pt-4">
-          <DNSProvidersCard />
-        </TabsContent>
-        <TabsContent value="cloud" className="pt-4">
-          <CloudProvidersCard />
-        </TabsContent>
-        <TabsContent value="notifications" className="pt-4">
-          <NotificationChannels />
-        </TabsContent>
-        <TabsContent value="secrets" className="pt-4">
-          <SecretManagersCard />
-        </TabsContent>
-        <TabsContent value="logs" className="pt-4">
-          <LogDrains />
-        </TabsContent>
-        <TabsContent value="components" className="pt-4">
-          <ComponentsPanel />
-        </TabsContent>
-        <TabsContent value="plugins" className="space-y-6 pt-4">
-          <SettingGroups only={["plugins"]} />
-          <StoreCheckCard />
-        </TabsContent>
-        <TabsContent value="members" className="pt-4">
-          <MembersPanel />
-        </TabsContent>
-        <TabsContent value="security" className="pt-4">
-          <SecurityPanel />
-        </TabsContent>
-        <TabsContent value="audit" className="pt-4">
-          <AuditPanel />
-        </TabsContent>
-      </Tabs>
-    </Page>
-  )
-}
-
-function SettingGroups({ only, except }: { only?: string[]; except?: string[] }) {
-  const { t } = useTranslation()
+  // Edits to panel-wide settings, kept here rather than in each tab's form:
+  // a tab that is not shown is unmounted, and somebody who typed an SMTP host
+  // and went to look at the Git tab lost it without a word.
   const [draft, setDraft] = useState<Record<string, string>>({})
-
-  const settings = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => api.get<List<Setting>>("/api/settings"),
-  })
 
   const save = useMutation({
     mutationFn: () => api.put("/api/settings", { values: draft }),
@@ -226,60 +204,180 @@ function SettingGroups({ only, except }: { only?: string[]; except?: string[] })
     },
   })
 
-  if (settings.isLoading) return <Skeleton className="h-96" />
-  if (settings.error) {
-    return <ErrorDisplay error={settings.error} onRetry={() => void settings.refetch()} />
+  const isAdmin = user?.is_admin === true
+  const allowed = (access: Access) => {
+    if (access === "admin") return isAdmin
+    if (!team) return false
+    return access === "team" ? isAdmin || teamAdmin : teamAdmin
   }
+  const visible = TABS.filter((entry) => allowed(entry.access))
+  // Nothing here is theirs to see; the route should not have let them in.
+  if (visible.length === 0) return <Navigate to="/" replace />
 
-  const items = settings.data?.items ?? []
-  const dirty = Object.keys(draft).length > 0
-  const shown = groupsOf(items).filter(
-    (group) => (!only || only.includes(group.key)) && (!except || !except.includes(group.key)),
-  )
+  // An unknown tab, or one this person may not open, is the first one they may.
+  const tab = visible.find((entry) => entry.value === params.get("tab"))?.value ?? visible[0].value
+  const choose = (value: string) => setParams({ tab: value }, { replace: true })
+  const shows = (value: string) => visible.some((entry) => entry.value === value)
+  const nav = NAV_GROUPS.map((group) => ({
+    ...group,
+    tabs: visible.filter((entry) => entry.group === group.key),
+  })).filter((group) => group.tabs.length > 0)
 
-  /** The value a control should show: the edit in progress, else what is stored. */
-  const valueOf = (setting: Setting) =>
-    draft[setting.key] ?? (setting.secret ? "" : (setting.value ?? ""))
-
-  const set = (key: string, value: string) => setDraft({ ...draft, [key]: value })
+  const edit = (key: string, value: string | undefined) =>
+    setDraft((current) => {
+      const next = { ...current }
+      if (value === undefined) delete next[key]
+      else next[key] = value
+      return next
+    })
+  const pending = Object.keys(draft).length
 
   return (
-    <div className="space-y-6">
-      {shown.map((group) => {
-        const groupItems = items.filter((setting) => setting.group === group.key)
-        if (groupItems.length === 0) return null
-        return (
-          <Card key={group.key}>
-            <CardHeader>
-              <CardTitle className="text-base">
-                {group.label.includes(".") ? t(group.label) : group.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                {groupItems.map((setting) => (
-                  <SettingField
-                    key={setting.key}
-                    setting={setting}
-                    value={valueOf(setting)}
-                    edited={setting.key in draft}
-                    onChange={(value) => set(setting.key, value)}
-                  />
-                ))}
-              </FieldGroup>
-            </CardContent>
-          </Card>
-        )
-      })}
+    <Page>
+      <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
+
+      {/* Thirteen tabs in a row wrapped into a second, stretched one. On a
+          wide screen they are a list down the side, in groups; on a phone, a
+          picker. */}
+      <Tabs
+        value={tab}
+        onValueChange={choose}
+        orientation={isMobile ? "horizontal" : "vertical"}
+        className="gap-6"
+      >
+        {isMobile ? (
+          <Select value={tab} onValueChange={choose}>
+            <SelectTrigger className="w-full" aria-label={t("settings.sections")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {nav.map((group) => (
+                <SelectGroup key={group.key}>
+                  <SelectLabel>{t(group.label)}</SelectLabel>
+                  {group.tabs.map((entry) => (
+                    <SelectItem key={entry.value} value={entry.value}>
+                      {t(entry.label)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <nav aria-label={t("settings.sections")} className="w-48 shrink-0 space-y-4">
+            {nav.map((group) => (
+              <div key={group.key} className="space-y-1">
+                <p
+                  id={`settings-nav-${group.key}`}
+                  className="px-3 text-xs font-medium text-muted-foreground"
+                >
+                  {t(group.label)}
+                </p>
+                <TabsList
+                  aria-labelledby={`settings-nav-${group.key}`}
+                  className="w-full items-stretch gap-0.5 bg-transparent p-0"
+                >
+                  {group.tabs.map((entry) => (
+                    <TabsTrigger
+                      key={entry.value}
+                      value={entry.value}
+                      className="px-3 py-1.5 data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >
+                      {t(entry.label)}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+            ))}
+          </nav>
+        )}
+
+        <div className="min-w-0 flex-1">
+          {shows("panel") && (
+            <TabsContent value="panel" className="space-y-6">
+              {/* Git and plugins have tabs of their own. */}
+              <SettingGroups except={["git", "plugins"]} draft={draft} onEdit={edit} />
+              <PanelBackupsCard />
+              <PanelUpgradeCard />
+            </TabsContent>
+          )}
+          {shows("components") && (
+            <TabsContent value="components">
+              <ComponentsPanel />
+            </TabsContent>
+          )}
+          {shows("plugins") && (
+            <TabsContent value="plugins" className="space-y-6">
+              <SettingGroups only={["plugins"]} draft={draft} onEdit={edit} />
+              <StoreCheckCard />
+            </TabsContent>
+          )}
+          {shows("security") && (
+            <TabsContent value="security">
+              <SecurityPanel />
+            </TabsContent>
+          )}
+          {shows("members") && (
+            <TabsContent value="members">
+              <MembersPanel />
+            </TabsContent>
+          )}
+          {shows("audit") && (
+            <TabsContent value="audit">
+              <AuditPanel />
+            </TabsContent>
+          )}
+          {shows("git") && (
+            <TabsContent value="git" className="space-y-6">
+              <GitSources />
+              <RegistriesCard />
+              {/* The hosts and authorities builds trust are the whole panel's,
+                  so only its administrator sees them. */}
+              {isAdmin && <SettingGroups only={["git"]} draft={draft} onEdit={edit} />}
+            </TabsContent>
+          )}
+          {shows("certificates") && (
+            <TabsContent value="certificates">
+              <CertificatesCard />
+            </TabsContent>
+          )}
+          {shows("dns") && (
+            <TabsContent value="dns">
+              <DNSProvidersCard />
+            </TabsContent>
+          )}
+          {shows("cloud") && (
+            <TabsContent value="cloud">
+              <CloudProvidersCard />
+            </TabsContent>
+          )}
+          {shows("notifications") && (
+            <TabsContent value="notifications">
+              <NotificationChannels />
+            </TabsContent>
+          )}
+          {shows("secrets") && (
+            <TabsContent value="secrets">
+              <SecretManagersCard />
+            </TabsContent>
+          )}
+          {shows("logs") && (
+            <TabsContent value="logs">
+              <LogDrains />
+            </TabsContent>
+          )}
+        </div>
+      </Tabs>
 
       {save.error != null && <ErrorDisplay error={save.error} />}
 
       {/* The bar only appears once something has changed, so it is never a
-          button that does nothing. */}
-      {dirty && (
+          button that does nothing. It stays while somebody moves between
+          tabs, because the edits do. */}
+      {pending > 0 && (
         <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-lg border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
           <span className="text-sm text-muted-foreground">
-            {t("settings.unsaved", { count: Object.keys(draft).length })}
+            {t("settings.unsaved", { count: pending })}
           </span>
           <div className="flex gap-2">
             <Button
@@ -297,6 +395,140 @@ function SettingGroups({ only, except }: { only?: string[]; except?: string[] })
           </div>
         </div>
       )}
+    </Page>
+  )
+}
+
+function SettingGroups({
+  only,
+  except,
+  draft,
+  onEdit,
+}: {
+  only?: string[]
+  except?: string[]
+  draft: Record<string, string>
+  /** A new value for a setting, "" to clear it, or undefined to forget the edit. */
+  onEdit: (key: string, value: string | undefined) => void
+}) {
+  const { t } = useTranslation()
+  const confirmRemove = useConfirm()
+
+  const settings = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<List<Setting>>("/api/settings"),
+  })
+
+  // Removing a stored secret is its own act, asked about, and saved at once:
+  // it used to be what happened to anybody who typed in the box and then
+  // emptied it again, on the next save of something unrelated.
+  const removeSecret = useMutation({
+    mutationFn: (key: string) => api.put("/api/settings", { values: { [key]: "" } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  })
+
+  if (settings.isLoading) return <Skeleton className="h-96" />
+  if (settings.error) {
+    return <ErrorDisplay error={settings.error} onRetry={() => void settings.refetch()} />
+  }
+
+  const items = settings.data?.items ?? []
+  const shown = groupsOf(items).filter(
+    (group) => (!only || only.includes(group.key)) && (!except || !except.includes(group.key)),
+  )
+
+  /** What a text box shows: the edit in progress, else what is stored. */
+  const typed = (setting: Setting) =>
+    draft[setting.key] ?? (setting.secret ? "" : (setting.value ?? ""))
+
+  /**
+   * What a switch or a choice shows: the edit in progress, else what is
+   * stored, else what the panel does while nothing is — a cleared one
+   * included, which goes back to that.
+   */
+  const effective = (setting: Setting) => {
+    const edit = draft[setting.key]
+    if (edit !== undefined && edit !== "") return edit
+    if (edit === "") return setting.default ?? ""
+    return setting.value ?? setting.default ?? ""
+  }
+
+  const change = (setting: Setting, value: string) => {
+    // An emptied secret box is a change of mind, not an instruction: saving
+    // "" deletes what is stored, and the passphrase every backup is sealed
+    // with is not something to lose to a stray keystroke.
+    if (setting.secret && value.trim() === "") onEdit(setting.key, undefined)
+    else onEdit(setting.key, value)
+  }
+
+  /** Back to what unset means: forget an edit to an unset one, or clear a stored one. */
+  const reset = (setting: Setting) =>
+    onEdit(setting.key, setting.value === undefined ? undefined : "")
+
+  const askRemove = (setting: Setting, label: string) => {
+    void confirmRemove({
+      title: t("settings.removeSecretTitle", { name: label }),
+      description: t("settings.removeSecretConfirm"),
+      confirmLabel: t("common.remove"),
+      destructive: true,
+    }).then((yes) => {
+      if (!yes) return
+      removeSecret.mutate(setting.key, {
+        onSuccess: () => toast.success(t("settings.secretRemoved", { name: label })),
+      })
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {shown.map((group) => {
+        const groupItems = items.filter((setting) => setting.group === group.key)
+        if (groupItems.length === 0) return null
+        return (
+          <Card key={group.key}>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {group.label.includes(".") ? t(group.label) : group.label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup>
+                {groupItems.map((setting) => {
+                  const edit = draft[setting.key]
+                  return (
+                    <SettingField
+                      key={setting.key}
+                      setting={setting}
+                      value={
+                        setting.kind === "bool" || setting.kind === "choice"
+                          ? effective(setting)
+                          : typed(setting)
+                      }
+                      edited={edit !== undefined}
+                      // A switch or a choice cannot be emptied by hand, so it
+                      // offers the way back to unset; a text box is emptied.
+                      resettable={
+                        !setting.secret &&
+                        (setting.default !== undefined ||
+                          setting.kind === "bool" ||
+                          setting.kind === "choice") &&
+                        edit !== "" &&
+                        (setting.value !== undefined || edit !== undefined)
+                      }
+                      removing={removeSecret.isPending && removeSecret.variables === setting.key}
+                      onChange={(value) => change(setting, value)}
+                      onReset={() => reset(setting)}
+                      onRemove={(label) => askRemove(setting, label)}
+                    />
+                  )
+                })}
+              </FieldGroup>
+            </CardContent>
+          </Card>
+        )
+      })}
+
+      {removeSecret.error != null && <ErrorDisplay error={removeSecret.error} />}
     </div>
   )
 }
@@ -312,17 +544,29 @@ function SettingField({
   setting,
   value,
   edited,
+  resettable,
+  removing,
   onChange,
+  onReset,
+  onRemove,
 }: {
   setting: Setting
   value: string
   edited: boolean
+  /** Whether going back to what unset means would change anything. */
+  resettable: boolean
+  removing: boolean
   onChange: (value: string) => void
+  onReset: () => void
+  onRemove: (label: string) => void
 }) {
   const { t } = useTranslation()
   const id = `setting-${setting.key}`
+  // A text box that is empty shows what empty means, when there is a default.
   const placeholder =
-    setting.secret && setting.configured ? t("settings.secretStored") : setting.placeholder
+    setting.secret && setting.configured
+      ? t("settings.secretStored")
+      : (setting.default ?? setting.placeholder)
 
   // The server's label and help are English, because the server has one
   // language and the API, the CLI and an assistant all read them. The panel has
@@ -334,13 +578,31 @@ function SettingField({
   const label = t(`${field}.label`, { defaultValue: setting.label })
   const help = setting.help ? t(`${field}.help`, { defaultValue: setting.help }) : ""
 
+  const resetButton = resettable && (
+    <Button type="button" variant="ghost" size="xs" className="w-fit" onClick={onReset}>
+      <RotateCcwIcon />
+      {t("settings.resetToDefault")}
+    </Button>
+  )
+
   if (setting.kind === "bool") {
     return (
-      <Field orientation="horizontal">
+      <Field orientation="horizontal" data-edited={edited || undefined}>
         <FieldContent>
-          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          <FieldLabel htmlFor={id}>
+            {label}
+            {edited && (
+              <Badge variant="secondary" className="ml-2 text-[10px]">
+                {t("settings.edited")}
+              </Badge>
+            )}
+          </FieldLabel>
           <FieldDescription>{help}</FieldDescription>
+          {resetButton}
         </FieldContent>
+        {/* Unset is drawn as what unset does: "Scan images" is on until
+            somebody turns it off, and was drawn off beside help text saying
+            so. */}
         <Switch
           id={id}
           checked={value === "true"}
@@ -402,6 +664,20 @@ function SettingField({
       )}
 
       <FieldDescription>{help}</FieldDescription>
+      {resetButton}
+      {setting.secret && setting.configured && !edited && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="w-fit text-destructive hover:text-destructive"
+          disabled={removing}
+          onClick={() => onRemove(label)}
+        >
+          {removing ? <Spinner /> : <Trash2Icon />}
+          {t("common.remove")}
+        </Button>
+      )}
     </Field>
   )
 }
@@ -430,6 +706,8 @@ function inputType(setting: Setting): string {
 function StrongAuthCard() {
   const { t } = useTranslation()
   const { team, refresh } = useSession()
+  const teamAdmin = useTeamAdmin()
+  const confirm = useConfirm()
 
   const update = useMutation({
     mutationFn: (required: boolean) =>
@@ -437,7 +715,7 @@ function StrongAuthCard() {
     onSuccess: () => void refresh(),
   })
 
-  if (!team || (team.role !== "admin" && team.role !== "owner")) return null
+  if (!team || !teamAdmin) return null
 
   return (
     <Card>
@@ -447,7 +725,21 @@ function StrongAuthCard() {
             id="require-strong-auth"
             checked={team.require_strong_auth ?? false}
             disabled={update.isPending}
-            onCheckedChange={(checked) => update.mutate(checked)}
+            onCheckedChange={(checked) => {
+              // Relaxing it locks nobody out. Requiring it does, on their very
+              // next request, everybody in the team with a password alone.
+              if (!checked) {
+                update.mutate(false)
+                return
+              }
+              void confirm({
+                title: t("settings.requireStrongAuth"),
+                description: t("settings.requireStrongAuthConfirm", { team: team.name }),
+                confirmLabel: t("settings.requireStrongAuthTurnOn"),
+              }).then((yes) => {
+                if (yes) update.mutate(true)
+              })
+            }}
           />
           <FieldContent>
             <FieldLabel htmlFor="require-strong-auth">{t("settings.requireStrongAuth")}</FieldLabel>
@@ -580,10 +872,26 @@ function PanelBackupsCard() {
  * The download is the panel's whole answer for this team; the CLI writes the
  * same thing as a directory with the Kubernetes objects split out per app,
  * which is the form somebody actually migrates with.
+ *
+ * Only for the team's owners and admins, which is what the export asks for.
  */
 function ExportCard() {
   const { t } = useTranslation()
   const { team } = useSession()
+
+  // Fetched rather than linked: a plain link saved whatever came back, so a
+  // refusal or a failure was written to disk as the export, under the
+  // export's name, and looked like one until somebody needed it.
+  const download = useMutation({
+    mutationFn: () => api.get<unknown>(`/api/teams/${team!.id}/export`),
+    onSuccess: (data) =>
+      downloadText(
+        `${team!.slug}-export.json`,
+        `${JSON.stringify(data, null, 2)}\n`,
+        "application/json",
+      ),
+  })
+
   if (!team) return null
 
   return (
@@ -595,19 +903,13 @@ function ExportCard() {
       <CardContent className="space-y-3 text-sm">
         <p className="text-xs text-muted-foreground">{t("settings.exportSecrets")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          {/*
-            A plain link rather than a fetch: the browser saves the file with
-            the session cookie it already has, and nothing has to be held in
-            memory on the way.
-          */}
-          <Button asChild variant="outline">
-            <a href={`/api/teams/${team.id}/export`} download={`${team.slug}-export.json`}>
-              <DownloadIcon />
-              {t("settings.exportDownload")}
-            </a>
+          <Button variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
+            {download.isPending ? <Spinner /> : <DownloadIcon />}
+            {t("settings.exportDownload")}
           </Button>
           <code className="rounded bg-muted px-2 py-1 font-mono text-xs">skifity export</code>
         </div>
+        {download.error != null && <ErrorDisplay error={download.error} compact />}
       </CardContent>
     </Card>
   )
@@ -682,26 +984,46 @@ function StoreCheckCard() {
 
 function ComponentsPanel() {
   const { t } = useTranslation()
+  const confirmUpgrade = useConfirm()
 
-  const components = useQuery({
-    queryKey: ["components"],
-    queryFn: () => api.get<List<Component>>("/api/components"),
-  })
+  const title = (component: Component) =>
+    t(`components.${component.name}.title`, { defaultValue: component.title })
 
+  // The answer comes when the install has finished, up to ten minutes later.
+  // Until then the list is what says it is happening — the server records
+  // "installing" before it starts — on this tab and on any other that opens
+  // it, including after a reload.
   const install = useMutation({
-    mutationFn: (name: string) => api.post(`/api/components/${name}/install`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["components"] }),
+    mutationFn: (component: Component) => api.post(`/api/components/${component.name}/install`),
+    onSuccess: (_, component) =>
+      toast.success(t("settings.componentInstalledToast", { name: title(component) })),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["components"] }),
   })
   const upgrade = useMutation({
     mutationFn: (name: string) => api.post(`/api/components/${name}/upgrade`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["components"] }),
   })
-  const confirmUpgrade = useConfirm()
+
+  const components = useQuery({
+    queryKey: ["components"],
+    queryFn: () => api.get<List<Component>>("/api/components"),
+    refetchInterval: (query) =>
+      install.isPending ||
+      (query.state.data?.items ?? []).some((component) => component.status === "installing")
+        ? 3000
+        : false,
+  })
 
   if (components.isLoading) return <Skeleton className="h-64" />
   if (components.error) {
     return <ErrorDisplay error={components.error} onRetry={() => void components.refetch()} />
   }
+
+  // The server installs one at a time, so a second press would only queue
+  // behind the first without saying so.
+  const busy =
+    install.isPending ||
+    (components.data?.items ?? []).some((component) => component.status === "installing")
 
   return (
     <div className="space-y-4">
@@ -713,9 +1035,7 @@ function ComponentsPanel() {
             <CardContent className="flex flex-wrap items-center gap-4 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">
-                    {t(`components.${component.name}.title`, { defaultValue: component.title })}
-                  </span>
+                  <span className="font-medium">{title(component)}</span>
                   {component.beta && (
                     <Badge variant="outline" className="text-[10px]">
                       {t("common.beta")}
@@ -731,6 +1051,12 @@ function ComponentsPanel() {
                       {component.version}
                     </Badge>
                   )}
+                  {component.status === "installing" && (
+                    <StatusBadge status="installing" label={t("settings.componentInstalling")} />
+                  )}
+                  {component.status === "failed" && (
+                    <StatusBadge status="failed" label={t("settings.componentFailed")} />
+                  )}
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {t(`components.${component.name}.description`, {
@@ -738,18 +1064,28 @@ function ComponentsPanel() {
                   })}
                 </p>
                 {component.detail && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{component.detail}</p>
+                  <p
+                    className={
+                      component.status === "failed"
+                        ? "mt-0.5 text-xs break-words text-destructive"
+                        : "mt-0.5 text-xs text-muted-foreground"
+                    }
+                  >
+                    {component.detail}
+                  </p>
                 )}
               </div>
 
               {component.external ? (
                 // An Install button that always answers "use Helm instead" is
-                // worse than no button: it looks like a failure.
+                // worse than no button: it looks like a failure. The page is
+                // the panel's documentation, which Go serves and the app's
+                // router does not know: a router link opened "Not found".
                 <Button variant="outline" size="sm" asChild>
-                  <Link to={component.docs ?? "/docs"}>
+                  <a href={component.docs ?? "/docs"} target="_blank" rel="noreferrer">
                     <BookOpenIcon className="size-4" />
                     {t("settings.componentExternal")}
-                  </Link>
+                  </a>
                 </Button>
               ) : component.upgrade_available ? (
                 <Button
@@ -758,11 +1094,7 @@ function ComponentsPanel() {
                   disabled={upgrade.isPending}
                   onClick={() =>
                     void confirmUpgrade({
-                      title: t("settings.componentUpgradeTitle", {
-                        name: t(`components.${component.name}.title`, {
-                          defaultValue: component.title,
-                        }),
-                      }),
+                      title: t("settings.componentUpgradeTitle", { name: title(component) }),
                       description: t("settings.componentUpgradeConfirm", {
                         from: component.version || t("settings.componentVersionUnknown"),
                         to: component.wanted_version,
@@ -787,15 +1119,21 @@ function ComponentsPanel() {
                   <CheckCircle2Icon className="size-4" />
                   {t("settings.componentInstalled")}
                 </span>
-              ) : (
+              ) : component.status === "installing" ? null : (
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={install.isPending}
-                  onClick={() => install.mutate(component.name)}
+                  disabled={busy}
+                  onClick={() => install.mutate(component)}
                 >
-                  <PackagePlusIcon className="size-4" />
-                  {t("settings.componentInstall")}
+                  {install.isPending && install.variables?.name === component.name ? (
+                    <Spinner />
+                  ) : (
+                    <PackagePlusIcon className="size-4" />
+                  )}
+                  {component.status === "failed"
+                    ? t("common.retry")
+                    : t("settings.componentInstall")}
                 </Button>
               )}
             </CardContent>
@@ -812,6 +1150,10 @@ function MembersPanel() {
   const { t } = useTranslation()
   const confirmMember = useConfirm()
   const { team } = useSession()
+  // Adding, changing and removing people is the team's owners' and admins'.
+  // A panel administrator who is a member here sees the list and nothing that
+  // would answer 403.
+  const canChange = useTeamAdmin()
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<Role>("member")
   const [limited, setLimited] = useState(false)
@@ -827,7 +1169,7 @@ function MembersPanel() {
   const invitations = useQuery({
     queryKey: ["invitations", team?.id],
     queryFn: () => api.get<List<Invitation>>(`/api/teams/${team!.id}/invitations`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && canChange,
   })
 
   // The link is shown once, the same way the recovery key and the setup token
@@ -891,7 +1233,7 @@ function MembersPanel() {
                 <TableHead>{t("common.name")}</TableHead>
                 <TableHead>{t("settings.memberRole")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("settings.access")}</TableHead>
-                <TableHead className="w-20" />
+                {canChange && <TableHead className="w-20" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -914,38 +1256,40 @@ function MembersPanel() {
                   <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
                     <AccessSummary scoped={member.scoped} projects={member.projects} />
                   </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("settings.changeAccess")}
-                      onClick={() => setChanging(member)}
-                    >
-                      <UserCogIcon className="size-4 text-muted-foreground" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("settings.removeMember")}
-                      disabled={remove.isPending}
-                      // Taking somebody's access away, on one click of a bin
-                      // the same size as the one beside a variable.
-                      onClick={() =>
-                        void confirmMember({
-                          title: t("settings.removeMember"),
-                          description: t("settings.removeMemberConfirm", {
-                            name: member.user.name || member.user.email,
-                          }),
-                          confirmLabel: t("common.remove"),
-                          destructive: true,
-                        }).then((yes) => {
-                          if (yes) remove.mutate(member.user.id)
-                        })
-                      }
-                    >
-                      <Trash2Icon className="size-4 text-muted-foreground" />
-                    </Button>
-                  </TableCell>
+                  {canChange && (
+                    <TableCell className="text-right whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("settings.changeAccess")}
+                        onClick={() => setChanging(member)}
+                      >
+                        <UserCogIcon className="size-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("settings.removeMember")}
+                        disabled={remove.isPending}
+                        // Taking somebody's access away, on one click of a bin
+                        // the same size as the one beside a variable.
+                        onClick={() =>
+                          void confirmMember({
+                            title: t("settings.removeMember"),
+                            description: t("settings.removeMemberConfirm", {
+                              name: member.user.name || member.user.email,
+                            }),
+                            confirmLabel: t("common.remove"),
+                            destructive: true,
+                          }).then((yes) => {
+                            if (yes) remove.mutate(member.user.id)
+                          })
+                        }
+                      >
+                        <Trash2Icon className="size-4 text-muted-foreground" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -964,61 +1308,63 @@ function MembersPanel() {
         />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("settings.inviteMember")}</CardTitle>
-          <CardDescription>{t("settings.inviteMemberHelp")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              invite.mutate()
-            }}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="member-email">{t("settings.memberEmail")}</Label>
-                <Input
-                  id="member-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
+      {canChange && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("settings.inviteMember")}</CardTitle>
+            <CardDescription>{t("settings.inviteMemberHelp")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault()
+                invite.mutate()
+              }}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="member-email">{t("settings.memberEmail")}</Label>
+                  <Input
+                    id="member-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="member-role">{t("settings.memberRole")}</Label>
+                  <RoleSelect id="member-role" value={role} onChange={setRole} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="member-role">{t("settings.memberRole")}</Label>
-                <RoleSelect id="member-role" value={role} onChange={setRole} />
+              <ProjectLimitField
+                id="invite"
+                role={role}
+                limited={limited}
+                onLimitedChange={setLimited}
+                chosen={chosen}
+                onChosenChange={setChosen}
+              />
+              {invite.error != null && <ErrorDisplay error={invite.error} compact />}
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  disabled={
+                    !email.trim() ||
+                    invite.isPending ||
+                    (canLimit(role) && limited && chosen.length === 0)
+                  }
+                >
+                  <PlusIcon className="size-4" />
+                  {invite.isPending && <Spinner />}
+                  {invite.isPending ? t("common.saving") : t("settings.inviteMember")}
+                </Button>
               </div>
-            </div>
-            <ProjectLimitField
-              id="invite"
-              role={role}
-              limited={limited}
-              onLimitedChange={setLimited}
-              chosen={chosen}
-              onChosenChange={setChosen}
-            />
-            {invite.error != null && <ErrorDisplay error={invite.error} compact />}
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={
-                  !email.trim() ||
-                  invite.isPending ||
-                  (canLimit(role) && limited && chosen.length === 0)
-                }
-              >
-                <PlusIcon className="size-4" />
-                {invite.isPending && <Spinner />}
-                {invite.isPending ? t("common.saving") : t("settings.inviteMember")}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {link != null && (
         <Alert>
@@ -1044,6 +1390,10 @@ function MembersPanel() {
             </Button>
           </AlertDescription>
         </Alert>
+      )}
+
+      {invitations.error != null && (
+        <ErrorDisplay error={invitations.error} onRetry={() => void invitations.refetch()} />
       )}
 
       {(invitations.data?.items.length ?? 0) > 0 && (
@@ -1110,19 +1460,21 @@ function MembersPanel() {
 
       {remove.error != null && <ErrorDisplay error={remove.error} />}
       {revoke.error != null && <ErrorDisplay error={revoke.error} />}
+
+      {canChange && <ExportCard />}
     </div>
   )
 }
 
 function SecurityPanel() {
   const { t } = useTranslation()
-  const { meta } = useSession()
-  const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
+  const { meta, refresh } = useSession()
+  const [shown, setShown] = useState<{ key: string; rotated: boolean } | null>(null)
   const confirm = useConfirm()
 
   const reveal = useMutation({
     mutationFn: () => api.get<{ recovery_key: string }>("/api/security/recovery-key"),
-    onSuccess: (data) => setRecoveryKey(data.recovery_key),
+    onSuccess: (data) => setShown({ key: data.recovery_key, rotated: false }),
   })
 
   const rotate = useMutation({
@@ -1131,7 +1483,10 @@ function SecurityPanel() {
         "/api/security/rotate-key",
       ),
     onSuccess: (data) => {
-      setRecoveryKey(data.recovery_key)
+      setShown({ key: data.recovery_key, rotated: true })
+      // The panel has asked every administrator to save the new key, this
+      // one included; the button that says so needs to know.
+      void refresh()
       // A partial rotation is not a failure: the old key is kept so the
       // secrets that did not rewrap stay readable. Say which one happened.
       if (data.failed > 0) {
@@ -1141,17 +1496,6 @@ function SecurityPanel() {
       }
     },
   })
-
-  const download = () => {
-    if (!recoveryKey) return
-    const blob = new Blob([`${recoveryKey}\n`], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = "skifity-recovery-key.txt"
-    anchor.click()
-    URL.revokeObjectURL(url)
-  }
 
   return (
     <div className="space-y-6">
@@ -1163,23 +1507,11 @@ function SecurityPanel() {
           <p className="text-sm text-muted-foreground">
             {t("auth.recoveryKeyIntro", { product: meta?.product ?? "Skifity" })}
           </p>
-          {recoveryKey ? (
-            <div className="space-y-3">
-              <pre className="rounded-md border bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap">
-                {recoveryKey}
-              </pre>
-              <Alert>
-                <AlertTitle>{t("auth.recoveryKeyWarning")}</AlertTitle>
-                <AlertDescription>{t("databases.credentialsWarning")}</AlertDescription>
-              </Alert>
-              <Button variant="outline" size="sm" onClick={download}>
-                <DownloadIcon className="size-4" />
-                {t("auth.download")}
-              </Button>
-            </div>
+          {shown ? (
+            <RecoveryKeyShown recoveryKey={shown.key} rotated={shown.rotated} />
           ) : (
             <Button variant="outline" disabled={reveal.isPending} onClick={() => reveal.mutate()}>
-              <KeyRoundIcon className="size-4" />
+              {reveal.isPending ? <Spinner /> : <KeyRoundIcon className="size-4" />}
               {t("settings.recoveryKey")}
             </Button>
           )}
@@ -1201,6 +1533,9 @@ function SecurityPanel() {
               void confirm({
                 title: t("settings.rotateKey"),
                 description: t("settings.rotateKeyHelp"),
+                // The recovery key is a copy of the key being replaced, so
+                // the one on paper stops opening what is re-encrypted.
+                consequence: t("settings.rotateKeyConsequence"),
                 confirmLabel: t("settings.rotateKeyConfirm"),
               }).then((yes) => {
                 if (yes) rotate.mutate()
@@ -1229,48 +1564,56 @@ function AuditPanel() {
   if (audit.isLoading) return <Skeleton className="h-64" />
   if (audit.error) return <ErrorDisplay error={audit.error} onRetry={() => void audit.refetch()} />
 
+  const items = audit.data?.items ?? []
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("settings.auditLogHelp")}</p>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("common.updated")}</TableHead>
-                <TableHead>{t("common.actions")}</TableHead>
-                <TableHead className="hidden sm:table-cell">{t("common.name")}</TableHead>
-                <TableHead className="hidden md:table-cell">IP</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {audit.data?.items.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell className="text-xs whitespace-nowrap">
-                    {formatDateTime(event.at)}
-                  </TableCell>
-                  <TableCell>
-                    {/* The same phrase the Activity page shows, so one thing
-                        is not called two names in one product. The code stays
-                        on the hover, because this is the tab somebody reads
-                        with a log open beside it. */}
-                    <div className="text-xs" title={event.action}>
-                      {t(`activity.action.${event.action}`, { defaultValue: event.action })}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{event.actor_label}</div>
-                  </TableCell>
-                  <TableCell className="hidden text-xs sm:table-cell">
-                    {event.target_label || event.target_type}
-                  </TableCell>
-                  <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">
-                    {event.ip}
-                  </TableCell>
+      {items.length === 0 ? (
+        <EmptyState title={t("settings.auditEmpty")} />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("settings.auditTime")}</TableHead>
+                  <TableHead>{t("settings.auditAction")}</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    {t("settings.auditTarget")}
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">{t("common.ipAddress")}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {items.map((event) => (
+                  <TableRow key={event.id}>
+                    <TableCell className="text-xs whitespace-nowrap">
+                      {formatDateTime(event.at)}
+                    </TableCell>
+                    <TableCell>
+                      {/* The same phrase the Activity page shows, so one thing
+                          is not called two names in one product. The code stays
+                          on the hover, because this is the tab somebody reads
+                          with a log open beside it. */}
+                      <div className="text-xs" title={event.action}>
+                        {t(`activity.action.${event.action}`, { defaultValue: event.action })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{event.actor_label}</div>
+                    </TableCell>
+                    <TableCell className="hidden text-xs sm:table-cell">
+                      {event.target_label || event.target_type}
+                    </TableCell>
+                    <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">
+                      {event.ip}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

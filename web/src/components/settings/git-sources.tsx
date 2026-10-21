@@ -61,6 +61,9 @@ const PROVIDERS = [
 export function GitSources() {
   const { t } = useTranslation()
   const { team } = useSession()
+  // Connecting, disconnecting and reading a webhook's secret are an owner's
+  // or an admin's; everybody else sees which connections there are.
+  const canChange = team?.role === "owner" || team?.role === "admin"
   const [adding, setAdding] = useState(false)
   const confirm = useConfirm()
   // Shown after connecting, and again on asking: a self-hosted Gitea or
@@ -109,10 +112,12 @@ export function GitSources() {
           title={t("git.empty")}
           description={t("git.help")}
           action={
-            <Button onClick={() => setAdding(true)}>
-              <PlusIcon className="size-4" />
-              {t("git.connect")}
-            </Button>
+            canChange && (
+              <Button onClick={() => setAdding(true)}>
+                <PlusIcon className="size-4" />
+                {t("git.connect")}
+              </Button>
+            )
           }
         />
       ) : (
@@ -133,38 +138,42 @@ export function GitSources() {
                     {source.account || source.base_url || formatRelative(source.created_at)}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={reveal.isPending}
-                  onClick={() => reveal.mutate(source.id)}
-                >
-                  <WebhookIcon className="size-4" />
-                  {t("git.showWebhook")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={remove.isPending}
-                  onClick={() => {
-                    void confirm({
-                      title: t("git.disconnect"),
-                      description: t("git.disconnectWarning"),
-                      confirmLabel: t("git.disconnect"),
-                      destructive: true,
-                    }).then((yes) => {
-                      if (yes) remove.mutate(source.id)
-                    })
-                  }}
-                >
-                  <Trash2Icon className="size-4" />
-                  {t("git.disconnect")}
-                </Button>
+                {canChange && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={reveal.isPending}
+                      onClick={() => reveal.mutate(source.id)}
+                    >
+                      <WebhookIcon className="size-4" />
+                      {t("git.showWebhook")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={remove.isPending}
+                      onClick={() => {
+                        void confirm({
+                          title: t("git.disconnect"),
+                          description: t("git.disconnectWarning"),
+                          confirmLabel: t("git.disconnect"),
+                          destructive: true,
+                        }).then((yes) => {
+                          if (yes) remove.mutate(source.id)
+                        })
+                      }}
+                    >
+                      <Trash2Icon className="size-4" />
+                      {t("git.disconnect")}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           ))}
 
-          {!adding && (
+          {canChange && !adding && (
             <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
               <PlusIcon className="size-4" />
               {t("git.connect")}
@@ -173,7 +182,7 @@ export function GitSources() {
         </div>
       )}
 
-      {adding && (
+      {canChange && adding && (
         <ConnectForm
           onDone={(made) => {
             setAdding(false)

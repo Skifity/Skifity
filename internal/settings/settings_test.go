@@ -8,8 +8,11 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"slices"
 	"testing"
 	"time"
+
+	"skifity/internal/pluginstore"
 )
 
 // A setting whose kind does not match its validator is a form that accepts what
@@ -91,6 +94,50 @@ func TestKindsAreCoherent(t *testing.T) {
 		}
 		if def.Multiline && kind != KindText {
 			t.Errorf("%s: only a text setting can be multiline, got %s", def.Key, kind)
+		}
+	}
+}
+
+// TestEverySwitchSaysWhatUnsetMeans: the panel draws a switch from what is
+// stored, or from the default when nothing is. A switch with no default is
+// drawn off, which is how "Scan images" read as off beside help text saying
+// it was on, on every panel nobody had touched. A default is also a value the
+// form can send back, so it has to be one the setting accepts.
+func TestEverySwitchSaysWhatUnsetMeans(t *testing.T) {
+	// Unset is neither on nor off for this one: the S3 client works it out
+	// from the endpoint, so drawing either would claim something untrue.
+	tristate := map[string]bool{KeyS3PathStyle: true}
+
+	for _, def := range Definitions {
+		kind := def.ResolvedKind()
+		if kind == KindBool && def.Default != "true" && def.Default != "false" && !tristate[def.Key] {
+			t.Errorf("%s is a switch with default %q; say \"true\" or \"false\", whichever the code that reads it does when it is unset",
+				def.Key, def.Default)
+		}
+		if def.Default == "" {
+			continue
+		}
+		if def.Secret {
+			t.Errorf("%s is a secret with a default, which the panel would never show", def.Key)
+		}
+		if err := def.Validate(def.Default); err != nil {
+			t.Errorf("%s: the default %q is a value the setting itself refuses: %v", def.Key, def.Default, err)
+		}
+		if kind == KindChoice && !slices.Contains(def.Options, def.Default) {
+			t.Errorf("%s: the default %q is not one of its options %v", def.Key, def.Default, def.Options)
+		}
+	}
+
+	// The three the review found drawn wrong, by name, so that taking one of
+	// these away is a decision rather than an accident.
+	for key, want := range map[string]string{
+		KeyScanEnabled: "true", KeyGeoEnabled: "true", KeySMTPTLS: "true",
+		KeyBuilderDefault: "railpack", KeyFlannelBackend: FlannelWireGuard,
+		KeyScanSchedule: DefaultScanSchedule, KeyPluginStoreURL: pluginstore.DefaultIndexURL,
+	} {
+		def, _ := Lookup(key)
+		if def.Default != want {
+			t.Errorf("%s defaults to %q, and the code that reads it does %q", key, def.Default, want)
 		}
 	}
 }
