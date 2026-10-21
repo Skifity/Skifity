@@ -594,7 +594,13 @@ function Crumbs({ crumbs }: { crumbs: Crumb[] }) {
         {parent?.to && (
           <BreadcrumbItem className="sm:hidden">
             <BreadcrumbLink asChild>
-              <Link to={parent.to} aria-label={parent.label} title={parent.label}>
+              {/* The chevron is 16px; the link around it is a thumb's width. */}
+              <Link
+                to={parent.to}
+                aria-label={parent.label}
+                title={parent.label}
+                className="-ml-1.5 inline-flex size-8 items-center justify-center rounded-md"
+              >
                 <ChevronLeftIcon className="size-4" />
               </Link>
             </BreadcrumbLink>
