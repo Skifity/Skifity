@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,22 @@ import (
 
 // sseHeartbeat keeps proxies from closing an idle stream.
 const sseHeartbeat = 25 * time.Second
+
+// An open stream is asked again, every streamRecheck, whether whoever opened
+// it is still signed in and may still see each topic it carries. The decision
+// made when it opened used to be the only one, and the interface's stream
+// stays open for as long as the browser tab does: signing out somewhere else,
+// a session that ran out, an account disabled, a member removed from the team
+// or limited to some projects all left it carrying the team's events.
+//
+// A recheck that cannot be answered — the panel's database busy for a moment —
+// is not a no: closing on it sends every open tab back to refetch everything
+// at the moment the panel can least afford it. streamPatience of them in a row
+// is. Variables, so a test need not wait.
+var (
+	streamRecheck  = 15 * time.Second
+	streamPatience = 3
+)
 
 // maxStreamsPerUser is how many realtime streams one account may hold open at
 // once. The interface keeps a handful (the list it is on, the log it is
@@ -68,8 +85,8 @@ func (c *streamCounter) release(user string) {
 }
 
 // handleEventStream is the panel's realtime channel. A client subscribes to the
-// topics it is allowed to see; authorization happens here, once, rather than per
-// event.
+// topics it is allowed to see; authorization happens here, when the stream
+// opens and again every streamRecheck, rather than per event.
 //
 // ?multiplex=true is how the panel's own interface asks. It keeps one stream
 // per browser tab for every page and card that wants live updates — one
@@ -144,6 +161,13 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 
 	heartbeat := time.NewTicker(sseHeartbeat)
 	defer heartbeat.Stop()
+	recheck := time.NewTicker(streamRecheck)
+	defer recheck.Stop()
+	// Topics withdrawn while the stream was open. The hub still routes them
+	// here, and what it had already queued is on its way: both are dropped
+	// rather than written.
+	withdrawn := map[string]bool{}
+	unanswered := 0
 
 	// What the subscriber had already missed when this loop started.
 	//
@@ -180,9 +204,47 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			_ = rc.Flush()
+		case <-recheck.C:
+			signedIn, lost, err := s.recheckStream(r, topics, withdrawn)
+			switch {
+			case err != nil:
+				unanswered++
+				if unanswered < streamPatience {
+					s.log.Warn("could not recheck an event stream; it stays open for now", "error", err)
+					continue
+				}
+				s.log.Warn("closed an event stream that could not be rechecked", "error", err)
+				return
+			case !signedIn:
+				// The browser reconnects by itself, is refused as anybody
+				// without a session is, and the tab signs out.
+				return
+			}
+			unanswered = 0
+			if len(lost) > 0 && !multiplex {
+				// A stream of its own is refused outright when it opens, so
+				// one that loses its topic ends: asking again is refused.
+				return
+			}
+			for _, topic := range lost {
+				withdrawn[topic.Topic] = true
+				frame, err := taggedFrame(0, topic.Topic, "refused", topic.Problem)
+				if err != nil {
+					continue
+				}
+				if _, err := w.Write(frame); err != nil {
+					return
+				}
+			}
+			if len(lost) > 0 {
+				_ = rc.Flush()
+			}
 		case ev, ok := <-sub.Events():
 			if !ok {
 				return
+			}
+			if withdrawn[ev.Topic] {
+				continue
 			}
 			frame, err := ev.Encode()
 			if multiplex {
@@ -198,6 +260,44 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 			_ = rc.Flush()
 		}
 	}
+}
+
+// recheckStream signs the stream's request in again, with the credential it
+// was opened with, and decides again each topic it still carries. signedIn is
+// false when that credential no longer signs anybody in; lost is the topics
+// they may no longer see. An error means it could not be asked.
+//
+// A cookie session is looked at without being extended, as a database
+// tunnel's is: a tab left open is not the person doing anything, and must not
+// keep an idle session alive.
+func (s *Server) recheckStream(r *http.Request, topics []string, withdrawn map[string]bool) (signedIn bool, lost []refusedTopic, err error) {
+	// Not the request's context: that one already says who opened the
+	// stream, and would go on saying it for a credential that signs nobody in.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctx, err = s.identifyAs(ctx, r, s.auth.CheckSession)
+	if err != nil {
+		if refused(err) {
+			return false, nil, nil
+		}
+		return false, nil, err
+	}
+	if _, ok := UserFrom(ctx); !ok {
+		return false, nil, nil
+	}
+	again := r.WithContext(ctx)
+	for _, topic := range topics {
+		if withdrawn[topic] {
+			continue
+		}
+		if err := s.authorizeTopic(again, topic); err != nil {
+			if !refused(err) {
+				return true, nil, err
+			}
+			lost = append(lost, refusedTopic{Topic: topic, Problem: toProblem(err)})
+		}
+	}
+	return true, lost, nil
 }
 
 // authorizeTopics turns the requested topics into the subset the caller may see.

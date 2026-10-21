@@ -1,5 +1,13 @@
-import { Suspense, lazy, useEffect, useEffectEvent, useState } from "react"
-import { Navigate, Route, Routes, useLocation } from "react-router-dom"
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ReactNode,
+} from "react"
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useIsFetching } from "@tanstack/react-query"
 import { RefreshCwIcon } from "lucide-react"
@@ -14,7 +22,6 @@ import { forgetSignedOutUser, saveThemeToAccount, useSession } from "@/hooks/use
 import { currentLanguage, isLanguage, setLanguage } from "@/lib/i18n"
 import { canOpenSettings } from "@/lib/permissions"
 import { useTheme } from "@/lib/theme"
-import type { User } from "@/lib/types"
 import { AccountPage } from "@/pages/account"
 import { ActivityPage } from "@/pages/activity"
 import { AddServerPage } from "@/pages/add-server"
@@ -138,14 +145,49 @@ export function App() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="projects" element={<ProjectsPage />} />
-          <Route path="projects/:projectId" element={<ProjectDetailPage />} />
-          <Route path="environments/:envId/apps/new" element={<NewAppPage />} />
-          <Route path="apps/:appId" element={<AppDetailPage />} />
+          <Route
+            path="projects/:projectId"
+            element={
+              <KeyedBy param="projectId">
+                <ProjectDetailPage />
+              </KeyedBy>
+            }
+          />
+          <Route
+            path="environments/:envId/apps/new"
+            element={
+              <KeyedBy param="envId">
+                <NewAppPage />
+              </KeyedBy>
+            }
+          />
+          <Route
+            path="apps/:appId"
+            element={
+              <KeyedBy param="appId">
+                <AppDetailPage />
+              </KeyedBy>
+            }
+          />
           <Route path="databases" element={<DatabasesPage />} />
-          <Route path="databases/:databaseId" element={<DatabaseDetailPage />} />
+          <Route
+            path="databases/:databaseId"
+            element={
+              <KeyedBy param="databaseId">
+                <DatabaseDetailPage />
+              </KeyedBy>
+            }
+          />
           <Route path="servers" element={<ServersPage />} />
           <Route path="servers/new" element={<AddServerPage />} />
-          <Route path="servers/:serverId" element={<ServerDetailPage />} />
+          <Route
+            path="servers/:serverId"
+            element={
+              <KeyedBy param="serverId">
+                <ServerDetailPage />
+              </KeyedBy>
+            }
+          />
           <Route
             path="templates"
             element={
@@ -172,6 +214,19 @@ export function App() {
       </Routes>
     </>
   )
+}
+
+/**
+ * A page about one thing, started afresh for each. React Router keeps the
+ * same page mounted when only the id in the address changes, and the command
+ * palette goes straight from one server to another: the page went on holding
+ * what it had about the first — an error, a box ticked to accept losing its
+ * data, an operation being followed — while showing the second, where "Remove
+ * anyway" would then have been sent with the first one's acceptance.
+ */
+function KeyedBy({ param, children }: { param: string; children: ReactNode }) {
+  const params = useParams()
+  return <Fragment key={params[param]}>{children}</Fragment>
 }
 
 /**
@@ -212,7 +267,8 @@ function AccountPreferences() {
   const { user, justSignedIn } = useSession()
   const { theme, applyTheme } = useTheme()
 
-  const apply = useEffectEvent((user: User) => {
+  const apply = useEffectEvent(() => {
+    if (!user) return
     if (isLanguage(user.locale) && user.locale !== currentLanguage()) setLanguage(user.locale)
     if (user.theme === "light" || user.theme === "dark") {
       if (user.theme !== theme) applyTheme(user.theme)
@@ -225,10 +281,14 @@ function AccountPreferences() {
   })
 
   // Signing in is an event in another system — the panel's — and this
-  // applies its answer to two more, i18next and the theme.
+  // applies its answer to two more, i18next and the theme. Once per sign-in,
+  // keyed by who: the account changing afterwards is not signing in again,
+  // and following every change put back the account's old language the
+  // moment a theme was picked after a new one.
+  const signedInAs = justSignedIn ? (user?.id ?? null) : null
   useEffect(() => {
-    if (user && justSignedIn) apply(user)
-  }, [user, justSignedIn])
+    if (signedInAs) apply()
+  }, [signedInAs])
 
   return null
 }

@@ -4734,7 +4734,9 @@ paths:
         client that reconnects with Last-Event-ID, or since, is sent what it
         missed. A `desync` event says the client fell behind and events were
         dropped, so it should read again what it shows. A comment line is sent
-        every 25 seconds to keep proxies from closing the stream.
+        every 25 seconds to keep proxies from closing the stream. Access is
+        asked again while the stream is open: it ends once its session or token
+        signs nobody in, or once a topic is one its caller may no longer see.
       parameters:
         - name: topics
           in: query
@@ -4752,7 +4754,8 @@ paths:
             browser tab. Every event is an unnamed message whose data is
             {"topic", "type", "data"}. A topic the caller may not see does not
             fail the request: it is answered with a "refused" message carrying
-            the Problem, and the other topics carry on.
+            the Problem, and the other topics carry on. The same goes for a
+            topic withdrawn while the stream is open.
           schema: {type: boolean}
         - name: Last-Event-ID
           in: header

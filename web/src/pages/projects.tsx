@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation } from "@tanstack/react-query"
 import { FolderIcon, PlusIcon } from "lucide-react"
@@ -30,10 +30,28 @@ import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { Project } from "@/lib/types"
 
+/** The search parameter that opens the new-project dialog: ?new=1. */
+const NEW_PARAM = "new"
+
 export function ProjectsPage() {
   const { t } = useTranslation()
   const { team } = useSession()
-  const [creating, setCreating] = useState(false)
+  // The new-project dialog is open while the address says so, which is how
+  // the command palette opens it from anywhere: read from the address rather
+  // than copied out of it, and taken out of it again when the dialog closes,
+  // so going back here later does not open it a second time.
+  const [params, setParams] = useSearchParams()
+  const creating = params.get(NEW_PARAM) === "1"
+  const setCreating = (open: boolean) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        if (open) next.set(NEW_PARAM, "1")
+        else next.delete(NEW_PARAM)
+        return next
+      },
+      { replace: true },
+    )
 
   // Both are published and neither was listened for, so a project created in
   // another tab — or by the CLI, or by an assistant over MCP — did not appear.

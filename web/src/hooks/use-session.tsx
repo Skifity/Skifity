@@ -156,13 +156,17 @@ function sessionEnded() {
  * the event stream that was keeping it current.
  *
  * Called once the pages are gone — the sign-in screen is up — so no page is
- * left watching a query removed from under it.
+ * left watching a query removed from under it. The sign-in screen's own are
+ * watched, and already on their way by the time this runs: removing those
+ * cancelled them and left the screen waiting for ever, with no single sign-on
+ * or passkey button. Every query the signed-out person's pages read has no
+ * page watching it any more, so leaving the watched ones drops all of theirs.
  */
 export function forgetSignedOutUser() {
   if (cacheOwner === null) return
   cacheOwner = null
   closeEventStreams()
-  queryClient.removeQueries({ predicate: notTheSession })
+  queryClient.removeQueries({ predicate: (query) => notTheSession(query) && !query.isActive() })
 }
 
 /**
@@ -180,6 +184,24 @@ export function saveThemeToAccount(theme: Theme) {
   })
   void api.patch("/api/me", { theme }).catch(() => {
     // The panel may be unreachable. The theme still changed here.
+  })
+}
+
+/**
+ * Saves a language somebody picked to their account, as saveThemeToAccount
+ * does a theme, and for the same reason says so in the session straight away:
+ * left as it was, the account's old language was read back and put on screen
+ * again the next time anything else about the account changed.
+ */
+export function saveLanguageToAccount(locale: string) {
+  const session = queryClient.getQueryData<Bootstrap>(SESSION_QUERY_KEY)
+  if (!session?.user || session.user.locale === locale) return
+  queryClient.setQueryData<Bootstrap>(SESSION_QUERY_KEY, {
+    ...session,
+    user: { ...session.user, locale },
+  })
+  void api.patch("/api/me", { locale }).catch(() => {
+    // The panel may be unreachable. The language still changed here.
   })
 }
 

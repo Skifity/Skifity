@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { api } from "@/lib/api"
+import { saveLanguageToAccount } from "@/hooks/use-session"
 import { LANGUAGES, currentLanguage, setLanguage, type LanguageCode } from "@/lib/i18n"
 
 /**
@@ -26,11 +26,7 @@ export function LanguageSwitcher({ signedIn }: { signedIn?: boolean }) {
 
   const choose = (code: LanguageCode) => {
     setLanguage(code)
-    if (signedIn) {
-      void api.patch("/api/me", { locale: code }).catch(() => {
-        // The panel may be unreachable. The language still changed here.
-      })
-    }
+    if (signedIn) saveLanguageToAccount(code)
   }
 
   return (

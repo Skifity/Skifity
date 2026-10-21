@@ -1,3 +1,4 @@
+import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
 
 /**
@@ -18,7 +19,9 @@ import { queryClient } from "@/lib/query"
  * page then silently stopped being live. Here a stream that gave up is opened
  * again with a backoff, from the last event it saw, and once it is back every
  * query is refetched, because a panel that restarted remembers nothing it
- * would have replayed.
+ * would have replayed. A stream refused because the session has ended gives up
+ * the same way, so then the panel is asked who this is, and a session that is
+ * gone signs the tab out.
  */
 
 type Handlers = Record<string, (data: unknown) => void>
@@ -41,12 +44,20 @@ type Frame = { topic?: string; type: string; data: unknown }
 const SETTLE_MS = 50
 /** How many event ids are remembered to drop one delivered twice. */
 const REMEMBERED_IDS = 256
+/**
+ * How long a replaced connection stays open once the one taking over is. The
+ * new one replays nothing, and an event published just before it subscribed
+ * may still be on its way down the old one.
+ */
+const HANDOVER_MS = 2_000
 
 const subscribers = new Set<Subscriber>()
 /** Topics the panel will not send to this session; asking again changes nothing. */
 const refused = new Set<string>()
 /** Ids recently delivered, so two connections overlapping deliver each event once. */
 const recent = new Set<string>()
+/** Connections replaced by another, delivering what they still had on the way. */
+const retiring = new Set<EventSource>()
 
 let current: Connection | null = null
 /** A connection with a different set of topics, taking over from current. */
@@ -86,13 +97,28 @@ export function closeEventStreams() {
   window.clearTimeout(settleTimer)
   window.clearTimeout(retryTimer)
   settleTimer = retryTimer = undefined
-  next?.source.close()
-  current?.source.close()
-  next = current = null
-  lastEventId = ""
+  closeAll()
+  forgetPlace()
   broken = false
   failures = 0
   refused.clear()
+}
+
+function closeAll() {
+  next?.source.close()
+  current?.source.close()
+  next = current = null
+  for (const source of retiring) source.close()
+  retiring.clear()
+}
+
+/**
+ * Forgets which events were seen. The panel numbers them from one again when
+ * it restarts, so an id remembered from before would drop a new event that
+ * happens to carry it.
+ */
+function forgetPlace() {
+  lastEventId = ""
   recent.clear()
 }
 
@@ -133,12 +159,13 @@ function sync() {
 
   if (wanted.size === 0) {
     // Nobody is listening, so there is nothing to catch up on either: whoever
-    // subscribes next has just read what they show, and starts from now.
+    // subscribes next has just read what they show, and starts from now —
+    // perhaps on a panel that restarted meanwhile, with an upgrade from a
+    // page that listens to nothing.
     window.clearTimeout(retryTimer)
     retryTimer = undefined
-    next?.source.close()
-    current?.source.close()
-    next = current = null
+    closeAll()
+    forgetPlace()
     broken = false
     failures = 0
     return
@@ -153,9 +180,10 @@ function sync() {
 
   if (current && current.source.readyState === EventSource.OPEN) {
     // Hand over without a gap: the stream that is open keeps delivering until
-    // the new one is, and an event both deliver is passed on once. The new one
-    // replays nothing, so a card that has just subscribed is not sent what
-    // happened before it asked, exactly as with a stream of its own.
+    // the new one is, and for a moment after (HANDOVER_MS), and an event both
+    // deliver is passed on once. The new one replays nothing, so a card that
+    // has just subscribed is not sent what happened before it asked, exactly
+    // as with a stream of its own.
     next?.source.close()
     next = connect(wanted, false)
     return
@@ -163,9 +191,8 @@ function sync() {
 
   // Nothing is flowing. A stream that broke picks up from the last event it
   // saw; one that was simply not needed for a while starts from now.
-  next?.source.close()
-  current?.source.close()
-  next = null
+  closeAll()
+  if (!broken) forgetPlace()
   current = connect(wanted, broken)
 }
 
@@ -192,7 +219,7 @@ function connect(topics: Set<string>, resume: boolean): Connection {
 
 function opened(connection: Connection) {
   if (connection === next) {
-    current?.source.close()
+    if (current) retire(current.source)
     current = next
     next = null
   }
@@ -203,7 +230,22 @@ function opened(connection: Connection) {
   }
 }
 
+/** Closes a replaced connection once what it still had on the way is in. */
+function retire(source: EventSource) {
+  retiring.add(source)
+  window.setTimeout(() => {
+    source.close()
+    retiring.delete(source)
+  }, HANDOVER_MS)
+}
+
 function failed(connection: Connection) {
+  if (retiring.has(connection.source)) {
+    // Its replacement is open; this one is not tried again.
+    connection.source.close()
+    retiring.delete(connection.source)
+    return
+  }
   if (connection.source.readyState === EventSource.CONNECTING) {
     // The browser is trying again by itself, with the last id it saw. Once it
     // is back, what it missed is read again: a panel that restarted has
@@ -223,6 +265,15 @@ function failed(connection: Connection) {
   } else {
     return
   }
+  // Or the 401 of a session that has ended — signed out in another tab, run
+  // out, or the account disabled — which a browser does not say either, and
+  // which trying again every thirty seconds never gets past. The panel is
+  // asked the way any page asks it, so a session that is gone signs the tab
+  // out like a 401 anywhere else does.
+  void api.get("/api/me").catch(() => {
+    // Signed out, and handled as such already, or the panel out of reach,
+    // which the retry below is for.
+  })
   failures++
   const delay = Math.min(30_000, 1000 * 2 ** (failures - 1)) + Math.random() * 1000
   retryTimer = window.setTimeout(() => {
