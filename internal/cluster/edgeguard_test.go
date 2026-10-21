@@ -2,11 +2,14 @@ package cluster
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"skifity/internal/edgerules"
 	"skifity/internal/guard"
@@ -316,5 +319,40 @@ func TestAnAppPullsWithItsTeamsRegistriesOnlyWhenItHasSome(t *testing.T) {
 	}
 	if spec, _ = c.SpecFor(t.Context(), app, env, "ghcr.io/acme/web:1"); spec.TeamPullSecret != kube.TeamRegistriesSecretName {
 		t.Fatalf("a team with credentials pulls with %q", spec.TeamPullSecret)
+	}
+}
+
+// With the guard on two servers, each kubelet refreshed its copy of the rules
+// on its own schedule, and an app taken out of maintenance answered some
+// visitors and showed the others the notice for up to a minute. Each guard pod
+// is told the digest of the rules it should be reading, which has its kubelet
+// refresh them at once; nothing else in the namespace is touched.
+func TestTheGuardsAreToldTheirRulesChanged(t *testing.T) {
+	pod := func(name, app string) *corev1.Pod {
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: "skifity-system", Labels: map[string]string{"app.kubernetes.io/name": app},
+		}}
+	}
+	clientset := fake.NewSimpleClientset(pod("guard-a", GuardDeployment), pod("guard-b", GuardDeployment), pod("panel", "skifity"))
+	c := New(kube.NewClientWith(clientset, nil, ""), nil, nil, slog.New(slog.DiscardHandler))
+
+	digest := func(name string) string {
+		got, err := clientset.CoreV1().Pods("skifity-system").Get(t.Context(), name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Annotations[GuardRulesAnnotation]
+	}
+	c.nudgeGuards(t.Context(), `{"maintenance":true}`)
+	first := digest("guard-a")
+	if first == "" || digest("guard-b") != first {
+		t.Fatalf("the guards were told %q and %q, want the same digest on both", first, digest("guard-b"))
+	}
+	if digest("panel") != "" {
+		t.Error("a pod that is not a guard was annotated")
+	}
+	c.nudgeGuards(t.Context(), `{"maintenance":false}`)
+	if digest("guard-a") == first || digest("guard-b") == first {
+		t.Error("new rules left the guards with the old digest, which changes nothing their kubelets see")
 	}
 }

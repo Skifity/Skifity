@@ -2,6 +2,8 @@ package cluster
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"skifity/internal/edgerules"
@@ -166,7 +169,40 @@ func (c *Cluster) RefreshFirewall(ctx context.Context) error {
 	if err := c.client.Applier().Apply(ctx, guardConfigMap(c.client.SystemNamespace(), raw)); err != nil {
 		return err
 	}
+	c.nudgeGuards(ctx, raw)
 	return c.ensureGuardMiddlewares(ctx)
+}
+
+// GuardRulesAnnotation is put on each guard pod with the digest of the rules it
+// should be reading.
+const GuardRulesAnnotation = "skifity.io/guard-rules"
+
+// nudgeGuards has the kubelets bring the guards' rules up to date now.
+//
+// A kubelet refreshes a mounted ConfigMap on its own schedule, up to a minute
+// or so after it changes. With the two guards on two servers, the two copies
+// disagreed for that long: an app taken out of maintenance answered some
+// visitors and showed the others the notice, which a run on two servers
+// counted. A pod that changes is synced at once, its volumes with it, so each
+// guard pod is given the digest of the rules it should have. Best effort: the
+// kubelet's own schedule still gets there.
+func (c *Cluster) nudgeGuards(ctx context.Context, rules string) {
+	sum := sha256.Sum256([]byte(rules))
+	patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:%q}}}`, GuardRulesAnnotation, hex.EncodeToString(sum[:8]))
+	pods := c.client.Clientset().CoreV1().Pods(c.client.SystemNamespace())
+	list, err := pods.List(ctx, metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=" + GuardDeployment})
+	if err != nil {
+		c.log.Warn("could not find the firewall's pods to refresh their rules", "error", err)
+		return
+	}
+	for _, pod := range list.Items {
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		if _, err := pods.Patch(ctx, pod.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
+			c.log.Warn("could not refresh the firewall's rules on one of its pods", "pod", pod.Name, "error", err)
+		}
+	}
 }
 
 // ensureGuardMiddlewares puts a forwardAuth middleware in every namespace that
