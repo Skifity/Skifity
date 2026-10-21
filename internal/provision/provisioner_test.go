@@ -3,6 +3,7 @@ package provision
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -714,5 +715,53 @@ func TestAJoinStopsWhenTheClusterWillNotSayItsVersion(t *testing.T) {
 	}
 	if sshServer.Ran("get.k3s.io") {
 		t.Fatal("Kubernetes was installed at a guessed version")
+	}
+}
+
+// A run stopped by "Stop adding", or by running out of time, writes its end
+// with the context that was just cancelled. Those writes were refused, so the
+// server stayed "provisioning" and the operation "running": the page offered
+// neither Retry nor Remove, and the API refused a removal as busy.
+func TestAStoppedRunStillSaysHowItEnded(t *testing.T) {
+	p, db, _, teamID := testHarness(t)
+	for i, c := range []struct {
+		err    error
+		status store.OperationStatus
+	}{
+		{context.Canceled, store.OpCancelled},
+		{context.DeadlineExceeded, store.OpFailed},
+	} {
+		server := store.Server{TeamID: teamID, Name: "worker-" + string(c.status), Host: fmt.Sprintf("203.0.113.%d", 30+i),
+			SSHPort: 22, SSHUser: "root", Role: "worker", Status: store.ServerProvisioning}
+		if err := db.CreateServer(t.Context(), &server); err != nil {
+			t.Fatalf("CreateServer: %v", err)
+		}
+		op := store.Operation{TeamID: teamID, Kind: opAddServer, TargetType: "server", TargetID: server.ID}
+		if err := db.CreateOperation(t.Context(), &op, addServerSteps); err != nil {
+			t.Fatalf("CreateOperation: %v", err)
+		}
+		if err := db.SetOperationStatus(t.Context(), op.ID, store.OpRunning, "", ""); err != nil {
+			t.Fatalf("SetOperationStatus: %v", err)
+		}
+
+		// The run's own context, as it is when the step returns.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		p.failStep(ctx, op, server.ID, StepInstallK3s, c.err)
+
+		after, err := db.GetOperation(t.Context(), op.ID)
+		if err != nil {
+			t.Fatalf("GetOperation: %v", err)
+		}
+		if after.Status != c.status {
+			t.Errorf("after %v the operation is %s, want %s", c.err, after.Status, c.status)
+		}
+		got, err := db.GetServer(t.Context(), server.ID)
+		if err != nil {
+			t.Fatalf("GetServer: %v", err)
+		}
+		if got.Status != store.ServerFailed {
+			t.Errorf("after %v the server is %s, want failed", c.err, got.Status)
+		}
 	}
 }

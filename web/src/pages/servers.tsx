@@ -28,6 +28,7 @@ import {
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
+import { managesTeam } from "@/lib/permissions"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { ClusterSummary, Server } from "@/lib/types"
@@ -106,15 +107,16 @@ export function ServersPage() {
   }, [items, search, filter, needsAttention])
 
   // Every server that joins holds the cluster's join token, so only the
-  // panel's administrator adds one.
-  const addButton = user?.is_admin ? (
-    <Button asChild>
-      <Link to="/servers/new">
-        <PlusIcon />
-        {t("servers.addServer")}
-      </Link>
-    </Button>
-  ) : undefined
+  // panel's administrator adds one, and into a team they administer.
+  const addButton =
+    user?.is_admin && managesTeam(team) ? (
+      <Button asChild>
+        <Link to="/servers/new">
+          <PlusIcon />
+          {t("servers.addServer")}
+        </Link>
+      </Button>
+    ) : undefined
 
   return (
     <Page>

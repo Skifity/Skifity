@@ -20,12 +20,15 @@ export function BackupVerification({
   backup,
   verifyPath,
   listKey,
+  canVerify = true,
 }: {
   backup: Backup
   /** The route that verifies this backup, from where it is listed. */
   verifyPath: string
   /** The query the list comes from, read again as the check finishes. */
   listKey: readonly unknown[]
+  /** Whether this person may ask for a check; a viewer still sees the result. */
+  canVerify?: boolean
 }) {
   const { t } = useTranslation()
   const verify = useMutation({
@@ -64,16 +67,18 @@ export function BackupVerification({
             {t("backups.verified", { when: formatRelative(backup.verified_at) })}
           </span>
         ) : null}
-        <Button
-          variant="link"
-          size="sm"
-          className="h-auto p-0 text-xs"
-          disabled={waiting}
-          onClick={() => verify.mutate(lastVerified)}
-        >
-          {waiting && <Spinner />}
-          {waiting ? t("backups.verifying") : t("backups.verify")}
-        </Button>
+        {canVerify && (
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs"
+            disabled={waiting}
+            onClick={() => verify.mutate(lastVerified)}
+          >
+            {waiting && <Spinner />}
+            {waiting ? t("backups.verifying") : t("backups.verify")}
+          </Button>
+        )}
       </div>
       {verify.error != null && <ErrorDisplay error={verify.error} compact />}
     </div>

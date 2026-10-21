@@ -679,9 +679,13 @@ function DatabaseBackups({
 
   const restore = useMutation({
     // overwrite is explicit: the panel refuses a restore over a database apps
-    // use without it, and the typed name in the dialog is that consent.
+    // use without it, and the typed name in a dialog that named those apps is
+    // that consent. Sent only when it did name them: an app linked since the
+    // page loaded is still caught by the refusal, rather than overwritten.
     mutationFn: (backupID: string) =>
-      api.post(`/api/databases/${databaseId}/restore/${backupID}?overwrite=true`),
+      api.post(
+        `/api/databases/${databaseId}/restore/${backupID}${links.length > 0 ? "?overwrite=true" : ""}`,
+      ),
     onSuccess: () => {
       toast.success(t("databases.restoreStarted"))
       refresh(databaseId)
@@ -819,6 +823,7 @@ function DatabaseBackups({
                         backup={backup}
                         verifyPath={`/api/databases/${databaseId}/backups/${backup.id}/verify`}
                         listKey={["backups", databaseId]}
+                        canVerify={canChange}
                       />
                     </TableCell>
                     <TableCell className="hidden tabular-nums sm:table-cell">

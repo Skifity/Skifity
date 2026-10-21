@@ -33,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { ApiError, api } from "@/lib/api"
+import { managesTeam } from "@/lib/permissions"
 import { formatCPU, formatDateTime, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { NodeInfo, Operation, Server } from "@/lib/types"
@@ -52,10 +53,11 @@ export function ServerDetailPage() {
   const { serverId = "" } = useParams()
   const navigate = useNavigate()
   const { team, user } = useSession()
-  // Which machines are in the cluster is the panel administrator's to change.
-  const canChangeServers = user?.is_admin === true
+  // Which machines are in the cluster is the panel administrator's to change,
+  // and the API asks for an administrator of the team the server is in too.
+  const canChangeServers = user?.is_admin === true && managesTeam(team)
   // Renaming one and setting its alerts are a team administrator's.
-  const teamAdmin = team?.role === "admin" || team?.role === "owner"
+  const teamAdmin = managesTeam(team)
   const confirm = useConfirm()
   const [wipe, setWipe] = useState(true)
   const [deleteMachine, setDeleteMachine] = useState(true)
@@ -107,6 +109,13 @@ export function ServerDetailPage() {
     onSuccess: (operation) => setOperationId(operation.id),
   })
 
+  // Stopping an add from the server's own page, not only from the page that
+  // started it: somebody who came back to a slow add had no way to end it.
+  const stop = useMutation({
+    mutationFn: (id: string) => api.post(`/api/operations/${id}/cancel`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["server", serverId] }),
+  })
+
   const remove = useMutation({
     // A machine the panel created can go with it; the name typed into the
     // dialog is sent as the confirmation the API asks for.
@@ -140,12 +149,11 @@ export function ServerDetailPage() {
   const cloudTitle = cloud ? cloudProviderTitle(cloud.provider_kind) : ""
   const deletingMachine = Boolean(cloud) && deleteMachine
   const latest = current.operation
-  // Being added, removed or promoted: a promotion leaves the status alone, so
-  // the operation says so too.
-  const busy =
-    BUSY_STATUSES.includes(current.status) ||
-    latest?.status === "pending" ||
-    latest?.status === "running"
+  // Being added, removed or promoted, as the latest operation says. The
+  // status alone is only asked when there is no operation to ask: a status
+  // left "provisioning" by a run that ended badly hid Remove and Retry both.
+  const running = latest?.status === "pending" || latest?.status === "running"
+  const busy = latest ? running : BUSY_STATUSES.includes(current.status)
   const canRetry =
     canChangeServers &&
     current.status === "failed" &&
@@ -275,6 +283,33 @@ export function ServerDetailPage() {
           operationId={liveOperationId}
           live={Boolean(team) && !team?.scoped}
         />
+      )}
+
+      {/* As on the page that started it: stopping is all it does, and the
+          dialog says what stays. */}
+      {canChangeServers && running && latest && RETRIED_KINDS.includes(latest.kind) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {stop.error != null && <ErrorDisplay error={stop.error} compact />}
+          <Button
+            variant="outline"
+            disabled={stop.isPending}
+            onClick={() => {
+              void confirm({
+                title: t("servers.stopAddingTitle", { name: current.name }),
+                description: t("servers.stopAddingConfirm"),
+                consequence:
+                  latest.kind === "server.create" ? t("servers.stopAddingCloud") : undefined,
+                confirmLabel: t("servers.stopAdding"),
+                destructive: true,
+              }).then((yes) => {
+                if (yes) stop.mutate(latest.id)
+              })
+            }}
+          >
+            {stop.isPending && <Spinner />}
+            {t("servers.stopAdding")}
+          </Button>
+        </div>
       )}
 
       <Card>

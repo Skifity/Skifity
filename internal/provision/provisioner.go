@@ -313,9 +313,12 @@ func (p *Provisioner) runJoin(ctx context.Context, op store.Operation, serverID 
 	if state.client != nil {
 		_ = state.client.Close()
 	}
-	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
-	_ = p.db.SetServerStatus(ctx, serverID, store.ServerReady, "")
-	p.publishOperation(ctx, op.ID)
+	// Recorded even if the run's time ran out on the last step: the server
+	// joined, and saying otherwise leaves it "provisioning" with nothing to do.
+	recordCtx := context.WithoutCancel(ctx)
+	_ = p.db.SetOperationStatus(recordCtx, op.ID, store.OpSucceeded, "", "")
+	_ = p.db.SetServerStatus(recordCtx, serverID, store.ServerReady, "")
+	p.publishOperation(recordCtx, op.ID)
 	// The steps may have learned the address: a machine the panel ordered has
 	// none until the provider gives it one.
 	req = state.request

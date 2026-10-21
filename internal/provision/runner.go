@@ -57,9 +57,15 @@ func (p *Provisioner) start(op store.Operation, work func(context.Context)) {
 // panicked, so the interface shows a failure rather than a step that never
 // finishes.
 func (p *Provisioner) failPanicked(ctx context.Context, op store.Operation, err error) {
+	ctx = context.WithoutCancel(ctx)
 	problem := errdoc.OperationPanicked()
 
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, problem.Code, err.Error())
+	// The server too: left "provisioning" with nothing running, its page
+	// offered neither Retry nor Remove.
+	if op.TargetType == "server" && op.TargetID != "" {
+		_ = p.db.SetServerStatus(ctx, op.TargetID, store.ServerFailed, problem.Title)
+	}
 	p.hub.Publish(events.OperationTopic(op.ID), "failed", problem)
 }
 
@@ -86,6 +92,11 @@ func (p *Provisioner) Cancel(ctx context.Context, operationID string) error {
 	if err := p.db.SetOperationStatus(ctx, operationID, store.OpCancelled, "cancelled", "Cancelled by a user."); err != nil {
 		return err
 	}
+	// Said here as well as by the run: a run stopped between two steps never
+	// reaches the code that would say it.
+	if op, err := p.db.GetOperation(ctx, operationID); err == nil && op.TargetType == "server" && op.TargetID != "" {
+		_ = p.db.SetServerStatus(ctx, op.TargetID, store.ServerFailed, api.ServerDetailCancelled)
+	}
 	p.publishOperation(ctx, operationID)
 	return nil
 }
@@ -98,15 +109,23 @@ func (p *Provisioner) setStep(ctx context.Context, op store.Operation, key strin
 	p.publishOperation(ctx, op.ID)
 }
 
-// failStep records a failure and stops the operation.
+// failStep records a failure and stops the operation. An empty serverID leaves
+// the server's status as it is, for a failure that changed nothing on it.
+//
+// The record is written with a context of its own: the run's is the one that
+// was cancelled or ran out of time, and writes made with it were refused, so
+// a server stopped by "Stop adding" or a timeout stayed "provisioning" for good.
 func (p *Provisioner) failStep(ctx context.Context, op store.Operation, serverID, key string, err error) {
+	ctx = context.WithoutCancel(ctx)
 	problem := errdoc.From(err)
 
 	// A cancelled operation is not a failure to report as one.
 	if errors.Is(err, context.Canceled) {
 		p.setStep(ctx, op, key, store.StepFailed, store.StepNote{Message: "Cancelled", Key: "cancelled"}, "")
 		_ = p.db.SetOperationStatus(ctx, op.ID, store.OpCancelled, "cancelled", "Cancelled by a user.")
-		_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, api.ServerDetailCancelled)
+		if serverID != "" {
+			_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, api.ServerDetailCancelled)
+		}
 		p.publishOperation(ctx, op.ID)
 		return
 	}
@@ -128,7 +147,9 @@ func (p *Provisioner) failStep(ctx context.Context, op store.Operation, serverID
 		store.StepNote{Message: problem.Title, Key: "problem:" + problem.Code, Args: problem.Args.Title},
 		problem.Text())
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, problem.Code, problem.Error())
-	_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, problem.Title)
+	if serverID != "" {
+		_ = p.db.SetServerStatus(ctx, serverID, store.ServerFailed, problem.Title)
+	}
 
 	// The full problem goes out on the event stream, so the UI can show the
 	// cause, the impact, the fix and the "copy for AI" block without another
@@ -143,6 +164,7 @@ func (p *Provisioner) failStep(ctx context.Context, op store.Operation, serverID
 // line is the problem's title, and the panel finds that title's translation by
 // this code.
 func (p *Provisioner) failOperation(ctx context.Context, op store.Operation, serverID string, err error) {
+	ctx = context.WithoutCancel(ctx) // as failStep: the run's own may be spent
 	problem := errdoc.From(err)
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, problem.Code, problem.Error())
 	if serverID != "" {

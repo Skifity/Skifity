@@ -139,8 +139,9 @@ func (p *Provisioner) runRemoveServer(ctx context.Context, op store.Operation, s
 		p.failOperation(ctx, op, server.ID, err)
 		return
 	}
-	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
-	p.publishOperation(ctx, op.ID)
+	recordCtx := context.WithoutCancel(ctx) // as runJoin's: the work is done
+	_ = p.db.SetOperationStatus(recordCtx, op.ID, store.OpSucceeded, "", "")
+	p.publishOperation(recordCtx, op.ID)
 	p.log.Info("server removed", "server", server.ID, "host", server.Host)
 
 	// The server's row is gone by now, so the team comes from the record read
@@ -538,14 +539,18 @@ func (p *Provisioner) runPromote(ctx context.Context, op store.Operation, server
 	}
 	check.request.ControlPlane = true
 
+	// A refusal here has changed nothing on the machine, so the server stays
+	// as it was rather than "failed": the watcher leaves failed servers alone
+	// and Promote needs a ready one, so a healthy worker was otherwise marked
+	// failed for good, with removing it the only way out.
 	p.setStep(ctx, op, StepPreflight, store.StepRunning, store.StepNote{}, "")
 	if err := p.stepConnect(ctx, check); err != nil {
-		p.failStep(ctx, op, server.ID, StepPreflight, err)
+		p.failStep(ctx, op, "", StepPreflight, err)
 		return
 	}
 	if err := p.stepPreflight(ctx, check); err != nil {
 		check.client.Close()
-		p.failStep(ctx, op, server.ID, StepPreflight, err)
+		p.failStep(ctx, op, "", StepPreflight, err)
 		return
 	}
 	check.client.Close()
@@ -612,9 +617,10 @@ func (p *Provisioner) runPromote(ctx context.Context, op store.Operation, server
 	if err := p.cordon(ctx, server, false); err != nil {
 		p.log.Warn("could not uncordon after promotion", "server", server.ID, "error", err)
 	}
-	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
-	_ = p.db.SetServerStatus(ctx, server.ID, store.ServerReady, "")
-	p.publishOperation(ctx, op.ID)
+	recordCtx := context.WithoutCancel(ctx) // as runJoin's: the work is done
+	_ = p.db.SetOperationStatus(recordCtx, op.ID, store.OpSucceeded, "", "")
+	_ = p.db.SetServerStatus(recordCtx, server.ID, store.ServerReady, "")
+	p.publishOperation(recordCtx, op.ID)
 }
 
 func isDaemonSetPod(pod corev1.Pod) bool {

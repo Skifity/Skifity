@@ -50,6 +50,7 @@ import { Switch } from "@/components/ui/switch"
 import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatDate } from "@/lib/format"
+import { canOpenSettings } from "@/lib/permissions"
 import { queryClient } from "@/lib/query"
 import type { AddedDomain, App, DNSCheck, DNSProvider, Domain } from "@/lib/types"
 
@@ -559,18 +560,20 @@ function DNSInstructions({ domain, action }: { domain: Domain; action: ReactNode
  */
 function OwnCertificate({ domain }: { domain: Domain }) {
   const { t } = useTranslation()
+  const { user, team } = useSession()
   const certificate = domain.certificate
   if (!certificate) return null
   const name = certificate.name
   const date = formatDate(certificate.not_after)
-  const settings = (
+  // Only for somebody Settings lets in: anyone else was sent to the overview.
+  const settings = canOpenSettings(user, team) ? (
     <Link
       to="/settings?tab=certificates"
       className="underline underline-offset-2 hover:text-primary"
     >
       {t("domains.manageCertificates")}
     </Link>
-  )
+  ) : null
 
   if (certificate.state === "valid") {
     return (

@@ -84,6 +84,7 @@ import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { copyText } from "@/lib/clipboard"
 import { downloadBlob } from "@/lib/download"
+import { managesTeam } from "@/lib/permissions"
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type {
@@ -178,9 +179,13 @@ const NAV_GROUPS: { key: NavGroup; label: string }[] = [
 ]
 
 /** Whether the signed-in person is an owner or admin of the team in view. */
+/**
+ * An owner or admin of the current team who sees the whole of it: the team's
+ * API refuses one limited to some projects, so the tabs and buttons do too.
+ */
 function useTeamAdmin(): boolean {
   const { team } = useSession()
-  return team?.role === "owner" || team?.role === "admin"
+  return managesTeam(team)
 }
 
 export function SettingsPage() {
