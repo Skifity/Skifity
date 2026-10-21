@@ -7146,6 +7146,84 @@ webhooks of GitHub and GitLab themselves, and delivery to Telegram, Discord,
 Slack, Microsoft Teams and Pushover — each a service on the internet rather
 than something a runner can start.
 
+## The interface, read as the person using it
+
+Everything above was checked from the API down. This pass went the other way:
+six reviewers read the whole frontend as somebody using it would, page by page,
+each claim checked against the Go handler behind it, and a seventh compared
+every request the interface sends with what the API expects. The JSON contract
+held up — 268 routes, 249 of them called, none with a wrong method, path or
+field — so what they found was what the screens did, not what they sent. About
+a hundred and forty findings, all fixed except the few named at the end, in five
+parallel passes, then read again by three more reviewers who found twenty
+regressions in the fixes, which were fixed too.
+
+**What did not work at all.**
+
+* Restoring a database that any app used was refused every time: the panel
+  never sent the `overwrite` the API asks for, and the refusal told the person
+  to confirm on the dialog they had just confirmed. Deleting a linked database
+  had the same gap with `force`.
+* Signing out left the signed-in screen up, with the last person's data in the
+  cache; accepting an invitation landed on "Page not found"; "Get new codes" for
+  two-factor had no endpoint behind it and failed every time.
+* Team owners and admins who were not the panel's administrator could not open
+  Settings at all, though every team tab's API was theirs; Activity was offered
+  to everybody and answered most of them 403.
+* Live updates stopped for good after a panel restart, and each card opened its
+  own connection, six of which use up what a browser allows one plain-HTTP host.
+  The tab now shares one stream, which reconnects from the last event it saw,
+  decides each topic on its own so a refused one does not end the rest, and
+  asks every fifteen seconds whether the session behind it still signs anybody
+  in and may still see each topic.
+* Firewall values could not be typed as a list; a stale "built differently"
+  warning could force a promotion to a target it was never raised for; a console
+  run was lost by switching tabs and could be started twice; a build log missed
+  and repeated lines, and was taken as finished while a seed still wrote to it.
+* Settings that are on when unset — image scanning, the location lookup,
+  STARTTLS — were drawn off; emptying a secret box deleted the secret.
+
+**What the panel said wrong.** A server's, a database's and an app's status
+lines were the English the backend wrote; they now come with a key and are said
+in five languages. Kubernetes reasons such as `CrashLoopBackOff` were shown as
+they came, in grey, and are product states now. Seven error codes were raised
+with two different sentences each, so one of the two was translated wrong; each
+is now one code, one sentence. A generic server error showed one fixed
+provisioning sentence in every language instead of its cause.
+
+**What a stopped run left behind.** Writing how an add, a restore, an import or
+a password change ended used the run's own context, which "Stop adding" or a
+timeout had just spent, so the write was refused: the server stayed
+"provisioning" with no Retry and no Remove, and the API refused its removal as
+busy until the panel restarted. Endings are written with a context of their
+own, and a test fails without it.
+
+**The layout.** Settings' thirteen tabs are a grouped list beside the page on a
+laptop and a picker below that; the project page lists its apps before the
+environment's settings; on a phone the breadcrumb is the page and a way back,
+and names the project and the app instead of their ids.
+
+**The gates that let it through, tightened.**
+
+* `check:i18n` compared the languages with each other, so a key missing from
+  all five passed and rendered as the key; it now fails on a key the code asks
+  for that English does not have.
+* `check:destructive` passed a confirm anywhere near the change; it now reads
+  the code and wants it in the handler that fires the change. It found one:
+  turning two-factor off.
+* The error catalogue's test fails on one code raised with two sentences.
+* The language test proves the language follows the account to a new sign-in.
+
+**Not done.** Upgrading a plugin in place, which needs an API that keeps its
+token across a reinstall; the step-up dialog for an account that signs in only
+through single sign-on and has no second factor, which can only send it to sign
+in again; and the header still sits inside the sidebar component's `<main>`.
+
+**Checked.** `typecheck`, ESLint, `check:i18n` (4,106 keys in five languages),
+`check:destructive`, golangci-lint, `go test` and the race detector on the
+stream, the Playwright suite (19 tests) and both smoke tests pass locally on
+the last commit; the screenshots in `docs/images` were taken again from it.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,
