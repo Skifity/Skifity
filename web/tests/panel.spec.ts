@@ -388,7 +388,8 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
 
   // No cluster here to make a database in.
   await page.getByRole("checkbox", { name: /PostgreSQL/ }).uncheck()
-  await page.getByRole("button", { name: /^create$/i }).click()
+  // The button says what it will do, and deploying straight away is the default.
+  await page.getByRole("button", { name: /^create and deploy$/i }).click()
 
   await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
   await expect(page.getByText("An uploaded folder")).toBeVisible()
