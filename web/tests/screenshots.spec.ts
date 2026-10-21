@@ -124,7 +124,8 @@ test("capture", async ({ page, request }) => {
   const environments = await get(`/api/projects/${project.id}/environments`)
   const envID = environments.items[0].id
 
-  const web = await post(`/api/environments/${envID}/apps`, {
+  // Creating an app answers with the app and what became of its webhook.
+  const { app: web } = await post(`/api/environments/${envID}/apps`, {
     name: "storefront",
     source_type: "git",
     repo_url: "https://github.com/vercel/next.js",
@@ -273,11 +274,14 @@ test("capture", async ({ page, request }) => {
     "scaling",
     "storage",
     "firewall",
+    "security",
     "settings",
     "advanced",
   ]) {
     await page.goto(tab === "overview" ? `/apps/${web.id}` : `/apps/${web.id}?tab=${tab}`)
-    await expect(page.getByRole("tab", { selected: true })).toBeVisible()
+    // The app's own tabs are the first tablist; the overview has a second, for
+    // the range its charts cover.
+    await expect(page.getByRole("tablist").first().getByRole("tab", { selected: true })).toBeVisible()
     await shoot(page, `app-${tab}`)
   }
 
