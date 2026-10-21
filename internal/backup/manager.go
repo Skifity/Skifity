@@ -143,6 +143,9 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 	defer cancel()
 
 	fail := func(err error) {
+		// Written with a context of its own: the run's may be the one that ran
+		// out, and a write made with it was refused, leaving the work "running".
+		ctx := context.WithoutCancel(ctx)
 		problem := errdoc.From(err)
 		m.log.Error("backup failed", "backup", backup.ID, "database", record.ID, "error", err)
 		_ = m.db.FinishBackup(ctx, backup.ID, "failed", backup.Location, 0, problem.Error())
@@ -358,6 +361,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 	defer cancel()
 
 	fail := func(step string, err error) {
+		ctx := context.WithoutCancel(ctx) // as a backup's: the run's may be spent
 		problem := errdoc.From(err)
 		m.log.Error("restore failed", "operation", op.ID, "step", step, "error", err)
 		_ = m.db.SetStepStatus(ctx, op.ID, step, store.StepFailed,
@@ -450,7 +454,7 @@ func (m *Manager) runRestore(ctx context.Context, op store.Operation, backup sto
 	_ = m.db.SetStepStatus(ctx, op.ID, "verify", store.StepSucceeded,
 		store.StepNote{Message: restarted, Key: "appsRestarted", Args: restartedArgs}, "")
 
-	_ = m.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
+	_ = m.db.SetOperationStatus(context.WithoutCancel(ctx), op.ID, store.OpSucceeded, "", "")
 	m.hub.Publish(events.OperationTopic(op.ID), "operation", op)
 }
 
@@ -721,6 +725,7 @@ func (m *Manager) runVolume(ctx context.Context, storage *Storage, backup store.
 	defer cancel()
 
 	fail := func(err error) {
+		ctx := context.WithoutCancel(ctx) // as a backup's: the run's may be spent
 		problem := errdoc.From(err)
 		m.log.Error("volume backup failed",
 			"backup", backup.ID, "volume", volume.ID, "app", app.ID, "error", err)

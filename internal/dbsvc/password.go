@@ -600,6 +600,9 @@ func (m *Manager) runPasswordChange(ctx context.Context, c passwordChange) {
 	op, record := c.op, c.record
 
 	fail := func(step string, problem *errdoc.Problem) {
+		// Written with a context of its own: the run's may be the one that ran
+		// out, and a write made with it was refused, leaving it "running".
+		ctx := context.WithoutCancel(ctx)
 		m.log.Error("the password change failed", "operation", op.ID, "database", record.ID,
 			"step", step, "code", problem.Code)
 		_ = m.db.SetStepStatus(ctx, op.ID, step, store.StepFailed,
@@ -611,7 +614,7 @@ func (m *Manager) runPasswordChange(ctx context.Context, c passwordChange) {
 	}
 	// Given up on: the database has the old password, and only the old one.
 	abandon := func(step string, problem *errdoc.Problem) {
-		_ = m.db.AbandonDatabaseCredentials(ctx, record.ID)
+		_ = m.db.AbandonDatabaseCredentials(context.WithoutCancel(ctx), record.ID)
 		fail(step, problem)
 	}
 	defer runsafe.Recover(m.log, "password change "+op.ID, func(err error) {
@@ -722,9 +725,9 @@ func (m *Manager) runPasswordChange(ctx context.Context, c passwordChange) {
 		}
 	}
 
-	_ = m.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
+	_ = m.db.SetOperationStatus(context.WithoutCancel(ctx), op.ID, store.OpSucceeded, "", "")
 	m.hub.Publish(events.OperationTopic(op.ID), "operation", op)
-	m.publish(ctx, record.ID)
+	m.publish(context.WithoutCancel(ctx), record.ID)
 	m.log.Info("database password changed", "database", record.ID, "apps", synced)
 }
 

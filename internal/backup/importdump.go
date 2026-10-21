@@ -415,6 +415,7 @@ func (m *Manager) runImport(ctx context.Context, storage *Storage, job importJob
 	op, record := job.op, job.record
 
 	fail := func(step string, err error) {
+		ctx := context.WithoutCancel(ctx) // as a backup's: the run's may be spent
 		problem := errdoc.From(err)
 		m.log.Error("import failed", "operation", op.ID, "database", record.ID, "step", step, "error", err)
 		_ = m.db.SetStepStatus(ctx, op.ID, step, store.StepFailed,
@@ -427,7 +428,7 @@ func (m *Manager) runImport(ctx context.Context, storage *Storage, job importJob
 	// The dump is somebody's data and not a backup: it goes when the import
 	// does, whichever way it went.
 	defer func() {
-		if err := storage.Remove(ctx, job.key); err != nil {
+		if err := storage.Remove(context.WithoutCancel(ctx), job.key); err != nil {
 			m.log.Warn("could not remove an imported dump from the bucket", "operation", op.ID, "error", err)
 		}
 	}()
@@ -502,7 +503,7 @@ func (m *Manager) runImport(ctx context.Context, storage *Storage, job importJob
 	_ = m.db.SetStepStatus(ctx, op.ID, "verify", store.StepSucceeded,
 		store.StepNote{Message: note, Key: "appsRestarted", Args: args}, "")
 
-	_ = m.db.SetOperationStatus(ctx, op.ID, store.OpSucceeded, "", "")
+	_ = m.db.SetOperationStatus(context.WithoutCancel(ctx), op.ID, store.OpSucceeded, "", "")
 	m.hub.Publish(events.OperationTopic(op.ID), "operation", op)
 	m.log.Info("import finished", "operation", op.ID, "database", record.ID, "format", job.format)
 }
