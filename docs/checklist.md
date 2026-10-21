@@ -217,8 +217,12 @@ not own reappears anywhere.
 `raw.githubusercontent.com/<repo>/<version>/deploy`. An install never pulls one
 release's image and another's Deployment.
 
-**v0.1.0 was published on 2026-10-06, and v0.1.1 is the tag after it.**
-`RELEASED_VERSION` in the installer is `v0.1.1`, the release workflow refuses a
+**v0.1.0 was published on 2026-10-06, and v0.1.1 on 2026-10-21**, tagged on
+`e1a9600` by `tag.yml` once CI, Cluster and Two servers had passed on it, with
+nobody pressing a button: the release workflow it started published the
+binaries, both images and the provenance, and the newest-release link now
+hands out v0.1.1's installer. `RELEASED_VERSION` in the installer is `v0.1.1`,
+the release workflow refuses a
 tag whose installer disagrees, and the one-line install in the README is the
 newest release's own installer, `releases/latest/download/install.sh`, which
 installs the release it is attached to. The release workflow's first real run passed, provenance

@@ -124,8 +124,9 @@ In the order it matters.
    clone URL that no push ever deployed; all are fixed. `docs/progress.md` has
    each run.
 2. **Tag a release** — *done.* v0.1.0 was cut before the cluster run, by the
-   maintainer's decision; v0.1.1 is the first tag cut after it, with everything
-   it found fixed. `docs/releasing.md` is the procedure.
+   maintainer's decision; v0.1.1, published on 2026-10-21, is the first tag
+   cut after it, with everything it found fixed, and the first tagged by the
+   workflow that reads the runs. `docs/releasing.md` is the procedure.
 3. **Measure k3s's own footprint** — *done.* A fresh install takes about 1 GB
    of memory before the first app, k3s 758 MiB of it, measured on every push
    (`docs/performance.md`). That is why the first server's minimum is now 2 GB

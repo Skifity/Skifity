@@ -7116,6 +7116,30 @@ passed: the upgrade from the last release, and in the `Two servers` workflow
 the full run across two servers, the one across the slow link, and the one
 that switches a server off.
 
+**v0.1.1, and the release that tags itself.** Tagging was the one step left
+to a person, and the session that did the rest could not push a tag.
+`.github/workflows/tag.yml` now reads the runs `docs/releasing.md` asks for —
+CI on the tip of `main`, and Cluster and Two servers on it or on the last
+commit before it that was more than documentation — tags `RELEASED_VERSION`
+when they have all passed and it has no tag yet, and starts the release
+workflow on the tag, since a tag pushed with a workflow's own token starts
+nothing by itself. Before the release it closed the nine updates Dependabot
+had open, applied on `main`: chi, minio-go, maxminddb-golang and golang.org/x;
+radix-ui, i18next, vite and eslint at the versions proposed rather than ones
+two days old; and `tailwind-merge`, proposed at a new major version, removed
+instead with `clsx`, since nothing imported either. The run on `0273332` then
+counted one more thing: an app taken out of maintenance answered the first
+request and showed the notice to the next, because the guard reads its rules
+from a ConfigMap and each server's kubelet refreshes it on its own schedule.
+Each guard pod is now annotated with the digest of the rules it should have,
+which has its kubelet refresh them at once, and the check asks for ten
+answers in a row. On `e1a9600` every job passed; `tag.yml` tagged v0.1.1 on it
+and the release published on 2026-10-21: binaries for six platforms, the
+installer and uninstaller, `checksums.txt`, SLSA provenance, and the image as
+`v0.1.1`, `0.1.1` and `latest`. From outside, `releases/latest/download/install.sh`
+is v0.1.1's installer and matches its checksum, and the manifests it fetches
+from the tag are there.
+
 Still only against fakes, because a runner cannot stand in for them: a passkey
 on a real authenticator, a GPU, servers made at Hetzner, Bitbucket, the
 webhooks of GitHub and GitLab themselves, and delivery to Telegram, Discord,
