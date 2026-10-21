@@ -247,8 +247,19 @@ accounts from one machine is stopped anyway.
 
 **Two-factor authentication** is TOTP, and a code is spent when it is used — the
 window is ninety seconds wide, so a code read over a shoulder or out of a screen
-share would otherwise work again. Eight recovery codes are shown when it is
-turned on; each works once.
+share would otherwise work again. Turning it on shows a QR code for an
+authenticator app, the secret to type in instead, and eight recovery codes; each
+code works once, and they stay on screen until you say you have saved them.
+**Account → Two-factor authentication → Get new codes** replaces them when they
+run out or the paper is lost, and the old ones stop working at once. Turning
+two-factor off asks first, deletes the recovery codes, and names any team that
+requires two-factor or single sign-on, because those teams will refuse the
+account afterwards.
+
+**An account made through single sign-on** has no password. It can set one under
+**Account → Set a password**, without a current password to give, within a few
+minutes of signing in through the identity provider; after that it is changed
+the usual way. A password is what lets the account unlink the provider later.
 
 **Sessions** last seven days of inactivity by default (`session_ttl`) and thirty
 days however much they are used. The second one is the ceiling: without it a
@@ -256,9 +267,10 @@ session used once a day renews forever, and a cookie stolen in January is still
 good in December. Account → Sessions lists every device and signs out the ones
 that are not this one.
 
-**Three actions ask for your password again**, even though you are signed in:
-turning two-factor off, reading the recovery codes, and creating an API token.
-Each of them turns a session somebody borrowed into access they keep. Signing in
+**Some actions ask for your password again**, even though you are signed in:
+turning two-factor on or off, getting new recovery codes, creating an API token,
+and setting a first password. Each of them turns a session somebody borrowed
+into access they keep. Signing in
 counts, so in practice this is one dialog a few minutes into a session. An API
 token cannot take these actions at all — there is nobody at the keyboard for it
 to ask. Adding or removing a passkey, and linking or unlinking single sign-on,

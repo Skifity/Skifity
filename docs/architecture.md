@@ -161,7 +161,7 @@ stateDiagram-v2
     Firewall --> Failed
     Agent --> Failed
     Failed --> Connecting: Retry (every step is idempotent)
-    Failed --> [*]: Cancel and clean up
+    Failed --> [*]: Stop adding (nothing installed is undone)
 ```
 
 ## Data model
