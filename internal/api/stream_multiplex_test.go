@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,9 +46,9 @@ func TestAMultiplexedStreamRefusesOneTopicAndCarriesTheRest(t *testing.T) {
 		Data  json.RawMessage `json:"data"`
 	}
 	frames := make(chan frame, 8)
-	go func() {
+	go func(body io.Reader) {
 		defer close(frames)
-		scanner := bufio.NewScanner(resp.Body)
+		scanner := bufio.NewScanner(body)
 		var id string
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -66,7 +67,7 @@ func TestAMultiplexedStreamRefusesOneTopicAndCarriesTheRest(t *testing.T) {
 				frames <- f
 			}
 		}
-	}()
+	}(resp.Body)
 	next := func() frame {
 		t.Helper()
 		select {
