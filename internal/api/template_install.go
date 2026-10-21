@@ -8,6 +8,7 @@ import (
 
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
+	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/store"
 	"skifity/internal/templates"
@@ -68,6 +69,10 @@ func (s *Server) installTemplate(
 
 	// Map service name to the created app, so links can be made afterwards.
 	created := map[string]store.App{}
+	// Each app is announced as it is made, as one made by hand is: a project
+	// page open elsewhere refreshes its list on it, and an install that fails
+	// half way has still made the apps before the failure.
+	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)
 	// What the cluster's servers offer, asked once and only when a service
 	// could use a GPU.
 	var gpus []gpuVendorView
@@ -112,6 +117,7 @@ func (s *Server) installTemplate(
 		if err := s.db.CreateApp(r.Context(), &app); err != nil {
 			return result, err
 		}
+		s.hub.Publish(events.TeamTopic(teamID), "app.created", app)
 		// Remembered, so a newer version of the template can be offered.
 		if err := s.db.RecordAppTemplate(r.Context(), store.AppTemplate{
 			AppID: app.ID, TemplateID: tpl.ID, CatalogueID: catalogueID, Service: svc.Name, InstalledImage: svc.Image,

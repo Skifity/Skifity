@@ -44,7 +44,10 @@ export function ProjectsPage() {
       "project.deleted": () =>
         void queryClient.invalidateQueries({ queryKey: ["projects", team?.id] }),
     },
-    Boolean(team),
+    // A member limited to some projects is refused the team's stream: it
+    // carries every project's events. Asking anyway is a refused topic on a
+    // connection other pages share.
+    Boolean(team) && !team?.scoped,
   )
 
   const projects = useQuery({

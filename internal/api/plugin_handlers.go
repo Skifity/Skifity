@@ -162,7 +162,9 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.db.GetPlugin(r.Context(), manifest.ID); err == nil {
 		writeError(w, r, errdoc.Conflict(
 			manifest.ID+" is already installed.",
-			"Remove it first, or upgrade it from the plugin's own page."))
+			// There is no upgrade in place yet, so the way to another version
+			// is the one that exists, with what it costs said up front.
+			"Remove it under Plugins, then install this version. Removing it revokes its token and forgets its settings, so note them first."))
 		return
 	}
 	if s.cluster == nil {

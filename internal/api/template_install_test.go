@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"skifity/internal/dbsvc/engine"
+	"skifity/internal/events"
 	"skifity/internal/store"
 	"skifity/internal/templates"
 )
@@ -104,6 +106,11 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 			VarName: "DATABASE_URL",
 			Vars:    templates.DatabaseVars{Host: "DB_HOST", Port: "DB_PORT", Name: "DB_DATABASE", User: "DB_USERNAME", Password: "DB_PASSWORD"}}},
 	}
+	// Announced as a hand-made app is, so a project page open elsewhere
+	// shows them without a reload.
+	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
+	defer stream.Close()
+
 	request := httptest.NewRequest(http.MethodPost, "/api/templates/assets/install", nil).WithContext(t.Context())
 	result, err := h.api.installTemplate(request, "", tpl, acme.env, acme.user, "", nil)
 	if err != nil {
@@ -112,6 +119,17 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 	apps := map[string]store.App{}
 	for _, app := range result.Apps {
 		apps[app.Name] = app
+	}
+	announced := 0
+	for announced < len(result.Apps) {
+		select {
+		case event := <-stream.Events():
+			if event.Type == "app.created" {
+				announced++
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d of %d apps were announced", announced, len(result.Apps))
+		}
 	}
 	if apps["worker"].StartCommand != "php artisan queue:work" || apps["web"].StartCommand != "" {
 		t.Errorf("start commands are web %q, worker %q", apps["web"].StartCommand, apps["worker"].StartCommand)

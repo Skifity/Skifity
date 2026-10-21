@@ -127,6 +127,9 @@ type databaseResult struct {
 	DatabaseID string `json:"database_id,omitempty"`
 	Name       string `json:"name,omitempty"`
 	Error      string `json:"error,omitempty"`
+	// Problem is Error as a catalogued problem, so the panel can say it in
+	// the reader's language rather than in the server's English.
+	Problem *errdoc.Problem `json:"problem,omitempty"`
 }
 
 // maxInitialDatabases bounds one request. An app that needs more than a
@@ -190,6 +193,7 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 		result := databaseResult{Engine: want.Engine, Variable: want.Variable}
 		if s.databases == nil {
 			result.Error = "This panel has no cluster connection, so it cannot create databases."
+			result.Problem = errdoc.NotConfigured("Managed databases", "the panel's cluster connection")
 			results = append(results, result)
 			continue
 		}
@@ -197,7 +201,7 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 			Name: app.Name + " " + want.Engine, Engine: want.Engine,
 		})
 		if err != nil {
-			result.Error = problemText(err)
+			result.Error, result.Problem = problemText(err), errdoc.From(err)
 			results = append(results, result)
 			continue
 		}
@@ -209,7 +213,7 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 		})
 
 		if err := s.databases.Link(r.Context(), record.ID, app.ID, want.Variable); err != nil {
-			result.Error = problemText(err)
+			result.Error, result.Problem = problemText(err), errdoc.From(err)
 			results = append(results, result)
 			continue
 		}
@@ -325,6 +329,10 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if err := validateInitialVariables(req.Variables); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if err := s.checkGitSource(r, req.GitSourceID, env.ID); err != nil {
 		writeError(w, r, err)
 		return
@@ -400,13 +408,19 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Before the first deploy, so the app never starts once without them.
+	//
+	// Every name was checked above; what can still fail here is sealing or
+	// storing one. The app goes with it, as a stack's do: a half-made app made
+	// the retry fail on its own name.
 	if err := s.setInitialVariables(r, app, req.Variables); err != nil {
+		_ = s.db.DeleteApp(r.Context(), app.ID)
 		writeError(w, r, err)
 		return
 	}
 	for i := range processes {
 		processes[i].AppID = app.ID
 		if err := s.db.SetProcess(r.Context(), &processes[i]); err != nil {
+			_ = s.db.DeleteApp(r.Context(), app.ID)
 			writeError(w, r, err)
 			return
 		}
@@ -518,6 +532,24 @@ func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus 
 	s.log.Info("could not register a webhook; it can be added by hand",
 		"app", app.ID, "reason", result.Reason)
 	return webhookStatus{URL: deliverTo, Reason: result.Reason}
+}
+
+// validateInitialVariables refuses a name the cluster could not carry before
+// the app exists. It was found only while storing them, after the insert, so
+// a Compose file's "discovery.type" left the app behind and the retry was
+// refused because its name was taken.
+func validateInitialVariables(values map[string]string) error {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if _, err := kube.SanitiseEnvKey(key); err != nil {
+			return errdoc.BadRequest(capitalise(err.Error()) + ".")
+		}
+	}
+	return nil
 }
 
 // setInitialVariables stores the variables a new app was created with.

@@ -10,7 +10,9 @@ import {
   DatabaseIcon,
   ExternalLinkIcon,
   FolderIcon,
+  LayersIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
   RocketIcon,
   Trash2Icon,
@@ -56,6 +58,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -92,6 +95,11 @@ export function ProjectDetailPage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const [newEnvironment, setNewEnvironment] = useState(false)
   const [cloning, setCloning] = useState(false)
+  const [editing, setEditing] = useState(false)
+  // The API's own lines: a member may change a project's name, only an
+  // admin may delete one of its environments.
+  const canEdit = team?.role !== undefined && team.role !== "viewer"
+  const isAdmin = team?.role === "owner" || team?.role === "admin"
 
   const project = useQuery({
     queryKey: ["project", projectId],
@@ -145,6 +153,17 @@ export function ProjectDetailPage() {
     },
   })
 
+  // One environment and everything in it. The page goes back to the first
+  // one left, because the one it showed is gone.
+  const removeEnvironment = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/environments/${id}`),
+    onSuccess: () => {
+      setChosen(null)
+      void queryClient.invalidateQueries({ queryKey: ["environments", projectId] })
+      void queryClient.invalidateQueries({ queryKey: ["canvas", projectId] })
+    },
+  })
+
   if (project.error) {
     return <ErrorDisplay error={project.error} onRetry={() => void project.refetch()} />
   }
@@ -181,6 +200,12 @@ export function ProjectDetailPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {canEdit && project.data && (
+                  <DropdownMenuItem onSelect={() => setEditing(true)}>
+                    <PencilIcon className="size-4" />
+                    {t("projects.edit")}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onSelect={() => setNewEnvironment(true)}>
                   <PlusIcon className="size-4" />
                   {t("projects.newEnvironment")}
@@ -189,6 +214,24 @@ export function ProjectDetailPage() {
                   <DropdownMenuItem onSelect={() => setCloning(true)}>
                     <CopyIcon className="size-4" />
                     {t("environments.cloneAction", { name: chosenEnvironment.name })}
+                  </DropdownMenuItem>
+                )}
+                {isAdmin && chosenEnvironment && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      const target = chosenEnvironment
+                      void confirmDelete(
+                        target.name,
+                        t("environments.deleteConfirm"),
+                        t("common.cannotBeUndone"),
+                      ).then((yes) => {
+                        if (yes) removeEnvironment.mutate(target.id)
+                      })
+                    }}
+                  >
+                    <Trash2Icon className="size-4" />
+                    {t("environments.deleteAction", { name: chosenEnvironment.name })}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -213,6 +256,7 @@ export function ProjectDetailPage() {
       />
 
       {remove.error && <ErrorDisplay error={remove.error} />}
+      {removeEnvironment.error != null && <ErrorDisplay error={removeEnvironment.error} />}
 
       {items.length > 1 && (
         <Field orientation="horizontal" className="w-fit">
@@ -241,20 +285,44 @@ export function ProjectDetailPage() {
           <TabsTrigger value="variables">{t("projects.sharedVariables")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="services" className="space-y-6 pt-4">
-          {environments.isLoading ? (
+        <TabsContent value="services" className="space-y-8 pt-4">
+          {/* A failed list is not an empty one. It used to leave the tab
+              blank and take the New app button with it, with nothing said. */}
+          {environments.error ? (
+            <ErrorDisplay error={environments.error} onRetry={() => void environments.refetch()} />
+          ) : environments.isLoading ? (
             <Skeleton className="h-40" />
-          ) : environmentId ? (
+          ) : chosenEnvironment ? (
             <>
-              {chosenEnvironment && <EnvironmentConfinement environment={chosenEnvironment} />}
-              {chosenEnvironment && <EnvironmentPreviews environment={chosenEnvironment} />}
-              <EnvironmentServices environmentId={environmentId} />
+              {/* What the page is about first; the environment's own settings
+                  after it. They used to come first and pushed the apps below
+                  the fold on every visit. */}
+              <EnvironmentServices environmentId={chosenEnvironment.id} />
+              <Section title={t("projects.environmentSettings", { name: chosenEnvironment.name })}>
+                <div className="space-y-3">
+                  <EnvironmentQuota environmentId={chosenEnvironment.id} />
+                  <EnvironmentConfinement environment={chosenEnvironment} />
+                  <EnvironmentPreviews environment={chosenEnvironment} />
+                </div>
+              </Section>
             </>
-          ) : null}
+          ) : (
+            <EmptyState
+              icon={LayersIcon}
+              title={t("projects.noEnvironments")}
+              description={t("projects.newEnvironmentHelp")}
+              action={
+                <Button onClick={() => setNewEnvironment(true)}>
+                  <PlusIcon />
+                  {t("projects.newEnvironment")}
+                </Button>
+              }
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="canvas" className="pt-4">
-          <ProjectCanvas projectId={projectId} />
+          <ProjectCanvas projectId={projectId} environments={items} />
         </TabsContent>
 
         <TabsContent value="variables" className="pt-4">
@@ -279,6 +347,11 @@ export function ProjectDetailPage() {
         onOpenChange={setCloning}
         onCloned={(environment) => setEnvironmentId(environment.id)}
       />
+      {/* Mounted only while open, so it starts from the project as it is now
+          rather than copying it into state when it changes. */}
+      {editing && project.data && (
+        <EditProjectDialog project={project.data} onClose={() => setEditing(false)} />
+      )}
     </Page>
   )
 }
@@ -306,9 +379,11 @@ function EnvironmentServices({ environmentId }: { environmentId: string }) {
   const noServices = appItems.length === 0 && databaseItems.length === 0
 
   if (apps.error) return <ErrorDisplay error={apps.error} onRetry={() => void apps.refetch()} />
-  if (apps.isLoading) return <Skeleton className="h-40" />
+  // Both lists, before deciding the environment is empty: the first-run
+  // state flashed while the databases loaded, and stayed when they failed.
+  if (apps.isLoading || databases.isLoading) return <Skeleton className="h-40" />
 
-  if (noServices) {
+  if (noServices && !databases.error) {
     return (
       <>
         <EmptyState
@@ -344,7 +419,6 @@ function EnvironmentServices({ environmentId }: { environmentId: string }) {
 
   return (
     <div className="space-y-6">
-      <EnvironmentQuota environmentId={environmentId} />
       {appItems.length > 0 && (
         <Section title={t("nav.apps")}>
           <ItemGroup className="rounded-lg border">
@@ -364,7 +438,9 @@ function EnvironmentServices({ environmentId }: { environmentId: string }) {
           </Button>
         }
       >
-        {databaseItems.length === 0 ? (
+        {databases.error ? (
+          <ErrorDisplay error={databases.error} onRetry={() => void databases.refetch()} />
+        ) : databaseItems.length === 0 ? (
           <EmptyState
             icon={DatabaseIcon}
             title={t("databases.empty")}
@@ -478,7 +554,13 @@ function AppRow({ app }: { app: App }) {
  * shape of a project at a glance and click through, and a layout they cannot
  * accidentally rearrange stays readable on a phone.
  */
-function ProjectCanvas({ projectId }: { projectId: string }) {
+function ProjectCanvas({
+  projectId,
+  environments: known,
+}: {
+  projectId: string
+  environments: Environment[]
+}) {
   const { t } = useTranslation()
 
   const canvas = useQuery({
@@ -501,13 +583,16 @@ function ProjectCanvas({ projectId }: { projectId: string }) {
 
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const environments = [...new Set(nodes.map((node) => node.environment))]
+  // The canvas names an environment by its slug; the heading is its name, as
+  // everywhere else on the page.
+  const nameOf = (slug: string) => known.find((item) => item.slug === slug)?.name ?? slug
 
   return (
     <div className="space-y-8">
       <p className="text-sm text-muted-foreground">{t("projects.canvasHelp")}</p>
       {environments.map((environment) => (
         <section key={environment} className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">{environment}</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">{nameOf(environment)}</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {nodes
               .filter((node) => node.environment === environment)
@@ -534,7 +619,17 @@ function ProjectCanvas({ projectId }: { projectId: string }) {
                             {node.name}
                           </Link>
                         </CardTitle>
-                        <StatusBadge status={node.status} />
+                        {/* A database's status words are not an app's: "creating"
+                            fell through to the English it was sent as. */}
+                        <StatusBadge
+                          status={node.status}
+                          label={t(
+                            node.kind === "database"
+                              ? `databases.status.${node.status}`
+                              : `apps.phase.${node.status}`,
+                            { defaultValue: node.status },
+                          )}
+                        />
                       </div>
                       {node.detail && (
                         <CardDescription className="font-mono text-xs">
@@ -610,7 +705,7 @@ function NewEnvironmentDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("projects.newEnvironment")}</DialogTitle>
-          <DialogDescription>{t("projects.sharedVariablesHelp")}</DialogDescription>
+          <DialogDescription>{t("projects.newEnvironmentHelp")}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -625,7 +720,7 @@ function NewEnvironmentDialog({
               id="environment-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="staging"
+              placeholder={t("environments.namePlaceholder")}
               autoFocus
               required
             />
@@ -638,6 +733,81 @@ function NewEnvironmentDialog({
             <Button type="submit" disabled={!name.trim() || create.isPending}>
               {create.isPending && <Spinner />}
               {create.isPending ? t("common.saving") : t("common.create")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * A project's name and description. Nothing else about a project can change,
+ * and nothing hangs off its name: apps keep their addresses.
+ */
+function EditProjectDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  const [name, setName] = useState(project.name)
+  const [description, setDescription] = useState(project.description)
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch<Project>(`/api/projects/${project.id}`, {
+        name: name.trim(),
+        description: description.trim(),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["project", project.id] })
+      void queryClient.invalidateQueries({ queryKey: ["projects", team?.id] })
+      onClose()
+    },
+  })
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("projects.edit")}</DialogTitle>
+          <DialogDescription>{t("projects.editHelp")}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            save.mutate()
+          }}
+        >
+          <Field>
+            <FieldLabel htmlFor="edit-project-name">{t("projects.projectName")}</FieldLabel>
+            <Input
+              id="edit-project-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoFocus
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-project-description">
+              {t("projects.description")}{" "}
+              <span className="text-muted-foreground">({t("common.optional")})</span>
+            </FieldLabel>
+            <Textarea
+              id="edit-project-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+            />
+          </Field>
+          {save.error != null && <ErrorDisplay error={save.error} compact />}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={!name.trim() || save.isPending}>
+              {save.isPending && <Spinner />}
+              {save.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </form>

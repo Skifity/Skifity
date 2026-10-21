@@ -255,7 +255,8 @@
     "memoryUsed": "Memory in use",
     "recentActivity": "Recent activity",
     "nothingYet": "Nothing has happened yet.",
-    "welcomeBack": "Welcome back, {{name}}."
+    "welcomeBack": "Welcome back, {{name}}.",
+    "readyOfTotal": "{{ready}} of {{total}}"
   },
   "activity": {
     "subtitle": "What changed in this team, newest first.",
@@ -455,7 +456,12 @@
       "requests.memory": "Memory reserved",
       "pods": "Instances",
       "requests.storage": "Storage"
-    }
+    },
+    "environmentSettings": "Settings for {{name}}",
+    "noEnvironments": "This project has no environments",
+    "newEnvironmentHelp": "A separate place in this project, such as staging beside production, with its own apps, databases and addresses. It starts empty.",
+    "edit": "Edit project",
+    "editHelp": "The name and description shown in the panel. Apps, their addresses and the environments are not affected."
   },
   "schedule": {
     "label": "Schedule",
@@ -661,7 +667,8 @@
     "stackNote": {
       "renamed": "{{service}} is reached as {{value}}: names in a cluster have no capitals or underscores.",
       "bind_mount": "{{service}}: {{value}} is a folder on the machine that ran Compose, and was not carried over. Put those files in the image or in a volume.",
-      "interpolation": "{{service}}: {{value}} refers to the shell Compose ran in. Set it under the app's Variables."
+      "interpolation": "{{service}}: {{value}} refers to the shell Compose ran in. Set it under the app's Variables.",
+      "variable_name": "{{service}}: the variable {{value}} was left out, because a container here cannot be given that name."
     },
     "internal": "Internal only",
     "internalHelp": "Reached by name and port from the other apps in this environment, and from nowhere else: no public address.",
@@ -759,6 +766,25 @@
         "product_missing": "No server says it has a {{product}}, so the app runs on any {{vendor}} card.",
         "previews": "The app's previews run without a GPU, so a preview never holds the card production needs."
       }
+    },
+    "creating": "Creating...",
+    "createAndDeploy": "Create and deploy",
+    "composePlanTitle": "{{name}} is created as the Compose file describes it",
+    "composePlanHelp": "The same way creating the whole file would: its port, command, variables and named volumes come from the file, and anything that does not carry over is listed once it exists. Change the rest on the app's page.",
+    "composePlanPublic": "It publishes a port, so it gets a public address.",
+    "composePlanInternal": "It publishes no port, so it is internal: only the other apps in this environment reach it, by name.",
+    "composePlanVariables": "Variables:",
+    "composePlanLeftOut": "Left out, because a container here cannot be given these names:",
+    "composeNote": {
+      "network_mode": "network_mode is ignored: every service gets a cluster address instead.",
+      "privileged": "privileged is not allowed: containers run unprivileged.",
+      "cap_add": "cap_add is not allowed: all capabilities are dropped.",
+      "devices": "devices are not available to containers here.",
+      "pid": "pid namespace sharing is not supported.",
+      "extends": "extends is not resolved; copy the settings into the service.",
+      "restart": "restart is not needed: instances are restarted automatically.",
+      "no_port": "No port is published or exposed, and its image's is not known: nothing can reach it by name. If another service connects to it, give it an expose line with the port it listens on.",
+      "skipped": "The service {{name}} could not be read and was skipped."
     }
   },
   "deploy": {
@@ -884,7 +910,11 @@
     "refKey": "Key (optional)",
     "referenceHelp": "The value is read at every deploy and never stored in the panel. A secret that holds several values needs the key of the one to use. It is read once now, to check it.",
     "noSecretManagersForProject": "No secret manager may be used by this project. An administrator can allow it under Settings, Secret managers.",
-    "allowedPathsHint": "{{name}} reads only at or under: {{paths}}."
+    "allowedPathsHint": "{{name}} reads only at or under: {{paths}}.",
+    "bulkSaved_one": "{{count}} variable saved",
+    "bulkSaved_other": "{{count}} variables saved",
+    "bulkNothing": "There are no KEY=value lines here, so there is nothing to save.",
+    "deleteKey": "Delete {{key}}"
   },
   "domains": {
     "title": "Domains",
@@ -1628,7 +1658,12 @@
       "staleNotice_one": "{{count}} catalogue could not be refreshed, and its last good copy is still in use.",
       "staleNotice_other": "{{count}} catalogues could not be refreshed, and their last good copies are still in use.",
       "review": "See why"
-    }
+    },
+    "withoutGPU": "Installed without a GPU: {{names}}",
+    "withoutGPUHelp": "No server offers one yet, so they run without. Give each one a GPU under its settings once a server does.",
+    "noEnvironment": "There is no project to install into yet. Create one first.",
+    "stackApps": "Apps it installs",
+    "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name."
   },
   "settings": {
     "title": "Settings",
@@ -4255,7 +4290,10 @@
       "push_deploy_off": "{{name}} does not deploy on push until that is turned on in its settings.",
       "database_skipped": "The database {{name}} was not copied: this panel has no cluster to make one in.",
       "deploy_failed": "{{name}} could not be deployed yet: {{detail}}"
-    }
+    },
+    "deleteAction": "Delete {{name}}",
+    "deleteConfirm": "Every app, database and volume in this environment is deleted with its data, and its namespace is removed from the cluster. The project and its other environments stay.",
+    "namePlaceholder": "staging"
   },
   "firewall": {
     "title": "Firewall",
@@ -4402,7 +4440,14 @@
       "teams": "your teams",
       "settings": "the panel's settings",
       "account": "your account"
-    }
+    },
+    "remove": "Remove {{name}}",
+    "clearSecret": "Clear the stored {{label}}",
+    "clearSecretTitle": "Clear {{label}}?",
+    "clearSecretConfirm": "The stored value is deleted and the plugin restarts without it. It cannot be read back, so putting it back means entering it again.",
+    "installedToast": "{{name}} is installed",
+    "upgradeHow": "There is no upgrade in place yet: remove the installed version under Installed, then install this one. Its settings and its token do not carry over.",
+    "alreadyInstalledTitle": "Version {{version}} is installed already"
   },
   "needs": {
     "databasesTitle": "Databases this app needs",
@@ -4437,7 +4482,8 @@
       "clickhouse": "ClickHouse",
       "memcached": "Memcached"
     },
-    "pastedReplaced": "{{variable}} from what you pasted is left out: the {{engine}} database created with the app sets it, pointing at itself rather than at the computer the file came from."
+    "pastedReplaced": "{{variable}} from what you pasted is left out: the {{engine}} database created with the app sets it, pointing at itself rather than at the computer the file came from.",
+    "refusedNames": "The panel refuses these names; rename or remove them before creating the app:"
   },
   "folder": {
     "label": "Your app's folder",

@@ -1260,6 +1260,8 @@ export type InitialDatabaseResult = {
   database_id?: string
   name?: string
   error?: string
+  /** The error as a catalogued problem, so it can be said in the reader's language. */
+  problem?: Problem
 }
 
 /** One service from a Compose file, as the panel would run it. */
@@ -1393,7 +1395,7 @@ export type MaintenanceView = Maintenance & {
 /** Something about a Compose service that did not carry over as written. */
 export type StackNote = {
   service: string
-  code: "renamed" | "bind_mount" | "interpolation"
+  code: "renamed" | "bind_mount" | "interpolation" | "variable_name"
   value?: string
 }
 

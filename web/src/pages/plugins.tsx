@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   BadgeCheckIcon,
   ExternalLinkIcon,
@@ -59,6 +60,10 @@ export function PluginsPage() {
   const { t } = useTranslation()
   const [pending, setPending] = useState<PluginInspection | null>(null)
   const [source, setSource] = useState<{ url?: string; manifest?: string; sha256?: string }>({})
+  const [tab, setTab] = useState("installed")
+  // Bumped by each install, so the address form starts empty again rather
+  // than offering to install what was just installed.
+  const [installs, setInstalls] = useState(0)
 
   const installed = useQuery({
     queryKey: ["plugins"],
@@ -77,7 +82,7 @@ export function PluginsPage() {
     <Page>
       <PageHeader title={t("plugins.title")} description={t("plugins.subtitle")} />
 
-      <Tabs defaultValue="installed">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="installed">{t("plugins.installed")}</TabsTrigger>
           <TabsTrigger value="store">{t("plugins.store")}</TabsTrigger>
@@ -105,7 +110,7 @@ export function PluginsPage() {
         </TabsContent>
 
         <TabsContent value="manual" className="pt-4">
-          <ManualTab onReview={review} />
+          <ManualTab key={installs} onReview={review} />
         </TabsContent>
       </Tabs>
 
@@ -113,6 +118,11 @@ export function PluginsPage() {
         inspection={pending}
         source={source}
         onOpenChange={(open) => !open && setPending(null)}
+        // Where the plugin now is, rather than a dialog that just closed.
+        onInstalled={() => {
+          setInstalls(installs + 1)
+          setTab("installed")
+        }}
       />
     </Page>
   )
@@ -187,10 +197,16 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
   const update = useMutation({
     mutationFn: (body: { enabled?: boolean; settings?: Record<string, string> }) =>
       api.patch<InstalledPlugin>(`/api/plugins/${plugin.id}`, body),
-    // Only a save of the settings is done with the edits. Turning the plugin
-    // on or off cleared them too, and whatever had been typed was gone.
+    // Only the settings that were saved are done with. Turning the plugin on
+    // or off cleared every edit too, and whatever had been typed was gone;
+    // clearing one secret keeps the others being typed.
     onSuccess: (_, body) => {
-      if (body.settings) setValues({})
+      const saved = body.settings
+      if (saved) {
+        setValues((current) =>
+          Object.fromEntries(Object.entries(current).filter(([key]) => !(key in saved))),
+        )
+      }
       void queryClient.invalidateQueries({ queryKey: ["plugins"] })
     },
   })
@@ -199,6 +215,28 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
     mutationFn: () => api.delete(`/api/plugins/${plugin.id}`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["plugins"] }),
   })
+
+  const declared = plugin.decoded.settings ?? []
+  const secrets = new Set(
+    declared.filter((setting) => setting.secret).map((setting) => setting.key),
+  )
+  // An empty secret field is "not typed", never "delete it": the server takes
+  // an empty value as clearing the stored one, and a field typed into and
+  // emptied again sent exactly that, with nothing asked. Clearing one is its
+  // own button, below, which asks.
+  const changes = Object.fromEntries(
+    Object.entries(values).filter(([key, value]) => !(secrets.has(key) && value === "")),
+  )
+
+  async function onClear(setting: DeclaredSetting) {
+    const ok = await confirm({
+      title: t("plugins.clearSecretTitle", { label: setting.label }),
+      description: t("plugins.clearSecretConfirm"),
+      confirmLabel: t("common.clear"),
+      destructive: true,
+    })
+    if (ok) update.mutate({ settings: { [setting.key]: "" } })
+  }
 
   async function onRemove() {
     const ok = await confirm({
@@ -209,8 +247,6 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
     })
     if (ok) remove.mutate()
   }
-
-  const declared = plugin.decoded.settings ?? []
 
   return (
     <Card>
@@ -243,7 +279,7 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
               variant="ghost"
               size="icon"
               onClick={() => void onRemove()}
-              aria-label={t("common.delete")}
+              aria-label={t("plugins.remove", { name: plugin.decoded.name })}
             >
               <Trash2Icon className="size-4" />
             </Button>
@@ -283,14 +319,26 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
                     onChange={(value) => setValues({ ...values, [setting.key]: value })}
                   />
                   {setting.help && <p className="text-xs text-muted-foreground">{setting.help}</p>}
+                  {setting.secret && stored?.configured && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-destructive"
+                      disabled={update.isPending}
+                      onClick={() => void onClear(setting)}
+                    >
+                      {t("plugins.clearSecret", { label: setting.label })}
+                    </Button>
+                  )}
                 </div>
               )
             })}
             <Button
               size="sm"
               variant="outline"
-              disabled={Object.keys(values).length === 0 || update.isPending}
-              onClick={() => update.mutate({ settings: values })}
+              disabled={Object.keys(changes).length === 0 || update.isPending}
+              onClick={() => update.mutate({ settings: changes })}
             >
               {update.isPending && <Spinner className="size-4" />}
               {t("common.save")}
@@ -383,6 +431,12 @@ function StoreTab({
                   <p className="mt-1 text-xs text-muted-foreground">
                     {entry.author} · {entry.license}
                   </p>
+                  {/* There is no upgrade in place yet, so the way there is
+                      said, with what it costs, rather than a badge that
+                      leads nowhere. */}
+                  {version && version !== entry.version && (
+                    <p className="mt-1 text-xs text-muted-foreground">{t("plugins.upgradeHow")}</p>
+                  )}
                 </div>
 
                 {entry.paid && entry.purchase_url && (
@@ -497,10 +551,12 @@ function ReviewDialog({
   inspection,
   source,
   onOpenChange,
+  onInstalled,
 }: {
   inspection: PluginInspection | null
   source: { url?: string; manifest?: string; sha256?: string }
   onOpenChange: (open: boolean) => void
+  onInstalled: () => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -511,10 +567,16 @@ function ReviewDialog({
         ...source,
         permissions: inspection?.permissions ?? [],
       }),
-    onSuccess: () => {
+    // Either way: a plugin the cluster would not start is stored all the
+    // same, as failed, and the list said nothing of it until a reload.
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["plugins"] })
       void queryClient.invalidateQueries({ queryKey: ["plugin-store"] })
+    },
+    onSuccess: (plugin) => {
+      toast.success(t("plugins.installedToast", { name: plugin.decoded.name }))
       onOpenChange(false)
+      onInstalled()
     },
   })
 
@@ -533,6 +595,18 @@ function ReviewDialog({
           <div className="text-xs text-muted-foreground">
             {manifest.author.name} · {manifest.license} · {manifest.version}
           </div>
+
+          {/* Installing it again is refused, so it is said before the button
+              rather than after it. */}
+          {inspection.already_installed && (
+            <Alert variant="warning">
+              <TriangleAlertIcon />
+              <AlertTitle>
+                {t("plugins.alreadyInstalledTitle", { version: inspection.already_installed })}
+              </AlertTitle>
+              <AlertDescription>{t("plugins.upgradeHow")}</AlertDescription>
+            </Alert>
+          )}
 
           {/* The one power that can stop everybody's work rather than merely
               read something, so it is not a line in a list. */}
@@ -563,7 +637,10 @@ function ReviewDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={install.isPending} onClick={() => install.mutate()}>
+          <Button
+            disabled={install.isPending || Boolean(inspection.already_installed)}
+            onClick={() => install.mutate()}
+          >
             {install.isPending && <Spinner className="size-4" />}
             {t("plugins.install")}
           </Button>

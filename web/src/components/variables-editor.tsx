@@ -197,13 +197,24 @@ export function VariablesEditor({
       // build_time is left out for the same reason: false took every variable
       // the build reads out of the build, and the next build went without it.
       const set = Object.entries(parseDotEnv(text)).map(([key, value]) => ({ key, value }))
-      if (set.length > 0) await api.post(`${base}/variables/batch`, { set })
+      return api.post<{ requires_rebuild?: boolean }>(`${base}/variables/batch`, { set })
     },
-    onSuccess: () => {
+    // Said, as a single variable's save is: it closed with nothing on the
+    // screen, the same whether thirty lines were saved or none.
+    onSuccess: (result, text) => {
       invalidate()
       setBulk(null)
+      toast.success(t("variables.bulkSaved", { count: Object.keys(parseDotEnv(text)).length }), {
+        description: result?.requires_rebuild
+          ? t("variables.rebuildQueued")
+          : t("deploy.noRebuildNeeded"),
+      })
     },
   })
+  // What the box holds, read on every render: Save is offered only for lines
+  // that are KEY=value, so a paste of something else is said rather than
+  // closed with nothing saved.
+  const bulkCount = bulk === null ? 0 : Object.keys(parseDotEnv(bulk)).length
 
   const items = variables.data?.items ?? []
   const hasReferences = items.some((variable) => variable.reference)
@@ -248,12 +259,19 @@ export function VariablesEditor({
               className="font-mono text-xs"
               placeholder={"DATABASE_URL=postgres://...\nLOG_LEVEL=info"}
             />
+            {bulk.trim() !== "" && bulkCount === 0 && (
+              <p className="text-xs text-destructive">{t("variables.bulkNothing")}</p>
+            )}
             {saveBulk.error && <ErrorDisplay error={saveBulk.error} compact />}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setBulk(null)}>
                 {t("common.cancel")}
               </Button>
-              <Button size="sm" disabled={saveBulk.isPending} onClick={() => saveBulk.mutate(bulk)}>
+              <Button
+                size="sm"
+                disabled={saveBulk.isPending || bulkCount === 0}
+                onClick={() => saveBulk.mutate(bulk)}
+              >
                 {saveBulk.isPending && <Spinner />}
                 {saveBulk.isPending ? t("common.saving") : t("common.save")}
               </Button>
@@ -365,7 +383,7 @@ export function VariablesEditor({
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={t("common.delete")}
+                        aria-label={t("variables.deleteKey", { key: variable.key })}
                         disabled={remove.isPending}
                         onClick={() => askThenRemove(variable)}
                       >

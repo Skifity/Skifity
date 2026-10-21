@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
@@ -44,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
+import { queryClient } from "@/lib/query"
 import type { Environment, Project, Template } from "@/lib/types"
 
 /** What the category picker holds for "every category": a Select item cannot be empty. */
@@ -161,6 +162,7 @@ export function TemplatesPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("templates.search")}
+              aria-label={t("templates.search")}
             />
           </InputGroup>
           {/*
@@ -510,7 +512,13 @@ function iconURL(template: Template): string {
 }
 
 /** What POST /api/templates/{id}/install answers with. */
-type Installed = { apps: { id: string }[]; databases: { id: string }[]; notes?: string }
+type Installed = {
+  apps: { id: string }[]
+  databases: { id: string }[]
+  notes?: string
+  /** Services that use a GPU where there is one, installed without: no server offers one. */
+  without_gpu?: string[]
+}
 
 function InstallDialog({ template, onClose }: { template: Template; onClose: () => void }) {
   const { t } = useTranslation()
@@ -521,6 +529,9 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries((template.inputs ?? []).map((input) => [input.key, input.default ?? ""])),
   )
+  // A name is given to a template of one app only; a stack's apps keep the
+  // names its services reach each other by, and the panel ignored a new one.
+  const services = template.services ?? []
 
   const projects = useQuery({
     queryKey: ["projects", team?.id],
@@ -541,11 +552,18 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
     const out: { environment: Environment; project: Project }[] = []
     environmentQueries.forEach((query, index) => {
       for (const environment of query.data?.items ?? []) {
+        // A pull request's preview is deleted when the request closes, and
+        // whatever was installed into it with it.
+        if (environment.kind === "preview") continue
         out.push({ environment, project: projectItems[index] })
       }
     })
     return out
   }, [environmentQueries, projectItems])
+  // Loading, failing and having nowhere to install are three different
+  // things to say. They were all the same sentence about what a project is.
+  const loadingTargets = projects.isLoading || environmentQueries.some((query) => query.isLoading)
+  const targetsError = projects.error ?? environmentQueries.find((query) => query.error)?.error
 
   // One click means one click. Almost every panel has exactly one environment —
   // first-run setup makes it — and the form opened with the picker empty and
@@ -562,11 +580,19 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
         // Which catalogue it is in: an id is only unique within one, and the
         // panel looks for it among this team's own and nobody else's.
         ...(template.catalogue ? { catalogue_id: template.catalogue.id } : {}),
-        name: name.trim(),
+        name: services.length > 1 ? "" : name.trim(),
         // A generated value is filled in by the panel, so anything left empty
         // is sent empty rather than as an accidental literal.
         values,
       }),
+    // Whatever happened, the lists are asked again: an install that fails
+    // half way has still made the apps before the failure, and the pages
+    // showing that environment had no way to know.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["apps", chosen] })
+      void queryClient.invalidateQueries({ queryKey: ["databases", chosen] })
+      void queryClient.invalidateQueries({ queryKey: ["canvas"] })
+    },
     // Land on the thing that was made, not on the list it is somewhere inside.
     // One app has a page of its own; a stack does not, so its project is the
     // nearest place that shows all of it at once. Sending everybody to
@@ -579,6 +605,14 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
           ? t("templates.installedApps", { count: apps.length })
           : t("templates.installedNote"),
       )
+      // Said rather than found later: the app runs, without the card it
+      // would have used, until a server offers one.
+      if (result?.without_gpu && result.without_gpu.length > 0) {
+        toast.warning(t("templates.withoutGPU", { names: result.without_gpu.join(", ") }), {
+          description: t("templates.withoutGPUHelp"),
+          duration: 15000,
+        })
+      }
       onClose()
       const project = environments.find((entry) => entry.environment.id === chosen)?.project
       // The notes ride along so the shell can show them where you land: they
@@ -614,8 +648,17 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="install-environment">{t("templates.installWhere")}</FieldLabel>
-              {environments.length === 0 ? (
-                <FieldDescription>{t("projects.emptyHelp")}</FieldDescription>
+              {loadingTargets ? (
+                <Skeleton className="h-9" />
+              ) : targetsError ? (
+                <ErrorDisplay error={targetsError} compact />
+              ) : environments.length === 0 ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <FieldDescription>{t("templates.noEnvironment")}</FieldDescription>
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <Link to="/projects">{t("projects.newProject")}</Link>
+                  </Button>
+                </div>
               ) : (
                 <Select value={chosen} onValueChange={setEnvironmentId}>
                   <SelectTrigger id="install-environment">
@@ -632,14 +675,25 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
               )}
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="install-name">{t("apps.appName")}</FieldLabel>
-              <Input
-                id="install-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
+            {services.length > 1 ? (
+              <Field>
+                <FieldLabel>{t("templates.stackApps")}</FieldLabel>
+                <FieldDescription>
+                  {t("templates.stackAppsHelp", {
+                    names: services.map((service) => service.name).join(", "),
+                  })}
+                </FieldDescription>
+              </Field>
+            ) : (
+              <Field>
+                <FieldLabel htmlFor="install-name">{t("apps.appName")}</FieldLabel>
+                <Input
+                  id="install-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+            )}
 
             {asked.map((input) => (
               <Field key={input.key}>

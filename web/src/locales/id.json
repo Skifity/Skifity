@@ -247,7 +247,8 @@
     "memoryUsed": "Memori terpakai",
     "recentActivity": "Aktivitas terbaru",
     "nothingYet": "Belum ada aktivitas.",
-    "welcomeBack": "Selamat datang kembali, {{name}}."
+    "welcomeBack": "Selamat datang kembali, {{name}}.",
+    "readyOfTotal": "{{ready}} dari {{total}}"
   },
   "activity": {
     "subtitle": "Apa yang berubah di tim ini, terbaru dulu.",
@@ -447,7 +448,12 @@
       "requests.memory": "Memori dipesan",
       "pods": "Instance",
       "requests.storage": "Penyimpanan"
-    }
+    },
+    "environmentSettings": "Pengaturan {{name}}",
+    "noEnvironments": "Proyek ini belum punya environment",
+    "newEnvironmentHelp": "Tempat terpisah di proyek ini, misalnya staging di samping production, dengan aplikasi, database, dan alamatnya sendiri. Awalnya kosong.",
+    "edit": "Ubah proyek",
+    "editHelp": "Nama dan deskripsi yang ditampilkan di panel. Aplikasi, alamatnya, dan environment tidak terpengaruh."
   },
   "schedule": {
     "label": "Jadwal",
@@ -651,7 +657,8 @@
     "stackNote": {
       "renamed": "{{service}} dijangkau sebagai {{value}}: nama di cluster tidak memakai huruf kapital atau garis bawah.",
       "bind_mount": "{{service}}: {{value}} adalah folder di mesin yang menjalankan Compose, dan tidak terbawa. Taruh file itu di image atau di volume.",
-      "interpolation": "{{service}}: {{value}} merujuk ke shell tempat Compose berjalan. Atur di Variables aplikasi."
+      "interpolation": "{{service}}: {{value}} merujuk ke shell tempat Compose berjalan. Atur di Variables aplikasi.",
+      "variable_name": "{{service}}: variabel {{value}} tidak disertakan, karena container di sini tidak bisa diberi nama itu."
     },
     "internal": "Hanya internal",
     "internalHelp": "Dijangkau lewat nama dan port dari aplikasi lain di environment ini, dan tidak dari tempat lain: tanpa alamat publik.",
@@ -749,6 +756,25 @@
         "product_missing": "Tidak ada server yang menyatakan memiliki {{product}}, jadi aplikasi berjalan di kartu {{vendor}} mana pun.",
         "previews": "Pratinjau aplikasi ini berjalan tanpa GPU, sehingga pratinjau tidak pernah memegang kartu yang dibutuhkan produksi."
       }
+    },
+    "creating": "Membuat...",
+    "createAndDeploy": "Buat dan deploy",
+    "composePlanTitle": "{{name}} dibuat persis seperti yang dijelaskan berkas Compose",
+    "composePlanHelp": "Sama seperti saat seluruh berkas dibuat: port, perintah, variabel, dan volume bernamanya diambil dari berkas, dan apa pun yang tidak ikut terbawa didaftar setelah aplikasinya ada. Ubah sisanya di halaman aplikasi.",
+    "composePlanPublic": "Layanan ini memublikasikan port, jadi mendapat alamat publik.",
+    "composePlanInternal": "Layanan ini tidak memublikasikan port, jadi bersifat internal: hanya aplikasi lain di environment ini yang bisa menjangkaunya, lewat namanya.",
+    "composePlanVariables": "Variabel:",
+    "composePlanLeftOut": "Tidak disertakan, karena container di sini tidak bisa diberi nama-nama ini:",
+    "composeNote": {
+      "network_mode": "network_mode diabaikan: setiap layanan mendapat alamat di klaster sebagai gantinya.",
+      "privileged": "privileged tidak diizinkan: container berjalan tanpa hak istimewa.",
+      "cap_add": "cap_add tidak diizinkan: semua capability dilepas.",
+      "devices": "devices tidak tersedia bagi container di sini.",
+      "pid": "Berbagi namespace pid tidak didukung.",
+      "extends": "extends tidak diproses; salin pengaturannya ke dalam layanan.",
+      "restart": "restart tidak diperlukan: instance dijalankan ulang secara otomatis.",
+      "no_port": "Tidak ada port yang dipublikasikan atau di-expose, dan port image-nya tidak diketahui: tidak ada yang bisa menjangkaunya lewat nama. Jika layanan lain terhubung ke sini, beri baris expose dengan port yang didengarnya.",
+      "skipped": "Layanan {{name}} tidak bisa dibaca dan dilewati."
     }
   },
   "deploy": {
@@ -874,7 +900,10 @@
     "refKey": "Kunci (opsional)",
     "referenceHelp": "Nilainya dibaca di setiap deploy dan tidak pernah disimpan di panel. Rahasia yang berisi beberapa nilai memerlukan kunci dari nilai yang dipakai. Nilainya dibaca sekali sekarang untuk memeriksanya.",
     "noSecretManagersForProject": "Tidak ada pengelola rahasia yang boleh dipakai proyek ini. Administrator bisa mengizinkannya di Pengaturan, Pengelola rahasia.",
-    "allowedPathsHint": "{{name}} hanya membaca di atau di bawah: {{paths}}."
+    "allowedPathsHint": "{{name}} hanya membaca di atau di bawah: {{paths}}.",
+    "bulkSaved_other": "{{count}} variabel disimpan",
+    "bulkNothing": "Tidak ada baris KEY=value di sini, jadi tidak ada yang disimpan.",
+    "deleteKey": "Hapus {{key}}"
   },
   "domains": {
     "title": "Domain",
@@ -1609,7 +1638,12 @@
       "notice_other": "{{count}} template di katalog Anda tidak bisa dipasang.",
       "staleNotice_other": "{{count}} katalog tidak bisa disegarkan, dan salinan baik terakhirnya masih dipakai.",
       "review": "Lihat alasannya"
-    }
+    },
+    "withoutGPU": "Dipasang tanpa GPU: {{names}}",
+    "withoutGPUHelp": "Belum ada server yang menyediakannya, jadi aplikasi berjalan tanpa GPU. Beri masing-masing GPU di pengaturannya setelah ada server yang menyediakan.",
+    "noEnvironment": "Belum ada proyek untuk tempat memasang. Buat dulu satu proyek.",
+    "stackApps": "Aplikasi yang dipasang",
+    "stackAppsHelp": "{{names}}. Masing-masing memakai nama dari template, karena aplikasi lainnya menjangkaunya lewat nama itu."
   },
   "settings": {
     "title": "Pengaturan",
@@ -4234,7 +4268,10 @@
       "push_deploy_off": "{{name}} tidak deploy saat push sampai diaktifkan di pengaturannya.",
       "database_skipped": "Database {{name}} tidak disalin: panel ini tidak punya klaster untuk membuatnya.",
       "deploy_failed": "{{name}} belum bisa di-deploy: {{detail}}"
-    }
+    },
+    "deleteAction": "Hapus {{name}}",
+    "deleteConfirm": "Semua aplikasi, database, dan volume di environment ini dihapus beserta datanya, dan namespace-nya dihapus dari klaster. Proyek dan environment lainnya tetap ada.",
+    "namePlaceholder": "pengujian"
   },
   "firewall": {
     "title": "Firewall",
@@ -4380,7 +4417,14 @@
       "teams": "tim Anda",
       "settings": "setelan panel",
       "account": "akun Anda"
-    }
+    },
+    "remove": "Copot {{name}}",
+    "clearSecret": "Hapus {{label}} yang tersimpan",
+    "clearSecretTitle": "Hapus {{label}}?",
+    "clearSecretConfirm": "Nilai yang tersimpan dihapus dan plugin dijalankan ulang tanpanya. Nilai itu tidak bisa dibaca kembali, jadi untuk mengembalikannya Anda harus memasukkannya lagi.",
+    "installedToast": "{{name}} sudah terpasang",
+    "upgradeHow": "Belum ada pembaruan langsung: copot versi yang terpasang di tab Terpasang, lalu pasang versi ini. Pengaturan dan token-nya tidak ikut terbawa.",
+    "alreadyInstalledTitle": "Versi {{version}} sudah terpasang"
   },
   "needs": {
     "databasesTitle": "Database yang dibutuhkan app ini",
@@ -4415,7 +4459,8 @@
       "clickhouse": "ClickHouse",
       "memcached": "Memcached"
     },
-    "pastedReplaced": "{{variable}} dari yang Anda tempel tidak disertakan: database {{engine}} yang dibuat bersama aplikasi akan mengisinya, menunjuk ke dirinya sendiri, bukan ke komputer asal berkas itu."
+    "pastedReplaced": "{{variable}} dari yang Anda tempel tidak disertakan: database {{engine}} yang dibuat bersama aplikasi akan mengisinya, menunjuk ke dirinya sendiri, bukan ke komputer asal berkas itu.",
+    "refusedNames": "Panel menolak nama-nama ini; ganti nama atau hapus sebelum membuat aplikasi:"
   },
   "folder": {
     "label": "Folder aplikasi Anda",

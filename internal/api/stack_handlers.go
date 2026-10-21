@@ -236,6 +236,14 @@ func planStackApp(env store.Environment, req stackRequest, repoURL string, servi
 
 	variables := map[string]string{}
 	for key, value := range service.Environment {
+		// Elasticsearch's "discovery.type" is a name Compose passes on and a
+		// container here cannot be given. Found while storing it, it undid
+		// the whole stack, and the file is not something the panel can edit;
+		// left out and said, the rest of the service still arrives.
+		if _, err := kube.SanitiseEnvKey(key); err != nil {
+			notes = append(notes, stackNote{Service: name, Code: "variable_name", Value: key})
+			continue
+		}
 		resolved, unresolved := resolveComposeValue(value)
 		if unresolved {
 			notes = append(notes, stackNote{Service: name, Code: "interpolation", Value: key})

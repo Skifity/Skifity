@@ -6814,6 +6814,7 @@ components:
               database_id: {type: string}
               name: {type: string}
               error: {type: string}
+              problem: {$ref: '#/components/schemas/Problem'}
         deployment: {$ref: '#/components/schemas/Deployment'}
 
     WebhookStatus:

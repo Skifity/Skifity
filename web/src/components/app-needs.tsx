@@ -9,6 +9,21 @@ import { Textarea } from "@/components/ui/textarea"
 import type { AppNeed } from "@/lib/types"
 
 /**
+ * Whether a container here can be given a variable of this name: the rule
+ * the panel checks with (kube.SanitiseEnvKey), said before the request rather
+ * than after it. NVIDIA_VISIBLE_DEVICES is the GPU device plugin's to set.
+ */
+export function usableVariableName(key: string): boolean {
+  const name = key.trim()
+  return (
+    name.length > 0 &&
+    name.length <= 256 &&
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) &&
+    name.toUpperCase() !== "NVIDIA_VISIBLE_DEVICES"
+  )
+}
+
+/**
  * What an app will need once it is running, said before its first deploy.
  *
  * This is the part of the form written for somebody who has never deployed
@@ -33,7 +48,6 @@ export function AppNeeds({
   pasted,
   onPaste,
   pastedKeys,
-  otherKeys,
 }: {
   needs: AppNeed[]
   /** Engines somebody chose not to create. */
@@ -44,8 +58,6 @@ export function AppNeeds({
   onPaste: (text: string) => void
   /** The names that paste already provides. */
   pastedKeys: string[]
-  /** Names provided some other way, such as a Compose service's environment. */
-  otherKeys: string[]
 }) {
   const { t } = useTranslation()
   const engine = (name?: string) =>
@@ -58,9 +70,12 @@ export function AppNeeds({
   const expected = needs.find((n) => n.kind === "variables")?.variables ?? []
 
   const creating = offered.filter((n) => n.engine && !declined.includes(n.engine))
-  // A setting is covered by what was pasted, by another source, or by a
-  // database that is about to be created and linked under that name.
-  const covered = new Set([...pastedKeys, ...otherKeys, ...creating.map((n) => n.variable ?? "")])
+  // A setting is covered by what was pasted, or by a database that is about
+  // to be created and linked under that name.
+  const covered = new Set([...pastedKeys, ...creating.map((n) => n.variable ?? "")])
+  // Names the panel would refuse, said here so the box can be put right
+  // before Create rather than after it.
+  const refused = pastedKeys.filter((name) => !usableVariableName(name))
   const missing = expected.filter((name) => !covered.has(name))
   // A pasted name that a database about to be created will set. The pasted
   // value is the address on the computer the .env came from, and the panel
@@ -170,6 +185,16 @@ export function AppNeeds({
               {t("needs.allSet")}
             </p>
           ))}
+        {refused.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-destructive">{t("needs.refusedNames")}</span>
+            {refused.map((name) => (
+              <Badge key={name} variant="outline" className="font-mono">
+                {name}
+              </Badge>
+            ))}
+          </div>
+        )}
         {replaced.map((r) => (
           <p key={r.variable} className="text-xs text-muted-foreground">
             {t("needs.pastedReplaced", { variable: r.variable, engine: r.engine })}

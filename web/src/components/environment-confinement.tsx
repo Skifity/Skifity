@@ -61,8 +61,10 @@ export function EnvironmentConfinement({ environment }: { environment: Environme
 
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-center gap-4 py-4">
-        <div className="min-w-0 flex-1">
+      {/* Stacked on a phone: side by side, the sentence was squeezed into a
+          narrow column beside a button that would not shrink. */}
+      <CardContent className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:gap-4">
+        <div className="w-full min-w-0 sm:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {lowered ? (
               <ShieldAlertIcon className="size-4 shrink-0 text-warning" />
@@ -87,6 +89,7 @@ export function EnvironmentConfinement({ environment }: { environment: Environme
         <Button
           variant="outline"
           size="sm"
+          className="shrink-0"
           disabled={change.isPending}
           onClick={() => void onToggle()}
         >

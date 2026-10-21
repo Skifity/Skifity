@@ -61,6 +61,10 @@ export function DashboardPage() {
   // Servers and the cluster belong to the whole team. A member limited to some
   // projects is refused them, so their overview is their projects.
   const teamWide = !team?.scoped
+  // The team's audit log is its admins' and owners' to read, whoever runs the
+  // panel: it was asked for by panel administrators, who are refused it in a
+  // team where they are a member, and never by a team's own admins.
+  const readsAudit = teamWide && (team?.role === "owner" || team?.role === "admin")
 
   const cluster = useQuery({
     queryKey: ["cluster", team?.id],
@@ -81,7 +85,7 @@ export function DashboardPage() {
   const audit = useQuery({
     queryKey: ["audit", team?.id, "recent"],
     queryFn: () => api.get<List<AuditEvent>>(`/api/teams/${team!.id}/audit?limit=8`),
-    enabled: Boolean(team) && Boolean(user?.is_admin),
+    enabled: Boolean(team) && readsAudit,
   })
 
   // Anything that changes in this team refreshes the page without a reload.
@@ -194,21 +198,31 @@ export function DashboardPage() {
         <>
           {teamWide && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* One sentence with both numbers in it, so each language can put
+                  them in its own order: "of" glued after the count read
+                  backwards in Hindi. */}
               <Stat
                 icon={ServerIcon}
                 label={t("nav.servers")}
-                value={loading ? null : String(summary?.ready_nodes ?? serverItems.length)}
-                detail={
-                  summary
-                    ? t("common.of") + " " + (summary.nodes?.length ?? serverItems.length)
-                    : undefined
+                value={
+                  loading
+                    ? null
+                    : summary
+                      ? t("dashboard.readyOfTotal", {
+                          ready: summary.ready_nodes,
+                          total: summary.nodes?.length ?? serverItems.length,
+                        })
+                      : String(serverItems.length)
                 }
                 to="/servers"
               />
+              {/* A list that failed is not a count of nothing. */}
               <Stat
                 icon={FolderIcon}
                 label={t("nav.projects")}
-                value={projects.isLoading ? null : String(projectItems.length)}
+                value={
+                  projects.isLoading ? null : projects.error ? "–" : String(projectItems.length)
+                }
                 to="/projects"
               />
               <UsageStat
@@ -261,6 +275,8 @@ export function DashboardPage() {
             >
               {projects.isLoading ? (
                 <Skeleton className="h-32" />
+              ) : projects.error ? (
+                <ErrorDisplay error={projects.error} onRetry={() => void projects.refetch()} />
               ) : projectItems.length === 0 ? (
                 <Empty className="border border-dashed">
                   <EmptyHeader>
@@ -347,7 +363,7 @@ export function DashboardPage() {
             )}
           </div>
 
-          {user?.is_admin && (audit.data?.items.length ?? 0) > 0 && (
+          {readsAudit && (audit.error != null || (audit.data?.items.length ?? 0) > 0) && (
             <Section
               title={t("dashboard.recentActivity")}
               actions={
@@ -359,15 +375,20 @@ export function DashboardPage() {
                 </Button>
               }
             >
-              <ItemGroup className="rounded-lg border">
+              {audit.error != null && (
+                <ErrorDisplay error={audit.error} onRetry={() => void audit.refetch()} compact />
+              )}
+              <ItemGroup className="rounded-lg border empty:hidden">
                 {audit.data?.items.slice(0, 6).map((event) => (
                   <Item key={event.id} size="sm">
                     <ItemMedia variant="icon">
                       <ActivityIcon />
                     </ItemMedia>
                     <ItemContent>
-                      <ItemTitle className="font-mono text-xs font-normal">
-                        {event.action}
+                      {/* In words, as the activity page says it; the code stays
+                          as the title for whoever matches it against a log. */}
+                      <ItemTitle className="font-normal" title={event.action}>
+                        {t(`activity.action.${event.action}`, { defaultValue: event.action })}
                       </ItemTitle>
                       <ItemDescription>
                         {event.target_label || event.target_type} · {event.actor_label}

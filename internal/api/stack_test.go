@@ -220,3 +220,43 @@ func TestAComposeFileCannotRunAnotherEnvironmentsBuiltImage(t *testing.T) {
 		t.Fatalf("its own environment's image was refused: %d %s", status, truncate(body, 200))
 	}
 }
+
+// A name Compose passes on and a container here cannot be given is left out of
+// that service and said, rather than undoing every service in the file.
+func TestAComposeVariableWithAnUnusableNameIsLeftOutAndSaid(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+
+	status, body := h.do(acme, http.MethodPost, "/api/environments/"+acme.env.ID+"/stack", map[string]any{
+		"services": []builder.ComposeService{{
+			Name: "search", Image: "elasticsearch:8.15.0",
+			Environment: map[string]string{"discovery.type": "single-node", "ES_JAVA_OPTS": "-Xms512m"},
+		}},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("answered %d: %s", status, truncate(body, 300))
+	}
+	var answer struct {
+		Apps  []store.App `json:"apps"`
+		Notes []stackNote `json:"notes"`
+	}
+	if err := json.Unmarshal([]byte(body), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if len(answer.Apps) != 1 {
+		t.Fatalf("%d apps", len(answer.Apps))
+	}
+	vars, _ := h.db.ListVariables(t.Context(), answer.Apps[0].ID)
+	if len(vars) != 1 || vars[0].Key != "ES_JAVA_OPTS" {
+		t.Errorf("variables: %+v", vars)
+	}
+	said := false
+	for _, note := range answer.Notes {
+		if note.Service == "search" && note.Code == "variable_name" && note.Value == "discovery.type" {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("leaving it out was not said: %+v", answer.Notes)
+	}
+}

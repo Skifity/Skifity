@@ -117,7 +117,7 @@ export function CloneEnvironmentDialog({
                 id="clone-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="staging"
+                placeholder={t("environments.namePlaceholder")}
                 autoFocus
                 required
               />
