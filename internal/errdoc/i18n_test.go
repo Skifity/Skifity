@@ -131,13 +131,18 @@ func problemsInSource(t *testing.T) map[string]problemInSource {
 	found := map[string]problemInSource{}
 	fset := token.NewFileSet()
 
-	err := filepath.Walk(filepath.Join("..", ".."), func(path string, info os.FileInfo, err error) error {
+	root := filepath.Join("..", "..")
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
 			// Vendored and generated trees have no errors of ours in them.
-			if name := info.Name(); name == "node_modules" || name == ".git" || name == "dist" {
+			// Nor does a directory Go itself ignores, one whose name starts
+			// with a dot: a git worktree checked out under .claude/ is another
+			// copy of this repository, with its own locales.
+			name := info.Name()
+			if name == "node_modules" || name == "dist" || (path != root && strings.HasPrefix(name, ".")) {
 				return filepath.SkipDir
 			}
 			return nil
