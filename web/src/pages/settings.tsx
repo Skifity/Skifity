@@ -80,7 +80,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
@@ -186,7 +185,6 @@ export function SettingsPage() {
   const { t } = useTranslation()
   const { user, team } = useSession()
   const teamAdmin = useTeamAdmin()
-  const isMobile = useIsMobile()
   // The tab is in the address, so a notification can link to the one it is
   // about: a certificate running out links to the certificates.
   const [params, setParams] = useSearchParams()
@@ -237,60 +235,63 @@ export function SettingsPage() {
       <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
 
       {/* Thirteen tabs in a row wrapped into a second, stretched one. On a
-          wide screen they are a list down the side, in groups; on a phone, a
-          picker. */}
+          wide screen they are a list down the side, in groups; below that, a
+          picker. The list needs a laptop's width: on a tablet the sidebar and
+          the list left the cards too narrow for their own buttons. Both are
+          rendered and CSS picks one, so the layout follows the window without
+          a re-render. */}
       <Tabs
         value={tab}
         onValueChange={choose}
-        orientation={isMobile ? "horizontal" : "vertical"}
-        className="gap-6"
+        orientation="vertical"
+        className="flex-col gap-6 lg:flex-row"
       >
-        {isMobile ? (
-          <Select value={tab} onValueChange={choose}>
-            <SelectTrigger className="w-full" aria-label={t("settings.sections")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {nav.map((group) => (
-                <SelectGroup key={group.key}>
-                  <SelectLabel>{t(group.label)}</SelectLabel>
-                  {group.tabs.map((entry) => (
-                    <SelectItem key={entry.value} value={entry.value}>
-                      {t(entry.label)}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <nav aria-label={t("settings.sections")} className="w-48 shrink-0 space-y-4">
+        <Select value={tab} onValueChange={choose}>
+          <SelectTrigger className="w-full lg:hidden" aria-label={t("settings.sections")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
             {nav.map((group) => (
-              <div key={group.key} className="space-y-1">
-                <p
-                  id={`settings-nav-${group.key}`}
-                  className="px-3 text-xs font-medium text-muted-foreground"
-                >
-                  {t(group.label)}
-                </p>
-                <TabsList
-                  aria-labelledby={`settings-nav-${group.key}`}
-                  className="w-full items-stretch gap-0.5 bg-transparent p-0"
-                >
-                  {group.tabs.map((entry) => (
-                    <TabsTrigger
-                      key={entry.value}
-                      value={entry.value}
-                      className="px-3 py-1.5 data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >
-                      {t(entry.label)}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
+              <SelectGroup key={group.key}>
+                <SelectLabel>{t(group.label)}</SelectLabel>
+                {group.tabs.map((entry) => (
+                  <SelectItem key={entry.value} value={entry.value}>
+                    {t(entry.label)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
-          </nav>
-        )}
+          </SelectContent>
+        </Select>
+        <nav
+          aria-label={t("settings.sections")}
+          className="hidden w-48 shrink-0 space-y-4 lg:block"
+        >
+          {nav.map((group) => (
+            <div key={group.key} className="space-y-1">
+              <p
+                id={`settings-nav-${group.key}`}
+                className="px-3 text-xs font-medium text-muted-foreground"
+              >
+                {t(group.label)}
+              </p>
+              <TabsList
+                aria-labelledby={`settings-nav-${group.key}`}
+                className="w-full items-stretch gap-0.5 bg-transparent p-0"
+              >
+                {group.tabs.map((entry) => (
+                  <TabsTrigger
+                    key={entry.value}
+                    value={entry.value}
+                    className="px-3 py-1.5 data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                  >
+                    {t(entry.label)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+          ))}
+        </nav>
 
         <div className="min-w-0 flex-1">
           {shows("panel") && (

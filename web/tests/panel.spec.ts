@@ -180,6 +180,29 @@ test("an error speaks the language the panel is set to", async ({ page }) => {
     page.getByText(english.catalogue["resource_not_found"].impact),
     "the English the server sent is still showing",
   ).toHaveCount(0)
+
+  // The language is the account's, not only this browser's: signing in again
+  // with nothing stored in the browser comes back in Russian.
+  await page.context().clearCookies()
+  await page.evaluate(() => localStorage.clear())
+  await signIn(page)
+  await expect(
+    page.getByRole("heading", {
+      name: localeStrings("ru").dashboard.title as string,
+      level: 1,
+      exact: true,
+    }),
+    "the account's language after signing in again",
+  ).toBeVisible()
+
+  // English again, saved to the account, so every test after this one starts
+  // in the language it reads.
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/me") && response.request().method() === "PATCH",
+  )
+  await page.locator('[data-slot="language-switcher"]').click()
+  await page.getByRole("menuitem", { name: "English" }).click()
+  await saved
 })
 
 // Every error the panel can show links into this, and an operator whose panel

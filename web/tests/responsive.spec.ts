@@ -78,7 +78,9 @@ async function seed(page: Page, request: APIRequestContext) {
 
   const teams = await get("/api/teams")
   const project = await post(`/api/teams/${teams.items[0].id}/projects`, {
-    name: "Layout",
+    // Unique, because a worker that restarts after a failed test seeds again,
+    // and a second "Layout" was refused: one failure became three.
+    name: `Layout ${Date.now().toString(36)}`,
     description: "Seeded so the detail pages have something on them.",
   })
   const environments = await get(`/api/projects/${project.id}/environments`)
