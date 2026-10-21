@@ -1,0 +1,113 @@
+name: Tag the release
+
+# A release waited for somebody to tag it by hand once they had read that the
+# runs docs/releasing.md asks for had passed. This does the reading and the
+# tagging. The release commit sets RELEASED_VERSION in installer/install.sh, as
+# before; once CI has passed on the tip of main, and Cluster and Two servers
+# have passed on it or on the last commit before it that was more than
+# documentation, the version is tagged on that commit and the release workflow
+# is started on the tag. A version that is tagged already is left alone, so
+# every push after a release does nothing here until the next version is set.
+#
+# It runs whenever one of those workflows finishes, and only the last of them
+# to finish finds everything passed. A tag pushed with this workflow's own token
+# starts no workflow by itself, which is why the release is started explicitly.
+
+on:
+  workflow_run:
+    workflows: [CI, Cluster, Two servers]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+# Two of them finishing together would both find everything passed; one at a
+# time, the second finds the tag the first made.
+concurrency:
+  group: tag-the-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          # Walking back to the last commit the cluster ran on needs history.
+          fetch-depth: 0
+
+      - name: Tag the version once every run has passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          version=$(SKIFITY_INSTALLER_LIB=1 sh -c '. ./installer/install.sh; printf "%s" "$RELEASED_VERSION"')
+          case "$version" in
+          v[0-9]*.[0-9]*.[0-9]*) ;;
+          *) echo "RELEASED_VERSION is '${version}', which is not a version to tag."; exit 0 ;;
+          esac
+          if git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null; then
+            echo "${version} is tagged already."
+            exit 0
+          fi
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" != "$SHA" ]; then
+            echo "main has moved on to ${tip}; the runs on that commit decide."
+            exit 0
+          fi
+
+          # latest_run WORKFLOW COMMIT prints "status conclusion" of the newest
+          # run of WORKFLOW for a push of COMMIT to main, or nothing.
+          latest_run() {
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=$2&event=push&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name == \"$1\" and .head_branch == \"main\")]
+                    | sort_by(.created_at) | last | select(. != null) | \"\(.status) \(.conclusion)\""
+          }
+          # passed WORKFLOW: it passed on this commit, or on the last commit
+          # before it that it ran on, with only documentation changed since —
+          # which is exactly when it is not run.
+          passed() {
+            local c state
+            for c in $(git rev-list --first-parent --max-count=50 "$SHA"); do
+              state=$(latest_run "$1" "$c")
+              [ -n "$state" ] || continue
+              if [ "$state" != "completed success" ]; then
+                echo "$1 on ${c:0:7}: ${state}."
+                return 1
+              fi
+              # Read whole, not with grep -q: under pipefail, grep stopping at
+              # the first match can leave git diff killed by SIGPIPE, and the
+              # pipeline would then read as "documentation only".
+              others=$(git diff --name-only "$c" "$SHA" | grep -vE '^docs/|\.md$' || true)
+              if [ -n "$others" ]; then
+                echo "$1 passed on ${c:0:7}, and a commit since changed more than documentation."
+                return 1
+              fi
+              echo "$1 passed on ${c:0:7}."
+              return 0
+            done
+            echo "$1 has not run on this commit or the fifty before it."
+            return 1
+          }
+
+          ci=$(latest_run CI "$SHA")
+          if [ "$ci" != "completed success" ]; then
+            echo "CI on this commit: ${ci:-not run yet}."
+            exit 0
+          fi
+          echo "CI passed on ${SHA:0:7}."
+          passed Cluster || exit 0
+          passed "Two servers" || exit 0
+
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            tag -a "$version" -m "$version" "$SHA"
+          git push origin "refs/tags/${version}"
+          gh workflow run release.yml --ref "$version"
+          echo "Tagged ${version} on ${SHA} and started the release."

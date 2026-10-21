@@ -37,7 +37,8 @@ copying from the wrong path, an image tag without its `v`, and `.exe.exe`.
 
 The installer names the release it installs, in its own source, because it has
 to work when it is one file downloaded by `curl` with no repository around it.
-So the release commit sets that line and the tag points at that commit:
+So the release commit sets that line, and the tag points at a commit that has
+it:
 
 ```sh
 # 1. Say which release this is. One line, in installer/install.sh.
@@ -46,7 +47,22 @@ RELEASED_VERSION="v0.1.0"
 # 2. Commit it.
 git commit -am "chore(release): v0.1.0"
 
-# 3. Tag that commit.
+# 3. Push it to main.
+git push origin main
+```
+
+The tag follows by itself. `.github/workflows/tag.yml` runs each time CI,
+Cluster or Two servers finishes on `main`, and tags the version once CI has
+passed on the tip of `main` and Cluster and Two servers have passed on it, or
+on the last commit before it that was more than documentation — the rule
+above, read from the runs rather than by somebody. It then starts the release
+workflow on the tag. A version with a tag already is left alone, so nothing
+happens on the pushes after a release until the next version is set, and a
+commit that is no longer the tip of `main` is never tagged: the runs on the
+newer one decide. Tagging by hand still works, for a release that should not
+wait:
+
+```sh
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
@@ -59,7 +75,8 @@ by a stranger rather than by CI.
 
 ## What the tag does
 
-`.github/workflows/release.yml` builds the binaries with GoReleaser and pushes a
+`.github/workflows/release.yml`, started by the tag being pushed or by
+`tag.yml` on a tag it made, builds the binaries with GoReleaser and pushes a
 multi-architecture image to `ghcr.io/<this repository, lowercased>`, tagged
 `v0.1.0`, `0.1.0` and `latest`. Nothing here names a registry path: it is
 derived from `GITHUB_REPOSITORY`, so it is correct wherever the repository
