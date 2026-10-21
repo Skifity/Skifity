@@ -2494,6 +2494,18 @@
         "impact": "Kubernetes is still enforcing the previous level, so a deploy will behave as it did before.",
         "fix": "Fix what the cause says and save the level again."
       },
+      "environment_deploying": {
+        "title": "An app here is still being deployed",
+        "cause": "{{0}} is being deployed, and a deployment that carries on after its environment is deleted puts the app back in the cluster.",
+        "impact": "Nothing was deleted.",
+        "fix": "Wait for the deployment to finish, or cancel it on the app's Deployments tab, then delete again."
+      },
+      "environment_not_removed": {
+        "title": "The cluster did not remove the environment",
+        "cause": "Deleting its namespace, {{0}}, failed: {{1}}",
+        "impact": "The panel kept its records of everything in it, so whatever still runs there can be found, and removed by deleting again.",
+        "fix": "Check that the panel can reach the cluster, then delete again. If the cause says the panel did not create the namespace, remove it with kubectl first."
+      },
       "firewall_failed": {
         "title": "The firewall could not be configured",
         "cause": "The firewall commands failed on {{0}}: {{1}}",

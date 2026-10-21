@@ -8,7 +8,6 @@ import (
 
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
-	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/store"
 	"skifity/internal/templates"
@@ -117,7 +116,9 @@ func (s *Server) installTemplate(
 		if err := s.db.CreateApp(r.Context(), &app); err != nil {
 			return result, err
 		}
-		s.hub.Publish(events.TeamTopic(teamID), "app.created", app)
+		// As one made by hand or from a Compose file is: the activity log
+		// names it, plugins hear of it, and a page open elsewhere refreshes.
+		s.announceAppCreated(r, teamID, app)
 		// Remembered, so a newer version of the template can be offered.
 		if err := s.db.RecordAppTemplate(r.Context(), store.AppTemplate{
 			AppID: app.ID, TemplateID: tpl.ID, CatalogueID: catalogueID, Service: svc.Name, InstalledImage: svc.Image,

@@ -487,17 +487,25 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Remove the namespaces before the rows, so a failure here does not orphan
-	// running workloads with no record of them in the panel.
+	// running workloads with no record of them in the panel. A namespace that
+	// would not go used to be logged and its rows deleted anyway, which was
+	// exactly that.
 	envs, err := s.db.ListEnvironments(r.Context(), project.ID)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if s.cluster != nil {
-		for _, env := range envs {
-			if err := s.cluster.DeleteNamespace(r.Context(), env.Namespace); err != nil {
-				s.log.Warn("could not delete namespace", "namespace", env.Namespace, "error", err)
-			}
+	// Every environment is asked first, so a refusal deletes nothing.
+	for _, env := range envs {
+		if err := s.refuseWhileDeploying(r, env); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	for _, env := range envs {
+		if err := s.removeNamespace(r, env); err != nil {
+			writeError(w, r, err)
+			return
 		}
 	}
 	if err := s.db.DeleteProject(r.Context(), project.ID); err != nil {
@@ -691,10 +699,13 @@ func (s *Server) handleDeleteEnvironment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)
-	if s.cluster != nil {
-		if err := s.cluster.DeleteNamespace(r.Context(), env.Namespace); err != nil {
-			s.log.Warn("could not delete namespace", "namespace", env.Namespace, "error", err)
-		}
+	if err := s.refuseWhileDeploying(r, env); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.removeNamespace(r, env); err != nil {
+		writeError(w, r, err)
+		return
 	}
 	if err := s.db.DeleteEnvironment(r.Context(), env.ID); err != nil {
 		writeError(w, r, err)
@@ -702,4 +713,33 @@ func (s *Server) handleDeleteEnvironment(w http.ResponseWriter, r *http.Request)
 	}
 	s.audit(r, teamID, "environment.deleted", "environment", env.ID, env.Name)
 	writeOK(w)
+}
+
+// refuseWhileDeploying stops an environment being deleted under a deployment.
+// Its build or rollout carries on after the namespace is gone, and the rollout
+// makes the namespace again — the deleted environment's app running in the
+// cluster, with no row left in the panel to show it or remove it by.
+func (s *Server) refuseWhileDeploying(r *http.Request, env store.Environment) error {
+	apps, err := s.db.AppsDeployingIn(r.Context(), env.ID)
+	if err != nil {
+		return err
+	}
+	if len(apps) > 0 {
+		return errdoc.EnvironmentDeploying(apps)
+	}
+	return nil
+}
+
+// removeNamespace deletes an environment's namespace, and fails rather than
+// logging: the rows are deleted after it, and an environment whose rows went
+// while its namespace stayed was apps still running on the servers that the
+// panel no longer knew about.
+func (s *Server) removeNamespace(r *http.Request, env store.Environment) error {
+	if s.cluster == nil {
+		return nil
+	}
+	if err := s.cluster.DeleteNamespace(r.Context(), env.Namespace); err != nil {
+		return errdoc.EnvironmentNotRemoved(env.Namespace, err)
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"net/http"
 	"strings"
 
@@ -98,6 +99,10 @@ func (s *Server) handleDeploymentLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// Decided before the lines are read, so a log said to be finished is never
+	// one missing its last lines: whatever is written after this is in a later
+	// answer that says it is not.
+	finished := deployment.Status.Terminal() && !s.deploymentWorking(deployment.ID)
 	lines, err := s.db.ListBuildLogs(r.Context(), deployment.ID, queryInt(r, "since", 0), queryInt(r, "limit", 0))
 	if err != nil {
 		writeError(w, r, err)
@@ -106,9 +111,31 @@ func (s *Server) handleDeploymentLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"deployment_id": deployment.ID,
 		"status":        deployment.Status,
-		"finished":      deployment.Status.Terminal(),
+		"finished":      finished,
 		"lines":         lines,
 	})
+}
+
+// WorkReporter is a Deployer that can say whether a deployment's work is
+// still going on, which its status cannot: a deployment is marked succeeded
+// the moment the app serves it, and then waits for the app's other processes,
+// seeds a preview and says "Deployed." — up to twenty minutes of lines written
+// into a log the page had been told was finished, and had stopped reading.
+type WorkReporter interface {
+	Working(deploymentID string) bool
+}
+
+// RunChecker is a Deployer that can say at once whether a run has ended,
+// without RunResult's wait for one whose output has stopped.
+type RunChecker interface {
+	RunEnded(ctx context.Context, appID, name string) (RunResult, error)
+}
+
+// deploymentWorking reports whether the deployer is still doing a deployment's
+// work. A deployer that cannot say is taken at the status's word.
+func (s *Server) deploymentWorking(deploymentID string) bool {
+	reporter, ok := s.deployer.(WorkReporter)
+	return ok && reporter.Working(deploymentID)
 }
 
 func (s *Server) handleCancelDeployment(w http.ResponseWriter, r *http.Request) {
@@ -528,6 +555,19 @@ func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
 
 	name := chi.URLParam(r, "runID")
 	follow := queryBool(r, "follow")
+	// Without following, whether it has ended is still said, and asked first,
+	// so output said to be all of it is read after the command stopped. A page
+	// whose followed request was cut — a proxy's timeout — reads this to know
+	// whether the command is still going, and must not offer to start it again
+	// while it is.
+	var ended *RunResult
+	if checker, ok := s.deployer.(RunChecker); ok && !follow {
+		// Not knowing is "not finished", which keeps the page waiting rather
+		// than offering a second run; the output below is read either way.
+		if result, err := checker.RunEnded(r.Context(), app.ID, name); err == nil && result.Finished {
+			ended = &result
+		}
+	}
 	stream, err := s.deployer.RunLogs(r.Context(), app.ID, name, follow)
 	if err != nil {
 		writeError(w, r, err)
@@ -542,6 +582,9 @@ func (s *Server) handleRunLogs(w http.ResponseWriter, r *http.Request) {
 		lines = append(lines, logging.Scrub(scanner.Text()))
 	}
 	answer := map[string]any{"run": name, "lines": lines, "finished": false}
+	if ended != nil {
+		answer["finished"], answer["exit_code"] = true, ended.ExitCode
+	}
 	// Followed to its end, the output is all of it, and how the command ended
 	// is what a script running it needs: a migration that failed printed its
 	// error and exited 0 as far as anybody could tell.

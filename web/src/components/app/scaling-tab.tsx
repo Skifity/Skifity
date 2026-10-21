@@ -49,10 +49,12 @@ export function ScalingTab({ app }: { app: App }) {
 
   const save = useMutation({
     mutationFn: (next: Scaling) => api.put(`/api/apps/${app.id}/scaling`, next),
-    onSuccess: () => {
+    onSuccess: (_, saved) => {
       // Let go of the edit, as the resources form does: kept, it hid every
       // later change to what is stored — another user's, a rollback's — for
-      // as long as the tab stayed open.
+      // as long as the tab stayed open. What was saved goes in first, or the
+      // form showed the values from before the save until the refetch landed.
+      queryClient.setQueryData<Scaling>(["scaling", app.id], saved)
       setDraft(null)
       toast.success(t("common.saved"))
       void queryClient.invalidateQueries({ queryKey: ["scaling", app.id] })
@@ -84,7 +86,11 @@ export function ScalingTab({ app }: { app: App }) {
 
   const resources = useMutation({
     mutationFn: (next: Partial<App>) => api.patch(`/api/apps/${app.id}`, next),
-    onSuccess: () => {
+    onSuccess: (_, saved) => {
+      // The same: what was saved first, then the edit let go.
+      queryClient.setQueryData<App>(["app", app.id], (current) =>
+        current ? { ...current, ...saved } : current,
+      )
       setResourceDraft({})
       toast.success(t("common.saved"))
       void queryClient.invalidateQueries({ queryKey: ["app", app.id] })

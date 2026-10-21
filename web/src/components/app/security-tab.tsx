@@ -10,6 +10,7 @@ import {
   ShieldOffIcon,
 } from "lucide-react"
 
+import { recordedTitle } from "@/components/app/recorded-title"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -155,9 +156,7 @@ export function SecurityTab({ app }: { app: App }) {
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
               <p className="font-medium">
                 {latest.error_code
-                  ? t(`errors.catalogue.${latest.error_code.replaceAll(".", "_")}.title`, {
-                      defaultValue: t("security.failed"),
-                    })
+                  ? recordedTitle(t, latest.error_code, t("security.failed"))
                   : t("security.failed")}
               </p>
               {latest.error_message && <p className="mt-1">{latest.error_message}</p>}

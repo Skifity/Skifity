@@ -2470,6 +2470,18 @@
         "impact": "Kubernetes masih menerapkan level yang lama, jadi sebuah deploy akan berperilaku seperti sebelumnya.",
         "fix": "Perbaiki apa yang disebut di penyebabnya, lalu simpan levelnya lagi."
       },
+      "environment_deploying": {
+        "title": "Sebuah aplikasi di sini masih dideploy",
+        "cause": "{{0}} sedang dideploy, dan deployment yang terus berjalan setelah environment-nya dihapus akan memasang aplikasinya lagi di klaster.",
+        "impact": "Tidak ada yang dihapus.",
+        "fix": "Tunggu sampai deployment selesai, atau batalkan di tab Deployment aplikasinya, lalu hapus lagi."
+      },
+      "environment_not_removed": {
+        "title": "Klaster tidak menghapus environment ini",
+        "cause": "Menghapus namespace-nya, {{0}}, gagal: {{1}}",
+        "impact": "Panel menyimpan catatan semua isinya, jadi apa pun yang masih berjalan di sana tetap bisa ditemukan, dan dihapus dengan menghapus lagi.",
+        "fix": "Pastikan panel bisa menjangkau klaster, lalu hapus lagi. Kalau penyebabnya menyebut namespace itu tidak dibuat oleh panel, hapus dulu dengan kubectl."
+      },
       "firewall_failed": {
         "title": "Firewall tidak bisa dikonfigurasi",
         "cause": "Perintah firewall gagal di {{0}}: {{1}}",

@@ -6905,6 +6905,7 @@ components:
           maxItems: 20
           items: {$ref: '#/components/schemas/ComposeService'}
         deploy: {type: boolean}
+        name: {type: string, description: 'The app''s name, for a stack of one service picked from the file. The service keeps the name the file gives it.'}
 
     CreatedStack:
       type: object
@@ -7159,8 +7160,8 @@ components:
       properties:
         run: {type: string}
         lines: {type: array, items: {type: string}}
-        finished: {type: boolean}
-        exit_code: {type: integer, description: 'How it ended, once it has, when it was followed.'}
+        finished: {type: boolean, description: 'Whether the command has ended. Without follow, said when it had ended before its output was read.'}
+        exit_code: {type: integer, description: 'How it ended, once it has.'}
 
     AppJob:
       type: object

@@ -427,11 +427,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	teamID, _ := s.db.TeamIDForEnvironment(r.Context(), env.ID)
-	s.audit(r, teamID, "app.created", "app", app.ID, app.Name)
-	s.hub.Publish(events.TeamTopic(teamID), "app.created", app)
-	s.plugins.Notify(r.Context(), plugins.EventAppCreated, teamID, map[string]any{
-		"app_id": app.ID, "app": app.Name, "environment_id": app.EnvironmentID,
-	})
+	s.announceAppCreated(r, teamID, app)
 
 	hook := s.ensureWebhookFor(r, app)
 
@@ -455,6 +451,19 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusCreated, answer)
+}
+
+// announceAppCreated tells everything that keeps track that an app exists: the
+// activity log, the team's open pages and the plugins that subscribed to
+// app.created. A form and a Compose file both create apps, and while only the
+// form's handler did all three, the apps a Compose file made reached the team's
+// pages and neither the activity log nor a plugin.
+func (s *Server) announceAppCreated(r *http.Request, teamID string, app store.App) {
+	s.audit(r, teamID, "app.created", "app", app.ID, app.Name)
+	s.hub.Publish(events.TeamTopic(teamID), "app.created", app)
+	s.plugins.Notify(r.Context(), plugins.EventAppCreated, teamID, map[string]any{
+		"app_id": app.ID, "app": app.Name, "environment_id": app.EnvironmentID,
+	})
 }
 
 // checkGitSource refuses a Git connection that is not the environment's

@@ -32,6 +32,14 @@ import (
 	"skifity/internal/upload"
 )
 
+// The API asks the last two only of a deployer that has them, so without
+// these a renamed method would compile and quietly stop being asked.
+var (
+	_ api.Deployer     = (*Deployer)(nil)
+	_ api.WorkReporter = (*Deployer)(nil)
+	_ api.RunChecker   = (*Deployer)(nil)
+)
+
 // Deployer implements api.Deployer.
 type Deployer struct {
 	db      *store.DB
@@ -977,6 +985,19 @@ func (d *Deployer) finish(deploymentID string) {
 	d.mu.Lock()
 	delete(d.running, deploymentID)
 	d.mu.Unlock()
+}
+
+// Working reports whether a deployment's work is still going on in this panel.
+//
+// Its status is no guide: a deployment is recorded as succeeded the moment the
+// app serves it, and goes on writing its log after that — the app's other
+// processes, a preview's seed, "Deployed.", a Git host that could not be told.
+// Nothing writes to it once this says false.
+func (d *Deployer) Working(deploymentID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, working := d.running[deploymentID]
+	return working
 }
 
 func (d *Deployer) setStatus(ctx context.Context, deployment *store.Deployment, status store.DeploymentStatus) {

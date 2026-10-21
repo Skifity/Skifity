@@ -407,6 +407,32 @@ func StackDuplicate(first, second, slug string) *Problem {
 		WithDocs("/docs/concepts#a-compose-file")
 }
 
+// EnvironmentDeploying is an environment, or a project, asked to be deleted
+// while one of its apps is being deployed. The deployment carries on after the
+// namespace is gone, and its rollout creates the namespace again, with the app
+// running in it and nothing in the panel left to find it by.
+func EnvironmentDeploying(apps []string) *Problem {
+	return New("environment.deploying", "An app here is still being deployed").
+		WithCause("%s is being deployed, and a deployment that carries on after its environment is deleted puts the app back in the cluster.", strings.Join(apps, ", ")).
+		WithImpact("Nothing was deleted.").
+		WithFix("Wait for the deployment to finish, or cancel it on the app's Deployments tab, then delete again.").
+		WithStatus(http.StatusConflict).
+		With("apps", strings.Join(apps, ", "))
+}
+
+// EnvironmentNotRemoved is an environment whose namespace the cluster did not
+// delete. The panel keeps its records: deleted anyway, the apps in it went on
+// running with nothing in the panel to show them or remove them by.
+func EnvironmentNotRemoved(namespace string, err error) *Problem {
+	return New("environment.not_removed", "The cluster did not remove the environment").
+		WithCause("Deleting its namespace, %s, failed: %s", namespace, err.Error()).
+		WithImpact("The panel kept its records of everything in it, so whatever still runs there can be found, and removed by deleting again.").
+		WithFix("Check that the panel can reach the cluster, then delete again. If the cause says the panel did not create the namespace, remove it with kubectl first.").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err)
+}
+
 // TemplateGone is an app whose template, or whose service in it, this
 // version of the panel no longer has.
 func TemplateGone(app string) *Problem {

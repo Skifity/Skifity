@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { skipToken, useMutation, useQuery } from "@tanstack/react-query"
+import { skipToken, useIsMutating, useMutation, useQuery } from "@tanstack/react-query"
 import { ClockIcon, PlayIcon, PlusIcon, TerminalIcon, Trash2Icon } from "lucide-react"
 
 import { useConfirm } from "@/components/confirm-dialog"
@@ -26,12 +26,18 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
-import { api, type List } from "@/lib/api"
+import { ApiError, api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
 import type { App, AppJob } from "@/lib/types"
 
 /** A run's output, and how it ended once it has. */
 type RunOutput = { lines: string[]; finished: boolean; exit_code?: number }
+
+/** A run to start: what to show it as, and the run on screen when it was. */
+type StartRun = { label: string; start: () => Promise<{ run: string }>; after: string | null }
+
+/** The run this page started last, and the one that was on screen then. */
+type StartedRun = { run: string; after: string | null }
 
 /** The search parameter naming the run the console shows; see ConsoleTab. */
 export const RUN_PARAM = "run"
@@ -48,29 +54,67 @@ export function ConsoleTab({ app }: { app: App }) {
   const { t } = useTranslation()
   const [command, setCommand] = useState("")
   const [params, setParams] = useSearchParams()
+
+  // What to run: a command typed here, or a scheduled one run now. Both are
+  // one-off runs whose output is followed the same way.
+  //
+  // Keyed, so a tab opened again while a run is being started knows it is:
+  // the new tab's own mutation was idle, Run was enabled, and the second press
+  // started the command twice. What is done here goes on after the tab is
+  // closed, so it only fills the cache; the address is changed by the tab
+  // that is open (see run below), because a stale copy of it, applied after
+  // the console was left, put the user back on the console.
+  const start = useMutation({
+    mutationKey: ["run-start", app.id],
+    mutationFn: (what: StartRun) => what.start(),
+    onSuccess: (started, what) => {
+      queryClient.setQueryData(["run", app.id, started.run, "command"], what.label)
+      queryClient.setQueryData<StartedRun>(["run-started", app.id], {
+        run: started.run,
+        after: what.after,
+      })
+    },
+  })
+  const starting = useIsMutating({ mutationKey: ["run-start", app.id] }) > 0
+  const recorded = useQuery<StartedRun>({
+    queryKey: ["run-started", app.id],
+    queryFn: skipToken,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+
   // Which run is on screen, in the address rather than in this component. A
   // tab is unmounted when another is opened, and a run only this component
   // knew about was forgotten with it: the output gone, Run enabled again, and
   // the migration still going on the server started a second time. In the
   // address it outlives the tab, a reload, and a proxy that cut the request.
-  const runName = params.get(RUN_PARAM)
+  //
+  // A run started from this page replaces the one that was on screen when it
+  // was started, whether or not the address heard about it: the tab may have
+  // been left while it was being started, and then only the cache did. An
+  // address naming any other run is one somebody opened on purpose.
+  const inAddress = params.get(RUN_PARAM)
+  const latest = recorded.data
+  const runName =
+    latest && (inAddress === null || inAddress === latest.after) ? latest.run : inAddress
 
-  // What to run: a command typed here, or a scheduled one run now. Both are
-  // one-off runs whose output is followed the same way.
-  const start = useMutation({
-    mutationFn: (what: { label: string; start: () => Promise<{ run: string }> }) => what.start(),
-    onSuccess: (started, what) => {
-      queryClient.setQueryData(["run", app.id, started.run, "command"], what.label)
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous)
-          next.set(RUN_PARAM, started.run)
-          return next
-        },
-        { replace: true },
-      )
-    },
-  })
+  const run = (label: string, post: () => Promise<{ run: string }>) =>
+    start.mutate(
+      { label, start: post, after: runName },
+      {
+        // Called only while this tab is still open, which is when the address
+        // is still the console's.
+        onSuccess: (started) =>
+          setParams(
+            (previous) => {
+              const next = new URLSearchParams(previous)
+              next.set(RUN_PARAM, started.run)
+              return next
+            },
+            { replace: true },
+          ),
+      },
+    )
 
   // Followed to the end. Without it the panel answered with whatever the
   // container had printed when its pod was first seen running — usually
@@ -85,16 +129,23 @@ export function ConsoleTab({ app }: { app: App }) {
     retry: false,
   })
   const following = runName !== null && followed.isFetching
-  // What it has printed so far, while the followed request waits for the end.
+  // A followed request that failed — a proxy that cuts long requests — says
+  // nothing about the command, which is most likely still going.
+  const cut = runName !== null && followed.isError
+  // What it has printed so far, while the followed request waits for the end,
+  // and whether it has ended, once that request is gone.
   const soFar = useQuery({
     queryKey: ["run", app.id, runName, "so-far"],
     queryFn:
-      runName && following
+      runName && (following || cut)
         ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${runName}/logs`)
         : skipToken,
-    refetchInterval: 5_000,
+    refetchInterval: (query) => (query.state.data?.finished ? false : 5_000),
     retry: false,
   })
+  // Ended, or gone: a run the panel no longer has is not one still going.
+  const ended =
+    soFar.data?.finished === true || (soFar.error instanceof ApiError && soFar.error.status === 404)
   // The command as it was typed, for as long as the page is open. Not in the
   // address: a command can carry a password, and the address is kept in the
   // browser's history.
@@ -106,7 +157,10 @@ export function ConsoleTab({ app }: { app: App }) {
   })
 
   const result = followed.data ?? soFar.data
-  const busy = start.isPending || following
+  // Not while a run is being started or is going, as far as anything here can
+  // tell: enabling Run when the followed request was cut was how a migration
+  // came to run twice.
+  const busy = starting || following || (cut && !ended)
   const stick = useStickToBottom(result?.lines)
 
   return (
@@ -115,11 +169,10 @@ export function ConsoleTab({ app }: { app: App }) {
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
-          start.mutate({
-            label: command.trim(),
-            start: () =>
-              api.post<{ run: string }>(`/api/apps/${app.id}/run`, { command: command.trim() }),
-          })
+          if (busy) return
+          run(command.trim(), () =>
+            api.post<{ run: string }>(`/api/apps/${app.id}/run`, { command: command.trim() }),
+          )
         }}
       >
         <Field>
@@ -155,7 +208,7 @@ export function ConsoleTab({ app }: { app: App }) {
       )}
 
       {runName === null ? (
-        !start.isPending && (
+        !starting && (
           // What this panel is for is output, so that is what its empty state
           // says. It used to repeat the field's label and its help text word
           // for word, sixty pixels below them.
@@ -176,10 +229,10 @@ export function ConsoleTab({ app }: { app: App }) {
           {followed.error != null && (
             <ErrorDisplay error={followed.error} compact onRetry={() => void followed.refetch()} />
           )}
-          {followed.data?.finished && followed.data.exit_code !== 0 && (
+          {result?.finished && result.exit_code !== 0 && (
             <Alert variant="destructive">
               <AlertDescription>
-                {t("apps.runExitStatus", { code: followed.data.exit_code })}
+                {t("apps.runExitStatus", { code: result.exit_code })}
               </AlertDescription>
             </Alert>
           )}
@@ -193,11 +246,11 @@ export function ConsoleTab({ app }: { app: App }) {
               <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                 {result.lines.length > 0
                   ? result.lines.join("\n")
-                  : followed.data && t("apps.runNoOutput")}
+                  : (followed.data || result.finished) && t("apps.runNoOutput")}
               </pre>
             </ScrollArea>
           ) : (
-            following && <Skeleton className="h-80" />
+            busy && <Skeleton className="h-80" />
           )}
         </div>
       )}
@@ -206,10 +259,9 @@ export function ConsoleTab({ app }: { app: App }) {
         app={app}
         running={busy}
         onRunNow={(job) =>
-          start.mutate({
-            label: job.command,
-            start: () => api.post<{ run: string }>(`/api/apps/${app.id}/jobs/${job.id}/run`, {}),
-          })
+          run(job.command, () =>
+            api.post<{ run: string }>(`/api/apps/${app.id}/jobs/${job.id}/run`, {}),
+          )
         }
       />
     </div>

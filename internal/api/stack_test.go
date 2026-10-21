@@ -1,13 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"skifity/internal/builder"
 	"skifity/internal/kube"
+	"skifity/internal/plugins"
 	"skifity/internal/store"
 )
 
@@ -258,5 +262,122 @@ func TestAComposeVariableWithAnUnusableNameIsLeftOutAndSaid(t *testing.T) {
 	}
 	if !said {
 		t.Errorf("leaving it out was not said: %+v", answer.Notes)
+	}
+}
+
+// Every app a stack creates is announced the way a single app is: an
+// app.created entry in the activity log and an app.created event to the
+// plugins that subscribed. One service picked from a file goes through the
+// stack, and was created with neither.
+func TestAStacksAppsAreAnnouncedLikeAnyApp(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+
+	var mu sync.Mutex
+	told := map[string]string{}
+	plugin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var event struct {
+			Event string `json:"event"`
+			Data  struct {
+				AppID string `json:"app_id"`
+				App   string `json:"app"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&event); err == nil && event.Event == plugins.EventAppCreated {
+			mu.Lock()
+			told[event.Data.AppID] = event.Data.App
+			mu.Unlock()
+		}
+	}))
+	t.Cleanup(plugin.Close)
+	h.api.plugins = plugins.Dispatcher{
+		Targets: func(_ context.Context, _, teamID string) ([]plugins.Target, error) {
+			if teamID != acme.team.ID {
+				return nil, nil
+			}
+			return []plugins.Target{{ID: "watcher", URL: plugin.URL, Secret: "fake-secret"}}, nil
+		},
+		Client: plugin.Client(),
+	}
+
+	status, body := h.do(acme, http.MethodPost, "/api/environments/"+acme.env.ID+"/stack", map[string]any{
+		"services": []builder.ComposeService{{Name: "web", Image: "nginx:1.27"}, {Name: "cache", Image: "redis:7"}},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("answered %d: %s", status, truncate(body, 300))
+	}
+	var answer struct {
+		Apps []store.App `json:"apps"`
+	}
+	if err := json.Unmarshal([]byte(body), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if len(answer.Apps) != 2 {
+		t.Fatalf("%d apps", len(answer.Apps))
+	}
+
+	audited, _ := h.db.ListAudit(t.Context(), acme.team.ID, "app.created", "", 10)
+	mu.Lock()
+	defer mu.Unlock()
+	for _, app := range answer.Apps {
+		if told[app.ID] != app.Name {
+			t.Errorf("the plugins were not told about %s: %v", app.Name, told)
+		}
+		found := false
+		for _, event := range audited {
+			found = found || event.TargetID == app.ID
+		}
+		if !found {
+			t.Errorf("%s has no app.created entry in the activity log", app.Name)
+		}
+	}
+}
+
+// A service picked from a file and named in the form is not said to have been
+// renamed: "My API" was typed by a person, and becoming my-api is what any
+// app's name does. Under the file's own name the note is still there, because
+// that is the name the file's other services use.
+func TestOnlyAFilesOwnNameIsSaidToBeRenamed(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	path := "/api/environments/" + acme.env.ID + "/stack"
+
+	create := func(name, service string) (store.App, []stackNote) {
+		t.Helper()
+		status, body := h.do(acme, http.MethodPost, path, map[string]any{
+			"name": name, "services": []builder.ComposeService{{Name: service, Image: "nginx:1.27"}},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("answered %d: %s", status, truncate(body, 300))
+		}
+		var answer struct {
+			Apps  []store.App `json:"apps"`
+			Notes []stackNote `json:"notes"`
+		}
+		if err := json.Unmarshal([]byte(body), &answer); err != nil || len(answer.Apps) != 1 {
+			t.Fatalf("%v: %s", err, truncate(body, 300))
+		}
+		return answer.Apps[0], answer.Notes
+	}
+
+	app, notes := create("My API", "web_api")
+	if app.Name != "My API" || app.Slug != "my-api" {
+		t.Errorf("the form's name was not used: %+v", app)
+	}
+	if len(notes) != 0 {
+		t.Errorf("a name typed in the form was reported: %+v", notes)
+	}
+
+	app, notes = create("Admin_UI", "Admin_UI")
+	if app.Slug != "admin-ui" || len(notes) != 1 || notes[0].Code != "renamed" || notes[0].Value != "admin-ui" {
+		t.Errorf("the file's own name changing was not said: %+v %+v", app, notes)
+	}
+
+	// A whole file's services keep the names it gives them.
+	status, body := h.do(acme, http.MethodPost, path, map[string]any{
+		"name": "Shop", "services": []builder.ComposeService{{Name: "a", Image: "nginx:1.27"}, {Name: "b", Image: "redis:7"}},
+	})
+	if status != http.StatusBadRequest {
+		t.Errorf("one name for two services answered %d: %s", status, truncate(body, 200))
 	}
 }

@@ -572,7 +572,7 @@ function BackUpNow({ appID, volumeID }: { appID: string; volumeID: string }) {
       const problem = toProblem(error)
       if (!problem) return
       const key = `errors.catalogue.${problem.code.replaceAll(".", "_")}`
-      toast.error(translated(t, `${key}.title`, problem.title), {
+      toast.error(translated(t, `${key}.title`, problem.title, problem.args?.title), {
         description: translated(t, `${key}.fix`, problem.fix, problem.args?.fix) || undefined,
       })
     },

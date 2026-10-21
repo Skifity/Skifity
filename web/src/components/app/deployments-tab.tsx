@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "cn"
 
+import { recordedTitle } from "@/components/app/recorded-title"
 import { DeployAnywayButton } from "@/components/app/security-tab"
 import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
@@ -256,9 +257,7 @@ export function DeploymentsTab({ app }: { app: App }) {
                       carry the names and numbers a translation cannot. */}
                     {deployment.error_code && (
                       <p className="font-medium">
-                        {t(`errors.catalogue.${deployment.error_code.replaceAll(".", "_")}.title`, {
-                          defaultValue: deployment.error_message,
-                        })}
+                        {recordedTitle(t, deployment.error_code, deployment.error_message)}
                       </p>
                     )}
                     <p className={deployment.error_code ? "mt-1" : "font-medium"}>
@@ -541,59 +540,114 @@ function triggerLabel(t: TFunction, deployment: Deployment): string {
 /** A line as the event stream sends it: numbered, except from an older panel. */
 type StreamedLine = { seq?: number; line: string }
 
-type StoredLog = { lines: LogLine[]; finished: boolean }
+/** One line of a deployment's log, by its number. */
+type NumberedLine = { seq: number; line: string }
+
+/** One page of the stored log, as the server answers it. */
+type LogPage = { lines: LogLine[]; finished: boolean }
+
+/**
+ * A deployment's log as this page has it: the stored lines and the streamed
+ * ones as one, in order and each once, kept in the query cache so that both
+ * the stream and a read of the stored log add to the same thing.
+ *
+ * Lines are numbered from 1 without a hole, so fewer of them than the highest
+ * number means some were never seen: sent before the stream was opened, and
+ * not yet stored when the log was read.
+ */
+type KnownLog = {
+  lines: NumberedLine[]
+  /** Lines an older panel streamed, which carry no number. */
+  unnumbered: string[]
+  /** The stored log has been read; until then this is only what streamed in. */
+  read: boolean
+  /** The server's word that nothing will be written to it again. */
+  finished: boolean
+}
+
+const NOTHING_KNOWN: KnownLog = { lines: [], unnumbered: [], read: false, finished: false }
 
 /** The most lines the server answers with at once. */
 const LOG_PAGE = 5000
 
+const buildLogKey = (deploymentId: string) => ["build-log", deploymentId]
+
+/** Whether a line below the highest one has not been seen. */
+const hasGap = (log: KnownLog) => (log.lines.at(-1)?.seq ?? 0) > log.lines.length
+
 /**
- * Every stored line of a deployment's log. The server answers a page at a
- * time, and a build that printed more than one page used to show only its
- * first, with no sign that the rest existed.
+ * How many lines from the first are here without a hole: where a read of the
+ * stored log picks up. A line's number is never below its place in the list,
+ * and equals it up to the first hole.
  */
-async function readBuildLog(appId: string, deploymentId: string): Promise<StoredLog> {
-  const path = `/api/apps/${appId}/deployments/${deploymentId}/logs?limit=${LOG_PAGE}`
-  const first = await api.get<StoredLog>(path)
-  const lines = [...first.lines]
-  let page = first.lines
-  while (page.length === LOG_PAGE) {
-    page = (await api.get<StoredLog>(`${path}&since=${page[page.length - 1].seq}`)).lines
-    lines.push(...page)
+function unbroken(lines: NumberedLine[]) {
+  let low = 0
+  let high = lines.length
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (lines[middle].seq === middle + 1) low = middle + 1
+    else high = middle
   }
-  return { lines, finished: first.finished }
+  return low
+}
+
+/** The log with more lines in it; they come in order of their numbers. */
+function withLines(log: KnownLog, more: NumberedLine[]): KnownLog {
+  if (more.length === 0) return log
+  const last = log.lines.at(-1)
+  // Nearly always: the lines after the last one known.
+  if (!last || more[0].seq > last.seq) return { ...log, lines: [...log.lines, ...more] }
+  const lines: NumberedLine[] = []
+  let i = 0
+  let j = 0
+  while (i < log.lines.length || j < more.length) {
+    const next =
+      j === more.length || (i < log.lines.length && log.lines[i].seq <= more[j].seq)
+        ? log.lines[i++]
+        : more[j++]
+    if (lines.at(-1)?.seq !== next.seq) lines.push(next)
+  }
+  return { ...log, lines }
 }
 
 /**
- * The stored lines and the streamed ones as one log, in order and each once.
+ * Reads the stored log into what the page has, from the first line it is
+ * missing, a page at a time: a build that printed more than one page used to
+ * show only its first.
  *
- * Lines are numbered from 1 without a hole, so fewer numbers than the highest
- * one means some were never seen: sent before the stream was opened, and not
- * yet stored when the log was fetched.
+ * From the first missing line rather than from the start, because a hole is
+ * waited on by reading again every two seconds until the batch holding it is
+ * stored — which was the whole log each time, for a build that had printed
+ * thousands of lines and was filling its next batch of sixty-four.
  */
-function mergeLog(stored: LogLine[], streamed: StreamedLine[]) {
-  const bySeq = new Map<number, string>()
-  let highest = 0
-  for (const entry of stored) {
-    bySeq.set(entry.seq, entry.line)
-    highest = Math.max(highest, entry.seq)
+async function readBuildLog(appId: string, deploymentId: string): Promise<KnownLog> {
+  const key = buildLogKey(deploymentId)
+  const path = `/api/apps/${appId}/deployments/${deploymentId}/logs?limit=${LOG_PAGE}`
+  let since = unbroken(queryClient.getQueryData<KnownLog>(key)?.lines ?? [])
+  const read: NumberedLine[] = []
+  let page: LogPage
+  do {
+    page = await api.get<LogPage>(`${path}&since=${since}`)
+    read.push(...page.lines.map(({ seq, line }) => ({ seq, line })))
+    since = page.lines.at(-1)?.seq ?? since
+  } while (page.lines.length === LOG_PAGE)
+
+  // What the cache holds now rather than when the reading began: lines that
+  // streamed in meanwhile are there, and returning without them lost them.
+  const known = queryClient.getQueryData<KnownLog>(key) ?? NOTHING_KNOWN
+  return {
+    ...withLines(known, read),
+    // A finished log holds an older panel's unnumbered lines too, numbered.
+    unnumbered: page.finished ? [] : known.unnumbered,
+    read: true,
+    finished: page.finished,
   }
-  const unnumbered: string[] = []
-  for (const entry of streamed) {
-    if (entry.seq === undefined) {
-      unnumbered.push(entry.line)
-      continue
-    }
-    bySeq.set(entry.seq, entry.line)
-    highest = Math.max(highest, entry.seq)
-  }
-  const ordered = [...bySeq.entries()].sort((a, b) => a[0] - b[0]).map(([, line]) => line)
-  return { lines: [...ordered, ...unnumbered], gap: bySeq.size < highest }
 }
 
 /**
  * The build log.
  *
- * The stored lines are fetched, and everything after that arrives on the event
+ * The stored lines are read, and everything after that arrives on the event
  * stream. Reloading the page mid-build therefore shows the whole log, not just
  * what happened after the reload.
  *
@@ -601,62 +655,75 @@ function mergeLog(stored: LogLine[], streamed: StreamedLine[]) {
  * each line as it comes and stores them in batches. Every line carries its
  * number, so one that came both ways is shown once, and a hole is filled by
  * reading the stored log again until the batch holding it is written.
+ *
+ * A deployment's status is not the end of its log. It is succeeded once the
+ * app serves it, and then waits up to five minutes for the app's other
+ * processes, seeds a preview for up to fifteen and says "Deployed." — all of
+ * it written after the status, and all of it missed when the status was taken
+ * to mean the log was done. The server says when it is.
  */
 function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment }) {
   const { t } = useTranslation()
-  const [streamed, setStreamed] = useState<StreamedLine[]>([])
-  const finished = TERMINAL.has(deployment.status)
+  const over = TERMINAL.has(deployment.status)
 
-  const stored = useQuery({
-    queryKey: ["build-log", deployment.id],
+  const log = useQuery({
+    queryKey: buildLogKey(deployment.id),
     queryFn: () => readBuildLog(appId, deployment.id),
-    // A finished log never changes. One still being written is read again
-    // whenever it is opened, rather than served from a cache that is behind.
-    staleTime: (query) => (query.state.data?.finished ? Infinity : 0),
-    refetchInterval: (query) =>
-      !finished && mergeLog(query.state.data?.lines ?? [], streamed).gap ? 2_000 : false,
+    // Read again whenever it is opened, which is one request for whatever is
+    // new: even a finished log gains a line when the app's settings are next
+    // applied to the version it built.
+    staleTime: 0,
+    // Changed a line at a time and never in place, so there is nothing to
+    // compare.
+    structuralSharing: false,
+    refetchInterval: (query) => {
+      const known = query.state.data
+      if (!known || known.finished) return false
+      if (hasGap(known)) return 2_000
+      // Over, and still being written. The lines come on the stream; this is
+      // how the page hears that the last of them has.
+      return over ? 5_000 : false
+    },
   })
 
+  // Followed while it is written: from the start for one under way, and for
+  // one that is over only once the server says its log is not, rather than
+  // reconnecting the event stream for every old deployment opened.
+  const live = !log.data?.finished && (!over || log.data?.read === true)
   useEvents(
     [`deployment:${deployment.id}`],
     {
       log: (data) => {
         const { seq, line } = data as StreamedLine
-        setStreamed((previous) => [...previous, { seq, line }])
+        queryClient.setQueryData<KnownLog>(buildLogKey(deployment.id), (known = NOTHING_KNOWN) =>
+          seq === undefined
+            ? { ...known, unnumbered: [...known.unnumbered, line] }
+            : withLines(known, [{ seq, line }]),
+        )
       },
       deployment: () => {
         void queryClient.invalidateQueries({ queryKey: ["deployments", appId] })
       },
     },
-    !finished,
+    live,
   )
 
-  // It finished while open. The log that was fetched was still being written,
-  // and its last batch is stored only as the build ends, so it is read again,
-  // whole, and what was streamed is let go.
-  const behind = finished && stored.data !== undefined && !stored.data.finished
-  useEffect(() => {
-    if (!behind) return
-    void queryClient
-      .invalidateQueries({ queryKey: ["build-log", deployment.id] })
-      .then(() => setStreamed([]))
-  }, [behind, deployment.id])
-
   const lines = useMemo(
-    () => mergeLog(stored.data?.lines ?? [], streamed).lines,
-    [stored.data, streamed],
+    () => (log.data ? [...log.data.lines.map((entry) => entry.line), ...log.data.unnumbered] : []),
+    [log.data],
   )
   const stick = useStickToBottom(lines)
 
-  if (stored.isLoading) return <Skeleton className="h-40" />
-  if (stored.error) return <ErrorDisplay error={stored.error} compact />
+  if (!log.data?.read) {
+    return log.error ? <ErrorDisplay error={log.error} compact /> : <Skeleton className="h-40" />
+  }
   if (lines.length === 0) {
     // No lines is only "nothing was built" once the deployment is over: a
     // queued one, or a build before its first line, has simply not said
     // anything yet.
     return (
       <p className="text-sm text-muted-foreground">
-        {finished ? t("deploy.reusedImage") : t("deploy.noLogYet")}
+        {over ? t("deploy.reusedImage") : t("deploy.noLogYet")}
       </p>
     )
   }
@@ -664,6 +731,8 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground">{t("deploy.buildLog")}</p>
+      {/* A later read that failed leaves what was read on screen. */}
+      {log.error != null && <ErrorDisplay error={log.error} compact />}
       <ScrollArea className="h-80 rounded-md border bg-muted/30" {...stick}>
         <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
           {lines.join("\n")}

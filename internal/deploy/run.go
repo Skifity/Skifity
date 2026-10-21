@@ -115,6 +115,21 @@ func (d *Deployer) RunResult(ctx context.Context, appID, name string) (api.RunRe
 	}
 }
 
+// RunEnded says how a run ended, or that it has not, without waiting for it:
+// what a look at a run's output so far asks, which RunResult's half a minute
+// of waiting would hold up every time.
+func (d *Deployer) RunEnded(ctx context.Context, appID, name string) (api.RunResult, error) {
+	namespace, err := d.runNamespace(ctx, appID, name)
+	if err != nil {
+		return api.RunResult{}, err
+	}
+	code, finished, err := d.cluster.Client().RunOutcome(ctx, namespace, name)
+	if err != nil {
+		return api.RunResult{}, err
+	}
+	return api.RunResult{Finished: finished, ExitCode: code}, nil
+}
+
 // RunLogs reads a run's output, following it until the Job ends.
 func (d *Deployer) RunLogs(ctx context.Context, appID, name string, follow bool) (io.ReadCloser, error) {
 	namespace, err := d.runNamespace(ctx, appID, name)

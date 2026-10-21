@@ -234,6 +234,28 @@ func (db *DB) ListUnfinishedDeployments(ctx context.Context) ([]Deployment, erro
 	return out, rows.Err()
 }
 
+// AppsDeployingIn names the apps in an environment with a deployment that is
+// queued, building or rolling out, in name order.
+func (db *DB) AppsDeployingIn(ctx context.Context, envID string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT a.name FROM deployments d
+		JOIN apps a ON a.id = d.app_id
+		WHERE a.environment_id = ? AND d.status IN ('queued','building','deploying')
+		ORDER BY a.name`, envID)
+	if err != nil {
+		return nil, fmt.Errorf("find the apps being deployed: %w", err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan an app being deployed: %w", err)
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
 // ClaimDeploymentResume marks a deployment as picked up again after a panel
 // restart, and says whether this call was the one that did it. A deployment
 // can be resumed once: false means it already was, and was interrupted again.

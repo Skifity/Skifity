@@ -11,7 +11,6 @@ import (
 
 	"skifity/internal/builder"
 	"skifity/internal/errdoc"
-	"skifity/internal/events"
 	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
 	"skifity/internal/store"
@@ -41,6 +40,10 @@ type stackRequest struct {
 	RootDir  string                   `json:"root_dir,omitempty"`
 	Services []builder.ComposeService `json:"services"`
 	Deploy   bool                     `json:"deploy,omitempty"`
+	// Name is what the form calls the one service picked from a file. The
+	// service keeps the name the file gave it, which is how the planner tells
+	// a name the others in the file use from one typed by a person.
+	Name string `json:"name,omitempty"`
 }
 
 // stackNote is something about a service that did not carry over as written.
@@ -73,6 +76,10 @@ func (s *Server) handleCreateStack(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Services) == 0 || len(req.Services) > maxStackServices {
 		writeError(w, r, errdoc.StackSize(maxStackServices))
+		return
+	}
+	if strings.TrimSpace(req.Name) != "" && len(req.Services) != 1 {
+		writeError(w, r, errdoc.BadRequest("A name is for one service picked from a Compose file; a whole file's services keep the names it gives them."))
 		return
 	}
 	repoURL := strings.TrimSpace(req.RepoURL)
@@ -158,7 +165,7 @@ func (s *Server) handleCreateStack(w http.ResponseWriter, r *http.Request) {
 	names := make([]string, 0, len(created))
 	for _, app := range created {
 		names = append(names, app.Name)
-		s.hub.Publish(events.TeamTopic(teamID), "app.created", app)
+		s.announceAppCreated(r, teamID, app)
 	}
 	s.audit(r, teamID, "stack.created", "environment", env.ID, strings.Join(names, ", "))
 
@@ -190,15 +197,21 @@ func (s *Server) handleCreateStack(w http.ResponseWriter, r *http.Request) {
 
 // planStackApp works out the app one service becomes.
 func planStackApp(env store.Environment, req stackRequest, repoURL string, service builder.ComposeService) (plannedApp, []stackNote, error) {
-	name := strings.TrimSpace(service.Name)
-	if name == "" {
+	fromFile := strings.TrimSpace(service.Name)
+	if fromFile == "" {
 		return plannedApp{}, nil, errdoc.StackNoSource("?")
+	}
+	name := fromFile
+	if given := strings.TrimSpace(req.Name); given != "" {
+		name = given
 	}
 	slug := kube.Slugify(name)
 	var notes []stackNote
 	// The others reach it by its slug, and a Compose name with an underscore
-	// or capitals is not one a cluster's DNS will answer to.
-	if slug != name {
+	// or capitals is not one a cluster's DNS will answer to. A name typed in
+	// the form is no name the others use, so "My API" becoming my-api is what
+	// an app's name always does and not news.
+	if name == fromFile && slug != name {
 		notes = append(notes, stackNote{Service: name, Code: "renamed", Value: slug})
 	}
 

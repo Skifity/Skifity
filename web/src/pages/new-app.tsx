@@ -374,7 +374,7 @@ export function NewAppPage() {
 
   // Services of a Compose file, created by the panel's own reading of it: the
   // whole file as one stack, or the one service picked. See handleCreateStack.
-  const postStack = (services: ComposeService[]) =>
+  const postStack = (services: ComposeService[], name?: string) =>
     api.post<StackResult>(`/api/environments/${envId}/stack`, {
       repo_url: repoURL.trim(),
       git_source_id: gitSourceID,
@@ -384,6 +384,7 @@ export function NewAppPage() {
       root_dir: rootDir.trim(),
       services,
       deploy: deployNow,
+      name,
     })
   function afterStack(result: StackResult) {
     void queryClient.invalidateQueries({ queryKey: ["apps", envId] })
@@ -409,9 +410,12 @@ export function NewAppPage() {
     onSuccess: afterStack,
   })
   // One service, under the name in the form: the stack's planner given a list
-  // of one, so it is made exactly as the whole file would have made it.
+  // of one, so it is made exactly as the whole file would have made it. The
+  // name goes beside the service rather than over the file's, which is how the
+  // planner tells "My API" typed here from a name the file's other services
+  // use, and only says the second was changed.
   const createService = useMutation({
-    mutationFn: (service: ComposeService) => postStack([{ ...service, name: appName }]),
+    mutationFn: (service: ComposeService) => postStack([service], appName),
     onSuccess: afterStack,
   })
 
@@ -1089,7 +1093,9 @@ function problemLine(t: TFunction, problem: Problem | null) {
   const fix = translated(t, `${key}.fix`, problem.fix, problem.args?.fix)
   return (
     <>
-      <span className="block">{translated(t, `${key}.title`, problem.title)}</span>
+      <span className="block">
+        {translated(t, `${key}.title`, problem.title, problem.args?.title)}
+      </span>
       {fix && <span className="block">{fix}</span>}
     </>
   )
