@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CheckIcon, ClipboardIcon, DownloadIcon, KeyRoundIcon } from "lucide-react"
+import { useMutation } from "@tanstack/react-query"
+import {
+  CheckIcon,
+  ClipboardIcon,
+  DownloadIcon,
+  KeyRoundIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
+import { CenteredLayout } from "@/components/centered-layout"
 import { ErrorDisplay } from "@/components/error-display"
-import { LanguageSwitcher } from "@/components/language-switcher"
 import { Logo } from "@/components/logo"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { PasswordStrength } from "@/components/password-strength"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Field,
   FieldDescription,
@@ -19,6 +28,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { api } from "@/lib/api"
+import { copyText } from "@/lib/clipboard"
+import { downloadText } from "@/lib/download"
 import { currentLanguage } from "@/lib/i18n"
 import type { Team, User } from "@/lib/types"
 
@@ -47,7 +58,19 @@ function setupTokenFromLink(): string {
   return new URLSearchParams(fragment).get("token")?.trim() ?? ""
 }
 
-export function SetupPage({ onComplete }: { onComplete: () => void }) {
+export function SetupPage({
+  onAccountCreated,
+  onComplete,
+}: {
+  /**
+   * The account exists and the session is open, but the recovery key is still
+   * on screen. The page that renders this has to keep it there even though
+   * the panel no longer needs setting up: a refetch of the session would
+   * otherwise replace the key with the shell before it was saved.
+   */
+  onAccountCreated: () => void
+  onComplete: () => void
+}) {
   const { t } = useTranslation()
   const [token, setToken] = useState(setupTokenFromLink)
   const [email, setEmail] = useState("")
@@ -86,7 +109,8 @@ export function SetupPage({ onComplete }: { onComplete: () => void }) {
           locale: currentLanguage(),
         },
       })
-      setRecoveryKey(result.recovery_key)
+      onAccountCreated()
+      setRecoveryKey(result.recovery_key ?? "")
     } catch (caught) {
       setError(caught)
     } finally {
@@ -94,7 +118,10 @@ export function SetupPage({ onComplete }: { onComplete: () => void }) {
     }
   }
 
-  if (recoveryKey) {
+  // The account exists from here on, so the form is never shown again: sending
+  // it a second time could only fail.
+  if (recoveryKey === "") return <RecoveryKeyMissing onDone={onComplete} />
+  if (recoveryKey !== null) {
     return <RecoveryKeyStep recoveryKey={recoveryKey} onDone={onComplete} />
   }
 
@@ -201,34 +228,39 @@ function RecoveryKeyStep({ recoveryKey, onDone }: { recoveryKey: string; onDone:
   const [acknowledged, setAcknowledged] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  // Ticking the box is the person's word; this is the panel's record of it.
+  // Without it the warning dot and "save your recovery key" were waiting in
+  // the shell the moment setup finished, and clearing them meant revealing
+  // the key again behind a fresh password, audited as viewed.
+  const saved = useMutation({
+    mutationFn: () => api.post("/api/security/recovery-key/saved"),
+    onSuccess: onDone,
+  })
+
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(recoveryKey)
+    if (await copyText(recoveryKey)) {
       setCopied(true)
       toast.success(t("common.copied"))
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error(t("errors.somethingWentWrong"))
+      window.setTimeout(() => setCopied(false), 2000)
+    } else {
+      toast.error(t("common.copyFailed"))
     }
   }
 
   const download = () => {
-    const blob = new Blob(
+    const title = t("auth.recoveryKeyFileTitle", { product: "Skifity" })
+    downloadText(
+      "skifity-recovery-key.txt",
       [
-        "Skifity recovery key\n",
-        "====================\n\n",
-        `${recoveryKey}\n\n`,
-        "Anyone holding this key can decrypt every secret this panel stores.\n",
-        "Keep it somewhere safe and offline. Without it, a restored backup is unreadable.\n",
-      ],
-      { type: "text/plain" },
+        title,
+        "=".repeat(title.length),
+        "",
+        recoveryKey,
+        "",
+        t("auth.recoveryKeyFileBody"),
+        "",
+      ].join("\n"),
     )
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "skifity-recovery-key.txt"
-    link.click()
-    URL.revokeObjectURL(url)
     setAcknowledged(true)
   }
 
@@ -254,7 +286,7 @@ function RecoveryKeyStep({ recoveryKey, onDone }: { recoveryKey: string; onDone:
           </pre>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={copy}>
+            <Button variant="outline" size="sm" onClick={() => void copy()}>
               {copied ? <CheckIcon className="size-4" /> : <ClipboardIcon className="size-4" />}
               {t("common.copy")}
             </Button>
@@ -264,17 +296,25 @@ function RecoveryKeyStep({ recoveryKey, onDone }: { recoveryKey: string; onDone:
             </Button>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-            <input
-              type="checkbox"
+          <Field orientation="horizontal">
+            <Checkbox
+              id="recovery-key-saved"
               checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-              className="mt-0.5 size-4 accent-primary"
+              onCheckedChange={(checked) => setAcknowledged(checked === true)}
             />
-            <span>{t("auth.recoveryKeyConfirm")}</span>
-          </label>
+            <FieldLabel htmlFor="recovery-key-saved" className="font-normal">
+              {t("auth.recoveryKeyConfirm")}
+            </FieldLabel>
+          </Field>
 
-          <Button className="w-full" disabled={!acknowledged} onClick={onDone}>
+          {saved.error != null && <ErrorDisplay error={saved.error} compact />}
+
+          <Button
+            className="w-full"
+            disabled={!acknowledged || saved.isPending}
+            onClick={() => saved.mutate()}
+          >
+            {saved.isPending && <Spinner />}
             {t("common.done")}
           </Button>
         </CardContent>
@@ -283,27 +323,27 @@ function RecoveryKeyStep({ recoveryKey, onDone }: { recoveryKey: string; onDone:
   )
 }
 
-/** A quiet strength hint, so the 12-character minimum is not a surprise. */
-export function PasswordStrength({ password }: { password: string }) {
+/**
+ * The account was made, and the panel could not show its recovery key. Not a
+ * dead end: the key is still there to reveal from Account, and the shell keeps
+ * saying so until it has been saved.
+ */
+function RecoveryKeyMissing({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation()
-  if (!password) return null
-
-  const tooShort = password.length < 12
   return (
-    <p className={tooShort ? "text-xs text-warning" : "text-xs text-success"}>
-      {tooShort ? t("common.required") + ": 12+" : `${password.length} ${t("common.of")} 12+`}
-    </p>
-  )
-}
-
-export function CenteredLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-svh flex-col bg-muted/30">
-      <div className="flex justify-end gap-1 p-4">
-        <LanguageSwitcher />
-        <ThemeToggle />
-      </div>
-      <div className="flex flex-1 items-center justify-center px-4 pb-16">{children}</div>
-    </div>
+    <CenteredLayout>
+      <Card className="w-full max-w-lg">
+        <CardContent className="space-y-4 pt-6">
+          <Alert variant="warning">
+            <TriangleAlertIcon />
+            <AlertTitle>{t("auth.recoveryKeyMissingTitle")}</AlertTitle>
+            <AlertDescription>{t("auth.recoveryKeyMissing")}</AlertDescription>
+          </Alert>
+          <Button className="w-full" onClick={onDone}>
+            {t("common.next")}
+          </Button>
+        </CardContent>
+      </Card>
+    </CenteredLayout>
   )
 }

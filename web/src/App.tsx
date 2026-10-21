@@ -1,10 +1,20 @@
-import { Suspense, lazy, useEffect } from "react"
+import { Suspense, lazy, useEffect, useEffectEvent, useState } from "react"
 import { Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useTranslation } from "react-i18next"
+import { useIsFetching } from "@tanstack/react-query"
+import { RefreshCwIcon } from "lucide-react"
 
 import { AppShell } from "@/components/app-shell"
+import { CenteredLayout } from "@/components/centered-layout"
+import { ErrorDisplay } from "@/components/error-display"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useSession } from "@/hooks/use-session"
+import { Spinner } from "@/components/ui/spinner"
+import { forgetSignedOutUser, saveThemeToAccount, useSession } from "@/hooks/use-session"
+import { currentLanguage, isLanguage, setLanguage } from "@/lib/i18n"
+import { canOpenSettings } from "@/lib/permissions"
+import { useTheme } from "@/lib/theme"
+import type { User } from "@/lib/types"
 import { AccountPage } from "@/pages/account"
 import { ActivityPage } from "@/pages/activity"
 import { AddServerPage } from "@/pages/add-server"
@@ -21,7 +31,7 @@ import { ProjectDetailPage } from "@/pages/project-detail"
 import { ProjectsPage } from "@/pages/projects"
 import { ServerDetailPage } from "@/pages/server-detail"
 import { ServersPage } from "@/pages/servers"
-import { CenteredLayout, SetupPage } from "@/pages/setup"
+import { SetupPage } from "@/pages/setup"
 
 // Settings and templates are rarely the first page anyone opens, so they load
 // on demand and stay out of the initial bundle.
@@ -38,13 +48,29 @@ const PluginsPage = lazy(() =>
 /**
  * The panel's routes.
  *
- * There are exactly three states before the routes matter: the session is still
- * loading, the panel has never been set up, or nobody is signed in. Each of them
- * takes over the whole screen, because showing a half-usable shell behind a
- * sign-in form is how people end up clicking things that then fail.
+ * There are a few states before the routes matter: the session is still
+ * loading, the panel could not be reached, the panel has never been set up,
+ * or nobody is signed in. Each of them takes over the whole screen, because
+ * showing a half-usable shell behind a sign-in form is how people end up
+ * clicking things that then fail.
  */
 export function App() {
-  const { loading, needsSetup, user, refresh } = useSession()
+  const { t } = useTranslation()
+  const { loading, error, needsSetup, user, refresh } = useSession()
+  const { pathname } = useLocation()
+  const retrying = useIsFetching({ queryKey: ["session"] }) > 0
+  // Set once the first account exists and its recovery key is on screen.
+  // From then on the panel no longer needs setting up, and any refetch of the
+  // session would have swapped the key for the shell before it was saved.
+  const [settingUp, setSettingUp] = useState(false)
+
+  // Nobody is signed in any more, whether they signed out in another tab or
+  // their session ran out: what the cache holds was fetched as them, and is
+  // dropped now that the pages showing it have gone, before anybody else
+  // signs in at this screen.
+  useEffect(() => {
+    if (!loading && !user) forgetSignedOutUser()
+  }, [loading, user])
 
   if (loading) {
     return (
@@ -62,24 +88,52 @@ export function App() {
   // Before the setup gate too — an install with no account has no invitations,
   // and a link that survived a wipe should say so rather than hand a stranger
   // first-run setup.
-  if (window.location.pathname.startsWith("/invite/")) {
+  if (pathname.startsWith("/invite/")) {
     return (
       <Routes>
-        <Route path="/invite/:token" element={<InvitePage onSignedIn={() => void refresh()} />} />
+        <Route path="/invite/:token" element={<InvitePage onSignedIn={refresh} />} />
       </Routes>
     )
   }
 
   // A reset link is followed by somebody who is not signed in, and it works
   // the same whether a session happens to be open in this browser or not.
-  if (window.location.pathname === "/reset-password") return <ResetPasswordPage />
+  if (pathname === "/reset-password") return <ResetPasswordPage />
 
-  if (needsSetup) return <SetupPage onComplete={() => void refresh()} />
+  if (settingUp || needsSetup) {
+    return (
+      <SetupPage
+        onAccountCreated={() => setSettingUp(true)}
+        onComplete={() => {
+          setSettingUp(false)
+          void refresh()
+        }}
+      />
+    )
+  }
+
+  // The panel could not say whether anybody is signed in. That is not the same
+  // as nobody being signed in: the sign-in form is a dead end on a panel that
+  // has no accounts yet, and a lie to somebody whose session is fine.
+  if (error) {
+    return (
+      <CenteredLayout>
+        <div className="w-full max-w-lg space-y-3">
+          <ErrorDisplay error={error} />
+          <Button variant="outline" disabled={retrying} onClick={() => void refresh()}>
+            {retrying ? <Spinner /> : <RefreshCwIcon />}
+            {t("common.retry")}
+          </Button>
+        </div>
+      </CenteredLayout>
+    )
+  }
+
   if (!user) return <LoginPage onSignedIn={() => void refresh()} />
 
   return (
     <>
-      <DocumentTitle />
+      <AccountPreferences />
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
@@ -100,14 +154,7 @@ export function App() {
               </Suspense>
             }
           />
-          <Route
-            path="plugins"
-            element={
-              <Suspense fallback={<Skeleton className="h-64" />}>
-                <PluginsPage />
-              </Suspense>
-            }
-          />
+          <Route path="plugins" element={<PluginsRoute />} />
           <Route path="activity" element={<ActivityPage />} />
           {/*
             The installer prints a link to /setup, and the gates above are what
@@ -127,10 +174,14 @@ export function App() {
   )
 }
 
-/** Settings are an administrator's page; anyone else is sent back to the overview. */
+/**
+ * Settings hold the panel-wide tabs, for the panel's administrator, and the
+ * team's own — members, invitations, connections — for the team's owners and
+ * admins. Anyone else is sent back to the overview.
+ */
 function SettingsRoute() {
-  const { user } = useSession()
-  if (!user?.is_admin) return <Navigate to="/" replace />
+  const { user, team } = useSession()
+  if (!canOpenSettings(user, team)) return <Navigate to="/" replace />
   return (
     <Suspense fallback={<Skeleton className="h-64" />}>
       <SettingsPage />
@@ -138,16 +189,46 @@ function SettingsRoute() {
   )
 }
 
-/** Keeps the browser tab's title in step with the page. */
-function DocumentTitle() {
-  const { t } = useTranslation()
-  const location = useLocation()
+/** Plugins are installed for the whole panel, so only its administrator sees them. */
+function PluginsRoute() {
+  const { user } = useSession()
+  if (!user?.is_admin) return <Navigate to="/" replace />
+  return (
+    <Suspense fallback={<Skeleton className="h-64" />}>
+      <PluginsPage />
+    </Suspense>
+  )
+}
 
+/**
+ * The account's language and theme, applied when somebody signs in, so both
+ * follow them to another machine.
+ *
+ * Only at signing in. A page loaded with a session already open keeps what
+ * was last picked in this browser: a choice whose save had not reached the
+ * panel before a reload was otherwise undone by the account's older one.
+ */
+function AccountPreferences() {
+  const { user, justSignedIn } = useSession()
+  const { theme, applyTheme } = useTheme()
+
+  const apply = useEffectEvent((user: User) => {
+    if (isLanguage(user.locale) && user.locale !== currentLanguage()) setLanguage(user.locale)
+    if (user.theme === "light" || user.theme === "dark") {
+      if (user.theme !== theme) applyTheme(user.theme)
+    } else if (theme !== "system") {
+      // "system" is what every account starts with, and until now nothing
+      // saved a choice to the account at all. One made in this browser is the
+      // better guess at what the person wants, so it is recorded instead.
+      saveThemeToAccount(theme)
+    }
+  })
+
+  // Signing in is an event in another system — the panel's — and this
+  // applies its answer to two more, i18next and the theme.
   useEffect(() => {
-    const segment = location.pathname.split("/")[1] || "overview"
-    const label = t(`nav.${segment}`, { defaultValue: "" })
-    document.title = label ? `${label} · Skifity` : "Skifity"
-  }, [location.pathname, t])
+    if (user && justSignedIn) apply(user)
+  }, [user, justSignedIn])
 
   return null
 }

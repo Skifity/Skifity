@@ -4739,12 +4739,21 @@ paths:
         - name: topics
           in: query
           required: true
-          description: Comma-separated topics, such as team:team_123,deployment:dep_456.
+          description: Comma-separated topics, such as team:team_123,deployment:dep_456. At most 64.
           schema: {type: string}
         - name: since
           in: query
           description: Resume after this event id, when Last-Event-ID is not sent.
           schema: {type: integer}
+        - name: multiplex
+          in: query
+          description: >-
+            One stream for many topics, as the panel's interface keeps one per
+            browser tab. Every event is an unnamed message whose data is
+            {"topic", "type", "data"}. A topic the caller may not see does not
+            fail the request: it is answered with a "refused" message carrying
+            the Problem, and the other topics carry on.
+          schema: {type: boolean}
         - name: Last-Event-ID
           in: header
           description: The last event id seen. A browser sends it by itself on reconnecting.

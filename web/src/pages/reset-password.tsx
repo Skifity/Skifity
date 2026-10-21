@@ -1,10 +1,12 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation } from "@tanstack/react-query"
 import { CheckCircle2Icon } from "lucide-react"
 
+import { CenteredLayout } from "@/components/centered-layout"
 import { ErrorDisplay } from "@/components/error-display"
 import { Logo } from "@/components/logo"
+import { PasswordStrength } from "@/components/password-strength"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +14,6 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { api } from "@/lib/api"
-import { CenteredLayout, PasswordStrength } from "@/pages/setup"
 
 /**
  * Choosing a new password through the link a reset sends.
@@ -26,6 +27,14 @@ export function ResetPasswordPage() {
   const [token] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "",
   )
+  // Read once above; taken out of the address bar here, as setup does with
+  // its token, so a screen share, a bookmark or the history does not keep a
+  // link that sets this account's password.
+  useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search)
+    }
+  }, [])
   const [password, setPassword] = useState("")
   const [again, setAgain] = useState("")
 

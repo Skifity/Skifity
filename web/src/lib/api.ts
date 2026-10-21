@@ -15,10 +15,10 @@ export type Problem = {
   impact?: string
   fix?: string
   /**
-   * The values the server interpolated into the three sentences above, in
-   * order, so a translated sentence can carry the same ones.
+   * The values the server interpolated into the title and the three sentences
+   * above, in order, so a translated sentence can carry the same ones.
    */
-  args?: { cause?: string[]; impact?: string[]; fix?: string[] }
+  args?: { title?: string[]; cause?: string[]; impact?: string[]; fix?: string[] }
   docs_path?: string
   severity: "error" | "warning" | "info"
   retryable: boolean
@@ -29,42 +29,58 @@ export type Problem = {
 /** ApiError carries a Problem and the HTTP status it arrived with. */
 export class ApiError extends Error {
   readonly problem: Problem
+  /** The HTTP status, or 0 for a request that never reached the panel. */
   readonly status: number
+  /** How long the panel asked to be left alone, from Retry-After, in ms. */
+  readonly retryAfterMs?: number
 
-  constructor(problem: Problem, status: number) {
+  constructor(problem: Problem, status: number, retryAfterMs?: number) {
     super(problem.title)
     this.name = "ApiError"
     this.problem = problem
     this.status = status
+    this.retryAfterMs = retryAfterMs
   }
 
   /** Renders the error as a Markdown block to paste into an AI assistant. */
-  toMarkdown(productVersion = "unknown"): string {
-    const parts = [
-      `## Skifity error: ${this.problem.title}`,
-      "",
-      `- **Error code**: \`${this.problem.code}\``,
-      `- **When**: ${this.problem.at}`,
-      `- **Panel version**: ${productVersion}`,
-    ]
-    if (this.problem.cause) parts.push("", "**What happened**", "", this.problem.cause)
-    if (this.problem.impact) parts.push("", "**What it means**", "", this.problem.impact)
-    if (this.problem.fix) parts.push("", "**Suggested fix**", "", this.problem.fix)
-    if (this.problem.context && Object.keys(this.problem.context).length > 0) {
-      parts.push("", "**Context**", "", "```")
-      for (const [key, value] of Object.entries(this.problem.context)) {
-        parts.push(`${key}: ${value}`)
-      }
-      parts.push("```")
-    }
-    parts.push(
-      "",
-      "**What I need**",
-      "",
-      "Explain what is wrong and give me the exact steps to fix it.",
-    )
-    return parts.join("\n")
+  toMarkdown(productVersion?: string): string {
+    return problemToMarkdown(this.problem, productVersion)
   }
+}
+
+/**
+ * A Problem as a Markdown block to paste into an AI assistant: the same block
+ * the server's errdoc renders, so what is copied from the panel and what the
+ * CLI prints read alike.
+ *
+ * It stays in English whatever language the panel is showing: it is what the
+ * server wrote, and what an assistant or an issue tracker reads.
+ */
+export function problemToMarkdown(problem: Problem, productVersion = "unknown"): string {
+  const parts = [
+    `## Skifity error: ${problem.title}`,
+    "",
+    `- **Error code**: \`${problem.code}\``,
+    `- **When**: ${problem.at}`,
+    `- **Panel version**: ${productVersion}`,
+  ]
+  if (problem.cause) parts.push("", "**What happened**", "", problem.cause)
+  if (problem.impact) parts.push("", "**What it means**", "", problem.impact)
+  if (problem.fix) parts.push("", "**Suggested fix**", "", problem.fix)
+  if (problem.context && Object.keys(problem.context).length > 0) {
+    parts.push("", "**Context**", "", "```")
+    for (const [key, value] of Object.entries(problem.context)) {
+      parts.push(`${key}: ${value}`)
+    }
+    parts.push("```")
+  }
+  parts.push(
+    "",
+    "**What I need**",
+    "",
+    "Explain what is wrong and give me the exact steps to fix it.",
+  )
+  return parts.join("\n")
 }
 
 /**
@@ -106,6 +122,15 @@ export function setReauthHandler(handler: () => Promise<boolean>) {
 /** The code the panel answers with when an action needs the password again. */
 const REAUTH_CODE = "auth.reauth_required"
 
+/**
+ * The code that means the session is gone.
+ *
+ * Not every 401 is that: a wrong current password, a wrong password in the
+ * re-authentication dialog and a wrong setup token answer 401 too, and taking
+ * them for a lost session signed the person out over a typo.
+ */
+const SIGNED_OUT_CODE = "auth.required"
+
 type RequestOptions = {
   method?: string
   body?: unknown
@@ -130,21 +155,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers["X-Skifity-CSRF"] = csrfToken()
   }
 
-  const response = await fetch(path, {
-    method,
-    headers,
-    credentials: "same-origin",
-    signal: options.signal,
-    body:
-      options.body === undefined
-        ? undefined
-        : raw
-          ? (options.body as Blob)
-          : JSON.stringify(options.body),
-  })
-
-  if (response.status === 401 && !options.allowAnonymous) {
-    onUnauthenticated?.()
+  let response: Response
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      credentials: "same-origin",
+      signal: options.signal,
+      body:
+        options.body === undefined
+          ? undefined
+          : raw
+            ? (options.body as Blob)
+            : JSON.stringify(options.body),
+    })
+  } catch (caught) {
+    // Somebody stopped waiting. Not a failure, and the caller is listening
+    // for exactly this.
+    if (caught instanceof DOMException && caught.name === "AbortError") throw caught
+    // The request never reached the panel: offline, refused, a name that
+    // does not resolve. That is the panel being out of reach, and it is said
+    // as such rather than as "something went wrong" in the browser's words.
+    throw new ApiError(unreachableProblem(path, caught), 0)
   }
 
   if (!response.ok) {
@@ -155,6 +187,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     } catch {
       problem = fallbackProblem(response)
     }
+    if (response.status === 401 && problem.code === SIGNED_OUT_CODE && !options.allowAnonymous) {
+      onUnauthenticated?.()
+    }
     // Turning two-factor off, reading the recovery codes and minting a token
     // each need the password again. The panel says so with a code rather than
     // by failing, so the dialog opens here and the request is repeated — the
@@ -164,13 +199,45 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         return request<T>(path, { ...options, steppedUp: true })
       }
     }
-    throw new ApiError(problem, response.status)
+    throw new ApiError(problem, response.status, retryAfter(response, problem))
   }
 
   if (response.status === 204) return undefined as T
   const text = await response.text()
   if (!text) return undefined as T
   return JSON.parse(text) as T
+}
+
+/**
+ * How long a 429 asked to wait, in milliseconds. The header is the standard
+ * answer and the Problem's context carries the same number. A duration such as
+ * "15m0s" — the sign-in lockout's — is not a count of seconds, and is left to
+ * the ordinary backoff.
+ */
+function retryAfter(response: Response, problem: Problem): number | undefined {
+  if (response.status !== 429) return undefined
+  for (const raw of [response.headers.get("Retry-After"), problem.context?.retry_after]) {
+    const seconds = raw?.trim()
+    if (seconds && /^\d+$/.test(seconds)) return Number(seconds) * 1000
+  }
+  return undefined
+}
+
+/** A request the browser could not deliver at all. */
+function unreachableProblem(path: string, caught: unknown): Problem {
+  const reason = caught instanceof Error && caught.message ? caught.message : "no reason given"
+  return {
+    code: "network.unreachable",
+    title: "The panel could not be reached",
+    cause: `The browser could not send the request to ${path}: ${reason}.`,
+    impact: "The action did not reach the panel, and the page may be showing stale information.",
+    fix: "Check your connection. If the panel is restarting, this clears up on its own: try again in a moment.",
+    // So the sentence can be said in the reader's language, like a server's.
+    args: { cause: [path, reason] },
+    severity: "error",
+    retryable: true,
+    at: new Date().toISOString(),
+  }
 }
 
 function fallbackProblem(response: Response): Problem {
@@ -205,33 +272,3 @@ export const api = {
 
 /** A list response, which every list endpoint returns. */
 export type List<T> = { items: T[]; total: number }
-
-/**
- * Subscribes to the panel's event stream.
- *
- * Returns a function that closes the stream. The browser reconnects on its own
- * and resends the last event id, so a dropped connection resumes rather than
- * losing the middle of a build log.
- */
-export function subscribe(
-  topics: string[],
-  handlers: Record<string, (data: unknown) => void>,
-  onError?: () => void,
-): () => void {
-  if (topics.length === 0) return () => {}
-
-  const source = new EventSource(`/api/events?topics=${encodeURIComponent(topics.join(","))}`)
-
-  for (const [event, handler] of Object.entries(handlers)) {
-    source.addEventListener(event, (message) => {
-      try {
-        handler(JSON.parse((message as MessageEvent).data))
-      } catch {
-        // A frame we cannot parse is not worth tearing the stream down for.
-      }
-    })
-  }
-  if (onError) source.addEventListener("error", onError)
-
-  return () => source.close()
-}

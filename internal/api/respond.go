@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"skifity/internal/errdoc"
 	"skifity/internal/store"
@@ -47,7 +48,15 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	body, marshalErr := problem.JSON()
 	if marshalErr != nil {
-		http.Error(w, `{"error":{"code":"internal","title":"Something went wrong"}}`, http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "encode problem", "code", problem.Code, "error", marshalErr)
+		// Still every field a Problem always has: a client that reads the
+		// severity, offers a retry or says when it happened must not trip
+		// over the one answer written by hand.
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, `{"error":{"code":"internal","title":"Something went wrong","severity":"error","retryable":false,"at":%q}}`,
+			time.Now().UTC().Format(time.RFC3339Nano))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

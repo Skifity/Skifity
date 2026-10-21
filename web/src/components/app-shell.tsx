@@ -1,4 +1,4 @@
-import { Fragment } from "react"
+import { Fragment, useEffect, useRef } from "react"
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
@@ -6,6 +6,7 @@ import {
   ActivityIcon,
   BookOpenIcon,
   BoxesIcon,
+  ChevronLeftIcon,
   ChevronsUpDownIcon,
   DatabaseIcon,
   ExternalLinkIcon,
@@ -19,6 +20,7 @@ import {
   ServerIcon,
   SettingsIcon,
   ShieldAlertIcon,
+  TriangleAlertIcon,
   UserIcon,
   XIcon,
 } from "lucide-react"
@@ -67,9 +69,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { usePaletteShortcut } from "@/hooks/use-palette"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
-import type { Project, Server } from "@/lib/types"
+import { canOpenSettings, managesTeam, seesWholeTeam } from "@/lib/permissions"
+import type { App, Database, DatabaseLink, Environment, Project, Server } from "@/lib/types"
 
 /**
  * The panel's frame.
@@ -82,6 +86,25 @@ export function AppShell() {
   const { t } = useTranslation()
   const { paletteOpen, setPaletteOpen } = usePaletteShortcut()
   const location = useLocation()
+  const crumbs = useCrumbs()
+  const title = crumbs.at(-1)?.label ?? t("nav.overview")
+
+  useEffect(() => {
+    document.title = `${title} · Skifity`
+  }, [title])
+
+  // A link inside the page goes when the page does, and focus goes with it
+  // to the top of the document, where the next Tab starts the sidebar over
+  // again. It is put on the new page instead. Focus that is still somewhere,
+  // on the sidebar link that was followed, is left where it is.
+  const shownPath = useRef(location.pathname)
+  useEffect(() => {
+    if (shownPath.current === location.pathname) return
+    shownPath.current = location.pathname
+    if (!document.activeElement || document.activeElement === document.body) {
+      document.getElementById("content")?.focus({ preventScroll: true })
+    }
+  }, [location.pathname])
 
   return (
     <SidebarProvider>
@@ -97,16 +120,24 @@ export function AppShell() {
       >
         {t("common.skipToContent")}
       </a>
+      {/* Says which page opened, for a screen reader: a new page is otherwise
+          silent, since the document itself never reloads. */}
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {title}
+      </p>
       <AppSidebar />
       {/*
         min-w-0 is load-bearing. A flex item's automatic minimum size is its
         min-content width, so without this the inset refuses to be narrower
         than the widest thing in the header — and the whole page scrolls
         sideways by exactly that difference. It was 7px on a 768px tablet.
+
+        The inset is the page's one <main>; the content is a region inside
+        it, which is what the skip link goes to.
       */}
       <SidebarInset className="min-w-0">
-        <Header onOpenPalette={() => setPaletteOpen(true)} />
-        <main id="content" tabIndex={-1} className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+        <Header onOpenPalette={() => setPaletteOpen(true)} crumbs={crumbs} />
+        <div id="content" tabIndex={-1} className="min-w-0 flex-1 p-4 outline-none sm:p-6 lg:p-8">
           {/*
             Inside the shell rather than around it, so a page that throws
             leaves the sidebar, the header and the command palette working and
@@ -119,7 +150,7 @@ export function AppShell() {
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
           </ErrorBoundary>
-        </main>
+        </div>
       </SidebarInset>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </SidebarProvider>
@@ -204,13 +235,30 @@ function InstallNotes() {
   )
 }
 
+/**
+ * Whether a page shows one thing that belongs to the team it was opened in: a
+ * project, an app, a database, a server, an environment's new-app form. After
+ * switching teams such a page would go on showing the old team's thing under
+ * the new team's name.
+ */
+function showsOneOfTheTeams(pathname: string): boolean {
+  const [first, second] = pathname.split("/").filter(Boolean)
+  return (
+    ["projects", "apps", "databases", "servers", "environments"].includes(first ?? "") &&
+    second !== undefined &&
+    second !== "new"
+  )
+}
+
 function AppSidebar() {
   const { t } = useTranslation()
   const { team, teams, setTeam, user } = useSession()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   // A member limited to some projects is not shown what belongs to the
   // whole team: the server refuses it, and a link to a refusal is a trap.
-  const teamWide = !team?.scoped
+  const teamWide = seesWholeTeam(team)
 
   // Counts next to the navigation, so the sidebar says something about the
   // state of the system rather than being a list of nouns.
@@ -219,11 +267,7 @@ function AppSidebar() {
     queryFn: () => api.get<List<Server>>(`/api/teams/${team!.id}/servers`),
     enabled: Boolean(team) && teamWide,
   })
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  const projects = useProjects()
 
   const unhealthy = (servers.data?.items ?? []).filter(
     (server) => server.status === "failed" || server.status === "not_ready",
@@ -248,7 +292,10 @@ function AppSidebar() {
     // Plugins run beside the panel for everybody, so only its administrator
     // installs or changes them.
     ...(user?.is_admin ? [{ to: "/plugins", label: t("nav.plugins"), icon: PuzzleIcon }] : []),
-    { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },
+    // The audit log is the team's owners' and admins' to read.
+    ...(managesTeam(team)
+      ? [{ to: "/activity", label: t("nav.activity"), icon: ActivityIcon }]
+      : []),
   ]
 
   return (
@@ -283,7 +330,15 @@ function AppSidebar() {
                 <DropdownMenuContent align="start" className="w-56">
                   <DropdownMenuLabel>{t("settings.team")}</DropdownMenuLabel>
                   {teams.map((candidate) => (
-                    <DropdownMenuItem key={candidate.id} onSelect={() => setTeam(candidate)}>
+                    <DropdownMenuItem
+                      key={candidate.id}
+                      onSelect={() => {
+                        setTeam(candidate)
+                        if (candidate.id !== team?.id && showsOneOfTheTeams(location.pathname)) {
+                          navigate("/")
+                        }
+                      }}
+                    >
                       <span className="truncate">{candidate.name}</span>
                     </DropdownMenuItem>
                   ))}
@@ -297,36 +352,48 @@ function AppSidebar() {
       <SidebarContent>
         {/* No group label: there is one group, and it used to be headed
             "Overview" above an item called "Overview". */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {links.map((link) => (
-                <SidebarMenuItem key={link.to}>
-                  <SidebarMenuButton asChild tooltip={link.label}>
-                    <NavLink to={link.to} end={link.end}>
-                      {({ isActive }) => (
-                        <>
-                          <link.icon data-active={isActive} />
-                          <span>{link.label}</span>
-                        </>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                  {link.alert ? (
-                    <SidebarMenuBadge className="text-destructive">{unhealthy}</SidebarMenuBadge>
-                  ) : link.count ? (
-                    <SidebarMenuBadge>{link.count}</SidebarMenuBadge>
-                  ) : null}
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <nav aria-label={t("common.navigation")}>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {links.map((link) => (
+                  <SidebarMenuItem key={link.to}>
+                    <SidebarMenuButton asChild tooltip={link.label}>
+                      <NavLink to={link.to} end={link.end}>
+                        {({ isActive }) => (
+                          <>
+                            <link.icon data-active={isActive} />
+                            <span>{link.label}</span>
+                          </>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                    {link.alert ? (
+                      // Not by colour alone: an icon, and words for a screen
+                      // reader, where the total count would otherwise be.
+                      <SidebarMenuBadge className="gap-0.5 text-destructive">
+                        <TriangleAlertIcon className="size-3" aria-hidden />
+                        <span aria-hidden>{unhealthy}</span>
+                        <span className="sr-only">
+                          {t("servers.needAttention", { count: unhealthy })}
+                        </span>
+                      </SidebarMenuBadge>
+                    ) : link.count ? (
+                      <SidebarMenuBadge>{link.count}</SidebarMenuBadge>
+                    ) : null}
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </nav>
       </SidebarContent>
 
       <SidebarFooter>
         <SidebarMenu>
-          {user?.is_admin && (
+          {/* The panel's administrator for the panel-wide tabs, a team's
+              owners and admins for the team's own. */}
+          {canOpenSettings(user, team) && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip={t("nav.settings")}>
                 <NavLink to="/settings">
@@ -355,7 +422,14 @@ function AppSidebar() {
   )
 }
 
-function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
+/** Whether the keyboard says ⌘ or Ctrl: the shortcut takes either, and shows the one there is. */
+const APPLE_KEYBOARD = /mac|iphone|ipad|ipod/i.test(
+  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    "",
+)
+
+function Header({ onOpenPalette, crumbs }: { onOpenPalette: () => void; crumbs: Crumb[] }) {
   const { t } = useTranslation()
 
   return (
@@ -363,7 +437,7 @@ function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-1 h-4" />
 
-      <Crumbs />
+      <Crumbs crumbs={crumbs} />
 
       {/*
         The label appears at lg rather than sm because what decides whether it
@@ -380,7 +454,7 @@ function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
         <SearchIcon className="size-4" />
         <span className="hidden lg:inline">{t("nav.commandPalette")}</span>
         <KbdGroup className="hidden lg:flex">
-          <Kbd>⌘</Kbd>
+          <Kbd>{APPLE_KEYBOARD ? "⌘" : "Ctrl"}</Kbd>
           <Kbd>K</Kbd>
         </KbdGroup>
       </Button>
@@ -392,36 +466,110 @@ function Header({ onOpenPalette }: { onOpenPalette: () => void }) {
   )
 }
 
+/** One step of the trail: a page, and where it is when it is one to go to. */
+type Crumb = { label: string; to?: string }
+
+/** The pages that are one segment long and are named in nav.*. */
+const TOP_PAGES = new Set(["templates", "plugins", "activity", "settings", "account"])
+
 /**
- * Where you are, from the URL.
+ * Where you are, from the URL, with things called by their names.
  *
- * Only the segments that name something are shown: an id in the middle of a
- * path is noise, and the page itself already says what it is looking at.
- *
- * A crumb is a link only when the path it would point at is a page. Dropping
- * the ids means the trail has to be rebuilt from what is left, and that used to
- * produce addresses nothing serves: on the new-app page —
- * /environments/env_x/apps/new — "Environments" linked to /environments and
- * "Apps" to /environments/apps, both of which are the not-found page.
+ * An id in a path is not something anybody reads, so a project, an app, a
+ * database or a server is shown by its name, read from the query its own
+ * page makes — the same key, so it is one request between them — and by
+ * what it is ("App") until the name has arrived. Every crumb that links goes
+ * to a page that exists: the trail used to be rebuilt from what was left once
+ * the ids were dropped, and pointed at /environments, which nothing serves.
  */
-const PAGES = new Set([
-  "/projects",
-  "/databases",
-  "/servers",
-  "/templates",
-  "/plugins",
-  "/activity",
-  "/settings",
-  "/account",
-])
-function Crumbs() {
+function useCrumbs(): Crumb[] {
   const { t } = useTranslation()
-  const location = useLocation()
+  const { pathname } = useLocation()
+  const [first = "", second, third, fourth] = pathname.split("/").filter(Boolean)
 
-  const segments = location.pathname.split("/").filter(Boolean)
-  const named = segments.filter((segment) => !segment.includes("_"))
+  const appId = first === "apps" ? second : undefined
+  const app = useQuery({
+    queryKey: ["app", appId],
+    queryFn: () => api.get<App>(`/api/apps/${appId}`),
+    enabled: Boolean(appId),
+  }).data
 
-  if (named.length === 0) {
+  const environmentId = first === "environments" ? second : app?.environment_id
+  const environment = useQuery({
+    queryKey: ["environment", environmentId],
+    queryFn: () => api.get<Environment>(`/api/environments/${environmentId}`),
+    enabled: Boolean(environmentId),
+  }).data
+
+  const projectId = first === "projects" ? second : environment?.project_id
+  const project = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => api.get<Project>(`/api/projects/${projectId}`),
+    enabled: Boolean(projectId),
+  }).data
+
+  const databaseId = first === "databases" ? second : undefined
+  const database = useQuery({
+    queryKey: ["database", databaseId],
+    queryFn: () =>
+      api.get<{ database: Database; links: DatabaseLink[] }>(`/api/databases/${databaseId}`),
+    enabled: Boolean(databaseId),
+  }).data?.database
+
+  const serverId = first === "servers" && second !== "new" ? second : undefined
+  const server = useQuery({
+    queryKey: ["server", serverId],
+    queryFn: () => api.get<Server>(`/api/servers/${serverId}`),
+    enabled: Boolean(serverId),
+  }).data
+
+  const projects: Crumb = { label: t("nav.projects"), to: "/projects" }
+  const projectCrumb: Crumb = {
+    label: project?.name ?? t("nav.project"),
+    to: projectId ? `/projects/${projectId}` : undefined,
+  }
+
+  switch (first) {
+    case "":
+      return []
+    case "projects":
+      return second ? [projects, { label: projectCrumb.label }] : [{ label: t("nav.projects") }]
+    case "environments":
+      if (third === "apps" && fourth === "new") {
+        return [
+          projects,
+          projectCrumb,
+          { label: environment?.name ?? t("nav.environment") },
+          { label: t("apps.newApp") },
+        ]
+      }
+      break
+    case "apps":
+      if (second) return [projects, projectCrumb, { label: app?.name ?? t("nav.app") }]
+      break
+    case "databases":
+      return second
+        ? [
+            { label: t("nav.databases"), to: "/databases" },
+            { label: database?.name ?? t("nav.database") },
+          ]
+        : [{ label: t("nav.databases") }]
+    case "servers":
+      if (!second) return [{ label: t("nav.servers") }]
+      return [
+        { label: t("nav.servers"), to: "/servers" },
+        { label: second === "new" ? t("servers.addServer") : (server?.name ?? t("nav.server")) },
+      ]
+    default:
+      if (TOP_PAGES.has(first) && !second) return [{ label: t(`nav.${first}`) }]
+  }
+  return [{ label: t("errors.pageNotFound") }]
+}
+
+function Crumbs({ crumbs }: { crumbs: Crumb[] }) {
+  const { t } = useTranslation()
+
+  if (crumbs.length === 0) {
     return (
       <Breadcrumb>
         <BreadcrumbList>
@@ -433,27 +581,43 @@ function Crumbs() {
     )
   }
 
+  // On a phone there is room for the page and a way back, not for the trail:
+  // every crumb with the separators hidden read "Servers New".
+  const parent = crumbs
+    .slice(0, -1)
+    .reverse()
+    .find((crumb) => crumb.to)
+
   return (
     <Breadcrumb className="min-w-0">
-      <BreadcrumbList>
-        <BreadcrumbItem className="hidden sm:block">
+      <BreadcrumbList className="flex-nowrap">
+        {parent?.to && (
+          <BreadcrumbItem className="sm:hidden">
+            <BreadcrumbLink asChild>
+              <Link to={parent.to} aria-label={parent.label} title={parent.label}>
+                <ChevronLeftIcon className="size-4" />
+              </Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+        )}
+        <BreadcrumbItem className="hidden sm:inline-flex">
           <BreadcrumbLink asChild>
             <Link to="/">{t("nav.overview")}</Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
-        {named.map((segment, index) => {
-          const last = index === named.length - 1
-          const label = t(`nav.${segment}`, { defaultValue: humanise(segment) })
-          const path = "/" + named.slice(0, index + 1).join("/")
+        {crumbs.map((crumb, index) => {
+          const last = index === crumbs.length - 1
           return (
-            <Fragment key={segment + index}>
+            <Fragment key={index}>
               <BreadcrumbSeparator className="hidden sm:block" />
-              <BreadcrumbItem className="min-w-0">
-                {last || !PAGES.has(path) ? (
-                  <BreadcrumbPage className="truncate">{label}</BreadcrumbPage>
+              <BreadcrumbItem className={last ? "min-w-0" : "hidden min-w-0 sm:inline-flex"}>
+                {last || !crumb.to ? (
+                  <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
-                    <Link to={path}>{label}</Link>
+                    <Link to={crumb.to} className="truncate">
+                      {crumb.label}
+                    </Link>
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>
@@ -465,16 +629,13 @@ function Crumbs() {
   )
 }
 
-function humanise(segment: string): string {
-  return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
-}
-
 function AccountMenu() {
   const { t } = useTranslation()
   const { user, signOut } = useSession()
   const navigate = useNavigate()
 
   const initial = (user?.name || user?.email || "?").charAt(0).toUpperCase()
+  const reminder = Boolean(user?.is_admin && !user.recovery_saved)
 
   return (
     <DropdownMenu>
@@ -482,7 +643,8 @@ function AccountMenu() {
         <Button
           variant="ghost"
           size="icon"
-          aria-label={t("nav.account")}
+          // The dot is a colour; the name says what it means.
+          aria-label={reminder ? t("nav.accountNeedsAttention") : t("nav.account")}
           data-slot="account-menu"
           className="relative"
         >
@@ -491,8 +653,11 @@ function AccountMenu() {
               {initial}
             </AvatarFallback>
           </Avatar>
-          {user?.is_admin && !user.recovery_saved && (
-            <span className="absolute top-1 right-1 size-2 rounded-full bg-warning ring-2 ring-background" />
+          {reminder && (
+            <span
+              aria-hidden
+              className="absolute top-1 right-1 size-2 rounded-full bg-warning ring-2 ring-background"
+            />
           )}
         </Button>
       </DropdownMenuTrigger>
@@ -517,11 +682,11 @@ function AccountMenu() {
           <UserIcon />
           {t("nav.account")}
         </DropdownMenuItem>
-        {user?.is_admin && !user.recovery_saved && (
+        {reminder && (
           <DropdownMenuItem onSelect={() => navigate("/account?recovery=1")}>
             <ShieldAlertIcon className="text-warning" />
             <span className="text-warning">{t("auth.recoveryKeyReminder")}</span>
-            <Badge variant="outline" className="ml-auto border-warning/40 text-warning">
+            <Badge variant="outline" className="ml-auto border-warning/40 text-warning" aria-hidden>
               !
             </Badge>
           </DropdownMenuItem>

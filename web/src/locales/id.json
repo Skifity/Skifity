@@ -92,7 +92,14 @@
     "themeSystem": "Ikuti sistem",
     "language": "Bahasa",
     "documentation": "Dokumentasi",
-    "plugins": "Plugin"
+    "plugins": "Plugin",
+    "project": "Proyek",
+    "app": "Aplikasi",
+    "environment": "Environment",
+    "database": "Database",
+    "server": "Server",
+    "accountNeedsAttention": "Akun: kunci pemulihan Anda belum disimpan",
+    "commandPaletteHelp": "Cari aplikasi, proyek, atau server, atau buka sebuah halaman."
   },
   "auth": {
     "signIn": "Masuk",
@@ -242,7 +249,13 @@
         "wrongAddress": "Peramban hanya memakai kunci sandi di alamat panel itu sendiri. Buka panel di Panel URL-nya lalu coba lagi.",
         "failed": "Peramban tidak dapat memakai kunci sandi. Coba lagi, atau gunakan peramban atau perangkat lain."
       }
-    }
+    },
+    "passwordMinLength": "Minimal {{min}} karakter",
+    "passwordLength_other": "{{count}} karakter",
+    "recoveryKeyFileTitle": "Kunci pemulihan {{product}}",
+    "recoveryKeyFileBody": "Siapa pun yang memegang kunci ini bisa mendekripsi semua rahasia yang disimpan panel ini. Simpan di tempat aman dan offline. Tanpa kunci ini, cadangan yang dipulihkan tidak bisa dibaca.",
+    "recoveryKeyMissingTitle": "Akun Anda sudah siap, tetapi kunci pemulihan tidak bisa ditampilkan",
+    "recoveryKeyMissing": "Panel tidak bisa membaca kunci pemulihannya saat ini. Setelah masuk, buka Akun untuk menampilkan dan menyimpannya; panel akan terus mengingatkan sampai Anda melakukannya."
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -436,7 +449,9 @@
       "cloud_provider.removed": "Penyedia cloud dihapus",
       "server.create_started": "Membuat server di penyedia cloud",
       "server.delete_started": "Menghapus server beserta mesinnya"
-    }
+    },
+    "notAllowedTitle": "Log aktivitas hanya untuk pemilik dan admin tim",
+    "notAllowed": "Tanyakan kepada pemilik atau admin {{team}} jika Anda perlu tahu apa yang berubah."
   },
   "projects": {
     "title": "Proyek",
@@ -2459,9 +2474,9 @@
       },
       "internal": {
         "title": "Ada yang tidak beres",
-        "cause": "Panel mengalami error tak terduga saat mengerjakan server ini.",
-        "impact": "Operasinya berhenti di tempatnya. Servernya mungkin terkonfigurasi setengah jalan; langkah-langkah di atas menunjukkan sampai mana.",
-        "fix": "Jalankan lagi — setiap langkah aman diulang. Kalau gagal dengan cara yang sama, salin error ini dan buka issue: itu bug di Skifity."
+        "cause": "{{0}}",
+        "impact": "Tindakan yang Anda minta tidak selesai.",
+        "fix": "Coba lagi. Jika terus terjadi, salin error ini dan buka issue."
       },
       "invite_account_exists": {
         "title": "Alamat itu sudah punya akun",
@@ -4142,6 +4157,30 @@
         "cause": "{{0}} berada di {{1}}, di jaringan privat atau di salah satu server, dan build dijauhkan dari keduanya.",
         "impact": "Tidak ada yang di-build atau di-deploy. Versi yang sedang berjalan tetap berjalan.",
         "fix": "Administrator bisa mengizinkan build menjangkaunya: tambahkan {{0}} di Pengaturan → Git, pada Host Git di jaringan Anda sendiri, lalu deploy lagi."
+      },
+      "internal_request_panicked": {
+        "title": "Ada yang tidak beres",
+        "cause": "Panel mengalami error tak terduga saat menangani permintaan ini.",
+        "impact": "Tindakan itu mungkin tidak selesai.",
+        "fix": "Coba lagi. Jika terus terjadi, salin error ini dan buka issue."
+      },
+      "internal_deployment_panicked": {
+        "title": "Ada yang tidak beres",
+        "cause": "Panel mengalami error tak terduga saat melakukan deploy.",
+        "impact": "Deployment berhenti di tempatnya. Apa pun yang sudah diterapkan tetap diterapkan.",
+        "fix": "Deploy lagi. Jika terjadi setiap kali, salin error ini dan buka issue: itu bug di Skifity, bukan di aplikasi Anda."
+      },
+      "internal_operation_panicked": {
+        "title": "Ada yang tidak beres",
+        "cause": "Panel mengalami error tak terduga saat mengerjakan server ini.",
+        "impact": "Operasinya berhenti di tempatnya. Servernya mungkin terkonfigurasi setengah jalan; langkah-langkah di atas menunjukkan sampai mana.",
+        "fix": "Jalankan lagi — setiap langkah aman diulang. Kalau gagal dengan cara yang sama, salin error ini dan buka issue: itu bug di Skifity."
+      },
+      "network_unreachable": {
+        "title": "Panel tidak bisa dihubungi",
+        "cause": "Browser tidak bisa mengirim permintaan ke {{0}}.",
+        "impact": "Tindakan itu tidak sampai ke panel, dan halaman ini mungkin menampilkan informasi yang sudah usang.",
+        "fix": "Periksa koneksi Anda. Jika panel sedang dimulai ulang, ini akan beres dengan sendirinya: coba lagi sebentar lagi."
       },
       "server_busy": {
         "title": "Server ini sedang dikerjakan",

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { useSession } from "@/hooks/use-session"
+import { useProjects } from "@/hooks/use-projects"
 import { api, type List } from "@/lib/api"
-import type { Environment, Project } from "@/lib/types"
+import type { Environment } from "@/lib/types"
 
 /**
  * Where a "New app" button should land.
@@ -17,15 +17,9 @@ import type { Environment, Project } from "@/lib/types"
  * projects, so a caller can simply not render the button.
  */
 export function useFirstEnvironment(enabled = true): string {
-  const { team } = useSession()
-
   // The same query keys the pages use, so this shares their cache rather than
   // asking again.
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: enabled && Boolean(team),
-  })
+  const projects = useProjects(enabled)
   const first = projects.data?.items[0]
 
   const environments = useQuery({

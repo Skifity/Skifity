@@ -963,10 +963,7 @@ func (d *Deployer) start(deploymentID string, work func(context.Context)) {
 // panicked, so what the user sees is a deployment that failed rather than one
 // that is still going and never will be.
 func (d *Deployer) failPanicked(ctx context.Context, deploymentID string, err error) {
-	problem := errdoc.New("internal", "Something went wrong").
-		WithCause("The panel hit an unexpected error while deploying.").
-		WithImpact("The deployment stopped where it was. Whatever had already been applied is still applied.").
-		WithFix("Deploy again. If it happens every time, copy this error and open an issue: it is a bug in Skifity, not in your app.")
+	problem := errdoc.DeploymentPanicked()
 
 	_ = d.db.UpdateDeploymentStatus(ctx, deploymentID, store.DeployFailed,
 		problem.Code, err.Error(), problem.Fix)

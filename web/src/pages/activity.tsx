@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
-import { ActivityIcon } from "lucide-react"
+import { ActivityIcon, LockIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
@@ -11,6 +11,7 @@ import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatDateTime, formatRelative } from "@/lib/format"
+import { managesTeam } from "@/lib/permissions"
 import { queryClient } from "@/lib/query"
 import type { AuditEvent } from "@/lib/types"
 
@@ -24,15 +25,19 @@ import type { AuditEvent } from "@/lib/types"
 export function ActivityPage() {
   const { t } = useTranslation()
   const { team } = useSession()
+  // The audit log is read by the team's owners and admins, not by members
+  // limited to some projects: the panel refuses everybody else, and asking
+  // anyway turned a page reached from an old link into an error.
+  const allowed = managesTeam(team)
 
   const events = useQuery({
     queryKey: ["audit", team?.id],
     queryFn: () => api.get<List<AuditEvent>>(`/api/teams/${team!.id}/audit`),
-    enabled: Boolean(team),
+    enabled: Boolean(team) && allowed,
   })
 
   useEvents(
-    team ? [`team:${team.id}`] : [],
+    team && allowed ? [`team:${team.id}`] : [],
     // Every audited action publishes "audit", and this page is the audit
     // timeline — and it was listening to operations and deployments instead,
     // as a proxy. Creating a project, renaming an app, issuing a token: all
@@ -43,10 +48,23 @@ export function ActivityPage() {
       operation: () => void queryClient.invalidateQueries({ queryKey: ["audit", team?.id] }),
       deployment: () => void queryClient.invalidateQueries({ queryKey: ["audit", team?.id] }),
     },
-    Boolean(team),
+    Boolean(team) && allowed,
   )
 
   const items = events.data?.items ?? []
+
+  if (team && !allowed) {
+    return (
+      <Page width="narrow">
+        <PageHeader title={t("nav.activity")} />
+        <EmptyState
+          icon={LockIcon}
+          title={t("activity.notAllowedTitle")}
+          description={t("activity.notAllowed", { team: team.name })}
+        />
+      </Page>
+    )
+  }
 
   return (
     <Page width="narrow">

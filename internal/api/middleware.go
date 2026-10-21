@@ -124,11 +124,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 					"method", r.Method,
 					"request_id", requestIDFrom(r.Context()),
 					"stack", string(debug.Stack()))
-				writeError(w, r, errdoc.New("internal", "Something went wrong").
-					WithCause("The panel hit an unexpected error while handling this request.").
-					WithImpact("The action may not have completed.").
-					WithFix("Try again. If it keeps happening, copy this error and open an issue.").
-					With("request_id", requestIDFrom(r.Context())))
+				writeError(w, r, errdoc.RequestPanicked(requestIDFrom(r.Context())))
 			}
 		}()
 		next.ServeHTTP(w, r)

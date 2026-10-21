@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ArrowLeftIcon, FingerprintIcon, KeyRoundIcon } from "lucide-react"
 
+import { CenteredLayout } from "@/components/centered-layout"
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Logo } from "@/components/logo"
@@ -24,7 +25,6 @@ import {
   type PasskeyRequestOptions,
 } from "@/lib/passkeys"
 import type { Meta } from "@/lib/types"
-import { CenteredLayout } from "@/pages/setup"
 
 /**
  * Signing in with a passkey, start to finish: a challenge from the panel, the
@@ -75,6 +75,21 @@ function ResetLinkRequest({ email }: { email: string }) {
       {request.error != null && <ErrorDisplay error={request.error} compact />}
     </div>
   )
+}
+
+/**
+ * Where single sign-on should bring somebody back to: the page they asked for,
+ * as password and passkey sign-in already do, without the failed sign-on's
+ * own reason riding along. The panel checks it is a path on itself.
+ */
+function ssoStartLink(): string {
+  const search = new URLSearchParams(window.location.search)
+  search.delete("sso_error")
+  const query = search.toString()
+  const next = window.location.pathname + (query ? `?${query}` : "")
+  return next === "/"
+    ? "/api/auth/sso/start"
+    : `/api/auth/sso/start?next=${encodeURIComponent(next)}`
 }
 
 /**
@@ -340,7 +355,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                     */}
                     {meta.data?.sso.enabled && (
                       <Button variant="outline" className="w-full" asChild>
-                        <a href="/api/auth/sso/start">
+                        <a href={ssoStartLink()}>
                           <KeyRoundIcon />
                           {meta.data.sso.label ?? t("auth.signInWithSSO")}
                         </a>

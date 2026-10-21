@@ -110,11 +110,34 @@ export function formatDuration(start?: string, end?: string): string {
   if (Number.isNaN(from) || Number.isNaN(to)) return "—"
 
   const seconds = Math.max(0, Math.round((to - from) / 1000))
-  if (seconds < 60) return `${seconds}s`
+  if (seconds < 60) return unit(seconds, "second")
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  if (minutes < 60) return `${unit(minutes, "minute")} ${unit(seconds % 60, "second")}`
   const hours = Math.floor(minutes / 60)
-  return `${hours}h ${minutes % 60}m`
+  return `${unit(hours, "hour")} ${unit(minutes % 60, "minute")}`
+}
+
+/**
+ * One part of a duration, in the user's language: "5s" in English, "5 с" in
+ * Russian, "5秒" in Chinese. Intl has the short unit names, so they need no
+ * translations of their own — the hand-written "5s" was English in all five.
+ */
+function unit(value: number, name: "second" | "minute" | "hour"): string {
+  return new Intl.NumberFormat(currentLanguage(), {
+    style: "unit",
+    unit: name,
+    unitDisplay: "narrow",
+  }).format(value)
+}
+
+/** Formats a time of day, such as 14:05, in the user's language. */
+export function formatTime(value: string | Date | number | undefined): string {
+  if (value === undefined || value === "") return "—"
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  return new Intl.DateTimeFormat(currentLanguage(), { hour: "2-digit", minute: "2-digit" }).format(
+    date,
+  )
 }
 
 /** Shortens a commit hash for display. */

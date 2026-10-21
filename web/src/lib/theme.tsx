@@ -25,7 +25,10 @@ type ThemeContextValue = {
   theme: Theme
   /** The theme actually in effect, with "system" resolved. */
   resolved: "light" | "dark"
+  /** The person picked a theme: remembered here, and handed to onChange. */
   setTheme: (theme: Theme) => void
+  /** A theme that comes from their account: remembered here, not saved back. */
+  applyTheme: (theme: Theme) => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
@@ -82,20 +85,29 @@ export function ThemeProvider({
     document.documentElement.style.colorScheme = resolved
   }, [resolved])
 
+  const applyTheme = useCallback((next: Theme) => {
+    setThemeState(next)
+    // Stored here as well, so the script in index.html paints this one before
+    // the first frame next time rather than flashing the old one.
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      // Not being able to remember the choice is not a reason to refuse it.
+    }
+  }, [])
+
   const setTheme = useCallback(
     (next: Theme) => {
-      setThemeState(next)
-      try {
-        localStorage.setItem(STORAGE_KEY, next)
-      } catch {
-        // Not being able to remember the choice is not a reason to refuse it.
-      }
+      applyTheme(next)
       onChange?.(next)
     },
-    [onChange],
+    [applyTheme, onChange],
   )
 
-  const value = useMemo(() => ({ theme, resolved, setTheme }), [theme, resolved, setTheme])
+  const value = useMemo(
+    () => ({ theme, resolved, setTheme, applyTheme }),
+    [theme, resolved, setTheme, applyTheme],
+  )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
 
@@ -104,7 +116,7 @@ export function useTheme(): ThemeContextValue {
   if (!context) {
     // The toaster renders outside the provider in tests; a sensible default is
     // better than throwing.
-    return { theme: "system", resolved: "light", setTheme: () => {} }
+    return { theme: "system", resolved: "light", setTheme: () => {}, applyTheme: () => {} }
   }
   return context
 }

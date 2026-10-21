@@ -583,7 +583,7 @@ func TestAPanickingDeploymentFailsInsteadOfEndingThePanel(t *testing.T) {
 			t.Fatalf("GetDeployment: %v", err)
 		}
 		if current.Status == store.DeployFailed {
-			if current.ErrorCode != "internal" {
+			if current.ErrorCode != "internal.deployment_panicked" {
 				t.Errorf("the failure was recorded as %q, not as a panel bug", current.ErrorCode)
 			}
 			if !strings.Contains(current.ErrorMessage, "panicked") {

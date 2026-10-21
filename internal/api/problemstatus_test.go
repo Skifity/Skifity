@@ -24,9 +24,9 @@ import (
 // the right default there.
 func TestEveryProblemThisPackageAnswersWithSaysItsStatus(t *testing.T) {
 	// A problem that really is a server fault, with the reason it is exempt.
-	serverFaults := map[string]string{
-		"internal": "the panic handler: by definition nobody's input",
-	}
+	// The panic handler is not here: it answers with errdoc.RequestPanicked,
+	// from the catalogue, so this package builds no problem for it.
+	serverFaults := map[string]string{}
 
 	dir := "."
 	entries, err := os.ReadDir(dir)

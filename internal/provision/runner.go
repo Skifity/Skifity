@@ -57,10 +57,7 @@ func (p *Provisioner) start(op store.Operation, work func(context.Context)) {
 // panicked, so the interface shows a failure rather than a step that never
 // finishes.
 func (p *Provisioner) failPanicked(ctx context.Context, op store.Operation, err error) {
-	problem := errdoc.New("internal", "Something went wrong").
-		WithCause("The panel hit an unexpected error while working on this server.").
-		WithImpact("The operation stopped where it was. The server may be half-configured; the steps above show how far it got.").
-		WithFix("Run it again — every step is safe to repeat. If it fails the same way, copy this error and open an issue: it is a bug in Skifity.")
+	problem := errdoc.OperationPanicked()
 
 	_ = p.db.SetOperationStatus(ctx, op.ID, store.OpFailed, problem.Code, err.Error())
 	p.hub.Publish(events.OperationTopic(op.ID), "failed", problem)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +31,11 @@ const sseHeartbeat = 25 * time.Second
 // process that runs everything. Past this the oldest tab is not dropped: the
 // new one is refused, and says why.
 const maxStreamsPerUser = 40
+
+// maxStreamTopics is how many topics one stream may ask for. A browser tab asks
+// for a handful; each one is a lookup and an authorization, and a multiplexed
+// stream decides every one of them rather than stopping at the first refusal.
+const maxStreamTopics = 64
 
 // streamCounter counts open streams per account.
 type streamCounter struct {
@@ -64,13 +70,34 @@ func (c *streamCounter) release(user string) {
 // handleEventStream is the panel's realtime channel. A client subscribes to the
 // topics it is allowed to see; authorization happens here, once, rather than per
 // event.
+//
+// ?multiplex=true is how the panel's own interface asks. It keeps one stream
+// per browser tab for every page and card that wants live updates — one
+// connection per card ran a browser out of its six connections to a host over
+// plain HTTP — so each event says which topic it belongs to, and a topic the
+// caller may not see is refused on the stream, by itself, rather than failing
+// the request: one card asking for something it should not have must not stop
+// every other card in the tab.
 func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
-	topics, err := s.authorizeTopics(r)
-	if err != nil {
-		writeError(w, r, err)
+	if len(requestedTopics(r)) > maxStreamTopics {
+		writeError(w, r, errdoc.BadRequest(fmt.Sprintf("Ask for at most %d topics on one stream.", maxStreamTopics)))
 		return
 	}
-	if len(topics) == 0 {
+	multiplex := queryBool(r, "multiplex")
+	var (
+		topics  []string
+		refused []refusedTopic
+	)
+	if multiplex {
+		topics, refused = s.authorizeEachTopic(r)
+	} else {
+		var err error
+		if topics, err = s.authorizeTopics(r); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	if len(topics) == 0 && len(refused) == 0 {
 		writeError(w, r, errdoc.BadRequest("Ask for at least one topic, for example ?topics=team:team_123."))
 		return
 	}
@@ -104,6 +131,15 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Fprintf(w, "retry: 3000\n\n"); err != nil {
 		return
 	}
+	for _, topic := range refused {
+		frame, err := taggedFrame(0, topic.Topic, "refused", topic.Problem)
+		if err != nil {
+			continue
+		}
+		if _, err := w.Write(frame); err != nil {
+			return
+		}
+	}
 	_ = rc.Flush()
 
 	heartbeat := time.NewTicker(sseHeartbeat)
@@ -124,7 +160,11 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 		// should already know.
 		if dropped := sub.Dropped(); dropped > missed {
 			missed = dropped
-			if _, err := fmt.Fprintf(w, "event: desync\ndata: {\"missed\":%d}\n\n", dropped); err != nil {
+			frame := fmt.Appendf(nil, "event: desync\ndata: {\"missed\":%d}\n\n", dropped)
+			if multiplex {
+				frame, _ = taggedFrame(0, "", "desync", map[string]int64{"missed": dropped})
+			}
+			if _, err := w.Write(frame); err != nil {
 				return
 			}
 			_ = rc.Flush()
@@ -145,6 +185,9 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			frame, err := ev.Encode()
+			if multiplex {
+				frame, err = taggedFrame(ev.Seq, ev.Topic, ev.Type, ev.Data)
+			}
 			if err != nil {
 				s.log.Warn("could not encode event", "topic", ev.Topic, "error", err)
 				continue
@@ -161,48 +204,104 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 // A topic the caller is not entitled to is an error, not a silent drop, so a
 // broken client is visible rather than mysteriously quiet.
 func (s *Server) authorizeTopics(r *http.Request) ([]string, error) {
-	requested := strings.Split(r.URL.Query().Get("topics"), ",")
+	requested := requestedTopics(r)
 	out := make([]string, 0, len(requested))
 	for _, topic := range requested {
-		topic = strings.TrimSpace(topic)
-		if topic == "" {
-			continue
-		}
-		kind, id, ok := strings.Cut(topic, ":")
-		if !ok {
-			return nil, errdoc.BadRequest("Topic " + topic + " is not in the form kind:id.")
-		}
-		switch kind {
-		case "team":
-			if _, err := s.authorizeTeam(r, id, store.RoleViewer); err != nil {
-				return nil, err
-			}
-		case "operation":
-			op, err := s.db.GetOperation(r.Context(), id)
-			if err != nil {
-				return nil, errdoc.NotFound("operation", id)
-			}
-			if err := s.authorizeOperation(r, op, store.RoleViewer); err != nil {
-				return nil, err
-			}
-		case "deployment":
-			deployment, err := s.db.GetDeployment(r.Context(), id)
-			if err != nil {
-				return nil, errdoc.NotFound("deployment", id)
-			}
-			if _, _, err := s.authorizeAppID(r, deployment.AppID, store.RoleViewer); err != nil {
-				return nil, err
-			}
-		case "app-logs":
-			if _, _, err := s.authorizeAppID(r, id, store.RoleViewer); err != nil {
-				return nil, err
-			}
-		default:
-			return nil, errdoc.BadRequest("Unknown topic kind " + kind + ".")
+		if err := s.authorizeTopic(r, topic); err != nil {
+			return nil, err
 		}
 		out = append(out, topic)
 	}
 	return out, nil
+}
+
+// refusedTopic is a topic a multiplexed stream was asked for and will not
+// carry, with the reason a stream of its own would have been refused.
+type refusedTopic struct {
+	Topic   string
+	Problem *errdoc.Problem
+}
+
+// authorizeEachTopic is authorizeTopics for a multiplexed stream: every topic
+// is decided on its own, and a refusal is said on the stream rather than
+// ending it. Still not a silent drop: the client is told which, and why.
+func (s *Server) authorizeEachTopic(r *http.Request) ([]string, []refusedTopic) {
+	var allowed []string
+	var refused []refusedTopic
+	for _, topic := range requestedTopics(r) {
+		if err := s.authorizeTopic(r, topic); err != nil {
+			refused = append(refused, refusedTopic{Topic: topic, Problem: toProblem(err)})
+			continue
+		}
+		allowed = append(allowed, topic)
+	}
+	return allowed, refused
+}
+
+func requestedTopics(r *http.Request) []string {
+	var out []string
+	for _, topic := range strings.Split(r.URL.Query().Get("topics"), ",") {
+		if topic = strings.TrimSpace(topic); topic != "" {
+			out = append(out, topic)
+		}
+	}
+	return out
+}
+
+// authorizeTopic decides one topic.
+func (s *Server) authorizeTopic(r *http.Request, topic string) error {
+	kind, id, ok := strings.Cut(topic, ":")
+	if !ok {
+		return errdoc.BadRequest("Topic " + topic + " is not in the form kind:id.")
+	}
+	switch kind {
+	case "team":
+		if _, err := s.authorizeTeam(r, id, store.RoleViewer); err != nil {
+			return err
+		}
+	case "operation":
+		op, err := s.db.GetOperation(r.Context(), id)
+		if err != nil {
+			return errdoc.NotFound("operation", id)
+		}
+		if err := s.authorizeOperation(r, op, store.RoleViewer); err != nil {
+			return err
+		}
+	case "deployment":
+		deployment, err := s.db.GetDeployment(r.Context(), id)
+		if err != nil {
+			return errdoc.NotFound("deployment", id)
+		}
+		if _, _, err := s.authorizeAppID(r, deployment.AppID, store.RoleViewer); err != nil {
+			return err
+		}
+	case "app-logs":
+		if _, _, err := s.authorizeAppID(r, id, store.RoleViewer); err != nil {
+			return err
+		}
+	default:
+		return errdoc.BadRequest("Unknown topic kind " + kind + ".")
+	}
+	return nil
+}
+
+// taggedFrame is one event on a multiplexed stream: an unnamed SSE message
+// whose data says which topic and which event it is, around the data a stream
+// of its own would have sent. A frame with no sequence number, a refusal or a
+// desync, carries no id, so it does not move the client's place.
+func taggedFrame(seq int64, topic, eventType string, data any) ([]byte, error) {
+	payload, err := json.Marshal(struct {
+		Topic string `json:"topic,omitempty"`
+		Type  string `json:"type"`
+		Data  any    `json:"data"`
+	}{topic, eventType, data})
+	if err != nil {
+		return nil, fmt.Errorf("encode event: %w", err)
+	}
+	if seq > 0 {
+		return fmt.Appendf(nil, "id: %d\ndata: %s\n\n", seq, payload), nil
+	}
+	return fmt.Appendf(nil, "data: %s\n\n", payload), nil
 }
 
 // handleAppLogs streams an app's runtime logs.

@@ -14,7 +14,9 @@ import { cn } from "cn"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ApiError, type Problem } from "@/lib/api"
+import { usePanelMeta } from "@/hooks/use-session"
+import { ApiError, problemToMarkdown, type Problem } from "@/lib/api"
+import { copyText } from "@/lib/clipboard"
 import { translated } from "@/lib/say"
 
 /**
@@ -36,6 +38,7 @@ export function ErrorDisplay({
   compact?: boolean
 }) {
   const { t } = useTranslation()
+  const meta = usePanelMeta()
   const [copied, setCopied] = useState(false)
 
   const problem = toProblem(error)
@@ -51,20 +54,19 @@ export function ErrorDisplay({
       t,
       `errors.catalogue.${problem.code.replaceAll(".", "_")}.${field}`,
       problem[field],
-      problem.args?.[field as "cause"],
+      problem.args?.[field],
     )
 
   const copyForAI = async () => {
-    const markdown = error instanceof ApiError ? error.toMarkdown() : problemToMarkdown(problem)
-    try {
-      await navigator.clipboard.writeText(markdown)
+    // The version is what an assistant needs first to say whether a fix
+    // exists, and it was "unknown" in every block ever copied.
+    const markdown = problemToMarkdown(problem, meta?.version)
+    if (await copyText(markdown)) {
       setCopied(true)
       toast.success(t("errors.copiedForAI"))
       setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard access can be refused; showing the text is the fallback that
-      // still lets someone copy it by hand.
-      toast.error(markdown.slice(0, 200))
+    } else {
+      toast.error(t("common.copyFailed"))
     }
   }
 
@@ -149,8 +151,9 @@ export function toProblem(error: unknown): Problem | null {
   if (!error) return null
   if (error instanceof ApiError) return error.problem
   if (error instanceof Error) {
-    // The title is fixed, so it is translated; the browser's own words —
-    // "Failed to fetch" when offline — are the cause.
+    // The title is fixed, so it is translated; the error's own words are the
+    // cause. A request that could not reach the panel is not one of these:
+    // the API client says that as network.unreachable.
     return {
       code: "unexpected",
       title: "Something went wrong",
@@ -170,12 +173,4 @@ export function toProblem(error: unknown): Problem | null {
     retryable: true,
     at: new Date().toISOString(),
   }
-}
-
-function problemToMarkdown(problem: Problem): string {
-  const parts = [`## Skifity error: ${problem.title}`, "", `- **Error code**: \`${problem.code}\``]
-  if (problem.cause) parts.push("", "**What happened**", "", problem.cause)
-  if (problem.impact) parts.push("", "**What it means**", "", problem.impact)
-  if (problem.fix) parts.push("", "**Suggested fix**", "", problem.fix)
-  return parts.join("\n")
 }

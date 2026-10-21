@@ -10,11 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { api, ApiError, setReauthHandler } from "@/lib/api"
+import { api, setReauthHandler } from "@/lib/api"
 
 /**
  * Proving who you are, again.
@@ -39,12 +40,14 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
   const [code, setCode] = useState("")
   const [needsCode, setNeedsCode] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
   const resolver = useRef<Resolver | null>(null)
+  const pending = useRef<Promise<boolean> | null>(null)
 
   const settle = useCallback((proved: boolean) => {
     resolver.current?.(proved)
     resolver.current = null
+    pending.current = null
     setOpen(false)
     setPassword("")
     setCode("")
@@ -54,17 +57,21 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    setReauthHandler(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolver.current = resolve
-          setPassword("")
-          setCode("")
-          setNeedsCode(false)
-          setError(null)
-          setOpen(true)
-        }),
-    )
+    setReauthHandler(() => {
+      // Two requests that need the password at the same moment ask for it
+      // once and both go ahead on the one answer. A second dialog replaced the
+      // first one's resolver, and the first request then waited for ever.
+      if (pending.current) return pending.current
+      pending.current = new Promise<boolean>((resolve) => {
+        resolver.current = resolve
+        setPassword("")
+        setCode("")
+        setNeedsCode(false)
+        setError(null)
+        setOpen(true)
+      })
+      return pending.current
+    })
   }, [])
 
   const submit = async () => {
@@ -83,8 +90,10 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       settle(true)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.problem.title : t("errors.unknown"))
+    } catch (caught) {
+      // The whole problem, not its title: for an account with no password,
+      // the fix — turn on two-factor first — is the only way through.
+      setError(caught)
       setPassword("")
       setBusy(false)
     }
@@ -142,7 +151,7 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
               </Field>
             )}
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error != null && <ErrorDisplay error={error} compact />}
 
             <DialogFooter>
               <Button type="button" variant="ghost" disabled={busy} onClick={() => settle(false)}>

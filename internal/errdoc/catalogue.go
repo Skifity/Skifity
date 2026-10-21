@@ -46,6 +46,39 @@ func Forbidden(action string) *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// --- the panel's own bugs ---
+//
+// Each place that stops a panic has its own code. They used to share
+// "internal" with From, and the interface translates by code: every error
+// nobody had catalogued yet was shown in five languages as a server left
+// half-configured, with the real cause only in the copied text.
+
+// RequestPanicked is a request whose handler panicked. The request id is what
+// finds the stack trace in the panel's log.
+func RequestPanicked(requestID string) *Problem {
+	return New("internal.request_panicked", "Something went wrong").
+		WithCause("The panel hit an unexpected error while handling this request.").
+		WithImpact("The action may not have completed.").
+		WithFix("Try again. If it keeps happening, copy this error and open an issue.").
+		With("request_id", requestID)
+}
+
+// DeploymentPanicked is a deployment whose goroutine panicked.
+func DeploymentPanicked() *Problem {
+	return New("internal.deployment_panicked", "Something went wrong").
+		WithCause("The panel hit an unexpected error while deploying.").
+		WithImpact("The deployment stopped where it was. Whatever had already been applied is still applied.").
+		WithFix("Deploy again. If it happens every time, copy this error and open an issue: it is a bug in Skifity, not in your app.")
+}
+
+// OperationPanicked is a server operation whose goroutine panicked.
+func OperationPanicked() *Problem {
+	return New("internal.operation_panicked", "Something went wrong").
+		WithCause("The panel hit an unexpected error while working on this server.").
+		WithImpact("The operation stopped where it was. The server may be half-configured; the steps above show how far it got.").
+		WithFix("Run it again — every step is safe to repeat. If it fails the same way, copy this error and open an issue: it is a bug in Skifity.")
+}
+
 // SchemaNewer is a binary asked to open a database that a later version has
 // already migrated.
 func SchemaNewer(have, know int) *Problem {

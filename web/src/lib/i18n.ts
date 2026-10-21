@@ -57,7 +57,11 @@ void i18n
       // picked a language keeps it on the next visit.
       order: ["localStorage", "navigator"],
       lookupLocalStorage: STORAGE_KEY,
-      caches: ["localStorage"],
+      // Nothing is cached by the detector. Caching stored whatever the browser
+      // asked for as if it had been picked, so a later change of the browser's
+      // language, or the account's, never got through. setLanguage stores a
+      // choice that was actually made.
+      caches: [],
     },
     interpolation: {
       // React escapes everything it renders, so escaping here would show
@@ -75,7 +79,11 @@ export function setLanguage(code: LanguageCode) {
   } catch {
     // Not being able to remember it is not a reason to refuse the change.
   }
-  document.documentElement.lang = code
+}
+
+/** Whether a code names a language the panel ships. */
+export function isLanguage(code: string | undefined): code is LanguageCode {
+  return LANGUAGES.some((language) => language.code === code)
 }
 
 /** The language currently in use, normalised to one we ship. */
@@ -91,9 +99,13 @@ export function currentLanguage(): LanguageCode {
 }
 
 // Keep the document's lang attribute in step, which screen readers and the
-// browser's own hyphenation both rely on.
-i18n.on("languageChanged", (code) => {
-  document.documentElement.lang = code
+// browser's own hyphenation both rely on. It names the language the text is
+// in, not the one the browser asked for: a browser asking for zh-TW is shown
+// Simplified Chinese, and a screen reader told zh-TW reads it with the wrong
+// voice.
+i18n.on("languageChanged", () => {
+  document.documentElement.lang = currentLanguage()
 })
+document.documentElement.lang = currentLanguage()
 
 export default i18n

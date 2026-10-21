@@ -2,6 +2,7 @@ package errdoc
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -94,11 +95,76 @@ func TestEveryErrorHasItsWordsInTheInterface(t *testing.T) {
 	}
 }
 
+// TestOneCodeSaysOneThing
+//
+// The interface has one translation per code. A code raised from two places
+// with two different sentences is shown, in every language but English, with
+// whichever one the locale happens to hold: "internal" was raised by From, by
+// the request panic handler, by a deployment and by a server operation, and
+// every uncatalogued failure — a SQLite error saving a variable — was shown as
+// a server left half-configured, with the real cause only in the copied text.
+//
+// A second place with something different to say gets a code of its own.
+func TestOneCodeSaysOneThing(t *testing.T) {
+	problems := problemsInSource(t)
+	stillMixed := map[string]bool{}
+	for code, problem := range problems {
+		for _, field := range []string{"title", "cause", "impact", "fix"} {
+			sentences := problem.Said[field]
+			distinct := 0
+			for sentence := range sentences {
+				// What is built at run time cannot be compared from here.
+				if sentence != "(built at run time)" {
+					distinct++
+				}
+			}
+			if distinct < 2 {
+				continue
+			}
+			if _, known := mixedSentences[code]; known {
+				stillMixed[code] = true
+				continue
+			}
+			var said []string
+			for sentence, where := range sentences {
+				said = append(said, fmt.Sprintf("%q at %s", truncate(sentence), strings.Join(where, ", ")))
+			}
+			sort.Strings(said)
+			t.Errorf("%s is raised with %d different sentences for its %s, and the interface can translate only one: %s. "+
+				"Give each its own code, with its own words in the locales.",
+				code, distinct, field, strings.Join(said, "; "))
+		}
+	}
+	// The list below only shrinks: a code that has been put right is taken
+	// off it, so it cannot drift back.
+	for code := range mixedSentences {
+		if !stillMixed[code] {
+			t.Errorf("%s says one thing now; take it off mixedSentences", code)
+		}
+	}
+}
+
+// mixedSentences are the codes still raised with different sentences from
+// different places. A code is a shipped identifier — tests and scripts match
+// on auth.needs_person and auth.token_scope — so each is a change of its own,
+// in the handler that raises it: a new code for the second place, with words
+// in the locales.
+var mixedSentences = map[string]string{
+	"auth.needs_person":        "plugins, re-authentication and two-factor each explain it differently",
+	"auth.token_scope":         "a read-only token and a scoped token reading a secret",
+	"backup.restore_refused":   "a volume restore and a database restore",
+	"plugin.unreachable":       "an address that failed and one that answered with an error",
+	"sso.not_configured":       "signing in and linking an identity",
+	"sso.provider_unreachable": "signing in and linking an identity",
+	"team.last_owner":          "changing the last owner's role and removing them",
+}
+
 // raisedByTheInterface are the codes the interface makes itself, for what the
-// panel never answered: a response that was not the panel's JSON — a 502 while
-// it restarts — in web/src/lib/api.ts, and a request the browser could not
-// send at all in web/src/components/error-display.tsx. No Go raises them.
-var raisedByTheInterface = map[string]bool{"network": true, "unexpected": true}
+// panel never answered, all in web/src/lib/api.ts and
+// web/src/components/error-display.tsx: a response that was not the panel's
+// JSON — a 502 while it restarts — a request the browser could not send at
+// all, and anything else thrown in the browser. No Go raises them.
+var raisedByTheInterface = map[string]bool{"network": true, "network_unreachable": true, "unexpected": true}
 
 // reachable reports whether a locale key belongs to one of the codes found.
 // The mapping is one-way — a code may contain an underscore of its own — so
@@ -122,6 +188,9 @@ func truncate(s string) string {
 type problemInSource struct {
 	Code   string
 	Fields map[string]string
+	// Said holds every sentence a field was given, with where, for a code
+	// raised from more than one place.
+	Said map[string]map[string][]string
 }
 
 // problemsInSource reads every errdoc.New call in the repository, with the
@@ -179,12 +248,21 @@ func problemsInSource(t *testing.T) map[string]problemInSource {
 			}
 			entry, seen := found[code]
 			if !seen {
-				entry = problemInSource{Code: code, Fields: map[string]string{}}
+				entry = problemInSource{Code: code, Fields: map[string]string{}, Said: map[string]map[string][]string{}}
 			}
-			entry.Fields["title"] = title
+			fields := map[string]string{"title": title}
+			collectSentences(file, call, fields)
 			// The same code raised from two places keeps whichever sentences
 			// either of them sets, which is what the interface has to cover.
-			collectSentences(file, call, entry.Fields)
+			// What each of them said is kept too, for the test below.
+			where := fset.Position(call.Pos()).String()
+			for field, sentence := range fields {
+				entry.Fields[field] = sentence
+				if entry.Said[field] == nil {
+					entry.Said[field] = map[string][]string{}
+				}
+				entry.Said[field][sentence] = append(entry.Said[field][sentence], where)
+			}
 			found[code] = entry
 			return true
 		})

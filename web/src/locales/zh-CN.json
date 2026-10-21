@@ -92,7 +92,14 @@
     "themeSystem": "跟随系统",
     "language": "语言",
     "documentation": "文档",
-    "plugins": "插件"
+    "plugins": "插件",
+    "project": "项目",
+    "app": "应用",
+    "environment": "环境",
+    "database": "数据库",
+    "server": "服务器",
+    "accountNeedsAttention": "账户：你的恢复密钥还没有保存",
+    "commandPaletteHelp": "查找应用、项目或服务器，或者跳转到某个页面。"
   },
   "auth": {
     "signIn": "登录",
@@ -242,7 +249,13 @@
         "wrongAddress": "浏览器只会在面板自己的地址上使用通行密钥。请通过面板 URL 打开面板后重试。",
         "failed": "浏览器无法使用通行密钥。请重试，或换用其他浏览器或设备。"
       }
-    }
+    },
+    "passwordMinLength": "至少 {{min}} 个字符",
+    "passwordLength_other": "{{count}} 个字符",
+    "recoveryKeyFileTitle": "{{product}} 恢复密钥",
+    "recoveryKeyFileBody": "持有这把密钥的任何人都能解密本面板保存的所有机密。请离线保存在安全的地方。没有它，恢复出来的备份将无法读取。",
+    "recoveryKeyMissingTitle": "账户已就绪，但恢复密钥没能显示出来",
+    "recoveryKeyMissing": "面板此刻读不到它的恢复密钥。登录后打开“账户”即可显示并保存它；在你保存之前，面板会一直提醒你。"
   },
   "dashboard": {
     "title": "总览",
@@ -436,7 +449,9 @@
       "cloud_provider.removed": "已移除云服务商",
       "server.create_started": "正在云服务商处创建服务器",
       "server.delete_started": "正在移除服务器并删除其机器"
-    }
+    },
+    "notAllowedTitle": "活动日志仅供团队所有者和管理员查看",
+    "notAllowed": "如需了解有哪些变化，请询问 {{team}} 的所有者或管理员。"
   },
   "projects": {
     "title": "项目",
@@ -2459,9 +2474,9 @@
       },
       "internal": {
         "title": "出了点问题",
-        "cause": "面板在处理这台服务器时遇到了意料之外的错误。",
-        "impact": "操作停在了原地。服务器可能只配置了一半；上面的步骤显示走到了哪里。",
-        "fix": "再跑一次——每个步骤重复执行都是安全的。如果仍以同样方式失败，请复制这个错误并提个 issue：那是 Skifity 的缺陷。"
+        "cause": "{{0}}",
+        "impact": "你请求的操作没有完成。",
+        "fix": "请重试。如果问题持续出现，请复制这个错误并提个 issue。"
       },
       "invite_account_exists": {
         "title": "这个地址已经有账户了",
@@ -4142,6 +4157,30 @@
         "cause": "{{0}} 位于 {{1}}，在私有网络中或在某台服务器上，而构建无法访问这些地址。",
         "impact": "没有构建或部署任何内容。当前运行的版本会继续运行。",
         "fix": "管理员可以允许构建访问它：在 设置 → Git 的“你自己网络中的 Git 主机”中添加 {{0}}，然后重新部署。"
+      },
+      "internal_request_panicked": {
+        "title": "出了点问题",
+        "cause": "面板在处理这个请求时遇到了意料之外的错误。",
+        "impact": "操作可能未完成。",
+        "fix": "请重试。如果问题持续出现，请复制这个错误并提个 issue。"
+      },
+      "internal_deployment_panicked": {
+        "title": "出了点问题",
+        "cause": "面板在部署时遇到了意料之外的错误。",
+        "impact": "部署停在了原地。已经应用的内容仍然保持应用状态。",
+        "fix": "重新部署。如果每次都这样，请复制这个错误并提个 issue：那是 Skifity 的缺陷，不是你的应用的问题。"
+      },
+      "internal_operation_panicked": {
+        "title": "出了点问题",
+        "cause": "面板在处理这台服务器时遇到了意料之外的错误。",
+        "impact": "操作停在了原地。服务器可能只配置了一半；上面的步骤显示走到了哪里。",
+        "fix": "再跑一次——每个步骤重复执行都是安全的。如果仍以同样方式失败，请复制这个错误并提个 issue：那是 Skifity 的缺陷。"
+      },
+      "network_unreachable": {
+        "title": "无法连接到面板",
+        "cause": "浏览器无法把请求发送到 {{0}}。",
+        "impact": "操作没有到达面板，页面显示的信息也可能已过时。",
+        "fix": "检查网络连接。如果面板正在重启，这会自行恢复：稍后再试。"
       },
       "server_busy": {
         "title": "这台服务器正在进行其他操作",

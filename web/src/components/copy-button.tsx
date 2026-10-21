@@ -5,6 +5,7 @@ import { CheckIcon, CopyIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { copyText } from "@/lib/clipboard"
 import { cn } from "cn"
 
 /**
@@ -33,17 +34,17 @@ export function CopyButton({
   // rather than at the corner of the screen.
   const [copied, setCopied] = useState(false)
 
-  const copy = () => {
-    void navigator.clipboard.writeText(value).then(
-      () => {
-        setCopied(true)
-        toast.success(t("common.copied"))
-        window.setTimeout(() => setCopied(false), 1500)
-      },
-      // Clipboard access is refused outside a secure context, and a button
-      // that silently does nothing is worse than one that says why.
-      () => toast.error(t("common.copyFailed")),
-    )
+  const copy = async () => {
+    // copyText falls back to the old way where the clipboard API is missing,
+    // which it is on the plain-http address a fresh install answers on.
+    if (await copyText(value)) {
+      setCopied(true)
+      toast.success(t("common.copied"))
+      window.setTimeout(() => setCopied(false), 1500)
+    } else {
+      // A button that silently does nothing is worse than one that says why.
+      toast.error(t("common.copyFailed"))
+    }
   }
 
   return (
@@ -55,7 +56,7 @@ export function CopyButton({
           size="icon"
           className={cn("size-8", className)}
           aria-label={t("common.copyValue", { name: label })}
-          onClick={copy}
+          onClick={() => void copy()}
         >
           {copied ? <CheckIcon className="size-4 text-success" /> : <CopyIcon className="size-4" />}
         </Button>

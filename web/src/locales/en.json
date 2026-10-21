@@ -99,7 +99,14 @@
     "themeSystem": "Match system",
     "language": "Language",
     "documentation": "Documentation",
-    "plugins": "Plugins"
+    "plugins": "Plugins",
+    "project": "Project",
+    "app": "App",
+    "environment": "Environment",
+    "database": "Database",
+    "server": "Server",
+    "accountNeedsAttention": "Account: your recovery key has not been saved yet",
+    "commandPaletteHelp": "Find an app, a project or a server, or go to a page."
   },
   "auth": {
     "signIn": "Sign in",
@@ -250,7 +257,14 @@
         "wrongAddress": "The browser only uses a passkey at the panel's own address. Open the panel at its Panel URL and try again.",
         "failed": "The browser could not use a passkey. Try again, or use another browser or device."
       }
-    }
+    },
+    "passwordMinLength": "At least {{min}} characters",
+    "passwordLength_one": "{{count}} character",
+    "passwordLength_other": "{{count}} characters",
+    "recoveryKeyFileTitle": "{{product}} recovery key",
+    "recoveryKeyFileBody": "Anyone holding this key can decrypt every secret this panel stores. Keep it somewhere safe and offline. Without it, a restored backup is unreadable.",
+    "recoveryKeyMissingTitle": "Your account is ready, but the recovery key could not be shown",
+    "recoveryKeyMissing": "The panel could not read its recovery key just now. Once you are in, open Account to show it and save it; the panel reminds you until you do."
   },
   "dashboard": {
     "title": "Overview",
@@ -444,7 +458,9 @@
       "cloud_provider.removed": "Cloud provider removed",
       "server.create_started": "Creating a server at a cloud provider",
       "server.delete_started": "Removing a server and deleting its machine"
-    }
+    },
+    "notAllowedTitle": "The activity log is for the team's owners and admins",
+    "notAllowed": "Ask an owner or an admin of {{team}} if you need to know what changed."
   },
   "projects": {
     "title": "Projects",
@@ -2482,9 +2498,9 @@
       },
       "internal": {
         "title": "Something went wrong",
-        "cause": "The panel hit an unexpected error while working on this server.",
-        "impact": "The operation stopped where it was. The server may be half-configured; the steps above show how far it got.",
-        "fix": "Run it again — every step is safe to repeat. If it fails the same way, copy this error and open an issue: it is a bug in Skifity."
+        "cause": "{{0}}",
+        "impact": "The action you asked for did not complete.",
+        "fix": "Try again. If it keeps happening, copy this error and open an issue."
       },
       "invite_account_exists": {
         "title": "That address already has an account",
@@ -4165,6 +4181,30 @@
         "cause": "{{0}} is at {{1}}, on a private network or on one of the servers, and builds are kept off those.",
         "impact": "Nothing was built or deployed. The version running now keeps running.",
         "fix": "An administrator can let builds reach it: add {{0}} under Settings → Git, in Git hosts on your own network, and deploy again."
+      },
+      "internal_request_panicked": {
+        "title": "Something went wrong",
+        "cause": "The panel hit an unexpected error while handling this request.",
+        "impact": "The action may not have completed.",
+        "fix": "Try again. If it keeps happening, copy this error and open an issue."
+      },
+      "internal_deployment_panicked": {
+        "title": "Something went wrong",
+        "cause": "The panel hit an unexpected error while deploying.",
+        "impact": "The deployment stopped where it was. Whatever had already been applied is still applied.",
+        "fix": "Deploy again. If it happens every time, copy this error and open an issue: it is a bug in Skifity, not in your app."
+      },
+      "internal_operation_panicked": {
+        "title": "Something went wrong",
+        "cause": "The panel hit an unexpected error while working on this server.",
+        "impact": "The operation stopped where it was. The server may be half-configured; the steps above show how far it got.",
+        "fix": "Run it again — every step is safe to repeat. If it fails the same way, copy this error and open an issue: it is a bug in Skifity."
+      },
+      "network_unreachable": {
+        "title": "The panel could not be reached",
+        "cause": "The browser could not send the request to {{0}}.",
+        "impact": "The action did not reach the panel, and the page may be showing stale information.",
+        "fix": "Check your connection. If the panel is restarting, this clears up on its own: try again in a moment."
       },
       "server_busy": {
         "title": "Something is already being done to this server",

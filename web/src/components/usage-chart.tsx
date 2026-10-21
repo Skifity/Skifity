@@ -1,5 +1,7 @@
 import { useId } from "react"
 
+import { formatTime } from "@/lib/format"
+
 /**
  * A line over time, drawn as an SVG, with a threshold if there is one.
  *
@@ -83,9 +85,9 @@ export function UsageChart({
       </svg>
       <figcaption className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>
-          {points.length > 0
-            ? new Date(start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : ""}
+          {/* In the panel's language, not the browser's: a Russian page with
+              an English "02:05 PM" under its chart. */}
+          {points.length > 0 ? formatTime(start) : ""}
         </span>
         <span>{last ? format(last.value) : ""}</span>
       </figcaption>
