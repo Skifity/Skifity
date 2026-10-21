@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
@@ -24,10 +24,11 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
-import { api, type List } from "@/lib/api"
+import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { Project, Role, User } from "@/lib/types"
+import type { Role, User } from "@/lib/types"
 
 /** Who can be limited to projects: admins and owners look after the whole team. */
 export function canLimit(role: Role): boolean {
@@ -36,12 +37,7 @@ export function canLimit(role: Role): boolean {
 
 /** The team's projects, which the limits are chosen from and named by. */
 export function useTeamProjects() {
-  const { team } = useSession()
-  return useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  return useProjects()
 }
 
 /** The select every role is picked from, in order, lowest first. */

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { useQueries, useQuery } from "@tanstack/react-query"
+import { useQueries } from "@tanstack/react-query"
 import { ChevronDownIcon, DatabaseIcon, PlusIcon, SearchIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useEvents } from "@/hooks/use-events"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
@@ -49,11 +50,7 @@ export function DatabasesPage() {
   const [creating, setCreating] = useState<string | null>(null)
   const [search, setSearch] = useState("")
 
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  const projects = useProjects()
 
   // This page had neither a subscription nor a poll, and a database takes
   // minutes to come up: it was created, the list said "creating", and it went

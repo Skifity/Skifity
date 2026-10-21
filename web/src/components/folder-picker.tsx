@@ -25,7 +25,7 @@ import {
   packFolder,
   type PackedFolder,
 } from "@/lib/folder"
-import { formatBytes } from "@/lib/format"
+import { formatBytes, formatNumber } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App, Deployment, Meta } from "@/lib/types"
 
@@ -120,7 +120,7 @@ export function FolderProblem({ error }: { error: unknown }) {
         <AlertDescription>
           <p>
             {t(`folder.tooLarge.${error.kind}`, {
-              entries: folderLimits.entries.toLocaleString(),
+              entries: formatNumber(folderLimits.entries),
               size: formatBytes(
                 error.kind === "compressed" ? folderLimits.compressed : folderLimits.unpacked,
               ),

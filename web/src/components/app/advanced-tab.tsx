@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSession } from "@/hooks/use-session"
+import { copyText } from "@/lib/clipboard"
 import { api } from "@/lib/api"
 import type { App } from "@/lib/types"
 
@@ -59,14 +60,13 @@ function Manifests({ app }: { app: App }) {
   }
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(advanced.data?.manifests ?? "")
-      setCopied(true)
-      toast.success(t("common.copied"))
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error(t("errors.somethingWentWrong"))
+    if (!(await copyText(advanced.data?.manifests ?? ""))) {
+      toast.error(t("common.copyFailed"))
+      return
     }
+    setCopied(true)
+    toast.success(t("common.copied"))
+    window.setTimeout(() => setCopied(false), 2000)
   }
 
   return (

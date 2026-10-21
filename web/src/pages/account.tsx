@@ -18,7 +18,8 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
-import { downloadText } from "@/components/settings/recovery-key"
+import { copyText } from "@/lib/clipboard"
+import { downloadText } from "@/lib/download"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -938,9 +939,8 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
   const download = () => downloadText("skifity-recovery-codes.txt", `${codes.join("\n")}\n`)
 
   const copy = () => {
-    void navigator.clipboard.writeText(codes.join("\n")).then(
-      () => toast.success(t("common.copied")),
-      () => toast.error(t("errors.somethingWentWrong")),
+    void copyText(codes.join("\n")).then((copied) =>
+      copied ? toast.success(t("common.copied")) : toast.error(t("common.copyFailed")),
     )
   }
 
@@ -1168,10 +1168,11 @@ function TokensCard() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    navigator.clipboard
-                      .writeText(secret)
-                      .then(() => toast.success(t("common.copied")))
-                      .catch(() => toast.error(t("common.copyFailed")))
+                    void copyText(secret).then((copied) =>
+                      copied
+                        ? toast.success(t("common.copied"))
+                        : toast.error(t("common.copyFailed")),
+                    )
                   }}
                 >
                   <CopyIcon className="size-4" />

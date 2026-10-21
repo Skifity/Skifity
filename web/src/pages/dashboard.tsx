@@ -42,11 +42,12 @@ import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useEvents } from "@/hooks/use-events"
 import { useFirstEnvironment } from "@/hooks/use-first-environment"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { AuditEvent, ClusterSummary, Project, Server } from "@/lib/types"
+import type { AuditEvent, ClusterSummary, Server } from "@/lib/types"
 
 /**
  * The first screen.
@@ -77,11 +78,7 @@ export function DashboardPage() {
     queryFn: () => api.get<List<Server>>(`/api/teams/${team!.id}/servers`),
     enabled: Boolean(team) && teamWide,
   })
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  const projects = useProjects()
   const audit = useQuery({
     queryKey: ["audit", team?.id, "recent"],
     queryFn: () => api.get<List<AuditEvent>>(`/api/teams/${team!.id}/audit?limit=8`),

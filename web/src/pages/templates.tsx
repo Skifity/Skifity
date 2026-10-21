@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
@@ -522,7 +523,6 @@ type Installed = {
 
 function InstallDialog({ template, onClose }: { template: Template; onClose: () => void }) {
   const { t } = useTranslation()
-  const { team } = useSession()
   const navigate = useNavigate()
   const [environmentId, setEnvironmentId] = useState("")
   const [name, setName] = useState(template.name)
@@ -533,11 +533,7 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
   // names its services reach each other by, and the panel ignored a new one.
   const services = template.services ?? []
 
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  const projects = useProjects()
 
   const projectItems = useMemo(() => projects.data?.items ?? [], [projects.data])
   // See below: `chosen` is what the form actually installs into.

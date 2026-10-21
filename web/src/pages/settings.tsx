@@ -32,7 +32,7 @@ import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { GitSources } from "@/components/settings/git-sources"
 import { RegistriesCard } from "@/components/settings/registries"
-import { RecoveryKeyShown, downloadText } from "@/components/settings/recovery-key"
+import { RecoveryKeyShown } from "@/components/settings/recovery-key"
 import {
   AccessSummary,
   ChangeAccessDialog,
@@ -82,6 +82,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
+import { copyText } from "@/lib/clipboard"
+import { downloadBlob } from "@/lib/download"
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type {
@@ -886,10 +888,9 @@ function ExportCard() {
   const download = useMutation({
     mutationFn: () => api.get<unknown>(`/api/teams/${team!.id}/export`),
     onSuccess: (data) =>
-      downloadText(
+      downloadBlob(
         `${team!.slug}-export.json`,
-        `${JSON.stringify(data, null, 2)}\n`,
-        "application/json",
+        new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: "application/json" }),
       ),
   })
 
@@ -1380,10 +1381,9 @@ function MembersPanel() {
               variant="outline"
               size="sm"
               onClick={() => {
-                navigator.clipboard
-                  .writeText(link)
-                  .then(() => toast.success(t("common.copied")))
-                  .catch(() => toast.error(t("errors.somethingWentWrong")))
+                void copyText(link).then((copied) =>
+                  copied ? toast.success(t("common.copied")) : toast.error(t("common.copyFailed")),
+                )
               }}
             >
               <CopyIcon className="size-4" />

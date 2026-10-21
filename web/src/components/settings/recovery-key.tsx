@@ -9,17 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api"
-
-/** Hands the browser a file to save, made from text the page already has. */
-export function downloadText(filename: string, text: string, type = "text/plain") {
-  const blob = new Blob([text], { type })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
+import { downloadText } from "@/lib/download"
 
 /**
  * The recovery key, on screen: a way to keep it, and a way to say it is kept.

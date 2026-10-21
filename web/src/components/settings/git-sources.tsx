@@ -31,6 +31,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useSession } from "@/hooks/use-session"
+import { copyText } from "@/lib/clipboard"
 import { api, type List } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
@@ -236,14 +237,13 @@ function CopyLine({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      toast.success(t("common.copied"))
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error(t("errors.somethingWentWrong"))
+    if (!(await copyText(value))) {
+      toast.error(t("common.copyFailed"))
+      return
     }
+    setCopied(true)
+    toast.success(t("common.copied"))
+    window.setTimeout(() => setCopied(false), 2000)
   }
 
   return (

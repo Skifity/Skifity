@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { FolderIcon, PlusIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
@@ -23,8 +23,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { useEvents } from "@/hooks/use-events"
+import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
-import { api, type List } from "@/lib/api"
+import { api } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { Project } from "@/lib/types"
@@ -50,11 +51,7 @@ export function ProjectsPage() {
     Boolean(team) && !team?.scoped,
   )
 
-  const projects = useQuery({
-    queryKey: ["projects", team?.id],
-    queryFn: () => api.get<List<Project>>(`/api/teams/${team!.id}/projects`),
-    enabled: Boolean(team),
-  })
+  const projects = useProjects()
 
   return (
     <Page>
