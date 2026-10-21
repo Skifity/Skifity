@@ -453,8 +453,9 @@ func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.cluster == nil {
 		writeJSON(w, http.StatusOK, ClusterSummary{
-			Reachable: false,
-			Message:   "The panel is not connected to a cluster.",
+			Reachable:  false,
+			Message:    NoClusterDetail,
+			MessageKey: "noCluster",
 		})
 		return
 	}

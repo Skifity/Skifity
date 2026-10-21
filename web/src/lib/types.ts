@@ -299,6 +299,8 @@ export type Instance = {
 export type AppStatus = {
   phase: string
   detail?: string
+  /** "noCluster" on a panel with no cluster connection, so it is translated. */
+  detail_key?: string
   desired_replicas: number
   ready_replicas: number
   instances: Instance[]
@@ -627,6 +629,10 @@ export type Database = {
   engine_version: string
   status: string
   status_detail?: string
+  /** Names the sentence in status_detail, so it is said in the reader's language. */
+  status_key?: string
+  /** The values in status_detail, in order: for degraded, ready then wanted. */
+  status_args?: string[]
   instances: number
   storage_gb: number
   cpu_request_m: number
@@ -763,6 +769,8 @@ export type ClusterSummary = {
   used_memory_mb: number
   high_availability: boolean
   message?: string
+  /** "noCluster" when the panel has no cluster connection at all. */
+  message_key?: string
 }
 
 export type ScalingFinding = {

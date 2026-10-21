@@ -43,7 +43,7 @@ const StatusStopped = "stopped"
 // created, which is what "starting" otherwise means to the work it marks as
 // interrupted (serverapp): its data is all there, and the next look at it
 // reads its state from the cluster.
-const StartingAgain = "Starting again on the disk it kept."
+const StartingAgain = api.DatabaseDetailStartingAgain
 
 // Stop scales a database to nothing and keeps its volume. It is idempotent:
 // stopping a stopped database changes nothing.

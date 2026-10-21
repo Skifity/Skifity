@@ -277,7 +277,8 @@
     "recentActivity": "Aktivitas terbaru",
     "nothingYet": "Belum ada aktivitas.",
     "welcomeBack": "Selamat datang kembali, {{name}}.",
-    "readyOfTotal": "{{ready}} dari {{total}}"
+    "readyOfTotal": "{{ready}} dari {{total}}",
+    "noCluster": "Panel tidak terhubung ke cluster."
   },
   "activity": {
     "subtitle": "Apa yang berubah di tim ini, terbaru dulu.",
@@ -610,7 +611,8 @@
       "running_other": "{{count}} instance berjalan.",
       "updating": "{{ready}} dari {{desired}} instance sudah siap.",
       "starting": "Instance sedang dinyalakan.",
-      "crashing": "Aplikasi menyala lalu berhenti. Baris log terakhir biasanya menjelaskan sebabnya."
+      "crashing": "Aplikasi menyala lalu berhenti. Baris log terakhir biasanya menjelaskan sebabnya.",
+      "noCluster": "Panel tidak terhubung ke cluster, jadi instance app ini tidak dapat dilihat."
     },
     "mountPath": "Lokasi mount",
     "sizeGB": "Ukuran (GB)",
@@ -1629,7 +1631,15 @@
     "restoreLinked": "Dari cadangan yang diambil pada {{date}}. Aplikasi-aplikasi ini memakai database tersebut dan kehilangannya selama pemulihan berjalan: {{apps}}.",
     "restoreUnlinked": "Dari cadangan yang diambil pada {{date}}. Tidak ada aplikasi yang terhubung dengannya.",
     "retentionInvalid": "Masukkan jumlah cadangan yang disimpan sebagai bilangan bulat, minimal 1.",
-    "backupPolicySaved": "Jadwal pencadangan sudah disimpan."
+    "backupPolicySaved": "Jadwal pencadangan sudah disimpan.",
+    "statusDetail": {
+      "noCluster": "Panel tidak terhubung ke cluster.",
+      "objectGone": "Objek Kubernetes milik database ini sudah tidak ada.",
+      "waiting": "Menunggu database siap menerima koneksi.",
+      "startingAgain": "Dijalankan lagi di disk yang disimpannya.",
+      "degraded": "{{ready}} dari {{wanted}} instance siap.",
+      "degradedLastOne": "{{ready}} dari {{wanted}} instance siap. Database masih menjawab, tetapi jika instance yang tersisa gagal, database akan mati."
+    }
   },
   "templates": {
     "title": "Template",

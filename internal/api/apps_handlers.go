@@ -910,7 +910,9 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.cluster == nil {
-		writeJSON(w, http.StatusOK, AppRuntimeStatus{Phase: "unknown", Detail: "The panel is not connected to a cluster."})
+		writeJSON(w, http.StatusOK, AppRuntimeStatus{
+			Phase: "unknown", Detail: NoClusterDetail, DetailKey: "noCluster",
+		})
 		return
 	}
 	status, err := s.cluster.AppStatus(r.Context(), env.Namespace, app.Slug)

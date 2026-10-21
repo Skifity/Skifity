@@ -111,8 +111,11 @@ type InstanceInfo struct {
 
 // AppRuntimeStatus is what the app page shows at the top.
 type AppRuntimeStatus struct {
-	Phase           string         `json:"phase"`
-	Detail          string         `json:"detail,omitempty"`
+	Phase  string `json:"phase"`
+	Detail string `json:"detail,omitempty"`
+	// DetailKey names a Detail the panel translates, for the one sentence the
+	// panel writes itself rather than reads from the cluster.
+	DetailKey       string         `json:"detail_key,omitempty"`
 	DesiredReplicas int            `json:"desired_replicas"`
 	ReadyReplicas   int            `json:"ready_replicas"`
 	Instances       []InstanceInfo `json:"instances"`
@@ -146,6 +149,10 @@ type ClusterSummary struct {
 	UsedMemoryMB     int64      `json:"used_memory_mb"`
 	HighAvailability bool       `json:"high_availability"`
 	Message          string     `json:"message,omitempty"`
+	// MessageKey is "noCluster" when the panel has no cluster connection at
+	// all, which the panel says in the reader's language; any other Message is
+	// the client's own error, shown as it came.
+	MessageKey string `json:"message_key,omitempty"`
 }
 
 // Cluster is the read side of Kubernetes plus the few direct actions the panel

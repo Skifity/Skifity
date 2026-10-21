@@ -162,8 +162,14 @@ export function DashboardPage() {
           <AlertTitle>{t("dashboard.clusterUnreachable")}</AlertTitle>
           <AlertDescription>
             <p>{t("dashboard.clusterUnreachableHelp", { product: meta?.product ?? "Skifity" })}</p>
-            {summary.message && (
-              <code className="mt-1 block font-mono text-xs break-all">{summary.message}</code>
+            {/* No cluster at all is said in words; anything else is the
+                client's own error, which is worth showing exactly. */}
+            {summary.message_key === "noCluster" ? (
+              <p>{t("dashboard.noCluster")}</p>
+            ) : (
+              summary.message && (
+                <code className="mt-1 block font-mono text-xs break-all">{summary.message}</code>
+              )
             )}
           </AlertDescription>
         </Alert>

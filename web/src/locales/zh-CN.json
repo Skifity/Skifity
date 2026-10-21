@@ -277,7 +277,8 @@
     "recentActivity": "最近活动",
     "nothingYet": "目前还没有任何动作。",
     "welcomeBack": "欢迎回来，{{name}}。",
-    "readyOfTotal": "{{ready}} / {{total}}"
+    "readyOfTotal": "{{ready}} / {{total}}",
+    "noCluster": "面板未连接到集群。"
   },
   "activity": {
     "subtitle": "这个团队里发生的变化，最新的在前。",
@@ -610,7 +611,8 @@
       "running_other": "{{count}} 个实例正在运行。",
       "updating": "{{desired}} 个实例中已有 {{ready}} 个就绪。",
       "starting": "实例正在启动。",
-      "crashing": "应用启动后随即退出。日志的最后几行通常会说明原因。"
+      "crashing": "应用启动后随即退出。日志的最后几行通常会说明原因。",
+      "noCluster": "面板未连接到集群，因此无法查看此应用的实例。"
     },
     "mountPath": "挂载路径",
     "sizeGB": "大小（GB）",
@@ -1629,7 +1631,15 @@
     "restoreLinked": "使用 {{date}} 的备份。这些应用正在使用该数据库，恢复期间将无法访问它：{{apps}}。",
     "restoreUnlinked": "使用 {{date}} 的备份。没有应用连接到它。",
     "retentionInvalid": "请输入要保留的备份数量，须为不小于 1 的整数。",
-    "backupPolicySaved": "备份计划已保存。"
+    "backupPolicySaved": "备份计划已保存。",
+    "statusDetail": {
+      "noCluster": "面板未连接到集群。",
+      "objectGone": "该数据库的 Kubernetes 对象已不存在。",
+      "waiting": "正在等待数据库开始接受连接。",
+      "startingAgain": "正在保留的磁盘上重新启动。",
+      "degraded": "{{wanted}} 个实例中有 {{ready}} 个已就绪。",
+      "degradedLastOne": "{{wanted}} 个实例中有 {{ready}} 个已就绪。数据库仍在响应，但剩下的这个实例一旦故障，服务就会中断。"
+    }
   },
   "templates": {
     "title": "模板",

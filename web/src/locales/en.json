@@ -286,7 +286,8 @@
     "recentActivity": "Recent activity",
     "nothingYet": "Nothing has happened yet.",
     "welcomeBack": "Welcome back, {{name}}.",
-    "readyOfTotal": "{{ready}} of {{total}}"
+    "readyOfTotal": "{{ready}} of {{total}}",
+    "noCluster": "The panel is not connected to a cluster."
   },
   "activity": {
     "subtitle": "What changed in this team, newest first.",
@@ -620,7 +621,8 @@
       "running_other": "{{count}} instances are running.",
       "updating": "{{ready}} of {{desired}} instances are ready.",
       "starting": "The instances are starting.",
-      "crashing": "The app starts and then exits. The last log lines usually say why."
+      "crashing": "The app starts and then exits. The last log lines usually say why.",
+      "noCluster": "The panel is not connected to a cluster, so it cannot see this app's instances."
     },
     "mountPath": "Mount path",
     "sizeGB": "Size (GB)",
@@ -1644,7 +1646,15 @@
     "restoreLinked": "From the backup taken on {{date}}. These apps use the database and lose it while the restore runs: {{apps}}.",
     "restoreUnlinked": "From the backup taken on {{date}}. No app is linked to it.",
     "retentionInvalid": "Enter a whole number of backups to keep, at least 1.",
-    "backupPolicySaved": "The backup schedule is saved."
+    "backupPolicySaved": "The backup schedule is saved.",
+    "statusDetail": {
+      "noCluster": "The panel is not connected to a cluster.",
+      "objectGone": "The database's Kubernetes object is gone.",
+      "waiting": "Waiting for the database to accept connections.",
+      "startingAgain": "Starting again on the disk it kept.",
+      "degraded": "{{ready}} of {{wanted}} instances are ready.",
+      "degradedLastOne": "{{ready}} of {{wanted}} instances are ready. The database is answering, but a failure of the one that is left is an outage."
+    }
   },
   "templates": {
     "title": "Templates",

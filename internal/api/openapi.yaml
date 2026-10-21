@@ -6241,6 +6241,7 @@ components:
         used_memory_mb: {type: integer}
         high_availability: {type: boolean}
         message: {type: string, description: 'Why the cluster could not be reached.'}
+        message_key: {type: string, description: 'noCluster when the panel has no cluster connection at all, so the message can be translated. Absent for an error the client returned.'}
 
     ServerUsage:
       type: object
@@ -7043,6 +7044,7 @@ components:
       properties:
         phase: {type: string, description: 'Such as running, deploying, sleeping, stopped or unknown.'}
         detail: {type: string}
+        detail_key: {type: string, description: 'noCluster when the panel has no cluster connection, so the detail can be translated.'}
         desired_replicas: {type: integer}
         ready_replicas: {type: integer}
         instances:
@@ -8218,6 +8220,8 @@ components:
         engine_version: {type: string}
         status: {type: string}
         status_detail: {type: string}
+        status_key: {type: string, description: 'Names the sentence in status_detail so it can be translated: noCluster, objectGone, waiting, startingAgain, degraded or degradedLastOne. Absent for a sentence the cluster wrote.'}
+        status_args: {type: array, items: {type: string}, description: 'The values in status_detail, in order: for degraded, the instances ready and the instances wanted.'}
         instances: {type: integer}
         storage_gb: {type: integer}
         cpu_request_m: {type: integer}

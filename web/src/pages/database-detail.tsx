@@ -128,7 +128,15 @@ export function DatabaseDetailPage() {
       <PageHeader
         icon={DatabaseIcon}
         title={record.name}
-        description={record.status_detail}
+        description={
+          record.status_key
+            ? t(`databases.statusDetail.${record.status_key}`, {
+                ready: record.status_args?.[0],
+                wanted: record.status_args?.[1],
+                defaultValue: record.status_detail,
+              })
+            : record.status_detail
+        }
         back={
           <Button variant="ghost" size="sm" asChild className="-ml-2">
             <Link to="/databases">

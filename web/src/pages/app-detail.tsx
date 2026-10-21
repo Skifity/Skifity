@@ -363,7 +363,7 @@ function phaseDetail(t: TFunction, status: AppStatus): string {
     case "not_deployed":
       return t(`apps.detail.${status.phase}`, { defaultValue: english })
     default:
-      return english
+      return status.detail_key === "noCluster" ? t("apps.detail.noCluster") : english
   }
 }
 

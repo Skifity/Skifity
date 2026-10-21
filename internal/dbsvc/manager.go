@@ -257,7 +257,7 @@ func (m *Manager) Status(ctx context.Context, databaseID string) (string, string
 
 func (m *Manager) readStatus(ctx context.Context, record store.Database, spec Spec) (string, string, error) {
 	if m.cluster == nil {
-		return "unknown", "The panel is not connected to a cluster.", nil
+		return "unknown", api.NoClusterDetail, nil
 	}
 	if spec.Namespace == "" {
 		env, err := m.db.GetEnvironment(ctx, record.EnvironmentID)
@@ -281,7 +281,7 @@ func (m *Manager) postgresStatus(ctx context.Context, spec Spec) (string, string
 		"postgresql.cnpg.io/v1", "Cluster", spec.Namespace, spec.Name)
 	if err != nil {
 		if kube.IsNotFound(err) {
-			return "missing", "The database's Kubernetes object is gone.", nil
+			return "missing", api.DatabaseDetailObjectGone, nil
 		}
 		return "unknown", err.Error(), nil
 	}
@@ -312,9 +312,7 @@ func interpretCNPGStatus(object *unstructured.Unstructured) (string, string) {
 
 	switch {
 	case ready > 0 && ready < wanted:
-		return "degraded", fmt.Sprintf(
-			"%d of %d instances are ready. The database is answering, but a failure of the one that is left is an outage.",
-			ready, wanted)
+		return "degraded", api.DatabaseDetailDegraded(ready, wanted)
 	case ready > 0:
 		return "running", ""
 	case strings.Contains(strings.ToLower(phase), "fail"):
@@ -329,7 +327,7 @@ func (m *Manager) statefulSetStatus(ctx context.Context, spec Spec) (string, str
 		StatefulSets(spec.Namespace).Get(ctx, spec.Name, metav1.GetOptions{})
 	if err != nil {
 		if kube.IsNotFound(err) {
-			return "missing", "The database's Kubernetes object is gone.", nil
+			return "missing", api.DatabaseDetailObjectGone, nil
 		}
 		return "unknown", err.Error(), nil
 	}
@@ -346,10 +344,9 @@ func (m *Manager) statefulSetStatus(ctx context.Context, spec Spec) (string, str
 	case statefulSet.Status.ReadyReplicas >= wanted:
 		return "running", "", nil
 	case statefulSet.Status.ReadyReplicas > 0:
-		return "degraded", fmt.Sprintf("%d of %d instances are ready.",
-			statefulSet.Status.ReadyReplicas, wanted), nil
+		return "degraded", api.DatabaseDetailDegraded(int64(statefulSet.Status.ReadyReplicas), int64(wanted)), nil
 	default:
-		return "starting", "Waiting for the database to accept connections.", nil
+		return "starting", api.DatabaseDetailWaiting, nil
 	}
 }
 

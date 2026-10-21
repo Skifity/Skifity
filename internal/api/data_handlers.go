@@ -26,7 +26,11 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeList(w, databases)
+	views := make([]databaseView, 0, len(databases))
+	for _, record := range databases {
+		views = append(views, viewDatabase(record))
+	}
+	writeList(w, views)
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -87,13 +91,16 @@ func (s *Server) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
 	// Refresh from the cluster so a database that finished provisioning while
 	// nobody was looking does not stay stuck at "creating".
 	if s.databases != nil {
-		if status, detail, err := s.databases.Status(r.Context(), record.ID); err == nil && status != record.Status {
+		// The line too: a database still degraded can have gone from one
+		// instance ready to two.
+		if status, detail, err := s.databases.Status(r.Context(), record.ID); err == nil &&
+			(status != record.Status || detail != record.StatusDetail) {
 			record.Status, record.StatusDetail = status, detail
 			_ = s.db.SetDatabaseStatus(r.Context(), record.ID, status, detail)
 		}
 	}
 	links, _ := s.db.ListLinksForDatabase(r.Context(), record.ID)
-	writeJSON(w, http.StatusOK, map[string]any{"database": record, "links": links})
+	writeJSON(w, http.StatusOK, map[string]any{"database": viewDatabase(record), "links": links})
 }
 
 func (s *Server) handleDeleteDatabase(w http.ResponseWriter, r *http.Request) {
