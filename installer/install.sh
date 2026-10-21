@@ -120,6 +120,8 @@ LOCK_DIR="/run/skifity-install.lock"
 SYSTEMD_DIR="/run/systemd/system"
 OS_RELEASE="/etc/os-release"
 MEMINFO="/proc/meminfo"
+# Where a process's systemd unit is read from, by the port check.
+PROC_DIR="/proc"
 CGROUP_CONTROLLERS="/sys/fs/cgroup/cgroup.controllers"
 PROC_CGROUPS="/proc/cgroups"
 # Where a question is asked and answered. Not stdin: under `curl | sh`, stdin
@@ -1158,7 +1160,7 @@ port_listeners() {
 	have ss || return 0
 	ss -lntpH "sport = :$1" 2>/dev/null | grep -o '"[^"]*",pid=[0-9]*' | sort -u |
 		sed 's/^"\(.*\)",pid=\([0-9]*\)$/\1 \2/' | while read -r name pid; do
-		unit=$(sed -n 's|.*/\([^/]*\.service\)$|\1|p' "/proc/${pid}/cgroup" 2>/dev/null | head -n 1)
+		unit=$(sed -n 's|.*/\([^/]*\.service\)$|\1|p' "${PROC_DIR}/${pid}/cgroup" 2>/dev/null | head -n 1)
 		printf '%s %s %s\n' "$name" "$pid" "${unit:--}"
 	done
 }

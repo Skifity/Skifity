@@ -1217,6 +1217,9 @@ run_install() {
       SYSTEMD_DIR="$R/run/systemd/system"
       OS_RELEASE="$R/etc/os-release"
       MEMINFO="$R/proc/meminfo"
+      # The stand-in ss names processes 811 and 812, and on a CI runner the
+      # real ones with those ids belong to some unit of the runner itself.
+      PROC_DIR="$R/proc"
       CGROUP_CONTROLLERS="$R/sys/fs/cgroup/cgroup.controllers"
       PROC_CGROUPS="$R/proc/cgroups"
       TTY_DEV="$R/dev/tty"
