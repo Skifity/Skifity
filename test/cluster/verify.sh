@@ -2601,14 +2601,20 @@ else
 	else
 		no "in maintenance the app answered ${CODE:-nothing}, not the notice"
 	fi
+	# Ten answers in a row, not the first: there is a guard on each server
+	# when there are two, and the run on 0273332 was answered by the one that
+	# had heard and then shown the notice by the one that had not.
 	if api DELETE "/api/apps/$APP_ID/maintenance" >/dev/null; then
-		for _ in $(seq 1 36); do
-			[ "$(through_ingress "$APP_HOST" 10)" = "200" ] && break
-			sleep 5
+		ENDED_AT=$(date +%s)
+		STEADY=0
+		for _ in $(seq 1 180); do
+			if [ "$(through_ingress "$APP_HOST" 10)" = "200" ]; then STEADY=$((STEADY + 1)); else STEADY=0; fi
+			[ "$STEADY" -ge 10 ] && break
+			sleep 1
 		done
-		[ "$(through_ingress "$APP_HOST" 10)" = "200" ] \
-			&& ok "the app answers again once maintenance ends" \
-			|| no "maintenance ended and the app still does not answer"
+		[ "$STEADY" -ge 10 ] \
+			&& ok "the app answers again once maintenance ends, ten requests in a row, $(($(date +%s) - ENDED_AT))s after it was ended" \
+			|| no "three minutes after maintenance ended the app did not answer ten requests in a row"
 	else
 		no "maintenance could not be ended"
 	fi
