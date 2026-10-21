@@ -273,8 +273,22 @@ func (db *DB) AppendBuildLog(ctx context.Context, deploymentID, stream, line str
 	return seq, err
 }
 
+// LastBuildLogSeq is the number of a deployment's newest stored line, or 0.
+func (db *DB) LastBuildLogSeq(ctx context.Context, deploymentID string) (int, error) {
+	var last sql.NullInt64
+	if err := db.QueryRowContext(ctx,
+		`SELECT MAX(seq) FROM build_logs WHERE deployment_id = ?`, deploymentID).Scan(&last); err != nil {
+		return 0, fmt.Errorf("find the last log sequence: %w", err)
+	}
+	return int(last.Int64), nil
+}
+
 // AppendBuildLogs stores a batch of lines in one transaction, which matters when
 // a build emits thousands of them.
+//
+// A line that already carries its number keeps it: a build numbers each line as
+// it streams it, before the batch the line belongs to is stored, so what a page
+// was sent and what it fetches later agree.
 func (db *DB) AppendBuildLogs(ctx context.Context, deploymentID string, lines []LogLine) error {
 	if len(lines) == 0 {
 		return nil
@@ -294,6 +308,9 @@ func (db *DB) AppendBuildLogs(ctx context.Context, deploymentID string, lines []
 		defer stmt.Close()
 		for _, l := range lines {
 			seq++
+			if l.Seq > 0 {
+				seq = l.Seq
+			}
 			at := l.At
 			if at.IsZero() {
 				at = time.Now()

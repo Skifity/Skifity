@@ -124,6 +124,18 @@ export function needsGeo(expr: FirewallExpr): GeoNeeds {
   return found
 }
 
+/** A test's values from the comma-separated text the form shows them as. */
+export function splitValues(text: string): string[] {
+  return text
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "")
+}
+
+export function sameValues(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
 /** A new, empty condition: one test that matches nothing until it is filled in. */
 export function newTest(): FirewallExpr {
   return { test: { field: "ip.src", op: "in", values: [] } }

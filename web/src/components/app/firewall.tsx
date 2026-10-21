@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { PlusIcon, Trash2Icon, ShieldIcon, TriangleAlertIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -29,6 +30,8 @@ import {
   newGroup,
   newTest,
   operatorsFor,
+  sameValues,
+  splitValues,
   withAction,
   withGroupKind,
   withoutCondition,
@@ -76,6 +79,7 @@ export function AppFirewall({ appId }: { appId: string }) {
     onSuccess: (saved) => {
       setDraft(null)
       queryClient.setQueryData(["firewall", appId], saved)
+      toast.success(t("common.saved"))
     },
   })
 
@@ -149,6 +153,7 @@ export function AppFirewall({ appId }: { appId: string }) {
             <RuleCard
               key={rule.id}
               rule={rule}
+              number={index + 1}
               onChange={(next) => updateRules(rules.map((r, i) => (i === index ? next : r)))}
               onRemove={() => updateRules(rules.filter((_, i) => i !== index))}
             />
@@ -230,14 +235,18 @@ export function AppFirewall({ appId }: { appId: string }) {
 
 function RuleCard({
   rule,
+  number,
   onChange,
   onRemove,
 }: {
   rule: FirewallRule
+  /** Its place in the list, which names a rule that has no name of its own. */
+  number: number
   onChange: (rule: FirewallRule) => void
   onRemove: () => void
 }) {
   const { t } = useTranslation()
+  const name = rule.name.trim() || t("firewall.ruleNumber", { number })
   return (
     <Card>
       <CardHeader className="flex flex-wrap items-center gap-3 pb-3">
@@ -273,7 +282,12 @@ function RuleCard({
             onCheckedChange={(enabled) => onChange({ ...rule, enabled })}
             aria-label={t("firewall.ruleEnabled")}
           />
-          <Button variant="ghost" size="icon" onClick={onRemove} aria-label={t("common.delete")}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            aria-label={t("common.removeNamed", { name })}
+          >
             <Trash2Icon className="size-4" />
           </Button>
         </div>
@@ -384,6 +398,22 @@ function ExprEditor({
   const { t } = useTranslation()
   const group = groupOf(expr)
 
+  // The form never makes one, but the engine has it and the API takes it. Read
+  // as a test, a rule saved with one showed "IP is in" nothing, and editing
+  // the row replaced it with exactly that.
+  if (expr.not) {
+    return (
+      <div className="space-y-2 rounded-md border border-dashed p-3">
+        <p className="text-sm text-muted-foreground">{t("firewall.except")}</p>
+        <ExprEditor
+          expr={expr.not}
+          depth={depth + 1}
+          onChange={(next) => onChange({ not: next })}
+        />
+      </div>
+    )
+  }
+
   if (!group) {
     return (
       <TestEditor test={expr.test ?? newTest().test!} onChange={(test) => onChange({ test })} />
@@ -426,7 +456,7 @@ function ExprEditor({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t("common.delete")}
+            aria-label={t("firewall.removeCondition", { number: index + 1 })}
             onClick={() => onChange(withoutCondition(expr, index))}
           >
             <Trash2Icon className="size-4" />
@@ -475,6 +505,16 @@ function TestEditor({
   // "contains" is selected would leave a comparison that can never match, and
   // the form should never be able to show one.
   const op = operators.includes(test.op) ? test.op : operators[0]
+
+  // The text as it is being typed. The box used to show the values joined
+  // back together, so the comma or space just typed was trimmed away before
+  // the next key: "ID, SG" became "IDSG", and a user agent could never hold
+  // a space. The values are still split from it on every change, so Save
+  // sends what is on screen; the text itself is let go on blur, and whenever
+  // it no longer says what the test holds — after a Cancel, say.
+  const [typed, setTyped] = useState<string | null>(null)
+  const shown =
+    typed !== null && sameValues(splitValues(typed), test.values) ? typed : test.values.join(", ")
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -530,19 +570,13 @@ function TestEditor({
       </Select>
 
       <Input
-        value={test.values.join(", ")}
+        value={shown}
         placeholder={t(`firewall.placeholders.${test.field}`)}
-        onChange={(e) =>
-          onChange({
-            ...test,
-            // Split on save rather than on every keystroke, so that typing a
-            // comma does not tear the value being typed into two.
-            values: e.target.value
-              .split(",")
-              .map((value) => value.trim())
-              .filter((value) => value !== ""),
-          })
-        }
+        onChange={(e) => {
+          setTyped(e.target.value)
+          onChange({ ...test, values: splitValues(e.target.value) })
+        }}
+        onBlur={() => setTyped(null)}
         className="min-w-48 flex-1"
         aria-label={t("firewall.values")}
       />

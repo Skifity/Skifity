@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useMutationState } from "@tanstack/react-query"
 import { LockIcon, LockOpenIcon } from "lucide-react"
 
 import { ErrorDisplay } from "@/components/error-display"
@@ -21,6 +21,9 @@ import { api } from "@/lib/api"
 import { formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App } from "@/lib/types"
+
+/** The unlock button's requests, which the notice reads the last refusal of. */
+const unlockKey = (appId: string) => ["unlock-deploys", appId]
 
 /**
  * Locking an app's deploys, the way `kamal lock` does.
@@ -45,6 +48,7 @@ export function DeployLockButton({ app }: { app: App }) {
     },
   })
   const unlock = useMutation({
+    mutationKey: unlockKey(app.id),
     mutationFn: () => api.delete(`/api/apps/${app.id}/lock`),
     onSuccess: invalidate,
   })
@@ -65,13 +69,19 @@ export function DeployLockButton({ app }: { app: App }) {
       </Button>
     )
   }
+  const setDialogOpen = (next: boolean) => {
+    // Opened again, the dialog asks afresh rather than showing the last
+    // refusal above an empty reason.
+    if (!next) lock.reset()
+    setOpen(next)
+  }
   return (
     <>
       <Button variant="outline" aria-label={t("apps.lockDeploys")} onClick={() => setOpen(true)}>
         <LockIcon />
         <span className="hidden sm:inline">{t("apps.lockDeploys")}</span>
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("apps.lockDeploys")}</DialogTitle>
@@ -96,7 +106,7 @@ export function DeployLockButton({ app }: { app: App }) {
             </div>
             {lock.error != null && <ErrorDisplay error={lock.error} compact />}
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
                 {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={lock.isPending || reason.trim() === ""}>
@@ -114,17 +124,28 @@ export function DeployLockButton({ app }: { app: App }) {
 /** Said at the top of the app while it holds: who, why and since when. */
 export function DeployLockNotice({ app }: { app: App }) {
   const { t } = useTranslation()
+  // Why Unlock did not unlock. The button is in the page's header, which has
+  // no room for an error, and the spinner simply stopped with the lock still
+  // on — in an incident, and for a viewer, whom the panel refuses.
+  const attempts = useMutationState({
+    filters: { mutationKey: unlockKey(app.id) },
+    select: (mutation) => mutation.state,
+  })
+  const last = attempts.at(-1)
   if (!app.deploy_lock) return null
   return (
     <Alert variant="warning">
       <LockIcon />
       <AlertTitle>{t("apps.deploysLocked")}</AlertTitle>
-      <AlertDescription>
-        {t("apps.deploysLockedBy", {
-          who: app.deploy_lock.locked_by,
-          when: formatRelative(app.deploy_lock.locked_at),
-          reason: app.deploy_lock.reason,
-        })}
+      <AlertDescription className="space-y-3">
+        <p>
+          {t("apps.deploysLockedBy", {
+            who: app.deploy_lock.locked_by,
+            when: formatRelative(app.deploy_lock.locked_at),
+            reason: app.deploy_lock.reason,
+          })}
+        </p>
+        {last?.status === "error" && <ErrorDisplay error={last.error} compact />}
       </AlertDescription>
     </Alert>
   )

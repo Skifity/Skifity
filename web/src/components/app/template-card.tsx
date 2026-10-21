@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ArrowUpCircleIcon, LayoutTemplateIcon } from "lucide-react"
 
+import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -33,6 +34,7 @@ type TemplateView = {
  */
 export function TemplateCard({ app }: { app: App }) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const view = useQuery({
     queryKey: ["app-template", app.id],
     queryFn: () => api.get<TemplateView>(`/api/apps/${app.id}/template`),
@@ -112,7 +114,18 @@ export function TemplateCard({ app }: { app: App }) {
                   size="sm"
                   variant="outline"
                   disabled={update.isPending}
-                  onClick={() => update.mutate({ force: data.changed_by_hand, skip_backup: true })}
+                  onClick={() => {
+                    // The backup is the way back if the new version damages
+                    // the data, so going without one is asked, not clicked.
+                    void confirm({
+                      title: t("apps.template.updateWithoutBackupTitle"),
+                      description: t("apps.template.updateWithoutBackupConfirm"),
+                      confirmLabel: t("apps.template.updateWithoutBackup"),
+                      destructive: true,
+                    }).then((yes) => {
+                      if (yes) update.mutate({ force: data.changed_by_hand, skip_backup: true })
+                    })
+                  }}
                 >
                   {t("apps.template.updateWithoutBackup")}
                 </Button>

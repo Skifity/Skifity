@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
@@ -38,12 +39,17 @@ import type { App, DriftItem, DriftReport } from "@/lib/types"
  */
 
 function useDrift(appId: string) {
+  const { team } = useSession()
   return useQuery({
     queryKey: ["drift", appId],
     queryFn: () => api.get<DriftReport>(`/api/apps/${appId}/drift`),
     // A few requests to the cluster each time; the notice and the card share
     // this one, and a page left open is refreshed by the watcher's event.
     staleTime: 30_000,
+    // Except for a member limited to some projects, who is refused the
+    // team's stream that event comes on. The watcher itself looks every few
+    // minutes, so once a minute is not behind it by much.
+    refetchInterval: team?.scoped ? 60_000 : false,
     retry: false,
   })
 }
@@ -173,20 +179,20 @@ export function DriftCard({ app }: { app: App }) {
         {repair.error != null && <ErrorDisplay error={repair.error} compact />}
 
         {canChange && report && report.status !== "not_deployed" && (
-          <label className="flex items-start justify-between gap-4 rounded-md border p-3">
-            <span className="space-y-1">
-              <span className="block text-sm font-medium">{t("drift.autoRepair")}</span>
-              <span className="block text-xs text-muted-foreground">
-                {t("drift.autoRepairHelp")}
-              </span>
-            </span>
+          <Field orientation="horizontal" className="items-start rounded-md border p-3">
+            <FieldContent>
+              <FieldLabel htmlFor={`drift-auto-repair-${app.id}`}>
+                {t("drift.autoRepair")}
+              </FieldLabel>
+              <FieldDescription className="text-xs">{t("drift.autoRepairHelp")}</FieldDescription>
+            </FieldContent>
             <Switch
+              id={`drift-auto-repair-${app.id}`}
               checked={report.auto_repair}
               disabled={autoRepair.isPending}
               onCheckedChange={(on) => autoRepair.mutate(on)}
-              aria-label={t("drift.autoRepair")}
             />
-          </label>
+          </Field>
         )}
         {autoRepair.error != null && <ErrorDisplay error={autoRepair.error} compact />}
       </CardContent>

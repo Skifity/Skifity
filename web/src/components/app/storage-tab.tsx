@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
+import { translated } from "@/lib/say"
 import { Input } from "@/components/ui/input"
 import { ScheduleField } from "@/components/schedule-field"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -66,6 +67,11 @@ export function StorageTab({ app }: { app: App }) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["volumes", app.id] })
+      // "data" and "/data" are suggestions for the first disk. Kept, the form
+      // reopened with the name just used and was refused as a duplicate.
+      setName("")
+      setMountPath("")
+      setSizeGB("5")
       setAdding(false)
     },
   })
@@ -86,13 +92,15 @@ export function StorageTab({ app }: { app: App }) {
   // dialog is where somebody finds out whether they can afford to press it, and
   // this screen already knows when the disk was last copied.
   const confirmDelete = useDeleteConfirm()
-  const askThenRemove = (volume: Volume, lastBackup?: string) => {
+  const askThenRemove = (volume: Volume, lastBackup: string | null | undefined) => {
     void confirmDelete(
       volume.name,
       t("apps.deleteVolumeConfirm", { path: volume.mount_path }),
-      lastBackup
-        ? t("apps.deleteVolumeLastBackup", { when: formatRelative(lastBackup) })
-        : t("apps.deleteVolumeNeverBackedUp"),
+      lastBackup === undefined
+        ? undefined
+        : lastBackup
+          ? t("apps.deleteVolumeLastBackup", { when: formatRelative(lastBackup) })
+          : t("apps.deleteVolumeNeverBackedUp"),
     ).then((yes) => {
       if (yes) remove.mutate(volume.id)
     })
@@ -152,7 +160,14 @@ export function StorageTab({ app }: { app: App }) {
               <p className="text-xs text-muted-foreground">{t("apps.volumeHelp")}</p>
               {add.error != null && <ErrorDisplay error={add.error} compact />}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    add.reset()
+                    setAdding(false)
+                  }}
+                >
                   {t("common.cancel")}
                 </Button>
                 <Button type="submit" disabled={add.isPending}>
@@ -256,19 +271,28 @@ function VolumeRow({
   appID: string
   volume: Volume
   deleting: boolean
-  onDelete: (volume: Volume, lastBackup?: string) => void
+  onDelete: (volume: Volume, lastBackup: string | null | undefined) => void
 }) {
   const { t } = useTranslation()
+  // The same list the backups dialog shows, not only the newest row: the
+  // newest can be one still running or one that failed, and the backup the
+  // delete dialog names is the newest that worked, wherever it is.
   const backups = useQuery({
-    queryKey: ["volume-backups", volume.id],
-    queryFn: () => api.get<List<Backup>>(`/api/apps/${appID}/volumes/${volume.id}/backups?limit=1`),
+    queryKey: ["volume-backups", volume.id, "all"],
+    queryFn: () => api.get<List<Backup>>(`/api/apps/${appID}/volumes/${volume.id}/backups`),
   })
 
   const [showBackups, setShowBackups] = useState(false)
 
-  const latest = backups.data?.items?.[0]
-  // Only a backup that worked is a backup.
-  const safe = latest && latest.status !== "failed" ? latest.created_at : undefined
+  const items = backups.data?.items ?? []
+  const latest = items[0]
+  // Only a backup that finished is a backup. One still running was offered
+  // as the safety net a second after "Back up now", and may never finish once
+  // the disk is gone; a skipped one copied nothing. Null is "never"; until the
+  // list has loaded it is not known, and nothing is claimed either way.
+  const safe = backups.data
+    ? (items.find((backup) => backup.status === "succeeded")?.created_at ?? null)
+    : undefined
 
   return (
     <TableRow>
@@ -278,10 +302,13 @@ function VolumeRow({
       <TableCell className="text-xs text-muted-foreground">
         {backups.isLoading ? (
           <Skeleton className="h-4 w-20" />
+        ) : backups.error != null ? (
+          t("common.unknown")
         ) : latest ? (
           <span>
             {formatRelative(latest.created_at)}
-            {latest.status === "failed" && ` · ${t("databases.status.failed")}`}
+            {latest.status !== "succeeded" &&
+              ` · ${t(`databases.backupStatus.${latest.status}`, { defaultValue: latest.status })}`}
           </span>
         ) : (
           t("common.never")
@@ -302,7 +329,8 @@ function VolumeRow({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t("common.delete")}
+            aria-label={t("apps.deleteVolumeNamed", { name: volume.name })}
+            title={t("apps.deleteVolumeNamed", { name: volume.name })}
             disabled={deleting}
             onClick={() => onDelete(volume, safe)}
           >
@@ -363,6 +391,11 @@ function VolumeBackupsDialog({
   const enabledValue = enabled ?? policy.data?.enabled ?? false
   const scheduleValue = schedule ?? policy.data?.schedule ?? "0 3 * * *"
   const retentionValue = retention ?? String(policy.data?.retention ?? 7)
+  const forgetEdits = () => {
+    setEnabled(null)
+    setSchedule(null)
+    setRetention(null)
+  }
 
   const savePolicy = useMutation({
     mutationFn: () =>
@@ -373,6 +406,7 @@ function VolumeBackupsDialog({
       }),
     onSuccess: () => {
       toast.success(t("common.saved"))
+      forgetEdits()
       void queryClient.invalidateQueries({ queryKey: ["volume-backup-policy", volume.id] })
     },
   })
@@ -389,46 +423,73 @@ function VolumeBackupsDialog({
   })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // The dialog stays mounted between openings, and an edit abandoned
+        // by closing it was still there the next time.
+        if (!next) {
+          forgetEdits()
+          savePolicy.reset()
+          restore.reset()
+        }
+        onOpenChange(next)
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("apps.volumeBackups", { name: volume.name })}</DialogTitle>
           <DialogDescription>{t("apps.volumeBackupsHelp")}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">{t("databases.backupsOn")}</span>
-            <Switch checked={enabledValue} onCheckedChange={setEnabled} />
-          </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ScheduleField
-              id={`volume-schedule-${volume.id}`}
-              value={scheduleValue}
-              onChange={setSchedule}
-              description={t("databases.backupScheduleFieldHelp")}
-            />
-            <Field>
-              <FieldLabel htmlFor={`volume-retention-${volume.id}`}>
-                {t("databases.retention")}
+        {/* Nothing to edit until the policy has loaded. The form showed its
+            defaults meanwhile, and on a failed load, and a Save from there
+            wrote "off" over a schedule that was on. */}
+        {policy.error != null ? (
+          <ErrorDisplay error={policy.error} compact onRetry={() => void policy.refetch()} />
+        ) : !policy.data ? (
+          <Skeleton className="h-32" />
+        ) : (
+          <div className="space-y-4">
+            <Field orientation="horizontal" className="justify-between gap-4">
+              <FieldLabel htmlFor={`volume-backups-on-${volume.id}`} className="font-normal">
+                {t("databases.backupsOn")}
               </FieldLabel>
-              <Input
-                id={`volume-retention-${volume.id}`}
-                type="number"
-                min={1}
-                value={retentionValue}
-                onChange={(event) => setRetention(event.target.value)}
+              <Switch
+                id={`volume-backups-on-${volume.id}`}
+                checked={enabledValue}
+                onCheckedChange={setEnabled}
               />
             </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ScheduleField
+                id={`volume-schedule-${volume.id}`}
+                value={scheduleValue}
+                onChange={setSchedule}
+                description={t("databases.backupScheduleFieldHelp")}
+              />
+              <Field>
+                <FieldLabel htmlFor={`volume-retention-${volume.id}`}>
+                  {t("databases.retention")}
+                </FieldLabel>
+                <Input
+                  id={`volume-retention-${volume.id}`}
+                  type="number"
+                  min={1}
+                  value={retentionValue}
+                  onChange={(event) => setRetention(event.target.value)}
+                />
+              </Field>
+            </div>
+            {savePolicy.error != null && <ErrorDisplay error={savePolicy.error} compact />}
+            <div className="flex justify-end">
+              <Button disabled={savePolicy.isPending} onClick={() => savePolicy.mutate()}>
+                {savePolicy.isPending && <Spinner />}
+                {t("common.save")}
+              </Button>
+            </div>
           </div>
-          {savePolicy.error != null && <ErrorDisplay error={savePolicy.error} compact />}
-          <div className="flex justify-end">
-            <Button disabled={savePolicy.isPending} onClick={() => savePolicy.mutate()}>
-              {savePolicy.isPending && <Spinner />}
-              {t("common.save")}
-            </Button>
-          </div>
-        </div>
+        )}
 
         {restore.error != null && <ErrorDisplay error={restore.error} />}
 
@@ -436,6 +497,11 @@ function VolumeBackupsDialog({
           {backups.isLoading ? (
             <div className="p-4">
               <Skeleton className="h-16" />
+            </div>
+          ) : backups.error != null ? (
+            // A list that could not be read is not an empty one.
+            <div className="p-4">
+              <ErrorDisplay error={backups.error} compact onRetry={() => void backups.refetch()} />
             </div>
           ) : (backups.data?.items?.length ?? 0) === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">{t("apps.noVolumeBackups")}</p>
@@ -499,7 +565,17 @@ function BackUpNow({ appID, volumeID }: { appID: string; volumeID: string }) {
       toast.success(t("databases.backupStarted"))
       void queryClient.invalidateQueries({ queryKey: ["volume-backups", volumeID] })
     },
-    onError: (error) => toast.error(toProblem(error)?.title ?? t("errors.somethingWentWrong")),
+    // A toast, because a table row has no room for the error card; but in
+    // the reader's language and with the fix, the way the card says it. It
+    // was the server's English title alone.
+    onError: (error) => {
+      const problem = toProblem(error)
+      if (!problem) return
+      const key = `errors.catalogue.${problem.code.replaceAll(".", "_")}`
+      toast.error(translated(t, `${key}.title`, problem.title), {
+        description: translated(t, `${key}.fix`, problem.fix, problem.args?.fix) || undefined,
+      })
+    },
   })
 
   return (

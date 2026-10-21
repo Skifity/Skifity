@@ -192,7 +192,14 @@ export function PortsCard({ app }: { app: App }) {
                 {open.isPending && <Spinner />}
                 {t("ports.add")}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  open.reset()
+                  setAdding(false)
+                }}
+              >
                 {t("common.cancel")}
               </Button>
             </div>

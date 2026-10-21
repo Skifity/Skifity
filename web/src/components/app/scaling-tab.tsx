@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { CheckCircle2Icon } from "lucide-react"
+import { toast } from "sonner"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { translated } from "@/lib/say"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
@@ -49,8 +50,16 @@ export function ScalingTab({ app }: { app: App }) {
   const save = useMutation({
     mutationFn: (next: Scaling) => api.put(`/api/apps/${app.id}/scaling`, next),
     onSuccess: () => {
+      // Let go of the edit, as the resources form does: kept, it hid every
+      // later change to what is stored — another user's, a rollback's — for
+      // as long as the tab stayed open.
+      setDraft(null)
+      toast.success(t("common.saved"))
       void queryClient.invalidateQueries({ queryKey: ["scaling", app.id] })
       void queryClient.invalidateQueries({ queryKey: ["app-status", app.id] })
+      // Scale to zero is written onto the app as well, and the GPU card reads
+      // it from there to warn that a sleeping app cannot hold a card.
+      void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
     },
   })
 
@@ -77,6 +86,7 @@ export function ScalingTab({ app }: { app: App }) {
     mutationFn: (next: Partial<App>) => api.patch(`/api/apps/${app.id}`, next),
     onSuccess: () => {
       setResourceDraft({})
+      toast.success(t("common.saved"))
       void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
     },
   })
@@ -98,6 +108,14 @@ export function ScalingTab({ app }: { app: App }) {
         <CardContent className="space-y-3">
           {readiness.isLoading ? (
             <p className="text-sm text-muted-foreground">{t("scaling.readinessChecking")}</p>
+          ) : readiness.error != null ? (
+            // A check that could not run is not a check that passed: this
+            // said "ready" in green when the cluster could not be read.
+            <ErrorDisplay
+              error={readiness.error}
+              compact
+              onRetry={() => void readiness.refetch()}
+            />
           ) : findings.length === 0 ? (
             <p className="flex items-center gap-2 text-sm text-success">
               <CheckCircle2Icon className="size-4" />
@@ -125,23 +143,26 @@ export function ScalingTab({ app }: { app: App }) {
           <CardTitle className="text-base">{t("scaling.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              {t("scaling.automatic")}
+          <Field orientation="horizontal" className="justify-between gap-4">
+            <FieldContent>
+              <FieldLabel htmlFor="scaling-automatic" className="font-normal">
+                {t("scaling.automatic")}
+              </FieldLabel>
               {/*
                 The line under the switch says what the switch does, and used to
                 repeat its own label when autoscaling was on: "Scale
                 automatically / Scale automatically".
               */}
-              <span className="block text-xs text-muted-foreground">
+              <FieldDescription className="text-xs">
                 {form.autoscale ? t("scaling.automaticHelp") : t("scaling.fixed")}
-              </span>
-            </span>
+              </FieldDescription>
+            </FieldContent>
             <Switch
+              id="scaling-automatic"
               checked={form.autoscale}
               onCheckedChange={(checked) => setForm({ ...form, autoscale: checked })}
             />
-          </label>
+          </Field>
 
           {form.autoscale ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -188,18 +209,21 @@ export function ScalingTab({ app }: { app: App }) {
             />
           )}
 
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              {t("scaling.scaleToZero")}
-              <span className="block text-xs text-muted-foreground">
+          <Field orientation="horizontal" className="justify-between gap-4">
+            <FieldContent>
+              <FieldLabel htmlFor="scaling-to-zero" className="font-normal">
+                {t("scaling.scaleToZero")}
+              </FieldLabel>
+              <FieldDescription className="text-xs">
                 {t("scaling.scaleToZeroHelp")}
-              </span>
-            </span>
+              </FieldDescription>
+            </FieldContent>
             <Switch
+              id="scaling-to-zero"
               checked={form.scale_to_zero}
               onCheckedChange={(checked) => setForm({ ...form, scale_to_zero: checked })}
             />
-          </label>
+          </Field>
 
           {/*
             Said out loud rather than left for somebody to discover. An app that

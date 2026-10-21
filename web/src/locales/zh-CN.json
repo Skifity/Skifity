@@ -69,7 +69,9 @@
     "copyFailed": "此处无法使用剪贴板。",
     "copyValue": "复制{{name}}",
     "show": "显示",
-    "hide": "隐藏"
+    "hide": "隐藏",
+    "saved": "已保存。",
+    "removeNamed": "移除 {{name}}"
   },
   "nav": {
     "overview": "总览",
@@ -545,7 +547,7 @@
     "runCommandHelp": "在该应用自己的镜像中、带着该应用的变量运行一次。用于迁移、回填数据，或查看数据。",
     "run": "运行",
     "running": "正在运行...",
-    "runningHelp": "命令正在运行，完成后会在这里显示输出。",
+    "runningHelp": "命令正在运行，其输出会显示在下方。",
     "runNoOutput": "命令已完成，没有任何输出。",
     "console": "控制台",
     "releaseCommand": "发布命令",
@@ -573,7 +575,11 @@
     "detail": {
       "sleeping": "没有人在使用，所以这个应用正在休眠。下一个请求会让它重新启动。",
       "stopped": "这个应用已缩容到零个实例。",
-      "not_deployed": "这个应用还没有部署过。"
+      "not_deployed": "这个应用还没有部署过。",
+      "running_other": "{{count}} 个实例正在运行。",
+      "updating": "{{desired}} 个实例中已有 {{ready}} 个就绪。",
+      "starting": "实例正在启动。",
+      "crashing": "应用启动后随即退出。日志的最后几行通常会说明原因。"
     },
     "mountPath": "挂载路径",
     "sizeGB": "大小（GB）",
@@ -676,7 +682,9 @@
       "backingUp": "正在更新到 {{image}} 之前进行备份…",
       "failed": "更新到 {{image}} 已停止，未做任何更改：{{reason}}",
       "started": "正在备份；备份完成后将部署更新。",
-      "upToDate": "与模板保持一致。"
+      "upToDate": "与模板保持一致。",
+      "updateWithoutBackupTitle": "不备份直接更新？",
+      "updateWithoutBackupConfirm": "不会先做任何备份。如果新版本损坏了磁盘或数据库中的数据，将没有副本可以恢复。"
     },
     "previewSeed": "预览的种子数据",
     "previewSeedHelp": "在每个新预览第一次部署后运行一次，给它空的数据库填上可以看的内容。不会在这个环境里运行，之后的推送也不会再运行。",
@@ -757,6 +765,28 @@
         "previews": "此应用的预览不使用 GPU，因此预览永远不会占用生产环境需要的显卡。"
       }
     },
+    "instanceStatus": {
+      "running": "运行中",
+      "notReady": "未就绪",
+      "starting": "启动中",
+      "waitingForCapacity": "等待资源",
+      "crashing": "反复崩溃",
+      "imageUnavailable": "无法拉取镜像",
+      "cannotStart": "无法启动",
+      "outOfMemory": "内存不足",
+      "failed": "失败",
+      "stopping": "正在停止",
+      "exited": "已退出",
+      "unknown": "未知"
+    },
+    "restartStarted": "正在重启，实例会逐个替换。",
+    "runName": "运行：{{name}}",
+    "scheduledEnabledNamed": "按计划运行 {{name}}",
+    "logsPause": "暂停",
+    "logsResume": "继续",
+    "deleteVolumeNamed": "删除磁盘 {{name}}",
+    "internalConfirmTitle": "让 {{name}} 脱离公网？",
+    "internalConfirm": "保存后，它的公共地址会立即停止响应。同一环境中的其他应用仍可通过名称访问它。",
     "creating": "正在创建…",
     "createAndDeploy": "创建并部署",
     "composePlanTitle": "{{name}} 会按 Compose 文件的描述创建",
@@ -851,7 +881,8 @@
     "noLogYet": "构建日志中还没有任何内容。",
     "deployAnyway": "仍然部署",
     "deployAnywayConfirm": "即使镜像中有已提供修复的严重漏洞，也会部署它。此操作会连同你的名字记录在活动日志中。",
-    "acceptedVulnerabilities": "已接受漏洞"
+    "acceptedVulnerabilities": "已接受漏洞",
+    "started": "部署 #{{number}} 已开始。"
   },
   "variables": {
     "title": "变量",
@@ -4341,7 +4372,10 @@
       "hour": "小时",
       "help": "按每位访问者的地址计数。超过上限后，在该时间段结束前一律返回 429 Too Many Requests；未超过时，后面的规则照常生效。",
       "seconds_other": "{{count}} 秒"
-    }
+    },
+    "ruleNumber": "规则 {{number}}",
+    "removeCondition": "移除条件 {{number}}",
+    "except": "除以下之外的任何请求："
   },
   "appPassword": {
     "title": "密码",
@@ -4704,7 +4738,13 @@
     "previewBranchTitle": "预览 {{name}} 的分支",
     "previewBranchHelp": "此应用的副本，从该分支构建，位于独立的预览环境中并拥有自己的数据库——与该分支的拉取请求获得的预览相同，因此之后打开拉取请求会更新它，而不是再创建一个。",
     "previewBranchRemove": "它会一直保留，直到分支被删除、其拉取请求被关闭，或有人用 skifity preview --close 关闭它。",
-    "start": "开始预览"
+    "start": "开始预览",
+    "openPreviews": "当前打开的分支预览",
+    "openPreview": "打开",
+    "closeNamed": "关闭 {{branch}} 的预览",
+    "closeTitle": "关闭 {{branch}} 的预览？",
+    "closeConfirm": "{{environment}} 及其中的一切都会被删除：此应用及其他应用的副本、它们的数据库和磁盘。分支本身不受影响。",
+    "closed": "{{branch}} 的预览已关闭。"
   },
   "security": {
     "title": "已知漏洞",

@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
@@ -200,28 +200,28 @@ function FileDialog({ app, file, onClose }: { app: App; file?: AppFile; onClose:
             />
           </Field>
           <div className="space-y-3">
-            <label className="flex items-start gap-2 text-sm">
+            <Field orientation="horizontal">
               <Checkbox
+                id="file-secret"
                 checked={secret}
                 onCheckedChange={(checked) => setSecret(checked === true)}
-                className="mt-0.5"
               />
-              <span>
-                <span className="font-medium">{t("files.secret")}</span>
-                <span className="block text-muted-foreground">{t("files.secretHelp")}</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm">
+              <FieldContent>
+                <FieldLabel htmlFor="file-secret">{t("files.secret")}</FieldLabel>
+                <FieldDescription>{t("files.secretHelp")}</FieldDescription>
+              </FieldContent>
+            </Field>
+            <Field orientation="horizontal">
               <Checkbox
+                id="file-executable"
                 checked={executable}
                 onCheckedChange={(checked) => setExecutable(checked === true)}
-                className="mt-0.5"
               />
-              <span>
-                <span className="font-medium">{t("files.executable")}</span>
-                <span className="block text-muted-foreground">{t("files.executableHelp")}</span>
-              </span>
-            </label>
+              <FieldContent>
+                <FieldLabel htmlFor="file-executable">{t("files.executable")}</FieldLabel>
+                <FieldDescription>{t("files.executableHelp")}</FieldDescription>
+              </FieldContent>
+            </Field>
           </div>
           {save.error != null && <ErrorDisplay error={save.error} compact />}
           <DialogFooter>

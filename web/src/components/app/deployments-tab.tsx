@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { cn } from "cn"
 
 import { DeployAnywayButton } from "@/components/app/security-tab"
+import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { StatusBadge } from "@/components/status-badge"
@@ -37,10 +38,12 @@ import {
 } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Card, CardContent } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useEvents } from "@/hooks/use-events"
+import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatDuration, formatRelative, shortCommit } from "@/lib/format"
 import { queryClient } from "@/lib/query"
@@ -50,6 +53,7 @@ const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
 
 export function DeploymentsTab({ app }: { app: App }) {
   const { t } = useTranslation()
+  const { team } = useSession()
   // null means "nothing chosen yet", which is not the same as "chosen nothing":
   // a running deployment opens itself until the user closes it.
   const [opened, setOpened] = useState<string | null>(null)
@@ -58,6 +62,14 @@ export function DeploymentsTab({ app }: { app: App }) {
   const deployments = useQuery({
     queryKey: ["deployments", app.id],
     queryFn: () => api.get<List<Deployment>>(`/api/apps/${app.id}/deployments`),
+    // A member limited to some projects is refused the team's event stream,
+    // so a deployment of theirs that is under way is polled until it ends:
+    // otherwise a row they were not watching the log of said "building" for
+    // ever. Nothing is polled once every deployment has finished.
+    refetchInterval: (query) =>
+      team?.scoped && query.state.data?.items.some((item) => !TERMINAL.has(item.status))
+        ? 5_000
+        : false,
   })
 
   const items = deployments.data?.items ?? []
@@ -135,139 +147,142 @@ export function DeploymentsTab({ app }: { app: App }) {
         const open = selected === deployment.id
         return (
           <Card key={deployment.id} className={cn(open && "border-primary/40")}>
-            <CardContent className="space-y-4 py-4">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  onClick={() => setSelected(open ? null : deployment.id)}
-                  aria-expanded={open}
-                >
-                  <span className="font-mono text-sm text-muted-foreground">
-                    #{deployment.number}
-                  </span>
-                  <StatusBadge
-                    status={deployment.status}
-                    label={t(`deploy.status.${deployment.status}`, {
-                      defaultValue: deployment.status,
-                    })}
-                  />
-                  {deployment.id === live && (
-                    <Badge className="gap-1 border-success/30 bg-success/10 text-success">
-                      <CircleDotIcon className="size-3" />
-                      {t("deploy.live")}
-                    </Badge>
-                  )}
-                  {deployment.accepted_vulnerabilities && (
-                    <Badge
-                      variant="outline"
-                      className="gap-1 border-destructive/40 text-destructive"
-                    >
-                      <ShieldAlertIcon className="size-3" />
-                      {t("deploy.acceptedVulnerabilities")}
-                    </Badge>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {deployment.commit_message || triggerLabel(t, deployment)}
-                  </span>
-                </button>
-
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  {deployment.commit_sha && (
-                    <span className="flex items-center gap-1 font-mono">
-                      <GitCommitHorizontalIcon className="size-3.5" />
-                      {shortCommit(deployment.commit_sha)}
+            <CardContent className="py-4">
+              <Collapsible
+                open={open}
+                onOpenChange={(next) => setSelected(next ? deployment.id : null)}
+                className="space-y-4"
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-sm text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                    <span className="font-mono text-sm text-muted-foreground">
+                      #{deployment.number}
                     </span>
-                  )}
-                  <span>{formatRelative(deployment.created_at)}</span>
-                  {deployment.started_at && (
-                    <span>{formatDuration(deployment.started_at, deployment.finished_at)}</span>
-                  )}
-                </div>
+                    <StatusBadge
+                      status={deployment.status}
+                      label={t(`deploy.status.${deployment.status}`, {
+                        defaultValue: deployment.status,
+                      })}
+                    />
+                    {deployment.id === live && (
+                      <Badge className="gap-1 border-success/30 bg-success/10 text-success">
+                        <CircleDotIcon className="size-3" />
+                        {t("deploy.live")}
+                      </Badge>
+                    )}
+                    {deployment.accepted_vulnerabilities && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-destructive/40 text-destructive"
+                      >
+                        <ShieldAlertIcon className="size-3" />
+                        {t("deploy.acceptedVulnerabilities")}
+                      </Badge>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {deployment.commit_message || triggerLabel(t, deployment)}
+                    </span>
+                  </CollapsibleTrigger>
 
-                {/* The version that is serving is the one most worth promoting,
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {deployment.commit_sha && (
+                      <span className="flex items-center gap-1 font-mono">
+                        <GitCommitHorizontalIcon className="size-3.5" />
+                        {shortCommit(deployment.commit_sha)}
+                      </span>
+                    )}
+                    <span>{formatRelative(deployment.created_at)}</span>
+                    {deployment.started_at && (
+                      <span>{formatDuration(deployment.started_at, deployment.finished_at)}</span>
+                    )}
+                  </div>
+
+                  {/* The version that is serving is the one most worth promoting,
                     so this is offered on it too, unlike a rollback. */}
-                {deployment.status === "succeeded" &&
-                  deployment.can_rollback !== false &&
-                  promoteTargets.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => setPromoting(deployment)}>
-                      <ArrowUpRightIcon className="size-3.5" />
-                      {t("deploy.promote")}
-                    </Button>
-                  )}
+                  {deployment.status === "succeeded" &&
+                    deployment.can_rollback !== false &&
+                    promoteTargets.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={() => setPromoting(deployment)}>
+                        <ArrowUpRightIcon className="size-3.5" />
+                        {t("deploy.promote")}
+                      </Button>
+                    )}
 
-                {TERMINAL.has(deployment.status) ? (
-                  // Not on the version that is already serving: rolling back to
-                  // what is running is a deployment that changes nothing, and a
-                  // button offering it invites the question of what it would do.
-                  deployment.status === "succeeded" &&
-                  deployment.id !== live &&
-                  (deployment.can_rollback === false ? (
-                    // Said rather than hidden. A button that is simply absent
-                    // on old versions reads as a bug; this says why, and the
-                    // answer — deploy that commit again — is a real one.
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-xs text-muted-foreground">
-                          {t("deploy.imageCollected")}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("deploy.imageCollectedHelp")}</TooltipContent>
-                    </Tooltip>
+                  {TERMINAL.has(deployment.status) ? (
+                    // Not on the version that is already serving: rolling back to
+                    // what is running is a deployment that changes nothing, and a
+                    // button offering it invites the question of what it would do.
+                    deployment.status === "succeeded" &&
+                    deployment.id !== live &&
+                    (deployment.can_rollback === false ? (
+                      // Said rather than hidden. A button that is simply absent
+                      // on old versions reads as a bug; this says why, and the
+                      // answer — deploy that commit again — is a real one.
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xs text-muted-foreground">
+                            {t("deploy.imageCollected")}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("deploy.imageCollectedHelp")}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRollingBackTo(deployment)}
+                      >
+                        <RotateCcwIcon className="size-3.5" />
+                        {t("deploy.rollback")}
+                      </Button>
+                    ))
                   ) : (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setRollingBackTo(deployment)}
+                      disabled={cancel.isPending}
+                      onClick={() => cancel.mutate(deployment.id)}
                     >
-                      <RotateCcwIcon className="size-3.5" />
-                      {t("deploy.rollback")}
+                      <XIcon className="size-3.5" />
+                      {t("common.cancel")}
                     </Button>
-                  ))
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={cancel.isPending}
-                    onClick={() => cancel.mutate(deployment.id)}
-                  >
-                    <XIcon className="size-3.5" />
-                    {t("common.cancel")}
-                  </Button>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {deployment.error_message && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                  {/* The headline in the reader's language, from the error's
+                {deployment.error_message && (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                    {/* The headline in the reader's language, from the error's
                       code; the particulars below are the server's, which
                       carry the names and numbers a translation cannot. */}
-                  {deployment.error_code && (
-                    <p className="font-medium">
-                      {t(`errors.catalogue.${deployment.error_code.replaceAll(".", "_")}.title`, {
-                        defaultValue: deployment.error_message,
-                      })}
+                    {deployment.error_code && (
+                      <p className="font-medium">
+                        {t(`errors.catalogue.${deployment.error_code.replaceAll(".", "_")}.title`, {
+                          defaultValue: deployment.error_message,
+                        })}
+                      </p>
+                    )}
+                    <p className={deployment.error_code ? "mt-1" : "font-medium"}>
+                      {deployment.error_message}
                     </p>
-                  )}
-                  <p className={deployment.error_code ? "mt-1" : "font-medium"}>
-                    {deployment.error_message}
-                  </p>
-                  {deployment.error_hint && (
-                    <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
-                  )}
-                  {/* Only the newest: an older one stopped the same way was
+                    {deployment.error_hint && (
+                      <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
+                    )}
+                    {/* Only the newest: an older one stopped the same way was
                       followed by something else, and deploying it now would
                       go back past that. */}
-                  {deployment.error_code === "deploy.vulnerable" &&
-                    deployment.id === items[0]?.id && (
-                      <div className="mt-3">
-                        <DeployAnywayButton app={app} deployment={deployment} />
-                      </div>
-                    )}
-                </div>
-              )}
+                    {deployment.error_code === "deploy.vulnerable" &&
+                      deployment.id === items[0]?.id && (
+                        <div className="mt-3">
+                          <DeployAnywayButton app={app} deployment={deployment} />
+                        </div>
+                      )}
+                  </div>
+                )}
 
-              {open && <BuildLog appId={app.id} deployment={deployment} />}
+                <CollapsibleContent>
+                  <BuildLog appId={app.id} deployment={deployment} />
+                </CollapsibleContent>
+              </Collapsible>
             </CardContent>
           </Card>
         )
@@ -407,18 +422,28 @@ function PromoteDialog({
   const [targetID, setTargetID] = useState(targets[0].app_id)
   const target = targets.find((candidate) => candidate.app_id === targetID) ?? targets[0]
   const promote = useMutation({
-    mutationFn: (force: boolean) =>
-      api.post(`/api/apps/${target.app_id}/promote`, { deployment_id: source.id, force }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["deployments", target.app_id] })
+    // The target travels with the request, so what the answer is about is the
+    // environment it was asked of, not whichever one is selected by then.
+    mutationFn: ({ to, force }: { to: PromoteTarget; force: boolean }) =>
+      api.post(`/api/apps/${to.app_id}/promote`, { deployment_id: source.id, force }),
+    onSuccess: (_, { to }) => {
+      void queryClient.invalidateQueries({ queryKey: ["deployments", to.app_id] })
       toast.success(
-        t("deploy.promoted", { number: source.number, environment: target.environment_name }),
+        t("deploy.promoted", { number: source.number, environment: to.environment_name }),
       )
       onClose()
     },
   })
+  // The build-time check is per target. A refusal from staging, still on
+  // screen after the choice moved to production, turned the button into
+  // "Promote anyway" and forced a deploy to an environment nobody had checked.
+  // The error is cleared when the target changes, and only ever honoured for
+  // the target it came back from.
+  const errorIsForTarget = promote.variables?.to.app_id === target.app_id
   const builtDifferently =
-    promote.error instanceof ApiError && promote.error.problem.code === "promote.built_differently"
+    errorIsForTarget &&
+    promote.error instanceof ApiError &&
+    promote.error.problem.code === "promote.built_differently"
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -428,7 +453,13 @@ function PromoteDialog({
           <DialogDescription>{t("deploy.promoteHelp")}</DialogDescription>
         </DialogHeader>
         {targets.length > 1 && (
-          <Select value={targetID} onValueChange={setTargetID}>
+          <Select
+            value={targetID}
+            onValueChange={(next) => {
+              promote.reset()
+              setTargetID(next)
+            }}
+          >
             <SelectTrigger aria-label={t("deploy.promoteEnvironment")}>
               <SelectValue />
             </SelectTrigger>
@@ -448,7 +479,9 @@ function PromoteDialog({
             environment: target.environment_name,
           })}
         </p>
-        {promote.error != null && <ErrorDisplay error={promote.error} compact />}
+        {promote.error != null && errorIsForTarget && (
+          <ErrorDisplay error={promote.error} compact />
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             {t("common.cancel")}
@@ -457,13 +490,16 @@ function PromoteDialog({
             <Button
               variant="destructive"
               disabled={promote.isPending}
-              onClick={() => promote.mutate(true)}
+              onClick={() => promote.mutate({ to: target, force: true })}
             >
               {promote.isPending ? <Spinner /> : <ArrowUpRightIcon />}
               {t("deploy.promoteAnyway")}
             </Button>
           ) : (
-            <Button disabled={promote.isPending} onClick={() => promote.mutate(false)}>
+            <Button
+              disabled={promote.isPending}
+              onClick={() => promote.mutate({ to: target, force: false })}
+            >
               {promote.isPending ? <Spinner /> : <ArrowUpRightIcon />}
               {t("deploy.promoteTo", { environment: target.environment_name })}
             </Button>
@@ -502,31 +538,92 @@ function triggerLabel(t: TFunction, deployment: Deployment): string {
   return deployment.trigger
 }
 
+/** A line as the event stream sends it: numbered, except from an older panel. */
+type StreamedLine = { seq?: number; line: string }
+
+type StoredLog = { lines: LogLine[]; finished: boolean }
+
+/** The most lines the server answers with at once. */
+const LOG_PAGE = 5000
+
+/**
+ * Every stored line of a deployment's log. The server answers a page at a
+ * time, and a build that printed more than one page used to show only its
+ * first, with no sign that the rest existed.
+ */
+async function readBuildLog(appId: string, deploymentId: string): Promise<StoredLog> {
+  const path = `/api/apps/${appId}/deployments/${deploymentId}/logs?limit=${LOG_PAGE}`
+  const first = await api.get<StoredLog>(path)
+  const lines = [...first.lines]
+  let page = first.lines
+  while (page.length === LOG_PAGE) {
+    page = (await api.get<StoredLog>(`${path}&since=${page[page.length - 1].seq}`)).lines
+    lines.push(...page)
+  }
+  return { lines, finished: first.finished }
+}
+
+/**
+ * The stored lines and the streamed ones as one log, in order and each once.
+ *
+ * Lines are numbered from 1 without a hole, so fewer numbers than the highest
+ * one means some were never seen: sent before the stream was opened, and not
+ * yet stored when the log was fetched.
+ */
+function mergeLog(stored: LogLine[], streamed: StreamedLine[]) {
+  const bySeq = new Map<number, string>()
+  let highest = 0
+  for (const entry of stored) {
+    bySeq.set(entry.seq, entry.line)
+    highest = Math.max(highest, entry.seq)
+  }
+  const unnumbered: string[] = []
+  for (const entry of streamed) {
+    if (entry.seq === undefined) {
+      unnumbered.push(entry.line)
+      continue
+    }
+    bySeq.set(entry.seq, entry.line)
+    highest = Math.max(highest, entry.seq)
+  }
+  const ordered = [...bySeq.entries()].sort((a, b) => a[0] - b[0]).map(([, line]) => line)
+  return { lines: [...ordered, ...unnumbered], gap: bySeq.size < highest }
+}
+
 /**
  * The build log.
  *
- * Lines already stored are fetched once, and everything after that arrives on
- * the event stream. Reloading the page mid-build therefore shows the whole log,
- * not just what happened after the reload.
+ * The stored lines are fetched, and everything after that arrives on the event
+ * stream. Reloading the page mid-build therefore shows the whole log, not just
+ * what happened after the reload.
+ *
+ * The two overlap and can leave a hole between them, because a build sends
+ * each line as it comes and stores them in batches. Every line carries its
+ * number, so one that came both ways is shown once, and a hole is filled by
+ * reading the stored log again until the batch holding it is written.
  */
 function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment }) {
   const { t } = useTranslation()
-  const [live, setLive] = useState<string[]>([])
-  const bottom = useRef<HTMLDivElement>(null)
+  const [streamed, setStreamed] = useState<StreamedLine[]>([])
   const finished = TERMINAL.has(deployment.status)
 
   const stored = useQuery({
     queryKey: ["build-log", deployment.id],
-    queryFn: () =>
-      api.get<{ lines: LogLine[]; finished: boolean }>(
-        `/api/apps/${appId}/deployments/${deployment.id}/logs`,
-      ),
+    queryFn: () => readBuildLog(appId, deployment.id),
+    // A finished log never changes. One still being written is read again
+    // whenever it is opened, rather than served from a cache that is behind.
+    staleTime: (query) => (query.state.data?.finished ? Infinity : 0),
+    refetchInterval: (query) =>
+      !finished && mergeLog(query.state.data?.lines ?? [], streamed).gap ? 2_000 : false,
   })
 
   useEvents(
     [`deployment:${deployment.id}`],
     {
-      log: (data) => setLive((previous) => [...previous, (data as { line: string }).line]),
+      log: (data) => {
+        const { seq, line } = data as StreamedLine
+        setStreamed((previous) => [...previous, { seq, line }])
+      },
       deployment: () => {
         void queryClient.invalidateQueries({ queryKey: ["deployments", appId] })
       },
@@ -534,11 +631,22 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
     !finished,
   )
 
-  const lines = [...(stored.data?.lines ?? []).map((entry) => entry.line), ...live]
-
+  // It finished while open. The log that was fetched was still being written,
+  // and its last batch is stored only as the build ends, so it is read again,
+  // whole, and what was streamed is let go.
+  const behind = finished && stored.data !== undefined && !stored.data.finished
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "nearest" })
-  }, [lines.length])
+    if (!behind) return
+    void queryClient
+      .invalidateQueries({ queryKey: ["build-log", deployment.id] })
+      .then(() => setStreamed([]))
+  }, [behind, deployment.id])
+
+  const lines = useMemo(
+    () => mergeLog(stored.data?.lines ?? [], streamed).lines,
+    [stored.data, streamed],
+  )
+  const stick = useStickToBottom(lines)
 
   if (stored.isLoading) return <Skeleton className="h-40" />
   if (stored.error) return <ErrorDisplay error={stored.error} compact />
@@ -556,10 +664,9 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground">{t("deploy.buildLog")}</p>
-      <ScrollArea className="h-80 rounded-md border bg-muted/30">
+      <ScrollArea className="h-80 rounded-md border bg-muted/30" {...stick}>
         <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
           {lines.join("\n")}
-          <div ref={bottom} />
         </pre>
       </ScrollArea>
     </div>
@@ -571,7 +678,10 @@ export function DeployButton({ appId, force }: { appId: string; force?: boolean 
 
   const deploy = useMutation({
     mutationFn: () => api.post<Deployment>(`/api/apps/${appId}/deploy`, { force: force ?? false }),
-    onSuccess: () => {
+    onSuccess: (started) => {
+      // Said, because from any tab but Deployments nothing else on screen
+      // changes when a deployment starts.
+      toast.success(t("deploy.started", { number: started.number }))
       void queryClient.invalidateQueries({ queryKey: ["deployments", appId] })
       void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })
     },

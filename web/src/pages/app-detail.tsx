@@ -1,7 +1,9 @@
 import { Link, useSearchParams, useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { BoxIcon, ExternalLinkIcon, InfoIcon, RefreshCwIcon, RocketIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { AdvancedTab } from "@/components/app/advanced-tab"
 import { DeployButton, DeploymentsTab } from "@/components/app/deployments-tab"
@@ -9,7 +11,7 @@ import { SendFolderButton } from "@/components/folder-picker"
 import { DomainsTab } from "@/components/app/domains-tab"
 import { AppFirewall } from "@/components/app/firewall"
 import { AppPasswordProtection } from "@/components/app/password-protection"
-import { ConsoleTab } from "@/components/app/console-tab"
+import { ConsoleTab, RUN_PARAM } from "@/components/app/console-tab"
 import { LogsTab } from "@/components/app/logs-tab"
 import { ScalingTab } from "@/components/app/scaling-tab"
 import { SecurityTab, vulnerabilitiesKey } from "@/components/app/security-tab"
@@ -48,7 +50,7 @@ import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { App, AppStatus, Environment, Project } from "@/lib/types"
+import type { App, AppStatus, Environment, Instance, Project } from "@/lib/types"
 
 export function AppDetailPage() {
   const { t } = useTranslation()
@@ -57,6 +59,16 @@ export function AppDetailPage() {
   const confirm = useConfirm()
   const [params, setParams] = useSearchParams()
   const tab = params.get("tab") ?? "overview"
+  // A console run stays named in the address while other tabs are open, so
+  // its output is there again when the console is: see ConsoleTab.
+  const openTab = (next: string) =>
+    setParams((previous) => {
+      const kept = new URLSearchParams()
+      if (next !== "overview") kept.set("tab", next)
+      const run = previous.get(RUN_PARAM)
+      if (run) kept.set(RUN_PARAM, run)
+      return kept
+    })
 
   const app = useQuery({
     queryKey: ["app", appId],
@@ -99,7 +111,13 @@ export function AppDetailPage() {
       // over between deployments, and a certificate that went active or failed.
       // The status poll caught the first within ten seconds; the second was not
       // caught at all, on the tab where somebody sits and waits for it.
-      app: () => void queryClient.invalidateQueries({ queryKey: ["app-status", appId] }),
+      //
+      // An app event is also how an alert crossing its threshold is said, and
+      // the usage card's "firing" line read the alerts it loaded first.
+      app: () => {
+        void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })
+        void queryClient.invalidateQueries({ queryKey: ["alerts", appId] })
+      },
       domain: () => void queryClient.invalidateQueries({ queryKey: ["domains", appId] }),
       // A scan of this app's image, or any other's: which one is not worth
       // reading the event for, and a refetch of one report is cheap.
@@ -112,7 +130,12 @@ export function AppDetailPage() {
 
   const restart = useMutation({
     mutationFn: () => api.post(`/api/apps/${appId}/restart`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app-status", appId] }),
+    onSuccess: () => {
+      // Instances are replaced one at a time, so for a while nothing on the
+      // page looks any different from before the button was pressed.
+      toast.success(t("apps.restartStarted"))
+      void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })
+    },
   })
 
   if (app.error) return <ErrorDisplay error={app.error} onRetry={() => void app.refetch()} />
@@ -173,7 +196,7 @@ export function AppDetailPage() {
             </Button>
             {current.source_type === "upload" && <SendFolderButton app={current} />}
             {current.source_type === "git" && environment.data?.kind === "standard" && (
-              <PreviewBranchButton app={current} />
+              <PreviewBranchButton app={current} projectId={environment.data.project_id} />
             )}
             <DeployLockButton app={current} />
             <DeployButton appId={appId} />
@@ -222,14 +245,9 @@ export function AppDetailPage() {
       <DeployLockNotice app={current} />
       <MaintenanceNotice app={current} />
       {/* Not on the Advanced tab itself, which lists the same thing in full. */}
-      {tab !== "advanced" && (
-        <DriftNotice app={current} onOpen={() => setParams({ tab: "advanced" })} />
-      )}
+      {tab !== "advanced" && <DriftNotice app={current} onOpen={() => openTab("advanced")} />}
 
-      <Tabs
-        value={tab}
-        onValueChange={(next) => setParams(next === "overview" ? {} : { tab: next })}
-      >
+      <Tabs value={tab} onValueChange={openTab}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">{t("apps.overview")}</TabsTrigger>
           <TabsTrigger value="deployments">{t("apps.deployments")}</TabsTrigger>
@@ -246,7 +264,13 @@ export function AppDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="pt-4">
-          <Overview app={current} status={status.data} loading={status.isLoading} />
+          <Overview
+            app={current}
+            status={status.data}
+            loading={status.isLoading}
+            error={status.error}
+            onRetry={() => void status.refetch()}
+          />
         </TabsContent>
         <TabsContent value="deployments" className="pt-4">
           <DeploymentsTab app={current} />
@@ -313,10 +337,109 @@ function detailTone(phase?: string): "destructive" | "warning" | "default" {
   }
 }
 
-function Overview({ app, status, loading }: { app: App; status?: AppStatus; loading: boolean }) {
+/**
+ * The sentence under the phase, in the reader's language.
+ *
+ * The phases whose sentence never varies, or varies only by the instance
+ * counts the response already carries, are said here; the rest carry a
+ * message from the cluster and fall back to what the panel was told, in
+ * English. "1 instance(s) running." was the most common sentence on this page,
+ * and it was English in all five languages.
+ */
+function phaseDetail(t: TFunction, status: AppStatus): string {
+  const english = status.detail ?? ""
+  switch (status.phase) {
+    case "running":
+      return t("apps.detail.running", { count: status.ready_replicas })
+    case "updating":
+      return t("apps.detail.updating", {
+        ready: status.ready_replicas,
+        desired: status.desired_replicas,
+      })
+    case "starting":
+    case "crashing":
+    case "sleeping":
+    case "stopped":
+    case "not_deployed":
+      return t(`apps.detail.${status.phase}`, { defaultValue: english })
+    default:
+      return english
+  }
+}
+
+/** What an instance's state is called and how loudly it reads. */
+type InstanceState = { key: string; tone: string }
+
+/**
+ * An instance's state, in the product's words.
+ *
+ * The cluster reports a pod's phase, or the reason its container is waiting or
+ * stopped, and that word was shown as it came: CrashLoopBackOff on the
+ * Overview, in English in every language, and in the same grey as an instance
+ * nobody knows anything about. Each reason is one of a few states here, with a
+ * word of its own and the colour of what it means; the cluster's own message
+ * is still in the card under the table. `tone` is the status StatusBadge
+ * colours by.
+ */
+function instanceState(instance: Instance): InstanceState {
+  if (instance.ready) return { key: "running", tone: "running" }
+  switch (instance.status) {
+    // Up, and not answering its health check yet: starting, or failing it.
+    case "Running":
+      return { key: "notReady", tone: "not_ready" }
+    case "Pending":
+    case "ContainerCreating":
+    case "PodInitializing":
+      return { key: "starting", tone: "starting" }
+    case "Unschedulable":
+      return { key: "waitingForCapacity", tone: "pending" }
+    case "CrashLoopBackOff":
+      return { key: "crashing", tone: "crashing" }
+    case "ImagePullBackOff":
+    case "ErrImagePull":
+    case "ErrImageNeverPull":
+    case "InvalidImageName":
+      return { key: "imageUnavailable", tone: "failed" }
+    case "CreateContainerConfigError":
+    case "CreateContainerError":
+    case "RunContainerError":
+    case "ContainerCannotRun":
+      return { key: "cannotStart", tone: "failed" }
+    case "OOMKilled":
+      return { key: "outOfMemory", tone: "failed" }
+    case "Error":
+    case "Failed":
+    case "DeadlineExceeded":
+      return { key: "failed", tone: "failed" }
+    case "Terminating":
+      return { key: "stopping", tone: "stopped" }
+    case "Completed":
+    case "Succeeded":
+      return { key: "exited", tone: "stopped" }
+    default:
+      return { key: "unknown", tone: "unknown" }
+  }
+}
+
+function Overview({
+  app,
+  status,
+  loading,
+  error,
+  onRetry,
+}: {
+  app: App
+  status?: AppStatus
+  loading: boolean
+  error: unknown
+  onRetry: () => void
+}) {
   const { t } = useTranslation()
 
   if (loading) return <Skeleton className="h-64" />
+  // Without this a failed read showed "0 / 0" and "No instances", which is a
+  // claim about the app rather than about the request.
+  if (error != null && !status) return <ErrorDisplay error={error} onRetry={onRetry} />
 
   const instances = status?.instances ?? []
 
@@ -370,12 +493,7 @@ function Overview({ app, status, loading }: { app: App; status?: AppStatus; load
       {status?.detail && (
         <Alert variant={detailTone(status.phase)}>
           <InfoIcon />
-          {/* A phase whose sentence never varies has that sentence in every
-              language; the rest carry numbers or a message from the cluster
-              and fall back to what the panel was told, in English. */}
-          <AlertDescription>
-            {t(`apps.detail.${status.phase}`, { defaultValue: status.detail })}
-          </AlertDescription>
+          <AlertDescription>{phaseDetail(t, status)}</AlertDescription>
         </Alert>
       )}
 
@@ -428,34 +546,35 @@ function Overview({ app, status, loading }: { app: App; status?: AppStatus; load
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {instances.map((instance) => (
-                  <TableRow key={instance.name}>
-                    <TableCell className="font-mono text-xs">{instance.name}</TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        status={instance.ready ? "running" : instance.status}
-                        label={t(`apps.phase.${instance.status}`, {
-                          defaultValue: instance.status,
-                        })}
-                      />
-                    </TableCell>
-                    <TableCell className="hidden font-mono text-xs sm:table-cell">
-                      {instance.node}
-                    </TableCell>
-                    <TableCell className="hidden tabular-nums md:table-cell">
-                      {instance.restarts}
-                    </TableCell>
-                    <TableCell className="hidden tabular-nums md:table-cell">
-                      {instance.cpu_m ? formatCPU(instance.cpu_m) : "—"}
-                    </TableCell>
-                    <TableCell className="hidden tabular-nums md:table-cell">
-                      {instance.memory_mb ? formatMemory(instance.memory_mb) : "—"}
-                    </TableCell>
-                    <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
-                      {instance.started_at ? formatRelative(instance.started_at) : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {instances.map((instance) => {
+                  const state = instanceState(instance)
+                  return (
+                    <TableRow key={instance.name}>
+                      <TableCell className="font-mono text-xs">{instance.name}</TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          status={state.tone}
+                          label={t(`apps.instanceStatus.${state.key}`)}
+                        />
+                      </TableCell>
+                      <TableCell className="hidden font-mono text-xs sm:table-cell">
+                        {instance.node}
+                      </TableCell>
+                      <TableCell className="hidden tabular-nums md:table-cell">
+                        {instance.restarts}
+                      </TableCell>
+                      <TableCell className="hidden tabular-nums md:table-cell">
+                        {instance.cpu_m ? formatCPU(instance.cpu_m) : "—"}
+                      </TableCell>
+                      <TableCell className="hidden tabular-nums md:table-cell">
+                        {instance.memory_mb ? formatMemory(instance.memory_mb) : "—"}
+                      </TableCell>
+                      <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                        {instance.started_at ? formatRelative(instance.started_at) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

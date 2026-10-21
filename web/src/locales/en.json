@@ -76,7 +76,9 @@
     "copyFailed": "The clipboard is not available here.",
     "copyValue": "Copy {{name}}",
     "show": "Show",
-    "hide": "Hide"
+    "hide": "Hide",
+    "saved": "Saved.",
+    "removeNamed": "Remove {{name}}"
   },
   "nav": {
     "overview": "Overview",
@@ -553,7 +555,7 @@
     "runCommandHelp": "Runs once, in this app's image, with this app's variables. A migration, a backfill, a look at the data.",
     "run": "Run",
     "running": "Running...",
-    "runningHelp": "The command is running. Its output appears here when it finishes.",
+    "runningHelp": "The command is running. What it prints appears below.",
     "runNoOutput": "The command finished and printed nothing.",
     "console": "Console",
     "releaseCommand": "Release command",
@@ -581,7 +583,12 @@
     "detail": {
       "sleeping": "This app is asleep because nobody is using it. The next request starts it again.",
       "stopped": "This app is scaled to zero instances.",
-      "not_deployed": "This app has not been deployed yet."
+      "not_deployed": "This app has not been deployed yet.",
+      "running_one": "{{count}} instance is running.",
+      "running_other": "{{count}} instances are running.",
+      "updating": "{{ready}} of {{desired}} instances are ready.",
+      "starting": "The instances are starting.",
+      "crashing": "The app starts and then exits. The last log lines usually say why."
     },
     "mountPath": "Mount path",
     "sizeGB": "Size (GB)",
@@ -686,7 +693,9 @@
       "backingUp": "Backing up before the update to {{image}}…",
       "failed": "The update to {{image}} stopped and nothing was changed: {{reason}}",
       "started": "Backing up; the update deploys when the backups finish.",
-      "upToDate": "Up to date with the template."
+      "upToDate": "Up to date with the template.",
+      "updateWithoutBackupTitle": "Update without a backup?",
+      "updateWithoutBackupConfirm": "Nothing is backed up first. If the new version damages the data on its disks or in its databases, there is no copy to go back to."
     },
     "previewSeed": "Seed for previews",
     "previewSeedHelp": "Runs once in each new preview, after its first deploy, to fill its empty database with something to look at. Not in this environment, and not again on later pushes.",
@@ -767,6 +776,28 @@
         "previews": "The app's previews run without a GPU, so a preview never holds the card production needs."
       }
     },
+    "instanceStatus": {
+      "running": "Running",
+      "notReady": "Not ready",
+      "starting": "Starting",
+      "waitingForCapacity": "Waiting for capacity",
+      "crashing": "Crashing",
+      "imageUnavailable": "Image cannot be pulled",
+      "cannotStart": "Cannot start",
+      "outOfMemory": "Out of memory",
+      "failed": "Failed",
+      "stopping": "Stopping",
+      "exited": "Exited",
+      "unknown": "Unknown"
+    },
+    "restartStarted": "Restarting. Instances are replaced one at a time.",
+    "runName": "Run: {{name}}",
+    "scheduledEnabledNamed": "Run {{name}} on its schedule",
+    "logsPause": "Pause",
+    "logsResume": "Resume",
+    "deleteVolumeNamed": "Delete the disk {{name}}",
+    "internalConfirmTitle": "Take {{name}} off the internet?",
+    "internalConfirm": "Its public addresses stop answering as soon as this is saved. The other apps in its environment still reach it by name.",
     "creating": "Creating...",
     "createAndDeploy": "Create and deploy",
     "composePlanTitle": "{{name}} is created as the Compose file describes it",
@@ -861,7 +892,8 @@
     "noLogYet": "Nothing has been written to the build log yet.",
     "deployAnyway": "Deploy anyway",
     "deployAnywayConfirm": "This deploys the image although it has critical vulnerabilities that have a fix. It is recorded in the activity log, with your name.",
-    "acceptedVulnerabilities": "Vulnerabilities accepted"
+    "acceptedVulnerabilities": "Vulnerabilities accepted",
+    "started": "Deployment #{{number}} started."
   },
   "variables": {
     "title": "Variables",
@@ -4364,7 +4396,10 @@
       "help": "Counted for each visitor's address. Past the limit they are answered 429 Too Many Requests until the period is over; under it, the rules after this one still apply.",
       "seconds_one": "{{count}} second",
       "seconds_other": "{{count}} seconds"
-    }
+    },
+    "ruleNumber": "Rule {{number}}",
+    "removeCondition": "Remove condition {{number}}",
+    "except": "Anything except:"
   },
   "appPassword": {
     "title": "Password",
@@ -4729,7 +4764,13 @@
     "previewBranchTitle": "Preview a branch of {{name}}",
     "previewBranchHelp": "A copy of this app, built from the branch, in a preview environment of its own with its own databases — the same preview a pull request from that branch gets, so opening one later updates this instead of making another.",
     "previewBranchRemove": "It stays until the branch is deleted, its pull request is closed, or somebody closes it with skifity preview --close.",
-    "start": "Start the preview"
+    "start": "Start the preview",
+    "openPreviews": "Previews of branches open now",
+    "openPreview": "Open",
+    "closeNamed": "Close the preview of {{branch}}",
+    "closeTitle": "Close the preview of {{branch}}?",
+    "closeConfirm": "{{environment}} is deleted with everything in it: its copy of this app and of any other app, their databases and their disks. The branch itself is not touched.",
+    "closed": "The preview of {{branch}} is closed."
   },
   "security": {
     "title": "Known vulnerabilities",

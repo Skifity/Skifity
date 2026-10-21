@@ -168,7 +168,14 @@ export function AppPasswordProtection({ appId }: { appId: string }) {
                 {current.enabled ? t("appPassword.save") : t("appPassword.turnOn")}
               </Button>
               {editing && (
-                <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    save.reset()
+                    setEditing(false)
+                  }}
+                >
                   {t("common.cancel")}
                 </Button>
               )}

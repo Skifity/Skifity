@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
 import { HistoryIcon, PauseIcon, PlayIcon, RadioIcon, ScrollTextIcon } from "lucide-react"
 
+import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ErrorDisplay } from "@/components/error-display"
@@ -52,7 +53,6 @@ export function LogsTab({ app }: { app: App }) {
   )
   /** Bumped by Retry, to open a stream that gave up. */
   const [attempt, setAttempt] = useState(0)
-  const bottom = useRef<HTMLDivElement>(null)
 
   const processes = useQuery({
     queryKey: ["processes", app.id],
@@ -115,9 +115,9 @@ export function LogsTab({ app }: { app: App }) {
     return all.filter((line) => line.toLowerCase().includes(needle))
   }, [all, filter])
 
-  useEffect(() => {
-    if (following && source === "live") bottom.current?.scrollIntoView({ block: "nearest" })
-  }, [shown.length, following, source])
+  // `shown` itself, not its length: past MAX_LINES every new line keeps the
+  // length the same.
+  const stick = useStickToBottom(shown, following && source === "live")
 
   return (
     <div className="space-y-3">
@@ -173,10 +173,14 @@ export function LogsTab({ app }: { app: App }) {
           </Button>
         </ButtonGroup>
 
+        {/* It says what pressing it does. It used to read "Off" while
+            following and "On" while paused, the opposite of the state. No
+            aria-pressed: a label that changes with the state already says it,
+            and "Resume, pressed" says it twice and confusingly. */}
         {source === "live" && (
           <Button variant="outline" size="sm" onClick={() => setFollowing(!following)}>
             {following ? <PauseIcon className="size-3.5" /> : <PlayIcon className="size-3.5" />}
-            {following ? t("common.off") : t("common.on")}
+            {following ? t("apps.logsPause") : t("apps.logsResume")}
           </Button>
         )}
         <span className="text-xs text-muted-foreground">
@@ -219,10 +223,9 @@ export function LogsTab({ app }: { app: App }) {
           description={source === "previous" ? t("apps.logsPreviousNone") : t("apps.logsQuiet")}
         />
       ) : (
-        <ScrollArea className="h-[28rem] rounded-md border bg-muted/30">
+        <ScrollArea className="h-[28rem] rounded-md border bg-muted/30" {...stick}>
           <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
             {shown.join("\n")}
-            <div ref={bottom} />
           </pre>
         </ScrollArea>
       )}

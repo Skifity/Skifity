@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ActivityIcon, BellIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { ErrorDisplay } from "@/components/error-display"
 import { TrafficCharts, type Traffic } from "@/components/app/traffic-charts"
@@ -152,7 +153,10 @@ function AlertSettings({ app, alerts }: { app: App; alerts: Alerts }) {
         restarts: Number(draft.restarts) || 0,
         server_errors_pct: Number(draft.server_errors_pct) || 0,
       }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["alerts", app.id] }),
+    onSuccess: () => {
+      toast.success(t("common.saved"))
+      void queryClient.invalidateQueries({ queryKey: ["alerts", app.id] })
+    },
   })
 
   return (

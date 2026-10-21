@@ -1,11 +1,13 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { skipToken, useMutation, useQuery } from "@tanstack/react-query"
 import { ClockIcon, PlayIcon, PlusIcon, TerminalIcon, Trash2Icon } from "lucide-react"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { ScheduleField, scheduleWords } from "@/components/schedule-field"
+import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -21,6 +23,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { api, type List } from "@/lib/api"
@@ -29,6 +32,9 @@ import type { App, AppJob } from "@/lib/types"
 
 /** A run's output, and how it ended once it has. */
 type RunOutput = { lines: string[]; finished: boolean; exit_code?: number }
+
+/** The search parameter naming the run the console shows; see ConsoleTab. */
+export const RUN_PARAM = "run"
 
 /**
  * One-off commands.
@@ -41,28 +47,67 @@ type RunOutput = { lines: string[]; finished: boolean; exit_code?: number }
 export function ConsoleTab({ app }: { app: App }) {
   const { t } = useTranslation()
   const [command, setCommand] = useState("")
-  const [result, setResult] = useState<RunOutput | null>(null)
-  const [ran, setRan] = useState("")
+  const [params, setParams] = useSearchParams()
+  // Which run is on screen, in the address rather than in this component. A
+  // tab is unmounted when another is opened, and a run only this component
+  // knew about was forgotten with it: the output gone, Run enabled again, and
+  // the migration still going on the server started a second time. In the
+  // address it outlives the tab, a reload, and a proxy that cut the request.
+  const runName = params.get(RUN_PARAM)
 
   // What to run: a command typed here, or a scheduled one run now. Both are
   // one-off runs whose output is followed the same way.
-  const run = useMutation({
-    mutationFn: async (what: { label: string; start: () => Promise<{ run: string }> }) => {
-      const started = await what.start()
-      // Followed to the end. Without it the panel answered with whatever the
-      // container had printed when its pod was first seen running — usually
-      // nothing — and this said the command had finished while it ran on.
-      const output = await api.get<RunOutput>(
-        `/api/apps/${app.id}/runs/${started.run}/logs?follow=true`,
+  const start = useMutation({
+    mutationFn: (what: { label: string; start: () => Promise<{ run: string }> }) => what.start(),
+    onSuccess: (started, what) => {
+      queryClient.setQueryData(["run", app.id, started.run, "command"], what.label)
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          next.set(RUN_PARAM, started.run)
+          return next
+        },
+        { replace: true },
       )
-      return { label: what.label, output }
-    },
-    onSuccess: (answer) => {
-      setResult(answer.output)
-      setRan(answer.label)
     },
   })
-  const output = result?.lines ?? null
+
+  // Followed to the end. Without it the panel answered with whatever the
+  // container had printed when its pod was first seen running — usually
+  // nothing — and this said the command had finished while it ran on. A query,
+  // so a tab opened again joins the request still waiting rather than losing it.
+  const followed = useQuery({
+    queryKey: ["run", app.id, runName, "followed"],
+    queryFn: runName
+      ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${runName}/logs?follow=true`)
+      : skipToken,
+    staleTime: Infinity,
+    retry: false,
+  })
+  const following = runName !== null && followed.isFetching
+  // What it has printed so far, while the followed request waits for the end.
+  const soFar = useQuery({
+    queryKey: ["run", app.id, runName, "so-far"],
+    queryFn:
+      runName && following
+        ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${runName}/logs`)
+        : skipToken,
+    refetchInterval: 5_000,
+    retry: false,
+  })
+  // The command as it was typed, for as long as the page is open. Not in the
+  // address: a command can carry a password, and the address is kept in the
+  // browser's history.
+  const ran = useQuery<string>({
+    queryKey: ["run", app.id, runName, "command"],
+    queryFn: skipToken,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+
+  const result = followed.data ?? soFar.data
+  const busy = start.isPending || following
+  const stick = useStickToBottom(result?.lines)
 
   return (
     <div className="space-y-6">
@@ -70,7 +115,7 @@ export function ConsoleTab({ app }: { app: App }) {
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
-          run.mutate({
+          start.mutate({
             label: command.trim(),
             start: () =>
               api.post<{ run: string }>(`/api/apps/${app.id}/run`, { command: command.trim() }),
@@ -87,28 +132,30 @@ export function ConsoleTab({ app }: { app: App }) {
               placeholder="npm run migrate"
               className="min-w-64 flex-1 font-mono"
               autoComplete="off"
-              disabled={run.isPending}
+              disabled={busy}
             />
-            <Button type="submit" disabled={!command.trim() || run.isPending}>
-              {run.isPending ? <Spinner /> : <PlayIcon />}
-              {run.isPending ? t("apps.running") : t("apps.run")}
+            {/* Not while a run is going: the second press was how a migration
+                came to run twice. */}
+            <Button type="submit" disabled={!command.trim() || busy}>
+              {busy ? <Spinner /> : <PlayIcon />}
+              {busy ? t("apps.running") : t("apps.run")}
             </Button>
           </div>
           <FieldDescription>{t("apps.runCommandHelp")}</FieldDescription>
         </Field>
       </form>
 
-      {run.error != null && <ErrorDisplay error={run.error} />}
+      {start.error != null && <ErrorDisplay error={start.error} />}
 
-      {run.isPending && (
+      {busy && (
         <Alert>
           <Spinner />
           <AlertDescription>{t("apps.runningHelp")}</AlertDescription>
         </Alert>
       )}
 
-      {output === null ? (
-        !run.isPending && (
+      {runName === null ? (
+        !start.isPending && (
           // What this panel is for is output, so that is what its empty state
           // says. It used to repeat the field's label and its help text word
           // for word, sixty pixels below them.
@@ -120,32 +167,46 @@ export function ConsoleTab({ app }: { app: App }) {
         )
       ) : (
         <div className="space-y-2">
-          <p className="font-mono text-xs text-muted-foreground">$ {ran}</p>
-          {result?.finished && result.exit_code !== 0 && (
+          {/* The run's own name as well as the command: it is what the CLI
+              and the API read the output by, if this page loses it. */}
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {ran.data && <span className="font-mono">$ {ran.data}</span>}
+            <span>{t("apps.runName", { name: runName })}</span>
+          </div>
+          {followed.error != null && (
+            <ErrorDisplay error={followed.error} compact onRetry={() => void followed.refetch()} />
+          )}
+          {followed.data?.finished && followed.data.exit_code !== 0 && (
             <Alert variant="destructive">
               <AlertDescription>
-                {t("apps.runExitStatus", { code: result.exit_code })}
+                {t("apps.runExitStatus", { code: followed.data.exit_code })}
               </AlertDescription>
             </Alert>
           )}
-          {result && !result.finished && (
+          {followed.data && !followed.data.finished && (
             <Alert>
               <AlertDescription>{t("apps.runOutcomeUnknown")}</AlertDescription>
             </Alert>
           )}
-          <ScrollArea className="h-80 rounded-md border bg-muted/30">
-            <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-              {output.length > 0 ? output.join("\n") : t("apps.runNoOutput")}
-            </pre>
-          </ScrollArea>
+          {result ? (
+            <ScrollArea className="h-80 rounded-md border bg-muted/30" {...stick}>
+              <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                {result.lines.length > 0
+                  ? result.lines.join("\n")
+                  : followed.data && t("apps.runNoOutput")}
+              </pre>
+            </ScrollArea>
+          ) : (
+            following && <Skeleton className="h-80" />
+          )}
         </div>
       )}
 
       <ScheduledCommands
         app={app}
-        running={run.isPending}
+        running={busy}
         onRunNow={(job) =>
-          run.mutate({
+          start.mutate({
             label: job.command,
             start: () => api.post<{ run: string }>(`/api/apps/${app.id}/jobs/${job.id}/run`, {}),
           })
@@ -273,7 +334,15 @@ function ScheduledCommands({
               </Field>
               {create.error != null && <ErrorDisplay error={create.error} compact />}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    // The next Add starts clean, not with this one's refusal.
+                    create.reset()
+                    setAdding(false)
+                  }}
+                >
                   {t("common.cancel")}
                 </Button>
                 <Button type="submit" disabled={create.isPending}>
@@ -286,8 +355,17 @@ function ScheduledCommands({
         )}
 
         {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+        {/* A switch the panel refused snaps back, and without this it said
+            nothing about why: switching one needs an admin. */}
+        {toggle.error != null && <ErrorDisplay error={toggle.error} compact />}
 
-        {items.length === 0 && !adding ? (
+        {/* Loading and failing are not "nothing scheduled", which is what
+            both used to say, and which invites adding the job a second time. */}
+        {jobs.isLoading ? (
+          <Skeleton className="h-16" />
+        ) : jobs.error != null ? (
+          <ErrorDisplay error={jobs.error} compact onRetry={() => void jobs.refetch()} />
+        ) : items.length === 0 && !adding ? (
           <EmptyState
             bordered={false}
             icon={ClockIcon}
@@ -324,12 +402,12 @@ function ScheduledCommands({
                     checked={job.enabled}
                     disabled={toggle.isPending}
                     onCheckedChange={() => toggle.mutate(job)}
-                    aria-label={t("apps.scheduledCommands")}
+                    aria-label={t("apps.scheduledEnabledNamed", { name: job.name })}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={t("common.remove")}
+                    aria-label={t("common.removeNamed", { name: job.name })}
                     onClick={() => {
                       // No typing the name for this one: a schedule can be
                       // added back in a few seconds, unlike an app or a volume.

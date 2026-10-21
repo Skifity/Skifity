@@ -1,24 +1,19 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { BookOpenIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { GPUCard } from "@/components/app/gpu-card"
 import { MaintenanceCard } from "@/components/app/maintenance"
 import { TemplateCard } from "@/components/app/template-card"
-import { useDeleteConfirm } from "@/components/confirm-dialog"
+import { useConfirm, useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle,
-} from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -31,7 +26,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { App, HealthCheck } from "@/lib/types"
+import type { App, Environment, HealthCheck } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
 
 /** The bounds the server holds the health check to, in seconds; see internal/kube/health.go. */
@@ -128,14 +123,43 @@ export function SettingsTab({ app }: { app: App }) {
         internal,
         ...(builtHere ? {} : { run_as_user: Number(runAsUser) || 0 }),
       }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["app", app.id] }),
+    onSuccess: () => {
+      toast.success(t("common.saved"))
+      void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
+    },
   })
+
+  // Taking every public address away is saved with the rest of the form,
+  // and removing just one domain asks first. This asks too.
+  const confirm = useConfirm()
+  const submit = () => {
+    if (!internal || app.internal) {
+      save.mutate()
+      return
+    }
+    void confirm({
+      title: t("apps.internalConfirmTitle", { name: app.name }),
+      description: t("apps.internalConfirm"),
+      confirmLabel: t("common.save"),
+      destructive: true,
+    }).then((yes) => {
+      if (yes) save.mutate()
+    })
+  }
+
+  // The page this app was reached from, which is where its project is: the
+  // list of every project was one more click away from anything useful.
+  const environment = useQuery({
+    queryKey: ["environment", app.environment_id],
+    queryFn: () => api.get<Environment>(`/api/environments/${app.environment_id}`),
+  })
+  const projectId = environment.data?.project_id
 
   const remove = useMutation({
     mutationFn: () => api.delete(`/api/apps/${app.id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["apps", app.environment_id] })
-      navigate("/projects")
+      navigate(projectId ? `/projects/${projectId}` : "/projects")
     },
   })
 
@@ -370,20 +394,26 @@ export function SettingsTab({ app }: { app: App }) {
 
           <Field orientation="horizontal">
             <FieldContent>
-              <FieldTitle>{t("apps.internal")}</FieldTitle>
+              <FieldLabel htmlFor="settings-internal">{t("apps.internal")}</FieldLabel>
               <FieldDescription>{t("apps.internalHelp")}</FieldDescription>
             </FieldContent>
-            <Switch checked={internal} onCheckedChange={setInternal} />
+            <Switch id="settings-internal" checked={internal} onCheckedChange={setInternal} />
           </Field>
 
           {app.source_type === "git" && (
             <>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>{t("apps.deployOnPush")}</FieldTitle>
+                  <FieldLabel htmlFor="settings-deploy-on-push">
+                    {t("apps.deployOnPush")}
+                  </FieldLabel>
                   <FieldDescription>{t("apps.deployOnPushHelp")}</FieldDescription>
                 </FieldContent>
-                <Switch checked={autoDeploy} onCheckedChange={setAutoDeploy} />
+                <Switch
+                  id="settings-deploy-on-push"
+                  checked={autoDeploy}
+                  onCheckedChange={setAutoDeploy}
+                />
               </Field>
               {/*
                 Every push to the branch, or only the tags somebody releases
@@ -457,10 +487,16 @@ export function SettingsTab({ app }: { app: App }) {
               )}
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>{t("apps.previewEnvironments")}</FieldTitle>
+                  <FieldLabel htmlFor="settings-preview-deploys">
+                    {t("apps.previewEnvironments")}
+                  </FieldLabel>
                   <FieldDescription>{t("apps.previewEnvironmentsHelp")}</FieldDescription>
                 </FieldContent>
-                <Switch checked={previewDeploys} onCheckedChange={setPreviewDeploys} />
+                <Switch
+                  id="settings-preview-deploys"
+                  checked={previewDeploys}
+                  onCheckedChange={setPreviewDeploys}
+                />
               </Field>
               {previewDeploys && (
                 <Field>
@@ -482,7 +518,7 @@ export function SettingsTab({ app }: { app: App }) {
           {save.error != null && <ErrorDisplay error={save.error} compact />}
 
           <div className="flex justify-end">
-            <Button disabled={save.isPending} onClick={() => save.mutate()}>
+            <Button disabled={save.isPending} onClick={submit}>
               {save.isPending && <Spinner />}
               {save.isPending ? t("common.saving") : t("common.save")}
             </Button>

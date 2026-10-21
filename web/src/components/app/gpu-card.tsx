@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { BookOpenIcon, CpuIcon, InfoIcon, TriangleAlertIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
@@ -98,10 +99,15 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
   const save = useMutation({
     mutationFn: (body: object) => api.put<AppGPUSettings>(`/api/apps/${app.id}/gpu`, body),
     onSuccess: (data) => {
+      toast.success(t("common.saved"))
       queryClient.setQueryData(["gpu", app.id], data)
       void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
     },
   })
+  // An empty box is a valid number input, and Number("") is 0, which the
+  // panel reads as "take the GPUs away": Save removed them without the
+  // question the switch asks first.
+  const countValid = Number.isInteger(Number(count)) && Number(count) >= 1
 
   const submit = () => {
     if (!enabled) {
@@ -117,6 +123,7 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
       })
       return
     }
+    if (!countValid) return
     save.mutate({
       count: Number(count),
       vendor,
@@ -163,10 +170,10 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
 
       <Field orientation="horizontal">
         <FieldContent>
-          <FieldTitle>{t("apps.gpu.enabled")}</FieldTitle>
+          <FieldLabel htmlFor="gpu-enabled">{t("apps.gpu.enabled")}</FieldLabel>
           <FieldDescription>{t("apps.gpu.enabledHelp")}</FieldDescription>
         </FieldContent>
-        <Switch checked={enabled} onCheckedChange={setEnabled} />
+        <Switch id="gpu-enabled" checked={enabled} onCheckedChange={setEnabled} />
       </Field>
 
       {enabled && (
@@ -207,6 +214,8 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
                 type="number"
                 min={1}
                 max={MAX_GPUS}
+                step={1}
+                required
                 value={count}
                 onChange={(event) => setCount(event.target.value)}
                 className="w-32"
@@ -246,17 +255,20 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
             <FieldTitle>{t("apps.gpu.workloads")}</FieldTitle>
             <div className="space-y-1">
               {[WEB, ...view.processes].map((name) => (
-                <label key={name} className="flex items-center gap-2.5 text-sm">
+                <Field key={name} orientation="horizontal" className="gap-2.5">
                   <Checkbox
+                    id={`gpu-workload-${name}`}
                     checked={workloads.includes(name)}
                     onCheckedChange={(checked) => toggleWorkload(name, checked === true)}
                   />
-                  {name === WEB ? (
-                    t("apps.gpu.workloadWeb")
-                  ) : (
-                    <span className="font-mono">{name}</span>
-                  )}
-                </label>
+                  <FieldLabel htmlFor={`gpu-workload-${name}`} className="font-normal">
+                    {name === WEB ? (
+                      t("apps.gpu.workloadWeb")
+                    ) : (
+                      <span className="font-mono">{name}</span>
+                    )}
+                  </FieldLabel>
+                </Field>
               ))}
             </div>
             <FieldDescription>{t("apps.gpu.workloadsHelp")}</FieldDescription>
@@ -296,7 +308,7 @@ function GPUForm({ app, view }: { app: App; view: AppGPUSettings }) {
           type="submit"
           disabled={
             save.isPending ||
-            (enabled && workloads.length === 0) ||
+            (enabled && (workloads.length === 0 || !countValid)) ||
             (!enabled && stored.count === 0)
           }
         >

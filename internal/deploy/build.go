@@ -422,13 +422,30 @@ func (d *Deployer) streamContainer(ctx context.Context, namespace, pod, containe
 	}
 	defer flush()
 
+	// Each line is sent with the number it is stored under, as appendLog's
+	// are. Lines go out one at a time but are stored in batches, so a page that
+	// fetched the stored log and then subscribed missed the ones sent before it
+	// subscribed and not yet stored, and was given twice the ones stored in
+	// between. The number is how it drops a repeat and sees a gap to fetch.
+	seq, err := d.db.LastBuildLogSeq(ctx, deployment.ID)
+	numbered := err == nil
+	if err != nil {
+		d.log.Warn("could not number the build log", "deployment", deployment.ID, "error", err)
+	}
+
 	for scanner.Scan() {
 		// A build prints whatever the application's own tooling prints, which
 		// sometimes includes a token from an environment variable.
 		line := logging.Scrub(scanner.Text())
-		batch = append(batch, store.LogLine{Line: line, At: time.Now()})
-		d.hub.Publish(buildTopic(deployment.ID), "log",
-			map[string]any{"stream": container, "line": line})
+		entry := store.LogLine{Line: line, At: time.Now()}
+		event := map[string]any{"stream": container, "line": line}
+		if numbered {
+			seq++
+			entry.Seq = seq
+			event["seq"] = seq
+		}
+		batch = append(batch, entry)
+		d.hub.Publish(buildTopic(deployment.ID), "log", event)
 
 		// Keep the end of the output for the failure message.
 		tail.WriteString(line)

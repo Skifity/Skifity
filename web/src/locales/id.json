@@ -69,7 +69,9 @@
     "copyFailed": "Papan klip tidak tersedia di sini.",
     "copyValue": "Salin {{name}}",
     "show": "Tampilkan",
-    "hide": "Sembunyikan"
+    "hide": "Sembunyikan",
+    "saved": "Tersimpan.",
+    "removeNamed": "Hapus {{name}}"
   },
   "nav": {
     "overview": "Ringkasan",
@@ -545,7 +547,7 @@
     "runCommandHelp": "Dijalankan sekali, di image aplikasi ini, dengan variabel aplikasi ini. Migrasi, pengisian data, atau sekadar melihat data.",
     "run": "Jalankan",
     "running": "Menjalankan...",
-    "runningHelp": "Perintah sedang berjalan. Keluarannya muncul di sini setelah selesai.",
+    "runningHelp": "Perintah sedang berjalan. Yang dicetaknya muncul di bawah.",
     "runNoOutput": "Perintah selesai tanpa menampilkan apa pun.",
     "console": "Konsol",
     "releaseCommand": "Perintah rilis",
@@ -573,7 +575,11 @@
     "detail": {
       "sleeping": "Aplikasi ini tidur karena tidak ada yang memakainya. Permintaan berikutnya menyalakannya lagi.",
       "stopped": "Aplikasi ini diskalakan ke nol instance.",
-      "not_deployed": "Aplikasi ini belum pernah di-deploy."
+      "not_deployed": "Aplikasi ini belum pernah di-deploy.",
+      "running_other": "{{count}} instance berjalan.",
+      "updating": "{{ready}} dari {{desired}} instance sudah siap.",
+      "starting": "Instance sedang dinyalakan.",
+      "crashing": "Aplikasi menyala lalu berhenti. Baris log terakhir biasanya menjelaskan sebabnya."
     },
     "mountPath": "Lokasi mount",
     "sizeGB": "Ukuran (GB)",
@@ -676,7 +682,9 @@
       "backingUp": "Mencadangkan sebelum pembaruan ke {{image}}…",
       "failed": "Pembaruan ke {{image}} berhenti dan tidak ada yang diubah: {{reason}}",
       "started": "Sedang mencadangkan; pembaruan di-deploy setelah pencadangan selesai.",
-      "upToDate": "Sudah sesuai dengan templat."
+      "upToDate": "Sudah sesuai dengan templat.",
+      "updateWithoutBackupTitle": "Perbarui tanpa cadangan?",
+      "updateWithoutBackupConfirm": "Tidak ada yang dicadangkan dulu. Jika versi baru merusak data di disk atau database-nya, tidak ada salinan untuk kembali."
     },
     "previewSeed": "Seed untuk pratinjau",
     "previewSeedHelp": "Dijalankan sekali di setiap pratinjau baru, setelah deploy pertamanya, untuk mengisi database kosongnya dengan sesuatu untuk dilihat. Tidak di environment ini, dan tidak lagi pada push berikutnya.",
@@ -757,6 +765,28 @@
         "previews": "Pratinjau aplikasi ini berjalan tanpa GPU, sehingga pratinjau tidak pernah memegang kartu yang dibutuhkan produksi."
       }
     },
+    "instanceStatus": {
+      "running": "Berjalan",
+      "notReady": "Belum siap",
+      "starting": "Menyala",
+      "waitingForCapacity": "Menunggu kapasitas",
+      "crashing": "Sering berhenti",
+      "imageUnavailable": "Image tidak bisa diambil",
+      "cannotStart": "Tidak bisa menyala",
+      "outOfMemory": "Kehabisan memori",
+      "failed": "Gagal",
+      "stopping": "Menghentikan",
+      "exited": "Sudah keluar",
+      "unknown": "Tidak diketahui"
+    },
+    "restartStarted": "Memulai ulang. Instance diganti satu per satu.",
+    "runName": "Eksekusi: {{name}}",
+    "scheduledEnabledNamed": "Jalankan {{name}} sesuai jadwalnya",
+    "logsPause": "Jeda",
+    "logsResume": "Lanjutkan",
+    "deleteVolumeNamed": "Hapus disk {{name}}",
+    "internalConfirmTitle": "Lepaskan {{name}} dari internet?",
+    "internalConfirm": "Alamat publiknya berhenti menjawab begitu ini disimpan. Aplikasi lain di environment yang sama tetap menjangkaunya lewat nama.",
     "creating": "Membuat...",
     "createAndDeploy": "Buat dan deploy",
     "composePlanTitle": "{{name}} dibuat persis seperti yang dijelaskan berkas Compose",
@@ -851,7 +881,8 @@
     "noLogYet": "Belum ada yang ditulis ke log build.",
     "deployAnyway": "Tetap deploy",
     "deployAnywayConfirm": "Ini men-deploy image tersebut meskipun ada kerentanan kritis yang sudah punya perbaikan. Tindakan ini dicatat di log aktivitas, dengan nama Anda.",
-    "acceptedVulnerabilities": "Kerentanan diterima"
+    "acceptedVulnerabilities": "Kerentanan diterima",
+    "started": "Deployment #{{number}} dimulai."
   },
   "variables": {
     "title": "Variabel",
@@ -4341,7 +4372,10 @@
       "hour": "jam",
       "help": "Dihitung untuk setiap alamat pengunjung. Melewati batas, pengunjung dijawab 429 Too Many Requests sampai periodenya habis; di bawah batas, aturan setelah ini tetap berlaku.",
       "seconds_other": "{{count}} detik"
-    }
+    },
+    "ruleNumber": "Aturan {{number}}",
+    "removeCondition": "Hapus kondisi {{number}}",
+    "except": "Apa pun kecuali:"
   },
   "appPassword": {
     "title": "Password",
@@ -4704,7 +4738,13 @@
     "previewBranchTitle": "Pratinjau branch dari {{name}}",
     "previewBranchHelp": "Salinan aplikasi ini, dibangun dari branch tersebut, di lingkungan pratinjau sendiri dengan database sendiri — pratinjau yang sama dengan yang didapat pull request dari branch itu, jadi membuka pull request nanti akan memperbaruinya, bukan membuat yang baru.",
     "previewBranchRemove": "Pratinjau tetap ada sampai branch dihapus, pull request-nya ditutup, atau seseorang menutupnya dengan skifity preview --close.",
-    "start": "Mulai pratinjau"
+    "start": "Mulai pratinjau",
+    "openPreviews": "Pratinjau branch yang sedang terbuka",
+    "openPreview": "Buka",
+    "closeNamed": "Tutup pratinjau {{branch}}",
+    "closeTitle": "Tutup pratinjau {{branch}}?",
+    "closeConfirm": "{{environment}} dihapus beserta seluruh isinya: salinan aplikasi ini dan aplikasi lain di dalamnya, database, dan disknya. Branch-nya sendiri tidak disentuh.",
+    "closed": "Pratinjau {{branch}} ditutup."
   },
   "security": {
     "title": "Kerentanan yang diketahui",

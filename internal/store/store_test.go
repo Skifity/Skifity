@@ -334,6 +334,27 @@ func TestBuildLogsAreSequencedAndResumable(t *testing.T) {
 	if tail[0].Seq != 9 {
 		t.Fatalf("resume started at seq %d, want 9", tail[0].Seq)
 	}
+
+	// A build numbers its lines as it streams them, from the last one stored,
+	// and the batch keeps those numbers.
+	last, err := db.LastBuildLogSeq(ctx, d.ID)
+	if err != nil {
+		t.Fatalf("LastBuildLogSeq: %v", err)
+	}
+	if last != 11 {
+		t.Fatalf("last stored line is %d, want 11", last)
+	}
+	numbered := []LogLine{{Seq: last + 1, Line: "step 1"}, {Seq: last + 2, Line: "step 2"}}
+	if err := db.AppendBuildLogs(ctx, d.ID, numbered); err != nil {
+		t.Fatalf("AppendBuildLogs with numbers: %v", err)
+	}
+	stored, err := db.ListBuildLogs(ctx, d.ID, last, 0)
+	if err != nil {
+		t.Fatalf("ListBuildLogs: %v", err)
+	}
+	if len(stored) != 2 || stored[0].Seq != 12 || stored[1].Seq != 13 || stored[1].Line != "step 2" {
+		t.Fatalf("numbered lines stored as %+v, want 12 and 13", stored)
+	}
 }
 
 func TestRoleOrdering(t *testing.T) {

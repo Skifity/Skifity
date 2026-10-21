@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
+import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { queryClient } from "@/lib/query"
@@ -64,9 +65,14 @@ export function DomainsTab({ app }: { app: App }) {
   // follows from the hostname typed and the zones the team connected.
   const [manageDNS, setManageDNS] = useState(true)
 
+  const { team } = useSession()
   const domains = useQuery({
     queryKey: ["domains", app.id],
     queryFn: () => api.get<List<Domain>>(`/api/apps/${app.id}/domains`),
+    // A certificate being issued is said on the team's event stream, which a
+    // member limited to some projects is refused; their page polls instead,
+    // or a domain stayed "Waiting for DNS" until it was reloaded.
+    refetchInterval: team?.scoped ? 10_000 : false,
   })
   const providers = useDNSProviders()
   const zone = app.internal ? null : zoneFor(hostname, providers.data?.items ?? [])
@@ -173,7 +179,14 @@ export function DomainsTab({ app }: { app: App }) {
               )}
               {add.error != null && <ErrorDisplay error={add.error} compact />}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    add.reset()
+                    setAdding(false)
+                  }}
+                >
                   {t("common.cancel")}
                 </Button>
                 <Button type="submit" disabled={!hostname.trim() || add.isPending}>
@@ -229,7 +242,7 @@ export function DomainsTab({ app }: { app: App }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={t("domains.removeDomain")}
+                    aria-label={t("common.removeNamed", { name: domain.hostname })}
                     disabled={remove.isPending}
                     onClick={() => askThenRemove(domain)}
                   >
