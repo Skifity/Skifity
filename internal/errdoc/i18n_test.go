@@ -104,10 +104,11 @@ func TestEveryErrorHasItsWordsInTheInterface(t *testing.T) {
 // every uncatalogued failure — a SQLite error saving a variable — was shown as
 // a server left half-configured, with the real cause only in the copied text.
 //
-// A second place with something different to say gets a code of its own.
+// A second place with something different to say gets a code of its own; two
+// places that mean the same thing share one constructor in the catalogue.
+// There is no list of exceptions, so a new one cannot be waved through.
 func TestOneCodeSaysOneThing(t *testing.T) {
 	problems := problemsInSource(t)
-	stillMixed := map[string]bool{}
 	for code, problem := range problems {
 		for _, field := range []string{"title", "cause", "impact", "fix"} {
 			sentences := problem.Said[field]
@@ -121,10 +122,6 @@ func TestOneCodeSaysOneThing(t *testing.T) {
 			if distinct < 2 {
 				continue
 			}
-			if _, known := mixedSentences[code]; known {
-				stillMixed[code] = true
-				continue
-			}
 			var said []string
 			for sentence, where := range sentences {
 				said = append(said, fmt.Sprintf("%q at %s", truncate(sentence), strings.Join(where, ", ")))
@@ -135,28 +132,6 @@ func TestOneCodeSaysOneThing(t *testing.T) {
 				code, distinct, field, strings.Join(said, "; "))
 		}
 	}
-	// The list below only shrinks: a code that has been put right is taken
-	// off it, so it cannot drift back.
-	for code := range mixedSentences {
-		if !stillMixed[code] {
-			t.Errorf("%s says one thing now; take it off mixedSentences", code)
-		}
-	}
-}
-
-// mixedSentences are the codes still raised with different sentences from
-// different places. A code is a shipped identifier — tests and scripts match
-// on auth.needs_person and auth.token_scope — so each is a change of its own,
-// in the handler that raises it: a new code for the second place, with words
-// in the locales.
-var mixedSentences = map[string]string{
-	"auth.needs_person":        "plugins, re-authentication and two-factor each explain it differently",
-	"auth.token_scope":         "a read-only token and a scoped token reading a secret",
-	"backup.restore_refused":   "a volume restore and a database restore",
-	"plugin.unreachable":       "an address that failed and one that answered with an error",
-	"sso.not_configured":       "signing in and linking an identity",
-	"sso.provider_unreachable": "signing in and linking an identity",
-	"team.last_owner":          "changing the last owner's role and removing them",
 }
 
 // raisedByTheInterface are the codes the interface makes itself, for what the

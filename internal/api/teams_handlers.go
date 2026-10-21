@@ -283,11 +283,7 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if count <= 1 {
-			writeError(w, r, errdoc.New("team.last_owner", "A team needs at least one owner").
-				WithCause("%s is the only owner of this team.", target.Email).
-				WithImpact("Nothing was changed.").
-				WithFix("Make someone else an owner first, then change this role.").
-				WithStatus(http.StatusConflict))
+			writeError(w, r, errdoc.LastOwner())
 			return
 		}
 	}
@@ -321,11 +317,7 @@ func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if count <= 1 {
-			writeError(w, r, errdoc.New("team.last_owner", "A team needs at least one owner").
-				WithCause("This is the only owner of the team.").
-				WithImpact("Nothing was changed.").
-				WithFix("Make someone else an owner first, then remove this one.").
-				WithStatus(http.StatusConflict))
+			writeError(w, r, errdoc.LastOwner())
 			return
 		}
 		// Only an owner may remove another owner. An actor whose own

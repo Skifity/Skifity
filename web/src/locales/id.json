@@ -2146,6 +2146,12 @@
         "impact": "Permintaan ditolak. Tidak ada yang diubah.",
         "fix": "Pakai token tanpa batasan, atau buat token yang bisa menulis, di halaman Akun."
       },
+      "auth_token_no_secrets": {
+        "title": "Token ini tidak boleh membaca rahasia",
+        "cause": "Token {{0}} dibatasi pada {{1}}, dan jawaban ini berisi rahasia yang tidak pernah diberikan ke token yang dibatasi.",
+        "impact": "Permintaan ditolak. Tidak ada yang diubah.",
+        "fix": "Pakai token tanpa batasan, atau masuk ke panel."
+      },
       "backup_bad_schedule": {
         "title": "Skifity tidak mengerti jadwal itu",
         "cause": "{{0}}",
@@ -2175,6 +2181,12 @@
         "cause": "{{0}} sedang dipakai dan pemulihan akan mengganti isinya sekarang.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Pulihkan ke database baru dulu, periksa hasilnya, lalu arahkan aplikasimu ke sana. Kalau memang mau menimpa, konfirmasikan secara eksplisit di dialog pemulihan."
+      },
+      "backup_volume_restore_unconfirmed": {
+        "title": "Ini akan mengganti isi disk saat ini",
+        "cause": "Memulihkan {{0}} menulis arsip di atas semua isi volume saat ini, dan menghentikan {{1}} selama prosesnya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Buat backup dari isinya sekarang kalau mungkin masih Anda perlukan, lalu konfirmasikan pemulihannya."
       },
       "backup_storage_no_delete": {
         "title": "Backup lama tidak bisa dihapus",
@@ -2562,9 +2574,21 @@
       },
       "plugin_unreachable": {
         "title": "Manifest itu tidak bisa diambil",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang dipasang.",
+        "fix": "Periksa alamatnya, dan pastikan cluster ini bisa menjangkaunya."
+      },
+      "plugin_unexpected_response": {
+        "title": "Manifest itu tidak bisa diambil",
         "cause": "Servernya menjawab {{0}}.",
         "impact": "Tidak ada yang dipasang.",
         "fix": "Periksa alamatnya."
+      },
+      "plugin_needs_person": {
+        "title": "Ini harus dilakukan dari panel",
+        "cause": "Plugin dipasang dan diubah oleh administrator yang masuk ke panel, bukan oleh token API.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Masuk ke panel dan lakukan di sana."
       },
       "preflight_arch_unknown": {
         "title": "Server ini belum siap bergabung",
@@ -2806,10 +2830,22 @@
         "impact": "Masuklah dengan alamat email dan kata sandi saja.",
         "fix": "Administrator bisa mengatur penyedianya di Pengaturan, lalu Masuk."
       },
+      "sso_link_not_configured": {
+        "title": "Single sign-on belum disiapkan",
+        "cause": "Belum ada penyedia identitas yang dikonfigurasi di panel ini.",
+        "impact": "Tidak ada yang bisa ditautkan.",
+        "fix": "Administrator bisa mengatur penyedianya di Pengaturan, lalu Masuk."
+      },
       "sso_provider_unreachable": {
         "title": "Penyedia identitasnya tidak bisa dihubungi",
         "cause": "{{0}}",
         "impact": "Tidak ada yang bisa masuk lewat single sign-on sampai ini diperbaiki.",
+        "fix": "Periksa URL issuer di Pengaturan, lalu Masuk, dan pastikan panel ini bisa menjangkaunya."
+      },
+      "sso_link_provider_unreachable": {
+        "title": "Penyedia identitasnya tidak bisa dihubungi",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang ditautkan.",
         "fix": "Periksa URL issuer di Pengaturan, lalu Masuk, dan pastikan panel ini bisa menjangkaunya."
       },
       "store_bad_index": {
@@ -2846,7 +2882,7 @@
         "title": "Sebuah tim butuh setidaknya satu pemilik",
         "cause": "Ini satu-satunya pemilik tim ini.",
         "impact": "Tidak ada yang diubah.",
-        "fix": "Jadikan orang lain pemilik dulu, baru hapus yang ini."
+        "fix": "Jadikan orang lain pemilik dulu."
       },
       "team_no_such_user": {
         "title": "Tidak ada akun dengan email itu",
@@ -2940,7 +2976,7 @@
       },
       "auth_needs_person": {
         "title": "Ini harus dilakukan dari panel",
-        "cause": "Mengubah autentikasi dua faktor atau membuat token harus dilakukan oleh orang yang bisa membuktikan identitasnya, dan token API tidak bisa.",
+        "cause": "Ini harus dilakukan oleh orang yang masuk ke panel dan bisa membuktikan identitasnya, dan token API tidak bisa.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Masuk ke panel dan lakukan di sana."
       },

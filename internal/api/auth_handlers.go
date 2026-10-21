@@ -262,11 +262,7 @@ func (s *Server) handleReauth(w http.ResponseWriter, r *http.Request) {
 	session, ok := sessionFrom(r.Context())
 	if !ok {
 		// A bearer token has nobody at the keyboard to ask.
-		writeError(w, r, errdoc.New("auth.needs_person", "This has to be done from the panel").
-			WithCause("Confirming who you are needs a browser session, and this request carried an API token.").
-			WithImpact("Nothing was changed.").
-			WithFix("Sign in to the panel and do it there.").
-			WithStatus(http.StatusForbidden))
+		writeError(w, r, errdoc.NeedsPerson())
 		return
 	}
 	var req reauthRequest

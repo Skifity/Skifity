@@ -2170,6 +2170,12 @@
         "impact": "The request was refused. Nothing was changed.",
         "fix": "Use a token without a scope, or create one that can write, under Account."
       },
+      "auth_token_no_secrets": {
+        "title": "This token cannot read secrets",
+        "cause": "The token {{0}} is limited to {{1}}, and this answer carries a secret no limited token is given.",
+        "impact": "The request was refused. Nothing was changed.",
+        "fix": "Use a token without a scope, or sign in to the panel."
+      },
       "backup_bad_schedule": {
         "title": "That is not a schedule Skifity understands",
         "cause": "{{0}}",
@@ -2199,6 +2205,12 @@
         "cause": "{{0}} is in use and the restore would replace its current contents.",
         "impact": "Nothing was changed.",
         "fix": "Restore into a new database instead, check it, then point your app at it. If you really do mean to overwrite, confirm it explicitly on the restore dialog."
+      },
+      "backup_volume_restore_unconfirmed": {
+        "title": "This would replace what is on the disk now",
+        "cause": "Restoring {{0}} writes the archive over everything currently in the volume, and stops {{1}} while it does.",
+        "impact": "Nothing was changed.",
+        "fix": "Take a backup of what is there now if you might want it, then confirm the restore."
       },
       "backup_storage_no_delete": {
         "title": "Old backups cannot be removed",
@@ -2586,9 +2598,21 @@
       },
       "plugin_unreachable": {
         "title": "That manifest could not be fetched",
+        "cause": "{{0}}",
+        "impact": "Nothing was installed.",
+        "fix": "Check the address, and that this cluster can reach it."
+      },
+      "plugin_unexpected_response": {
+        "title": "That manifest could not be fetched",
         "cause": "The server answered {{0}}.",
         "impact": "Nothing was installed.",
         "fix": "Check the address."
+      },
+      "plugin_needs_person": {
+        "title": "This has to be done from the panel",
+        "cause": "Plugins are installed and changed by an administrator signed in to the panel, not by an API token.",
+        "impact": "Nothing was changed.",
+        "fix": "Sign in to the panel and do it there."
       },
       "preflight_arch_unknown": {
         "title": "This server is not ready to join",
@@ -2830,10 +2854,22 @@
         "impact": "Sign in with an email address and password instead.",
         "fix": "An administrator can configure a provider under Settings, Sign-in."
       },
+      "sso_link_not_configured": {
+        "title": "Single sign-on is not set up",
+        "cause": "No identity provider is configured on this panel.",
+        "impact": "There is nothing to link.",
+        "fix": "An administrator can configure a provider under Settings, Sign-in."
+      },
       "sso_provider_unreachable": {
         "title": "The identity provider could not be reached",
         "cause": "{{0}}",
         "impact": "Nobody can sign in with single sign-on until this is fixed.",
+        "fix": "Check the issuer URL under Settings, Sign-in, and that this panel can reach it."
+      },
+      "sso_link_provider_unreachable": {
+        "title": "The identity provider could not be reached",
+        "cause": "{{0}}",
+        "impact": "Nothing was linked.",
         "fix": "Check the issuer URL under Settings, Sign-in, and that this panel can reach it."
       },
       "store_bad_index": {
@@ -2870,7 +2906,7 @@
         "title": "A team needs at least one owner",
         "cause": "This is the only owner of the team.",
         "impact": "Nothing was changed.",
-        "fix": "Make someone else an owner first, then remove this one."
+        "fix": "Make someone else an owner first."
       },
       "team_no_such_user": {
         "title": "No account with that email",
@@ -2964,7 +3000,7 @@
       },
       "auth_needs_person": {
         "title": "This has to be done from the panel",
-        "cause": "Changing two-factor authentication or creating a token has to be done by somebody who can prove who they are, and an API token cannot.",
+        "cause": "This has to be done by somebody signed in to the panel who can prove who they are, and an API token cannot.",
         "impact": "Nothing was changed.",
         "fix": "Sign in to the panel and do it there."
       },

@@ -392,11 +392,7 @@ func (s *Server) handleStartSSOLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !config.Enabled() {
-		writeError(w, r, errdoc.New("sso.not_configured", "Single sign-on is not set up").
-			WithCause("No identity provider is configured on this panel.").
-			WithImpact("There is nothing to link.").
-			WithFix("An administrator can configure a provider under Settings, Sign-in.").
-			WithStatus(http.StatusNotFound))
+		writeError(w, r, errdoc.SSOLinkNotConfigured())
 		return
 	}
 	redirectURL, err := s.ssoRedirectURL(r)
@@ -406,11 +402,7 @@ func (s *Server) handleStartSSOLink(w http.ResponseWriter, r *http.Request) {
 	}
 	authURL, state, nonce, verifier, err := auth.NewOIDC(config).Start(r.Context(), redirectURL)
 	if err != nil {
-		writeError(w, r, errdoc.New("sso.provider_unreachable", "The identity provider could not be reached").
-			WithCause("%s", err.Error()).
-			WithImpact("Nothing was linked.").
-			WithFix("Check the issuer URL under Settings, Sign-in, and that this panel can reach it.").
-			WithStatus(http.StatusBadGateway).Retry())
+		writeError(w, r, errdoc.SSOLinkProviderUnreachable(err.Error()))
 		return
 	}
 	encoded, err := json.Marshal(ssoState{State: state, Nonce: nonce, Verifier: verifier, Link: user.ID})

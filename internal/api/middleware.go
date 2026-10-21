@@ -415,11 +415,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 func (s *Server) requireRecentAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := apiTokenFrom(r.Context()); ok {
-			writeError(w, r, errdoc.New("auth.needs_person", "This has to be done from the panel").
-				WithCause("Changing two-factor authentication or creating a token has to be done by somebody who can prove who they are, and an API token cannot.").
-				WithImpact("Nothing was changed.").
-				WithFix("Sign in to the panel and do it there.").
-				WithStatus(http.StatusForbidden))
+			writeError(w, r, errdoc.NeedsPerson())
 			return
 		}
 		session, ok := sessionFrom(r.Context())
@@ -451,11 +447,7 @@ func (s *Server) requireRecentAuth(next http.Handler) http.Handler {
 func refuseScopedTokens(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if token, ok := apiTokenFrom(r.Context()); ok && strings.TrimSpace(token.Scopes) != "" {
-			writeError(w, r, errdoc.New("auth.token_scope", "This token cannot make that request").
-				WithCause("The token %s is limited to %s, and this answer carries a secret no limited token is given.", token.Name, token.Scopes).
-				WithImpact("The request was refused. Nothing was changed.").
-				WithFix("Use a token without a scope, or sign in to the panel.").
-				WithStatus(http.StatusForbidden))
+			writeError(w, r, errdoc.TokenNoSecrets(token.Name, token.Scopes))
 			return
 		}
 		next.ServeHTTP(w, r)

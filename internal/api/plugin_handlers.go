@@ -431,11 +431,7 @@ func (s *Server) fetchPluginURL(r *http.Request, url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errdoc.New("plugin.unreachable", "That manifest could not be fetched").
-			WithCause("The server answered %s.", resp.Status).
-			WithImpact("Nothing was installed.").
-			WithFix("Check the address.").
-			WithStatus(http.StatusBadGateway)
+		return nil, errdoc.PluginUnexpectedResponse(resp.Status)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, plugins.MaxManifestBytes+1))
 }
@@ -496,11 +492,7 @@ func (s *Server) requirePluginChange(r *http.Request) (store.User, error) {
 		return store.User{}, err
 	}
 	if _, byToken := apiTokenFrom(r.Context()); byToken {
-		return store.User{}, errdoc.New("auth.needs_person", "This has to be done from the panel").
-			WithCause("Plugins are installed and changed by an administrator signed in to the panel, not by an API token.").
-			WithImpact("Nothing was changed.").
-			WithFix("Sign in to the panel and do it there.").
-			WithStatus(http.StatusForbidden)
+		return store.User{}, errdoc.PluginNeedsPerson()
 	}
 	return user, nil
 }

@@ -46,6 +46,89 @@ func Forbidden(action string) *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// --- accounts, teams and plugins ---
+//
+// Each of these used to share its code with a second place that said
+// something else, and the interface translates by code: one of the two was
+// always shown in the other's words.
+
+// NeedsPerson is an API token asking for what only a person at the keyboard
+// may do: confirming who they are, and everything that waits on it — the
+// second factor, a new token, a passkey, linking single sign-on, the master
+// key. A token cannot re-authenticate, so it is refused rather than asked.
+func NeedsPerson() *Problem {
+	return New("auth.needs_person", "This has to be done from the panel").
+		WithCause("This has to be done by somebody signed in to the panel who can prove who they are, and an API token cannot.").
+		WithImpact("Nothing was changed.").
+		WithFix("Sign in to the panel and do it there.").
+		WithStatus(http.StatusForbidden)
+}
+
+// TokenNoSecrets is a limited token asking for an answer that carries a
+// secret: a database's password, a team's export. Unlike auth.token_scope the
+// request may be inside the token's scope; no limited token is given a secret.
+func TokenNoSecrets(name, scopes string) *Problem {
+	return New("auth.token_no_secrets", "This token cannot read secrets").
+		WithCause("The token %s is limited to %s, and this answer carries a secret no limited token is given.", name, scopes).
+		WithImpact("The request was refused. Nothing was changed.").
+		WithFix("Use a token without a scope, or sign in to the panel.").
+		WithStatus(http.StatusForbidden)
+}
+
+// SSOLinkNotConfigured is linking an account to an identity provider on a
+// panel that has none. Signing in without one is sso.not_configured.
+func SSOLinkNotConfigured() *Problem {
+	return New("sso.link_not_configured", "Single sign-on is not set up").
+		WithCause("No identity provider is configured on this panel.").
+		WithImpact("There is nothing to link.").
+		WithFix("An administrator can configure a provider under Settings, Sign-in.").
+		WithDocs("/docs/configuration#single-sign-on").
+		WithStatus(http.StatusNotFound)
+}
+
+// SSOLinkProviderUnreachable is linking an account while the identity
+// provider cannot be reached. Signing in then is sso.provider_unreachable.
+func SSOLinkProviderUnreachable(reason string) *Problem {
+	return New("sso.link_provider_unreachable", "The identity provider could not be reached").
+		WithCause("%s", reason).
+		WithImpact("Nothing was linked.").
+		WithFix("Check the issuer URL under Settings, Sign-in, and that this panel can reach it.").
+		WithDocs("/docs/configuration#single-sign-on").
+		WithStatus(http.StatusBadGateway).
+		Retry()
+}
+
+// LastOwner is a team's only owner being removed or given another role. Both
+// leave the team with nobody who can administer it, so both say the same.
+func LastOwner() *Problem {
+	return New("team.last_owner", "A team needs at least one owner").
+		WithCause("This is the only owner of the team.").
+		WithImpact("Nothing was changed.").
+		WithFix("Make someone else an owner first.").
+		WithStatus(http.StatusConflict)
+}
+
+// PluginNeedsPerson is an API token installing, changing or removing a plugin.
+// Installing mints a token that outlives the request and is bound to no team,
+// which is what creating a token by hand refuses to a token too.
+func PluginNeedsPerson() *Problem {
+	return New("plugin.needs_person", "This has to be done from the panel").
+		WithCause("Plugins are installed and changed by an administrator signed in to the panel, not by an API token.").
+		WithImpact("Nothing was changed.").
+		WithFix("Sign in to the panel and do it there.").
+		WithStatus(http.StatusForbidden)
+}
+
+// PluginUnexpectedResponse is a manifest address that answered, with something
+// other than the manifest. One that could not be reached is plugin.unreachable.
+func PluginUnexpectedResponse(status string) *Problem {
+	return New("plugin.unexpected_response", "That manifest could not be fetched").
+		WithCause("The server answered %s.", status).
+		WithImpact("Nothing was installed.").
+		WithFix("Check the address.").
+		WithStatus(http.StatusBadGateway)
+}
+
 // --- the panel's own bugs ---
 //
 // Each place that stops a panic has its own code. They used to share
@@ -2102,6 +2185,18 @@ func RestoreRefused(target string) *Problem {
 		WithDocs("/docs/backups#restoring").
 		WithStatus(http.StatusConflict).
 		With("target", target)
+}
+
+// VolumeRestoreUnconfirmed is a volume restore that was not confirmed. Unlike
+// a database's, it is asked every time: it replaces the whole disk and stops
+// the app while it does.
+func VolumeRestoreUnconfirmed(volume, app string) *Problem {
+	return New("backup.volume_restore_unconfirmed", "This would replace what is on the disk now").
+		WithCause("Restoring %s writes the archive over everything currently in the volume, and stops %s while it does.", volume, app).
+		WithImpact("Nothing was changed.").
+		WithFix("Take a backup of what is there now if you might want it, then confirm the restore.").
+		WithDocs("/docs/backups#volumes").
+		WithStatus(http.StatusConflict)
 }
 
 // BackupNotOffered is a backup, a schedule or a restore asked of a database

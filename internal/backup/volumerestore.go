@@ -56,11 +56,7 @@ func (m *Manager) RestoreVolume(ctx context.Context, backupID string, overwrite 
 	// app is stopped while that happens. Neither is a surprise somebody should
 	// get from pressing a button, so it is asked for rather than assumed.
 	if !overwrite {
-		return store.Operation{}, errdoc.New("backup.restore_refused", "This would replace what is on the disk now").
-			WithCause("Restoring %s writes the archive over everything currently in the volume, and stops %s while it does.", volume.Name, app.Name).
-			WithImpact("Nothing has been changed.").
-			WithFix("Take a backup of what is there now if you might want it, then confirm the restore.").
-			WithStatus(409)
+		return store.Operation{}, errdoc.VolumeRestoreUnconfirmed(volume.Name, app.Name)
 	}
 
 	teamID, err := m.db.TeamIDForApp(ctx, app.ID)
