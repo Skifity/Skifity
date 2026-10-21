@@ -333,6 +333,32 @@ function checkLiteralProps() {
   }
 }
 
+/**
+ * A key the code asks for that English does not have.
+ *
+ * Everything above compares the languages with each other, so a key missing
+ * from all five at once passed: i18next then renders the key itself, and
+ * "common.saved" appeared as the toast after saving a volume's backup policy.
+ * Only literal keys can be checked; a key built at run time from a status or
+ * a code is the caller's to cover, and most of those pass a defaultValue.
+ */
+function checkKeysExist() {
+  const calls = [/\bt\(\s*"([\w.-]+)"/g, /\bi18nKey="([\w.-]+)"/g]
+  for (const file of walk(srcDir)) {
+    if (!file.endsWith(".tsx") && !file.endsWith(".ts")) continue
+    const contents = readFileSync(file, "utf8")
+    for (const pattern of calls) {
+      for (const match of contents.matchAll(pattern)) {
+        if (!match[1].includes(".") || sourceGroups.has(match[1])) continue
+        const line = contents.slice(0, match.index).split("\n").length
+        problems.push(
+          `${file.slice(srcDir.length + 1)}:${line} asks for "${match[1]}", which ${SOURCE}.json does not have`,
+        )
+      }
+    }
+  }
+}
+
 function* walk(directory) {
   let entries = []
   try {
@@ -350,6 +376,7 @@ function* walk(directory) {
 checkSourceStrings()
 checkLiteralProps()
 checkInterpolations()
+checkKeysExist()
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} translation problem(s):\n`)
