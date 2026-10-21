@@ -152,25 +152,34 @@ export function DashboardPage() {
         }
       />
 
-      {/* Anything wrong comes first, above everything else on the page. */}
-      {summary && !summary.reachable && (
-        <Alert variant="destructive">
-          <ShieldAlertIcon />
-          <AlertTitle>{t("dashboard.clusterUnreachable")}</AlertTitle>
-          <AlertDescription>
-            <p>{t("dashboard.clusterUnreachableHelp", { product: meta?.product ?? "Skifity" })}</p>
-            {/* No cluster at all is said in words; anything else is the
-                client's own error, which is worth showing exactly. */}
-            {summary.message_key === "noCluster" ? (
-              <p>{t("dashboard.noCluster")}</p>
-            ) : (
-              summary.message && (
+      {/* Anything wrong comes first, above everything else on the page. A
+          panel with no cluster connection at all is a different thing from
+          one whose cluster stopped answering: nothing was running to keep
+          running, so it is said in its own words. */}
+      {summary &&
+        !summary.reachable &&
+        (summary.message_key === "noCluster" ? (
+          <Alert variant="warning">
+            <ShieldAlertIcon />
+            <AlertTitle>{t("dashboard.noCluster")}</AlertTitle>
+            <AlertDescription>
+              {t("dashboard.noClusterHelp", { product: meta?.product ?? "Skifity" })}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert variant="destructive">
+            <ShieldAlertIcon />
+            <AlertTitle>{t("dashboard.clusterUnreachable")}</AlertTitle>
+            <AlertDescription>
+              <p>
+                {t("dashboard.clusterUnreachableHelp", { product: meta?.product ?? "Skifity" })}
+              </p>
+              {summary.message && (
                 <code className="mt-1 block font-mono text-xs break-all">{summary.message}</code>
-              )
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
+              )}
+            </AlertDescription>
+          </Alert>
+        ))}
 
       {/* Only a panel administrator can download the recovery key or say it
           is saved; shown to everybody, it was a warning a member could never

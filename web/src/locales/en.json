@@ -287,7 +287,8 @@
     "nothingYet": "Nothing has happened yet.",
     "welcomeBack": "Welcome back, {{name}}.",
     "readyOfTotal": "{{ready}} of {{total}}",
-    "noCluster": "The panel is not connected to a cluster."
+    "noCluster": "The panel is not connected to a cluster.",
+    "noClusterHelp": "Nothing can be deployed until it is. A panel the installer set up runs inside the cluster it made; this one was started on its own, which is how {{product}} is developed and tested."
   },
   "activity": {
     "subtitle": "What changed in this team, newest first.",

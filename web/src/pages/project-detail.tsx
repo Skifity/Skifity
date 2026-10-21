@@ -455,14 +455,14 @@ function EnvironmentServices({ environmentId }: { environmentId: string }) {
         ) : (
           <ItemGroup className="rounded-lg border">
             {databaseItems.map((database) => (
-              <Item key={database.id} asChild>
+              <Item key={database.id} asChild className="flex-nowrap">
                 <Link to={`/databases/${database.id}`}>
                   <ItemMedia variant="icon">
                     <DatabaseIcon />
                   </ItemMedia>
-                  <ItemContent>
+                  <ItemContent className="min-w-0">
                     <ItemTitle>{database.name}</ItemTitle>
-                    <ItemDescription className="font-mono">
+                    <ItemDescription className="font-mono break-all">
                       {database.engine} {database.engine_version}
                       {database.storage_gb > 0 && ` · ${database.storage_gb} GB`}
                     </ItemDescription>
@@ -512,14 +512,16 @@ function AppRow({ app }: { app: App }) {
   const url = status.data?.urls?.[0]
 
   return (
-    <Item asChild>
+    // Not wrapped: a long image name pushed the status under the name on a
+    // phone, on some rows and not others.
+    <Item asChild className="flex-nowrap">
       <Link to={`/apps/${app.id}`}>
         <ItemMedia variant="icon">
           <BoxIcon />
         </ItemMedia>
-        <ItemContent>
+        <ItemContent className="min-w-0">
           <ItemTitle>{app.name}</ItemTitle>
-          <ItemDescription className="font-mono">
+          <ItemDescription className="font-mono break-all">
             {app.source_type === "image"
               ? app.image
               : app.source_type === "upload"

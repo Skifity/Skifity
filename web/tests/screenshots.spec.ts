@@ -287,18 +287,20 @@ test("capture", async ({ page, request }) => {
 
   // --- settings, tab by tab ----------------------------------------------
 
-  for (const [tab, name] of [
-    ["panel", /^general$/i],
-    ["git", /^git$/i],
-    ["notifications", /notifications/i],
-    ["components", /components/i],
-    ["plugins", /plugins/i],
-    ["members", /members/i],
-    ["security", /security/i],
-    ["audit", /audit/i],
+  // By address rather than by clicking: on a laptop the sections are a list
+  // down the side, on anything narrower a picker, and the address is the same.
+  for (const tab of [
+    "panel",
+    "git",
+    "notifications",
+    "components",
+    "plugins",
+    "members",
+    "security",
+    "audit",
   ] as const) {
-    await page.goto("/settings")
-    await page.getByRole("tab", { name }).click()
+    await page.goto(`/settings?tab=${tab}`)
+    await expect(page.getByRole("tabpanel")).toBeVisible()
     await shoot(page, `settings-${tab === "panel" ? "general" : tab}`)
   }
 

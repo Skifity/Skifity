@@ -889,7 +889,9 @@ function SourceChoice({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "h-auto justify-start gap-2.5 rounded-lg px-3 py-3",
+        // Wrapping, not clipped: "A folder on my computer" is longer than a
+        // third of the card in English and longer still in Russian.
+        "h-auto justify-start gap-2.5 rounded-lg px-3 py-3 text-left whitespace-normal",
         active
           ? "border-primary bg-primary/5 hover:bg-primary/10"
           : "font-normal text-muted-foreground",

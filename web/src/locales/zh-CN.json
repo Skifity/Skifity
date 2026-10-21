@@ -278,7 +278,8 @@
     "nothingYet": "目前还没有任何动作。",
     "welcomeBack": "欢迎回来，{{name}}。",
     "readyOfTotal": "{{ready}} / {{total}}",
-    "noCluster": "面板未连接到集群。"
+    "noCluster": "面板未连接到集群。",
+    "noClusterHelp": "在连接之前无法部署任何内容。通过安装程序部署的面板运行在它所创建的集群中；这个面板是单独启动的，这是开发和测试 {{product}} 的方式。"
   },
   "activity": {
     "subtitle": "这个团队里发生的变化，最新的在前。",

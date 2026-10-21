@@ -278,7 +278,8 @@
     "nothingYet": "Belum ada aktivitas.",
     "welcomeBack": "Selamat datang kembali, {{name}}.",
     "readyOfTotal": "{{ready}} dari {{total}}",
-    "noCluster": "Panel tidak terhubung ke cluster."
+    "noCluster": "Panel tidak terhubung ke cluster.",
+    "noClusterHelp": "Belum ada yang bisa di-deploy sampai panel terhubung. Panel yang dipasang lewat installer berjalan di dalam cluster yang dibuatnya; panel ini dijalankan sendiri, seperti saat {{product}} dikembangkan dan diuji."
   },
   "activity": {
     "subtitle": "Apa yang berubah di tim ini, terbaru dulu.",
