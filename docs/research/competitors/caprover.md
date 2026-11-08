@@ -16,9 +16,11 @@ host's `/var/run/docker.sock` mounted, and drives an **nginx** reverse proxy,
 once there is more than one node), optional **Netdata** server monitoring and,
 since 1.14 (June 2025), **GoAccess** traffic statistics. Its own state is a flat
 JSON file, `/captain/data/config-captain.json`; a "backup" is a tar of
-`/captain/data`. Requirements: Ubuntu 24.04 with Docker 25+, 1 GB of RAM, AMD64
-or ARM64 (ARMv7 images are being dropped in the next release), ports 80, 443/tcp,
-443/udp and 3000 open. **Licence:** Apache 2.0 with a custom appendix added in
+`/captain/data`. Requirements: Ubuntu 24.04 with Docker 25+, 1 GB of RAM and,
+since the 1.16.0 installer, 5 GB free on Docker's disk (it refuses less and warns
+below 2 GB of RAM or 10 GB of disk), AMD64 or ARM64 (ARMv7 images were dropped in
+1.16.0, 2026-11-03), ports 80/tcp, 443/tcp and 3000/tcp open, and 443/udp for
+HTTP/3. **Licence:** Apache 2.0 with a custom appendix added in
 July 2023 ("the paid features of CapRover (as a service) cannot be modified", no
 redistributing another paid version), plus a Terms and Conditions file that the
 installer makes you accept (`ACCEPTED_TERMS=true`) and that discloses anonymous
@@ -29,8 +31,9 @@ success/failure alerts, "up to 5 instances per license" and 24-hour email
 support. The price is loaded at runtime from a Paddle checkout and could not be
 confirmed from any page or article (read 2026-09-30). **Maturity:** repository
 created 2017-10-25; releases 1.13.0 (2024-10-19), 1.14.0 (2025-06-07), 1.14.1
-(2025-11-11), 1.14.2 (2026-05-14), 1.15.0 (2026-08-04) and four patch releases
-to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
+(2025-11-11), 1.14.2 (2026-05-14), 1.15.0 (2026-08-04), four patch releases
+to 1.15.4 (2026-08-30), then 1.15.5 (2026-10-23) and 1.16.0 (2026-11-03) —
+two or three feature releases a year. **Adoption:**
 15,177 GitHub stars, 1,004 forks, 178 open issues and pull requests
 (GitHub API, 2026-09-30); 228,673,959 Docker Hub pulls of `caprover/caprover`
 (Docker Hub API, 2026-09-30); 360 one-click apps in the official catalogue
@@ -56,7 +59,8 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 * **Docker Compose, simplified** (1.15.0, "still experimental"): paste a Compose
   file and it becomes several apps. Only `image`, `environment`, `ports`,
   `volumes`, `depends_on`, `hostname`, `cap_add` and `command` are read; `build`,
-  `networks`, `secrets`, `configs`, `deploy` and `restart` are ignored.
+  `networks`, `secrets`, `configs`, `deploy` and `restart` are ignored, with a
+  warning naming them since 1.16.0.
 * **Escape hatches:** a *pre-deploy script* — JavaScript executed inside the
   CapRover process with access to the Docker service update object ("literally
   do anything") — and a *Service Update Override*, a raw Docker Engine API
@@ -71,7 +75,8 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 * Let's Encrypt through Certbot over HTTP-01, one click per domain. **DNS-01 and
   wildcard certificates** since 1.12.0 by building a custom Certbot image and
   hand-editing `/captain/data/config-override.json`.
-* Per app: *Force HTTPS*, *Websocket support*, **HTTP Basic Auth**, "Redirect all
+* Per app: *Force HTTPS*, *Websocket support* (on by default for new apps since
+  1.16.0), **HTTP Basic Auth**, "Redirect all
   domains to" one canonical domain (1.11, "experimental"; redirects kept the
   path from 1.12), container HTTP port, and a **per-app nginx config template**
   that can be edited in the dashboard; the captain-wide nginx template can be
@@ -96,15 +101,18 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 * *Persistent apps* get persistent directories (named volumes or host paths)
   and can be pinned to a node by Node ID. 1.15.0 warns when a volume label is
   already used by another app.
-* **Backup** (Settings → Backup) downloads a tar of `/captain/data`: app
-  settings, configuration and certificates. It **excludes container images and
-  every persistent directory**, so no database or upload is in it. There is no
-  schedule and no S3 target; the docs suggest scripting the API and using
-  `mysqldump`/`mongodump` or a volume-backup container yourself.
+* **Backup** (Maintenance → Configuration Backup since 1.16.0, Settings → Backup
+  before) downloads a tar of `/captain/data`: app settings, configuration and
+  certificates, and a self-hosted registry's image data when there is one. It
+  **excludes the local Docker image store and every persistent directory**, so
+  no database or upload is in it. There is no schedule and no S3 target; the docs
+  give a `curl` script against the backup API for your own scheduler and suggest
+  `mysqldump`/`mongodump` or a volume-backup container for the data.
 * Restoring onto a new server means repointing `*.root` DNS and, for a cluster,
-  hand-editing node IPs and uploading an SSH key. The unreleased edge build fixes
-  "backups created with an incorrect nested data directory that prevented them
-  from being restored".
+  hand-editing node IPs and uploading an SSH key. On 2026-09-30 the edge build
+  already fixed "backups created with an incorrect nested data directory that
+  prevented them from being restored"; 1.16.0 shipped fixes to "Backup creation,
+  restoration of malformed archives, and missing-download handling".
 * Automated disk clean-up of old images (1.12.0).
 
 ### Scaling and high availability
@@ -129,8 +137,9 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 * **Netdata** for server CPU, memory, disk and network (optional, one click).
 * **GoAccess** (1.14.0) for per-app traffic statistics from nginx logs, with an
   option to stop logging client IPs (1.15.0).
-* No alerting in the free core beyond whatever Netdata is configured to send;
-  build success/failure alerts are a Pro feature.
+* Until 1.16.0, no alerting in the free core beyond whatever Netdata is
+  configured to send; 1.16.0 added "disk usage monitoring with persistent
+  low-space alerts". Build success/failure alerts are still a Pro feature.
 
 ### Security, auth, roles, SSO, audit
 
@@ -170,8 +179,9 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 
 * `caprover` CLI (npm): `serversetup`, `login` (several servers at once),
   `list`, `logout`, `deploy`, and `api` for any dashboard endpoint.
-* The HTTP API is the one the dashboard uses and is not documented as a public
-  contract.
+* The HTTP API is the one the dashboard uses. The rewritten docs describe its
+  login, headers and route groups and call the server's route code "the
+  authoritative inventory", so it is still not a public contract.
 * No declarative configuration beyond `captain-definition`; nothing like a
   project file that describes an app's settings.
 * An unofficial CapRover MCP server exists (`ivan-saorin/caprover-mcp`).
@@ -194,8 +204,12 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 
 ### Developer experience and onboarding
 
-* One `docker run`, then `caprover serversetup` asks for the IP, root domain,
-  new password and email. Translations and themes since 1.13.0.
+* Since 1.16.0 an installer script (`get.caprover.com`) checks the server,
+  installs Docker if it is missing and starts CapRover with one `docker run`;
+  before that the documented install was the `docker run` alone. Then the
+  dashboard on port 3000, or `caprover serversetup`, asks for the root domain,
+  new password and email. Translations and themes since 1.13.0; eleven light and
+  dark themes since 1.16.0.
 * Installation refuses known-incompatible hosts such as Proxmox LXC with a
   descriptive error since 1.15.0.
 
@@ -278,8 +292,10 @@ to 1.15.4 (2026-08-30) — two or three feature releases a year. **Adoption:**
 
 ## Against Skifity
 
-Skifity statuses follow `docs/checklist.md`: almost everything cluster-facing is
-**Written, never run** (ADR-0010).
+The Skifity column is Skifity on 2026-09-30, when it was unreleased and almost
+everything cluster-facing was **Written, never run** (ADR-0010). Since then
+v0.1.1 has been released (2026-10-21) and the `Cluster` workflow runs it on a
+real k3s on every push to `main`; "Since 2026-09-30" below says what changed.
 
 | Capability | CapRover | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -437,6 +453,151 @@ L ≈ several weeks.
 * **The Docker socket inside the panel.** Skifity talks to the Kubernetes API
   with a ServiceAccount; keep it that way.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and pages could not be reached from the sandbox
+this update was written in, so stars, open issues and the security advisory page
+were not read again; the changelog (through raw.githubusercontent.com), Docker
+Hub, NVD and caprover.com were.
+
+### Releases
+
+* **1.15.5 (2026-10-23)** is one line: "Updated Node.js to 22.23.4 to address
+  CVE-2026-111497". That CVE is a buffer overflow in Google's Brotli decoder,
+  CVSS 9.8 (NVD, published 2026-10-22); Node.js 22.23.4 was the security release
+  of 2026-10-20.
+* **1.16.0 (2026-11-03)**, the second feature release of 2026:
+  * A redesigned dashboard: an Overview page, a guided Setup, and Settings
+    regrouped, with the configuration backup and updates under Maintenance.
+  * A new installer, `get.caprover.com`, that checks the server before it
+    changes anything: architecture, RAM, 5 GB of free disk, inodes, cgroups,
+    clock, swap, IP forwarding, VXLAN, ports, the host firewall, an existing
+    Docker, Swarm or `/captain`. Any failure stops it with nothing changed.
+    `--check` runs only the checks. The terms must be accepted explicitly
+    (`--accept-terms`, or a prompt that defaults to No). It learns the public
+    address from ipconfig.io or api.ipify.org and, unless
+    `--skip-external-check` is given, asks check-host.net after the install
+    whether ports 80, 443 and 3000 answer from outside.
+  * "App runtime health and diagnostics, including instance counts and task
+    history".
+  * "Disk usage monitoring with persistent low-space alerts", the first alert in
+    the free core.
+  * Eleven light and dark themes; Node.js 24; ARMv7 images removed; WebSocket
+    support on by default for new apps.
+  * Warnings for the Compose fields it ignores. The subset it reads is
+    unchanged (`image`, `environment`, `ports`, `volumes`, `depends_on`,
+    `hostname`, `cap_add`, `command`).
+  * "Docker API compatibility checks before official upgrades when version
+    metadata is available": the answer to the November 2025 outage, when
+    Docker 29 stopped every CapRover older than 1.14.1.
+  * Fixes to backup creation and restore; to "queued builds and one-click
+    deployments failing or creating partial resources"; to duplicate custom
+    domains and custom ports lost when an app is updated; to the dashboard
+    losing its API connection during nginx reloads and to SSH Git clones; and
+    orphaned certificates are now removed a day after they expire.
+  * Backend dependencies updated and the deprecated `request` library replaced.
+* The `edge` build has one change since 1.16.0 (read 2026-11-08): a white
+  background in dark mode.
+
+### Documentation, licence, pricing and adoption
+
+* caprover.com's documentation has been rewritten and reorganised (read
+  2026-11-08; the old URLs redirect). New pages include an outline of the HTTP
+  API, a script that automates the configuration backup through it, a
+  production checklist, and `caprover-diagnostic.sh`, a collector that reads
+  ports, Swarm tasks, mounts, the firewall and logs into an owner-only file and
+  leaves environment variables and CapRover's configuration out. When
+  these pages first appeared could not be established.
+* The licence is unchanged: Apache 2.0 with the appendix (LICENSE read
+  2026-11-08). A comparison by wz-it.com (updated 2026-10-19) lists CapRover as
+  "Apache-2.0, restriction: none", which is wrong.
+* CapRover Pro's plan text is unchanged (a monthly price loaded at runtime, "Up
+  to 5 instances per license", 24-hour email support); the price still could not
+  be read (2026-11-08).
+* 228,946,267 Docker Hub pulls (2026-11-08); 363 one-click apps
+  (`oneclickapps.caprover.com/v4/list`, 2026-11-08, up from 360). wz-it.com
+  counted 15,186 GitHub stars on 2026-10-12.
+
+### What users say
+
+* The "not evolving" verdict quoted above is gone from temps.sh's comparison
+  (updated 2026-11-05), which now says releases are less frequent but
+  "development continues"; wz-it.com (2026-10-19) says "the common assumption
+  that CapRover has gone quiet does not hold". Coolify's comparison page (last
+  verified 2026-10-19) still calls its Compose support "an experimental subset"
+  and says backups "don't cover volumes", both still true of 1.16.0.
+* No new incident or widely discussed complaint was found on Hacker News
+  between 2026-09-30 and 2026-11-08 (hn.algolia.com, 2026-11-08).
+
+### Security
+
+* NVD still has no CVE for CapRover (keyword search, 2026-11-08). The security
+  changes of the period are the Node.js update in 1.15.5 and the dependency
+  update in 1.16.0, neither with an advisory of its own. Skifity's binary links
+  no Brotli library (none in `go.mod`).
+* The new installer's external check sends the server's public address to
+  check-host.net by default, and its address lookup asks ipconfig.io. Skifity's
+  installer asks api.ipify.org or icanhazip.com only when the server's own
+  address is a private one (`installer/install.sh`, `find_public_ip`), and
+  checks that the panel answers from the server itself, not from outside
+  (`check_panel_answers`).
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* Already there, against 1.16.0: disk, memory and CPU alerts per server
+  (`internal/watch/servers_usage.go`, the `server.alert` event); per-instance
+  status and the cluster's events for an app
+  (`web/src/components/events-card.tsx`); light, dark and system themes
+  (`web/src/components/theme-toggle.tsx`); warnings for the Compose keys it does
+  not carry over (`internal/builder/detect.go`, `ComposeWarnings`). Of this
+  file's gaps, a whole Compose file as a stack (Phase 101), public TCP and UDP
+  ports (`internal/kube/ports.go`), the panel's own off-site backup (Phase 84),
+  basic auth (`web/src/components/app/password-protection.tsx`), canonical
+  redirects (`internal/kube/hostredirect.go`) and request statistics
+  (`internal/watch/traffic.go`) are closed. The catalogue has 374 templates
+  (`internal/templates/catalogue/`, 2026-11-08) against CapRover's 363.
+* Still open from this file: choosing a template's version at install
+  (`internal/api/template_install.go` takes the image as the file names it).
+* **New gap — an audit-only installer run.** CapRover's `--check` runs every
+  check and changes nothing, so a server can be judged before it is committed
+  to. Skifity's installer has the checks (`preflight` in
+  `installer/install.sh`) and stops before changing anything when one fails,
+  but a server that passes goes straight on to the firewall and k3s (`main`);
+  there is no flag to stop after the report. A `--check` that runs `preflight`
+  and the port and DNS checks, prints the count of problems and warnings and
+  exits, is small; the installer smoke test can run it against its fake root.
+  Size S; no cluster needed.
+* **New gap — an install that fails half way leaves what it made.** CapRover
+  1.16.0 fixed one-click deployments "creating partial resources". Skifity's
+  `installTemplate` (`internal/api/template_install.go`) creates each service's
+  app, variables, files, ports and volumes in turn, then each managed database,
+  and returns at the first error: a port already taken by the third service, or
+  a link to a service the template lacks after its database was created, leaves
+  the first two apps and the database behind, and the error does not mention
+  them. Checking ports and names before creating anything, and removing what
+  was made when a later step fails, closes it; the Compose stack takes the same
+  path. Size S; no cluster needed (the databases manager has a fake).
+* **New gap — check a panel upgrade before the panel stops.** CapRover now
+  checks the Docker API before an upgrade. Skifity's `upgradePanel`
+  (`internal/api/upgrade.go`, `internal/cluster/components.go`) takes a snapshot
+  and swaps the image tag; it does not check that the image exists, that the
+  target is newer than the running version, or that the target release supports
+  the cluster's Kubernetes version. The panel uses the Recreate strategy, so a
+  tag that cannot be pulled leaves no panel (the response says how to undo it
+  by hand). The panel's own form only offers a release found by the update
+  check, but the CLI (`skifity upgrade --to`) and the API take any tag. Size S;
+  no cluster needed (a fake registry and clientset).
+* **New gap — ship the report collector.** `test/cluster/collect.sh` already
+  does what CapRover's diagnostic collector does, more carefully (it reads only,
+  and leaves Secrets out entirely), and its header says it is "what to attach
+  when something on a server of your own does not work". It is used only by CI
+  (`.github/workflows/cluster.yml`, `servers.yml`): the release does not ship it
+  and `docs/troubleshooting.md` does not mention it. Publishing it with the
+  installer, or as `skifity admin report`, and a section in the troubleshooting
+  page close it. Size S; no cluster needed to ship it.
+
 ## Sources
 
 All read 2026-09-30.
@@ -488,3 +649,31 @@ All read 2026-09-30.
 * https://selfhostable.dev/blog/coolify-vs-caprover-vs-dokku/
 * https://kanopylabs.com/blog/coolify-vs-dokku-vs-caprover
 * https://github.com/ivan-saorin/caprover-mcp (via search result)
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://raw.githubusercontent.com/caprover/caprover/master/CHANGELOG.md (1.15.5, 1.16.0 and the edge entry)
+* https://raw.githubusercontent.com/caprover/caprover/master/LICENSE and TERMS_AND_CONDITIONS.md (unchanged)
+* https://get.caprover.com (redirects to https://raw.githubusercontent.com/caprover/caprover/master/scripts/user/installer/caprover-install.sh, installer 1.0.0)
+* https://hub.docker.com/v2/repositories/caprover/caprover/ and /tags (pull count; 1.15.5 pushed 2026-10-23, 1.16.0 pushed 2026-11-03)
+* https://oneclickapps.caprover.com/v4/list (363 apps)
+* https://caprover.com/sitemap.xml
+* https://caprover.com/docs/get-started
+* https://caprover.com/docs/installation
+* https://caprover.com/docs/server/backup
+* https://caprover.com/docs/server/upgrade
+* https://caprover.com/docs/data-persistence/backup-data
+* https://caprover.com/docs/reference/api
+* https://caprover.com/docs/troubleshooting/diagnostics
+* https://caprover.com/docs/production-checklist
+* https://caprover.com/docs/applications
+* https://caprover.com/docs/deployments/other/docker-compose
+* https://caprover.com/docs/backup-and-restore (now a redirect to /docs/server/backup)
+* https://pro.caprover.com/ and its JavaScript bundle (plan text)
+* https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=caprover (0 results)
+* https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-111497 (published 2026-10-22)
+* https://nodejs.org/dist/index.json (v22.23.4, security release, 2026-10-20)
+* https://hn.algolia.com/api/v1/search_by_date?query=caprover (stories and comments since 2026-09-30)
+* https://temps.sh/blog/5-best-coolify-alternatives-self-hosted-paas-2026 (modified 2026-11-05)
+* https://wz-it.com/en/blog/self-hosted-paas-comparison-coolify-dokploy-caprover/ (modified 2026-10-19; figures as of 2026-10-12)
+* https://coolify.io/compare/coolify-vs-dokploy-vs-caprover-vs-dokku-vs-kamal (last verified 2026-10-19)

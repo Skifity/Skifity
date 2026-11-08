@@ -26,7 +26,8 @@ announcement (2026, after 2026-08-09) says "this release increases Dokku Pro's
 price to $999"; Pro must reach the internet to validate its licence "or it will
 fail to start". **Maturity:** still 0.x after 13 years; minor releases 0.36.0
 (2025-07-24), 0.37.0 (2025-11-20), 0.38.0 (2026-04-30), then **31 patch releases
-to 0.38.31 (2026-09-26)** in five months (Docker Hub tag dates). **Adoption:**
+to 0.38.31 (2026-09-26)** in five months and three more to 0.38.34 (2026-10-30)
+(Docker Hub tag dates). **Adoption:**
 32,166 GitHub stars, 2,081 forks, and only 29 open issues and pull requests
 (GitHub API, 2026-09-30) — a number every review mentions. Requirements: Ubuntu
 22.04/24.04/26.04 or Debian 11+, amd64 or arm64, **1 GB of memory for the Docker
@@ -263,12 +264,12 @@ class: a string a user controls reaching a shell or `tar` on the host.
 | GHSA-j6qq-xg73-ghqg | CVE-2026-45405 | 2026-05-13 | Critical (9.0) | `git:from-archive` and `certs:add` extracted archives without sanitising paths or symlinks; overwrite `~/.ssh/authorized_keys` | 0.38.2 |
 | GHSA-xh7p-9crg-pchr | CVE-2026-45407 | 2026-05-13 | Moderate (5.0) | `.netrc` with git credentials created 0644 by `touch` before `netrc` could set 0600 | 0.38.2 |
 | GHSA-72vm-7pc2-x95w | CVE-2026-54636 | 2026-06-16 | Critical (9.0) | `app.json` cron commands with `>` or `;` escaped the container and ran on the host as `dokku` | 0.38.7 |
-| GHSA-fccf-j7qf-2xp9 | CVE-2026-86002 (as listed on the advisory) | 2026-09-24 | Critical (9.0) | `docker-options` strings concatenated into `DOCKER_ARGS` and run through Bash `eval`; "any user with app-level dokku access" | 0.38.25 |
+| GHSA-fccf-j7qf-2xp9 | CVE-2026-86002 | 2026-09-24 | Critical (9.0) | `docker-options` strings concatenated into `DOCKER_ARGS` and run through Bash `eval`; "any user with app-level dokku access" | 0.38.25 |
 
-NVD lists the first five (published there 2026-06-26); the sixth was not yet in
-NVD's keyword results on 2026-09-30. The `dokku` user can run Docker, so
-command execution as `dokku` is effectively root on the host. The pattern is
-the one `docs/research/competitors.md` already quotes for Coolify — "user input
+NVD lists the first five (published there 2026-06-26) and, since 2026-10-14,
+the sixth (still "Awaiting Analysis" on 2026-11-08). The `dokku` user can run
+Docker, so command execution as `dokku` is effectively root on the host. The
+pattern is the one `docs/research/competitors.md` already quotes for Coolify — "user input
 reaches a shell without enough sanitization, in many independent code paths" —
 and Dokku's 13 years of Bash plugins are many paths. To its credit, every fix
 shipped within days of the report, with advisories and a blog post urging the
@@ -280,8 +281,11 @@ Dokku's k3s scheduler is the closest architectural relative Skifity has: k3s
 joined over SSH, cert-manager, Traefik or ingress-nginx, KEDA with the HTTP
 add-on, Longhorn-backed volumes. The difference is that Dokku bolts it onto a
 CLI whose default is still docker-local, while Skifity is k3s-only and hides it.
-Skifity statuses: almost everything cluster-facing is **Written, never run**
-(ADR-0010).
+The Skifity column is Skifity on 2026-09-30, when it was unreleased and almost
+everything cluster-facing was **Written, never run** (ADR-0010). Since then
+v0.1.1 has been released (2026-10-21), the `Cluster` workflow runs it on a real
+k3s on every push to `main`, and its memory has been measured; "Since
+2026-09-30" below says what changed.
 
 | Capability | Dokku | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -441,6 +445,118 @@ Skifity statuses: almost everything cluster-facing is **Written, never run**
   procedure that says "at a time when not executing any Dokku commands". One
   SQLite file with `VACUUM INTO` is the better shape.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and pages could not be reached from the sandbox
+this update was written in, so stars, issues and the security advisory page
+were not read again; `HISTORY.md` and the docs (through
+raw.githubusercontent.com), Docker Hub, NVD, dokku.com and pro.dokku.com were.
+
+### Releases
+
+* **0.38.32 (2026-10-25)**, the largest patch of the series. Deploy locks are
+  released when a deploy exits and `apps:lock` is honoured (#9189), and the
+  deploy lock is hardened (#9131); concurrent property updates are serialised
+  (#9172); an image that another app uses as its source is no longer retired
+  (#9148); arguments such as `--version` and `-n` survive being run over SSH;
+  every Docker memory unit is accepted. New: a whole-set form and a clear for
+  the k3s scheduler's chart overrides (#9190), the nginx proxy's HTTP version
+  per app (#9152), a per-entry `MAILTO` for cron entries that plugins inject
+  (#9104), and Let's Encrypt for the HAProxy proxy (#9176). Traefik 3.7.15,
+  Vector 0.60.0, herokuish 0.11.21 and pack 0.40.10.
+* **0.38.33 (2026-10-29)**: a missing `wget` for source installs, `go-jose`
+  4.1.6, Traefik 3.7.16 and dokku-update 0.11.0.
+* **0.38.34 (2026-10-30)**: `ps:rebuild --no-cache` rebuilds an app without the
+  build cache, for that one build (#9225), and every network is attached after
+  a container is created (#9223).
+* Not released (`master`, 2026-11-08): a 0.39.0 migration guide. The buildpack
+  `stack` setting moves into the herokuish and pack builders, and changing it
+  clears that builder's cache. The Debian package will depend on
+  `coredns-docker`, so nginx can find an app's containers by name at request
+  time, opt-in, which is the fix for the long-standing "nginx routes to a stale
+  IP after a reboot" bug (#8313). Another minor version, another migration guide.
+
+### Pro, pricing and adoption
+
+* No Dokku Pro release after 1.5.0 is on the blog (2026-11-08). pro.dokku.com
+  still shows "$849 for life" (2026-11-08), although the 1.5.0 announcement said
+  the price rises to $999, and it links an interactive demo of the UI.
+* Pro's documentation describes an activity log: every command Pro runs for a
+  user, with who triggered it, the app or service, the outcome, the exit code
+  and the output, secrets redacted, write records kept 90 days. The page does
+  not say when it was added.
+* wz-it.com counted 32,176 GitHub stars on 2026-10-12. Docker Hub has 441,899
+  pulls of `dokku/dokku` (2026-11-08); most installs use the apt package.
+
+### What users say
+
+* Comparisons revised in this period repeat the picture above: CLI first, the UI
+  paid, single server by default with the k3s scheduler for several at 2 GB per
+  node (temps.sh, updated 2026-11-05; Coolify's comparison page, verified
+  2026-10-19). wz-it.com (2026-10-19): "There is no dashboard. That is a decision
+  rather than a shortcoming."
+* On Hacker News, a write-up of throwaway apps on a wildcard domain (2026-10-08):
+  "spinning up quick apps on Dokku without setting up DNS, GitHub, etc." In the
+  thread about Northflank's breach (2026-10-30) a commenter expected people to
+  "move back to their own hardware with OSS deployment like dokku", since
+  breaking into a hosted platform yields everybody's keys at once.
+
+### Security
+
+* No new advisory was found. NVD has six Dokku CVEs; the newest,
+  CVE-2026-86002, entered NVD on 2026-10-14 for the advisory of 2026-09-24,
+  fixed in 0.38.25. GitHub's advisory page could not be read from here.
+* Not in this file before: 0.38.31 (2026-09-26) validated the app name in every
+  app-scoped command, refused bare shell operators in Procfile commands and
+  checked the path and scheme of `app.json` health checks — hardening in the
+  class of the 2026 advisories, with no advisory of its own.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* Already there, against the period's releases: deploy locks
+  (`internal/store/locks.go`); a registry sweep that keeps every image any app's
+  recent deployments name, across apps (`ImagesWorthKeeping`,
+  `internal/store/apps.go`), so a promoted image is not removed while another
+  environment runs it; log drains (`internal/logdrain`).
+* Of this file's gaps, joining at the cluster's own k3s version (`15c20cc`,
+  `joinVersion` in `internal/provision/provisioner.go`), several processes from
+  one build (Phase 106), several variables in one rollout and `.env` import
+  (Phase 89), importing a database dump (`POST /api/databases/{id}/import`),
+  encrypted backups (Phase 104) and more engines — MariaDB, MongoDB, Valkey,
+  Dragonfly, ClickHouse, Memcached (`internal/dbsvc/manifests.go`) — are
+  closed. Basic auth, redirects, custom certificates and maintenance mode
+  exist too.
+* The memory floor is measured now (`docs/performance.md`): k3s takes 748–780
+  MiB after a fresh install and adds about 1 GB to the machine, so the first
+  server needs 2 GB, the same as Dokku's k3s scheduler asks per node. The
+  installer still starts on 900 MB, with a warning.
+* Still open from this file: DNS-01 challenges and wildcard certificates (no
+  DNS-01 solver anywhere in `internal/`), and a diff of the objects the next
+  deploy would apply.
+* **New gap — what happened to a scheduled command.** Dokku mails a task's
+  output to a `MAILTO` (per entry since 0.38.32) and can route cron output to its
+  own log sink. Skifity runs scheduled commands as Kubernetes CronJobs and keeps
+  their history, but the panel shows only the schedule and the command:
+  `AppJob` (`web/src/lib/types.ts`) has no last run, the API has no list of a
+  schedule's runs (`internal/api/api.go`, `/jobs` routes), and no notification
+  event fires when a run fails (`internal/notify/notify.go`, `AllEvents`). A
+  nightly job that has failed for a week looks the same as one that works. The
+  fix: the last few runs of each schedule, with status, duration and a link to
+  their logs, on the Console tab; and a `job.failed` event, sent once per failed
+  run. Size M; no cluster needed for the code (a fake clientset), the `Cluster`
+  workflow for the proof.
+* **New gap — rebuild without the build cache.** Dokku 0.38.34 added
+  `ps:rebuild --no-cache`. Skifity's builds always import the registry cache
+  (`--import-cache` in `internal/builder/job.go`), and `skifity deploy --force`
+  only skips the fingerprint shortcut (`internal/cli/commands.go`,
+  `DeployRequest.Force` in `internal/api/ports.go`). A cache that went bad, or a
+  dependency layer that should have been refetched, has no way out short of
+  deleting the cache tag by hand. A `no_cache` flag on the deploy request that
+  leaves out `--import-cache` for that build only, as "Rebuild from scratch"
+  beside Redeploy. Size S; no cluster needed (the Job is rendered by pure code).
+
 ## Sources
 
 All read 2026-09-30.
@@ -484,3 +600,20 @@ All read 2026-09-30.
 * https://selfhostable.dev/blog/coolify-vs-caprover-vs-dokku/
 * https://sliplane.io/blog/dokku-self-hosted-heroku-alternative
 * https://github.com/dokku-MCP/dokku-mcp (via search result)
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://raw.githubusercontent.com/dokku/dokku/master/HISTORY.md (0.38.32 to 0.38.34)
+* https://hub.docker.com/v2/repositories/dokku/dokku/ and /tags (0.38.32 pushed 2026-10-25, 0.38.33 2026-10-29, 0.38.34 2026-10-30; pull count)
+* https://raw.githubusercontent.com/dokku/dokku/master/docs/processes/process-management.md (`ps:rebuild --no-cache`, "New as of 0.38.34")
+* https://raw.githubusercontent.com/dokku/dokku/master/docs/processes/scheduled-cron-tasks.md (`MAILTO`, cron output)
+* https://raw.githubusercontent.com/dokku/dokku/master/docs/appendices/0.39.0-migration-guide.md (unreleased)
+* https://dokku.com/blog/ (no post after Pro 1.5.0)
+* https://pro.dokku.com/ (price and demo)
+* https://pro.dokku.com/docs/features/activity/
+* https://pro.dokku.com/docs/features/webhooks/
+* https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=dokku (six CVEs; CVE-2026-86002 published 2026-10-14)
+* https://hn.algolia.com/api/v1/search_by_date?query=dokku (stories and comments since 2026-09-30), including https://news.ycombinator.com/item?id=50006639 (https://kevinmarsh.com/2026/10/08/throwaway-apps-with-dokku/) and https://news.ycombinator.com/item?id=50307024
+* https://temps.sh/blog/5-best-coolify-alternatives-self-hosted-paas-2026 (modified 2026-11-05)
+* https://wz-it.com/en/blog/self-hosted-paas-comparison-coolify-dokploy-caprover/ (modified 2026-10-19; figures as of 2026-10-12)
+* https://coolify.io/compare/coolify-vs-dokploy-vs-caprover-vs-dokku-vs-kamal (last verified 2026-10-19)

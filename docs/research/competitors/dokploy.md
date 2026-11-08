@@ -2,14 +2,17 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about Dokploy that changed are corrected in place, and "Since 2026-09-30"
+> says what changed, with its sources.
 
 Dokploy (Dokploy/dokploy, dokploy.com) is a self-hosted PaaS that describes itself as an "open
 source alternative to Vercel, Netlify and Heroku". It is for developers and small teams who want
 to push Git, a Docker image or a Compose file to their own VPS and get HTTPS, databases and
 backups without learning an orchestrator. **Architecture:** a Next.js application (tRPC,
 Drizzle ORM, better-auth) that runs as a Docker Swarm service, a PostgreSQL 16 service for
-all of its own state, and a Traefik v3.6.25 container for routing. The installer installs
+all of its own state, and a Traefik container for routing (v3.6.25 on 30 September 2026;
+v0.31.0 moved it to v3.7.16). The installer installs
 Docker 28.5.0 and runs `docker swarm init` on the first server. Configuration files such as
 Traefik dynamic config and Compose files live under `/etc/dokploy`. Remote servers are reached
 over SSH and each runs its own Traefik. Multi-node means Docker Swarm workers and managers
@@ -24,14 +27,16 @@ agreement. It covers SSO/SAML, SCIM, audit logs, white-labelling and license key
 self-hosted OSS is free. Dokploy Cloud (hosted control plane, your servers over SSH) costs
 $4.50 per server per month (Hobby: 1 server, 1 user), or $15/month for the Startup plan
 (3 servers included, unlimited users, then $4.50 per extra server), with 20% off yearly.
-Enterprise (cloud or self-hosted) is "contact sales". **Maturity:** still pre-1.0. The latest
-release is **v0.30.8 (29 September 2026)**, and the only open milestone, `v1.0.0`, is 92%
-done (25 of 27 issues closed) with no due date. It shipped 40 releases in 2026.
+Enterprise (cloud or self-hosted) is "contact sales". Since v0.31.0 Cloud has a 7-day trial.
+**Maturity:** still pre-1.0. The latest release is **v0.31.0 (5 November 2026)**. On
+30 September it was v0.30.8, and the only open milestone, `v1.0.0`, was 92% done (25 of 27
+issues closed) with no due date; the milestone was not re-read. It has shipped 43 releases in
+2026.
 **Adoption:** 37,579 GitHub stars, 3,023 forks, 541 open issues and 186 open PRs (GitHub,
 30 Sep 2026). `dokploy/dokploy` has 14,767,856 Docker Hub pulls (30 Sep 2026). In the month
 to 28 Sep 2026 npm counted 23,002 downloads of `@dokploy/mcp`, 5,224 of `@dokploy/cli` and
 2,408 of `@dokploy/sdk`. The official catalogue lists 518 templates (templates.dokploy.com,
-30 Sep 2026).
+30 Sep 2026). The figures of 8 Nov 2026 are under "Since 2026-09-30".
 
 **Two findings correct `docs/research/competitors.md` (17 Sep 2026):**
 1. That page says "Dokploy has no publicly disclosed CVEs". This is now false. The
@@ -66,8 +71,10 @@ no year.
 | **v0.29.13** | 21 Jul | 16 security PRs (command injection, cross-org IDOR, missing WebSocket authorisation). **42 advisories published that day** |
 | **v0.30.0** | 14 Aug | Docker network management (and "Isolated Deployments" deprecated), **DNS provider integration** (Cloudflare, Route53), **external secret providers** (HashiCorp Vault/OpenBao, Infisical, AWS Secrets Manager, Doppler, Scaleway), one Docker dashboard (containers, volumes with a file explorer, networks, events, images, disk usage, Swarm), session management, **passkeys**, a default role for new members, a toggle to disable a domain |
 | v0.30.1 – v0.30.8 | 18 Aug – 29 Sep | Porkbun, Infomaniak and OVHcloud DNS, Phase.dev and AWS Parameter Store secrets, bulk import from vaults, Cloud onboarding wizard, Compose "fresh volume" deploys, missing Railpack versions |
+| v0.30.9 – v0.30.10 | 22 Oct | Node.js 24.22.1, a security release |
+| **v0.31.0** | 5 Nov | Logs and metrics to external providers through Vector, a server security section, moving services between servers, a Traefik safe update to v3.7.16, backup downloads, and fixes for two cross-organisation CVEs (see "Since 2026-09-30") |
 
-**Is it 1.0?** No. It is v0.30.8 on 30 September 2026. A community answer in discussion
+**Is it 1.0?** No. It is v0.31.0 on 8 November 2026. A community answer in discussion
 #4175 (April 2026) advises pinning versions and "waiting for the 1.0 release for
 customer-facing applications requiring SLAs".
 
@@ -153,7 +160,10 @@ customer-facing applications requiring SLAs".
   of Dokploy"**. The comparison table gives OSS "Basic" monitoring. On self-hosted,
   remote-server monitoring is unsupported (#2685, 12 👍).
 - **AI analysis of logs and build errors** (v0.29.0) uses your own API key.
-- Missing: log drains (#2748), Prometheus as a backend (#2376, 19 👍), and uptime checks.
+- Log drains (#2748) and Prometheus as a backend (#2376, 19 👍) were missing on 30 Sep 2026.
+  v0.31.0 (5 Nov) ships logs and metrics through Vector to nine kinds of provider, Prometheus
+  remote write among them, without a licence (see "Since 2026-09-30"). Uptime checks are
+  still missing.
 
 ### Security, auth, roles, SSO, audit
 - Email and password, TOTP 2FA, **passkeys** (v0.30.0), and a session list with revocation
@@ -188,9 +198,9 @@ customer-facing applications requiring SLAs".
   fork a public repo and get code with the app's secrets deployed (CVE-2025-53825, 9.8).
 
 ### Templates and catalogue
-- **518 templates** (templates.dokploy.com/meta.json, 30 Sep 2026). Each is a Compose file
-  plus `template.toml` (domains, env, mounts) plus `meta.json`, in the `Dokploy/templates`
-  repository (226 stars), and every PR there gets a preview deploy.
+- **518 templates** (templates.dokploy.com/meta.json, 30 Sep 2026; **602** on 8 Nov 2026).
+  Each is a Compose file plus `template.toml` (domains, env, mounts) plus `meta.json`, in the
+  `Dokploy/templates` repository (226 stars), and every PR there gets a preview deploy.
 - Image pinning is loose. I fetched all 518 `docker-compose.yml` files: **227 templates
   (44%) use at least one image on `:latest` or with no tag**, which is 292 of 1,154 image
   references.
@@ -217,14 +227,16 @@ customer-facing applications requiring SLAs".
 - **Events:** app deployed, build error, database backup, volume backup, Docker cleanup and
   Dokploy restart. CPU and memory threshold alerts exist on Cloud monitoring.
 - Open bug #4693: build-failure emails and server logs contain the **registry password in
-  plain text**.
+  plain text**. v0.31.0 passes the password to `docker login` on stdin and keeps commands and
+  secrets out of error messages (#5701, #5733).
 
 ### Multi-server and networking
 - Remote servers are added with an SSH key, as root or (since v0.29.0) a passwordless-sudo
   user. Dokploy installs Docker and Traefik on each and runs a security validation (UFW,
   SSH hardening, fail2ban).
 - **Each remote server is independent**, with its own Traefik. A Swarm cluster with
-  workers and managers is separate and needs a registry.
+  workers and managers is separate and needs a registry. Since v0.31.0 a service can be moved
+  from one server to another (#5396).
 - v0.30.0 added Docker network management (overlay or bridge, MTU, IPAM) and attaching a
   service to a network. Before that, isolation was "Isolated Deployments" for Compose,
   which v0.30.0 deprecated. Isolating containers by project (#129) and "Network Management
@@ -283,18 +295,19 @@ customer-facing applications requiring SLAs".
   - a Swarm rollback does not show in the UI, so a failed deploy looks successful (#3987)
   - database backups fail when the database is on a worker node (#3516)
   - worker nodes get Swarm-provider Traefik config and flood their logs "until disk fills"
-    (#5112)
-  - Swarm settings are not persisted from the UI (#5223)
+    (#5112; v0.31.0 turns the Swarm provider off on workers)
+  - Swarm settings are not persisted from the UI (#5223; fixes are in v0.31.0)
   - a health check `Test` is serialised as a string, so tasks hang in "Starting" (#5171)
   - custom domains do not work with Swarm (#4130)
   - a deploy builds a new image but the service keeps running the old one (#2150)
 - **Upgrades and regressions.**
   - Traefik does not start after a reboot on v0.30.2 (#5131)
   - v0.29.0 crash-loops after "Migration complete" (#4253)
-  - updating Dokploy does not update the pinned Traefik container (#5221)
+  - updating Dokploy does not update the pinned Traefik container (#5221; v0.31.0 adds a
+    version check and a safe update)
   - migrating off the hardcoded auth secret, as the startup banner tells you to,
     **silently deploys every service with an empty environment**, because decryption fails
-    open (#4833)
+    open (#4833; a fix, #5779, is in v0.31.0)
 - **Memory and disk on small VPSs.** Idle usage "roughly doubled" in v0.27.1 (#3755,
   12 reactions). There are also calls to cut memory for "4GB RAM class and smaller" servers
   (#3909), and an orphaned stats loop that writes about 8.7 GB a day (#5504).
@@ -374,7 +387,8 @@ transparent: every advisory is published, and v0.29.13 fixed 16 PRs' worth in on
 
 Skifity statuses follow `docs/checklist.md`. **Written** means the code and unit tests
 exist and the feature has never run on a cluster (ADR-0010). **Works** means a test runs in
-CI.
+CI. The Dokploy column was brought up to 2026-11-08. The Skifity column is still as read on
+2026-09-30, and "Since 2026-09-30" lists the rows it no longer describes.
 
 | Capability | Dokploy | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -400,7 +414,7 @@ CI.
 | Connecting a database to an app | Copy credentials by hand | `Link` injects a sealed connection string (`internal/dbsvc/manager.go:342-366`). Written | Skifity ahead |
 | Reaching a database from a laptop | External port toggle | None, and not documented (no `port-forward` in `docs/`) | Absent in Skifity |
 | **Storage and backups** | | | |
-| Database backup to S3 plus restore | Yes, several destinations | Yes, one bucket. Restore has a `verify` step (`internal/backup/manager.go:206-255`). Written, never taken or restored | Parity (Skifity unproven) |
+| Database backup to S3 plus restore | Yes, several destinations, downloadable since v0.31.0 | Yes, one bucket. Restore has a `verify` step (`internal/backup/manager.go:206-255`). Written, never taken or restored | Parity (Skifity unproven) |
 | Volume backup and restore | Named volumes, optional stop | Tar while the app runs, and restore stops the app (`internal/backup/volume.go`, `volumerestore.go`, `docs/backups.md`). Written | Parity (Dokploy has a stop-during-backup option) |
 | Panel's own backup | Scheduled to S3, with restore from the UI | Manual local copy only: `skifity admin backup-db <path>` (`internal/cli/admin.go:215-226`). `docs/backups.md` says "What is not backed up: the panel's own state" | **Behind** |
 | Encrypted backups | None (#2926 open) | None (no encryption in `internal/backup/`) | Absent in both |
@@ -411,7 +425,7 @@ CI.
 | Checking before adding replicas | None | `ScalingReadiness` (`internal/deploy/scaling.go`). Written | Skifity ahead |
 | **Observability** | | | |
 | Logs | Live and build logs | Live logs over SSE, previous-container logs, build logs (`internal/api/api.go` routes `/logs`, `/deployments/{id}/logs`). Written | Parity |
-| Metrics history and graphs | 20 s samples, 2-day retention, graphs (advanced page Cloud-only) | Live snapshot per node and instance from metrics-server (`internal/api/servers_handlers.go:272-298`). No history, no charts in `web/src` | **Behind** |
+| Metrics history and graphs | 20 s samples, 2-day retention, graphs (advanced page Cloud-only); logs and metrics to nine kinds of external provider (v0.31.0) | Live snapshot per node and instance from metrics-server (`internal/api/servers_handlers.go:272-298`). No history, no charts in `web/src` | **Behind** |
 | Threshold alerts | CPU and memory thresholds (Cloud) | Only an `app.unhealthy` event (`internal/notify/notify.go:41-47`) | Behind |
 | Panel self-metrics | Not found | Prometheus `GET /api/metrics`. Works | Skifity ahead |
 | **Security, auth, roles, SSO, audit** | | | |
@@ -429,7 +443,7 @@ CI.
 | Previews | GitHub only, applications only, limit 3, label filter | GitHub, GitLab MRs and Gitea PRs. Namespace per PR, forks get no secrets, commit status plus one PR comment, TTL (`internal/api/webhook_handlers.go:183-345`, `internal/gitsrc/webhook.go:109-331`, `internal/deploy/gitreport.go`, `KeyPreviewTTLDays`). Written | **Skifity ahead** |
 | A database for each preview | None (#2462) | None. The preview copies the parent's linked `DATABASE_URL`, which points at the parent namespace's `*.svc.cluster.local`, and the default-deny NetworkPolicy blocks egress there (`internal/dbsvc/manifests.go:143`, `internal/kube/namespace.go:127-200`) | Both absent. In Skifity it is **a latent defect** (see P0) |
 | **Templates and catalogue** | | | |
-| Catalogue | 518, 44% with `latest` or untagged images, AI Compose generator | 282, every image pinned and checked against its registry (`internal/templates/catalogue/`, 282 YAML plus README) | Behind on count, ahead on pinning |
+| Catalogue | 518 on 2026-09-30 (602 on 2026-11-08), 44% of the 518 with `latest` or untagged images, AI Compose generator | 282, every image pinned and checked against its registry (`internal/templates/catalogue/`, 282 YAML plus README) | Behind on count, ahead on pinning |
 | **CLI, API, IaC, integrations** | | | |
 | API description, SDK | OpenAPI, TypeScript SDK | None (no `openapi` anywhere) | Behind |
 | CLI | 449 generated commands | About 18 hand-written commands with `--json`, plus `up` from a folder (`internal/cli/commands.go:34-71`). Works (`make smoke`) | Behind on breadth, ahead on `up` and error shape |
@@ -439,7 +453,7 @@ CI.
 | **Notifications** | | | |
 | Providers and events | 12 providers, 6 events | Email, Telegram, Discord, webhook, plus plugin-provided kinds (ADR-0021), with no plugin store published. 7 events (`internal/notify/notify.go:1,41-53`). Written | **Behind** |
 | **Multi-server and networking** | | | |
-| Adding servers | SSH key, root or sudo. Each server is independent with its own Traefik, or a Swarm with a registry | Password once, then its own key, then k3s join, all one pool (`internal/provision`). Written | Different. Skifity is ahead in design and unproven |
+| Adding servers | SSH key, root or sudo. Each server is independent with its own Traefik, or a Swarm with a registry. Services move between servers since v0.31.0 | Password once, then its own key, then k3s join, all one pool (`internal/provision`). Written | Different. Skifity is ahead in design and unproven |
 | Isolation between projects | Manual networks (v0.30.0). #129 and #2798 open | Namespace, default-deny NetworkPolicy, quota, restricted PSS (`internal/kube/namespace.go`). Written | Skifity ahead |
 | **Team and collaboration** | | | |
 | Orgs, teams, invites | Multiple orgs, shared Git providers, tags | Teams, hashed single-use invitations, project-shared variables (`internal/api/api.go` routes `/teams/{id}/invitations`, `/projects/{id}/variables`) | Parity (Dokploy shares Git providers) |
@@ -681,8 +695,9 @@ has.
   and nanoCPUs, plus a string-versus-array bug that hangs tasks (#5171). Skifity's
   "Advanced" tab is read-only YAML. Keep settings in product terms.
 - **Credentials in logs and emails.** Dokploy prints full commands, registry password
-  included, into server logs and failure emails (#4693). Keep `internal/logging` redaction
-  and the smoke test that greps the panel log for every secret.
+  included, into server logs and failure emails (#4693; v0.31.0 moved the password to stdin).
+  Keep `internal/logging` redaction and the smoke test that greps the panel log for every
+  secret.
 - **A monitoring page locked to the hosted tier.** If Skifity ever has a hosted version
   (`docs/roadmap.md` says not), basic observability stays in the free product.
 - **An in-panel LLM Compose generator.** It sends the user's configuration to a third-party
@@ -697,9 +712,188 @@ has.
   its Traefik are independent single points (discussion #4060). Skifity runs the ingress
   on every node in one cluster. Do not regress to per-server islands.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's web pages and API could not be reached from where this was written, so
+release notes were read through the ungh.cc mirror of GitHub's releases API, the 261 commits from
+`v0.30.8` to `v0.31.0` and the source at `v0.31.0` from the repository itself, image dates from
+Docker Hub, and CVEs from NVD and CIRCL. Issue states, the `v1.0.0` milestone and the GitHub
+advisory list were not re-read: where a commit names an issue, this says so, not that the issue is
+closed.
+
+### Releases
+
+| Version | Date | What mattered |
+|---|---|---|
+| v0.30.9, v0.30.10 | 22 Oct | Node.js 24.22.1, a security release (#5738); v0.30.10 has no notes |
+| **v0.31.0** | 5 Nov | Container logs and host and container metrics shipped to external providers through Vector (#5624); a server security section for remote servers (#5866); moving a service to another server (#5396); a Traefik version check and safe update, to v3.7.16 (#5756); backups downloadable by presigned URL (#5260) and given custom file names (#4964); audit-log export as CSV, TSV or JSON (#5797, Enterprise); dual light and dark branding and a custom forgot-password flow (Enterprise); the AI module in custom roles (Enterprise); "pull latest images on deploy" for Compose (#5410); Compose `models` (#5418); Fresh Volumes moved behind a typed confirmation (#5411); a panel-port toggle that prints a recovery command (#5833); on Cloud, a 7-day trial, account deletion and PostHog analytics; and the security and Swarm fixes below |
+
+`v0.31.0` is `latest` on Docker Hub since 2026-11-05. On `canary`, a commit of 2026-11-07
+"enforce[s] org/role boundaries across routers, webhooks and auth", so another round of
+authorisation fixes is coming.
+
+### Logs and metrics, built in
+
+The file listed log drains (#2748) and Prometheus as a backend (#2376) as missing. Both arrived in
+v0.31.0, and for everybody: the router (`apps/dokploy/server/api/routers/telemetry-provider.ts`)
+sits outside `/proprietary` and checks an ordinary permission, not a licence. A `dokploy-vector`
+Swarm service runs on each server it is turned on for, with a cAdvisor service where metrics are
+shipped. Each provider takes logs, metrics or both:
+
+- logs: Grafana Loki;
+- metrics: Prometheus remote write (Prometheus, Grafana Cloud, Mimir, VictoriaMetrics, Thanos,
+  Cortex), New Relic, InfluxDB 2 and 3;
+- both: Datadog, AWS CloudWatch, Splunk HTTP Event Collector, Elasticsearch or OpenSearch, Better
+  Stack.
+
+"Test connection" sends one request per signal. The advanced monitoring page, with retention and
+CPU and memory thresholds that alert, is still "only available on Cloud Version of Dokploy"
+(monitoring docs, read 2026-11-08).
+
+### Server security
+
+The new section for remote servers (`packages/server/src/services/server-security.ts` and the
+`settings/servers/security/` tabs at `v0.31.0`) installs and configures Fail2ban on apt, dnf,
+pacman and zypper systems, bans and unbans addresses by hand, lists the ports listening on the host
+with the container or service that publishes each and UFW's state beside them, checks the SSH
+settings, and shows pending OS security updates and whether a reboot is required. The docs call it
+experimental and Ubuntu and Debian only.
+
+### Security
+
+NVD and CIRCL list two Dokploy CVEs published since 2026-09-30. CIRCL now holds 59 CVE records for
+Dokploy; the GitHub advisory count (60 on 2026-09-30) could not be re-read.
+
+- **CVE-2026-111331** (2026-10-15, CVSS 4.0 5.3, through VulnCheck): through 0.30.8 the port router
+  never checked the application's organisation, so an owner or admin of any organisation could
+  read, change, delete or add another tenant's port mappings.
+- **CVE-2026-116068** (2026-10-25, CVSS 4.0 8.7, through VulnCheck): through 0.30.10,
+  `saveEnvironment`, `updateTraefikConfig`, `deploy` and `stop` accepted another organisation's
+  `applicationId`, so one tenant could overwrite another's variables and build secrets, repoint its
+  source and stop it. The fix (`b3cd3c5`, 2026-10-22, in v0.31.0) also checks backup and volume
+  backup destinations against the organisation, confines certificate paths, validates Compose
+  branches, and sends Git tokens as an `http.extraHeader` instead of inside the clone URL.
+
+v0.31.0 also disables better-auth's SCIM management endpoints for GHSA-j8v8-g9cx-5qf4 and moves to
+better-auth 1.6.33 (`b6f344e`); bumps Next.js to 16.3.4 "to patch critical RCE advisories"
+(#5416); marks the session cookie `Secure` over HTTPS (#5022); passes registry passwords to
+`docker login` on stdin (#5701) and keeps commands and secrets out of `ExecError` messages (#5733),
+which is the plain-text registry password of #4693; fixes command injection and path traversal in
+patch file paths; and confines Traefik file reads and writes to the Traefik directory (#5070).
+
+The shape is the one the file described: an organisation check missing from one router at a time,
+and input reaching a shell one sink at a time, each fixed where it was found.
+
+### Complaints the release answers
+
+Commits in v0.31.0 name or match issues the file listed. Traefik on Swarm workers no longer gets the
+Swarm provider (#5764, for #5112). Cluster settings load their saved replicas and registry, and a
+select no longer clears them (#5745 and #5778, for #5223). Traefik has a version check and a safe
+update (#5756, for #5221). Variables stay readable after leaving the legacy auth secret (#5779, for
+#4833). A deploy fails when Swarm cannot schedule the new task, and a remote deploy fails when the
+server dies mid-build (#5846, #5803, close to #4461 and #3987). Whether the issues are closed was
+not checked.
+
+### Numbers on 2026-11-08
+
+- 38,287 stars and 3,160 forks (repository metadata through the ungh.cc mirror), against 37,579 and
+  3,023 on 2026-09-30.
+- 16,071,427 Docker Hub pulls (14,767,856).
+- In the 30 days to 2026-11-06 npm counted 12,990 downloads of `@dokploy/mcp`, 5,767 of
+  `@dokploy/cli` and 7,681 of `@dokploy/sdk`; the MCP package is at about half its September month
+  (23,002), the SDK about three times (2,408).
+- 602 templates in `templates.dokploy.com/meta.json` (518). A reviewer counted 598 on 2026-11-04.
+- 43 releases in 2026.
+- Pricing: Hobby $4.50 a server and Startup from $15, as before, now with a 7-day trial and no card.
+  The page lists Hobby with one server, one organisation, one user, two environments, one volume
+  backup per application, one backup per database and one scheduled job per application.
+
+PostHog arrived in v0.31.0 for Cloud only: `getPostHogKey` in
+`packages/server/src/utils/tracking/posthog.ts` returns nothing unless `IS_CLOUD`, so a self-hosted
+panel sends nothing. On Cloud it links server events to the browser's session replay.
+
+### Users
+
+One Hacker News user moved from Coolify to Dokploy, "not for any reason other than I prefer the
+interface for Dokploy" (2026-10-16). Milan Jovanović, who runs Dokploy and says so, compared the
+two on 2026-11-04: Dokploy "opens fewer ports during setup and keeps supporting Docker Swarm", its
+previews are "GitHub only and off by default", and it published 33 critical and 17 high GitHub
+advisories in 2026. Coolify's own comparison page (last verified 2026-10-19, "written by the
+Coolify team") concedes Dokploy is "stronger for Docker Swarm clustering and per-member
+permissions".
+
+### Rows of the table above that no longer describe Skifity
+
+Checked in the code on 2026-11-08:
+
+- **Docker Compose:** a Compose file deploys as one stack (`POST …/environments/{id}/stack`,
+  `internal/api/stack_handlers.go`, Phase 101).
+- **Watch paths:** `App.WatchPaths` (`internal/store/models.go`, Phase 96). Patches are still
+  absent.
+- **DNS provider automation:** records kept at Cloudflare, Hetzner, DigitalOcean and Route 53
+  (`internal/dnsprov`); DNS-01 and wildcard issuance are still absent.
+- **Custom certificate upload:** a team's own certificates (`internal/tlscert`).
+- **Engines:** nine, MongoDB among them (`internal/dbsvc/engine/engine.go`); libSQL is absent.
+- **Reaching a database from a laptop:** `skifity db connect` (`internal/cli/dbconnect.go`).
+- **Panel's own backup:** scheduled, verifiable (`/panel/backups` in `internal/api/api.go`), and
+  restored with `skifity admin restore-db`.
+- **Encrypted backups:** sealed with a backup passphrase (`storage.backup_passphrase` in
+  `internal/settings/settings.go`, Phase 104).
+- **Metrics history and threshold alerts:** usage charts per app and per server with `app.alert`
+  and `server.alert` (Phases 95 and 99).
+- **Passkeys:** yes (`internal/store/passkeys.go`).
+- **Per-project member access:** members limited to projects (migration 0021, Phase 86); tokens
+  cannot be.
+- **Enforcing 2FA or SSO:** `RequireStrongAuth` per team (Phase 91).
+- **External secret stores:** Vault and OpenBao, Infisical, Doppler, AWS Secrets Manager
+  (`internal/secretmgr`).
+- **API description:** `internal/api/openapi.yaml`, with a test that no route is left out.
+- **MCP:** served by the panel at `/api/mcp`, with read-only annotations
+  (`internal/mcpserver/server.go`).
+- **Notifications:** ten kinds, Slack, Teams, Mattermost, Gotify, ntfy and Pushover among them
+  (`internal/notify/notify.go`).
+- **Builder images:** pinned (Phase 80).
+- **Install:** v0.1.0 (2026-10-06) and v0.1.1 (2026-10-21) are released, and the `Cluster` workflow
+  installs the panel on a real k3s on every push to `main`.
+
+Still true: GitHub is connected with a personal access token, not a GitHub App
+(`internal/settings/settings.go`), and there are no patches.
+
+### New gaps for Skifity
+
+Each checked against Skifity's code on 2026-11-08.
+
+1. **Ship metrics, not only logs.** *Evidence:* Dokploy v0.31.0 sends host and container metrics
+   to Prometheus remote write, Datadog, CloudWatch, InfluxDB, New Relic, Splunk, Elasticsearch and
+   Better Stack, without a licence. Skifity's Vector pipeline (`internal/logdrain/vector.go`)
+   carries logs only, and the usage history of Phases 95 and 99 stays inside the panel, so a team
+   with Grafana cannot see its apps there. *Fit:* a metrics source and a `prometheus_remote_write`
+   or Datadog sink in the same collector, with the same per-team and per-project routing. *Size:*
+   M. *Without a cluster:* the rendered pipeline and `vector validate`, yes; the numbers need one.
+2. **CloudWatch and Splunk as drain kinds.** *Evidence:* Dokploy v0.31.0 has both, and Coolify added
+   CloudWatch in v4.5.0. Skifity's eight kinds (`internal/logdrain/logdrain.go`) have neither.
+   *Size:* S. *Without a cluster:* yes, with a test send against `httptest`.
+3. **Download a backup.** *Evidence:* Dokploy v0.31.0 downloads backups through a presigned URL
+   (#5260). Skifity presigns URLs for its own jobs (`internal/backup/jobs.go`), but no route in
+   `internal/api/api.go` and no button in `web/src` hands a person their backup, so a backup can only
+   be read back through the panel that took it, or straight from the bucket. *Size:* S. *Without a
+   cluster:* yes, against an `httptest` S3.
+4. **More than one backup destination.** *Evidence:* Dokploy keeps several destinations per
+   organisation and, since `b3cd3c5`, checks each against it; Coolify keeps S3 storages per team
+   and has SFTP, FTPS and WebDAV merged. Skifity has one S3 bucket for the whole panel, set by its
+   administrator (`storage.s3_*` in `internal/settings/settings.go`), so an agency cannot keep one
+   client's backups in that client's bucket. *Size:* M. *Without a cluster:* the store, the API and
+   the presigning, yes.
+5. **Fail2ban from the panel.** *Evidence:* Dokploy v0.31.0 installs and configures Fail2ban and
+   bans and unbans addresses. Skifity's hardening report (`internal/provision/hardening.go`) reads
+   whether fail2ban is active and says what to run, and changes only the SSH password setting
+   itself. *Size:* S. *Without a cluster:* the scripts against stand-ins, yes; a real distribution
+   needs a VM.
+
 ## Sources
 
-All read on 2026-09-30 unless a different date is given.
+All read on 2026-09-30 unless a different date is given; the list at the end was read on
+2026-11-08.
 
 - https://github.com/Dokploy/dokploy — repository page (stars, forks, issues, PRs, commits, top-level files); the repository object from the GitHub search API (37,579 stars, 3,023 forks, default branch `canary`)
 - https://github.com/Dokploy/dokploy/releases, `?page=2` to `?page=5`
@@ -788,3 +982,21 @@ All read on 2026-09-30 unless a different date is given.
 - https://www.cherryservers.com/blog/coolify-vs-dokploy (from search results)
 - https://github.com/Dokploy/dokploy/pull/792 and /994 (i18n, from search results)
 - Skifity files cited in the table above, read in this repository on 2026-09-30
+
+Read on 2026-11-08, for "Since 2026-09-30":
+
+- https://ungh.cc/repos/Dokploy/dokploy/releases and https://ungh.cc/repos/Dokploy/dokploy/releases/latest (a mirror of GitHub's releases API: the notes of v0.30.9, v0.30.10 and v0.31.0), and https://ungh.cc/repos/Dokploy/dokploy (stars, forks)
+- `git ls-remote --tags https://github.com/Dokploy/dokploy`; the commits `v0.30.8..v0.31.0` and `v0.31.0..canary` (to 2026-11-07); commits `b3cd3c5` and `b6f344e`
+- The source at `v0.31.0`: `apps/dokploy/server/api/routers/telemetry-provider.ts`, `packages/server/src/services/logs-and-metrics/providers/`, `packages/server/src/services/server-security.ts`, `apps/dokploy/components/dashboard/settings/servers/security/`, `packages/server/src/utils/tracking/posthog.ts`, `packages/server/src/lib/auth.ts`, and the `proprietary` directories
+- https://hub.docker.com/v2/repositories/dokploy/dokploy/ and `/tags` (16,071,427 pulls; `v0.31.0` and `latest` pushed 2026-11-05)
+- https://api.npmjs.org/downloads/point/2026-10-08:2026-11-06/ for `@dokploy/mcp`, `@dokploy/cli` and `@dokploy/sdk`
+- https://templates.dokploy.com/meta.json (602 templates)
+- https://dokploy.com/pricing
+- https://docs.dokploy.com/sitemap.xml, https://docs.dokploy.com/docs/core/logs-and-metrics, /docs/core/remote-servers/security, /docs/core/monitoring, /docs/core/applications/preview-deployments
+- https://services.nvd.nist.gov/rest/json/cves/2.0 with `keywordSearch=dokploy`, published 2026-09-30 to 2026-11-08 (CVE-2026-111331, CVE-2026-116068)
+- https://vulnerability.circl.lu/api/vulnerability/search/dokploy/dokploy (59 CVE records)
+- https://www.vulncheck.com/advisories/dokploy-through-0.30.8-cross-organization-authorization-bypass-via-port-trpc-router, https://www.vulncheck.com/advisories/dokploy-through-0.30.10-cross-organization-authorization-bypass-via-application-trpc-router and https://hackmd.io/@hieuPenguinnn/dokploy-port-router-cross-org-idor (named in the NVD records; not opened)
+- https://hn.algolia.com/api/v1/search_by_date?query=dokploy (comments since 2026-09-30), among them https://news.ycombinator.com/item?id=50119559
+- https://milanjovanovic.tech/blog/dokploy-vs-coolify (published 2026-11-04; the author runs Dokploy)
+- https://coolify.io/compare/coolify-vs-dokploy-vs-caprover-vs-dokku-vs-kamal (last verified by Coolify 2026-10-19)
+- Skifity files named under "Since 2026-09-30", read in this repository on 2026-11-08

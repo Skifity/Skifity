@@ -33,7 +33,7 @@ Maturity: very active — about **1,080 commits in the 12 months to September
 2026, ~96% by Chris Zhu** — but **no tag or release has ever been cut** (the
 Compose file runs `ghcr.io/caninehq/canine:latest`), and **docs.canine.sh
 answered HTTP 503 "no available server" on 2026-09-30**, as it did when a user
-reported it on HN on 2026-05-26. Adoption: **2,937 stars, 122 forks, 49 open
+reported it on HN on 2026-05-26; it answered HTTP 200 again on 2026-11-08. Adoption: **2,937 stars, 122 forks, 49 open
 issues and PRs** (GitHub API, 2026-09-30); Show HN in June 2025 took **320
 points and 123 comments**; the author reports "~1000 developers" (April 2026),
 "2000 developers ... actively deploying" (May 2026, repeated September 2026)
@@ -70,8 +70,10 @@ figures and could not be checked independently.
   automatically (architecture docs).
 - An **internal auth proxy** (September 2026) puts Canine sign-in in front of a
   service or add-on endpoint.
-- Open: an external domain cannot be removed once added (#535, February 2026);
-  domains cannot be managed through the API (#696, August 2026).
+- An external domain could not be removed once added (#535, February 2026)
+  until an outside contributor's fix (#762) was merged on 2026-10-07. Still
+  open: domains cannot be managed through the API (#696, August 2026); the
+  `api/v1` routes at main on 2026-11-08 have none.
 
 ### Databases and services
 
@@ -206,7 +208,8 @@ figures and could not be checked independently.
   Code, Cursor or Codex against your own compute.
 - Docs include a well-reviewed "Kubernetes crash course" — Canine explains
   Kubernetes rather than hiding it.
-- The docs site has been unreachable for months (above).
+- The docs site was unreachable for months, through 2026-09-30, and was back
+  by 2026-11-08 (above).
 
 ## What users love
 
@@ -244,7 +247,7 @@ figures and could not be checked independently.
   (HN, June and December 2025); "The README is confusing me" (Show HN).
 - **Secrets at rest.** "Encrypted Environment Variables" requested (#557, open).
 - **Gaps under the features.** No headless domain management (#696), cannot
-  remove a domain (#535), API not at parity (#636), local setup failing
+  remove a domain (#535, fixed 2026-10-07), API not at parity (#636), local setup failing
   silently (#463), a Cloud outage with no status page (#497). None of these had
   a maintainer reply on 2026-09-30 — the cost of one person shipping new
   features.
@@ -264,7 +267,9 @@ figures and could not be checked independently.
   (`app/controllers/clusters/cluster_packages_controller.rb`). On Canine Cloud,
   a multi-tenant service, any signed-in user could address another account's
   cluster by numeric id. No advisory or changelog entry — there are no
-  releases to carry one.
+  releases to carry one. It was not the only path: creating or moving a project
+  or add-on took the cluster's id from the request unchecked until 2026-10-16
+  (see "Since 2026-09-30").
 - **Webhook verification**, same commit: GitLab webhook tokens were not verified
   at all, and Bitbucket webhooks were accepted when no secret was configured.
 - **Auth proxy authorization**, 2026-09-19 (commit 4b9a219): the proxy added on
@@ -455,6 +460,163 @@ clusters.
   writing, and it concedes the abstraction. Skifity's `docs/concepts.md` maps
   its words to Kubernetes for the curious, which is the right amount.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and pages could not be reached from the sandbox
+this update was written in, so stars, issues and the security tab were not read
+again. The repositories were cloned with git instead (`canine` at 6bfa93d,
+2026-10-24; `canine-docs`; the CLI), and canine.sh, docs.canine.sh, the Helm
+repository's index, NVD and the Hacker News search API were read directly.
+
+### Shipping
+
+- Still no tag and no release. The self-hosted Compose file still runs
+  `ghcr.io/caninehq/canine:latest`; the Helm chart's newest version is still
+  0.1.10 (2026-06-21) and the CLI's newest tag still v0.1.33 (2026-03-01). The
+  docs repository has had no commit since 2026-07-13, so nothing below is in
+  the documentation.
+- 90 commits reached main between 2026-09-30 and 2026-10-24, through 13 merged
+  pull requests and two direct commits; every non-merge commit in that window
+  is Chris Zhu's. Nothing
+  landed between 2026-10-24 and 2026-11-08.
+- **Error tracking, Sentry-compatible** (#771, merged 2026-10-16). Each project
+  can have a DSN that unmodified Sentry SDKs report to. Events arrive at
+  `/api/<id>/envelope` and `/store`, are grouped into issues by exception type
+  and in-app call path (or the SDK's own fingerprint), and a resolved issue
+  reopens when it recurs. An Errors tab shows the DSN with setup snippets, the
+  issues with search, sorting, paging and a trend line each, and every event's
+  stack trace, tags, request, user and breadcrumbs. Payloads are kept 30 days;
+  counts are kept. The MCP server gained `list_error_issues`, `get_error_issue`
+  and `update_error_issue`, and `update_project` can switch tracking on and
+  returns the DSN. Nothing was found that notifies anybody of a new issue.
+- **Agent computers** (#761, merged 2026-10-18; a memory choice in #785,
+  2026-10-22). A Linux desktop — an Omarchy virtual machine under KubeVirt, a
+  new optional cluster package that needs nodes with KVM — streamed to the
+  browser over WebRTC through Cloudflare's TURN service. A computer-use server
+  inside the machine (screenshots, mouse and keyboard, a terminal, the
+  accessibility tree) is exposed as MCP tools, and an agent loop on OpenRouter
+  models runs one-off or scheduled tasks and posts what it did to a feed. Each
+  machine takes 4 cores, a 60 GiB disk and 8 GiB of memory by default (4 and 6
+  can be chosen). It is behind a per-account feature flag, and the project's
+  `TODO.md` says the agents' provider keys are "stored in plain text".
+- **Sign in with Google** (#766, 2026-10-10), when a Google client ID is
+  configured; people are matched by verified email address.
+- **Replacing a credential's token** (#786, 2026-10-24). The new token is checked
+  like a new one, and a job re-applies the image pull secret in the namespace of
+  every deployed project that uses the credential, so pods stuck in
+  ImagePullBackOff after a token expired recover on their next retry without a
+  redeploy.
+- Canine polls each auto-deploying project for new commits as a fallback for a
+  webhook that never arrives: every minute when self-hosted, and since #775
+  (2026-10-16) every 30 minutes rather than 5 on Canine Cloud, to stay inside
+  GitHub's hourly API budget.
+- An external domain can be removed again (#535, fixed by #762, merged
+  2026-10-07); background jobs are no longer queued twice (#764, #770); the k3s
+  instructions' last step no longer submits early (#763).
+- Unchanged on 2026-11-08: pricing (the first cluster free, $20 a month for each
+  further cluster, Pro with SSO and SAML), and the licence mismatch: `LICENSE` is
+  Apache-2.0 and canine.sh/self-hosted still says "MIT licensed". docs.canine.sh
+  answered HTTP 200 again.
+
+### Security
+
+There is still no CVE (NVD keyword searches "canine.sh" and "CanineHQ": 0), no
+`SECURITY.md` and no release that could carry an advisory. Three fixes landed
+in the period, none announced:
+
+- **A second cross-tenant path, closed 2026-10-16** (#772, commit 4dd1973). From
+  the commit message: "cluster_id comes straight from request params, and nothing
+  checked that the cluster belongs to the user. A signed-in user could create a
+  project or add-on on any account's cluster, or move an existing one onto it."
+  That held for the web interface and the MCP server, so the fix of 2026-09-18
+  in "Security record" closed one path of at least two. On Canine Cloud an
+  add-on is a Helm chart with values the user chooses.
+- **The MCP server ignored teams, fixed 2026-10-16** (commit 3309a9d, in #771):
+  `get_cluster_kubeconfig` "returned the kubeconfig of any cluster in the
+  account, ignoring teams", and `create_project`, `create_add_on` and the
+  clusters resource were scoped the same way. A member that teams restricted to
+  some clusters could take the admin credential of the others. Requiring an
+  explicit read or write scope on `/mcp` was tried and reverted 20 minutes later
+  (7e143f2), because MCP clients such as Claude Code ask for no scope.
+- **Passwordless sign-in in the self-hosted Compose file, 2025-09-20 to
+  2026-10-19** (#783, commit 53e8618). `docker-compose.yml`, which
+  `install.sh` runs, set `LOCAL_MODE_PASSWORDLESS: true`. With it, a POST to
+  `/local/authentication/<account>/login` signed the caller in as the account's
+  owner, without a password, whenever the account had one user and no SSO —
+  the usual self-hosted case. The same file published PostgreSQL on port 5432
+  of every interface with the password `password`, and Docker's published
+  ports go around a host firewall such as ufw. canine.sh says to run the
+  installer on a laptop; anybody who ran it on a server reachable from the
+  internet in that year had the panel and its database open, and the database
+  holds kubeconfigs, Git tokens and variables in plain columns. The agent
+  computers branch had its own cross-account cluster check and cookie
+  forwarding fixed before it merged (694edb5, 2026-10-18).
+
+### What users say
+
+- No Hacker News story or comment mentioned Canine between 2026-09-30 and
+  2026-11-08 (Algolia search API); the author's last mention of it there is
+  from 2026-09-14 ("about 2000 active developers"). A web search found nothing.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- Of this file's gaps: the remote MCP endpoint exists (`/api/mcp`, streamable
+  HTTP, `internal/mcpserver/server.go`, Phase 87) and takes the existing API
+  tokens. The half Canine has and Skifity does not is OAuth — discovery metadata
+  and dynamic client registration (there is no `.well-known/oauth-*` route in
+  `internal/`) — so a hosted assistant's connector still needs a token pasted
+  in. Members limited to some projects (Phase 86), DNS records kept at the
+  provider (`internal/dnsprov`: Cloudflare, DigitalOcean, Hetzner), usage
+  history (Phases 95 and 99) and log drains (`internal/logdrain`) are closed.
+  An existing cluster is still "Not yet" (`docs/faq.md`).
+- Lesson 1 has moved: the installer and joining a server now run on every push
+  to `main` (the `Cluster` and `Two servers` workflows, `docs/progress.md`).
+- Not gaps. Agent computers are a second product, and the roadmap declines even
+  an interactive shell (`docs/roadmap.md`, "Not on this roadmap"). Google
+  sign-in is a case of the OpenID Connect sign-in Skifity has, which names
+  Google among the providers it is written for (`internal/auth/oidc.go`).
+- Canine's two cross-tenant bugs were ids carried in a request's parameters,
+  not its path. Skifity's cross-team walk (`internal/api/crosschild_test.go`)
+  sends every route an empty body, so an id in a body — `app_id` when linking a
+  database, for one — is checked by its handler (`handleLinkDatabase`
+  authorizes it) and not by the walk. A walk that fills body ids with another
+  team's real objects would hold every such handler to it.
+- **New gap — a replaced registry credential reaches running apps.** Saving a
+  team's registry credential again (`handleSetRegistry`,
+  `internal/api/registries_handlers.go`) stores it and changes nothing in the
+  cluster; the pull secret in each namespace is rewritten only at that app's
+  next deploy or one-off command (`ensureTeamRegistries`,
+  `internal/deploy/deployer.go`), and a deleted credential stays until then by
+  design ("the panel does not reach into every environment from a settings
+  page"). When the old token is revoked — the usual reason to replace one — an
+  instance that is rescheduled, scaled up, or woken from zero on a server
+  without the image cached cannot pull it. Canine fixed exactly this on
+  2026-10-24. The fix: after a credential is saved or deleted, re-apply or
+  delete `skifity-team-registries` in every namespace of the team, and say how
+  many were updated. Size S; no cluster needed for the code (the fake applier),
+  the `Cluster` workflow for the proof.
+- **New gap — error tracking.** Canine reports exceptions from Sentry's own SDKs
+  per project. Skifity counts each app's requests and how they were answered
+  (`internal/traffic`) and has GlitchTip and Bugsink as templates
+  (`internal/templates/catalogue/glitchtip.yaml`, `bugsink.yaml`), but nothing
+  gives an app a DSN or groups its exceptions; ADR-0021 lists error tracking
+  among the features that belong in the panel. The small version: when the team
+  has a GlitchTip or Bugsink installed, "Connect error tracking" on an app
+  creates its project there and sets `SENTRY_DSN` the way a database link sets
+  `DATABASE_URL`. The full version, Canine's, is an ingest endpoint, grouping,
+  retention and a page in five languages. M for the first, L for the second;
+  neither needs a cluster.
+- **New gap — a push that never arrives.** Canine polls for new commits when
+  self-hosted. Skifity deploys on a webhook only (`internal/gitsrc/webhook.go`;
+  no poller anywhere in `internal/`), so a push made while the panel is being
+  upgraded, or to a panel the Git host cannot reach, is lost until somebody
+  presses Redeliver or pushes again. A per-app "check for new commits every N
+  minutes" through the host's API, off by default, with the same deploy path
+  as a webhook. Size M; no cluster needed (the hosts are faked in tests
+  already).
+
 ## Sources
 
 All read 2026-09-30.
@@ -488,3 +650,16 @@ All read 2026-09-30.
 - https://github.com/bitnami/charts/issues/35164 (Bitnami catalogue change)
 - https://medium.com/@asierr/canine-sh-the-open-source-heroku-alternative-for-kubernetes-de73993d18a2 and https://blog.brightcoding.dev/2026/06/13/canine-the-revolutionary-paas-every-kubernetes-developer-needs (search-result summaries only; not relied on for figures)
 - Skifity, for the comparison: `internal/mcpserver/server.go`, `internal/api/api.go`, `internal/api/webhook_handlers.go`, `internal/dbsvc/manager.go`, `internal/kube/*`, `internal/notify/*`, `internal/crypto`, `internal/store/password.go`, `docs/faq.md`, `docs/roadmap.md`, `docs/progress.md`, `docs/research/competitors.md`, `docs/checklist.md`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- Git clone of https://github.com/CanineHQ/canine (main at 6bfa93d, 2026-10-24): tags (none), first-parent history since 2026-09-15, commits per author since 2026-09-30, and the commits 4dd1973 (#772), 3309a9d and 7e143f2 (MCP scope), 53e8618 (#783, Compose hardening), 24a9738 (2025-09-20, passwordless sign-in added), 694edb5 (agent computers), 8a1a6f1 (error tracking), b0046b2 (#766), b1dbe10 (#786), d5438ee (#775), 9c3bb1f (#762); at main: `config/routes.rb`, `docker-compose.yml`, `TODO.md`, `LICENSE`, `resources/helm/charts.yml`, `resources/helm/system_packages.yml`, `app/models/agent_computer.rb`, `app/models/error_tracking/event.rb`, `app/mcp/tools/`, `app/views/agent_computers/_intro.html.erb`; `install/install.sh` at f7c7cc3
+- Git clones of https://github.com/CanineHQ/canine-docs (newest commit b5543d0, 2026-07-13) and https://github.com/CanineHQ/cli (newest tag v0.1.33, 2026-03-01)
+- https://caninehq.github.io/canine/index.yaml (newest chart 0.1.10, created 2026-06-21)
+- https://canine.sh/ (pricing unchanged), https://canine.sh/self-hosted ("MIT licensed"), https://canine.sh/model-context-protocol
+- https://docs.canine.sh (HTTP 200)
+- https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=canine.sh and ?keywordSearch=CanineHQ (0 results each)
+- https://hn.algolia.com/api/v1/search_by_date for "canine.sh", "canine paas", "canine cloud" and "canine" (exact match, since 2026-09-30: nothing about the product), and for the author's comments
+- A web search for news and reviews of the product in the last month (nothing relevant)
+- Not reachable from this sandbox: the GitHub REST API and github.com pages for CanineHQ (stars, issues, the security tab)
+- Skifity, for "For Skifity": `internal/api/registries_handlers.go`, `internal/deploy/deployer.go` (`ensureTeamRegistries`), `internal/deploy/run.go`, `internal/traffic/traffic.go`, `internal/templates/catalogue/glitchtip.yaml` and `bugsink.yaml`, `internal/gitsrc/webhook.go`, `internal/api/crosschild_test.go`, `internal/api/data_handlers.go`, `internal/auth/oidc.go`, `internal/mcpserver/server.go`, `internal/dnsprov`, `internal/logdrain`, `docs/decisions.md` (ADR-0021), `docs/roadmap.md`, `docs/faq.md`, `docs/progress.md` (Phases 86, 87, 95, 99, and "A real cluster, at last")

@@ -21,8 +21,10 @@ commercial tier. **Maturity:** Kamal 2.0 shipped 2024-09-26 and replaced Traefik
 with kamal-proxy; minor releases since then include 2.5.0 (2025-02-04), 2.6.0
 (2025-05-13), 2.7.0 (2025-06-18), 2.8.0 (2025-10-19), 2.9.0 (2025-11-26), 2.10.0
 (2025-12-15),
-2.11.0 (2026-03-18) and **2.12.0 (2026-06-18)** (RubyGems); kamal-proxy is at
-**v0.10.1 (2026-09-29)**, still 0.x (Docker Hub tags). **Adoption:** 14,617
+2.11.0 (2026-03-18) and **2.12.0 (2026-06-18)**, still the newest on 2026-11-08
+(RubyGems); kamal-proxy was at v0.10.1 (2026-09-29) and is at **v0.10.2
+(2026-10-06)**, still 0.x (Docker Hub tags), though Kamal itself installs v0.9.2
+unless told otherwise (see "Since 2026-09-30"). **Adoption:** 14,617
 GitHub stars, 754 forks, 153 open issues and pull requests on `basecamp/kamal`;
 1,110 stars on `basecamp/kamal-proxy` (GitHub API, 2026-09-30); **27,509,053
 RubyGems downloads** (2026-09-30), inflated by the fact that **every `rails new`
@@ -247,8 +249,10 @@ it.
 ## Security record
 
 * **GitHub Security Advisories:** none published for `basecamp/kamal` or
-  `basecamp/kamal-proxy` (read 2026-09-30). Reports go through GitHub's private
-  reporting or 37signals' HackerOne programme.
+  `basecamp/kamal-proxy` (read 2026-09-30). By 2026-10-06 two had been for
+  kamal-proxy, a path-based routing bypass fixed in v0.10.1 and missing client
+  timeouts fixed in v0.10.2; "Since 2026-09-30" has them. Reports go through
+  GitHub's private reporting or 37signals' HackerOne programme.
 * **NVD:** a keyword search for "kamal" returns three CVEs, none of them about
   this Kamal (queried 2026-09-30).
 * **One silent fix:** 2.9.0 (2025-11-26) "Prevent OS Command Injection in
@@ -266,8 +270,12 @@ it.
 
 Kamal is a different category: a deploy tool, not a platform. Where Kamal has
 nothing, that is a design choice, and the verdicts below say "Skifity ahead"
-only in the sense of what a user gets. Skifity statuses: almost everything
-cluster-facing is **Written, never run** (ADR-0010).
+only in the sense of what a user gets. The Skifity column is Skifity on
+2026-09-30, when it was unreleased and almost everything cluster-facing was
+**Written, never run** (ADR-0010). Since then v0.1.0 (2026-10-06) and v0.1.1
+(2026-10-21) have been released, the `Cluster` workflow runs it on a real k3s on
+every push to `main`, and several rows below have changed; "Since 2026-09-30"
+says which.
 
 | Capability | Kamal | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -428,6 +436,128 @@ cluster-facing is **Written, never run** (ADR-0010).
   firewalls and headers that a beginner cannot diagnose; Skifity's errors with a
   cause and a fix are the answer to exactly that.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's repository API (releases, advisories, comments)
+refused this sandbox, so pull requests and issues were read through GitHub's
+search API, source files through raw.githubusercontent.com, and versions
+through RubyGems and Docker Hub.
+
+### Releases
+
+* **No Kamal release.** 2.12.0 (2026-06-18) is still the newest on RubyGems.
+  Two pull requests were merged to `main`: #1963 (2026-10-13), hooks and output
+  logs are told which subcommand ran, and #1975 (2026-10-21), secrets are loaded
+  once when several roles run the `pre-connect` hook at the same time, after the
+  1Password app dropped seven concurrent `op` connections and the command
+  failed.
+* **kamal-proxy v0.10.2 (2026-10-06)**, the fix for one of the advisories below:
+  client timeouts on the public listeners, 10 s for request headers and a TLS
+  handshake, 60 s idle between keep-alive requests and 60 s without progress on
+  a request body (`--read-header-timeout`, `--idle-timeout`,
+  `--request-body-timeout`; #254). Before it, "a small number of slow
+  connections could hold the proxy's goroutines and file descriptors
+  indefinitely". Afterwards `main` moved to Go 1.27.2 (#256, 2026-10-11) and
+  1.27.3 (#261, 2026-10-23), after the project's scheduled `govulncheck` found
+  standard-library advisories (#255, 2026-10-09, eleven of them, one an HTTP/2
+  server crash; #259, 2026-10-21, one in `crypto/x509`). No tag has followed,
+  so the newest image is from before both.
+* Open on 2026-11-08, not merged: #1960 raises the kamal-proxy Kamal installs
+  from v0.9.2 to v0.10.2; #1959 keeps password-manager session tokens off
+  command lines; #1964 adds a `pre-configure` hook that can choose the
+  destination, for a pool of shared review destinations; #1962 publishes the
+  release image only after a reviewer approves promoting a signed edge image, so
+  the repository's own token can no longer push it; #1979, with kamal-proxy
+  #264, a `pre-app-drain` hook so a long-lived SSE response does not hold every
+  deploy for the whole drain timeout; #1984, because `kamal rollback` to a
+  version with no container printed a message and exited 0 — "Scripts and CI
+  saw a successful rollback while the old version kept running"; and
+  kamal-proxy #258, a filter for secrets in request paths before they are
+  logged.
+
+### Security
+
+* **Two kamal-proxy advisories**, cited by a Kamal maintainer in #1960
+  (2026-10-06): GHSA-g5gj-723m-2f9x, "a path-based routing bypass, patched in
+  v0.10.1", and GHSA-g8jf-9mcc-x4f2, "no client connection timeouts on the
+  public listeners, patched in v0.10.2". A project that applied the second
+  quotes it as high, CVSS 7.5, and measured a half-sent request header holding
+  v0.9.2 open past 40 s and v0.10.2 closing it at 10 s
+  (`mezinster/encounter-engine` #202). Neither was in the GitHub Advisory
+  Database, OSV or NVD on 2026-11-08, and the repository's advisory pages could
+  not be read from here, so when each was published is not known.
+* **A default Kamal install runs the affected proxy.** Kamal boots
+  `MINIMUM_VERSION` unless `proxy.run.version` is set, and that is `v0.9.2` in
+  2.12.0 and on `main` (`lib/kamal/configuration/proxy/run.rb`, 2026-11-08). In
+  the maintainer's words, "a default setup keeps running an affected proxy until
+  the pin moves", and moving it takes a `kamal proxy reboot`, which "interrupts
+  traffic briefly on each host".
+* **The registry password on a command line** (#1985, 2026-11-07, open): Kamal
+  logs in with `docker login -u … -p …` through a shell, locally and on every
+  host, so the password is in `/proc/<pid>/cmdline`, readable by any local user,
+  while it runs; `sensitive` redacts Kamal's own log only. It runs on every
+  deploy, setup, build push, proxy boot and accessory boot.
+* Kamal itself: no advisory found, and NVD's keyword search for "kamal" returns
+  the same three unrelated CVEs.
+
+### Adoption
+
+* 31,658,148 RubyGems downloads (2026-11-08; 27,509,053 on 2026-09-30).
+  `basecamp/kamal` has 14,714 stars, 772 forks and 166 open issues and pull
+  requests; `basecamp/kamal-proxy` 1,118 stars; `basecamp/kamal-proxy` on Docker
+  Hub 423,921 pulls (all 2026-11-08). On Hacker News Kamal came up only in job
+  listings in this period.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* Closed since this file was written: maintenance mode (Phase 98); a team's own
+  TLS certificates (`internal/tlscert`); requests, errors and response times per
+  app from Traefik's histogram (`internal/traffic`); the environment described
+  in `skifity.yaml` with plan and apply (Phase 108), in which "an app that runs
+  an image and has a new one in the file is deployed with it" (`docs/cli.md`);
+  variables read from Vault, AWS Secrets Manager, Doppler and Infisical
+  (`internal/secretmgr`); ten notification channels and fourteen events
+  (`internal/notify/notify.go`); 374 templates; locked deploys (Phase 94); and
+  releases.
+* Still open from this file: `skifity deploy --image` and a CI recipe — the
+  deploy body has `commit_sha`, `force` and `accept_vulnerabilities` and no
+  image (`internal/api/deploy_handlers.go`), and `docs/cli.md` has no CI section,
+  so a CI job rewrites `image:` in `skifity.yaml` and runs `skifity apply`, or
+  makes the two API calls; one switch of traffic instead of a rolling update
+  (`maxSurge: 1`); a drain time per app (the grace is still a fixed 30 s,
+  `internal/kube/manifests.go`); mixed architectures (no `kubernetes.io/arch`
+  anywhere in `internal/`); and percentage rollouts.
+* Already covered, against this period's advisories: every server of Skifity's
+  own times out slow clients — the guard (5 s for headers, 10 s to read and to
+  write, 60 s idle, `internal/guard/guard.go`), the panel (`internal/serverapp`)
+  and the registry's guard (`internal/registryguard`) — and Traefik, which faces
+  visitors, has its own. Phase 109 offers each component's newer version after
+  a panel upgrade, and k3s, which brings Traefik, is upgraded from the panel;
+  both by hand, as Kamal's proxy is. The build reads its registry credential
+  from a Docker config mounted from a Secret, never a command line
+  (`internal/builder/job.go`); the Git token does reach `git -c` as an
+  argument, in an init container that runs nothing else and has finished
+  before the build starts.
+* Worth knowing beside #1962: Skifity's binaries carry SLSA provenance
+  (`.github/workflows/release.yml`), but the panel's image is pushed by the same
+  workflow's token under tags that move (`latest`, `.goreleaser.yaml`), is not
+  signed, and the installer pulls it by tag (`installer/install.sh`).
+* **New gap — the firewall judges the path as the visitor encoded it.** The
+  guard takes the path from `X-Forwarded-Uri`, which Traefik's forwardAuth
+  fills from the request URI as it was sent (`req.URL.RequestURI()`), and
+  compares it lowercased and otherwise untouched (`pathOf` in
+  `internal/guard/guard.go`, `compare` in `internal/edgerules/edgerules.go`). A
+  *starts with* `/admin` rule, the example `docs/firewall.md` gives, does not
+  match `/%61dmin`, which Go's `net/http` and any WSGI app decode to `/admin`
+  before routing; a rate limit on `/login` is stepped round the same way. It is
+  the class of kamal-proxy's path-based routing bypass. Read from the code, not
+  run. The fix: decode the path once before any rule sees it, refuse one that
+  does not decode or holds an encoded `/`, `\` or NUL, remove dot segments and
+  repeated slashes the way an app's router would, and test each encoding in
+  `internal/guard`.
+
 ## Sources
 
 All read 2026-09-30.
@@ -470,3 +600,17 @@ All read 2026-09-30.
 * https://news.ycombinator.com/item?id=43591098 (via hn.algolia.com API)
 * https://news.ycombinator.com/item?id=47864425 (story title via hn.algolia.com API)
 * https://github.com/dokku/dokku/issues/8282
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://rubygems.org/api/v1/versions/kamal.json and https://rubygems.org/api/v1/gems/kamal.json (2.12.0 still newest; 31,658,148 downloads)
+* https://github.com/basecamp/kamal/releases, page 1 (newest v2.12.0, 2026-06-18; read through Firecrawl's GitHub provider)
+* https://hub.docker.com/v2/repositories/basecamp/kamal-proxy/ and /tags (v0.10.2 pushed 2026-10-06; 423,921 pulls)
+* GitHub search API: `repo:basecamp/kamal` and `repo:basecamp/kamal-proxy` pull requests and issues created or merged since 2026-09-30 (kamal #1959, #1960, #1962, #1963, #1964, #1967, #1975, #1976, #1977, #1979, #1984, #1985; kamal-proxy #254, #255, #256, #258, #259, #261, #264, #265), and repository stars and forks
+* GitHub search API for GHSA-g5gj-723m-2f9x and GHSA-g8jf-9mcc-x4f2 (kamal #1960; https://github.com/mezinster/encounter-engine/pull/202)
+* https://api.osv.dev/v1/vulns/GHSA-g5gj-723m-2f9x and /GHSA-g8jf-9mcc-x4f2, and the GitHub Advisory Database through Firecrawl's GitHub provider (not found in either)
+* https://raw.githubusercontent.com/basecamp/kamal/main/lib/kamal/configuration/proxy/run.rb and the same file at v2.12.0 (`MINIMUM_VERSION = "v0.9.2"`)
+* https://raw.githubusercontent.com/basecamp/kamal-proxy/main/internal/cmd/run.go and /internal/server/service.go (the timeout flags and defaults)
+* https://raw.githubusercontent.com/traefik/traefik/master/pkg/middlewares/auth/forward.go (what forwardAuth sends as `X-Forwarded-Uri`)
+* https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=kamal (three unrelated CVEs)
+* https://hn.algolia.com/api/v1/search_by_date?query=kamal (comments and stories since 2026-09-30)
