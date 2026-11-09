@@ -261,7 +261,8 @@ paths:
       description: >-
         Sets the session cookie. An account with two-factor authentication
         answers totp_required first; send the same request again with
-        totp_code.
+        totp_code, which may also be one of the account's recovery codes. A
+        recovery code is spent, and the answer says how many are left.
       security: []
       requestBody:
         required: true
@@ -5389,6 +5390,8 @@ components:
         user: {$ref: '#/components/schemas/User'}
         csrf_token: {type: string, description: 'Send it as X-Skifity-CSRF on every request that changes something.'}
         expires_at: {type: string, format: date-time}
+        used_recovery_code: {type: boolean, description: 'Present, and true, when the second factor was a recovery code rather than the authenticator. That code is spent.'}
+        recovery_codes_left: {type: integer, minimum: 0, description: 'With used_recovery_code: how many unused recovery codes the account has left.'}
 
     TOTPRequired:
       type: object

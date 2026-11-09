@@ -249,9 +249,13 @@ accounts from one machine is stopped anyway.
 window is ninety seconds wide, so a code read over a shoulder or out of a screen
 share would otherwise work again. Turning it on shows a QR code for an
 authenticator app, the secret to type in instead, and eight recovery codes; each
-code works once, and they stay on screen until you say you have saved them.
+code works once, and they stay on screen until you say you have saved them. A
+recovery code signs in in place of the six-digit code — **Use a recovery code
+instead** on the sign-in page — and the panel then says how many are left.
 **Account → Two-factor authentication → Get new codes** replaces them when they
-run out or the paper is lost, and the old ones stop working at once. Turning
+run out or the paper is lost, and the old ones stop working at once. With the
+phone and the codes both gone, see
+[I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator). Turning
 two-factor off asks first, deletes the recovery codes, and names any team that
 requires two-factor or single sign-on, because those teams will refuse the
 account afterwards.

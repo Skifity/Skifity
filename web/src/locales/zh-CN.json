@@ -255,7 +255,16 @@
     "recoveryKeyFileTitle": "{{product}} 恢复密钥",
     "recoveryKeyFileBody": "持有这把密钥的任何人都能解密本面板保存的所有机密。请离线保存在安全的地方。没有它，恢复出来的备份将无法读取。",
     "recoveryKeyMissingTitle": "账户已就绪，但恢复密钥没能显示出来",
-    "recoveryKeyMissing": "面板此刻读不到它的恢复密钥。登录后打开“账户”即可显示并保存它；在你保存之前，面板会一直提醒你。"
+    "recoveryKeyMissing": "面板此刻读不到它的恢复密钥。登录后打开“账户”即可显示并保存它；在你保存之前，面板会一直提醒你。",
+    "useRecoveryCode": "改用恢复码",
+    "useAuthenticator": "改用验证器应用",
+    "recoveryCode": "恢复码",
+    "recoveryCodePrompt": "请输入开启双重验证时保存的任一恢复码。每个恢复码只能使用一次。",
+    "recoveryCodeUsed_other": "已用恢复码登录，还剩 {{count}} 个。",
+    "recoveryCodeUsedHelp": "该恢复码已失效。请在用完之前到“账户”中获取一组新的恢复码。",
+    "recoveryCodesUsedUp": "这是你的最后一个恢复码",
+    "recoveryCodesUsedUpHelp": "请立即到“账户”中获取一组新的恢复码，并存放在手机以外的地方。没有恢复码时，再次丢失手机就只能请服务器管理员重置双重验证。",
+    "openAccount": "打开账户"
   },
   "dashboard": {
     "title": "总览",
@@ -450,7 +459,10 @@
       "cloud_provider.added": "已连接云服务商",
       "cloud_provider.removed": "已移除云服务商",
       "server.create_started": "正在云服务商处创建服务器",
-      "server.delete_started": "正在移除服务器并删除其机器"
+      "server.delete_started": "正在移除服务器并删除其机器",
+      "auth.recovery_code_used": "使用恢复码登录",
+      "account.two_factor_reset": "管理员重置了双重验证",
+      "account.password_reset": "从服务器重置了密码"
     },
     "notAllowedTitle": "活动日志仅供团队所有者和管理员查看",
     "notAllowed": "如需了解有哪些变化，请询问 {{team}} 的所有者或管理员。"

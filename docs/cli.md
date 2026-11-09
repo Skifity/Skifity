@@ -455,13 +455,24 @@ need root.
 ```sh
 sudo skifity admin list-users
 sudo skifity admin reset-password you@example.com
+sudo skifity admin reset-2fa you@example.com
 ```
 
 Resetting a password signs out every device that was signed in as that account.
 Two-factor authentication stays on, so you will still need your authenticator
-app. Passkeys stay too, and the command says how many the account has; add
-`--remove-passkeys` to remove them as well, when the reason for the reset is
-that somebody else got in. See [Passkeys](configuration.md#passkeys).
+app or a recovery code. Passkeys stay too, and the command says how many the
+account has; add `--remove-passkeys` to remove them as well, when the reason for
+the reset is that somebody else got in. See [Passkeys](configuration.md#passkeys).
+
+`reset-2fa` is for a lost phone with the recovery codes gone too. It turns the
+account's two-factor authentication off, deletes its recovery codes and signs
+out every device, so the password signs in on its own; the account turns
+two-factor on again under Account. It names any team that requires a second
+factor, which refuses the account until then. See
+[I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator).
+
+Each of these writes what it did to the activity log of every team the account
+is in, as `skifity admin`.
 
 Two more work on the database itself:
 

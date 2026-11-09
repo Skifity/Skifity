@@ -169,7 +169,9 @@ kubectl -n skifity-system logs -l app.kubernetes.io/component=panel | grep setup
 when the panel has a mail server (Settings → Email) and a Panel URL to link to.
 The link works once, for half an hour; only the newest one works; and using it
 signs out everything that was signed in with the old password. It does not
-skip two-factor: an account that has it still needs its code afterwards.
+skip two-factor: an account that has it still needs its code afterwards — see
+[I have lost my authenticator](#i-have-lost-my-authenticator) if that is gone
+too.
 
 The page answers the same whether or not the address has an account, so it
 cannot be used to find out who does.
@@ -183,6 +185,30 @@ server instead:
 ```sh
 sudo skifity admin reset-password you@example.com
 ```
+
+## I have lost my authenticator
+
+**Use a recovery code.** After the password, the sign-in page asks for the
+six-digit code; **Use a recovery code instead** below the boxes takes one of
+the eight codes shown when two-factor was turned on. Type it as it is on the
+paper — with or without the dashes, in capitals or not. Each code works once, and
+the panel says how many are left as you sign in. Then go to **Account →
+Two-factor authentication**: get a new set of codes, or turn two-factor off
+and on again with the new phone.
+
+**No codes either.** Whoever runs the server can turn two-factor off for the
+account:
+
+```sh
+sudo skifity admin reset-2fa you@example.com
+```
+
+It forgets the account's two-factor secret and its recovery codes, signs out
+every device that was signed in as it, and writes an entry to the activity log
+of every team the account is in. The password then signs in on its own, and the
+account can turn two-factor on again under Account. A team that requires a
+second factor refuses the account until it does, and the command names those
+teams.
 
 ## A deployment failed
 

@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ArrowLeftIcon, FingerprintIcon, KeyRoundIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { CenteredLayout } from "@/components/centered-layout"
 import { ErrorDisplay } from "@/components/error-display"
@@ -92,6 +94,13 @@ function ssoStartLink(): string {
     : `/api/auth/sso/start?next=${encodeURIComponent(next)}`
 }
 
+/** What the sign-in answers: the session, or a request for the second factor. */
+type SignInAnswer = {
+  totp_required?: boolean
+  used_recovery_code?: boolean
+  recovery_codes_left?: number
+}
+
 /**
  * Sign-in.
  *
@@ -100,10 +109,15 @@ function ssoStartLink(): string {
  */
 export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
   const [needsCode, setNeedsCode] = useState(false)
+  // A recovery code is fourteen characters of letters and digits, which six
+  // boxes for digits cut short — and the cut-off code was sent on its own, as
+  // a wrong guess. It gets a plain field that waits for the button instead.
+  const [recovery, setRecovery] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<unknown>(null)
 
@@ -176,11 +190,31 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
     }
   }
 
+  // A recovery code is spent by signing in with it, and this is the one moment
+  // the panel can warn somebody before they run out. A toast, because this
+  // page is gone as soon as the session exists.
+  const sayRecoveryCodeUsed = (left: number) => {
+    const action = { label: t("auth.openAccount"), onClick: () => navigate("/account") }
+    if (left > 0) {
+      toast.info(t("auth.recoveryCodeUsed", { count: left }), {
+        description: t("auth.recoveryCodeUsedHelp"),
+        action,
+        duration: 15000,
+      })
+    } else {
+      toast.warning(t("auth.recoveryCodesUsedUp"), {
+        description: t("auth.recoveryCodesUsedUpHelp"),
+        action,
+        duration: 30000,
+      })
+    }
+  }
+
   const signIn = async (totpCode: string) => {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await api.anonymous<{ totp_required?: boolean }>("/api/auth/login", {
+      const result = await api.anonymous<SignInAnswer>("/api/auth/login", {
         method: "POST",
         body: { email: email.trim(), password, totp_code: totpCode.trim() || undefined },
       })
@@ -188,15 +222,26 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
         setNeedsCode(true)
         return
       }
+      if (result?.used_recovery_code) sayRecoveryCodeUsed(result.recovery_codes_left ?? 0)
       onSignedIn()
     } catch (caught) {
       setError(caught)
-      // A wrong code is almost always a typo or a clock drift, and leaving the
-      // digits in place means fixing one of them rather than retyping six.
-      setCode("")
+      // Six digits are cleared, because the boxes send themselves when full
+      // and a wrong code is retyped from the app anyway. A recovery code is
+      // kept: it was copied off paper, and a typo in it is one character to
+      // fix rather than fourteen to type again.
+      if (!recovery) setCode("")
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Changing how the second factor is given starts that answer afresh: half a
+  // code typed into one is not the beginning of the other.
+  const chooseRecovery = (next: boolean) => {
+    setRecovery(next)
+    setCode("")
+    setError(null)
   }
 
   return (
@@ -206,10 +251,18 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
           <Logo className="size-9 text-primary" />
           <div className="space-y-1">
             <CardTitle className="text-xl">
-              {needsCode ? t("auth.twoFactorCode") : t("auth.signInTitle", { product: "Skifity" })}
+              {needsCode
+                ? recovery
+                  ? t("auth.recoveryCode")
+                  : t("auth.twoFactorCode")
+                : t("auth.signInTitle", { product: "Skifity" })}
             </CardTitle>
             <CardDescription>
-              {needsCode ? t("auth.twoFactorPrompt") : t("auth.signInSubtitle")}
+              {needsCode
+                ? recovery
+                  ? t("auth.recoveryCodePrompt")
+                  : t("auth.twoFactorPrompt")
+                : t("auth.signInSubtitle")}
             </CardDescription>
           </div>
         </CardHeader>
@@ -247,32 +300,70 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
 
               {needsCode ? (
                 <>
-                  <Field className="items-center">
-                    <InputOTP
-                      maxLength={6}
-                      value={code}
-                      autoFocus
-                      onChange={(value) => {
-                        setCode(value)
-                        // Six digits is the whole answer, so pressing a button
-                        // afterwards is a step with no decision in it.
-                        if (value.length === 6 && !submitting) void signIn(value)
-                      }}
-                    >
-                      <InputOTPGroup>
-                        {[0, 1, 2, 3, 4, 5].map((slot) => (
-                          <InputOTPSlot key={slot} index={slot} />
-                        ))}
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </Field>
+                  {recovery ? (
+                    <>
+                      <Field>
+                        <FieldLabel htmlFor="recovery-code">{t("auth.recoveryCode")}</FieldLabel>
+                        <Input
+                          id="recovery-code"
+                          value={code}
+                          onChange={(event) => setCode(event.target.value)}
+                          // Letters and digits, so no number pad, and nothing
+                          // a browser should remember or offer again: each
+                          // code works once.
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          className="font-mono"
+                          required
+                          autoFocus
+                        />
+                      </Field>
+                      <Button type="submit" className="w-full" disabled={submitting || !code.trim()}>
+                        {submitting && <Spinner />}
+                        {submitting ? t("auth.signingIn") : t("auth.signIn")}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Field className="items-center">
+                        <InputOTP
+                          maxLength={6}
+                          value={code}
+                          autoFocus
+                          onChange={(value) => {
+                            setCode(value)
+                            // Six digits is the whole answer, so pressing a
+                            // button afterwards is a step with no decision in it.
+                            if (value.length === 6 && !submitting) void signIn(value)
+                          }}
+                        >
+                          <InputOTPGroup>
+                            {[0, 1, 2, 3, 4, 5].map((slot) => (
+                              <InputOTPSlot key={slot} index={slot} />
+                            ))}
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </Field>
 
-                  {submitting && (
-                    <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <Spinner />
-                      {t("auth.signingIn")}
-                    </p>
+                      {submitting && (
+                        <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                          <Spinner />
+                          {t("auth.signingIn")}
+                        </p>
+                      )}
+                    </>
                   )}
+
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    disabled={submitting}
+                    onClick={() => chooseRecovery(!recovery)}
+                  >
+                    {recovery ? t("auth.useAuthenticator") : t("auth.useRecoveryCode")}
+                  </Button>
 
                   <Button
                     type="button"
@@ -280,8 +371,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                     size="sm"
                     onClick={() => {
                       setNeedsCode(false)
-                      setCode("")
-                      setError(null)
+                      chooseRecovery(false)
                     }}
                   >
                     <ArrowLeftIcon />

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
+import { createHmac } from "node:crypto"
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -554,6 +555,127 @@ test("Settings asks about new releases only when the button is pressed", async (
   await expect(page.getByText("This panel does not know where its releases are")).toBeVisible()
   expect(asked).toEqual(["POST"])
 })
+
+// A recovery code on the sign-in page.
+//
+// The second factor was six boxes for digits, which cut a fourteen-character
+// recovery code short and sent what was left as a wrong guess, so the codes the
+// panel hands out "for when you lose your phone" could not be used. This is a
+// second account, made here through an invitation, because turning two-factor
+// on for the setup account would lock every test after this one out.
+test("a recovery code signs in when the phone is gone", async ({ page }) => {
+  const email = "phoneless@example.test"
+  const password = "another reasonable passphrase"
+  const codes = await accountWithTwoFactor(page, email, password)
+
+  const attempts: string[] = []
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/auth/login")) attempts.push(request.method())
+  })
+
+  // The way to it is there in another language too, not only in English.
+  const russian = localeStrings("ru").auth as Record<string, string>
+  await page.goto("/")
+  await page.evaluate(() => localStorage.setItem("skifity-language", "ru"))
+  await page.reload()
+  await page.locator("#email").fill(email)
+  await page.locator("#password").fill(password)
+  await page.locator('form button[type="submit"]').click()
+  await expect(page.getByRole("button", { name: russian.useRecoveryCode })).toBeVisible()
+
+  await page.evaluate(() => localStorage.setItem("skifity-language", "en"))
+  await page.reload()
+  await page.getByLabel(/^email$/i).fill(email)
+  await page.getByLabel(/^password$/i).fill(password)
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  // Six digits in the boxes still send themselves.
+  const boxes = page.locator('[data-slot="input-otp"]')
+  await expect(boxes).toBeVisible()
+  const before = attempts.length
+  await boxes.pressSequentially("000000")
+  await expect.poll(() => attempts.length, "six digits did not send themselves").toBe(before + 1)
+  await expect(page.getByText("Email or password is not correct")).toBeVisible()
+
+  // A recovery code waits for the button, however many characters are in.
+  await page.getByRole("button", { name: "Use a recovery code instead" }).click()
+  const field = page.getByLabel("Recovery code", { exact: true })
+  await field.pressSequentially(codes[0].slice(0, 6))
+  await page.waitForTimeout(1000)
+  expect(attempts.length, "six characters of a recovery code were sent on their own").toBe(
+    before + 1,
+  )
+  await field.pressSequentially(codes[0].slice(6))
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  await expect(page.locator('[data-slot="account-menu"]')).toBeVisible()
+  await expect(page.getByText(`${codes.length - 1} codes are left`, { exact: false })).toBeVisible()
+})
+
+/**
+ * Makes a second account through an invitation from the setup account, turns
+ * two-factor on for it, and leaves the browser signed out. Answers the
+ * recovery codes.
+ */
+async function accountWithTwoFactor(page: Page, email: string, password: string) {
+  const token = await invite(page, email)
+  await page.context().clearCookies()
+  const accepted = await page.request.post(`/api/invitations/${token}/accept`, {
+    data: { name: "Phoneless", password },
+  })
+  expect(accepted.ok(), await accepted.text()).toBeTruthy()
+
+  // Signed in a moment ago, so turning two-factor on does not ask again.
+  const headers = await csrfHeaders(page)
+  const started = await page.request.post("/api/me/totp", { headers, data: {} })
+  expect(started.ok(), await started.text()).toBeTruthy()
+  const setup = (await started.json()) as { secret: string; recovery_codes: string[] }
+  const confirmed = await page.request.post("/api/me/totp/confirm", {
+    headers,
+    data: { code: totp(setup.secret) },
+  })
+  expect(confirmed.ok(), await confirmed.text()).toBeTruthy()
+
+  await page.context().clearCookies()
+  return setup.recovery_codes
+}
+
+/** Invites an address to the setup account's team, and answers the link's token. */
+async function invite(page: Page, email: string): Promise<string> {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const invited = await page.request.post(`/api/teams/${me.teams[0].id}/invitations`, {
+    headers: await csrfHeaders(page),
+    data: { email, role: "member" },
+  })
+  expect(invited.ok(), await invited.text()).toBeTruthy()
+  const { url } = (await invited.json()) as { url: string }
+  return url.split("/invite/").pop()!
+}
+
+/** What a request that changes something carries, for this browser's session. */
+async function csrfHeaders(page: Page) {
+  const cookies = await page.context().cookies()
+  return {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+}
+
+/** The six-digit code an authenticator app would show now, RFC 6238. */
+function totp(secret: string): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+  let bits = ""
+  for (const char of secret.replace(/[\s=]/g, "").toUpperCase()) {
+    bits += alphabet.indexOf(char).toString(2).padStart(5, "0")
+  }
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)))
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)))
+  const mac = createHmac("sha1", key).update(counter).digest()
+  const offset = mac[mac.length - 1] & 0x0f
+  return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0")
+}
 
 /** Signs in, unless this context already has a session. */
 async function signIn(page: Page) {

@@ -255,7 +255,16 @@
     "recoveryKeyFileTitle": "Kunci pemulihan {{product}}",
     "recoveryKeyFileBody": "Siapa pun yang memegang kunci ini bisa mendekripsi semua rahasia yang disimpan panel ini. Simpan di tempat aman dan offline. Tanpa kunci ini, cadangan yang dipulihkan tidak bisa dibaca.",
     "recoveryKeyMissingTitle": "Akun Anda sudah siap, tetapi kunci pemulihan tidak bisa ditampilkan",
-    "recoveryKeyMissing": "Panel tidak bisa membaca kunci pemulihannya saat ini. Setelah masuk, buka Akun untuk menampilkan dan menyimpannya; panel akan terus mengingatkan sampai Anda melakukannya."
+    "recoveryKeyMissing": "Panel tidak bisa membaca kunci pemulihannya saat ini. Setelah masuk, buka Akun untuk menampilkan dan menyimpannya; panel akan terus mengingatkan sampai Anda melakukannya.",
+    "useRecoveryCode": "Pakai kode pemulihan",
+    "useAuthenticator": "Pakai aplikasi autentikator",
+    "recoveryCode": "Kode pemulihan",
+    "recoveryCodePrompt": "Masukkan salah satu kode pemulihan yang Anda simpan saat menyalakan autentikasi dua faktor. Setiap kode hanya berlaku sekali.",
+    "recoveryCodeUsed_other": "Masuk dengan kode pemulihan. Sisa {{count}} kode.",
+    "recoveryCodeUsedHelp": "Kode itu tidak bisa dipakai lagi. Minta set baru di Akun sebelum kodenya habis.",
+    "recoveryCodesUsedUp": "Itu kode pemulihan terakhir Anda",
+    "recoveryCodesUsedUpHelp": "Minta set baru di Akun sekarang, dan simpan di tempat selain ponsel Anda. Tanpa kode itu, jika ponsel hilang lagi Anda harus meminta pengelola server untuk mereset dua faktor.",
+    "openAccount": "Buka Akun"
   },
   "dashboard": {
     "title": "Ringkasan",
@@ -450,7 +459,10 @@
       "cloud_provider.added": "Penyedia cloud dihubungkan",
       "cloud_provider.removed": "Penyedia cloud dihapus",
       "server.create_started": "Membuat server di penyedia cloud",
-      "server.delete_started": "Menghapus server beserta mesinnya"
+      "server.delete_started": "Menghapus server beserta mesinnya",
+      "auth.recovery_code_used": "Masuk dengan kode pemulihan",
+      "account.two_factor_reset": "Dua faktor direset oleh administrator",
+      "account.password_reset": "Kata sandi direset dari server"
     },
     "notAllowedTitle": "Log aktivitas hanya untuk pemilik dan admin tim",
     "notAllowed": "Tanyakan kepada pemilik atau admin {{team}} jika Anda perlu tahu apa yang berubah."

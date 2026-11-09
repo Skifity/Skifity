@@ -145,6 +145,32 @@ func (db *DB) UpdatePasswordHash(ctx context.Context, id, hash string) error {
 	return nil
 }
 
+// ResetSecondFactor turns an account's two-factor authentication off from the
+// outside: the secret, whether it is on, the last code spent and every
+// recovery code go together, in one transaction.
+//
+// It is for somebody who has lost both the phone and the codes, which the
+// account's own page cannot help with — turning two-factor off there needs a
+// code. Only the two-factor columns are written, for the reason
+// UpdatePasswordHash gives. The counter goes back to zero so that the codes of
+// a new secret, set up later, are not measured against the old one's.
+func (db *DB) ResetSecondFactor(ctx context.Context, userID string) error {
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET totp_secret_enc = '', totp_enabled = 0,
+			totp_last_counter = 0, updated_at = ? WHERE id = ?`, Now(), userID)
+		if err != nil {
+			return fmt.Errorf("reset two-factor: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNotFound
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM recovery_codes WHERE user_id = ?`, userID); err != nil {
+			return fmt.Errorf("delete recovery codes: %w", err)
+		}
+		return nil
+	})
+}
+
 // TouchUserLogin records a successful sign-in.
 func (db *DB) TouchUserLogin(ctx context.Context, id string) error {
 	_, err := db.Exec(ctx, `UPDATE users SET last_login_at = ? WHERE id = ?`, Now(), id)

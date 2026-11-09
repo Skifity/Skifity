@@ -25,6 +25,11 @@ type loginResponse struct {
 	User      store.User `json:"user"`
 	CSRFToken string     `json:"csrf_token"`
 	ExpiresAt time.Time  `json:"expires_at"`
+	// UsedRecoveryCode and RecoveryCodesLeft are there only when the second
+	// factor was a recovery code, so the sign-in page can say one is gone and
+	// how many remain — zero included, which is the answer that matters most.
+	UsedRecoveryCode  bool `json:"used_recovery_code,omitempty"`
+	RecoveryCodesLeft *int `json:"recovery_codes_left,omitempty"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -61,12 +66,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, s.auth.SessionCookie(result.Token, result.ExpiresAt))
 	http.SetCookie(w, s.auth.CSRFCookie(result.CSRFToken, result.ExpiresAt))
 
-	s.audit(r.WithContext(withUser(r, result.User)), "", "auth.login", "user", result.User.ID, result.User.Email)
-	writeJSON(w, http.StatusOK, loginResponse{
+	signedIn := r.WithContext(withUser(r, result.User))
+	s.audit(signedIn, "", "auth.login", "user", result.User.ID, result.User.Email)
+	answer := loginResponse{
 		User:      result.User,
 		CSRFToken: result.CSRFToken,
 		ExpiresAt: result.ExpiresAt,
-	})
+	}
+	if result.UsedRecoveryCode {
+		// A code off the paper is what a lost phone looks like, or what a
+		// stolen sheet looks like. Either way it belongs in the log, apart
+		// from the sign-in it came with.
+		s.audit(signedIn, "", "auth.recovery_code_used", "user", result.User.ID, result.User.Email)
+		left := result.RecoveryCodesLeft
+		answer.UsedRecoveryCode, answer.RecoveryCodesLeft = true, &left
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

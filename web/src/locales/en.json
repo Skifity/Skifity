@@ -264,7 +264,17 @@
     "recoveryKeyFileTitle": "{{product}} recovery key",
     "recoveryKeyFileBody": "Anyone holding this key can decrypt every secret this panel stores. Keep it somewhere safe and offline. Without it, a restored backup is unreadable.",
     "recoveryKeyMissingTitle": "Your account is ready, but the recovery key could not be shown",
-    "recoveryKeyMissing": "The panel could not read its recovery key just now. Once you are in, open Account to show it and save it; the panel reminds you until you do."
+    "recoveryKeyMissing": "The panel could not read its recovery key just now. Once you are in, open Account to show it and save it; the panel reminds you until you do.",
+    "useRecoveryCode": "Use a recovery code instead",
+    "useAuthenticator": "Use the authenticator app instead",
+    "recoveryCode": "Recovery code",
+    "recoveryCodePrompt": "Enter one of the recovery codes you saved when you turned on two-factor authentication. Each one works once.",
+    "recoveryCodeUsed_one": "Signed in with a recovery code. {{count}} code is left.",
+    "recoveryCodeUsed_other": "Signed in with a recovery code. {{count}} codes are left.",
+    "recoveryCodeUsedHelp": "That code cannot be used again. Get a new set under Account before they run out.",
+    "recoveryCodesUsedUp": "That was your last recovery code",
+    "recoveryCodesUsedUpHelp": "Get a new set under Account now, and keep it somewhere other than your phone. Without one, losing the phone again means asking whoever runs the server to reset two-factor.",
+    "openAccount": "Open Account"
   },
   "dashboard": {
     "title": "Overview",
@@ -459,7 +469,10 @@
       "cloud_provider.added": "Cloud provider connected",
       "cloud_provider.removed": "Cloud provider removed",
       "server.create_started": "Creating a server at a cloud provider",
-      "server.delete_started": "Removing a server and deleting its machine"
+      "server.delete_started": "Removing a server and deleting its machine",
+      "auth.recovery_code_used": "Signed in with a recovery code",
+      "account.two_factor_reset": "Two-factor reset by an administrator",
+      "account.password_reset": "Password reset from the server"
     },
     "notAllowedTitle": "The activity log is for the team's owners and admins",
     "notAllowed": "Ask an owner or an admin of {{team}} if you need to know what changed."
