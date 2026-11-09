@@ -3,6 +3,7 @@ package templates
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -116,6 +117,60 @@ func TestSearchAndLookupFindWhatIsThere(t *testing.T) {
 // CheckWiring for the rest of what it reads.
 func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 	report(t, CheckWiring)
+}
+
+// TestKnownImagesGetTheVariablesTheyRead: a database handed over as a URL
+// to an image that reads its connection piece by piece is created and never
+// used. WordPress, Ghost, n8n, and every Gitea, Forgejo and Nextcloud with a
+// database did that until this ran over the catalogue.
+func TestKnownImagesGetTheVariablesTheyRead(t *testing.T) {
+	report(t, CheckKnownImages)
+}
+
+// TestTheReadmeAccountsForEveryURLOnlyTemplate: 120 templates handed their
+// database over as a URL alone, and only some of their images read one. The
+// README lists which have been looked up and which have not, and a list in
+// prose is the first thing to go stale, so this holds it to the directory.
+func TestTheReadmeAccountsForEveryURLOnlyTemplate(t *testing.T) {
+	body, err := os.ReadFile("catalogue/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := func(marker string) map[string]bool {
+		_, rest, ok := strings.Cut(string(body), "<!-- "+marker+" -->")
+		section, _, closed := strings.Cut(rest, "<!-- /"+marker+" -->")
+		if !ok || !closed {
+			t.Fatalf("the README has no %s list", marker)
+		}
+		out := map[string]bool{}
+		for _, match := range regexp.MustCompile("`([a-z0-9-]+)`").FindAllStringSubmatch(section, -1) {
+			out[match[1]] = true
+		}
+		return out
+	}
+	audited, unaudited := listed("url-only:audited"), listed("url-only:unaudited")
+	for _, tpl := range All() {
+		urlOnly, lookedUp := URLOnly(tpl)
+		switch {
+		case lookedUp && !audited[tpl.ID]:
+			t.Errorf("%s hands over a URL its image is known to read; list it as looked up in the README", tpl.ID)
+		case urlOnly && !lookedUp && !unaudited[tpl.ID]:
+			t.Errorf("%s hands over only a URL, and nobody has looked up whether its image reads one; "+
+				"list it in the README, or give its database the vars its image reads", tpl.ID)
+		case !urlOnly && (audited[tpl.ID] || unaudited[tpl.ID]):
+			t.Errorf("%s is listed in the README as handing over only a URL, and does not", tpl.ID)
+		}
+		delete(audited, tpl.ID)
+		if !lookedUp {
+			delete(unaudited, tpl.ID)
+		}
+	}
+	for id := range audited {
+		t.Errorf("the README lists %s as looked up, and it is not a URL-only template its image is known to read", id)
+	}
+	for id := range unaudited {
+		t.Errorf("the README lists %s, which is not a template here or has been looked up", id)
+	}
 }
 
 // TestNotesAndNeedsRootAgree: a template whose image starts as root says so

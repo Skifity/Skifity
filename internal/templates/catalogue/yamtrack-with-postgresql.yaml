@@ -21,4 +21,10 @@ databases:
   link_to:
   - yamtrack
   var_name: DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_NAME
+    user: DB_USER
+    password: DB_PASSWORD
 notes: The image starts as root, so the environment needs the baseline pod security level.

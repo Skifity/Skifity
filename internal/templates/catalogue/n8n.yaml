@@ -30,6 +30,12 @@ databases:
   link_to:
   - n8n
   var_name: DB_POSTGRESDB_URL
+  vars:
+    host: DB_POSTGRESDB_HOST
+    port: DB_POSTGRESDB_PORT
+    name: DB_POSTGRESDB_DATABASE
+    user: DB_POSTGRESDB_USER
+    password: DB_POSTGRESDB_PASSWORD
 inputs:
 - key: N8N_ENCRYPTION_KEY
   label: Encryption key

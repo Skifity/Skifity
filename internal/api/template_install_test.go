@@ -635,3 +635,59 @@ func TestAnInstallThatFailsLeavesTheLevelAsItWas(t *testing.T) {
 		t.Errorf("an install that was undone left the level at %q, applying %v", env.PodSecurity, cluster.ensured)
 	}
 }
+
+// WordPress and Ghost read their database piece by piece, and were handed a
+// URL neither reads: the database was made, and the app could not reach it.
+// Installed from the built-in catalogue, each now gets the pieces its image
+// reads, from the database's own credentials, the password as a secret.
+func TestWordPressAndGhostGetTheirDatabaseInThePiecesTheyRead(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+
+	for _, c := range []struct {
+		template string
+		want     map[string]string
+		secret   string
+	}{
+		{"wordpress", map[string]string{
+			"WORDPRESS_DB_HOST": "wordpress-db.acme-production.svc", "WORDPRESS_DB_USER": "app",
+			"WORDPRESS_DB_NAME": "app", "WORDPRESS_DB_PASSWORD": "not-a-real-password",
+		}, "WORDPRESS_DB_PASSWORD"},
+		{"ghost", map[string]string{
+			"database__client": "mysql", "database__connection__host": "ghost-db.acme-production.svc",
+			"database__connection__port": "3306", "database__connection__user": "app",
+			"database__connection__database": "app", "database__connection__password": "not-a-real-password",
+		}, "database__connection__password"},
+	} {
+		status, body := h.do(acme, http.MethodPost, "/api/templates/"+c.template+"/install",
+			map[string]any{"environment_id": acme.env.ID})
+		if status != http.StatusCreated {
+			t.Fatalf("installing %s answered %d %s", c.template, status, body)
+		}
+		var installed installedTemplate
+		if err := json.Unmarshal([]byte(body), &installed); err != nil || len(installed.Apps) != 1 {
+			t.Fatalf("installing %s made %s", c.template, body)
+		}
+		app := installed.Apps[0]
+		rows, err := h.db.ListVariables(t.Context(), app.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, secret := map[string]string{}, map[string]bool{}
+		for _, row := range rows {
+			if value, err := h.keyring.Open(row.Sealed, variableContext(app.ID, row.Key)); err == nil {
+				got[row.Key] = string(value)
+			}
+			secret[row.Key] = row.IsSecret
+		}
+		for key, value := range c.want {
+			if got[key] != value {
+				t.Errorf("%s: %s is %q, want %q", c.template, key, got[key], value)
+			}
+			if secret[key] != (key == c.secret) {
+				t.Errorf("%s: %s is secret %v", c.template, key, secret[key])
+			}
+		}
+	}
+}

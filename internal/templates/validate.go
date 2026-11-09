@@ -87,6 +87,7 @@ var Checks = []Check{
 	CheckWiring,
 	CheckFiles,
 	CheckDatabasePieces,
+	CheckKnownImages,
 }
 
 // Validate returns every reason a template cannot be installed, and nothing
@@ -227,6 +228,10 @@ func CheckServices(template Template) []string {
 		for _, vol := range svc.Volumes {
 			if !strings.HasPrefix(vol.MountPath, "/") {
 				add("%s/%s mounts %q, which is not an absolute path", template.ID, svc.Name, vol.MountPath)
+			}
+			if hostFile(vol.MountPath) {
+				add("%s/%s mounts a volume at %s, which in Compose was one of the server's own files; "+
+					"here it would be an empty directory where the image expects a file", template.ID, svc.Name, vol.MountPath)
 			}
 			if vol.SizeGB < 0 {
 				add("%s/%s asks for %d GB", template.ID, svc.Name, vol.SizeGB)
@@ -538,6 +543,16 @@ func CheckDatabasePieces(template Template) []string {
 		}
 	}
 	return problems
+}
+
+// hostFile is a path a Compose file mounts from the server it runs on: the
+// server's clock settings, or the socket of its container runtime. A
+// converter that turns every bind mount into a volume turns these into a
+// disk mounted over a file — eight Gitea and Forgejo templates mounted 5 GB at
+// /etc/timezone — and a socket has no business in an app at all.
+func hostFile(path string) bool {
+	path = strings.TrimSuffix(path, "/")
+	return path == "/etc/timezone" || path == "/etc/localtime" || strings.HasSuffix(path, ".sock")
 }
 
 func protocolOr(protocol string) string {

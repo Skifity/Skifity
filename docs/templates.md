@@ -105,7 +105,8 @@ What the conversion added:
   refused.
 * **The database wiring was taken out.** A Compose file points an app at a
   sibling container (`DB_HOST=mariadb`); here the database is a managed one and
-  arrives as a connection string, so the old variables would point at nothing.
+  arrives as a connection string, or in the pieces its image reads, so the old
+  variables would point at nothing.
 * **A port comes from the source, never from a guess.** A template's own domain
   marker, an `expose` or `ports` entry, the port a sibling service dials, a short
   table of ports that are documented facts about an image, or the port the
@@ -118,9 +119,21 @@ What the conversion added:
 
 ### What that does not mean
 
-None of these has been deployed by us, because nothing in this product has been
-deployed by us yet — see the Status section of the README. What is checked is
-that each template is structurally sound and that its image exists. Treat a
+What is checked for every template, on every build, is that it is structurally
+sound, that its image exists, that its notes and `needs_root` say the same
+thing about the user its image starts as, and — for the few dozen images whose
+settings are known, WordPress, Ghost, Nextcloud, Gitea, Forgejo, n8n and others —
+that its database arrives in the variables the image actually reads. That last
+check exists because WordPress, Ghost, n8n and every Gitea, Forgejo and
+Nextcloud with a database created their database and handed it over as a URL
+none of them reads. The catalogue's README lists the templates that hand over a
+URL whose images have not been looked up yet.
+
+What is not checked is that each one runs. The `Cluster` workflow installs the
+panel on a real single-server k3s for every change to `main` and installs
+templates from this catalogue there: Homer, and WordPress with its database into
+an environment that accepts root images, whose installer has to answer. The other
+three hundred and seventy-odd have not been started by anyone here. Treat a
 template as a well-informed starting point, not as a guarantee.
 
 ## Versions

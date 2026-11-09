@@ -64,6 +64,30 @@ func TestEveryCheckRefusesWhatItIsFor(t *testing.T) {
 		{"root and a uid at once", CheckServices, func(t *Template) {
 			t.Services[0].NeedsRoot, t.Services[0].RunAsUser = true, 1000
 		}, "needs root and runs as 1000"},
+		{"a volume over the server's timezone", CheckServices, func(t *Template) {
+			t.Services[0].Volumes[0].MountPath = "/etc/timezone"
+		}, "one of the server's own files"},
+		{"a volume over the server's clock", CheckServices, func(t *Template) {
+			t.Services[0].Volumes[0].MountPath = "/etc/localtime"
+		}, "one of the server's own files"},
+		{"a volume over the Docker socket", CheckServices, func(t *Template) {
+			t.Services[0].Volumes[0].MountPath = "/var/run/docker.sock"
+		}, "one of the server's own files"},
+		{"WordPress handed only a URL", CheckKnownImages, func(t *Template) {
+			t.Services[0].Image, t.Services[0].Files = "docker.io/library/wordpress:6.9.4-apache", nil
+			t.Databases[0].Engine, t.Databases[0].Vars = "mariadb", DatabaseVars{}
+		}, "is not given WORDPRESS_DB_HOST, WORDPRESS_DB_USER, WORDPRESS_DB_PASSWORD, WORDPRESS_DB_NAME"},
+		{"Gitea without its type", CheckKnownImages, func(t *Template) {
+			t.Services[0].Image, t.Services[0].Files = "gitea/gitea:1.27.3", nil
+			t.Databases[0].Vars = DatabaseVars{Host: "GITEA__database__HOST", Name: "GITEA__database__NAME",
+				User: "GITEA__database__USER", Password: "GITEA__database__PASSWD"}
+		}, "is not given GITEA__database__DB_TYPE"},
+		{"an image that takes no database setting", CheckKnownImages, func(t *Template) {
+			t.Services[0].Image, t.Services[0].Files = "lscr.io/linuxserver/nextcloud:35.0.0", nil
+		}, "takes no database setting from its environment"},
+		{"an installer nobody is told about", CheckKnownImages, func(t *Template) {
+			t.Services[0].Image, t.Services[0].Files = "drupal:10.6.18-apache", nil
+		}, "asks for its database in its own installer"},
 		{"a public worker", CheckWorkers, func(t *Template) { t.Services[0].Name = "worker" }, "named for a worker"},
 		{"an engine nobody runs", CheckDatabases, func(t *Template) { t.Databases[0].Engine = "oracle" }, "not an engine"},
 		{"a database linked to nothing", CheckDatabases, func(t *Template) { t.Databases[0].LinkTo = nil }, "linked to nothing"},

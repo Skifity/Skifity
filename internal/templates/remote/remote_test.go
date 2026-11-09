@@ -169,6 +169,31 @@ func TestATemplateThatFailsIsListedWithWhyAndTheRestStillLoad(t *testing.T) {
 	}
 }
 
+// A team's WordPress is held to what the WordPress image reads, as the
+// built-in one is: handed only a URL, its database would be created and never
+// used, so it is listed with why and cannot be installed. One that writes its
+// own settings file may be configuring itself another way, and is accepted.
+func TestATeamsTemplateOnAKnownImageGetsWhatTheImageReads(t *testing.T) {
+	blog := strings.Replace(templateYAML("blog", "Blog", "wordpress:6.9.4-apache"),
+		"services:", "databases:\n- name: blog-db\n  engine: mariadb\n  storage_gb: 5\n  link_to: [blog]\n"+
+			"  var_name: DATABASE_URL\nservices:", 1)
+	configured := strings.Replace(strings.Replace(blog, "id: blog", "id: configured", 1),
+		"  public: true\n", "  public: true\n  files:\n  - path: /var/www/html/wp-config.php\n"+
+			"    content: \"<?php require '/etc/blog/settings.php';\"\n", 1)
+
+	catalogue, err := Read([]byte("templates:\n" + indent(blog) + indent(configured)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalogue.Templates) != 1 || catalogue.Templates[0].ID != "configured" {
+		t.Errorf("installable: %+v", catalogue.Templates)
+	}
+	if len(catalogue.Problems) != 1 || catalogue.Problems[0].ID != "blog" ||
+		!strings.Contains(strings.Join(catalogue.Problems[0].Errors, "\n"), "is not given WORDPRESS_DB_HOST") {
+		t.Errorf("problems: %+v", catalogue.Problems)
+	}
+}
+
 func TestWhatIsNotACatalogueIsRefusedAsAWhole(t *testing.T) {
 	cases := map[string][]byte{
 		"an empty file":             nil,

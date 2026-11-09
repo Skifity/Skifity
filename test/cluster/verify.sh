@@ -2904,6 +2904,59 @@ else
 fi
 [ -z "$HOMER_ID" ] || api DELETE "/api/apps/$HOMER_ID" >/dev/null 2>&1 || true
 
+# WordPress: an image that starts as root, and a database it reads in pieces
+# — WORDPRESS_DB_HOST and the three beside it — which it was handed as a URL
+# it never reads until the catalogue was checked against what images read. It
+# goes into an environment of its own, so the one everything else runs in
+# stays at the strictest level. Installed without accepting root images it is
+# refused with nothing made; accepted, the level changes on the way, and the
+# installer only answers once WordPress has reached its database.
+WP_ENV=$(api POST "/api/projects/$PROJECT_ID/environments" '{"name":"wordpress"}' | pick id 2>/dev/null || echo "")
+if [ -z "$WP_ENV" ]; then
+	no "an environment for WordPress could not be created"
+else
+	CODE=$(api_code POST /api/templates/wordpress/install "{\"environment_id\":\"$WP_ENV\"}")
+	[ "$CODE" = "409" ] \
+		&& ok "WordPress into an environment at the strictest level is refused before anything is made" \
+		|| no "WordPress into an environment at the strictest level answered $CODE, not 409"
+	WP=$(api_any POST /api/templates/wordpress/install "{\"environment_id\":\"$WP_ENV\",\"allow_root\":true}")
+	WP_ID=$(printf '%s' "$WP" | pick apps.0.id 2>/dev/null || echo "")
+	if [ -z "$WP_ID" ]; then
+		no "the WordPress template could not be installed: $(printf '%s' "$WP" | head -c 300)"
+	elif ! wait_deployed "$WP_ID"; then
+		no "WordPress, installed with its database, did not deploy"
+	else
+		WP_HOST=$(api GET "/api/apps/$WP_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WP_HOST" "http://127.0.0.1/wp-admin/install.php")
+		[ "$CODE" = "200" ] \
+			&& ok "WordPress, installed from the catalogue with its database, answers its installer" \
+			|| no "WordPress's installer answered $CODE; it cannot reach its database, or did not start"
+	fi
+	api DELETE "/api/environments/$WP_ENV" >/dev/null 2>&1 || true
+fi
+
+# Whether WordPress needs root at all. Its image supports running as an
+# arbitrary user, and the strictest level would take www-data's uid. A finding
+# rather than a promise, so it never fails the run: if this answers, the
+# WordPress templates can say run_as_user: 33 instead of needs_root, and run
+# without anybody lowering an environment.
+WWW_ID=$(api POST "/api/environments/$ENV_ID/apps" \
+	'{"name":"wordpress-as-www-data","source_type":"image","image":"wordpress:6.9.4-apache","port":80}' \
+	| pick app.id 2>/dev/null || echo "")
+if [ -z "$WWW_ID" ]; then
+	skip "WordPress as www-data at the strictest level" "the app could not be created"
+elif ! api PATCH "/api/apps/$WWW_ID" '{"run_as_user":33}' >/dev/null 2>&1 \
+	|| ! api POST "/api/apps/$WWW_ID/deploy" >/dev/null 2>&1 || ! wait_deployed "$WWW_ID"; then
+	skip "WordPress as www-data at the strictest level" "it did not start, so its templates keep needs_root"
+else
+	WWW_HOST=$(api GET "/api/apps/$WWW_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+	CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WWW_HOST" "http://127.0.0.1/readme.html")
+	[ "$CODE" = "200" ] \
+		&& ok "WordPress runs as www-data at the strictest level; its templates could say run_as_user: 33 instead of needs_root" \
+		|| skip "WordPress as www-data at the strictest level" "it started, and its files answered $CODE"
+fi
+[ -z "$WWW_ID" ] || api DELETE "/api/apps/$WWW_ID" >/dev/null 2>&1 || true
+
 step "Promoting a version to another environment"
 
 # The version phase 1 built, run in a second environment of the same project

@@ -14,6 +14,8 @@ services:
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+  variables:
+    UPTIME_KUMA_DB_TYPE: mariadb
   volumes:
   - name: uptime-kuma-data
     mount_path: /app/data
@@ -25,4 +27,10 @@ databases:
   link_to:
   - uptime-kuma
   var_name: DATABASE_URL
+  vars:
+    host: UPTIME_KUMA_DB_HOSTNAME
+    port: UPTIME_KUMA_DB_PORT
+    name: UPTIME_KUMA_DB_NAME
+    user: UPTIME_KUMA_DB_USERNAME
+    password: UPTIME_KUMA_DB_PASSWORD
 notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -21,4 +21,7 @@ databases:
   link_to:
   - drupal
   var_name: DATABASE_URL
-notes: The image starts as root, so the environment needs the baseline pod security level.
+notes: 'Open the app''s address and follow Drupal''s installer. It reads no database setting from its
+  environment: on its database step, choose PostgreSQL and enter the host, database name, user and password
+  from Connection details on the database''s page - only an owner or an admin of the team can see them.
+  The image starts as root, so the environment needs the baseline pod security level.'

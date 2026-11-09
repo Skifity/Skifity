@@ -109,6 +109,82 @@ ask for:
   password as a secret. They are written once at install, unlike `var_name`,
   which the panel keeps linked.
 
+## Which variables a database arrives as
+
+A database arrives as one connection string, under `var_name`. That is right for
+software that reads a URL, and for nothing else: an image that reads a host, a
+user and a password instead is given a variable it never looks at, and the
+database is created beside an app that cannot reach it. Read the image's own
+documentation for what it reads, and when it is pieces, ask for them with
+`vars` — and set whatever a piece cannot say, such as which kind of database it
+is, in `variables`:
+
+```yaml
+services:
+  - name: gitea
+    image: gitea/gitea:1.27.3
+    variables:
+      GITEA__database__DB_TYPE: postgres
+databases:
+  - name: gitea-db
+    engine: postgres
+    storage_gb: 5
+    link_to: [gitea]
+    var_name: DATABASE_URL
+    vars:
+      host: GITEA__database__HOST
+      name: GITEA__database__NAME
+      user: GITEA__database__USER
+      password: GITEA__database__PASSWD
+```
+
+`internal/templates/known_images.go` lists what a few dozen well-known images
+read — WordPress, Ghost, the official Nextcloud, Gitea, Forgejo, Joomla, Matomo,
+BookStack, n8n, Grafana and others, each from its project's documentation or
+source — and a test holds every template on one of them to it, as the panel
+holds a team's own catalogue. One that sets `files` or `command` is left alone,
+since it may configure itself another way. An image whose installer asks for its
+database in a browser (Drupal, MediaWiki, FreshRSS) reads nothing from its
+environment, so its template's notes have to say what to type there. An image
+that takes no database setting at all, such as linuxserver's Nextcloud, cannot
+be given a database.
+
+### Templates that hand over only a URL
+
+These link a database as a connection string and nothing else. The ones whose
+images have been looked up, and do read a URL or ask in their installer:
+
+<!-- url-only:audited -->
+`docuseal-with-postgres`, `drupal-with-postgresql`, `freshrss-with-mariadb`,
+`freshrss-with-mysql`, `freshrss-with-postgresql`, `pocket-id-with-postgresql`,
+`unleash-with-postgresql`.
+<!-- /url-only:audited -->
+
+The ones nobody has looked up yet. Many of their images read a URL, and some
+will not; each one checked either moves to the list above, with its image added
+to `known_images.go`, or gets the `vars` its image reads. A test keeps both lists
+to what is in this directory.
+
+<!-- url-only:unaudited -->
+`activepieces`, `alexandrie`, `argilla`, `authorizer`, `baserow`, `bugsink`,
+`casdoor`, `castopod`, `chaskiq`, `chatwoot`, `cloudreve`, `coder`, `codimd`,
+`docmost`, `documenso`, `dolibarr`, `easyappointments`, `engram`, `faraday`,
+`fider`, `firefly`, `flagsmith`, `focalboard`, `formbricks`, `ghostfolio`,
+`glitchtip`, `glpi`, `grimmory`, `grist`, `hedgedoc`, `hoppscotch`, `inngest`,
+`invoice-ninja`, `joplin`, `keila`, `kener`, `keycloak-with-postgres`, `kimai`,
+`langflow`, `langfuse`, `leantime`, `librechat`, `linkwarden`, `listmonk`,
+`litellm`, `logto`, `matrix-synapse-with-postgresql`, `mattermost`, `metabase`,
+`metamcp`, `mindsdb`, `miniflux`, `mixpost`, `monica`, `moodle`, `newapi`,
+`nitropage-with-postgresql`, `nocobase`, `nodebb`, `observium`, `odoo`,
+`open-archiver`, `openpanel`, `orangehrm`, `outline`, `owncloud`, `passbolt`,
+`paymenter`, `pgbackweb`, `photoview`, `piwigo`, `planka`, `plausible`, `plunk`,
+`portabase`, `postiz`, `pydio-cells`, `rallly`, `reactive-resume`, `redash`,
+`redmine`, `rybbit`, `ryot`, `seafile`, `sequin`, `sftpgo`, `strapi`,
+`superset-with-postgresql`, `sure`, `tandoor-recipes`, `teable`, `tolgee`,
+`traccar`, `twenty`, `typebot`, `umami`, `usesend`, `wakapi`, `weblate`,
+`wikijs`, `zipline`.
+<!-- /url-only:unaudited -->
+
 ## Which user an image starts as
 
 Every environment starts at the strictest confinement level, which refuses an
@@ -168,10 +244,12 @@ wants its Redis or its database under a name of its own, that name is the
 `go test ./internal/templates/` covers: unique ids that are already slugs, a
 description and an https website, at least one service somebody can open, ports
 in range, requests that do not exceed limits, variable names a container can
-carry, absolute mount paths, every `link_to` naming a real service, every engine
-one Skifity provisions, no floating or major-only tags, no service named for a
-worker that is public, no database wiring, and no URL pointing at a host the
-template does not install.
+carry, absolute mount paths and no volume over one of the server's own files,
+every `link_to` naming a real service, every engine one Skifity provisions, no
+floating or major-only tags, no service named for a worker that is public, no
+database wiring, no URL pointing at a host the template does not install, a
+well-known image given the database variables it reads, and `needs_root` and the
+notes agreeing.
 
 Run `make check` before opening a pull request. A template that fails is not a
 template.

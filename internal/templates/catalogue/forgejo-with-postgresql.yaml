@@ -22,9 +22,6 @@ services:
   - name: forgejo-data
     mount_path: /data
     size_gb: 5
-  - name: forgejo-timezone
-    mount_path: /etc/timezone
-    size_gb: 5
 databases:
 - name: forgejo-with-postgresql-db
   engine: postgres
@@ -32,4 +29,9 @@ databases:
   link_to:
   - forgejo
   var_name: DATABASE_URL
+  vars:
+    host: FORGEJO__database__HOST
+    name: FORGEJO__database__NAME
+    user: FORGEJO__database__USER
+    password: FORGEJO__database__PASSWD
 notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -6,24 +6,18 @@ category: storage
 website: https://docs.nextcloud.com
 services:
 - name: nextcloud
-  image: linuxserver/nextcloud:35.0.0
+  image: nextcloud:35.0.2-apache
   needs_root: true
   port: 80
   public: true
-  mem_request_mb: 128
+  mem_request_mb: 256
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
-  variables:
-    PUID: '1000'
-    PGID: '1000'
   volumes:
-  - name: nextcloud-config
-    mount_path: /config
-    size_gb: 5
-  - name: nextcloud-data
-    mount_path: /data
-    size_gb: 5
+  - name: nextcloud-html
+    mount_path: /var/www/html
+    size_gb: 10
 databases:
 - name: nextcloud-with-postgres-db
   engine: postgres
@@ -31,4 +25,13 @@ databases:
   link_to:
   - nextcloud
   var_name: DATABASE_URL
-notes: The image starts as root, so the environment needs the baseline pod security level.
+  vars:
+    host: POSTGRES_HOST
+    name: POSTGRES_DB
+    user: POSTGRES_USER
+    password: POSTGRES_PASSWORD
+notes: 'Open the app''s address and create the admin account: the database step is already filled in from
+  the database this template created. Nextcloud and everything uploaded to it are on one disk, at /var/www/html.
+  If its links come out as http://, set OVERWRITEPROTOCOL to https in the app''s variables - HTTPS ends
+  at the ingress in front of it. The image starts as root, so the environment needs the baseline pod security
+  level.'

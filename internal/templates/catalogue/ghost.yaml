@@ -28,5 +28,11 @@ databases:
   link_to:
   - ghost
   var_name: DATABASE_URL
+  vars:
+    host: database__connection__host
+    port: database__connection__port
+    name: database__connection__database
+    user: database__connection__user
+    password: database__connection__password
 notes: Set the mail settings in Ghost's admin area, or it cannot send member emails. The image starts
   as root, so the environment needs the baseline pod security level.

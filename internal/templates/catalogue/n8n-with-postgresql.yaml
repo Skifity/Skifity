@@ -39,5 +39,11 @@ databases:
   - n8n
   - task-runners
   var_name: DATABASE_URL
+  vars:
+    host: DB_POSTGRESDB_HOST
+    port: DB_POSTGRESDB_PORT
+    name: DB_POSTGRESDB_DATABASE
+    user: DB_POSTGRESDB_USER
+    password: DB_POSTGRESDB_PASSWORD
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
   together.
