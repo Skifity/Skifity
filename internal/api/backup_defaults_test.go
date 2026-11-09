@@ -231,7 +231,7 @@ func TestDatabasesMadeWithAnAppOrByATemplateAreBackedUp(t *testing.T) {
 		Databases: []templates.DatabaseSpec{{Name: "notes-db", Engine: "postgres", LinkTo: []string{"web"}}},
 	}
 	request := httptest.NewRequest(http.MethodPost, "/api/templates/notes/install", nil).WithContext(t.Context())
-	plan, err := h.api.planTemplateInstall(request.Context(), acme.env, tpl, "", "", nil)
+	plan, err := h.api.planTemplateInstall(request.Context(), acme.env, tpl, installTemplateRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
