@@ -203,7 +203,27 @@ func (g *Guard) RefreshGeo(ctx context.Context, client *http.Client, now time.Ti
 // rules actually saw. Logging the raw header instead said one thing while the
 // rules used another, which is the worst possible state for a record somebody
 // consults after being blocked.
+//
+// A request whose path cannot be read one way, on a host whose rules look at
+// the path, is blocked here; the handler answers it 400 rather than 403,
+// because nothing the visitor is decided it — see judge.
 func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, bool) {
+	verdict := g.judge(r)
+	return verdict.decision, verdict.request, verdict.decided
+}
+
+// verdict is one request judged.
+type verdict struct {
+	decision edgerules.Decision
+	request  edgerules.Request
+	// decided is false when no rules have ever been loaded.
+	decided bool
+	// unreadable is why the path could not be read one way, for a host whose
+	// rules look at it. The decision is then a block.
+	unreadable error
+}
+
+func (g *Guard) judge(r *http.Request) verdict {
 	g.mu.RLock()
 	config, trust, loaded := g.config, g.trust, g.loaded
 	g.mu.RUnlock()
@@ -224,13 +244,13 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 		// Nothing has ever been loaded, so nothing can be said about this
 		// request. Refusing is the only honest answer for a process whose whole
 		// purpose is to refuse.
-		return edgerules.Decision{Action: edgerules.ActionBlock}, edgerules.Request{}, false
+		return verdict{decision: edgerules.Decision{Action: edgerules.ActionBlock}}
 	}
 	if !found {
 		// A hostname with no rules is a hostname nobody asked to protect. It
 		// should not be reaching the guard at all, and letting it through is
 		// better than breaking a site because a middleware outlived its rules.
-		return edgerules.Decision{Action: edgerules.ActionAllow}, edgerules.Request{Host: host}, true
+		return verdict{decision: edgerules.Decision{Action: edgerules.ActionAllow}, request: edgerules.Request{Host: host}, decided: true}
 	}
 
 	ip := edgerules.ClientIP(peer, r.Header, trust)
@@ -239,11 +259,26 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 		IP:        ip,
 		Country:   edgerules.ClientCountry(peer, r.Header, trust),
 		Host:      host,
-		Path:      pathOf(r, peer, trust),
 		Method:    firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Method"], peer, trust), r.Method),
 		UserAgent: r.Header.Get("User-Agent"),
 		Header:    r.Header.Get,
 	}
+	// The path an app would route rather than the bytes the client sent, so
+	// that /%61dmin and //admin are both /admin to a rule about /admin. One that
+	// cannot be read one way is refused where the rules would look at it, and
+	// judged as it came everywhere else: a host whose rules are about addresses
+	// has no reason to turn a strange path away. The request goes on to the app
+	// unchanged either way.
+	uri := uriOf(r, peer, trust)
+	path, err := edgerules.CanonicalPath(uri)
+	if err != nil {
+		if protected.RuleSet.TestsPath() {
+			request.Path = pathWithoutQuery(uri)
+			return verdict{decision: edgerules.Decision{Action: edgerules.ActionBlock}, request: request, decided: true, unreadable: err}
+		}
+		path = pathWithoutQuery(uri)
+	}
+	request.Path = path
 	// The database is only consulted for what the headers did not answer, so a
 	// cluster behind the tunnel pays nothing for a country rule.
 	needCountry, needASN := protected.RuleSet.Needs()
@@ -255,7 +290,7 @@ func (g *Guard) Decide(r *http.Request) (edgerules.Decision, edgerules.Request, 
 		request.ASN = result.ASN
 	}
 
-	return protected.RuleSet.EvaluateWith(request, g.limits), request, true
+	return verdict{decision: protected.RuleSet.EvaluateWith(request, g.limits), request: request, decided: true}
 }
 
 // Handler is what Traefik talks to.
@@ -277,13 +312,21 @@ func (g *Guard) Handler() http.Handler {
 	})
 
 	mux.HandleFunc("/authorize", func(w http.ResponseWriter, r *http.Request) {
-		decision, judged, decided := g.Decide(r)
-		if !decided {
+		verdict := g.judge(r)
+		decision, judged := verdict.decision, verdict.request
+		if !verdict.decided {
 			// No rules have ever been loaded, so nothing can be said about this
 			// request. The readiness probe reports the same thing, so this
 			// should be unreachable in a running cluster — it is the answer for
 			// the moment between a pod starting and the kubelet noticing.
 			http.Error(w, "This site is not accepting requests right now.", http.StatusServiceUnavailable)
+			return
+		}
+		if verdict.unreadable != nil {
+			// The reason, not the path: it names the escape that could not be
+			// read, which is what somebody looking into it needs.
+			g.log.Info("unreadable path", "host", judged.Host, "reason", verdict.unreadable.Error())
+			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
 		if decision.Action == edgerules.ActionLimit {
@@ -416,14 +459,23 @@ func hostname(value string) string {
 	return strings.TrimSuffix(value, ".")
 }
 
-// pathOf is the original path, without the query string.
+// uriOf is the original request's path and query, as the client wrote them.
 //
-// Traefik sends it in X-Forwarded-Uri, which includes the query; a rule is
-// written about the path, and a rule on "/admin" that a "?next=/admin" could
-// satisfy would be a rule that means nothing.
-func pathOf(r *http.Request, peer netip.Addr, trust edgerules.Trust) string {
-	uri := firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Uri"], peer, trust), r.URL.Path)
-	if i := strings.IndexByte(uri, '?'); i >= 0 {
+// Traefik sends it in X-Forwarded-Uri, still escaped. A request that did not
+// come through a proxy of ours is judged on its own, by its escaped path too:
+// r.URL.Path is decoded already, and decoding it a second time would read
+// /100%2525 as /100% where an app reads /100%25.
+func uriOf(r *http.Request, peer netip.Addr, trust edgerules.Trust) string {
+	return firstNonEmpty(forwardedByAProxy(r.Header["X-Forwarded-Uri"], peer, trust), r.URL.EscapedPath())
+}
+
+// pathWithoutQuery is the path as it came, without the query string, for a
+// request whose path could not be read one way.
+//
+// A rule is written about the path, and a rule on "/admin" that a
+// "?next=/admin" could satisfy would be a rule that means nothing.
+func pathWithoutQuery(uri string) string {
+	if i := strings.IndexAny(uri, "?#"); i >= 0 {
 		uri = uri[:i]
 	}
 	if uri == "" {

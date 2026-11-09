@@ -556,7 +556,10 @@ Checked against the code on 2026-11-08.
   run. The fix: decode the path once before any rule sees it, refuse one that
   does not decode or holds an encoded `/`, `\` or NUL, remove dot segments and
   repeated slashes the way an app's router would, and test each encoding in
-  `internal/guard`.
+  `internal/guard`. **Closed since:** `edgerules.CanonicalPath` is what every
+  rule now sees, a path that cannot be read one way is answered 400 where the
+  rules look at the path, and [the firewall's page](../../firewall.md#what-the-path-is)
+  lists what is read and what is refused.
 
 ## Sources
 

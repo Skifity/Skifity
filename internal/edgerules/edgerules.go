@@ -406,7 +406,22 @@ func (t Test) compare(value string) truth {
 
 	matched := false
 	for _, want := range t.Values {
-		wantLower := strings.ToLower(strings.TrimSpace(want))
+		written := strings.TrimSpace(want)
+		// A path is compared as an app would route it, on both sides: the
+		// request's is canonical already (see path.go), and a rule written
+		// "/%61dmin/" is the rule written "/admin/". A pattern is left as it
+		// was written, and sees the canonical path.
+		if t.Field == FieldPath && t.Op != OpMatches {
+			canonical, err := canonicalValue(t.Op, written)
+			if err != nil {
+				// Refused when the rule is saved, so this is a rule stored
+				// before that check. It cannot be compared, so it does not
+				// decide.
+				return isUnknown
+			}
+			written = canonical
+		}
+		wantLower := strings.ToLower(written)
 		if t.Field == FieldASN {
 			wantLower = strings.TrimPrefix(wantLower, "as")
 		}
@@ -499,6 +514,36 @@ func (s RuleSet) Needs() (country, asn bool) {
 		asn = asn || a
 	}
 	return country, asn
+}
+
+// TestsPath reports whether any rule that is switched on looks at the path.
+//
+// A request whose path cannot be read one way is refused by the guard only
+// where the answer could depend on it. A host whose rules are about addresses
+// alone judges it as it always has, and a host with no rules at all lets it
+// through.
+func (s RuleSet) TestsPath() bool {
+	for _, rule := range s.Rules {
+		if rule.Enabled && rule.Expr.testsPath() {
+			return true
+		}
+	}
+	return false
+}
+
+func (e Expr) testsPath() bool {
+	if e.Test != nil {
+		return e.Test.Field == FieldPath
+	}
+	if e.Not != nil {
+		return e.Not.testsPath()
+	}
+	for _, sub := range append(append([]Expr{}, e.All...), e.Any...) {
+		if sub.testsPath() {
+			return true
+		}
+	}
+	return false
 }
 
 func (e Expr) needs() (country, asn bool) {
@@ -682,6 +727,12 @@ func (t Test) validate() error {
 		}
 	}
 
+	if t.Field == FieldPath && t.Op != OpMatches {
+		if err := validatePathValues(t.Op, t.Values); err != nil {
+			return err
+		}
+	}
+
 	if t.Op == OpMatches {
 		for _, value := range t.Values {
 			if _, err := regexp.Compile(value); err != nil {
@@ -701,6 +752,26 @@ const (
 	maxValues      = 1000
 	maxValueLength = 512
 )
+
+// validatePathValues refuses a path a rule would compare in a way nobody
+// meant: one that cannot be read one way, one with a query string that is
+// never part of the path, and one that reading leaves nothing of.
+func validatePathValues(op Operator, values []string) error {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if strings.ContainsAny(value, "?#") {
+			return fmt.Errorf("%q has a query string, and a path is compared without one, so this would never match as written", value)
+		}
+		canonical, err := canonicalValue(op, value)
+		if err != nil {
+			return fmt.Errorf("%q cannot be read as a path: %w", value, err)
+		}
+		if canonical == "" {
+			return fmt.Errorf("%q is a ;parameter, which is taken off a path before any rule sees it, so this would never match", value)
+		}
+	}
+	return nil
+}
 
 func isCountryCode(value string) bool {
 	value = strings.TrimSpace(value)

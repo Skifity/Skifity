@@ -48,7 +48,7 @@ a broad **Block** is how you carve an exception out.
 | **Visitor's address** | One or more addresses or ranges, `203.0.113.0/24`. IPv4 and IPv6. |
 | **Visitor's country** | Two-letter codes, `ID`, `SG`. Needs the country lookup, below. |
 | **Visitor's network** | AS numbers, `AS13335` or `13335`. Needs the network lookup. |
-| **Hostname**, **Path**, **Method** | The request's own. The path never includes the query string, so a rule about `/admin` cannot be satisfied by `?next=/admin`. |
+| **Hostname**, **Path**, **Method** | The request's own. The path never includes the query string, so a rule about `/admin` cannot be satisfied by `?next=/admin`, and it is read the way the app reads it: see [What the path is](#what-the-path-is). |
 | **Browser or bot** | The `User-Agent` header. |
 | **A header** | Any header, by name. |
 
@@ -59,6 +59,59 @@ about `/admin` that missed `/Admin` would be a rule that does not work.
 An address, a country and a network only offer *is one of* and *is not one of*.
 "Contains" on an address would save and never match anything, so it is not
 offered and would be refused if it were.
+
+## What the path is
+
+A rule about `/admin` is only worth something if every way of writing `/admin`
+is caught by it. Your app does not route the bytes a visitor sent: nearly every
+web server and framework decodes `%61` to `a`, collapses `//`, resolves `..`
+and drops a `;jsessionid=…` before it chooses a page, and several treat `\` as
+`/`. So `/%61dmin`, `//admin`, `/x/../admin`, `/admin;x=1` and `\admin` all
+reach `/admin` in the app, and a rule has to see all of them as `/admin`.
+
+So the firewall reads the path the way the app does, before any rule sees it:
+
+1. The query string and anything after `#` are cut off.
+2. Each `%XX` escape is decoded, exactly once: `/%61dmin` is `/admin`,
+   `/admin%2Fx` is `/admin/x`, and `/100%25` is `/100%`.
+3. A backslash is a slash.
+4. A `;parameter` is removed from each part of the path: `/admin;jsessionid=1`
+   is `/admin`.
+5. Repeated slashes are one slash.
+6. `.` and `..` are resolved, and never climb above the root: `/x/../admin` and
+   `/../../admin` are both `/admin`.
+7. A trailing slash is kept, and the path always starts with one.
+
+Letters keep their case. Comparisons ignore it anyway, and a pattern sees the
+path as it was written.
+
+Some paths cannot be read one way, and those are **refused with `400 Bad
+Request`**:
+
+* a `%` that is not followed by two hexadecimal digits, such as `%zz`;
+* an encoded or raw control character, `%00` to `%1F` and `%7F`;
+* a slash, backslash or dot encoded twice, such as `%252F`, `%255C` or
+  `%252E`. An app that decodes once and one that decodes twice disagree about
+  where these lead, and the firewall cannot know which kind yours is.
+
+Only on an app whose rules look at the path. An app whose rules are about
+addresses, countries or headers judges such a request as it always has, and an
+app with no rules lets it through. The request the app receives is never
+changed: this is how the firewall reads it, not what it forwards.
+
+The values in a rule are read the same way when it is saved, so `/Admin/` and
+`/%61dmin/` are one rule, and a value that cannot be read, or that has a query
+string in it, is refused there. For **contains** and **ends with** the value is a
+piece of a path, so it is decoded and its backslashes and parameters are
+handled, but `.` and `..` in it are compared as written. **Matches the
+pattern** is the exception: a pattern is not a path, so it is used as written,
+against the path as read above.
+
+Two things follow that are worth knowing. A rule cannot see a `..` or a
+`;parameter`, because they are gone before it looks: write the rule about the
+place the request leads rather than about the trick it uses. And the firewall
+is not a substitute for an app that handles these itself; it is a way of making
+sure the app and the rule agree about which page was asked for.
 
 ## Country and network
 
