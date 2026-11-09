@@ -108,8 +108,7 @@ func TestAskingForALinkSaysNothingAboutWhoHasAnAccount(t *testing.T) {
 	h, box := withMail(t)
 	h.person(t, "real@example.test", "a-long-password-1")
 	disabled := h.person(t, "gone@example.test", "a-long-password-2")
-	disabled.Disabled = true
-	if err := h.db.UpdateUser(t.Context(), &disabled); err != nil {
+	if err := h.db.SetUserDisabled(t.Context(), disabled.ID, true); err != nil {
 		t.Fatal(err)
 	}
 

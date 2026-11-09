@@ -208,7 +208,8 @@ every device that was signed in as it, and writes an entry to the activity log
 of every team the account is in. The password then signs in on its own, and the
 account can turn two-factor on again under Account. A team that requires a
 second factor refuses the account until it does, and the command names those
-teams.
+teams. A panel administrator can do the same for somebody else from the panel,
+under **Settings → Accounts → Reset two-factor**.
 
 ## A deployment failed
 

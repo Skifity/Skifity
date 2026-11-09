@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
+import { AccountsPanel } from "@/components/settings/accounts"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { PanelUpgradeCard } from "@/components/settings/panel-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
@@ -156,6 +157,7 @@ const TABS: { value: string; label: string; group: NavGroup; access: Access }[] 
   { value: "components", label: "settings.components", group: "panel", access: "admin" },
   { value: "plugins", label: "settings.plugins", group: "panel", access: "admin" },
   { value: "security", label: "settings.security", group: "panel", access: "admin" },
+  { value: "accounts", label: "accounts.tab", group: "panel", access: "admin" },
   { value: "members", label: "settings.members", group: "team", access: "team" },
   { value: "audit", label: "settings.auditLog", group: "team", access: "teamAdmin" },
   { value: "git", label: "settings.git", group: "integrations", access: "team" },
@@ -323,6 +325,11 @@ export function SettingsPage() {
           {shows("security") && (
             <TabsContent value="security">
               <SecurityPanel />
+            </TabsContent>
+          )}
+          {shows("accounts") && (
+            <TabsContent value="accounts">
+              <AccountsPanel />
             </TabsContent>
           )}
           {shows("members") && (

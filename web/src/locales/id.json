@@ -464,7 +464,12 @@
       "server.delete_started": "Menghapus server beserta mesinnya",
       "auth.recovery_code_used": "Masuk dengan kode pemulihan",
       "account.two_factor_reset": "Dua faktor direset oleh administrator",
-      "account.password_reset": "Kata sandi direset dari server"
+      "account.password_reset": "Kata sandi direset dari server",
+      "account.disabled": "Akun dinonaktifkan",
+      "account.enabled": "Akun diaktifkan",
+      "account.deleted": "Akun dihapus",
+      "account.admin_granted": "Dijadikan administrator panel",
+      "account.admin_revoked": "Bukan lagi administrator panel"
     },
     "notAllowedTitle": "Log aktivitas hanya untuk pemilik dan admin tim",
     "notAllowed": "Tanyakan kepada pemilik atau admin {{team}} jika Anda perlu tahu apa yang berubah."
@@ -4346,6 +4351,30 @@
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
       },
+      "account_last_admin": {
+        "title": "Ini administrator terakhir panel",
+        "cause": "Tidak ada akun aktif lain yang mengelola panel, dan tanpa itu tidak ada yang bisa mengubah pengaturannya, memperbaruinya, atau membaca kunci pemulihannya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jadikan orang lain administrator panel dulu, di Pengaturan → Akun atau dengan `{{0}} admin make-admin` di server."
+      },
+      "account_self": {
+        "title": "Itu akun Anda sendiri",
+        "cause": "Pengaturan → Akun mengubah akun orang lain. Menonaktifkan, menghapus, atau mencabut status administrator akun Anda sendiri di sana akan mengunci Anda tanpa ada yang bisa membatalkannya.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Ubah cara Anda masuk di halaman Akun. Untuk berhenti menjadi administrator, jadikan orang lain administrator lalu minta ia melakukannya."
+      },
+      "account_last_owner": {
+        "title": "Akun ini satu-satunya pemilik sebuah tim",
+        "cause": "Menghapusnya akan membuat {{0}} tidak punya siapa pun yang bisa mengelolanya.",
+        "impact": "Akun tidak dihapus.",
+        "fix": "Jadikan orang lain pemilik setiap tim di Pengaturan → Anggota, atau hapus timnya, lalu hapus akunnya. Menonaktifkannya membiarkan semuanya seperti sekarang."
+      },
+      "account_owns_plugins": {
+        "title": "Akun ini memasang plugin",
+        "cause": "{{0}} berjalan dengan token API milik akun ini, yang akan ikut terhapus dan menghentikannya tanpa pemberitahuan.",
+        "impact": "Akun tidak dihapus.",
+        "fix": "Hapus plugin itu di Plugin, lalu pasang lagi dari akun administrator lain jika masih dibutuhkan. Setelah itu hapus akunnya."
+      },
       "deploy_crashed": {
         "title": "Versi baru berhenti saat menyala",
         "cause": "Versi baru {{0}} berhenti saat menyala. Jumlah berhenti sejauh ini: {{1}}. Yang terakhir berakhir dengan kode keluar {{2}} ({{3}}).",
@@ -5487,6 +5516,57 @@
     "tokenHint": "token …{{hint}}",
     "serverCount": "Server yang dibuat dengannya: {{servers}}",
     "checked": "diperiksa {{when}}"
+  },
+  "accounts": {
+    "tab": "Akun",
+    "title": "Akun",
+    "description": "Semua orang yang bisa masuk ke panel ini, dari tim mana pun. Menonaktifkan akun langsung mengeluarkannya dari semua perangkat dan bisa dibatalkan; menghapus akun tidak bisa. Akun Anda sendiri diubah di halaman Akun.",
+    "serverHint": "Jika tidak ada yang bisa masuk untuk melakukannya, {{command}} di server panel melakukan hal yang sama.",
+    "account": "Akun",
+    "signsInWith": "Masuk dengan",
+    "teams": "Tim",
+    "lastSignIn": "Terakhir masuk",
+    "you": "Anda",
+    "administrator": "Administrator panel",
+    "disabledBadge": "Nonaktif",
+    "onlyOwnerOf": "Satu-satunya pemilik {{teams}}",
+    "installedPlugins": "Memasang {{plugins}}",
+    "password": "Kata sandi",
+    "twoFactor": "Dua faktor",
+    "passkeys_other": "{{count}} kunci sandi",
+    "sso": "Single sign-on",
+    "noWayIn": "Tidak ada",
+    "noTeams": "Tidak di tim mana pun",
+    "never": "Belum pernah",
+    "actions": "Tindakan untuk {{name}}",
+    "makeAdmin": "Jadikan administrator panel",
+    "revokeAdmin": "Cabut administrator panel",
+    "enable": "Aktifkan",
+    "disable": "Nonaktifkan",
+    "resetTwoFactor": "Reset dua faktor",
+    "disableTitle": "Nonaktifkan {{name}}?",
+    "disableDescription": "Ia langsung dikeluarkan dari semua perangkat, dan kata sandi, kunci sandi, single sign-on, serta token API-nya berhenti berfungsi. Tidak ada yang ia buat yang dihapus, dan mengaktifkan akun ini mengembalikan semuanya.",
+    "disablePlugins": "Plugin yang dipasang akun ini berjalan dengan token API-nya, dan berhenti selama akun ini nonaktif: {{plugins}}.",
+    "makeAdminTitle": "Jadikan {{name}} administrator panel?",
+    "makeAdminDescription": "Ia akan bisa mengubah semua pengaturan panel, memasang plugin, memperbarui panel dan klasternya, membaca kunci pemulihan, dan mengubah semua akun di sini, termasuk akun Anda. Panel meminta kata sandi Anda terlebih dulu.",
+    "revokeAdminTitle": "Berhentikan {{name}} sebagai administrator panel?",
+    "revokeAdminDescription": "Ia tetap di timnya beserta isinya, dan kehilangan akses ke pengaturan panel, komponen, pembaruan, plugin, dan kunci pemulihan.",
+    "resetTwoFactorTitle": "Reset dua faktor untuk {{name}}?",
+    "resetTwoFactorDescription": "Untuk ponsel yang hilang beserta kode pemulihannya, jadi pastikan memang ia yang meminta. Aplikasi autentikator dan kode pemulihannya berhenti berfungsi dan ia dikeluarkan dari semua perangkat; setelah itu kata sandi saja sudah cukup untuk masuk, dan ia bisa menyalakan dua faktor lagi di halaman Akun. Panel meminta kata sandi Anda terlebih dulu.",
+    "resetTwoFactorStrongTeams": "{{teams}} mewajibkan faktor kedua, kunci sandi, atau single sign-on, dan menolak akun ini jika masuk hanya dengan kata sandi sampai dua faktor menyala lagi.",
+    "deleteDescription": "Akun ini tidak bisa masuk lagi, dan tidak ada yang bisa mengembalikannya. Alamatnya bisa diundang lagi sebagai akun baru.",
+    "deleteGoes": "Ikut terhapus: {{what}}. Log aktivitas tetap menyimpan apa yang ia lakukan.",
+    "deleteGoesNothing": "Akun ini tidak ada di tim mana pun dan tidak punya token API atau kunci sandi. Log aktivitas tetap menyimpan apa yang ia lakukan.",
+    "goesTeams_other": "keanggotaannya di {{teams}}",
+    "goesTokens_other": "{{count}} token API",
+    "goesPasskeys_other": "{{count}} kunci sandi",
+    "goesSSO": "tautannya ke single sign-on",
+    "disabledDone": "{{name}} dinonaktifkan dan dikeluarkan dari semua perangkat.",
+    "enabledDone": "{{name}} bisa masuk lagi.",
+    "adminGrantedDone": "{{name}} sekarang administrator panel.",
+    "adminRevokedDone": "{{name}} bukan lagi administrator panel.",
+    "twoFactorResetDone": "Dua faktor dimatikan untuk {{name}}, yang telah dikeluarkan dari semua perangkat.",
+    "deletedDone": "{{name}} telah dihapus."
   },
   "attention": {
     "title": "Perlu perhatian",

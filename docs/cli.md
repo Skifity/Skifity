@@ -523,6 +523,21 @@ two-factor on again under Account. It names any team that requires a second
 factor, which refuses the account until then. See
 [I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator).
 
+When the panel's only administrator has gone, or somebody who left can still
+sign in, the accounts themselves can be changed from the server too:
+
+```sh
+sudo skifity admin make-admin someone@example.com
+sudo skifity admin disable leaver@example.com
+sudo skifity admin enable leaver@example.com
+sudo skifity admin revoke-admin leaver@example.com
+```
+
+`disable` signs the account out everywhere and stops its password, passkeys,
+single sign-on and API tokens until `enable`. The last enabled administrator is
+kept: make somebody else one before disabling or demoting them. The panel does
+the same under [Settings → Accounts](configuration.md#accounts).
+
 Each of these writes what it did to the activity log of every team the account
 is in, as `skifity admin`.
 

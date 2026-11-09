@@ -138,8 +138,7 @@ func TestAStreamEndsWithTheSessionThatOpenedIt(t *testing.T) {
 			return h.db.DeleteSession(context.Background(), session.ID)
 		}},
 		{"account disabled", func(h *harness, user store.User, _ store.Session) error {
-			user.Disabled = true
-			return h.db.UpdateUser(context.Background(), &user)
+			return h.db.SetUserDisabled(context.Background(), user.ID, true)
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

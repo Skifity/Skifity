@@ -236,6 +236,42 @@ definition. Deleting the last project somebody was limited to leaves them with
 no projects, not with all of them. Changing someone's role without ticking the
 box lifts the limit — the form always says the whole of what they can reach.
 
+## Accounts
+
+**Settings → Accounts** lists everybody who can sign in to the panel, whatever
+team they are in: how each one signs in, the teams and roles they have, and when
+they last signed in. It is the panel administrator's, and it changes other
+people's accounts — your own is changed under Account.
+
+* **Disable** signs the account out everywhere at once, and its password,
+  passkeys, single sign-on and API tokens stop working. Nothing it made is
+  removed, and **Enable** gives it all back. Plugins the account installed run
+  with its API token, so they stop while it is disabled; the page says which.
+* **Delete** removes the account for good, with its memberships, API tokens and
+  passkeys. The activity log keeps what it did, under its address. It is
+  refused while the account is the only owner of a team — make somebody else an
+  owner first, or delete the team — and while it is the installer of a plugin,
+  which runs with the account's token and would stop without a word.
+* **Make panel administrator** gives somebody the panel-wide settings,
+  components, upgrades, plugins and the recovery key. Having more than one is
+  the point: with one, the whole panel depends on one person.
+  **Remove panel administrator** takes it back. The panel always keeps one
+  enabled administrator.
+* **Reset two-factor** is for somebody who has lost the phone and the recovery
+  codes with it. It turns their two-factor authentication off and signs them out
+  everywhere, and they turn it on again under Account. See
+  [I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator).
+
+Making somebody an administrator, enabling an account and resetting two-factor
+give access somebody keeps, so they ask for your password again and an API
+token cannot do them. Disabling, removing an administrator and deleting take
+access away, and ask you to confirm. Each change is written to the activity log
+of every team the account is in.
+
+When nobody who can sign in is an administrator any more — the only one has
+left — `skifity admin make-admin`, `revoke-admin`, `disable` and `enable` do the
+same from the server, as root. See [Recovering access](cli.md#recovering-access).
+
 ## Signing in
 
 **Passwords** are hashed with Argon2id, twelve characters minimum, and checked

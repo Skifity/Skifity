@@ -202,3 +202,89 @@ func TestAnAdminCanResetTwoFactorFromTheServer(t *testing.T) {
 		t.Errorf("an unknown address answered %v", err)
 	}
 }
+
+// When the only administrator has left, root on the server is the way back:
+// make somebody else one, then disable the account that went. The panel's last
+// enabled administrator is kept here as it is in the panel, and each change is
+// in the activity log.
+func TestAnAdminCanBeMadeAndAnAccountDisabledFromTheServer(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "panel.db")
+	db, err := store.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := store.User{Email: "gone@example.test", PasswordHash: "x", IsAdmin: true}
+	stays := store.User{Email: "stays@example.test", PasswordHash: "x"}
+	for _, user := range []*store.User{&gone, &stays} {
+		if err := db.CreateUser(t.Context(), user); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	run := func(command, email string) (map[string]any, error) {
+		t.Helper()
+		var out bytes.Buffer
+		err := adminChangeAccount(t.Context(), command, []string{email, "--database", path, "--json"}, &out)
+		if err != nil {
+			return nil, err
+		}
+		var answer map[string]any
+		if err := json.Unmarshal(out.Bytes(), &answer); err != nil {
+			t.Fatalf("decode %q: %v", out.String(), err)
+		}
+		return answer, nil
+	}
+	isProblem := func(err error, code string) bool {
+		var problem *errdoc.Problem
+		return errors.As(err, &problem) && problem.Code == code
+	}
+
+	// The only administrator cannot be disabled or demoted yet.
+	for _, command := range []string{"disable", "revoke-admin"} {
+		if _, err := run(command, gone.Email); !isProblem(err, "account.last_admin") {
+			t.Errorf("%s on the only administrator answered %v", command, err)
+		}
+	}
+	if answer, err := run("make-admin", stays.Email); err != nil || answer["is_admin"] != true || answer["changed"] != true {
+		t.Fatalf("make-admin answered %v, %v", answer, err)
+	}
+	if answer, err := run("make-admin", stays.Email); err != nil || answer["changed"] != false {
+		t.Errorf("make-admin a second time answered %v, %v", answer, err)
+	}
+	if answer, err := run("disable", gone.Email); err != nil || answer["disabled"] != true {
+		t.Fatalf("disable answered %v, %v", answer, err)
+	}
+	// A disabled administrator is no administrator: the other is now the last.
+	if _, err := run("revoke-admin", stays.Email); !isProblem(err, "account.last_admin") {
+		t.Errorf("revoke-admin on the last enabled administrator answered %v", err)
+	}
+	if _, err := run("enable", "nobody@example.test"); !isProblem(err, "admin.no_such_user") {
+		t.Errorf("an unknown address answered %v", err)
+	}
+
+	db, err = store.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var actions []string
+	rows, err := db.QueryContext(t.Context(), `SELECT action FROM audit_events WHERE actor_label = ? ORDER BY at, rowid`, adminActor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var action string
+		if err := rows.Scan(&action); err != nil {
+			t.Fatal(err)
+		}
+		actions = append(actions, action)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(actions, " ") != "account.admin_granted account.disabled" {
+		t.Errorf("the activity log has %v, want one entry for each change made", actions)
+	}
+}

@@ -129,6 +129,57 @@ func PluginUnexpectedResponse(status string) *Problem {
 		WithStatus(http.StatusBadGateway)
 }
 
+// --- the accounts on the panel ---
+//
+// Settings → Accounts in the panel and `skifity admin` on the server change
+// accounts the same way, so they refuse the same things in the same words.
+
+// AccountLastAdmin is demoting, disabling or deleting the last enabled panel
+// administrator, which would leave the settings, the upgrades and the master
+// key with nobody who can reach them.
+func AccountLastAdmin() *Problem {
+	return New("account.last_admin", "This is the panel's last administrator").
+		WithCause("No other enabled account administers the panel, and without one nobody can change its settings, upgrade it or read its recovery key.").
+		WithImpact("Nothing was changed.").
+		WithFix("Make somebody else a panel administrator first, under Settings → Accounts or with `%s admin make-admin` on the server.", version.Binary).
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountSelf is a panel administrator using Settings → Accounts on their own
+// account. Locking yourself out is not something that page should be able to
+// do in one click.
+func AccountSelf() *Problem {
+	return New("account.self", "That is your own account").
+		WithCause("Settings → Accounts changes other people's accounts. Disabling, deleting or demoting your own there would lock you out with nobody to undo it.").
+		WithImpact("Nothing was changed.").
+		WithFix("Change how you sign in under Account. To stop being an administrator, make somebody else one and ask them to do it.").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountLastOwner is deleting an account that is the only owner of a team.
+// Removing or demoting that owner from inside the team is team.last_owner.
+func AccountLastOwner(teams string) *Problem {
+	return New("account.last_owner", "This account is the only owner of a team").
+		WithCause("Deleting it would leave %s with nobody who can administer it.", teams).
+		WithImpact("The account was not deleted.").
+		WithFix("Make somebody else an owner of each team under Settings → Members, or delete the team, then delete the account. Disabling it instead keeps everything as it is.").
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountOwnsPlugins is deleting the account that installed a plugin. A
+// plugin runs with an API token of its installer's, and the token would go
+// with the account.
+func AccountOwnsPlugins(plugins string) *Problem {
+	return New("account.owns_plugins", "This account installed plugins").
+		WithCause("%s run with an API token of this account's, which would be deleted with it and stop them without a word.", plugins).
+		WithImpact("The account was not deleted.").
+		WithFix("Remove those plugins under Plugins, and install them again from another administrator's account if they are still wanted. Then delete the account.").
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
+}
+
 // --- the panel's own bugs ---
 //
 // Each place that stops a panic has its own code. They used to share

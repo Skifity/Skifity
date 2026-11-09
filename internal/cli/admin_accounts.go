@@ -168,3 +168,101 @@ func adminResetTwoFactor(ctx context.Context, args []string, out io.Writer) erro
 	fmt.Fprintln(out)
 	return nil
 }
+
+// adminChangeAccount is disable, enable, make-admin and revoke-admin: the way
+// back when the panel's only administrator has gone, or somebody who left can
+// still sign in and nobody left can stop them. The panel's last enabled
+// administrator is kept here as it is in the panel.
+func adminChangeAccount(ctx context.Context, command string, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(out)
+	databasePath := flags.String("database", "", "the panel database to use")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	email, err := oneAddress(command, flags, args)
+	if err != nil {
+		return err
+	}
+	db, err := openPanelDatabase(ctx, *databasePath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	user, err := accountByEmail(ctx, db, email)
+	if err != nil {
+		return err
+	}
+	var changed bool
+	var action string
+	switch command {
+	case "disable":
+		changed, action = !user.Disabled, "account.disabled"
+		err = db.SetUserDisabled(ctx, user.ID, true)
+	case "enable":
+		changed, action = user.Disabled, "account.enabled"
+		err = db.SetUserDisabled(ctx, user.ID, false)
+	case "make-admin":
+		changed, action = !user.IsAdmin, "account.admin_granted"
+		err = db.SetUserAdmin(ctx, user.ID, true)
+	case "revoke-admin":
+		changed, action = user.IsAdmin, "account.admin_revoked"
+		err = db.SetUserAdmin(ctx, user.ID, false)
+	default:
+		return errdoc.BadRequest(fmt.Sprintf("%q is not an admin command. Try `%s admin help`.", command, version.Binary))
+	}
+	if errors.Is(err, store.ErrLastAdmin) {
+		return errdoc.AccountLastAdmin()
+	}
+	if err != nil {
+		return err
+	}
+	if command == "disable" {
+		// Every way in refuses a disabled account; ending the sessions now
+		// means somebody in the middle of using one is out at once.
+		if err := db.DeleteUserSessions(ctx, user.ID); err != nil {
+			return fmt.Errorf("the account was disabled, but its sessions could not be ended: %w", err)
+		}
+	}
+	if changed {
+		if err := recordAccountChange(ctx, db, action, user); err != nil {
+			return fmt.Errorf("the account was changed, but the activity log could not record it: %w", err)
+		}
+	}
+	after, err := db.GetUser(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+
+	if *asJSON {
+		return writeJSON(out, map[string]any{
+			"email": after.Email, "changed": changed,
+			"is_admin": after.IsAdmin, "disabled": after.Disabled,
+		})
+	}
+	fmt.Fprintln(out)
+	switch {
+	case !changed:
+		already := map[string]string{
+			"disable": "is already disabled", "enable": "is not disabled",
+			"make-admin": "is already a panel administrator", "revoke-admin": "is not a panel administrator",
+		}[command]
+		fmt.Fprintf(out, "Nothing was changed: %s %s.\n", after.Email, already)
+	case command == "disable":
+		fmt.Fprintf(out, "%s is disabled, and every signed-in device was signed out. Its password,\n"+
+			"passkeys, single sign-on and API tokens stop working until `%s admin enable %s`.\n",
+			after.Email, version.Binary, after.Email)
+	case command == "enable":
+		fmt.Fprintf(out, "%s can sign in again.\n", after.Email)
+	case command == "make-admin":
+		fmt.Fprintf(out, "%s is a panel administrator: it can change panel-wide settings, upgrade the\n"+
+			"panel, install plugins and read the recovery key.\n", after.Email)
+	case command == "revoke-admin":
+		fmt.Fprintf(out, "%s is no longer a panel administrator. It keeps its teams.\n", after.Email)
+	}
+	if after.IsAdmin && after.Disabled {
+		fmt.Fprintf(out, "It is disabled, so it cannot sign in until `%s admin enable %s`.\n",
+			version.Binary, after.Email)
+	}
+	fmt.Fprintln(out)
+	return nil
+}

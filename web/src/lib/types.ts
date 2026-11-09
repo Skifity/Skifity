@@ -46,6 +46,25 @@ export type Team = {
 /** One person in a team, as the members list shows them. */
 export type Member = { user: User; role: Role; scoped: boolean; projects?: string[] }
 
+/** A team an account is in, as Settings → Accounts lists it. */
+export type AccountTeam = { id: string; name: string; role: Role; require_strong_auth: boolean }
+
+/** One account on the panel, for its administrator. */
+export type Account = {
+  user: User
+  teams: AccountTeam[]
+  /** False for an account that signs in only through the identity provider. */
+  has_password: boolean
+  passkeys: number
+  /** API tokens that have not expired. */
+  tokens: number
+  sso_issuers: string[]
+  /** What has to change before the account can be deleted. */
+  blockers: { sole_owner_of: AccountTeam[]; plugins: { id: string; name: string }[] }
+  /** The administrator looking, whose own account is changed under Account. */
+  current: boolean
+}
+
 export type Project = {
   id: string
   team_id: string

@@ -5230,6 +5230,83 @@ paths:
               schema: {type: string}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/users:
+    get:
+      operationId: listAccounts
+      tags: [Settings]
+      summary: Every account on the panel
+      description: >-
+        Panel administrators only. Each account with its teams, how it signs
+        in, and what would stand in the way of deleting it.
+      responses:
+        '200':
+          description: The accounts, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Account'}
+                  total: {type: integer}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/users/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    patch:
+      operationId: updateAccount
+      tags: [Settings]
+      summary: Disable or enable an account, or make it a panel administrator or not
+      description: >-
+        Panel administrators only, and never on their own account. Disabling
+        signs the account out everywhere and stops its API tokens. Making an
+        account an administrator, or enabling one, wants a recent sign-in; a
+        token cannot. The last enabled administrator is kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAccountRequest'}
+      responses:
+        '200':
+          description: The account as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteAccount
+      tags: [Settings]
+      summary: Delete an account
+      description: >-
+        Panel administrators only, and never their own account. Its
+        memberships, sessions, tokens and passkeys go with it; the activity log
+        keeps what it did. Refused while it is a team's only owner, installed a
+        plugin, or is the last enabled administrator.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/users/{userID}/two-factor/reset:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    post:
+      operationId: resetAccountTwoFactor
+      tags: [Settings]
+      summary: Turn somebody's two-factor authentication off
+      description: >-
+        Panel administrators, signed in within the last few minutes; a token
+        cannot. For a lost phone with the recovery codes gone: the secret and
+        the codes are deleted and the account is signed out everywhere.
+      security:
+        - sessionCookie: []
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
 components:
 
   securitySchemes:
@@ -5483,6 +5560,56 @@ components:
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
         last_login_at: {type: string, format: date-time}
+
+    AccountTeam:
+      type: object
+      required: [id, name, role, require_strong_auth]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        role: {$ref: '#/components/schemas/Role'}
+        require_strong_auth: {type: boolean}
+
+    Account:
+      type: object
+      required: [user, teams, has_password, passkeys, tokens, sso_issuers, blockers, current]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        teams:
+          type: array
+          items: {$ref: '#/components/schemas/AccountTeam'}
+        has_password: {type: boolean, description: 'False for an account that signs in only through the identity provider.'}
+        passkeys: {type: integer}
+        tokens: {type: integer, description: 'API tokens that have not expired.'}
+        sso_issuers:
+          type: array
+          items: {type: string}
+          description: The identity providers the account is linked to.
+        blockers:
+          type: object
+          description: What has to change before the account can be deleted.
+          required: [sole_owner_of, plugins]
+          properties:
+            sole_owner_of:
+              type: array
+              items: {$ref: '#/components/schemas/AccountTeam'}
+            plugins:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string}
+                  name: {type: string}
+        current: {type: boolean, description: 'The administrator asking. Their own account is changed under Account, not here.'}
+
+    UpdateAccountRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        disabled: {type: boolean}
+        is_admin: {type: boolean}
 
     LoginRequest:
       type: object

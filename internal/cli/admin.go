@@ -35,6 +35,10 @@ Usage:
   %s admin reset-2fa <email>        turn an account's two-factor authentication off,
                                     for a lost phone with the recovery codes gone
   %s admin list-users               show the accounts on this panel
+  %s admin disable <email>          stop an account signing in, everywhere at once
+  %s admin enable <email>           let a disabled account sign in again
+  %s admin make-admin <email>       make an account a panel administrator
+  %s admin revoke-admin <email>     stop an account being one; the last is kept
   %s admin backup-db <path>         write a consistent copy of the database
   %s admin restore-db <file>        put a backup of the database back
   %s admin restore-key              write the master key back from a recovery key,
@@ -44,7 +48,8 @@ Usage:
 
 These run on the server the panel is installed on and read its database
 directly, so they work when nobody can sign in. They need to be run as root.
-`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
+`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary,
+			version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
 		return nil
 	}
 
@@ -55,6 +60,8 @@ directly, so they work when nobody can sign in. They need to be run as root.
 		return adminResetTwoFactor(ctx, args[1:], out)
 	case "list-users":
 		return adminListUsers(ctx, args[1:], out)
+	case "disable", "enable", "make-admin", "revoke-admin":
+		return adminChangeAccount(ctx, args[0], args[1:], out)
 	case "backup-db":
 		return adminBackupDatabase(ctx, args[1:], out)
 	case "restore-db":

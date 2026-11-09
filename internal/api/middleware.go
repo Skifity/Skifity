@@ -414,27 +414,35 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 // two-factor would make the token a way around the very thing it protects.
 func (s *Server) requireRecentAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := apiTokenFrom(r.Context()); ok {
-			writeError(w, r, errdoc.NeedsPerson())
-			return
-		}
-		session, ok := sessionFrom(r.Context())
-		if !ok {
-			writeError(w, r, errdoc.Unauthorized())
-			return
-		}
-		if !s.auth.RecentlyAuthenticated(session) {
-			// The frontend routes on this code: it opens the dialog that asks
-			// for the password, then repeats the request.
-			writeError(w, r, errdoc.New("auth.reauth_required", "Confirm it is you").
-				WithCause("This action needs your password again, because holding a signed-in session is not the same as being at the keyboard.").
-				WithImpact("Nothing was changed.").
-				WithFix("Enter your password to continue.").
-				WithStatus(http.StatusForbidden))
+		if err := s.checkRecentAuth(r); err != nil {
+			writeError(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// checkRecentAuth is requireRecentAuth's question, for a handler where only
+// some requests to one route need it: changing an account answers to it when
+// the change gives access, and not when it takes access away.
+func (s *Server) checkRecentAuth(r *http.Request) error {
+	if _, ok := apiTokenFrom(r.Context()); ok {
+		return errdoc.NeedsPerson()
+	}
+	session, ok := sessionFrom(r.Context())
+	if !ok {
+		return errdoc.Unauthorized()
+	}
+	if !s.auth.RecentlyAuthenticated(session) {
+		// The frontend routes on this code: it opens the dialog that asks
+		// for the password, then repeats the request.
+		return errdoc.New("auth.reauth_required", "Confirm it is you").
+			WithCause("This action needs your password again, because holding a signed-in session is not the same as being at the keyboard.").
+			WithImpact("Nothing was changed.").
+			WithFix("Enter your password to continue.").
+			WithStatus(http.StatusForbidden)
+	}
+	return nil
 }
 
 // refuseScopedTokens keeps a route that hands out a secret — a database's

@@ -440,6 +440,7 @@ test("every page in the navigation renders", async ({ page }) => {
     ["/activity", "Activity"],
     ["/account", "Account"],
     ["/settings", "Settings"],
+    ["/settings?tab=accounts", "Accounts"],
   ] as const) {
     await page.goto(path)
     // The heading, not networkidle: two of these are lazy chunks behind a
@@ -874,6 +875,52 @@ test("a recovery code signs in when the phone is gone", async ({ page }) => {
 
   await expect(page.locator('[data-slot="account-menu"]')).toBeVisible()
   await expect(page.getByText(`${codes.length - 1} codes are left`, { exact: false })).toBeVisible()
+})
+
+// Settings → Accounts, in every language, and the reason it exists: somebody
+// who left could be taken out of each team, one at a time, and still sign in.
+test("an administrator disables an account, and it cannot sign in", async ({ page, request }) => {
+  const email = "leaver@example.test"
+  const password = "a passphrase for leaving"
+  const token = await invite(page, email)
+  // Accepted on a request context of its own, so this page stays signed in as
+  // the setup account.
+  const accepted = await request.post(`/api/invitations/${token}/accept`, {
+    data: { name: "Leaver", password },
+  })
+  expect(accepted.ok(), await accepted.text()).toBeTruthy()
+
+  await page.goto("/settings?tab=accounts")
+  for (const language of LANGUAGES) {
+    await page.locator('[data-slot="language-switcher"]').click()
+    await page.getByRole("menuitem", { name: language.name }).click()
+    const words = localeStrings(language.code).accounts as Record<string, string>
+    await expect(page.getByText(words.description), `the tab in ${language.name}`).toBeVisible()
+    const body = (await page.locator("body").innerText()).trim()
+    expect(body, `untranslated key visible in ${language.name}`).not.toMatch(
+      /\baccounts\.[a-zA-Z]+\b/,
+    )
+  }
+  // The last switch was to Chinese; English again, saved to the account, so
+  // what follows reads it.
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/me") && response.request().method() === "PATCH",
+  )
+  await page.locator('[data-slot="language-switcher"]').click()
+  await page.getByRole("menuitem", { name: "English" }).click()
+  await saved
+
+  const row = page.locator(`tr[data-account="${email}"]`)
+  await row.getByRole("button", { name: /^Actions for/ }).click()
+  await page.getByRole("menuitem", { name: "Disable" }).click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Disable" }).click()
+  await expect(row.getByText("Disabled", { exact: true })).toBeVisible()
+
+  // The session the invitation started is over, and the password opens
+  // nothing: refused the way a wrong one is.
+  expect((await request.get("/api/me")).status()).toBe(401)
+  const refused = await request.post("/api/auth/login", { data: { email, password } })
+  expect(refused.status(), await refused.text()).toBe(401)
 })
 
 /**

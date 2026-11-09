@@ -464,7 +464,12 @@
       "server.delete_started": "正在移除服务器并删除其机器",
       "auth.recovery_code_used": "使用恢复码登录",
       "account.two_factor_reset": "管理员重置了双重验证",
-      "account.password_reset": "从服务器重置了密码"
+      "account.password_reset": "从服务器重置了密码",
+      "account.disabled": "账户已停用",
+      "account.enabled": "账户已启用",
+      "account.deleted": "账户已删除",
+      "account.admin_granted": "被设为面板管理员",
+      "account.admin_revoked": "不再是面板管理员"
     },
     "notAllowedTitle": "活动日志仅供团队所有者和管理员查看",
     "notAllowed": "如需了解有哪些变化，请询问 {{team}} 的所有者或管理员。"
@@ -4346,6 +4351,30 @@
         "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
         "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
       },
+      "account_last_admin": {
+        "title": "这是面板的最后一位管理员",
+        "cause": "没有其他已启用的账户在管理面板；没有管理员，就没人能修改设置、升级面板或读取恢复密钥。",
+        "impact": "没有改动任何东西。",
+        "fix": "请先在“设置 → 账户”中，或在服务器上用 `{{0}} admin make-admin`，把其他人设为面板管理员。"
+      },
+      "account_self": {
+        "title": "这是你自己的账户",
+        "cause": "“设置 → 账户”用来修改其他人的账户。在那里停用、删除或取消自己的管理员身份，会把你锁在外面，而且没人能撤销。",
+        "impact": "没有改动任何东西。",
+        "fix": "请在“账户”页面修改你的登录方式。若想不再担任管理员，请先把别人设为管理员，再请对方操作。"
+      },
+      "account_last_owner": {
+        "title": "此账户是某个团队的唯一所有者",
+        "cause": "删除它会让 {{0}} 没有任何人能管理。",
+        "impact": "账户没有被删除。",
+        "fix": "请在“设置 → 成员”中为每个团队另设所有者，或删除该团队，然后再删除账户。改为停用账户则一切保持原样。"
+      },
+      "account_owns_plugins": {
+        "title": "此账户安装了插件",
+        "cause": "{{0}} 使用此账户的 API 令牌运行，令牌会随账户一起删除，插件会悄无声息地停止。",
+        "impact": "账户没有被删除。",
+        "fix": "请在“插件”中移除这些插件，如仍需要，再从另一位管理员的账户重新安装。然后再删除账户。"
+      },
       "deploy_crashed": {
         "title": "新版本在启动时停止了",
         "cause": "{{0}} 的新版本在启动时停止了。目前已停止 {{1}} 次。最后一次以退出码 {{2}}（{{3}}）结束。",
@@ -5487,6 +5516,57 @@
     "tokenHint": "令牌 …{{hint}}",
     "serverCount": "用它创建的服务器：{{servers}}",
     "checked": "{{when}} 检查过"
+  },
+  "accounts": {
+    "tab": "账户",
+    "title": "账户",
+    "description": "所有能登录此面板的人，无论属于哪个团队。停用账户会立即让它在所有设备上退出登录，并且可以撤销；删除账户则无法撤销。你自己的账户请在“账户”页面中修改。",
+    "serverHint": "当没有人能登录来做这件事时，在面板服务器上运行 {{command}} 也能做到。",
+    "account": "账户",
+    "signsInWith": "登录方式",
+    "teams": "团队",
+    "lastSignIn": "上次登录",
+    "you": "你",
+    "administrator": "面板管理员",
+    "disabledBadge": "已停用",
+    "onlyOwnerOf": "{{teams}} 的唯一所有者",
+    "installedPlugins": "安装了 {{plugins}}",
+    "password": "密码",
+    "twoFactor": "双重验证",
+    "passkeys_other": "{{count}} 个通行密钥",
+    "sso": "单点登录",
+    "noWayIn": "无",
+    "noTeams": "不在任何团队中",
+    "never": "从未",
+    "actions": "{{name}} 的操作",
+    "makeAdmin": "设为面板管理员",
+    "revokeAdmin": "取消面板管理员",
+    "enable": "启用",
+    "disable": "停用",
+    "resetTwoFactor": "重置双重验证",
+    "disableTitle": "停用 {{name}}？",
+    "disableDescription": "此账户会立即在所有设备上退出登录，其密码、通行密钥、单点登录和 API 令牌都会失效。它创建的内容都不会被删除，重新启用账户即可恢复一切。",
+    "disablePlugins": "此账户安装的插件使用它的 API 令牌运行，在账户停用期间会停止：{{plugins}}。",
+    "makeAdminTitle": "将 {{name}} 设为面板管理员？",
+    "makeAdminDescription": "对方将能修改面板的所有设置、安装插件、升级面板及其集群、读取恢复密钥，并修改这里的所有账户，包括你的。面板会先要求你输入密码。",
+    "revokeAdminTitle": "取消 {{name}} 的面板管理员身份？",
+    "revokeAdminDescription": "对方保留所在团队及其中的一切，但失去面板设置、组件、升级、插件和恢复密钥的访问权限。",
+    "resetTwoFactorTitle": "重置 {{name}} 的双重验证？",
+    "resetTwoFactorDescription": "这是为手机丢失且恢复码也不在的情况准备的，所以请确认确实是本人在请求。对方的验证器和恢复码将失效，并在所有设备上退出登录；之后仅凭密码即可登录，并可在“账户”中重新开启双重验证。面板会先要求你输入密码。",
+    "resetTwoFactorStrongTeams": "{{teams}} 要求第二重验证、通行密钥或单点登录，在重新开启双重验证之前，会拒绝此账户仅用密码登录。",
+    "deleteDescription": "此账户将无法再登录，也无法恢复。它的邮箱地址可以作为新账户重新邀请。",
+    "deleteGoes": "将一并删除：{{what}}。活动日志会保留它做过的操作。",
+    "deleteGoesNothing": "它不在任何团队中，也没有 API 令牌或通行密钥。活动日志会保留它做过的操作。",
+    "goesTeams_other": "它在 {{teams}} 中的成员身份",
+    "goesTokens_other": "{{count}} 个 API 令牌",
+    "goesPasskeys_other": "{{count}} 个通行密钥",
+    "goesSSO": "它与单点登录的关联",
+    "disabledDone": "{{name}} 已停用，并已在所有设备上退出登录。",
+    "enabledDone": "{{name}} 可以再次登录了。",
+    "adminGrantedDone": "{{name}} 现在是面板管理员。",
+    "adminRevokedDone": "{{name}} 不再是面板管理员。",
+    "twoFactorResetDone": "已关闭 {{name}} 的双重验证，对方已在所有设备上退出登录。",
+    "deletedDone": "已删除 {{name}}。"
   },
   "attention": {
     "title": "需要处理",

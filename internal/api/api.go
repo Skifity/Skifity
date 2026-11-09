@@ -655,6 +655,15 @@ func (s *Server) routes() chi.Router {
 				// anybody who can reach the port. Prometheus scrapes it with
 				// an API token, the same way the CLI talks to the panel.
 				admin.Get("/metrics", s.handleMetrics)
+				// The accounts on the panel. Taking access away asks only for
+				// a confirmation, on the page; giving it — an administrator,
+				// an account enabled again, a second factor taken off — asks
+				// for the password again too: in the handler for a change, on
+				// the route for a reset. See users_handlers.go.
+				admin.Get("/users", s.handleListAccounts)
+				admin.Patch("/users/{userID}", s.handleUpdateAccount)
+				admin.Delete("/users/{userID}", s.handleDeleteAccount)
+				admin.With(s.requireRecentAuth).Post("/users/{userID}/two-factor/reset", s.handleResetAccountTwoFactor)
 			})
 		})
 
