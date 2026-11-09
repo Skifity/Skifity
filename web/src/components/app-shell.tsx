@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
@@ -6,15 +6,18 @@ import {
   ActivityIcon,
   BookOpenIcon,
   BoxesIcon,
+  CheckIcon,
   ChevronLeftIcon,
   ChevronsUpDownIcon,
   DatabaseIcon,
+  DoorOpenIcon,
   ExternalLinkIcon,
   EyeIcon,
   FolderIcon,
   InfoIcon,
   LayoutGridIcon,
   LogOutIcon,
+  PlusIcon,
   PuzzleIcon,
   SearchIcon,
   ServerIcon,
@@ -22,6 +25,7 @@ import {
   ShieldAlertIcon,
   TriangleAlertIcon,
   UserIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react"
 
@@ -31,6 +35,7 @@ import { pickedOrOnly, useEnvironmentTargets } from "@/components/environment-pi
 import { ErrorBoundary } from "@/components/error-boundary"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { Logo } from "@/components/logo"
+import { NewTeamDialog, useLeaveTeam } from "@/components/team-dialogs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -72,6 +77,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAttentionUpdates } from "@/hooks/use-attention"
 import { useDeployToasts } from "@/hooks/use-deploy-toasts"
+import { useEvents } from "@/hooks/use-events"
 import { usePaletteShortcut } from "@/hooks/use-palette"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
@@ -153,6 +159,7 @@ export function AppShell() {
             navigating away is what clears it.
           */}
           <InstallNotes />
+          <NoTeamNotice />
           <StrongAuthNotice />
           <ReadOnlyNotice />
           <ErrorBoundary resetKey={location.pathname}>
@@ -162,6 +169,34 @@ export function AppShell() {
       </SidebarInset>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </SidebarProvider>
+  )
+}
+
+/**
+ * Somebody in no team at all: one who left their last, whose last was
+ * deleted, or whom single sign-on made an account for and nobody has added
+ * anywhere yet. Every page would be empty with nothing saying why.
+ */
+function NoTeamNotice() {
+  const { t } = useTranslation()
+  const { user, teams, canCreateTeams } = useSession()
+  const [creating, setCreating] = useState(false)
+  if (!user || teams.length > 0) return null
+  return (
+    <Alert className="mb-6">
+      <UsersIcon />
+      <AlertTitle>{t("teams.noneTitle")}</AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center gap-3">
+        <span>{canCreateTeams ? t("teams.noneCreate") : t("teams.noneAsk")}</span>
+        {canCreateTeams && (
+          <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+            <PlusIcon />
+            {t("teams.new")}
+          </Button>
+        )}
+      </AlertDescription>
+      {creating && <NewTeamDialog onClose={() => setCreating(false)} />}
+    </Alert>
   )
 }
 
@@ -260,9 +295,11 @@ function showsOneOfTheTeams(pathname: string): boolean {
 
 function AppSidebar() {
   const { t } = useTranslation()
-  const { team, teams, setTeam, user } = useSession()
+  const { team, teams, setTeam, user, canCreateTeams, refresh } = useSession()
   const location = useLocation()
   const navigate = useNavigate()
+  const leaveTeam = useLeaveTeam()
+  const [creatingTeam, setCreatingTeam] = useState(false)
 
   // A member limited to some projects is not shown what belongs to the
   // whole team: the server refuses it, and a link to a refusal is a trap.
@@ -276,6 +313,19 @@ function AppSidebar() {
     enabled: Boolean(team) && teamWide,
   })
   const projects = useProjects()
+
+  // The team in view deleted by its owner, from another browser: the session
+  // is asked again, which shows another team or none, from the overview.
+  useEvents(
+    team ? [`team:${team.id}`] : [],
+    {
+      "team.deleted": () => {
+        void refresh()
+        navigate("/")
+      },
+    },
+    Boolean(team) && teamWide,
+  )
 
   const unhealthy = (servers.data?.items ?? []).filter(
     (server) => server.status === "failed" || server.status === "not_ready",
@@ -326,17 +376,20 @@ function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
 
-          {teams.length > 1 && (
+          {/* Shown with one team too: it is where a team is made and where
+              somebody leaves one, and with a single team it was missing, so
+              neither could be done at all. */}
+          {(teams.length > 0 || canCreateTeams) && (
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton tooltip={t("settings.team")}>
+                  <SidebarMenuButton tooltip={t("settings.team")} data-team-switcher="">
                     <ChevronsUpDownIcon />
                     <span className="truncate">{team?.name ?? "—"}</span>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>{t("settings.team")}</DropdownMenuLabel>
+                  {teams.length > 0 && <DropdownMenuLabel>{t("settings.team")}</DropdownMenuLabel>}
                   {teams.map((candidate) => (
                     <DropdownMenuItem
                       key={candidate.id}
@@ -348,10 +401,25 @@ function AppSidebar() {
                       }}
                     >
                       <span className="truncate">{candidate.name}</span>
+                      {candidate.id === team?.id && <CheckIcon className="ml-auto" />}
                     </DropdownMenuItem>
                   ))}
+                  {teams.length > 0 && <DropdownMenuSeparator />}
+                  {canCreateTeams && (
+                    <DropdownMenuItem onSelect={() => setCreatingTeam(true)}>
+                      <PlusIcon />
+                      {t("teams.new")}
+                    </DropdownMenuItem>
+                  )}
+                  {team && (
+                    <DropdownMenuItem variant="destructive" onSelect={() => leaveTeam(team)}>
+                      <DoorOpenIcon />
+                      <span className="truncate">{t("teams.leaveNamed", { name: team.name })}</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
+              {creatingTeam && <NewTeamDialog onClose={() => setCreatingTeam(false)} />}
             </SidebarMenuItem>
           )}
         </SidebarMenu>

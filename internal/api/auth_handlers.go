@@ -113,6 +113,9 @@ type meResponse struct {
 	// identity provider, which the account page offers a first password to
 	// rather than asking for a current one it does not have.
 	HasPassword bool `json:"has_password"`
+	// CanCreateTeams is whether this account may make a team of its own, so
+	// the panel offers New team only where it would not be refused.
+	CanCreateTeams bool `json:"can_create_teams"`
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -138,9 +141,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Warn("could not count recovery codes", "user", user.ID, "error", err)
 	}
+	// A token made for one team cannot create another, whatever the setting.
+	canCreate := false
+	if token, ok := apiTokenFrom(r.Context()); !ok || token.TeamID == "" {
+		if canCreate, err = s.mayCreateTeams(r.Context(), user); err != nil {
+			s.log.Warn("could not read who may create teams", "error", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, meResponse{
 		User: user, Teams: teams, RecoverySaved: user.RecoverySaved, RecoveryCodesLeft: codesLeft,
 		StrongAuth: s.strongAuth(r, user), HasPassword: user.PasswordHash != "",
+		CanCreateTeams: canCreate,
 	})
 }
 

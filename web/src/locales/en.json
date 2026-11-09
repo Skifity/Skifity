@@ -485,7 +485,9 @@
       "account.enabled": "Account enabled",
       "account.deleted": "Account deleted",
       "account.admin_granted": "Made a panel administrator",
-      "account.admin_revoked": "No longer a panel administrator"
+      "account.admin_revoked": "No longer a panel administrator",
+      "team.member_left": "Left the team",
+      "team.deleted": "Team deleted"
     },
     "notAllowedTitle": "The activity log is for the team's owners and admins",
     "notAllowed": "Ask an owner or an admin of {{team}} if you need to know what changed."
@@ -4543,6 +4545,12 @@
         "impact": "No team was created.",
         "fix": "Ask a panel administrator to create the team and add you to it, or to let everyone create teams under Settings, Sign-in."
       },
+      "team_has_servers": {
+        "title": "This team still has servers",
+        "cause": "These servers belong to the team and are still in the cluster: {{0}}.",
+        "impact": "Nothing was deleted.",
+        "fix": "Remove each of them under Servers first, then delete the team again."
+      },
       "deploy_crashed": {
         "title": "The new version stopped as it started",
         "cause": "The new version of {{0}} stopped as it started. Stops so far: {{1}}. The last ended with exit code {{2}} ({{3}}).",
@@ -5840,6 +5848,30 @@
     "adminRevokedDone": "{{name}} is no longer a panel administrator.",
     "twoFactorResetDone": "Two-factor is off for {{name}}, who was signed out everywhere.",
     "deletedDone": "{{name}} was deleted."
+  },
+  "teams": {
+    "new": "New team",
+    "newHelp": "You will be its owner. A team has its own projects, servers, connections and people, and nobody in another team sees any of it.",
+    "name": "Team name",
+    "nameHelp": "What everybody in the team sees. Its owners and admins can change it later.",
+    "create": "Create team",
+    "created": "{{name}} is ready.",
+    "renameHelp": "What everybody in the team sees in the panel. Apps, their addresses and their data do not change with it.",
+    "renamed": "The team is now called {{name}}.",
+    "leave": "Leave",
+    "leaveNamed": "Leave {{name}}",
+    "leaveTitle": "Leave {{name}}?",
+    "leaveConfirm": "You lose access to everything in it at once, and your API tokens made for it stop working. Somebody who manages the team can add you again.",
+    "left": "You left {{name}}.",
+    "noneTitle": "You are not in any team",
+    "noneCreate": "Create one to start deploying, or ask somebody who manages a team to add you.",
+    "noneAsk": "Ask somebody who manages a team to add you. Until then there is nothing here to show.",
+    "delete": "Delete this team",
+    "deleteHelp": "Removes every project, environment, app and database in the team from the cluster, and the team with them. Only an owner can, and not while the team has a server or anything in it is being deployed.",
+    "deleteButton": "Delete team",
+    "deleteConfirm": "Every project, environment, app and database in this team is removed from the cluster, and everybody in it loses access.",
+    "deleteKeeps": "Backups already in your storage bucket, and DNS records the team's DNS providers created, are not removed.",
+    "deletedToast": "{{name}} was deleted."
   },
   "attention": {
     "title": "Needs attention",

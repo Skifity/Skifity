@@ -121,6 +121,19 @@ func TeamCreationRestricted() *Problem {
 		WithStatus(http.StatusForbidden)
 }
 
+// TeamHasServers is deleting a team that still has servers. A server is a
+// machine in the cluster, running every team's apps, and its row in the team
+// is the only record of it — the SSH key the panel reaches it with included.
+func TeamHasServers(servers []string) *Problem {
+	return New("team.has_servers", "This team still has servers").
+		WithCause("These servers belong to the team and are still in the cluster: %s.", strings.Join(servers, ", ")).
+		WithImpact("Nothing was deleted.").
+		WithFix("Remove each of them under Servers first, then delete the team again.").
+		WithDocs("/docs/configuration#several-teams").
+		WithStatus(http.StatusConflict).
+		With("servers", strings.Join(servers, ", "))
+}
+
 // PluginNeedsPerson is an API token installing, changing or removing a plugin.
 // Installing mints a token that outlives the request and is bound to no team,
 // which is what creating a token by hand refuses to a token too.

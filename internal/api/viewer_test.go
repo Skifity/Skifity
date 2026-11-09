@@ -38,6 +38,12 @@ var viewerMayNotRead = map[string]string{
 		"that orders a server, which a viewer cannot",
 }
 
+// viewerMayChange is every request other than a GET that a viewer may make
+// in a team, and why: what is theirs rather than the team's.
+var viewerMayChange = map[string]string{
+	"POST /api/teams/{teamID}/leave": "leaving is the viewer's own decision, and changes nothing of the team's",
+}
+
 // TestAViewerCanChangeNothing walks the whole router as a viewer of the team
 // that owns every id in the path.
 func TestAViewerCanChangeNothing(t *testing.T) {
@@ -68,6 +74,16 @@ func TestAViewerCanChangeNothing(t *testing.T) {
 		})
 		status, body := h.do(viewer, method, path, map[string]any{})
 
+		if why, theirs := viewerMayChange[method+" "+pattern]; theirs {
+			if status != http.StatusOK {
+				t.Errorf("%s %s answered a viewer %d: %s.\n%s", method, pattern, status, why, truncate(body, 200))
+			}
+			// They left; the rest of the walk is about a viewer.
+			if err := h.db.AddMember(t.Context(), acme.team.ID, viewer.user.ID, store.RoleViewer); err != nil {
+				t.Fatal(err)
+			}
+			return nil
+		}
 		if method != http.MethodGet {
 			if status != http.StatusForbidden {
 				t.Errorf("%s %s answered a viewer %d, want 403.\n%s", method, pattern, status, truncate(body, 200))
@@ -116,6 +132,11 @@ func TestEveryRouteAViewerIsRefusedIsStillThere(t *testing.T) {
 	for route := range viewerMayNotRead {
 		if !live[route] {
 			t.Errorf("%q is refused to viewers and is not a route this panel serves", route)
+		}
+	}
+	for route := range viewerMayChange {
+		if !live[route] {
+			t.Errorf("%q is open to viewers and is not a route this panel serves", route)
 		}
 	}
 }

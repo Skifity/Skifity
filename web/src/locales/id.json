@@ -475,7 +475,9 @@
       "account.enabled": "Akun diaktifkan",
       "account.deleted": "Akun dihapus",
       "account.admin_granted": "Dijadikan administrator panel",
-      "account.admin_revoked": "Bukan lagi administrator panel"
+      "account.admin_revoked": "Bukan lagi administrator panel",
+      "team.member_left": "Keluar dari tim",
+      "team.deleted": "Tim dihapus"
     },
     "notAllowedTitle": "Log aktivitas hanya untuk pemilik dan admin tim",
     "notAllowed": "Tanyakan kepada pemilik atau admin {{team}} jika Anda perlu tahu apa yang berubah."
@@ -4514,6 +4516,12 @@
         "impact": "Tidak ada tim yang dibuat.",
         "fix": "Minta administrator panel membuat tim itu dan menambahkan Anda, atau mengizinkan semua orang membuat tim di Pengaturan, lalu Masuk."
       },
+      "team_has_servers": {
+        "title": "Tim ini masih punya server",
+        "cause": "Server ini milik tim dan masih ada di klaster: {{0}}.",
+        "impact": "Tidak ada yang dihapus.",
+        "fix": "Hapus masing-masing dulu di Server, lalu hapus tim ini lagi."
+      },
       "deploy_crashed": {
         "title": "Versi baru berhenti saat menyala",
         "cause": "Versi baru {{0}} berhenti saat menyala. Jumlah berhenti sejauh ini: {{1}}. Yang terakhir berakhir dengan kode keluar {{2}} ({{3}}).",
@@ -5800,6 +5808,30 @@
     "adminRevokedDone": "{{name}} bukan lagi administrator panel.",
     "twoFactorResetDone": "Dua faktor dimatikan untuk {{name}}, yang telah dikeluarkan dari semua perangkat.",
     "deletedDone": "{{name}} telah dihapus."
+  },
+  "teams": {
+    "new": "Tim baru",
+    "newHelp": "Anda akan menjadi pemiliknya. Sebuah tim punya proyek, server, koneksi, dan orangnya sendiri, dan tidak ada orang di tim lain yang bisa melihatnya.",
+    "name": "Nama tim",
+    "nameHelp": "Yang dilihat semua orang di tim. Pemilik dan admin tim bisa mengubahnya nanti.",
+    "create": "Buat tim",
+    "created": "{{name}} sudah siap.",
+    "renameHelp": "Yang dilihat semua orang di tim dalam panel. Aplikasi, alamatnya, dan datanya tidak berubah karenanya.",
+    "renamed": "Tim ini sekarang bernama {{name}}.",
+    "leave": "Keluar",
+    "leaveNamed": "Keluar dari {{name}}",
+    "leaveTitle": "Keluar dari {{name}}?",
+    "leaveConfirm": "Anda langsung kehilangan akses ke semua isinya, dan token API Anda yang dibuat untuk tim ini berhenti bekerja. Orang yang mengelola tim bisa menambahkan Anda lagi.",
+    "left": "Anda keluar dari {{name}}.",
+    "noneTitle": "Anda tidak berada di tim mana pun",
+    "noneCreate": "Buat satu untuk mulai men-deploy, atau minta orang yang mengelola sebuah tim untuk menambahkan Anda.",
+    "noneAsk": "Minta orang yang mengelola sebuah tim untuk menambahkan Anda. Sampai saat itu, tidak ada yang bisa ditampilkan di sini.",
+    "delete": "Hapus tim ini",
+    "deleteHelp": "Menghapus semua proyek, lingkungan, aplikasi, dan basis data di tim ini dari klaster, beserta timnya. Hanya pemilik yang bisa, dan tidak selama tim masih punya server atau ada yang sedang di-deploy.",
+    "deleteButton": "Hapus tim",
+    "deleteConfirm": "Semua proyek, lingkungan, aplikasi, dan basis data di tim ini dihapus dari klaster, dan semua orang di dalamnya kehilangan akses.",
+    "deleteKeeps": "Cadangan yang sudah ada di bucket penyimpanan Anda, dan catatan DNS yang dibuat oleh penyedia DNS tim, tidak dihapus.",
+    "deletedToast": "{{name}} telah dihapus."
   },
   "attention": {
     "title": "Perlu perhatian",

@@ -52,6 +52,11 @@ In more than one team, it asks which one to use, or takes `--team` with the
 team's name, slug or id; with nobody to ask it stores none, and each command
 says which to name.
 
+Teams themselves are made, renamed, left and deleted in the panel, from the team
+menu and **Settings → Members**; there is no command for them, and no tool for
+an assistant. A token is made for one team and cannot make another. See
+[Several teams](configuration.md#several-teams).
+
 The token is stored in your user configuration directory, never in a project, so
 it cannot be committed by accident.
 

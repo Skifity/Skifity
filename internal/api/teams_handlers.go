@@ -370,6 +370,136 @@ func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	writeOK(w)
 }
 
+// handleLeaveTeam takes the caller out of a team.
+//
+// Any role may, a member limited to some projects included: removing somebody
+// is an admin's, and without this a member or a viewer who no longer wanted to
+// be in a team had to ask one to do it for them. The team's last owner may
+// not, for the same reason they cannot be removed — a team nobody can
+// administer. Their tokens made for this team stop working with the
+// membership, because every request through one asks for it.
+func (s *Server) handleLeaveTeam(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	user, membership, err := s.authorizeTeamMember(r, teamID, store.RoleViewer)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if membership.Role == store.RoleOwner {
+		owners, err := s.db.CountOwners(r.Context(), teamID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if owners <= 1 {
+			writeError(w, r, errdoc.LastOwner())
+			return
+		}
+	}
+	if err := s.db.RemoveMember(r.Context(), teamID, user.ID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.audit(r, teamID, "team.member_left", "user", user.ID, user.Email)
+	writeOK(w)
+}
+
+// handleDeleteTeam removes a team and everything it runs.
+//
+// The owner's alone. It is refused while the team has a server, which is a
+// machine in the cluster that every team's apps run on, and while anything in
+// it is being deployed, because a deployment carries on after its namespace is
+// gone and puts it back. Otherwise every environment's namespace is removed
+// first, as deleting a project does, so a failure leaves the records of
+// whatever still runs rather than workloads nothing in the panel knows about.
+func (s *Server) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleOwner); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	team, err := s.db.GetTeam(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.refuseWhileTeamHasServers(r, teamID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	projects, err := s.db.ListProjects(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var envs []store.Environment
+	for _, project := range projects {
+		inProject, err := s.db.ListEnvironments(r.Context(), project.ID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		envs = append(envs, inProject...)
+	}
+	// Every environment is asked first, so a refusal deletes nothing.
+	for _, env := range envs {
+		if err := s.refuseWhileDeploying(r, env); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	for _, env := range envs {
+		if err := s.removeNamespace(r, env); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	drains, err := s.db.ListLogDrains(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.db.DeleteTeam(r.Context(), teamID); err != nil {
+		if errors.Is(err, store.ErrTeamHasServers) {
+			// A server added since they were last counted, named if it is
+			// still there when asked again.
+			if refusal := s.refuseWhileTeamHasServers(r, teamID); refusal != nil {
+				err = refusal
+			}
+		}
+		writeError(w, r, err)
+		return
+	}
+	// Recorded under the team's id, which keeps it with the rest of the
+	// team's history in the panel's database; there is no team left to show
+	// it in.
+	s.audit(r, teamID, "team.deleted", "team", teamID, team.Name)
+	s.hub.Publish(events.TeamTopic(teamID), "team.deleted", map[string]string{"id": teamID})
+	// The collector ships every team's logs from one configuration, and this
+	// team's drains, credentials included, were in it.
+	if len(drains) > 0 {
+		s.refreshLogCollector(r)
+	}
+	writeOK(w)
+}
+
+// refuseWhileTeamHasServers names the team's servers, if it has any.
+func (s *Server) refuseWhileTeamHasServers(r *http.Request, teamID string) error {
+	servers, err := s.db.ListServers(r.Context(), teamID)
+	if err != nil {
+		return err
+	}
+	if len(servers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(servers))
+	for _, server := range servers {
+		names = append(names, server.Name)
+	}
+	return errdoc.TeamHasServers(names)
+}
+
 func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {

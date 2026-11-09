@@ -1180,6 +1180,42 @@ test("an administrator disables an account, and it cannot sign in", async ({ pag
   expect(refused.status(), await refused.text()).toBe(401)
 })
 
+// A team was made at setup and nothing in the panel could make another,
+// rename one or remove one: the switcher only appeared with two teams.
+test("a team is made, renamed and deleted from the panel", async ({ page }) => {
+  await signIn(page)
+
+  // One team, and the switcher is there: it is where a new one is made.
+  const switcher = page.locator("[data-team-switcher]")
+  await expect(switcher).toBeVisible()
+  await expect(switcher).toContainText("Acme")
+
+  await switcher.click()
+  await page.getByRole("menuitem", { name: "New team" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Team name").fill("Side project")
+  await dialog.getByRole("button", { name: "Create team" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(switcher).toContainText("Side project")
+
+  // Renamed by its owner, under Members.
+  await page.goto("/settings?tab=members")
+  const name = page.getByLabel("Team name", { exact: true })
+  await expect(name).toHaveValue("Side project")
+  await name.fill("Side quest")
+  await page.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(switcher).toContainText("Side quest")
+
+  // Deleted after typing its name, and the panel is back on the first team.
+  await page.getByRole("button", { name: "Delete team" }).click()
+  const confirm = page.getByRole("alertdialog")
+  await confirm.getByRole("textbox").fill("Side quest")
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click()
+  await expect(switcher).toContainText("Acme")
+  const me = await (await page.request.get("/api/me")).json()
+  expect(me.teams.map((team: { name: string }) => team.name)).toEqual(["Acme"])
+})
+
 /**
  * Makes a second account through an invitation from the setup account, turns
  * two-factor on for it, and leaves the browser signed out. Answers the

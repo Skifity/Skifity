@@ -239,10 +239,12 @@ Pending invitations are listed under Members, and can be withdrawn there.
 Somebody who already has an account here does not need a link. Add them by the
 same form and they join directly.
 
-Roles: **owner** administers the team and can delete it, **admin** can invite
-and configure, **member** can deploy, and **viewer** can see everything a member
-can — apps, deployments, logs, metrics, variables that are not secret — and
-change nothing. Nobody can invite somebody to a role above their own.
+Roles: **owner** administers the team and is the only one who can delete it,
+**admin** can invite, configure and rename the team, **member** can deploy, and
+**viewer** can see everything a member can — apps, deployments, logs, metrics,
+variables that are not secret — and change nothing. Nobody can invite somebody
+to a role above their own. Anybody can leave a team; see
+[Several teams](#several-teams).
 
 A viewer is for the client who wants to watch their site's deployments, the
 manager who wants the logs, or an assistant that should read and never act. A
@@ -295,6 +297,35 @@ in**, that includes an account single sign-on made by itself and somebody who is
 only a viewer in another team. Open it when the people who sign in here are
 people you would let run their own containers on your servers. Anybody else is
 refused with `team.creation_restricted`.
+
+The team menu at the top of the sidebar lists your teams and switches between
+them. **New team** there makes one, when you may, and takes you to it.
+
+**Renaming** is under **Settings → Members**, for the team's owners and admins.
+The name is what people see; the short name under it, which is part of every
+namespace the team has, stays as it was, so nothing running changes.
+
+**Leaving** is in the team menu, for anybody in the team, a viewer or somebody
+limited to some projects included. It takes your access away at once, and your
+API tokens made for that team stop working with it. The team's last owner
+cannot leave: make somebody else an owner first. Somebody who manages the team
+can add you again later.
+
+**Deleting** is at the bottom of **Settings → Members**, for owners only, after
+typing the team's name. It is refused while the team has a server, with
+`team.has_servers` naming them — a server is a machine every team's apps run
+on, so remove it under **Servers** first — and while anything in the team is
+being deployed. Otherwise every environment's namespace is removed from the
+cluster, then the projects, the team and everything recorded under it:
+members, invitations, connections, notification channels, API tokens made for
+it. Its activity log stays in the panel's database. Two things outside the
+panel are not removed: backups already in your storage bucket, and DNS records
+the team's DNS providers created. Remove those at the bucket and at the DNS
+provider if you no longer want them. A webhook the team's Git connections added
+to a repository stays there too, and its deliveries are refused from then on.
+
+Somebody whose last team is gone sees a note saying so on every page, with
+**New team** where they may make one.
 
 ## Accounts
 

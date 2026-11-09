@@ -921,7 +921,10 @@ paths:
       operationId: createTeam
       tags: [Teams]
       summary: Create a team
-      description: You become its owner. Refused to a token made for one team.
+      description: >-
+        You become its owner. Only a panel administrator may, unless the
+        signin.team_creation setting lets everyone (team.creation_restricted).
+        Refused to a token made for one team.
       requestBody:
         required: true
         content:
@@ -968,6 +971,34 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Team'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteTeam
+      tags: [Teams]
+      summary: Delete a team and everything in it
+      description: >-
+        Owner. Refused with team.has_servers while the team has a server, and
+        with environment.deploying while anything in it is being deployed.
+        Every environment's namespace is removed from the cluster first, then
+        the projects and the team. Backups already in the bucket, and DNS
+        records the team's DNS providers created, are not removed.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/leave:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    post:
+      operationId: leaveTeam
+      tags: [Teams]
+      summary: Leave a team
+      description: >-
+        Any role, a member limited to some projects included. The team's last
+        owner cannot (team.last_owner). Your tokens made for this team stop
+        working with the membership.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/teams/{teamID}/members:
@@ -5841,7 +5872,7 @@ components:
 
     Me:
       type: object
-      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth, has_password]
+      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth, has_password, can_create_teams]
       properties:
         user: {$ref: '#/components/schemas/User'}
         teams:
@@ -5851,6 +5882,7 @@ components:
         recovery_codes_left: {type: integer, description: 'Unused two-factor recovery codes.'}
         strong_auth: {type: boolean, description: 'Whether this sign-in would satisfy a team that requires a second factor.'}
         has_password: {type: boolean, description: 'False for an account that signs in only through the identity provider.'}
+        can_create_teams: {type: boolean, description: 'Whether this account may create a team: a panel administrator, or anybody where the panel lets everyone. Never through a token made for one team.'}
 
     UpdateMeRequest:
       type: object

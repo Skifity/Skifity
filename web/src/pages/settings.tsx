@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, Navigate, useSearchParams } from "react-router-dom"
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { useConfirm } from "@/components/confirm-dialog"
+import { useConfirm, useDeleteConfirm } from "@/components/confirm-dialog"
 import { AccountsPanel } from "@/components/settings/accounts"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
 import { PanelDomainCard } from "@/components/settings/panel-domain"
@@ -718,6 +718,113 @@ function inputType(setting: Setting): string {
 }
 
 /**
+ * The team's name, which its owners and admins change.
+ *
+ * The name was chosen once at setup — "My team" unless somebody typed another
+ * — and nothing in the panel could change it, although the API always could.
+ * The slug under it stays: it is part of every namespace the team has, and
+ * changing it would mean recreating every workload in them.
+ */
+function TeamNameCard() {
+  const { t } = useTranslation()
+  const { team, refresh } = useSession()
+  const teamAdmin = useTeamAdmin()
+  // What was typed, or null for the team's own name: derived, so a rename
+  // somewhere else shows here without anything copying it in.
+  const [typed, setTyped] = useState<string | null>(null)
+
+  const rename = useMutation({
+    mutationFn: (name: string) => api.patch(`/api/teams/${team!.id}`, { name }),
+    onSuccess: async (_, name) => {
+      await refresh()
+      setTyped(null)
+      toast.success(t("teams.renamed", { name }))
+    },
+  })
+
+  if (!team || !teamAdmin) return null
+  const name = typed ?? team.name
+  const changed = name.trim() !== "" && name.trim() !== team.name
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (changed) rename.mutate(name.trim())
+          }}
+        >
+          <Field className="flex-1">
+            <FieldLabel htmlFor="team-rename">{t("teams.name")}</FieldLabel>
+            <Input id="team-rename" value={name} onChange={(event) => setTyped(event.target.value)} />
+            <FieldDescription>{t("teams.renameHelp")}</FieldDescription>
+          </Field>
+          <Button type="submit" variant="outline" disabled={!changed || rename.isPending}>
+            {rename.isPending && <Spinner />}
+            {t("common.save")}
+          </Button>
+        </form>
+        {rename.error != null && <ErrorDisplay error={rename.error} compact />}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Deleting the team, for its owners.
+ *
+ * Typed by name, like deleting a project, because it is every project at once.
+ * The server refuses while the team has a server — a machine the whole cluster
+ * runs on — or anything is being deployed, and says which.
+ */
+function DeleteTeamCard() {
+  const { t } = useTranslation()
+  const { team, refresh } = useSession()
+  const confirmDelete = useDeleteConfirm()
+  const navigate = useNavigate()
+
+  const remove = useMutation({
+    mutationFn: (target: { id: string; name: string }) => api.delete(`/api/teams/${target.id}`),
+    onSuccess: async (_, target) => {
+      await refresh()
+      toast.success(t("teams.deletedToast", { name: target.name }))
+      navigate("/")
+    },
+  })
+
+  if (!team || team.scoped || team.role !== "owner") return null
+
+  return (
+    <Card className="border-destructive/40">
+      <CardHeader>
+        <CardTitle className="text-base">{t("teams.delete")}</CardTitle>
+        <CardDescription>{t("teams.deleteHelp")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button
+          variant="destructive"
+          disabled={remove.isPending}
+          onClick={() => {
+            const target = { id: team.id, name: team.name }
+            void confirmDelete(target.name, t("teams.deleteConfirm"), t("teams.deleteKeeps")).then(
+              (yes) => {
+                if (yes) remove.mutate(target)
+              },
+            )
+          }}
+        >
+          {remove.isPending ? <Spinner /> : <Trash2Icon />}
+          {t("teams.deleteButton")}
+        </Button>
+        {remove.error != null && <ErrorDisplay error={remove.error} />}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
  * Whether everybody in the team has to sign in with more than a password.
  *
  * Only an admin or an owner can change it, and the server refuses to turn it
@@ -1243,6 +1350,9 @@ function MembersPanel() {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("settings.roleHelp")}</p>
 
+      {/* Keyed by the team, so a name half-typed for one team is not offered
+          for the next one somebody switches to. */}
+      {team && <TeamNameCard key={team.id} />}
       <StrongAuthCard />
 
       <Card>
@@ -1481,6 +1591,8 @@ function MembersPanel() {
       {revoke.error != null && <ErrorDisplay error={revoke.error} />}
 
       {canChange && <ExportCard />}
+      {/* After the export: taking a copy is what to do before this. */}
+      <DeleteTeamCard />
     </div>
   )
 }

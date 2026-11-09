@@ -352,6 +352,11 @@ func (s *Server) routes() chi.Router {
 			authed.Route("/teams/{teamID}", func(team chi.Router) {
 				team.Get("/", s.handleGetTeam)
 				team.Patch("/", s.handleUpdateTeam)
+				// The owner's, and refused while the team has a server or
+				// a deployment under way. See handleDeleteTeam.
+				team.Delete("/", s.handleDeleteTeam)
+				// Any member's own, the last owner's excepted.
+				team.Post("/leave", s.handleLeaveTeam)
 				team.Get("/members", s.handleListMembers)
 				team.Post("/members", s.handleAddMember)
 				team.Post("/invitations", s.handleInvite)

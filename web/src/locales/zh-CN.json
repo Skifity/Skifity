@@ -475,7 +475,9 @@
       "account.enabled": "账户已启用",
       "account.deleted": "账户已删除",
       "account.admin_granted": "被设为面板管理员",
-      "account.admin_revoked": "不再是面板管理员"
+      "account.admin_revoked": "不再是面板管理员",
+      "team.member_left": "已退出团队",
+      "team.deleted": "已删除团队"
     },
     "notAllowedTitle": "活动日志仅供团队所有者和管理员查看",
     "notAllowed": "如需了解有哪些变化，请询问 {{team}} 的所有者或管理员。"
@@ -4514,6 +4516,12 @@
         "impact": "没有创建任何团队。",
         "fix": "请面板管理员创建这个团队并把你加进去，或者在「设置」→「登录」里允许所有人创建团队。"
       },
+      "team_has_servers": {
+        "title": "这个团队还有服务器",
+        "cause": "这些服务器属于这个团队，并且仍在集群中：{{0}}。",
+        "impact": "没有删除任何东西。",
+        "fix": "先在「服务器」里逐一移除它们，然后再删除团队。"
+      },
       "deploy_crashed": {
         "title": "新版本在启动时停止了",
         "cause": "{{0}} 的新版本在启动时停止了。目前已停止 {{1}} 次。最后一次以退出码 {{2}}（{{3}}）结束。",
@@ -5800,6 +5808,30 @@
     "adminRevokedDone": "{{name}} 不再是面板管理员。",
     "twoFactorResetDone": "已关闭 {{name}} 的双重验证，对方已在所有设备上退出登录。",
     "deletedDone": "已删除 {{name}}。"
+  },
+  "teams": {
+    "new": "新建团队",
+    "newHelp": "你将成为它的所有者。每个团队有自己的项目、服务器、连接和成员，其他团队的人看不到其中任何内容。",
+    "name": "团队名称",
+    "nameHelp": "团队里每个人看到的名称。团队的所有者和管理员之后可以修改。",
+    "create": "创建团队",
+    "created": "{{name}} 已就绪。",
+    "renameHelp": "团队里每个人在面板中看到的名称。应用、它们的地址和数据都不会因此改变。",
+    "renamed": "团队现在叫 {{name}}。",
+    "leave": "退出",
+    "leaveNamed": "退出 {{name}}",
+    "leaveTitle": "退出 {{name}}？",
+    "leaveConfirm": "你会立刻失去对其中所有内容的访问权限，为它创建的 API 令牌也会失效。管理这个团队的人可以再次把你加进来。",
+    "left": "你已退出 {{name}}。",
+    "noneTitle": "你不在任何团队里",
+    "noneCreate": "创建一个团队开始部署，或者请管理某个团队的人把你加进去。",
+    "noneAsk": "请管理某个团队的人把你加进去。在那之前，这里没有可显示的内容。",
+    "delete": "删除这个团队",
+    "deleteHelp": "从集群中移除团队里的所有项目、环境、应用和数据库，团队本身也随之删除。只有所有者可以操作，并且团队还有服务器或有内容正在部署时不能删除。",
+    "deleteButton": "删除团队",
+    "deleteConfirm": "这个团队的所有项目、环境、应用和数据库都会从集群中移除，其中的每个人都会失去访问权限。",
+    "deleteKeeps": "已经在你的存储桶里的备份，以及团队的 DNS 提供商创建的 DNS 记录，都不会被删除。",
+    "deletedToast": "{{name}} 已删除。"
   },
   "attention": {
     "title": "需要处理",

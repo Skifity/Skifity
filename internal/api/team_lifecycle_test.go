@@ -70,3 +70,126 @@ func TestOnlyAPanelAdministratorCreatesATeamByDefault(t *testing.T) {
 		t.Fatalf("the panel administrator was refused a team: %d %s", status, truncate(body, 200))
 	}
 }
+
+// Leaving is anybody's own, and a token made for the team stops working with
+// the membership it stood on. The last owner cannot leave a team nobody could
+// then administer.
+func TestLeavingATeam(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	acme := h.newTenant("acme")
+	member := h.newMember(acme, "member", store.RoleMember)
+	path := "/api/teams/" + acme.team.ID
+
+	if status, body := h.do(member, http.MethodPost, path+"/leave", nil); status != http.StatusOK {
+		t.Fatalf("a member could not leave: %d %s", status, truncate(body, 200))
+	}
+	if _, err := h.db.GetMembership(ctx, acme.team.ID, member.user.ID); err == nil {
+		t.Fatal("the member is still in the team")
+	}
+	if status, body := h.do(member, http.MethodGet, path, nil); status != http.StatusNotFound {
+		t.Fatalf("their token made for the team still reaches it: %d %s", status, truncate(body, 200))
+	}
+	left, _ := h.db.ListAudit(ctx, acme.team.ID, "team.member_left", member.user.ID, 10)
+	if len(left) != 1 {
+		t.Fatalf("leaving was recorded %d times", len(left))
+	}
+
+	// A member limited to some projects is still a member, and may go.
+	limited := h.limitedMember(acme, "contractor", store.RoleViewer, acme.project.ID)
+	if status, body := h.do(limited, http.MethodPost, path+"/leave", nil); status != http.StatusOK {
+		t.Fatalf("a limited viewer could not leave: %d %s", status, truncate(body, 200))
+	}
+
+	// The only owner may not; with a second one, either may.
+	status, body := h.do(acme, http.MethodPost, path+"/leave", nil)
+	if status != http.StatusConflict || !strings.Contains(body, "team.last_owner") {
+		t.Fatalf("the last owner left: %d %s", status, truncate(body, 200))
+	}
+	h.newMember(acme, "partner", store.RoleOwner)
+	if status, body := h.do(acme, http.MethodPost, path+"/leave", nil); status != http.StatusOK {
+		t.Fatalf("an owner with another owner beside them could not leave: %d %s", status, truncate(body, 200))
+	}
+}
+
+// Deleting a team is its owner's, is refused while it has a machine in the
+// cluster or a deployment under way, and takes every environment's namespace
+// out of the cluster before any record goes.
+func TestDeletingATeam(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	acme := h.newTenant("acme")
+	app := h.app(acme, "web")
+	staging := store.Environment{
+		ProjectID: acme.project.ID, Name: "staging", Slug: "staging", Namespace: "acme-staging",
+	}
+	if err := h.db.CreateEnvironment(ctx, &staging); err != nil {
+		t.Fatal(err)
+	}
+	other := h.newTenant("other")
+	cluster := &namespaceRefuser{}
+	h.withCluster(cluster)
+	path := "/api/teams/" + acme.team.ID
+
+	// An admin is not an owner.
+	admin := h.newMember(acme, "admin", store.RoleAdmin)
+	status, body := h.do(admin, http.MethodDelete, path, nil)
+	if status != http.StatusForbidden || !strings.Contains(body, "auth.forbidden") {
+		t.Fatalf("an admin deleted the team: %d %s", status, truncate(body, 200))
+	}
+
+	// A server is a machine every team's apps run on.
+	server := h.node(acme, "web-1")
+	status, body = h.do(acme, http.MethodDelete, path, nil)
+	if status != http.StatusConflict || !strings.Contains(body, "team.has_servers") || !strings.Contains(body, "web-1") {
+		t.Fatalf("a team with a server answered %d %s", status, truncate(body, 300))
+	}
+	if err := h.db.DeleteServer(ctx, server.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// A deployment carries on after its namespace and puts it back.
+	deployment := store.Deployment{AppID: app.ID, Status: store.DeployBuilding}
+	if err := h.db.CreateDeployment(ctx, &deployment); err != nil {
+		t.Fatal(err)
+	}
+	status, body = h.do(acme, http.MethodDelete, path, nil)
+	if status != http.StatusConflict || !strings.Contains(body, "environment.deploying") {
+		t.Fatalf("a team with a deployment under way answered %d %s", status, truncate(body, 300))
+	}
+	if len(cluster.removed()) != 0 {
+		t.Fatalf("refusing removed namespaces: %v", cluster.removed())
+	}
+	if err := h.db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeploySucceeded, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if status, body := h.do(acme, http.MethodDelete, path, nil); status != http.StatusOK {
+		t.Fatalf("deleting an empty team answered %d %s", status, truncate(body, 300))
+	}
+	removed := strings.Join(cluster.removed(), " ")
+	for _, namespace := range []string{acme.env.Namespace, staging.Namespace} {
+		if !strings.Contains(removed, namespace) {
+			t.Errorf("the namespace %s was not removed; removed were %s", namespace, removed)
+		}
+	}
+	if strings.Contains(removed, other.env.Namespace) {
+		t.Errorf("another team's namespace was removed: %s", removed)
+	}
+	if _, err := h.db.GetTeam(ctx, acme.team.ID); err == nil {
+		t.Error("the team's row is still there")
+	}
+	if _, err := h.db.GetProject(ctx, acme.project.ID); err == nil {
+		t.Error("its project is still there")
+	}
+	if _, err := h.db.GetApp(ctx, app.ID); err == nil {
+		t.Error("its app is still there")
+	}
+	if deleted, _ := h.db.ListAudit(ctx, acme.team.ID, "team.deleted", acme.team.ID, 10); len(deleted) != 1 {
+		t.Errorf("the delete was recorded %d times", len(deleted))
+	}
+	// Somebody else's team is untouched.
+	if _, err := h.db.GetTeam(ctx, other.team.ID); err != nil {
+		t.Errorf("another team went with it: %v", err)
+	}
+}

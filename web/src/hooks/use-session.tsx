@@ -46,6 +46,11 @@ type SessionState = {
    */
   hasPassword: boolean
   /**
+   * Whether this account may create a team: the panel's administrator, or
+   * anybody where the panel lets everyone.
+   */
+  canCreateTeams: boolean
+  /**
    * Somebody signed in on this page — through the sign-in form, setup or an
    * invitation — rather than arriving with a session already open. The
    * account's language and theme are applied then, and only then: a page
@@ -70,6 +75,7 @@ type Bootstrap = {
   recoveryCodesLeft: number
   strongAuth: boolean
   hasPassword: boolean
+  canCreateTeams: boolean
   justSignedIn: boolean
 }
 
@@ -82,6 +88,7 @@ function signedOut(meta: Meta | null): Bootstrap {
     recoveryCodesLeft: 0,
     strongAuth: false,
     hasPassword: true,
+    canCreateTeams: false,
     justSignedIn: false,
   }
 }
@@ -112,6 +119,7 @@ async function loadSession(): Promise<Bootstrap> {
     recovery_codes_left?: number
     strong_auth?: boolean
     has_password?: boolean
+    can_create_teams?: boolean
   }
   try {
     me = await api.anonymous("/api/me")
@@ -136,6 +144,7 @@ async function loadSession(): Promise<Bootstrap> {
     recoveryCodesLeft: me.recovery_codes_left ?? 0,
     strongAuth: me.strong_auth ?? false,
     hasPassword: me.has_password ?? true,
+    canCreateTeams: me.can_create_teams ?? false,
     justSignedIn: before !== undefined && !before.user,
   }
 }
@@ -277,6 +286,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       recoveryCodesLeft: session.data?.recoveryCodesLeft ?? 0,
       strongAuth: session.data?.strongAuth ?? false,
       hasPassword: session.data?.hasPassword ?? true,
+      canCreateTeams: session.data?.canCreateTeams ?? false,
       justSignedIn: session.data?.justSignedIn ?? false,
       setTeam,
       refresh,

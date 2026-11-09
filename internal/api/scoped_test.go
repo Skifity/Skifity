@@ -33,6 +33,7 @@ var limitedMemberMayUse = map[string]string{
 	"GET /api/teams/{teamID}/secret-managers":                     "picking the secret manager a variable in one of their projects is read from; names and addresses, never credentials",
 	"GET /api/teams/{teamID}/dns-providers": "adding a domain to an app in their project offers to create its record " +
 		"in a zone the team connected; names and zones, never a credential",
+	"POST /api/teams/{teamID}/leave": "leaving is their own decision, whatever they are limited to",
 }
 
 // otherProject makes a second project in a tenant's team, with an environment,
@@ -149,6 +150,13 @@ func TestAMemberLimitedToAProjectReachesNothingElse(t *testing.T) {
 				}
 				if status == http.StatusForbidden || status == http.StatusNotFound {
 					t.Errorf("%s answered a limited member %d: %s.\n%s", route, status, why, truncate(body, 200))
+				}
+				// They left; the rest of the walk is about somebody limited.
+				if _, err := h.db.GetMembership(t.Context(), acme.team.ID, member.user.ID); err != nil {
+					if err := h.db.SetMembership(t.Context(), acme.team.ID, member.user.ID,
+						store.RoleMember, []string{acme.project.ID}); err != nil {
+						t.Fatal(err)
+					}
 				}
 				return nil
 			}
