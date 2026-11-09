@@ -8930,11 +8930,12 @@ components:
         id: {type: string}
         target_type: {type: string, enum: [database, volume, panel]}
         target_id: {type: string}
-        status: {type: string}
+        status: {type: string, enum: [running, succeeded, failed, skipped]}
         kind: {type: string, description: 'manual, scheduled, before_update and the like.'}
         location: {type: string}
         size_bytes: {type: integer}
         error_message: {type: string}
+        error_code: {type: string, description: 'Why it was skipped (database.stopped, database.busy) or could not start (the problem''s code).'}
         created_at: {type: string, format: date-time}
         finished_at: {type: string, format: date-time}
         encrypted: {type: boolean, description: 'Sealed with the backup passphrase.'}

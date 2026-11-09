@@ -1648,6 +1648,7 @@
     "nativeConnectionStringHint": "适用于使用 ClickHouse 原生协议的客户端，例如 clickhouse-client 和 clickhouse-go。上面的连接字符串使用 HTTP，大多数客户端库都接受它。",
     "noCredentials": "Memcached 没有用户也没有密码。只有此环境中的应用能访问它。",
     "backupSkipped": "已跳过：数据库处于停止状态，没有新内容需要备份。",
+    "backupSkippedBusy": "已跳过：数据库当时正在进行其他操作（创建、恢复、导入或更换密码），因此本次备份留待下一次。",
     "backupKind": {
       "before_import": "导入之前",
       "before_update": "更新之前"

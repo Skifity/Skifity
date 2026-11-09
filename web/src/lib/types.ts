@@ -729,12 +729,14 @@ export type Backup = {
   id: string
   target_type: string
   target_id: string
-  /** Skipped is a scheduled backup of a stopped database. */
+  /** Skipped is a scheduled backup of a stopped or busy database. */
   status: "running" | "succeeded" | "failed" | "skipped"
   kind: string
   location: string
   size_bytes: number
   error_message?: string
+  /** Why it was skipped (database.stopped, database.busy) or could not start. */
+  error_code?: string
   created_at: string
   finished_at?: string
   /** Sealed with the backup passphrase. */

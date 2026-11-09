@@ -136,6 +136,10 @@ missed, and the team is told it was late with `backup.missed`. It looks back a
 week. A backup started at or after the time it was due counts as taken, even
 one that failed: that failure was already reported.
 
+A schedule belongs to its database or volume and is deleted with it — whether
+it was deleted itself or went with its app, environment, project or team. The
+backups already taken are not deleted with it.
+
 ## What is backed up, and how
 
 Each engine is dumped with its own client, from the database's own image, so
@@ -214,6 +218,28 @@ A failed backup is worth knowing about immediately, which is why
 `backup.failed` and `backup.missed` are on by default in a new notification
 channel — for volumes as well as databases. `backup.succeeded` is there for a
 channel that wants every one; a channel with no list of events is not sent it.
+
+A scheduled backup that cannot even start is a failed backup too. It is in the
+list on the Backups tab with the reason, and `backup.failed` is sent for it,
+the same as for one that started and then failed. Those reasons are:
+
+* **No storage**, or storage the panel cannot read: an endpoint that is not an
+  address, a key it cannot decrypt.
+* **A backup passphrase that cannot be read**, so a sealed backup cannot be
+  made.
+* **The database is not running.** Before refusing, the panel asks the cluster
+  how the database is now, rather than going by what it saw last — which is
+  only brought up to date when somebody opens the database. A database that is
+  **degraded**, with some of its instances down, is still answering, and is
+  backed up.
+* **No cluster to run it on.**
+
+Two things are not failures, and are listed as **Skipped** with the reason
+instead, with nobody told: a database somebody **stopped**, which has nothing
+new to back up, and a database something else is being done to at the time —
+being created, restored, imported into or given a new password. A backup taken
+in the middle of a restore would be half of two databases; the next one on the
+schedule is taken as usual.
 
 **No storage configured.** Nothing has been backed up. A panel administrator
 sets it up under Settings → General → Backup storage.

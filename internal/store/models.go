@@ -664,16 +664,19 @@ type BackupPolicy struct {
 
 // Backup is one stored copy of a database or volume.
 type Backup struct {
-	ID           string    `json:"id"`
-	TargetType   string    `json:"target_type"`
-	TargetID     string    `json:"target_id"`
-	Status       string    `json:"status"`
-	Kind         string    `json:"kind"`
-	Location     string    `json:"location"`
-	SizeBytes    int64     `json:"size_bytes"`
-	ErrorMessage string    `json:"error_message,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	FinishedAt   time.Time `json:"finished_at,omitzero"`
+	ID           string `json:"id"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	Status       string `json:"status"`
+	Kind         string `json:"kind"`
+	Location     string `json:"location"`
+	SizeBytes    int64  `json:"size_bytes"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	// ErrorCode is why it was skipped or could not start, as a code the
+	// panel translates: database.stopped, database.busy, or the problem's.
+	ErrorCode  string    `json:"error_code,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 	// Encrypted is sealed with the backup passphrase. See backup/seal.go.
 	Encrypted bool `json:"encrypted"`
 	// VerifiedAt is when it was last downloaded, opened and read through;

@@ -1648,6 +1648,7 @@
     "nativeConnectionStringHint": "Untuk klien yang memakai protokol ClickHouse sendiri, seperti clickhouse-client dan clickhouse-go. String koneksi di atas memakai HTTP, yang diterima sebagian besar pustaka klien.",
     "noCredentials": "Memcached tidak punya pengguna maupun kata sandi. Hanya aplikasi di environment ini yang bisa menjangkaunya.",
     "backupSkipped": "Dilewati: database sedang dihentikan, jadi tidak ada yang baru untuk dicadangkan.",
+    "backupSkippedBusy": "Dilewati: database sedang dikerjakan hal lain — sedang dibuat, dipulihkan, diimpor, atau diberi kata sandi baru — jadi pencadangan ini ditunda ke jadwal berikutnya.",
     "backupKind": {
       "before_import": "Sebelum impor",
       "before_update": "Sebelum pembaruan"

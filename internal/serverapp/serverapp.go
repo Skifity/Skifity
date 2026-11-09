@@ -160,6 +160,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	databases := dbsvc.New(db, keyring, hub, clusterAdapter, deployer, log)
 	backups := backup.New(db, keyring, hub, clusterAdapter, dispatcher, log)
 	backups.Plugins = pluginEvents
+	backups.Status = databases.Status
 	watcher := watch.New(db, watchCluster(clusterAdapter), hub, dispatcher, log)
 	// Every few minutes each app is compared with what the deployer would
 	// apply, which only means something with a cluster to compare with.

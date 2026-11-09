@@ -941,7 +941,9 @@ function DatabaseBackups({
                       )}
                       {backup.status === "skipped" ? (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {t("databases.backupSkipped")}
+                          {backup.error_code === "database.busy"
+                            ? t("databases.backupSkippedBusy")
+                            : t("databases.backupSkipped")}
                         </p>
                       ) : (
                         backup.error_message && (

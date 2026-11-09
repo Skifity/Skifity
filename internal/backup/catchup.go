@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"skifity/internal/cron"
@@ -65,13 +66,25 @@ func LastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
 
 // takeMissed starts the late backup and tells the team, with the reason when
 // it could not start.
+//
+// One that could not start is written down as failed, as the tick does, so a
+// second restart finds it and does not say the same night was missed twice.
+// Plugins hear it as the failed backup it is; channels hear it once, as
+// missed, with the reason.
 func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due time.Time) {
 	m.log.Info("taking a scheduled backup that was missed",
 		"target", policy.TargetID, "due", due.Format(time.RFC3339))
-	taken, runErr := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled")
+	taken, runErr := m.runScheduled(ctx, policy)
+	if errors.Is(runErr, errTargetGone) {
+		return
+	}
+	name := m.targetName(ctx, policy)
+	if runErr != nil && taken.ID != "" {
+		m.finish(ctx, taken, name, runErr, false)
+	}
 
-	// A stopped database's backup was skipped, not missed: there was nothing
-	// new to copy then, and there is nothing now.
+	// A stopped or busy database's backup was skipped, not missed: there was
+	// nothing new to copy then, or it was not the time to copy it.
 	if m.notifier == nil || (runErr == nil && taken.Status == "skipped") {
 		return
 	}
@@ -81,7 +94,6 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 	if err != nil || teamID == "" {
 		return
 	}
-	name := m.targetName(ctx, policy)
 	msg := notify.Message{
 		Title: "The " + due.Format("15:04 MST") + " backup of " + name + " was missed",
 		Body: "The panel was not running when it was due, on " + due.Format("Monday 2 January") +

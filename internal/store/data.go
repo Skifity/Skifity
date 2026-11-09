@@ -189,21 +189,19 @@ func (db *DB) ListDatabasesChangingPassword(ctx context.Context) ([]Database, er
 		WHERE credentials_next_enc != '' ORDER BY created_at`)
 }
 
-// DeleteDatabase removes a database record, and its backup schedule with it.
+// DeleteDatabase removes a database record. Its backup schedule goes with it,
+// by a trigger (migration 0064) that also runs when an environment, a project
+// or a team takes the database by cascade. Its backups stay: they are still in
+// the bucket, and still the team's to copy into a new database.
 func (db *DB) DeleteDatabase(ctx context.Context, id string) error {
-	return db.Tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `DELETE FROM databases WHERE id = ?`, id)
-		if err != nil {
-			return fmt.Errorf("delete database: %w", err)
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return ErrNotFound
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM backup_policies WHERE target_type = 'database' AND target_id = ?`, id); err != nil {
-			return fmt.Errorf("delete the database's backup schedule: %w", err)
-		}
-		return nil
-	})
+	res, err := db.Exec(ctx, `DELETE FROM databases WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete database: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // --- database links ---
@@ -323,6 +321,17 @@ func (db *DB) GetBackupPolicy(ctx context.Context, targetType, targetID string) 
 	return p, nil
 }
 
+// DeleteBackupPolicy removes a target's schedule. Deleting a database or a
+// volume does this by itself; this is for a schedule found running for
+// something already gone.
+func (db *DB) DeleteBackupPolicy(ctx context.Context, targetType, targetID string) error {
+	if _, err := db.Exec(ctx, `DELETE FROM backup_policies WHERE target_type = ? AND target_id = ?`,
+		targetType, targetID); err != nil {
+		return fmt.Errorf("delete backup policy: %w", err)
+	}
+	return nil
+}
+
 // ListDatabasesWithoutBackupPolicy returns a team's databases that have no
 // schedule at all — not one that is off, which somebody chose — outside its
 // previews, which are thrown away with their pull request.
@@ -337,10 +346,9 @@ func (db *DB) ListDatabasesWithoutBackupPolicy(ctx context.Context, teamID strin
 
 // ListEnabledBackupPolicies feeds the scheduler.
 //
-// Only schedules whose database or volume still exists: a policy is not
-// removed with what it belongs to when a whole environment goes, and every
-// new database has one, so a schedule for nothing came round every night to
-// say in the log that its database was not found.
+// Only schedules whose database or volume still exists. Since 0064 a schedule
+// is deleted with its target, cascades included; the condition stays so that
+// a schedule left behind some other way is never run for nothing.
 func (db *DB) ListEnabledBackupPolicies(ctx context.Context) ([]BackupPolicy, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, schedule, retention, destination,
 		enabled, created_at, updated_at FROM backup_policies WHERE enabled = 1
@@ -372,10 +380,11 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 	}
 	now := Now()
 	_, err := db.Exec(ctx, `INSERT INTO backups
-		(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+		 encrypted, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		b.ID, b.TargetType, b.TargetID, defaultStr(b.Status, "running"), defaultStr(b.Kind, "scheduled"),
-		b.Location, b.SizeBytes, b.ErrorMessage, b.Encrypted, now)
+		b.Location, b.SizeBytes, b.ErrorMessage, b.ErrorCode, b.Encrypted, now)
 	if err != nil {
 		return fmt.Errorf("create backup: %w", err)
 	}
@@ -383,10 +392,35 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 	return nil
 }
 
+// RecordFailedBackup writes down a backup that could not start: no storage,
+// a passphrase that cannot be read, a database that is not running. Without
+// it a scheduled one that never started left nothing at all — no row on the
+// Backups tab, and on the next start a night the panel thought it had slept
+// through.
+func (db *DB) RecordFailedBackup(ctx context.Context, b *Backup) error {
+	if b.ID == "" {
+		b.ID = NewID("bak")
+	}
+	now := Now()
+	if _, err := db.Exec(ctx, `INSERT INTO backups
+		(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+		 encrypted, created_at, finished_at)
+		VALUES (?,?,?,'failed',?,'',0,?,?,0,?,?)`,
+		b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, b.ErrorCode,
+		now, now); err != nil {
+		return fmt.Errorf("record a backup that could not start: %w", err)
+	}
+	b.Status = "failed"
+	b.CreatedAt, _ = ParseTime(now)
+	b.FinishedAt = b.CreatedAt
+	return nil
+}
+
 // RecordSkippedBackup notes that a scheduled backup did not run, and why:
-// the database was stopped, so there was nothing to copy. Only the newest
-// skip is kept for a target, because a database stopped for a month would
-// otherwise fill its list with thirty rows saying the same thing.
+// the database was stopped, so there was nothing to copy, or something else
+// was being done to it. Only the newest skip is kept for a target, because a
+// database stopped for a month would otherwise fill its list with thirty rows
+// saying the same thing.
 func (db *DB) RecordSkippedBackup(ctx context.Context, b *Backup) error {
 	if b.ID == "" {
 		b.ID = NewID("bak")
@@ -398,10 +432,11 @@ func (db *DB) RecordSkippedBackup(ctx context.Context, b *Backup) error {
 			return fmt.Errorf("forget the earlier skipped backup: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO backups
-			(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted,
-			 created_at, finished_at)
-			VALUES (?,?,?,'skipped',?,'',0,?,0,?,?)`,
-			b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, now, now); err != nil {
+			(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+			 encrypted, created_at, finished_at)
+			VALUES (?,?,?,'skipped',?,'',0,?,?,0,?,?)`,
+			b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, b.ErrorCode,
+			now, now); err != nil {
 			return fmt.Errorf("record a skipped backup: %w", err)
 		}
 		return nil
@@ -428,14 +463,15 @@ func (db *DB) FinishBackup(ctx context.Context, id, status, location string, siz
 // backupColumns is what every query reading backups selects, in the order
 // scanBackup reads it.
 const backupColumns = `id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at, encrypted, verified_at, verify_error`
+		error_message, error_code, created_at, finished_at, encrypted, verified_at, verify_error`
 
 func scanBackup(row interface{ Scan(...any) error }) (Backup, error) {
 	var b Backup
 	var created string
 	var finished, verified sql.NullString
 	if err := row.Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location,
-		&b.SizeBytes, &b.ErrorMessage, &created, &finished, &b.Encrypted, &verified, &b.VerifyError); err != nil {
+		&b.SizeBytes, &b.ErrorMessage, &b.ErrorCode, &created, &finished, &b.Encrypted, &verified,
+		&b.VerifyError); err != nil {
 		return b, err
 	}
 	b.CreatedAt, _ = ParseTime(created)

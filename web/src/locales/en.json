@@ -1664,6 +1664,7 @@
     "nativeConnectionStringHint": "For clients that speak ClickHouse's own protocol, such as clickhouse-client and clickhouse-go. The connection string above is HTTP, which most client libraries take.",
     "noCredentials": "Memcached has no user and no password. Only the apps in this environment can reach it.",
     "backupSkipped": "Skipped: the database was stopped, so there was nothing new to back up.",
+    "backupSkippedBusy": "Skipped: something else was being done to the database — it was being created, restored, imported into or given a new password — so this backup was left for the next one.",
     "backupKind": {
       "before_import": "Before an import",
       "before_update": "Before an update"
