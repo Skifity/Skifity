@@ -1502,9 +1502,9 @@ func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	// One the build read is in the image until it is built again.
-	rebuild := wasBuildTime && buildReads(app)
-	effect := s.applyVariableChanges(r, app, user.ID, !rebuild, rebuild)
+	// It leaves the running instances at once, as it always did; one the
+	// build read is in the image as well, until it is built again.
+	effect := s.applyVariableChanges(r, app, user.ID, true, wasBuildTime && buildReads(app))
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "variable.deleted", "app", app.ID, key)
 	writeJSON(w, http.StatusOK, struct {

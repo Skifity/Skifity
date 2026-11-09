@@ -100,16 +100,18 @@ func TestABuildTimeVariableRebuildsTheVersionTheAppRuns(t *testing.T) {
 		t.Fatalf("a mixed batch answered %d %s, with %d deploys and %d rollouts", status, body, len(deployer.requests), deployer.syncs)
 	}
 
-	// Removing it takes it out of the image, which is a build too.
+	// Removing it takes it out of the running instances, as removing any
+	// variable does, and out of the image, which is a build too.
 	status, body = h.do(acme, http.MethodDelete, "/api/apps/"+app.ID+"/variables/NEXT_PUBLIC_API", nil)
 	decodeInto(t, body, &answer)
-	if status != http.StatusOK || !answer.RequiresRebuild || len(deployer.requests) != 3 {
+	if status != http.StatusOK || !answer.RequiresRebuild || len(deployer.requests) != 3 || deployer.syncs != 2 {
 		t.Fatalf("removing a build-time variable answered %d %s", status, body)
 	}
 	// A runtime one only rolls out.
+	answer = variableAnswer{}
 	status, body = h.do(acme, http.MethodDelete, "/api/apps/"+app.ID+"/variables/LOG_LEVEL", nil)
 	decodeInto(t, body, &answer)
-	if status != http.StatusOK || answer.RequiresRebuild || len(deployer.requests) != 3 || deployer.syncs != 2 {
+	if status != http.StatusOK || answer.RequiresRebuild || len(deployer.requests) != 3 || deployer.syncs != 3 {
 		t.Fatalf("removing a runtime variable answered %d %s", status, body)
 	}
 }
