@@ -142,13 +142,19 @@ type AppRuntimeStatus struct {
 
 // LogOptions is what to read from an app's logs, and from where.
 type LogOptions struct {
-	// TailLines bounds how far back to read.
+	// TailLines bounds how far back to read, across every instance read.
 	TailLines int64
 	// Follow keeps the stream open.
 	Follow bool
 	// Previous reads the container that ran before the current one, which is
 	// the only copy of why a crash-looping app crashed.
 	Previous bool
+	// Instance reads one instance, by name. Empty reads every one that has
+	// started.
+	Instance string
+	// SinceSeconds reads only what was written in the last this many
+	// seconds; zero is no bound.
+	SinceSeconds int64
 }
 
 // ClusterSummary is the cluster overview for a team.
@@ -181,8 +187,8 @@ type Cluster interface {
 	// PublicAddress is where a domain of somebody's own should point. Empty
 	// when the panel cannot work it out and nobody has set it.
 	PublicAddress(ctx context.Context, teamID string) string
-	// AppLogs streams an app's logs.
-	AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (io.ReadCloser, error)
+	// AppLogs reads an app's logs: every instance's, merged, or one's.
+	AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (*kube.LogStream, error)
 	// RestartApp triggers a rolling restart without changing anything else.
 	RestartApp(ctx context.Context, namespace, appSlug string) error
 	// DeleteApp removes an app's Kubernetes objects.

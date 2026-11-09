@@ -1564,6 +1564,43 @@ names are made to fit — `Celery_Beat` becomes `celery-beat` — and a line tha
 becomes a name an earlier line already has, or an eleventh, is left out and said,
 rather than stopping the app from being created.
 
+## Logs
+
+An app's **Logs** tab, `skifity logs` and an assistant's `get_app_logs` read
+every instance of the app that has started, and merge their lines in the order
+they were written. Once more than one instance is being read, each line says
+which wrote it: the end of the instance's name, as in `[x7k2p]`, which is also
+what to pass to read that instance alone. An instance that starts while the log
+is being followed joins it within ten seconds; one that is stopped or replaced
+is let go. Twenty instances are read at once; past that, the log says how many
+it left out, and choosing one reads it.
+
+The newest 200 lines are shown first, counted across every instance read, and
+1,000 or 5,000 can be asked for instead. A time range — the last 15 minutes, the
+last hour, six hours, a day — reads only what was written in it. The times are
+the server's own, shown in your time zone or in UTC, and **Download** saves the
+lines loaded as a `.log` file with each line's time and instance.
+
+A line an app writes as a JSON object, as structured loggers do, opens to show
+its fields one to a line.
+
+```sh
+skifity logs --follow                 # every instance, as it is written
+skifity logs --instance x7k2p         # one of them
+skifity logs --since 15m --tail 1000  # the last 15 minutes, up to 1,000 lines
+skifity logs --timestamps             # each line with its time, in UTC
+```
+
+**Before the restart** reads the container that ran before the current one: the
+instance that restarted most, or the one chosen. When an app keeps restarting,
+the container that printed the reason has already been replaced, and this is
+the only copy of it.
+
+Anything in a line that looks like a credential — a bearer token, a private key,
+a cloud access key — is replaced with `[redacted]` before the line leaves the
+panel. Logs are read from the servers as they are asked for and are not kept by
+the panel; to keep them, [ship them to a log drain](log-drains.md).
+
 ## Servers
 
 The first server runs the control plane: the Kubernetes API, the panel and its

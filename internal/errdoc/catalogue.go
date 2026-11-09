@@ -1622,6 +1622,19 @@ func AppNotStarted(instance, reason string) *Problem {
 		With("instance", instance)
 }
 
+// InstanceNotStarted is one instance's log asked for, by name, before that
+// instance has started. AppNotStarted says no instance has, which is not so
+// while the others are serving.
+func InstanceNotStarted(instance, reason string) *Problem {
+	return New("app.instance_not_started", "That instance has not started yet").
+		WithCause("%s has not started: %s", instance, reason).
+		WithImpact("There is nothing in its log until it starts. The app's other instances are not affected.").
+		WithFix("Read another instance's log, or all of them, in the meantime. If this one does not start, the reason above says what it is waiting for.").
+		WithDocs("/docs/troubleshooting#what-kubernetes-said").
+		WithStatus(http.StatusConflict).
+		With("instance", instance)
+}
+
 // --- scanning images for vulnerabilities ---
 
 // VulnerableImage is a deploy stopped because its image has a critical

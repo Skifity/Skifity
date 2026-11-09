@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -23,12 +22,14 @@ type processCluster struct {
 
 func (c *processCluster) AppStatus(_ context.Context, _, name string) (AppRuntimeStatus, error) {
 	c.asked = append(c.asked, name)
-	return AppRuntimeStatus{Phase: "running", ReadyReplicas: 2, DesiredReplicas: 2}, nil
+	return AppRuntimeStatus{Phase: "running", ReadyReplicas: 2, DesiredReplicas: 2,
+		Instances: []InstanceInfo{{Name: name + "-1", Ready: true}, {Name: name + "-2", Ready: true}}}, nil
 }
 
-func (c *processCluster) AppLogs(_ context.Context, _, name string, _ LogOptions) (io.ReadCloser, error) {
+func (c *processCluster) AppLogs(_ context.Context, _, name string, _ LogOptions) (*kube.LogStream, error) {
 	c.asked = append(c.asked, name)
-	return io.NopCloser(strings.NewReader("working on job 1\n")), nil
+	return kube.NewLogStream([]string{name + "-1"}, 0,
+		[]kube.LogEntry{{Instance: name + "-1", Line: "working on job 1"}}), nil
 }
 
 func TestAnAppsProcessesAreItsOwnToChange(t *testing.T) {
@@ -151,6 +152,11 @@ func TestAProcessIsReadAndStatedByItsOwnName(t *testing.T) {
 	if ready := listed.Items[0].Ready; ready == nil || *ready != 2 {
 		t.Fatalf("the worker's running count is %v", ready)
 	}
+	// Its instances, which the logs tab offers to read one of.
+	if instances := listed.Items[0].InstanceList; len(instances) != 2 ||
+		instances[0].Name != kube.ProcessDeploymentName(app.Slug, "worker")+"-1" {
+		t.Fatalf("the worker's instances are %+v", instances)
+	}
 
 	status, body = h.do(acme, http.MethodGet, "/api/apps/"+app.ID+"/logs?process=worker", nil)
 	if status != http.StatusOK || !strings.Contains(body, "working on job 1") {
@@ -172,7 +178,7 @@ type waitingCluster struct {
 	Cluster
 }
 
-func (waitingCluster) AppLogs(context.Context, string, string, LogOptions) (io.ReadCloser, error) {
+func (waitingCluster) AppLogs(context.Context, string, string, LogOptions) (*kube.LogStream, error) {
 	return nil, &kube.NotStarted{Instance: "shop-7d4db6466b-vd9m8",
 		Reason: kube.ExplainUnschedulable("0/2 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity.")}
 }

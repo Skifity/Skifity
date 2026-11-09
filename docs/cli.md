@@ -181,7 +181,9 @@ See [I pushed and nothing happened](troubleshooting.md#i-pushed-and-nothing-happ
 ```sh
 skifity status                    # running? which version is live? what URL?
 skifity status --all              # what needs attention across the team; exits 1 if anything is broken
-skifity logs --follow             # live output
+skifity logs --follow             # live output, from every instance
+skifity logs --instance x7k2p     # one instance, by the name printed beside its lines
+skifity logs --since 1h --timestamps  # the last hour, with the time of each line
 skifity events --warnings         # what Kubernetes said went wrong, explained
 skifity events --db orders        # the same for a database
 skifity drift                     # what somebody changed with kubectl, and who

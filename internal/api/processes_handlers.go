@@ -32,6 +32,10 @@ type processView struct {
 	store.AppProcess
 	Ready *int   `json:"ready,omitempty"`
 	Phase string `json:"phase,omitempty"`
+	// InstanceList is the process's instances as the cluster has them, which
+	// is what the logs tab offers to read one of. Instances is the number
+	// asked for.
+	InstanceList []InstanceInfo `json:"instance_list,omitempty"`
 }
 
 func (s *Server) handleListProcesses(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +65,7 @@ func (s *Server) handleListProcesses(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				ready := status.ReadyReplicas
 				view.Ready, view.Phase = &ready, status.Phase
+				view.InstanceList = status.Instances
 			}
 		}
 		items = append(items, view)

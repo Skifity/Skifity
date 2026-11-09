@@ -901,7 +901,25 @@
     "instanceVersion": "版本",
     "nowLive": "{{name}} 已上线",
     "nowLiveNumber": "部署 #{{number}} 正在提供服务。",
-    "openApp": "打开"
+    "openApp": "打开",
+    "logsInstance": "实例",
+    "logsInstanceAll": "全部实例",
+    "logsRange": {
+      "label": "时间范围",
+      "all": "全部时间",
+      "15m": "最近 15 分钟",
+      "1h": "最近 1 小时",
+      "6h": "最近 6 小时",
+      "24h": "最近 24 小时"
+    },
+    "logsTailLabel": "显示行数",
+    "logsTail_other": "{{lines}} 行",
+    "logsZone": "时间显示为",
+    "logsZoneLocal": "本地时间",
+    "logsDownload": "下载",
+    "logsOmitted": "共 {{total}} 个实例，正在读取前 {{shown}} 个。要读取其他实例，请在上方选择。",
+    "logsFieldsShow": "展开字段",
+    "logsFieldsHide": "收起字段"
   },
   "deploy": {
     "title": "部署记录",
@@ -4384,6 +4402,12 @@
         "cause": "对 {{0}} 做的最后一件事不是添加它，而重试执行的是添加服务器的步骤。",
         "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
         "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
+      },
+      "app_instance_not_started": {
+        "title": "该实例尚未启动",
+        "cause": "{{0}} 尚未启动：{{1}}",
+        "impact": "在它启动之前，日志中没有任何内容。应用的其他实例不受影响。",
+        "fix": "在此期间，可以先读取其他实例或全部实例的日志。如果它一直没有启动，上面的原因说明了它在等待什么。"
       },
       "panel_domain_dns_mismatch": {
         "title": "该域名还没有指向这台服务器",

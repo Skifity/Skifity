@@ -887,6 +887,40 @@ test("the overview lists the team's apps with where they live", async ({ page })
   }
 })
 
+test("the logs tab reads every instance, and says when the stream fails", async ({ page }) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "chatty", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  const apps = localeStrings("en").apps as Record<string, string>
+  await page.goto(`/apps/${appID}?tab=logs`)
+
+  // Every instance by default, with a way to choose one, and the lines that
+  // were loaded to take away.
+  await expect(page.getByRole("combobox", { name: apps.logsInstance })).toContainText(
+    apps.logsInstanceAll,
+  )
+  await expect(page.getByRole("button", { name: apps.logsDownload })).toBeVisible()
+  // There is no cluster here, so the stream cannot be opened, and that is
+  // said rather than looking like an app with nothing to say.
+  await expect(page.getByText(apps.logsStreamFailed)).toBeVisible({ timeout: 15_000 })
+})
+
 test("Settings asks about new releases only when the button is pressed", async ({ page }) => {
   // Every request the page makes is watched, so the promise is checked rather
   // than read: the panel never asks which release is the newest on its own.

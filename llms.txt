@@ -41,7 +41,8 @@ skifity init                      Write a skifity.toml in this directory
 skifity deploy                    Deploy this directory's app
 skifity status                    Is it running, and on what
 skifity status --all              What needs attention across the team; exits 1 if anything is broken
-skifity logs --follow             Live logs
+skifity logs --follow             Live logs, every instance's, merged
+skifity logs --instance x7k2p --since 1h --timestamps  One instance, the last hour, with times
 skifity env set KEY=value         Set a variable (several at once roll out once)
 skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
@@ -133,7 +134,7 @@ Tools, in the order they are usually needed:
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
 | `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed, and `last_lines` for a version that crashed as it started (`deploy.crashed`). |
 | `get_events` | What Kubernetes said about an app's or a database's instances, newest first: a pod that could not be placed, a failed health check, an instance killed for its memory. The common warnings come with what they mean. Where the answer is when the logs are empty. |
-| `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, and `process` for a worker's. |
+| `get_app_logs` | Recent log lines from every instance, merged in the order they were written and marked with the instance that wrote each. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, `process` for a worker's, `instance` for one instance's and `since` (`15m`, `1h`, `2d`) for a time range. |
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
 | `list_variables` | An app's variables. Secret values are never returned; one read from a secret manager says where from, as `connection:path#key`. |
 | `set_variable` | Sets one, or with `from` reads it from one of the team's secret managers (Vault, Infisical, Doppler, AWS Secrets Manager) instead of storing it. Says whether it causes a rebuild. |
@@ -235,7 +236,8 @@ PUT    /api/apps/{app}/lock                   lock deploys and rollbacks (reason
 DELETE /api/apps/{app}/lock                   unlock them
 GET    /api/apps/{app}/vulnerabilities        known vulnerabilities in the image it runs, from the newest scan
 POST   /api/apps/{app}/vulnerabilities/scan   scan that image now
-GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events
+GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events: an entry event per line, {instance, at, line}
+GET    /api/apps/{app}/logs?instance=&since=1h  one instance's, the last hour; every instance's when instance is left out
 GET    /api/apps/{app}/logs?previous=true     the log of the container before the last restart
 POST   /api/apps/{app}/run                    run a command once in the app's image
 GET    /api/apps/{app}/runs/{run}/logs        that command's output

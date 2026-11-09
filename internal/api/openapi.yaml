@@ -3340,15 +3340,23 @@ paths:
       tags: [Apps]
       summary: An app's logs
       description: >-
-        The recent lines as JSON, or with follow=true a server-sent event
-        stream: one `log` event per line, its data a JSON string, and an
-        `error` event if reading stops. Anything that looks like a credential
-        is scrubbed from every line.
+        Every instance that has started, up to twenty, merged in the order
+        the lines were written; or one instance. The recent lines as JSON, or
+        with follow=true a server-sent event stream: an `instances` event
+        first and whenever an instance starts or goes, its data
+        {instances, omitted}; for each line an `entry` event, its data
+        {instance, at, line}, followed by a `log` event with the line alone
+        as a JSON string, for clients that read only that; and an `error`
+        event if reading stops. Anything that looks like a credential is
+        scrubbed from every line.
       parameters:
-        - {name: follow, in: query, description: 'Keep the stream open and send lines as they come.', schema: {type: boolean}}
-        - {name: previous, in: query, description: 'The container that ran before the last restart, which is where a crash is explained.', schema: {type: boolean}}
-        - {name: tail, in: query, description: 'How many lines back to start.', schema: {type: integer, minimum: 1, maximum: 10000, default: 200}}
+        - {name: follow, in: query, description: 'Keep the stream open and send lines as they come. An instance that starts while it is open joins it.', schema: {type: boolean}}
+        - {name: previous, in: query, description: 'The container that ran before the last restart, which is where a crash is explained: the named instance''s, or the one that restarted most.', schema: {type: boolean}}
+        - {name: tail, in: query, description: 'How many lines back to start, across every instance read.', schema: {type: integer, minimum: 1, maximum: 10000, default: 200}}
         - {name: process, in: query, description: 'One of the app''s other processes, by name. The web process when left out.', schema: {type: string}}
+        - {name: instance, in: query, description: 'One instance, by its name or the part after its last hyphen. Every instance when left out.', schema: {type: string}}
+        - {name: since, in: query, description: 'Only what was written in this long before now: 90s, 15m, 1h, 2d. Up to 30 days.', schema: {type: string}}
+        - {name: timestamps, in: query, description: 'Put each line''s time in front of it in lines and in the log event, as kubectl --timestamps does. Entries carry it either way.', schema: {type: boolean}}
       responses:
         '200':
           description: The lines.
@@ -7717,11 +7725,24 @@ components:
 
     AppLogs:
       type: object
-      required: [app_id, lines, previous]
+      required: [app_id, lines, entries, previous, instances, instances_omitted]
       properties:
         app_id: {type: string}
-        lines: {type: array, items: {type: string}}
+        lines: {type: array, items: {type: string}, description: 'Each line''s text, in the same order as entries.'}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/LogEntry'}
         previous: {type: boolean}
+        instances: {type: array, items: {type: string}, description: 'The instances read.'}
+        instances_omitted: {type: integer, description: 'How many more had started and were not read.'}
+
+    LogEntry:
+      type: object
+      required: [instance, line]
+      properties:
+        instance: {type: string, description: 'The instance that wrote the line.'}
+        at: {type: string, format: date-time, description: 'When, by its server''s clock.'}
+        line: {type: string}
 
     RunLogs:
       type: object
@@ -8750,6 +8771,10 @@ components:
                 properties:
                   ready: {type: integer, description: 'Instances ready, when the cluster said.'}
                   phase: {type: string}
+                  instance_list:
+                    type: array
+                    description: 'Its instances, when the cluster said.'
+                    items: {$ref: '#/components/schemas/InstanceInfo'}
         total: {type: integer}
 
     SetProcessRequest:

@@ -5,7 +5,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -175,10 +174,11 @@ func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api
 	return out, nil
 }
 
-// AppLogs streams an app's logs.
-func (c *Cluster) AppLogs(ctx context.Context, namespace, appSlug string, opts api.LogOptions) (io.ReadCloser, error) {
+// AppLogs reads an app's logs: every instance's, merged, or one's.
+func (c *Cluster) AppLogs(ctx context.Context, namespace, appSlug string, opts api.LogOptions) (*kube.LogStream, error) {
 	return c.client.AppLogs(ctx, namespace, appSlug, kube.LogOptions{
 		TailLines: opts.TailLines, Follow: opts.Follow, Previous: opts.Previous,
+		Instance: opts.Instance, SinceSeconds: opts.SinceSeconds,
 	})
 }
 

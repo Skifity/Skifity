@@ -1662,6 +1662,27 @@ export type AppProcess = {
   /** How many are running, when the cluster could say. */
   ready?: number
   phase?: string
+  /** Its instances as the cluster has them, when it could say. */
+  instance_list?: Instance[]
+}
+
+/** One line of an app's log: which instance wrote it, and when by its server's clock. */
+export type LogEntry = {
+  instance: string
+  at?: string
+  line: string
+}
+
+/** A read of an app's log, every instance's merged or one's. */
+export type AppLogs = {
+  app_id: string
+  /** Each line's text alone, in the order of entries. */
+  lines: string[]
+  entries: LogEntry[]
+  previous: boolean
+  /** The instances read, and how many more had started and were not. */
+  instances: string[]
+  instances_omitted: number
 }
 
 /** How an app's objects in the cluster compare with what the panel applies. */

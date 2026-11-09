@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,7 +17,6 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
 	"skifity/internal/logging"
-	"skifity/internal/runsafe"
 	"skifity/internal/store"
 )
 
@@ -404,7 +402,70 @@ func taggedFrame(seq int64, topic, eventType string, data any) ([]byte, error) {
 	return fmt.Appendf(nil, "data: %s\n\n", payload), nil
 }
 
-// handleAppLogs streams an app's runtime logs.
+// logEntry is one line of an app's log as the API sends it: which instance
+// wrote it, and when by that instance's server's clock.
+type logEntry struct {
+	Instance string    `json:"instance"`
+	At       time.Time `json:"at,omitzero"`
+	Line     string    `json:"line"`
+}
+
+// text is the line as a plain line of text, with its time in front when that
+// was asked for, as kubectl's --timestamps writes it.
+func (e logEntry) text(timestamps bool) string {
+	if timestamps && !e.At.IsZero() {
+		return e.At.UTC().Format(time.RFC3339Nano) + " " + e.Line
+	}
+	return e.Line
+}
+
+// scrubbedEntry is a line as it may leave the panel. An app that prints its
+// own credentials should not have them stored in a browser's memory too.
+func scrubbedEntry(entry kube.LogEntry) logEntry {
+	return logEntry{Instance: entry.Instance, At: entry.At, Line: logging.Scrub(entry.Line)}
+}
+
+// logInstances says which instances a log read is reading, and how many it
+// leaves out.
+type logInstances struct {
+	Instances []string `json:"instances"`
+	Omitted   int      `json:"omitted"`
+}
+
+func readingInstances(stream *kube.LogStream) logInstances {
+	names, omitted := stream.Instances()
+	if names == nil {
+		names = []string{}
+	}
+	return logInstances{Instances: names, Omitted: omitted}
+}
+
+// longestLogSince is as far back as a log read may be bounded to. Further
+// than that is not "since", it is everything the node still has.
+const longestLogSince = 30 * 24 * time.Hour
+
+// parseLogSince reads how far back to read a log: 15m, 1h, 90s or 2d. Empty is
+// no bound.
+func parseLogSince(raw string) (int64, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil {
+		if days, ok := strings.CutSuffix(raw, "d"); ok {
+			if n, convErr := strconv.Atoi(days); convErr == nil {
+				duration, err = time.Duration(n)*24*time.Hour, nil
+			}
+		}
+	}
+	if err != nil || duration < time.Second || duration > longestLogSince {
+		return 0, errdoc.BadRequest("since is how far back to read, such as 15m, 1h or 2d, from one second up to 30 days.")
+	}
+	return int64(duration / time.Second), nil
+}
+
+// handleAppLogs reads an app's runtime logs: every instance's, merged in the
+// order the lines were written, or one instance's.
 //
 // Logs come straight from the Kubernetes API rather than through the event hub,
 // because they can be large and there is no reason to buffer them in the panel.
@@ -429,10 +490,17 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 	// replaced and the live stream no longer has it: this is the only copy.
 	previous := queryBool(r, "previous")
 	follow := queryBool(r, "follow") && !previous
+	timestamps := queryBool(r, "timestamps")
 	tailLines := int64(queryInt(r, "tail", 200))
 	if tailLines < 1 || tailLines > 10000 {
 		tailLines = 200
 	}
+	since, err := parseLogSince(r.URL.Query().Get("since"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	instance := strings.TrimSpace(r.URL.Query().Get("instance"))
 
 	// One of the app's other processes, by name: a worker's output is not
 	// in the web's.
@@ -447,12 +515,19 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 
 	stream, err := s.cluster.AppLogs(r.Context(), env.Namespace, target, LogOptions{
 		TailLines: tailLines, Follow: follow, Previous: previous,
+		Instance: instance, SinceSeconds: since,
 	})
 	if err != nil {
 		// No instance has started, so there is no log yet: what it is
 		// waiting for, rather than a failure to read one.
 		var notStarted *kube.NotStarted
-		if errors.As(err, &notStarted) {
+		var unknown *kube.UnknownInstance
+		switch {
+		case errors.As(err, &unknown):
+			err = errdoc.NotFound("instance", unknown.Name)
+		case errors.As(err, &notStarted) && instance != "":
+			err = errdoc.InstanceNotStarted(notStarted.Instance, notStarted.Reason)
+		case errors.As(err, &notStarted):
 			err = errdoc.AppNotStarted(notStarted.Instance, notStarted.Reason)
 		}
 		writeError(w, r, err)
@@ -462,15 +537,19 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 
 	if !follow {
 		// A plain read returns the lines as JSON, which is easier for the CLI
-		// and for anything scripting against the API.
+		// and for anything scripting against the API. lines is each line's
+		// text alone, as it was before entries said which instance wrote it.
 		lines := []string{}
-		scanner := bufio.NewScanner(stream)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			lines = append(lines, logging.Scrub(scanner.Text()))
+		entries := []logEntry{}
+		for raw := range stream.Entries() {
+			entry := scrubbedEntry(raw)
+			entries = append(entries, entry)
+			lines = append(lines, entry.text(timestamps))
 		}
+		reading := readingInstances(stream)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"app_id": app.ID, "lines": lines, "previous": previous,
+			"app_id": app.ID, "lines": lines, "entries": entries, "previous": previous,
+			"instances": reading.Instances, "instances_omitted": reading.Omitted,
 		})
 		return
 	}
@@ -479,36 +558,24 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	// Read on its own goroutine, so the heartbeat below can still be written
-	// while the app is saying nothing. A healthy app that is simply idle is the
-	// ordinary case for this stream, and a connection with nothing on it is
-	// what a proxy in front of the panel closes.
-	lines := make(chan string, 64)
-	readErr := make(chan error, 1)
-	go func() {
-		// close(lines) is deferred first so it runs last: whatever happens,
-		// the reader sees the stream end rather than waiting for ever.
-		defer close(lines)
-		// This scrubs an app's own output, which is the least trustworthy text
-		// the panel handles. A panic in it must not end every other session.
-		defer runsafe.Recover(s.log, "streaming an app's logs", nil)
-		scanner := bufio.NewScanner(stream)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			// Scrub before the line leaves the process: an app that prints its
-			// own credentials should not have them stored in a browser's
-			// memory too.
-			select {
-			case lines <- logging.Scrub(scanner.Text()):
-			case <-r.Context().Done():
-				return
-			}
+	sendInstances := func() bool {
+		data, err := json.Marshal(readingInstances(stream))
+		if err != nil {
+			return false
 		}
-		if err := scanner.Err(); err != nil {
-			readErr <- err
+		if _, err := fmt.Fprintf(w, "event: instances\ndata: %s\n\n", data); err != nil {
+			return false
 		}
-	}()
+		_ = rc.Flush()
+		return true
+	}
+	if !sendInstances() {
+		return
+	}
 
+	// A healthy app that is simply idle is the ordinary case for this
+	// stream, and a connection with nothing on it is what a proxy in front
+	// of the panel closes.
 	heartbeat := time.NewTicker(sseHeartbeat)
 	defer heartbeat.Stop()
 
@@ -517,26 +584,43 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case err := <-readErr:
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", jsonString(err.Error()))
-			_ = rc.Flush()
-			return
 		case <-heartbeat.C:
 			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
 				return
 			}
 			_ = rc.Flush()
-		case line, ok := <-lines:
+		case <-stream.Changed():
+			if !sendInstances() {
+				return
+			}
+		case raw, ok := <-stream.Entries():
 			if !ok {
-				// The container stopped writing, which for a log that is not
-				// being followed any more is simply the end.
+				// The read stopped by itself: the cluster stopped answering
+				// with nothing left to read.
+				if err := stream.Err(); err != nil {
+					fmt.Fprintf(w, "event: error\ndata: %s\n\n", jsonString(err.Error()))
+					_ = rc.Flush()
+				}
 				return
 			}
 			seq++
-			if _, err := fmt.Fprintf(w, "id: %d\nevent: log\ndata: %s\n\n", seq, jsonString(line)); err != nil {
+			entry := scrubbedEntry(raw)
+			data, err := json.Marshal(entry)
+			if err != nil {
+				continue
+			}
+			// The entry says which instance and when. The log event beside it
+			// is the line alone: a client written before entries existed reads
+			// every event's data as a string, and skips what is not one.
+			if _, err := fmt.Fprintf(w, "id: %d\nevent: entry\ndata: %s\n\nevent: log\ndata: %s\n\n",
+				seq, data, jsonString(entry.text(timestamps))); err != nil {
 				return
 			}
-			_ = rc.Flush()
+			// A first read of thousands of lines is sent in a few writes
+			// rather than one each.
+			if len(stream.Entries()) == 0 {
+				_ = rc.Flush()
+			}
 		}
 	}
 }

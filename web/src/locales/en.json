@@ -914,7 +914,26 @@
     "instanceVersion": "Version",
     "nowLive": "{{name}} is live",
     "nowLiveNumber": "Deployment #{{number}} is serving.",
-    "openApp": "Open"
+    "openApp": "Open",
+    "logsInstance": "Instance",
+    "logsInstanceAll": "All instances",
+    "logsRange": {
+      "label": "Time range",
+      "all": "Any time",
+      "15m": "Last 15 minutes",
+      "1h": "Last hour",
+      "6h": "Last 6 hours",
+      "24h": "Last 24 hours"
+    },
+    "logsTailLabel": "How many lines",
+    "logsTail_one": "{{lines}} line",
+    "logsTail_other": "{{lines}} lines",
+    "logsZone": "Show times in",
+    "logsZoneLocal": "Local time",
+    "logsDownload": "Download",
+    "logsOmitted": "Reading the first {{shown}} of {{total}} instances. Choose one above to read another.",
+    "logsFieldsShow": "Show its fields",
+    "logsFieldsHide": "Hide its fields"
   },
   "deploy": {
     "title": "Deployments",
@@ -4412,6 +4431,12 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "app_instance_not_started": {
+        "title": "That instance has not started yet",
+        "cause": "{{0}} has not started: {{1}}",
+        "impact": "There is nothing in its log until it starts. The app's other instances are not affected.",
+        "fix": "Read another instance's log, or all of them, in the meantime. If this one does not start, the reason above says what it is waiting for."
       },
       "panel_domain_dns_mismatch": {
         "title": "That domain does not point at this server yet",

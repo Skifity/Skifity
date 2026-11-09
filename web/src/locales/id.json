@@ -901,7 +901,25 @@
     "instanceVersion": "Versi",
     "nowLive": "{{name}} sudah aktif",
     "nowLiveNumber": "Deployment #{{number}} sedang melayani.",
-    "openApp": "Buka"
+    "openApp": "Buka",
+    "logsInstance": "Instance",
+    "logsInstanceAll": "Semua instance",
+    "logsRange": {
+      "label": "Rentang waktu",
+      "all": "Kapan saja",
+      "15m": "15 menit terakhir",
+      "1h": "1 jam terakhir",
+      "6h": "6 jam terakhir",
+      "24h": "24 jam terakhir"
+    },
+    "logsTailLabel": "Berapa baris",
+    "logsTail_other": "{{lines}} baris",
+    "logsZone": "Tampilkan waktu dalam",
+    "logsZoneLocal": "Waktu lokal",
+    "logsDownload": "Unduh",
+    "logsOmitted": "Membaca {{shown}} instance pertama dari {{total}}. Pilih salah satu di atas untuk membaca yang lain.",
+    "logsFieldsShow": "Tampilkan isinya",
+    "logsFieldsHide": "Sembunyikan isinya"
   },
   "deploy": {
     "title": "Deployment",
@@ -4384,6 +4402,12 @@
         "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
+      },
+      "app_instance_not_started": {
+        "title": "Instance itu belum berjalan",
+        "cause": "{{0}} belum berjalan: {{1}}",
+        "impact": "Lognya kosong sampai instance itu berjalan. Instance lain aplikasi ini tidak terpengaruh.",
+        "fix": "Sementara itu, baca log instance lain, atau semuanya. Kalau instance ini tidak kunjung berjalan, alasan di atas menyebutkan apa yang ditunggunya."
       },
       "panel_domain_dns_mismatch": {
         "title": "Domain itu belum mengarah ke server ini",

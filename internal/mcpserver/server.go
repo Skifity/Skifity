@@ -258,9 +258,11 @@ type runCommandOutput struct {
 
 type logsInput struct {
 	AppID    string `json:"app_id" jsonschema:"the app's id"`
-	Lines    int    `json:"lines,omitempty" jsonschema:"how many lines to return, up to 500"`
+	Lines    int    `json:"lines,omitempty" jsonschema:"how many lines to return, up to 500, across every instance read"`
 	Previous bool   `json:"previous,omitempty" jsonschema:"read the container that ran before the current one; this is where a crash-looping app printed why it crashed"`
 	Process  string `json:"process,omitempty" jsonschema:"one of the app's other processes, such as worker; leave empty for the app itself"`
+	Instance string `json:"instance,omitempty" jsonschema:"one instance, by the name get_app_status gives or the part after its last hyphen; leave empty for every instance, merged"`
+	Since    string `json:"since,omitempty" jsonschema:"only what was written this long ago or since, such as 15m, 1h or 2d"`
 }
 
 type setProcessInput struct {
@@ -272,6 +274,17 @@ type setProcessInput struct {
 
 type logsOutput struct {
 	Lines []string `json:"lines"`
+	// Entries says which instance wrote each line, and when.
+	Entries   []logEntry `json:"entries,omitempty"`
+	Instances []string   `json:"instances,omitempty"`
+	// InstancesOmitted is how many instances had started and were not read.
+	InstancesOmitted int `json:"instances_omitted,omitempty"`
+}
+
+type logEntry struct {
+	Instance string `json:"instance"`
+	At       string `json:"at,omitempty"`
+	Line     string `json:"line"`
 }
 
 type listVariablesOutput struct {
@@ -491,7 +504,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_logs",
 		Annotations: reads("Read an app's logs"),
-		Description: "Read an app's recent log lines. This is where the cause of a crash or a failed start is. For an app that keeps restarting, pass previous=true: the container that printed the reason has already been replaced and the live log no longer has it.",
+		Description: "Read an app's recent log lines: every instance's, merged in the order they were written, each marked with the instance that wrote it when there is more than one. This is where the cause of a crash or a failed start is. For an app that keeps restarting, pass previous=true: the container that printed the reason has already been replaced and the live log no longer has it. Pass instance to read one instance, and since to read only the last 15m, 1h or 2d.",
 	}, s.getAppLogs)
 
 	addTool(s, &mcp.Tool{
@@ -886,18 +899,44 @@ func (s *Server) getAppLogs(ctx context.Context, _ *mcp.CallToolRequest, in logs
 	if lines <= 0 || lines > 500 {
 		lines = 200
 	}
-	var response struct {
-		Lines []string `json:"lines"`
-	}
+	var response logsOutput
 	path := fmt.Sprintf("/api/apps/%s/logs?tail=%d&previous=%t", in.AppID, lines, in.Previous)
-	if in.Process != "" {
-		path += "&process=" + url.QueryEscape(in.Process)
+	for _, param := range [][2]string{{"process", in.Process}, {"instance", in.Instance}, {"since", in.Since}} {
+		if param[1] != "" {
+			path += "&" + param[0] + "=" + url.QueryEscape(param[1])
+		}
 	}
 	if err := s.client.Do(ctx, "GET", path, nil, &response); err != nil {
 		return errorResult(err), logsOutput{}, nil
 	}
-	out := logsOutput{Lines: response.Lines}
-	return textResult(strings.Join(response.Lines, "\n")), out, nil
+	if response.Lines == nil {
+		response.Lines = []string{}
+	}
+
+	// Several instances' lines interleave, and which wrote one is often the
+	// whole question: the one that crashed, the one on the old version.
+	text := response.Lines
+	if len(response.Instances) > 1 && len(response.Entries) == len(response.Lines) {
+		text = make([]string, len(response.Entries))
+		for i, entry := range response.Entries {
+			text[i] = "[" + shortInstance(entry.Instance) + "] " + entry.Line
+		}
+	}
+	summary := strings.Join(text, "\n")
+	if response.InstancesOmitted > 0 {
+		summary = fmt.Sprintf("Read %d of %d instances; pass instance to read one of the others.\n",
+			len(response.Instances), len(response.Instances)+response.InstancesOmitted) + summary
+	}
+	return textResult(summary), response, nil
+}
+
+// shortInstance is the part of an instance's name after its last hyphen,
+// which tells an app's instances apart and is what instance accepts.
+func shortInstance(name string) string {
+	if i := strings.LastIndexByte(name, '-'); i >= 0 && i < len(name)-1 {
+		return name[i+1:]
+	}
+	return name
 }
 
 func (s *Server) setProcess(ctx context.Context, _ *mcp.CallToolRequest, in setProcessInput) (*mcp.CallToolResult, store.AppProcess, error) {

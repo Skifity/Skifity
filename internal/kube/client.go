@@ -3,7 +3,6 @@ package kube
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/netip"
 	"slices"
 	"sort"
@@ -41,6 +40,11 @@ type Client struct {
 	// inCluster is true for a panel running in the cluster it manages, with
 	// the ServiceAccount's token rather than a kubeconfig.
 	inCluster bool
+	// logOpener opens one instance's log; nil is through the API server.
+	// logRelist is how often a followed log looks for new instances; zero
+	// is every ten seconds. See logs.go.
+	logOpener logOpener
+	logRelist time.Duration
 }
 
 // Options configure a Client.
@@ -673,8 +677,9 @@ func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, st
 
 // LogOptions is what to read, and from where.
 type LogOptions struct {
-	// TailLines bounds how far back to read. Zero means everything the node
-	// still has.
+	// TailLines bounds how far back to read: the newest this many lines of
+	// every instance read, together. Zero means everything the node still
+	// has.
 	TailLines int64
 	// Follow keeps the stream open.
 	Follow bool
@@ -684,47 +689,58 @@ type LogOptions struct {
 	// that printed the reason has already been replaced, and its log is gone
 	// from the live stream the moment the new one starts.
 	Previous bool
+	// Instance reads one instance, by its name or the part of it after the
+	// last hyphen. Empty reads every instance that has started, up to
+	// MaxLogInstances; with Previous, the one that restarted most.
+	Instance string
+	// SinceSeconds reads only what was written in the last this many
+	// seconds. Zero is no bound but TailLines.
+	SinceSeconds int64
 }
 
-// AppLogs streams the logs of an app's instances.
-func (c *Client) AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (io.ReadCloser, error) {
-	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(map[string]string{"app.kubernetes.io/name": appSlug}).String(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("find the app's instances: %w", err)
-	}
-	if len(pods.Items) == 0 {
-		return io.NopCloser(strings.NewReader("")), nil
-	}
-
-	target := pickLogPod(pods.Items, opts.Previous)
-	// An instance that has never started has no log, and the API server's
-	// answer for it — "waiting to start", "does not have a host assigned" —
-	// came out of the panel as something gone wrong. What it is waiting for
-	// is the answer.
-	if !opts.Previous && !hasStarted(target) {
-		return nil, &NotStarted{Instance: target.Name, Reason: waitingFor(target)}
-	}
-
-	options := &corev1.PodLogOptions{
-		Follow:     opts.Follow && !opts.Previous,
-		Previous:   opts.Previous,
-		Timestamps: false,
-	}
-	if opts.TailLines > 0 {
-		options.TailLines = &opts.TailLines
-	}
-	stream, err := c.StreamClientset().CoreV1().Pods(namespace).GetLogs(target.Name, options).Stream(ctx)
-	if err != nil {
-		if opts.Previous {
-			// The API server answers 400 when there is no earlier container,
-			// which is the ordinary case for an app that has not crashed.
-			return nil, fmt.Errorf("%s has not restarted, so there is no earlier log to read", target.Name)
+// AppLogs reads an app's log: every instance's that has started, merged in
+// the order the lines were written, or the one opts names.
+//
+// name is a Deployment's — the app's slug, or one of its processes' — and
+// the instances read are the pods carrying it as their name label. Nothing
+// else does: a run of a command is named for the run. So an instance asked for
+// by name is only found among the app's own, or the process's own.
+func (c *Client) AppLogs(ctx context.Context, namespace, name string, opts LogOptions) (*LogStream, error) {
+	selector := labels.SelectorFromSet(map[string]string{"app.kubernetes.io/name": name}).String()
+	list := func(ctx context.Context) ([]corev1.Pod, error) {
+		pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			return nil, fmt.Errorf("find the app's instances: %w", err)
 		}
-		return nil, fmt.Errorf("read logs from %s: %w", target.Name, err)
+		return pods.Items, nil
 	}
-	return stream, nil
+	pods, err := list(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(pods) == 0 {
+		return NewLogStream(nil, 0, nil), nil
+	}
+
+	targets, omitted, err := logTargets(pods, opts)
+	if err != nil {
+		return nil, err
+	}
+	begun := time.Now()
+	entries, read, newest, err := c.readLogs(ctx, namespace, targets, opts)
+	if err != nil {
+		return nil, err
+	}
+	// The container before the restart has exited: a stream that stayed
+	// open on it would hang rather than end.
+	if !opts.Follow || opts.Previous {
+		return NewLogStream(read, omitted, entries), nil
+	}
+	only := ""
+	if opts.Instance != "" {
+		only = targets[0].Name
+	}
+	return c.followLogs(ctx, namespace, list, opts, only, entries, read, omitted, newest, begun), nil
 }
 
 // NotStarted is an app none of whose instances has started: there is no log

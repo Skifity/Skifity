@@ -952,8 +952,11 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	flags.SetOutput(out)
 	appID := flags.String("app", "", "the app id")
 	follow := flags.Bool("follow", false, "keep the stream open")
-	tail := flags.Int("tail", 200, "how many lines to show first")
+	tail := flags.Int("tail", 200, "how many lines to show first, across every instance")
 	process := flags.String("process", "", "one of the app's other processes, such as worker")
+	instance := flags.String("instance", "", "one instance, by its name or the part after its last hyphen; every instance when left out")
+	since := flags.String("since", "", "only what was written this long ago or since, such as 10m, 1h or 2d")
+	timestamps := flags.Bool("timestamps", false, "put the time each line was written in front of it")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -968,39 +971,79 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	printer := &logPrinter{out: out, timestamps: *timestamps}
+	query := []string{"tail", strconv.Itoa(*tail), "process", *process, "instance", *instance, "since", *since}
 
 	if *follow {
 		// With --json, one JSON object a line: a stream has no end to put a
 		// document's closing bracket after.
 		encoder := json.NewEncoder(out)
-		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(
-			"follow", "true", "tail", strconv.Itoa(*tail), "process", *process),
+		// A panel from before entries sends each line as a log event alone;
+		// one that sends entries sends that beside each, and it is skipped.
+		entries := false
+		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(append([]string{"follow", "true"}, query...)...),
 			func(event, data string) bool {
-				var line string
-				if err := json.Unmarshal([]byte(data), &line); err != nil {
+				var line logLine
+				switch event {
+				case "instances":
+					var reading struct {
+						Instances []string `json:"instances"`
+						Omitted   int      `json:"omitted"`
+					}
+					if err := json.Unmarshal([]byte(data), &reading); err == nil && !*asJSON {
+						printer.reading(reading.Instances, reading.Omitted)
+					}
 					return true
+				case "entry":
+					if err := json.Unmarshal([]byte(data), &line); err != nil {
+						return true
+					}
+					entries = true
+				case "error":
+					var reason string
+					if json.Unmarshal([]byte(data), &reason) == nil {
+						fmt.Fprintf(out, "The log stopped: %s\n", reason)
+					}
+					return true
+				default:
+					if entries || json.Unmarshal([]byte(data), &line.Line) != nil {
+						return true
+					}
 				}
 				if *asJSON {
-					_ = encoder.Encode(map[string]string{"line": line})
+					_ = encoder.Encode(line)
 				} else {
-					fmt.Fprintln(out, line)
+					printer.print(line)
 				}
 				return true
 			})
 	}
 
 	var response struct {
-		Lines []string `json:"lines"`
+		Lines            []string  `json:"lines"`
+		Entries          []logLine `json:"entries,omitempty"`
+		Instances        []string  `json:"instances,omitempty"`
+		InstancesOmitted int       `json:"instances_omitted,omitempty"`
 	}
-	if err := client.Do(ctx, "GET",
-		"/api/apps/"+app+"/logs"+Query("tail", strconv.Itoa(*tail), "process", *process), nil, &response); err != nil {
+	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/logs"+Query(query...), nil, &response); err != nil {
 		return err
 	}
 	if *asJSON {
 		return writeJSON(out, response)
 	}
-	for _, line := range response.Lines {
-		fmt.Fprintln(out, line)
+	if response.Entries == nil {
+		for _, line := range response.Lines {
+			response.Entries = append(response.Entries, logLine{Line: line})
+		}
+	}
+	printer.reading(response.Instances, response.InstancesOmitted)
+	for _, line := range response.Entries {
+		if line.Instance != response.Entries[0].Instance {
+			printer.several = true
+		}
+	}
+	for _, line := range response.Entries {
+		printer.print(line)
 	}
 	return nil
 }
