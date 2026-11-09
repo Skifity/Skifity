@@ -130,7 +130,7 @@ Tools, in the order they are usually needed:
 | `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, the catalogue it is in, and needs_root for an image that starts as root. |
 | `install_template` | Installs one into an environment: its apps, databases and volumes, wired together, all or nothing. Takes the catalogue_id of a team template, dry_run to see what it would create and what would stop it, and allow_root — only once the person agreed — to let the environment accept an image that starts as root. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
-| `get_app_status` | Whether an app is running, how many instances are ready, its URLs, and which deployment is live (`live_deployment`) and which each instance runs. |
+| `get_app_status` | Whether an app is running, how many instances are ready, its URLs, and which deployment is live (`live_deployment`) and which each instance runs. An instance that has restarted says how its previous container ended (`last_exit`): `OOMKilled`, or the exit code. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
 | `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed, and `last_lines` for a version that crashed as it started (`deploy.crashed`). |
 | `get_events` | What Kubernetes said about an app's or a database's instances, newest first: a pod that could not be placed, a failed health check, an instance killed for its memory. The common warnings come with what they mean. Where the answer is when the logs are empty. |

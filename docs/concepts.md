@@ -1582,7 +1582,10 @@ the server's own, shown in your time zone or in UTC, and **Download** saves the
 lines loaded as a `.log` file with each line's time and instance.
 
 A line an app writes as a JSON object, as structured loggers do, opens to show
-its fields one to a line.
+its fields one to a line. A line that says it is an error — a `level` or
+`severity` of `error` or `fatal` in JSON, `level=error` in logfmt, `ERROR` in
+capitals near its start, or something a runtime threw — is shown in red, and a
+warning in amber; **Errors only** hides the rest.
 
 ```sh
 skifity logs --follow                 # every instance, as it is written
@@ -1594,7 +1597,11 @@ skifity logs --timestamps             # each line with its time, in UTC
 **Before the restart** reads the container that ran before the current one: the
 instance that restarted most, or the one chosen. When an app keeps restarting,
 the container that printed the reason has already been replaced, and this is
-the only copy of it.
+the only copy of it. Above its lines is how that container ended — out of
+memory, or the exit code it stopped with — which its own log often cannot say:
+a process killed for its memory never gets to write anything. The same is said
+under each instance on the Overview, in `skifity status` and in
+`get_app_status`.
 
 Anything in a line that looks like a credential — a bearer token, a private key,
 a cloud access key — is replaced with `[redacted]` before the line leaves the

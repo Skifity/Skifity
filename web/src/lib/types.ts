@@ -321,6 +321,15 @@ export type Instance = {
   last_reason?: string
   /** The exit code it last stopped with; absent means 0. */
   last_exit_code?: number
+  /** How the container before this one ended, for an instance that has restarted. */
+  last_exit?: InstanceExit
+}
+
+/** How a container ended: the kubelet's reason (OOMKilled, Error, Completed) and its code. */
+export type InstanceExit = {
+  reason: string
+  exit_code: number
+  finished_at?: string
 }
 
 /** What saving an app's settings answers: the app, and when each change takes effect. */

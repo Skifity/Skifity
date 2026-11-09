@@ -935,7 +935,17 @@
     "logsDownload": "डाउनलोड करें",
     "logsOmitted": "{{total}} में से पहले {{shown}} इंस्टेंस पढ़े जा रहे हैं। किसी दूसरे को पढ़ने के लिए ऊपर उसे चुनें।",
     "logsFieldsShow": "इसके फ़ील्ड दिखाएँ",
-    "logsFieldsHide": "इसके फ़ील्ड छिपाएँ"
+    "logsFieldsHide": "इसके फ़ील्ड छिपाएँ",
+    "instanceExit": {
+      "outOfMemory": "मेमोरी ख़त्म",
+      "exitCode": "कोड {{code}} के साथ बाहर निकला",
+      "completed": "अपने आप बाहर निकला",
+      "cannotStart": "शुरू नहीं हो पाया (कोड {{code}})",
+      "other": "{{reason}} (कोड {{code}})"
+    },
+    "lastExit": "{{when}} बंद हुआ: {{reason}}",
+    "logsPreviousEnded": "{{instance}} {{when}} बंद हुआ: {{reason}}",
+    "logsErrorsOnly": "केवल त्रुटियाँ"
   },
   "deploy": {
     "title": "तैनातियाँ",

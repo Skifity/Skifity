@@ -967,7 +967,17 @@
     "logsDownload": "Скачать",
     "logsOmitted": "Экземпляров: {{total}}, читаются первые {{shown}}. Чтобы прочитать другой, выберите его выше.",
     "logsFieldsShow": "Показать поля",
-    "logsFieldsHide": "Скрыть поля"
+    "logsFieldsHide": "Скрыть поля",
+    "instanceExit": {
+      "outOfMemory": "не хватило памяти",
+      "exitCode": "завершился с кодом {{code}}",
+      "completed": "завершился сам",
+      "cannotStart": "не смог запуститься (код {{code}})",
+      "other": "{{reason}} (код {{code}})"
+    },
+    "lastExit": "Остановился {{when}}: {{reason}}",
+    "logsPreviousEnded": "{{instance}} остановился {{when}}: {{reason}}",
+    "logsErrorsOnly": "Только ошибки"
   },
   "deploy": {
     "title": "Развёртывания",

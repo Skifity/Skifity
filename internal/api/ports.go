@@ -118,6 +118,17 @@ type InstanceInfo struct {
 	// "crashing". LastReason is empty for one that has not stopped.
 	LastReason   string `json:"last_reason,omitempty"`
 	LastExitCode int32  `json:"last_exit_code,omitempty"`
+	// LastExit is how the container before this one ended, for an instance
+	// that has restarted: out of memory, or an exit code.
+	LastExit *InstanceExit `json:"last_exit,omitempty"`
+}
+
+// InstanceExit is how an instance's previous container ended.
+type InstanceExit struct {
+	// Reason is the kubelet's: OOMKilled, Error, Completed.
+	Reason     string    `json:"reason"`
+	ExitCode   int       `json:"exit_code"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 }
 
 // AppRuntimeStatus is what the app page shows at the top.

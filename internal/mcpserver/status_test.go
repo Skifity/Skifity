@@ -26,7 +26,8 @@ func TestAppStatusNamesTheLiveDeployment(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/apps/app_1/status":
 			_, _ = io.WriteString(w, `{"phase":"running","desired_replicas":1,"ready_replicas":1,
-"instances":[{"name":"web-1","status":"Running","ready":true,"node":"s1","deployment":6}]}`)
+"instances":[{"name":"web-1","status":"Running","ready":true,"node":"s1","deployment":6,"restarts":2,
+"last_exit":{"reason":"OOMKilled","exit_code":137,"finished_at":"2026-11-01T09:00:00Z"}}]}`)
 		case "/api/apps/app_1/deployments":
 			_, _ = io.WriteString(w, `{"items":[
 {"id":"dep_7","number":7,"status":"building","commit_sha":"9f8e7d6"},
@@ -51,6 +52,9 @@ func TestAppStatusNamesTheLiveDeployment(t *testing.T) {
 	if !strings.Contains(text, "#6 is live") {
 		t.Errorf("the summary does not say which version is live: %q", text)
 	}
+	if !strings.Contains(text, "web-1's previous container ended 2026-11-01T09:00:00Z: OOMKilled, exit code 137") {
+		t.Errorf("the summary does not say how the instance last ended: %q", text)
+	}
 
 	encoded, _ := json.Marshal(result.StructuredContent)
 	var out statusOutput
@@ -64,6 +68,9 @@ func TestAppStatusNamesTheLiveDeployment(t *testing.T) {
 	}
 	if len(out.Instances) != 1 || out.Instances[0].Deployment != 6 {
 		t.Errorf("the instance does not say which deployment it runs: %+v", out.Instances)
+	}
+	if exit := out.Instances[0].LastExit; exit == nil || exit.Reason != "OOMKilled" || exit.ExitCode != 137 {
+		t.Errorf("the instance does not say how its last container ended: %+v", exit)
 	}
 }
 

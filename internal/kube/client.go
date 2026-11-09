@@ -524,6 +524,35 @@ type Instance struct {
 	// not there are different fixes on different tabs.
 	LastReason   string
 	LastExitCode int32
+	// LastExit is how the container before the current one ended, for an
+	// instance that has restarted. Nil when it has not.
+	LastExit *Exit
+}
+
+// Exit is how a container ended: the kubelet's reason (OOMKilled, Error,
+// Completed), its exit code, and when.
+type Exit struct {
+	Reason     string
+	ExitCode   int
+	FinishedAt time.Time
+}
+
+// lastExit is how an instance's previous container ended, the newest of its
+// containers' when it has more than one.
+//
+// It is the one place the reason survives: the instance list said only that
+// an app was crashing, and the log of the container that was killed for its
+// memory does not say so, because the process never got to.
+func lastExit(pod corev1.Pod) *Exit {
+	var exit *Exit
+	for _, cs := range pod.Status.ContainerStatuses {
+		last := cs.LastTerminationState.Terminated
+		if last == nil || (exit != nil && !last.FinishedAt.After(exit.FinishedAt)) {
+			continue
+		}
+		exit = &Exit{Reason: last.Reason, ExitCode: int(last.ExitCode), FinishedAt: last.FinishedAt.Time}
+	}
+	return exit
 }
 
 // DeploymentIDAnnotation names, on a pod, the deployment it was started for.
@@ -532,7 +561,7 @@ var DeploymentIDAnnotation = version.LabelKey("deployment-id")
 func describePod(pod corev1.Pod) Instance {
 	inst := Instance{
 		Name: pod.Name, Node: pod.Spec.NodeName, Status: string(pod.Status.Phase),
-		DeploymentID: pod.Annotations[DeploymentIDAnnotation],
+		DeploymentID: pod.Annotations[DeploymentIDAnnotation], LastExit: lastExit(pod),
 	}
 	if pod.Status.StartTime != nil {
 		inst.StartedAt = pod.Status.StartTime.Time

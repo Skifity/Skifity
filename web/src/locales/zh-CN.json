@@ -919,7 +919,17 @@
     "logsDownload": "下载",
     "logsOmitted": "共 {{total}} 个实例，正在读取前 {{shown}} 个。要读取其他实例，请在上方选择。",
     "logsFieldsShow": "展开字段",
-    "logsFieldsHide": "收起字段"
+    "logsFieldsHide": "收起字段",
+    "instanceExit": {
+      "outOfMemory": "内存不足",
+      "exitCode": "以代码 {{code}} 退出",
+      "completed": "自行退出",
+      "cannotStart": "无法启动（代码 {{code}}）",
+      "other": "{{reason}}（代码 {{code}}）"
+    },
+    "lastExit": "{{when}}停止：{{reason}}",
+    "logsPreviousEnded": "{{instance}} {{when}}停止：{{reason}}",
+    "logsErrorsOnly": "仅显示错误"
   },
   "deploy": {
     "title": "部署记录",

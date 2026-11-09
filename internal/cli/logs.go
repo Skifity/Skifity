@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+// instanceExit is how an instance's previous container ended, as the
+// panel's status says it.
+type instanceExit struct {
+	Reason     string    `json:"reason"`
+	ExitCode   int       `json:"exit_code"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
+}
+
+// summary says how it ended in words: the kubelet's OOMKilled is the one
+// reason that matters most and reads least like one.
+func (e instanceExit) summary() string {
+	switch e.Reason {
+	case "OOMKilled":
+		return fmt.Sprintf("out of memory (exit code %d)", e.ExitCode)
+	case "Completed":
+		return "exited by itself (exit code 0)"
+	case "", "Error":
+		return fmt.Sprintf("exit code %d", e.ExitCode)
+	default:
+		return fmt.Sprintf("%s (exit code %d)", e.Reason, e.ExitCode)
+	}
+}
+
 // logLine is one line of an app's log as the panel sends it: which instance
 // wrote it, and when.
 type logLine struct {

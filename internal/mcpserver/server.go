@@ -205,8 +205,17 @@ type statusOutput struct {
 		Node     string `json:"node"`
 		// The number of the deployment the instance runs.
 		Deployment int `json:"deployment,omitempty"`
+		// How the container before this one ended, for an instance that
+		// has restarted: OOMKilled is the answer a log cannot give.
+		LastExit *instanceExit `json:"last_exit,omitempty"`
 	} `json:"instances,omitempty"`
 	LiveDeployment *liveDeployment `json:"live_deployment,omitempty"`
+}
+
+type instanceExit struct {
+	Reason     string `json:"reason"`
+	ExitCode   int    `json:"exit_code"`
+	FinishedAt string `json:"finished_at,omitempty"`
 }
 
 // liveDeployment is the version an app serves: its newest deployment that
@@ -741,6 +750,8 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 			Restarts   int    `json:"restarts"`
 			Node       string `json:"node"`
 			Deployment int    `json:"deployment,omitempty"`
+			// Read for the summary below as well as passed on.
+			LastExit *instanceExit `json:"last_exit,omitempty"`
 		} `json:"instances"`
 		PendingChanges []store.BuildChange `json:"pending_changes"`
 	}
@@ -755,6 +766,12 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 	}
 	summary := fmt.Sprintf("%s: %d of %d instances ready. %s",
 		raw.Phase, raw.ReadyReplicas, raw.DesiredReplicas, raw.Detail)
+	for _, instance := range raw.Instances {
+		if exit := instance.LastExit; exit != nil {
+			summary = strings.TrimSpace(summary) + fmt.Sprintf(" %s's previous container ended %s: %s, exit code %d.",
+				instance.Name, exit.FinishedAt, exit.Reason, exit.ExitCode)
+		}
+	}
 
 	// Which version that is, from the history: the status alone said an app
 	// was running and not whether it was running the deploy just made.

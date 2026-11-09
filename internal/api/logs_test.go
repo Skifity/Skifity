@@ -142,3 +142,25 @@ func TestAFollowedLogSendsEntriesAndTheOldLines(t *testing.T) {
 		t.Fatalf("a credential an app printed reached the browser: %s", body)
 	}
 }
+
+func (c *logCluster) AppStatus(context.Context, string, string) (AppRuntimeStatus, error) {
+	return AppRuntimeStatus{Phase: "crashing", DesiredReplicas: 1, Instances: []InstanceInfo{{
+		Name: "shop-5d8f-aaaaa", Status: "CrashLoopBackOff", Restarts: 4,
+		LastExit: &InstanceExit{Reason: "OOMKilled", ExitCode: 137, FinishedAt: time.Date(2026, 11, 9, 9, 48, 0, 0, time.UTC)},
+	}}}, nil
+}
+
+// The status says how each instance's previous container ended: an app that
+// keeps restarting showed "Crashing", and never that it ran out of memory.
+func TestTheStatusSaysHowAnInstanceLastEnded(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	h.withCluster(&logCluster{})
+	app := h.app(acme, "shop")
+
+	status, body := h.do(acme, http.MethodGet, "/api/apps/"+app.ID+"/status", nil)
+	if status != http.StatusOK ||
+		!strings.Contains(body, `"last_exit":{"reason":"OOMKilled","exit_code":137,"finished_at":"2026-11-09T09:48:00Z"}`) {
+		t.Fatalf("the status answered %d: %s", status, body)
+	}
+}

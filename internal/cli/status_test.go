@@ -24,7 +24,8 @@ func statusPanel(t *testing.T) {
 			_, _ = io.WriteString(w, `{"phase":"updating","desired_replicas":2,"ready_replicas":2,
 "urls":["https://web.example.test"],"instances":[
 {"name":"web-new","status":"Running","ready":true,"node":"s1","deployment":6},
-{"name":"web-old","status":"Running","ready":true,"node":"s2","deployment":5}]}`)
+{"name":"web-old","status":"Running","ready":true,"node":"s2","deployment":5,"restarts":3,
+ "last_exit":{"reason":"OOMKilled","exit_code":137,"finished_at":"`+finished+`"}}]}`)
 		case "/api/apps/app_1/deployments":
 			_, _ = io.WriteString(w, `{"items":[
 {"id":"dep_7","number":7,"status":"building","commit_sha":"9f8e7d6c5b4a","commit_author":"Someone Else"},
@@ -58,6 +59,8 @@ func TestStatusSaysWhichVersionIsLive(t *testing.T) {
 	}
 	for _, line := range strings.Split(printed, "\n") {
 		switch {
+		case strings.Contains(line, "web-old") && !strings.Contains(line, "last ended: out of memory (exit code 137), 3h ago"):
+			t.Errorf("an instance killed for its memory does not say so: %q", line)
 		case strings.Contains(line, "web-old") && !strings.Contains(line, "#5"):
 			t.Errorf("an instance on the version before does not say so: %q", line)
 		case strings.Contains(line, "web-new") && strings.Contains(line, "#6"):

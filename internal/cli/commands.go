@@ -607,6 +607,8 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			Node     string `json:"node"`
 			// The number of the deployment the instance runs; 0 when unknown.
 			Deployment int `json:"deployment"`
+			// How the container before this one ended, when it restarted.
+			LastExit *instanceExit `json:"last_exit,omitempty"`
 		} `json:"instances"`
 		// LiveDeployment is not the status route's: it is read from the
 		// history, so that one command says what is serving.
@@ -645,6 +647,9 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 		}
 		if instance.Restarts > 0 {
 			fmt.Fprintf(out, "  (%d restarts)", instance.Restarts)
+		}
+		if exit := instance.LastExit; exit != nil {
+			fmt.Fprintf(out, "  last ended: %s, %s", exit.summary(), humanTime(exit.FinishedAt))
 		}
 		fmt.Fprintln(out)
 	}

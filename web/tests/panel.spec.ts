@@ -921,6 +921,122 @@ test("the logs tab reads every instance, and says when the stream fails", async 
   await expect(page.getByText(apps.logsStreamFailed)).toBeVisible({ timeout: 15_000 })
 })
 
+test("a log names the instance behind each line, and how the one that restarted ended", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "restarting", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  // No cluster here, so the cluster's side is played: two instances, one of
+  // which keeps being killed for its memory.
+  const ended = new Date(Date.now() - 12 * 60_000).toISOString()
+  const [calm, crashing] = ["restarting-5d8f-aaaaa", "restarting-5d8f-bbbbb"]
+  const instance = {
+    ready: true,
+    status: "Running",
+    restarts: 0,
+    node: "s1",
+    cpu_m: 0,
+    memory_mb: 0,
+    deployment: 0,
+  }
+  await page.route(`**/api/apps/${appID}/status`, (route) =>
+    route.fulfill({
+      json: {
+        phase: "updating",
+        desired_replicas: 2,
+        ready_replicas: 1,
+        instances: [
+          { ...instance, name: calm },
+          {
+            ...instance,
+            name: crashing,
+            ready: false,
+            status: "CrashLoopBackOff",
+            restarts: 4,
+            last_exit: { reason: "OOMKilled", exit_code: 137, finished_at: ended },
+          },
+        ],
+      },
+    }),
+  )
+  await page.route(
+    (url) => url.pathname === `/api/apps/${appID}/logs`,
+    (route) => {
+      if (new URL(route.request().url()).searchParams.get("previous") === "true") {
+        return route.fulfill({
+          json: {
+            app_id: appID,
+            previous: true,
+            instances: [crashing],
+            instances_omitted: 0,
+            lines: ["allocating the cache"],
+            entries: [{ instance: crashing, at: ended, line: "allocating the cache" }],
+          },
+        })
+      }
+      const event = (name: string, data: unknown) =>
+        `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
+      return route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+        body:
+          "retry: 600000\n\n" +
+          event("instances", { instances: [calm, crashing], omitted: 0 }) +
+          event("entry", { instance: calm, at: ended, line: "listening on 80" }) +
+          event("entry", { instance: crashing, at: ended, line: "ERROR the cache does not fit" }),
+      })
+    },
+  )
+
+  const apps = localeStrings("en").apps as Record<string, string>
+  await page.goto(`/apps/${appID}?tab=logs`)
+
+  // Each line says which instance wrote it, by the end of its name.
+  const log = page.getByRole("log")
+  await expect(log.getByText("listening on 80")).toBeVisible()
+  await expect(log.getByText("aaaaa", { exact: true })).toBeVisible()
+  await expect(log.getByText("bbbbb", { exact: true })).toBeVisible()
+
+  // Either can be read alone.
+  await page.getByRole("combobox", { name: apps.logsInstance }).click()
+  await expect(page.getByRole("option", { name: calm })).toBeVisible()
+  await expect(page.getByRole("option", { name: crashing })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // An error is told apart from the rest, and can be all that is shown.
+  await page.getByRole("button", { name: apps.logsErrorsOnly }).click()
+  await expect(log.getByText("listening on 80")).toHaveCount(0)
+  await expect(log.getByText("ERROR the cache does not fit")).toBeVisible()
+
+  // Before the restart: what it printed, and how it ended, which its own log
+  // cannot say.
+  await page.getByRole("button", { name: apps.logsErrorsOnly }).click()
+  await page.getByRole("button", { name: apps.logsPrevious }).click()
+  await expect(log.getByText("allocating the cache")).toBeVisible()
+  await expect(page.getByText(new RegExp(`${crashing} ended .+: out of memory`))).toBeVisible()
+
+  // And on the Overview, under the instance it happened to.
+  await page.getByRole("tab", { name: "Overview" }).click()
+  await expect(page.getByText(/Ended .+: out of memory/)).toBeVisible()
+})
+
 test("Settings asks about new releases only when the button is pressed", async ({ page }) => {
   // Every request the page makes is watched, so the promise is checked rather
   // than read: the panel never asks which release is the newest on its own.

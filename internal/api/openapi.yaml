@@ -7591,6 +7591,14 @@ components:
         deployment: {type: integer, description: 'That deployment''s number, which is the version the instance runs; 0 when unknown.'}
         last_reason: {type: string, description: 'How the instance last stopped, in the kubelet''s word: OOMKilled, Error, Completed. Absent for one that has not stopped.'}
         last_exit_code: {type: integer, description: 'The exit code it last stopped with, beside last_reason.'}
+        last_exit:
+          type: object
+          description: 'How the container before this one ended, for an instance that has restarted.'
+          required: [reason, exit_code]
+          properties:
+            reason: {type: string, description: 'The kubelet''s: OOMKilled, Error, Completed.'}
+            exit_code: {type: integer}
+            finished_at: {type: string, format: date-time}
 
     AppRuntimeStatus:
       type: object

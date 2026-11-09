@@ -388,3 +388,25 @@ func TestALongLineDoesNotEndTheRead(t *testing.T) {
 		t.Errorf("a line without a time came back as %+v", got[2])
 	}
 }
+
+// An app that keeps restarting showed "Crashing" and never why. A container
+// killed for its memory does not say so in its own log — the process never
+// got to — so how the one before ended is read from the instance itself.
+func TestAnInstanceSaysHowItsLastContainerEnded(t *testing.T) {
+	finished := time.Date(2026, 11, 9, 9, 48, 0, 0, time.UTC)
+	crashing := logPod("web-5d8f-aaaaa", "web", true, false)
+	crashing.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		RestartCount: 4,
+		State:        corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+		LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			Reason: "OOMKilled", ExitCode: 137, FinishedAt: metav1.Time{Time: finished},
+		}},
+	}}
+	if exit := describePod(*crashing).LastExit; exit == nil || exit.Reason != "OOMKilled" ||
+		exit.ExitCode != 137 || !exit.FinishedAt.Equal(finished) {
+		t.Fatalf("the last exit read %+v", exit)
+	}
+	if exit := describePod(*logPod("web-5d8f-bbbbb", "web", true, true)).LastExit; exit != nil {
+		t.Fatalf("an instance that never restarted has a last exit: %+v", exit)
+	}
+}

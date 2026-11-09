@@ -10,7 +10,7 @@ import {
   ScrollTextIcon,
 } from "lucide-react"
 
-import { LogRow, shortInstance, type LogLine } from "@/components/app/log-line"
+import { LogRow, lineFacts, shortInstance, type LogLine } from "@/components/app/log-line"
 import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -31,6 +31,7 @@ import { api, type List } from "@/lib/api"
 import { downloadText } from "@/lib/download"
 import { formatNumber } from "@/lib/format"
 import { currentLanguage } from "@/lib/i18n"
+import { exitWords } from "@/lib/instance-exit"
 import type { App, AppLogs, AppProcess, AppStatus, LogEntry } from "@/lib/types"
 
 /** How far back a read starts, in lines across every instance read. */
@@ -78,6 +79,8 @@ export function LogsTab({ app }: { app: App }) {
   const [lines, setLines] = useState<LogLine[]>([])
   const [following, setFollowing] = useState(true)
   const [filter, setFilter] = useState("")
+  /** Only the lines that say they are errors, as a level, a capital ERROR, or something thrown. */
+  const [errorsOnly, setErrorsOnly] = useState(false)
   /**
    * "live" is the container running now; "previous" is the one before it.
    *
@@ -152,9 +155,9 @@ export function LogsTab({ app }: { app: App }) {
     const events = new EventSource(
       `/api/apps/${app.id}/logs?follow=true&tail=${tail}${since}${which ? `&${which}` : ""}`,
     )
-    // A first read of thousands of lines arrives as thousands of events. Put
-    // on screen one at a time, each re-rendered every line before it; a
-    // tenth of a second's worth at once is the same to read.
+    // A first read of thousands of lines arrives as thousands of events, and
+    // putting each on screen as it came rendered the log once a line. A tenth
+    // of a second's worth at once reads the same.
     let pending: LogLine[] = []
     let timer: number | undefined
     const flush = () => {
@@ -211,10 +214,20 @@ export function LogsTab({ app }: { app: App }) {
   const all = source === "previous" ? earlierLines : lines
 
   const shown = useMemo(() => {
-    if (!filter.trim()) return all
-    const needle = filter.toLowerCase()
-    return all.filter((entry) => entry.line.toLowerCase().includes(needle))
-  }, [all, filter])
+    const needle = filter.trim().toLowerCase()
+    if (!needle && !errorsOnly) return all
+    return all.filter(
+      (entry) =>
+        (!needle || entry.line.toLowerCase().includes(needle)) &&
+        (!errorsOnly || lineFacts(entry).level === "error"),
+    )
+  }, [all, filter, errorsOnly])
+
+  // How the container read before the restart ended, from the instance list:
+  // its own log cannot say it was killed for its memory.
+  const endedInstance = earlier.data?.instances?.[0]
+  const endedExit = instances.find((one) => one.name === endedInstance)?.last_exit
+  const ended = endedExit && exitWords(t, endedExit)
 
   // Which instance wrote a line is said once more than one is being read.
   const tagged = useMemo(
@@ -268,7 +281,9 @@ export function LogsTab({ app }: { app: App }) {
   // file's are, and the instance that wrote it.
   const download = () => {
     const text = all
-      .map((entry) => [entry.at, entry.instance && `[${entry.instance}]`, entry.line].filter(Boolean).join(" "))
+      .map((entry) =>
+        [entry.at, entry.instance && `[${entry.instance}]`, entry.line].filter(Boolean).join(" "),
+      )
       .join("\n")
     downloadText(`${app.slug}${process === "web" ? "" : `-${process}`}.log`, `${text}\n`)
   }
@@ -400,6 +415,14 @@ export function LogsTab({ app }: { app: App }) {
             UTC
           </Button>
         </ButtonGroup>
+        <Button
+          variant={errorsOnly ? "default" : "outline"}
+          size="sm"
+          aria-pressed={errorsOnly}
+          onClick={() => setErrorsOnly(!errorsOnly)}
+        >
+          {t("apps.logsErrorsOnly")}
+        </Button>
         <Button variant="outline" size="sm" disabled={all.length === 0} onClick={download}>
           <DownloadIcon className="size-3.5" />
           {t("apps.logsDownload")}
@@ -419,6 +442,15 @@ export function LogsTab({ app }: { app: App }) {
       )}
       {source === "previous" && (
         <p className="text-xs text-muted-foreground">{t("apps.logsPreviousHelp")}</p>
+      )}
+      {source === "previous" && endedInstance && ended && (
+        <p className="text-sm font-medium">
+          {t("apps.logsPreviousEnded", {
+            instance: endedInstance,
+            when: ended.when,
+            reason: ended.reason,
+          })}
+        </p>
       )}
       {source === "previous" && earlier.error != null && (
         <ErrorDisplay error={earlier.error} compact />

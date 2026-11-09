@@ -919,7 +919,17 @@
     "logsDownload": "Unduh",
     "logsOmitted": "Membaca {{shown}} instance pertama dari {{total}}. Pilih salah satu di atas untuk membaca yang lain.",
     "logsFieldsShow": "Tampilkan isinya",
-    "logsFieldsHide": "Sembunyikan isinya"
+    "logsFieldsHide": "Sembunyikan isinya",
+    "instanceExit": {
+      "outOfMemory": "kehabisan memori",
+      "exitCode": "keluar dengan kode {{code}}",
+      "completed": "keluar sendiri",
+      "cannotStart": "tidak bisa menyala (kode {{code}})",
+      "other": "{{reason}} (kode {{code}})"
+    },
+    "lastExit": "Berhenti {{when}}: {{reason}}",
+    "logsPreviousEnded": "{{instance}} berhenti {{when}}: {{reason}}",
+    "logsErrorsOnly": "Hanya error"
   },
   "deploy": {
     "title": "Deployment",

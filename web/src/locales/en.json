@@ -933,7 +933,17 @@
     "logsDownload": "Download",
     "logsOmitted": "Reading the first {{shown}} of {{total}} instances. Choose one above to read another.",
     "logsFieldsShow": "Show its fields",
-    "logsFieldsHide": "Hide its fields"
+    "logsFieldsHide": "Hide its fields",
+    "instanceExit": {
+      "outOfMemory": "out of memory",
+      "exitCode": "exited with code {{code}}",
+      "completed": "exited by itself",
+      "cannotStart": "could not start (code {{code}})",
+      "other": "{{reason}} (code {{code}})"
+    },
+    "lastExit": "Ended {{when}}: {{reason}}",
+    "logsPreviousEnded": "{{instance}} ended {{when}}: {{reason}}",
+    "logsErrorsOnly": "Errors only"
   },
   "deploy": {
     "title": "Deployments",

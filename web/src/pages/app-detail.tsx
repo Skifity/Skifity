@@ -65,6 +65,7 @@ import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
+import { exitWords } from "@/lib/instance-exit"
 import { queryClient } from "@/lib/query"
 import type { App, AppStatus, Deployment, Environment, Instance, Project } from "@/lib/types"
 
@@ -656,6 +657,7 @@ function Overview({
               <TableBody>
                 {instances.map((instance) => {
                   const state = instanceState(instance)
+                  const exit = instance.last_exit && exitWords(t, instance.last_exit)
                   return (
                     <TableRow key={instance.name}>
                       <TableCell className="font-mono text-xs">{instance.name}</TableCell>
@@ -664,6 +666,14 @@ function Overview({
                           status={state.tone}
                           label={t(`apps.instanceStatus.${state.key}`)}
                         />
+                        {/* Why the one before it ended: "Crashing" said that
+                            it keeps stopping and never why, and a container
+                            killed for its memory says nothing in its log. */}
+                        {exit && (
+                          <p className="mt-1 text-xs whitespace-normal text-muted-foreground">
+                            {t("apps.lastExit", { when: exit.when, reason: exit.reason })}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         {instance.deployment && instance.deployment_id ? (

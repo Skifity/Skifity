@@ -163,13 +163,17 @@ func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api
 		Image: raw.Image,
 	}
 	for _, inst := range raw.Instances {
-		out.Instances = append(out.Instances, api.InstanceInfo{
+		info := api.InstanceInfo{
 			Name: inst.Name, Status: inst.Status, Ready: inst.Ready,
 			Restarts: inst.Restarts, Node: inst.Node, StartedAt: inst.StartedAt,
 			Message: inst.Message, CPUM: inst.CPUM, MemoryMB: inst.MemoryMB, UsageKnown: inst.UsageKnown,
 			DeploymentID: inst.DeploymentID,
 			LastReason:   inst.LastReason, LastExitCode: inst.LastExitCode,
-		})
+		}
+		if exit := inst.LastExit; exit != nil {
+			info.LastExit = &api.InstanceExit{Reason: exit.Reason, ExitCode: exit.ExitCode, FinishedAt: exit.FinishedAt}
+		}
+		out.Instances = append(out.Instances, info)
 	}
 	return out, nil
 }
