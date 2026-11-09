@@ -105,7 +105,7 @@ func TestDispatcherSendsOnlyToSubscribers(t *testing.T) {
 
 	d.Notify(t.Context(), "team_1", EventDeployFailed, Message{
 		Title: "Deploying shop failed", Body: "The build ran out of memory.",
-		Level: "error", Path: "/apps/app_1/deployments",
+		Level: "error", Path: "/apps/app_1?tab=deployments&deployment=dep_2",
 	})
 	d.Wait()
 
@@ -124,7 +124,7 @@ func TestDispatcherSendsOnlyToSubscribers(t *testing.T) {
 			t.Errorf("delivered %q, want the message that was sent", msg.Title)
 		}
 		// The producer knows the path; only the dispatcher knows the address.
-		if msg.URL != "https://panel.example.com/apps/app_1/deployments" {
+		if msg.URL != "https://panel.example.com/apps/app_1?tab=deployments&deployment=dep_2" {
 			t.Errorf("link is %q, want the panel address joined to the path", msg.URL)
 		}
 	}

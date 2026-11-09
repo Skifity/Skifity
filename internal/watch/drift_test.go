@@ -103,7 +103,7 @@ func TestADriftIsSaidOnceAndAgainOnlyAfterItWasPutRight(t *testing.T) {
 		t.Errorf("the notification is about team %q, project %q", sent.teamID, sent.msg.ProjectID)
 	}
 	if !strings.Contains(sent.msg.Title, "changed outside") || sent.msg.Fields["Changed by"] != "kubectl" ||
-		!strings.Contains(sent.msg.Path, "tab=advanced") {
+		sent.msg.Path != "/apps/app_1?tab=advanced" || !strings.Contains(sent.msg.Fix, "Put it back") {
 		t.Errorf("the notification says %+v", sent.msg)
 	}
 	if got, _ := db.GetAppDrift(t.Context(), "app_1"); got.Status != store.DriftDrifted || got.Notified == "" {

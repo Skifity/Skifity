@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"skifity/internal/gitsrc"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 )
 
@@ -95,9 +96,11 @@ func (d *Deployer) reportToGit(ctx context.Context, deployment store.Deployment,
 	ctx, cancel := context.WithTimeout(ctx, gitReportTimeout)
 	defer cancel()
 
+	// The build of this commit, not the app's list of deployments: "Details"
+	// on a failed check is clicked to see why that one failed.
 	logs := ""
 	if panel := d.panelURL(ctx); panel != "" {
-		logs = panel + "/apps/" + app.ID + "/deployments"
+		logs = panel + panelpath.AppDeployment(app.ID, deployment.ID)
 	}
 	live := ""
 	if state == gitsrc.StateSuccess {

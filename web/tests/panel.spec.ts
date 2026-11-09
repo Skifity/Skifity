@@ -755,6 +755,93 @@ test("a failed deploy is on the overview, and opens its deployments", async ({ p
   )
 })
 
+// Links sent before the tab moved into the query string put it in the path:
+// notifications, commit statuses, pull request comments. Those are in inboxes
+// and on commits for good, so they still open the tab they name, and anything
+// else under an app opens the app rather than "Page not found".
+test("an old link to an app's tab opens that tab, and nonsense opens the app", async ({ page }) => {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  const appID: string = apps.items[0].id
+
+  await page.goto(`/apps/${appID}/deployments`)
+  await expect(page).toHaveURL(new RegExp(`/apps/${appID}\\?tab=deployments$`))
+  await expect(page.getByRole("tab", { name: "Deployments" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+
+  await page.goto(`/apps/${appID}/nonsense`)
+  await expect(page).toHaveURL(new RegExp(`/apps/${appID}$`))
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+  await expect(page.getByText("That page does not exist")).toHaveCount(0)
+})
+
+// A failed deploy's notification links to that deployment. It opens, at the
+// first line of its build that went wrong, even with another one running;
+// clicking another opens that one instead; and a link to one the list does
+// not have opens the tab as it would have opened anyway.
+test("a link to a deployment opens its build at the line that went wrong", async ({ page }) => {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  const appID: string = apps.items[0].id
+  const at = new Date().toISOString()
+  const deployment = (id: string, number: number, status: string) => ({
+    id,
+    app_id: appID,
+    number,
+    status,
+    trigger: "manual",
+    commit_sha: "",
+    commit_message: `Release ${number}`,
+    commit_author: "",
+    image: "",
+    build_fingerprint: "",
+    created_by: "",
+    created_at: at,
+  })
+  const log = (lines: string[], finished: boolean) => ({
+    lines: lines.map((line, index) => ({ seq: index + 1, stream: "stdout", line, at })),
+    finished,
+  })
+  await page.route(`**/api/apps/${appID}/deployments`, (route) =>
+    route.fulfill({
+      json: {
+        items: [deployment("dep_e2e_running", 3, "building"), deployment("dep_e2e_failed", 2, "failed")],
+        total: 2,
+      },
+    }),
+  )
+  await page.route(`**/api/apps/${appID}/deployments/dep_e2e_failed/logs*`, (route) =>
+    route.fulfill({
+      json: log(
+        ["Preparing the builder.", "> shop@1.0.0 build", "npm ERR! missing script: build", "Done."],
+        true,
+      ),
+    }),
+  )
+  await page.route(`**/api/apps/${appID}/deployments/dep_e2e_running/logs*`, (route) =>
+    route.fulfill({ json: log(["Preparing the builder.", "Installing the dependencies."], false) }),
+  )
+
+  await page.goto(`/apps/${appID}?tab=deployments&deployment=dep_e2e_failed`)
+  await expect(page.getByTestId("first-error-line")).toHaveText("npm ERR! missing script: build")
+  await expect(page.getByText("Installing the dependencies.")).toHaveCount(0)
+
+  await page.getByRole("button", { name: /Release 3/ }).click()
+  await expect(page.getByText("Installing the dependencies.")).toBeVisible()
+  await expect(page.getByTestId("first-error-line")).toHaveCount(0)
+
+  await page.goto(`/apps/${appID}?tab=deployments&deployment=dep_e2e_gone`)
+  await expect(page.getByText("Installing the dependencies.")).toBeVisible()
+  await expect(page.getByText(/this page stopped working/i)).toHaveCount(0)
+})
+
 // The apps are on the overview once it is past first-run setup, each with the
 // project and environment it lives in. This panel has no servers, so one is
 // put in the answer to make it past that.

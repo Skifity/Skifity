@@ -22,6 +22,7 @@ import (
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/plugins"
 	"skifity/internal/runsafe"
 	"skifity/internal/settings"
@@ -659,7 +660,7 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 		if m.notifier != nil {
 			fields["Reason"] = problem.Code
 			m.notifier.Notify(ctx, teamID, notify.EventBackupFailed, notify.Message{
-				Title: "Backing up " + name + " failed", Body: problem.Error() + "\n\n" + problem.Fix,
+				Title: "Backing up " + name + " failed", Body: problem.Error(), Fix: problem.Fix,
 				Level: "error", Path: path, Fields: fields, ProjectID: projectID,
 			})
 		}
@@ -674,15 +675,20 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 	}
 }
 
-// backupPath is the page a backup's notification links to: the database, or
-// the app whose volume it copied.
+// backupPath is the page a backup's notification links to: the database's
+// backups with this one picked out, or the storage of the app whose volume it
+// copied. A backup with no record yet — one that never started — is the
+// database's list.
 func (m *Manager) backupPath(ctx context.Context, backup store.Backup) string {
 	switch backup.TargetType {
 	case "database":
-		return "/databases/" + backup.TargetID
+		if backup.ID == "" {
+			return panelpath.Database(backup.TargetID, panelpath.DatabaseBackups)
+		}
+		return panelpath.DatabaseBackup(backup.TargetID, backup.ID)
 	case "volume":
 		if volume, err := m.db.GetVolume(ctx, backup.TargetID); err == nil {
-			return "/apps/" + volume.AppID
+			return panelpath.App(volume.AppID, panelpath.AppStorage)
 		}
 	}
 	return ""

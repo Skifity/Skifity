@@ -23,6 +23,7 @@ import (
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/plugins"
 	"skifity/internal/settings"
 	"skifity/internal/sshx"
@@ -329,7 +330,7 @@ func (p *Provisioner) runJoin(ctx context.Context, op store.Operation, serverID 
 			Title:  req.Name + " joined the cluster",
 			Body:   "The server is ready and can run apps.",
 			Level:  "success",
-			Path:   "/servers/" + serverID,
+			Path:   panelpath.Server(serverID),
 			Fields: map[string]string{"Server": req.Name, "Host": req.Host},
 		})
 	}

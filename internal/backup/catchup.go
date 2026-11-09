@@ -75,7 +75,8 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 	if m.notifier == nil || (runErr == nil && taken.Status == "skipped") {
 		return
 	}
-	probe := store.Backup{TargetType: policy.TargetType, TargetID: policy.TargetID}
+	// The late backup itself when it started, so the link opens on it.
+	probe := store.Backup{ID: taken.ID, TargetType: policy.TargetType, TargetID: policy.TargetID}
 	teamID, projectID, err := m.ownerOfBackup(ctx, probe)
 	if err != nil || teamID == "" {
 		return
@@ -93,7 +94,8 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 	if runErr != nil {
 		problem := errdoc.From(runErr)
 		msg.Body = "The panel was not running when it was due, on " + due.Format("Monday 2 January") +
-			", and it could not be taken now either: " + problem.Error() + "\n\n" + problem.Fix
+			", and it could not be taken now either: " + problem.Error()
+		msg.Fix = problem.Fix
 		msg.Level = "error"
 		msg.Fields["Reason"] = problem.Code
 	}

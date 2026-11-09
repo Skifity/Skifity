@@ -9,6 +9,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 )
 
@@ -180,8 +181,9 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 				Title:  alertTitle(app.Name, a.name),
 				Body:   a.detail,
 				Level:  "warning",
-				Path:   "/apps/" + app.ID,
+				Path:   panelpath.App(app.ID, alertTab(a.name)),
 				Fields: map[string]string{"App": app.Name},
+				Fix:    alertFix(a.name),
 			})
 		}
 	}
@@ -191,7 +193,7 @@ func (w *Watcher) checkAlerts(ctx context.Context, app store.DeployedApp, now ti
 				Title:  app.Name + " is back under its " + alertNoun(was) + " threshold",
 				Body:   "Nothing to do; this is the end of the earlier warning.",
 				Level:  "success",
-				Path:   "/apps/" + app.ID,
+				Path:   panelpath.App(app.ID, ""),
 				Fields: map[string]string{"App": app.Name},
 			})
 		}
@@ -217,6 +219,34 @@ func alertTitle(app, name string) string {
 		return app + " is failing requests"
 	default:
 		return app + " keeps restarting"
+	}
+}
+
+// alertFix is what to do about an app's threshold going off.
+func alertFix(name string) string {
+	switch name {
+	case "memory":
+		return "Raise its memory limit under Scaling, or find what is using the memory: " +
+			"the usage chart on its overview shows when it started to grow."
+	case "cpu":
+		return "Raise its CPU limit under Scaling, or run more instances so the work is shared."
+	case "errors":
+		return "Its logs say why the requests failed. If this started with a deploy, " +
+			"roll back to the version before it under Deployments."
+	default:
+		return "Open Logs, then Before the restart, for why the last instance stopped. " +
+			"If this started with a deploy, roll back to the version before it under Deployments."
+	}
+}
+
+// alertTab is the tab of the app's page an alert's notification opens: where
+// the limit is changed, or where the reason is.
+func alertTab(name string) string {
+	switch name {
+	case "memory", "cpu":
+		return panelpath.AppScaling
+	default:
+		return panelpath.AppLogs
 	}
 }
 

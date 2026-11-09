@@ -217,9 +217,13 @@ exists is how the list fills up with promises.
   "provider": "chat",
   "action": "send",
   "config": {"webhook_url": "https://example.test/hook"},
-  "data": {"title": "web is unhealthy", "body": "...", "level": "error", "url": "https://..."}
+  "data": {"title": "web is unhealthy", "body": "...", "fix": "...", "level": "error", "url": "https://..."}
 }
 ```
+
+`fix` is what to do about it, for you to show apart from the body; it is left
+out when there is nothing to do. `fields` may carry more, such as the app and
+the commit.
 
 `X-Skifity-Provider` carries `kind/id` and `X-Skifity-Action` the action, so
 you can route without parsing the body. Check `X-Skifity-Signature` the same way

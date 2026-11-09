@@ -13,6 +13,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/runsafe"
 	"skifity/internal/store"
 	"skifity/internal/version"
@@ -278,7 +279,7 @@ func driftMessage(app store.DeployedApp, report api.DriftReport, outcome string)
 	msg := notify.Message{
 		Title: app.Name + " was changed outside " + version.Name,
 		Level: "warning",
-		Path:  "/apps/" + app.ID + "?tab=advanced",
+		Path:  panelpath.App(app.ID, panelpath.AppAdvanced),
 		Fields: map[string]string{
 			"App":         app.Name,
 			"Differences": strconv.Itoa(len(report.Items)),
@@ -292,13 +293,18 @@ func driftMessage(app store.DeployedApp, report api.DriftReport, outcome string)
 	}
 	switch outcome {
 	case "":
-		msg.Body = what + ". The app's Advanced tab lists them, and puts them back."
+		msg.Body = what + "."
+		msg.Fix = "The app's Advanced tab lists each difference and who made it. If it was not on purpose, " +
+			"Put it back there; if it was, make the same change in " + version.Name + ", or the next deploy undoes it."
 	case "put back":
 		msg.Title = app.Name + " was changed outside " + version.Name + " and put back"
 		msg.Body = what + ", and the app is set to be put back automatically, so it was."
+		msg.Fix = "Nothing, unless the change was made on purpose: then make it in " + version.Name +
+			", or whatever made it will keep losing it."
 	default:
 		msg.Title = app.Name + " was changed outside " + version.Name + " and could not be put back"
 		msg.Body = what + ". Putting it back automatically failed: " + outcome
+		msg.Fix = "Open the app's Advanced tab to see what differs, then Put it back there, or deploy again."
 	}
 	return msg
 }

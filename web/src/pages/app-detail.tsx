@@ -68,13 +68,42 @@ import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App, AppStatus, Deployment, Environment, Instance, Project } from "@/lib/types"
 
+/**
+ * The tabs of an app's page, by the value each is opened with: ?tab= in the
+ * address, which is how a notification, a commit status or the overview links
+ * to one. internal/panelpath links to these, and its test reads this file.
+ */
+export const APP_TABS = [
+  "overview",
+  "deployments",
+  "logs",
+  "console",
+  "variables",
+  "domains",
+  "firewall",
+  "security",
+  "scaling",
+  "storage",
+  "settings",
+  "advanced",
+] as const
+
+export type AppTab = (typeof APP_TABS)[number]
+
+export function isAppTab(value: string | null | undefined): value is AppTab {
+  return APP_TABS.includes(value as AppTab)
+}
+
 export function AppDetailPage() {
   const { t } = useTranslation()
   const { appId = "" } = useParams()
   const { team } = useSession()
   const confirm = useConfirm()
   const [params, setParams] = useSearchParams()
-  const tab = params.get("tab") ?? "overview"
+  // One the page does not have opened nothing at all, under a row of tabs
+  // none of which was selected: an old link, or one typed by hand.
+  const asked = params.get("tab")
+  const tab: AppTab = isAppTab(asked) ? asked : "overview"
   // A console run stays named in the address while other tabs are open, so
   // its output is there again when the console is: see ConsoleTab.
   const openTab = (next: string) =>

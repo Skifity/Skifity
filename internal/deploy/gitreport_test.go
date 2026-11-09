@@ -116,7 +116,8 @@ func TestAPreviewTellsItsPullRequestWhereItIs(t *testing.T) {
 	d.PanelURL = func(context.Context) string { return "https://panel.example.test/" }
 
 	preview := previewOf(t, db, app, env, "12")
-	d.reportToGit(t.Context(), deploymentFor(t, db, preview.ID, "preview"), gitsrc.StateSuccess, "")
+	deployment := deploymentFor(t, db, preview.ID, "preview")
+	d.reportToGit(t.Context(), deployment, gitsrc.StateSuccess, "")
 
 	if len(host.statuses) != 1 || len(host.comments) != 1 {
 		t.Fatalf("expected one status and one comment, got %d and %d", len(host.statuses), len(host.comments))
@@ -148,7 +149,8 @@ func TestAPreviewTellsItsPullRequestWhereItIs(t *testing.T) {
 	}
 	for _, want := range []string{
 		"http://web-pr-12.203-0-113-7.sslip.io",
-		"https://panel.example.test/apps/" + preview.ID + "/deployments",
+		// This deployment's build, open, on a page the panel serves.
+		"https://panel.example.test/apps/" + preview.ID + "?tab=deployments&deployment=" + deployment.ID,
 	} {
 		if !strings.Contains(comment.Body, want) {
 			t.Errorf("the comment is missing %q:\n%s", want, comment.Body)
@@ -163,8 +165,10 @@ func TestAProductionDeployOnlySetsAStatus(t *testing.T) {
 	host := &recordingHost{}
 	d.gitHost = host
 	connectRepository(t, d, db, &app, "https://git.example.test", "https://git.example.test/acme/shop")
+	d.PanelURL = func(context.Context) string { return "https://panel.example.test" }
 
-	d.reportToGit(t.Context(), deploymentFor(t, db, app.ID, "push"), gitsrc.StateFailure, "the build failed")
+	deployment := deploymentFor(t, db, app.ID, "push")
+	d.reportToGit(t.Context(), deployment, gitsrc.StateFailure, "the build failed")
 
 	if len(host.statuses) != 1 || len(host.comments) != 0 {
 		t.Fatalf("expected one status and no comment, got %d and %d", len(host.statuses), len(host.comments))
@@ -175,6 +179,11 @@ func TestAProductionDeployOnlySetsAStatus(t *testing.T) {
 	}
 	if !strings.Contains(status.Description, "the build failed") {
 		t.Errorf("the status does not say why it failed: %q", status.Description)
+	}
+	// "Details" on a failed check opens the build that failed, not the app's
+	// list of deployments, where the one that opens is whichever is running.
+	if want := "https://panel.example.test/apps/" + app.ID + "?tab=deployments&deployment=" + deployment.ID; status.TargetURL != want {
+		t.Errorf("the failed status links to %q, want %q", status.TargetURL, want)
 	}
 }
 

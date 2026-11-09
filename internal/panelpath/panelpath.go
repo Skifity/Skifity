@@ -6,6 +6,10 @@
 // /apps/{id}/deployments is "Page not found". Anything the server hands out
 // that a person will click — a notification, a commit status, an item on the
 // overview — is built here, so the shape is written down once.
+//
+// The tests read the panel's own source: every address built here has to be
+// one of its routes, and every tab one its page has. A Go file elsewhere that
+// writes a panel address by hand fails them too.
 package panelpath
 
 import (
@@ -17,16 +21,32 @@ import (
 const (
 	AppOverview    = "overview"
 	AppDeployments = "deployments"
+	AppLogs        = "logs"
+	AppConsole     = "console"
+	AppVariables   = "variables"
 	AppDomains     = "domains"
+	AppFirewall    = "firewall"
 	AppSecurity    = "security"
+	AppScaling     = "scaling"
 	AppStorage     = "storage"
+	AppSettings    = "settings"
 	AppAdvanced    = "advanced"
 )
 
+// AppTabs is every tab of an app's page, in the order the page shows them.
+var AppTabs = []string{
+	AppOverview, AppDeployments, AppLogs, AppConsole, AppVariables, AppDomains,
+	AppFirewall, AppSecurity, AppScaling, AppStorage, AppSettings, AppAdvanced,
+}
+
 // The tabs of a database's page.
 const (
-	DatabaseBackups = "backups"
+	DatabaseConnection = "connection"
+	DatabaseBackups    = "backups"
 )
+
+// DatabaseTabs is every tab of a database's page that something links to.
+var DatabaseTabs = []string{DatabaseConnection, DatabaseBackups}
 
 // The tabs of Settings.
 const (
@@ -34,6 +54,9 @@ const (
 	SettingsCertificates  = "certificates"
 	SettingsNotifications = "notifications"
 )
+
+// SettingsTabs is every tab of Settings that something links to.
+var SettingsTabs = []string{SettingsPanel, SettingsCertificates, SettingsNotifications}
 
 // App is an app's page, open on a tab. The overview is the page's own address.
 func App(id, tab string) string {
@@ -43,7 +66,8 @@ func App(id, tab string) string {
 	return withQuery("/apps/"+url.PathEscape(id), "tab", tab)
 }
 
-// AppDeployment is an app's Deployments tab with one deployment open.
+// AppDeployment is an app's Deployments tab with one deployment open: its
+// build log, at the first line that went wrong when it failed.
 func AppDeployment(id, deploymentID string) string {
 	return withQuery("/apps/"+url.PathEscape(id), "tab", AppDeployments, "deployment", deploymentID)
 }
@@ -51,6 +75,11 @@ func AppDeployment(id, deploymentID string) string {
 // Database is a database's page, open on a tab.
 func Database(id, tab string) string {
 	return withQuery("/databases/"+url.PathEscape(id), "tab", tab)
+}
+
+// DatabaseBackup is a database's Backups tab with one backup picked out.
+func DatabaseBackup(id, backupID string) string {
+	return withQuery("/databases/"+url.PathEscape(id), "tab", DatabaseBackups, "backup", backupID)
 }
 
 // Server is a server's page.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
@@ -103,6 +103,14 @@ export function DeploymentsTab({ app }: { app: App }) {
   // a running deployment opens itself until the user closes it.
   const [opened, setOpened] = useState<string | null>(null)
   const [touched, setTouched] = useState(false)
+  // The card a link opened is brought into view once, not again whenever the
+  // list is asked for again and somebody has scrolled away from it.
+  const shown = useRef<string | null>(null)
+  const bringIntoView = (id: string) => (node: HTMLDivElement | null) => {
+    if (!node || shown.current === id) return
+    shown.current = id
+    node.scrollIntoView({ block: "start" })
+  }
 
   const deployments = useDeployments(app.id)
 
@@ -110,8 +118,12 @@ export function DeploymentsTab({ app }: { app: App }) {
   const running = items.find((deployment) => !TERMINAL.has(deployment.status))
   const live = liveDeployment(items)?.id
 
-  // A running deployment opens itself: that is what the user came to look at.
-  const selected = touched ? opened : (asked ?? running?.id ?? null)
+  // What the address named opens first, then a running deployment: each is
+  // what the person came to look at, until they open something else. A link
+  // to one that is not among those listed — an old one, a mistyped one —
+  // opens what would have opened without it, and says nothing.
+  const linkedHere = items.some((deployment) => deployment.id === asked) ? asked : null
+  const selected = touched ? opened : (linkedHere ?? running?.id ?? null)
   const setSelected = (id: string | null) => {
     setTouched(true)
     setOpened(id)
@@ -195,7 +207,13 @@ export function DeploymentsTab({ app }: { app: App }) {
       {items.map((deployment) => {
         const open = selected === deployment.id
         return (
-          <Card key={deployment.id} className={cn(open && "border-primary/40")}>
+          <Card
+            key={deployment.id}
+            ref={
+              !touched && deployment.id === linkedHere ? bringIntoView(deployment.id) : undefined
+            }
+            className={cn("scroll-mt-20", open && "border-primary/40")}
+          >
             <CardContent className="py-4">
               <Collapsible
                 open={open}
@@ -305,11 +323,7 @@ export function DeploymentsTab({ app }: { app: App }) {
                 </div>
 
                 {deployment.id === live && elsewhere.length > 0 && projectId && (
-                  <PromoteNowhere
-                    app={app}
-                    projectId={projectId}
-                    environments={elsewhere}
-                  />
+                  <PromoteNowhere app={app} projectId={projectId} environments={elsewhere} />
                 )}
 
                 {deployment.error_message && (
@@ -800,7 +814,14 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
     () => (log.data ? [...log.data.lines.map((entry) => entry.line), ...log.data.unnumbered] : []),
     [log.data],
   )
-  const stick = useStickToBottom(lines)
+  // A failed build opens at the first line that says what went wrong, not at
+  // its end: the end is the panel's own summary, which is in the box above,
+  // and the compiler's error is often hundreds of lines further up.
+  const failedAt = useMemo(
+    () => (deployment.status === "failed" ? firstErrorLine(lines) : -1),
+    [deployment.status, lines],
+  )
+  const stick = useStickToBottom(lines, failedAt < 0)
 
   if (!log.data?.read) {
     return log.error ? <ErrorDisplay error={log.error} compact /> : <Skeleton className="h-40" />
@@ -823,11 +844,55 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
       {log.error != null && <ErrorDisplay error={log.error} compact />}
       <ScrollArea className="h-80 rounded-md border bg-muted/30" {...stick}>
         <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-          {lines.join("\n")}
+          {failedAt < 0 ? (
+            lines.join("\n")
+          ) : (
+            <>
+              {failedAt > 0 && lines.slice(0, failedAt).join("\n") + "\n"}
+              <mark
+                ref={showLine}
+                data-testid="first-error-line"
+                className="rounded-sm bg-destructive/15 text-foreground"
+              >
+                {lines[failedAt]}
+              </mark>
+              {failedAt < lines.length - 1 && "\n" + lines.slice(failedAt + 1).join("\n")}
+            </>
+          )}
         </pre>
       </ScrollArea>
     </div>
   )
+}
+
+/**
+ * A line that says something went wrong, as builders, compilers and package
+ * managers write one: "error:", "Error:", "ERROR:", "[ERROR]", "error[E0425]:",
+ * "error TS2304:", "npm ERR!", a Python traceback, a step's non-zero exit.
+ * A word in passing — an error-handler.js being copied, "0 errors" — is not.
+ */
+const ERROR_LINE =
+  /\b(error|fatal|panic)(\[[^\]]*\])?(:|!|\])|\berror (TS|CS)\d+|\bERR!|^Traceback \(most recent call last\)|\bexit code: [1-9]/i
+
+/** Where the first line that says something went wrong is, or -1. */
+function firstErrorLine(lines: string[]): number {
+  return lines.findIndex((line) => ERROR_LINE.test(line))
+}
+
+/**
+ * Scrolls the log, and only the log, to the line picked out in it: a third of
+ * the way down, so what led up to it is in view too. A function of its own
+ * rather than one written where it is used, so React calls it when the line
+ * appears and not again on every render, which would pull the log back while
+ * somebody scrolled it.
+ */
+function showLine(node: HTMLElement | null) {
+  const viewport = node?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  if (!node || !viewport) return
+  viewport.scrollTop +=
+    node.getBoundingClientRect().top -
+    viewport.getBoundingClientRect().top -
+    viewport.clientHeight / 3
 }
 
 export function DeployButton({ appId, force }: { appId: string; force?: boolean }) {

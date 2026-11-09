@@ -24,6 +24,7 @@ import (
 	"skifity/internal/kube"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/plugins"
 	"skifity/internal/registry"
 	"skifity/internal/runsafe"
@@ -1087,9 +1088,10 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	defer d.rollBackIfLeftDown(ctx, app, deployment, problem)
 	d.notify(ctx, app, deployment, notify.EventDeployFailed, notify.Message{
 		Title:  "Deploying " + app.Name + " failed",
-		Body:   problem.Error() + "\n\n" + problem.Fix,
+		Body:   problem.Error(),
 		Level:  "error",
 		Fields: map[string]string{"Reason": problem.Code},
+		Fix:    problem.Fix,
 	})
 	// A plugin that subscribed to deploy.failed was never told, because only
 	// the success path sent anything. A rollback plugin, or one that opens a
@@ -1189,7 +1191,9 @@ func (d *Deployer) notify(ctx context.Context, app store.App, deployment store.D
 	if deployment.CommitSHA != "" {
 		msg.Fields["Commit"] = shortSHA(deployment.CommitSHA)
 	}
-	msg.Path = "/apps/" + app.ID + "/deployments"
+	// This deployment, open, rather than the list it is somewhere in: the one
+	// running opens itself there, which is not the one that just failed.
+	msg.Path = panelpath.AppDeployment(app.ID, deployment.ID)
 	d.notifier.Notify(ctx, teamID, event, msg)
 }
 

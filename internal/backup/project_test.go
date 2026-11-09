@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"skifity/internal/notify"
@@ -64,5 +65,21 @@ func TestABackupsNoticeNamesItsProject(t *testing.T) {
 		if got != want[i] {
 			t.Errorf("notice %d is %+v, want %+v", i, got, want[i])
 		}
+	}
+
+	// Each opens where it is dealt with: the database's backups with this one
+	// picked out, or the storage of the app whose volume it was. A failure says
+	// what to do apart from what went wrong.
+	for i, path := range []string{
+		"/databases/" + shop.ID + "?tab=backups&backup=bkp_1",
+		"/databases/" + shop.ID + "?tab=backups&backup=bkp_2",
+		"/apps/" + app.ID + "?tab=storage",
+	} {
+		if got := notifier.messages[i].Path; got != path {
+			t.Errorf("notice %d links to %q, want %q", i, got, path)
+		}
+	}
+	if failed := notifier.messages[1]; failed.Fix == "" || strings.Contains(failed.Body, failed.Fix) {
+		t.Errorf("a failed backup says %q, and %q to do", failed.Body, failed.Fix)
 	}
 }

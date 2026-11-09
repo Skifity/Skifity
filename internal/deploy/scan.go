@@ -20,6 +20,7 @@ import (
 	"skifity/internal/kube"
 	"skifity/internal/logging"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/runsafe"
 	"skifity/internal/settings"
 	"skifity/internal/store"
@@ -262,6 +263,11 @@ func (d *Deployer) publishScan(ctx context.Context, scan store.ImageScan) {
 	})
 }
 
+// vulnerableFix is what to do about an app.vulnerable notification, in the
+// words the Security tab uses for a deploy it stopped.
+const vulnerableFix = "The Security tab lists each one with the version that fixes it. " +
+	"Move to the fixed versions, in the app's dependencies or its base image, and deploy again."
+
 // notifyVulnerable tells the app's team about critical vulnerabilities its
 // previous scan did not find.
 func (d *Deployer) notifyVulnerable(ctx context.Context, scan store.ImageScan, fresh []store.ScanFinding) {
@@ -295,7 +301,8 @@ func (d *Deployer) notifyVulnerable(ctx context.Context, scan store.ImageScan, f
 		Title:     title,
 		Body:      body,
 		Level:     "error",
-		Path:      "/apps/" + app.ID + "?tab=security",
+		Path:      panelpath.App(app.ID, panelpath.AppSecurity),
+		Fix:       vulnerableFix,
 		ProjectID: projectID,
 		Fields: map[string]string{
 			"App":      app.Name,

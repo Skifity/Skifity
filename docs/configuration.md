@@ -136,6 +136,26 @@ settings above.
 Every one of them is sent from the panel through the same guarded client as a
 webhook, so none can be pointed at an address inside the cluster.
 
+### What a notification says
+
+A notification says what happened and, when there is something to do about it,
+what to do, on a line of its own: **What to do** is a field in Slack, Discord
+and Mattermost, a fact in Teams, a line in email, ntfy, Pushover, Gotify and
+Telegram, and the `fix` key a webhook receives beside `title`, `body`, `level`,
+`url` and `fields`. A certificate that cannot be issued says which of the usual
+causes it is — the name does not point here yet, port 80 is closed, Let's
+Encrypt's rate limit, a CAA record — and an app over a threshold says what to
+change for that threshold.
+
+Its link opens the page it is about, at the place it is about: a deployment
+that failed opens that deployment's build log, at the first line that says
+what went wrong; a backup, the database's backups with that one picked out; a
+certificate, the app's **Domains** tab; an alert, **Scaling** or **Logs**. A
+commit status's **Details** and a preview's pull request comment link to the
+deployment of that commit in the same way. Links sent by older releases, which
+put the tab in the path (`/apps/<id>/deployments`), still open the tab they
+name.
+
 ### Changing a channel
 
 **Edit** on a channel opens the form it was added with. Everything can change

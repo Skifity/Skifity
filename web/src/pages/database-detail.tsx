@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useRef, useState } from "react"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -80,10 +80,20 @@ import type {
   LinkPieces,
 } from "@/lib/types"
 
+/** The tabs of a database's page, by the value ?tab= opens each with. */
+const DATABASE_TABS = ["connection", "apps", "backups", "manage", "history", "advanced"]
+
 export function DatabaseDetailPage() {
   const { t } = useTranslation()
   const { databaseId = "" } = useParams()
   const { team } = useSession()
+  // The tab is in the address, so a failed backup's notification and the
+  // overview's line about it open the backups rather than the connection
+  // details. A link to one backup, ?backup=, is on that tab.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get("tab") ?? (params.get("backup") ? "backups" : "")
+  const tab = DATABASE_TABS.includes(asked) ? asked : "connection"
+  const openTab = (next: string) => setParams(next === "connection" ? {} : { tab: next })
   // What the API asks of each action: deleting, restoring, reading the
   // credentials and changing the backup schedule are an administrator's;
   // linking and backing up are a member's. A button that can only end in a
@@ -168,7 +178,7 @@ export function DatabaseDetailPage() {
         }
       />
 
-      <Tabs defaultValue="connection">
+      <Tabs value={tab} onValueChange={openTab}>
         <TabsList>
           <TabsTrigger value="connection">{t("databases.connectionDetails")}</TabsTrigger>
           <TabsTrigger value="apps">{t("databases.linkedApps")}</TabsTrigger>
@@ -695,6 +705,16 @@ function DatabaseBackups({
   const databaseId = database.id
   const names = useLinkedAppNames(database, links)
   const { team } = useSession()
+  // The backup a link named — a notification about it, the overview — picked
+  // out of the list, and scrolled to once.
+  const [params] = useSearchParams()
+  const picked = params.get("backup")
+  const shown = useRef<string | null>(null)
+  const bringIntoView = (id: string) => (node: HTMLTableRowElement | null) => {
+    if (!node || shown.current === id) return
+    shown.current = id
+    node.scrollIntoView({ block: "center" })
+  }
   // A member limited to projects has no live stream to hear of a new backup.
   const scoped = Boolean(team?.scoped)
   const backupStorage = useBackupStorage()
@@ -895,7 +915,11 @@ function DatabaseBackups({
               </TableHeader>
               <TableBody>
                 {items.map((backup) => (
-                  <TableRow key={backup.id}>
+                  <TableRow
+                    key={backup.id}
+                    ref={backup.id === picked ? bringIntoView(backup.id) : undefined}
+                    data-state={backup.id === picked ? "selected" : undefined}
+                  >
                     <TableCell>
                       <div className="text-sm">{formatDateTime(backup.created_at)}</div>
                       <div className="text-xs text-muted-foreground">
