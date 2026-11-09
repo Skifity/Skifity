@@ -357,9 +357,14 @@ if a cookie names a domain — so no page on a sibling subdomain can write them.
 That prefix requires HTTPS. The default install is plain HTTP on an sslip.io
 address (ADR-0015), and on plain HTTP the prefix cannot be used at all. This
 matters more here than on most products, because the applications this panel
-hosts can be on subdomains of the domain the panel answers on. Adding a domain
-in Settings is what closes it, and it is also what makes passkeys available:
-set the Panel URL to the new `https://` address once the domain is on.
+hosts can be on subdomains of the domain the panel answers on. A domain of the
+panel's own is what closes it, and it is also what makes passkeys available.
+There is no control for it in the panel yet: create a DNS record for the name
+pointing at the server, then run the installer again with `--domain
+panel.example.com`. It installs cert-manager, asks Let's Encrypt for a
+certificate, moves the panel's route to the name and restarts the panel at its
+`https://` address. Set the Panel URL under Settings → General to the same
+address if you had set one before.
 
 Whether cookies are marked `Secure` follows `SKIFITY_PUBLIC_URL` rather than the
 build, because a `Secure` cookie is never stored over plain HTTP: marking them

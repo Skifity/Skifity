@@ -144,8 +144,8 @@ server cannot see: allow TCP 80 and 443 there.
 
 **A certificate warning.** With no domain of your own, the panel is served over
 plain HTTP at an `sslip.io` address, on purpose: Let's Encrypt rate limits are
-per domain, and every Skifity install in the world shares sslip.io's. Add a
-domain in Settings and HTTPS is turned on for it automatically.
+per domain, and every Skifity install in the world shares sslip.io's. Point a
+domain at the server and run the installer again with `--domain` for HTTPS.
 
 ## I have lost the setup token
 

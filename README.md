@@ -70,8 +70,8 @@ That is the whole installation. The installer:
 
 Run in a terminal without `--domain`, it offers to take one. Without a domain
 the panel answers at a free `sslip.io` address over plain HTTP, on purpose
-([ADR-0015](docs/decisions.md)); add a domain in Settings later and HTTPS is
-turned on for it automatically. Behind NAT — AWS, Google Cloud, Oracle, a home
+([ADR-0015](docs/decisions.md)); run it again later with `--domain` and the
+panel moves to HTTPS at that name. Behind NAT — AWS, Google Cloud, Oracle, a home
 router — it finds the address the internet reaches the server on.
 
 **It never goes quiet.** Most of an install is a download — Kubernetes, then

@@ -359,8 +359,8 @@ One release exactly is `releases/download/<tag>/install.sh`, or `--version
 
 Ubuntu 24.04 or Debian 12, 1 GB of memory, 8 GB of disk, root over SSH. The
 installer prints a URL and a one-time setup token. With no domain the panel is
-reached at an `sslip.io` address over HTTP; add a domain in Settings and HTTPS
-is turned on for it automatically.
+reached at an `sslip.io` address over HTTP; run the installer again with
+`--domain` and it moves to HTTPS at that name.
 
 Options go after `sh -s --`: `--domain panel.example.com` for HTTPS from the
 start, `--email`, `--public-ip`, `--version`, and `--yes` for a run nobody is
