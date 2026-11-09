@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -169,7 +171,11 @@ func cmdAppsRm(ctx context.Context, args []string, out io.Writer) error {
 				WithFix("Run it again with --yes, once you are sure: the app's disks go with it, and nothing brings them back.")
 		}
 		fmt.Fprintf(out, "Deleting %s removes it from the cluster with its disks and their data. Nothing brings them back.\n", app.Name)
-		if typed := prompt(out, "Type the app's name to delete it: "); typed != app.Name {
+		// The whole line: a name can have spaces in it, and prompt reads
+		// one word.
+		fmt.Fprintf(out, "Type %s to delete it: ", app.Slug)
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		if typed := strings.TrimSpace(line); typed != app.Slug && typed != app.Name {
 			fmt.Fprintln(out, "That is not its name. Nothing was deleted.")
 			return nil
 		}
