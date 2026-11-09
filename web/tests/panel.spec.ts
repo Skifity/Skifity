@@ -582,6 +582,100 @@ test("an app can be put behind a password, and the password never comes back", a
   )
 })
 
+test("a variable is changed in place, and Edit as text sends only what changed", async ({
+  page,
+}) => {
+  await signIn(page)
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "configured", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+  for (const variable of [
+    { key: "GREETING", value: "hello there", is_secret: false },
+    { key: "API_TOKEN", value: "tok_e2e_not_a_real_token", is_secret: true },
+  ]) {
+    const set = await page.request.put(`/api/apps/${appID}/variables`, { headers, data: variable })
+    expect(set.ok(), await set.text()).toBeTruthy()
+  }
+
+  const en = localeStrings("en")
+  const words = en.variables as Record<string, string>
+  const common = en.common as Record<string, string>
+  const named = (sentence: string, values: Record<string, string>) =>
+    sentence.replace(/\{\{(\w+)\}\}/g, (_, name: string) => values[name])
+  // Every batch the page sends, which is what "nothing changed" is checked by.
+  const batches: string[] = []
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith(`/apps/${appID}/variables/batch`)) {
+      batches.push(request.postData() ?? "")
+    }
+  })
+
+  await page.goto(`/apps/${appID}?tab=variables`)
+
+  // A plain value is copied whole.
+  await page.getByRole("button", { name: named(common.copyValue, { name: "GREETING" }) }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("hello there")
+
+  // Edited in place, from what it is, without typing its name again.
+  await page.getByRole("button", { name: named(words.editKey, { key: "GREETING" }) }).click()
+  // The form opens in the variable's own row.
+  const form = page.getByRole("row").filter({ has: page.locator("#variable-value") })
+  await expect(form.locator("#variable-key")).toHaveValue("GREETING")
+  await expect(form.locator("#variable-value")).toHaveValue("hello there")
+  await form.locator("#variable-value").fill("hello again")
+  await form.getByRole("button", { name: common.save, exact: true }).click()
+  await expect(page.getByText((en.deploy as Record<string, string>).noRebuildNeeded)).toBeVisible()
+  await expect(page.getByRole("button", { name: "hello again", exact: true })).toBeVisible()
+
+  // A secret's value is never sent back, so its box starts empty.
+  await page.getByRole("button", { name: named(words.editKey, { key: "API_TOKEN" }) }).click()
+  await expect(form.locator("#variable-value")).toHaveValue("")
+  await form.getByRole("button", { name: common.cancel, exact: true }).click()
+
+  // The box opens with what is there: the plain line, and a comment for the
+  // secret it leaves alone.
+  await page.getByRole("button", { name: words.bulkEdit }).click()
+  const box = page.locator("#bulk-variables")
+  const bulk = page.locator('[data-slot="card"]').filter({ has: box })
+  await expect(box).toHaveValue(/^GREETING=hello again$/m)
+  const comment = `# ${named(words.textSecret, { key: "API_TOKEN" })}`
+  const escaped = comment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  await expect(box).toHaveValue(new RegExp(`^${escaped}$`, "m"))
+
+  // Saved as it opened: nothing to send, so nothing is sent.
+  await bulk.getByRole("button", { name: common.save, exact: true }).click()
+  await expect(page.getByText(words.nothingChanged)).toBeVisible()
+  expect(batches).toEqual([])
+
+  // One line changed: that line, and only it.
+  await page.getByRole("button", { name: words.bulkEdit }).click()
+  await box.fill((await box.inputValue()).replace("GREETING=hello again", "GREETING=hello, text"))
+  await bulk.getByRole("button", { name: common.save, exact: true }).click()
+  await expect.poll(() => batches.length).toBe(1)
+  expect(JSON.parse(batches[0])).toEqual({ set: [{ key: "GREETING", value: "hello, text" }] })
+  await expect(page.getByRole("button", { name: "hello, text", exact: true })).toBeVisible()
+
+  const after = await (await page.request.get(`/api/apps/${appID}/variables`)).json()
+  const secret = after.items.find((v: { key: string }) => v.key === "API_TOKEN")
+  expect(secret?.is_secret, "the secret was lost or made plain").toBe(true)
+  expect(JSON.stringify(after)).not.toContain("tok_e2e_not_a_real_token")
+})
+
 test("Settings asks about new releases only when the button is pressed", async ({ page }) => {
   // Every request the page makes is watched, so the promise is checked rather
   // than read: the panel never asks which release is the newest on its own.

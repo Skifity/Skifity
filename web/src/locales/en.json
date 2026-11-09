@@ -1015,7 +1015,16 @@
     "bulkSaved_one": "{{count}} variable saved",
     "bulkSaved_other": "{{count}} variables saved",
     "bulkNothing": "There are no KEY=value lines here, so there is nothing to save.",
-    "deleteKey": "Delete {{key}}"
+    "deleteKey": "Delete {{key}}",
+    "editKey": "Edit {{key}}",
+    "textSecret": "{{key}} is a secret and is left as it is",
+    "textReference": "{{key}} is read from {{reference}} and is left as it is",
+    "textMultiline": "{{key}} has more than one line and is left as it is; edit it from its row",
+    "bulkEditKeeps": "Only the lines you add or change are saved. Removing a line does not delete its variable: the delete button on its row does that.",
+    "nothingChanged": "Nothing changed, so nothing was saved.",
+    "keptPlaceholder": "Left as it is unless you type a new value",
+    "keptHelp": "A secret's value is never shown again. Type a new one to replace it, or leave this empty to keep it.",
+    "keptNeedsValue": "Type the value again to change this: a secret's value is never shown, so it cannot be carried over."
   },
   "domains": {
     "title": "Domains",

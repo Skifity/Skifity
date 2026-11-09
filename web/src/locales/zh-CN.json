@@ -1001,7 +1001,16 @@
     "allowedPathsHint": "{{name}} 只读取以下路径或其下的内容：{{paths}}。",
     "bulkSaved_other": "已保存 {{count}} 个变量",
     "bulkNothing": "这里没有 KEY=value 格式的行，因此没有可保存的内容。",
-    "deleteKey": "删除 {{key}}"
+    "deleteKey": "删除 {{key}}",
+    "editKey": "编辑 {{key}}",
+    "textSecret": "{{key}} 是机密，保持不变",
+    "textReference": "{{key}} 从 {{reference}} 读取，保持不变",
+    "textMultiline": "{{key}} 有多行内容，保持不变；请在它所在的行中编辑",
+    "bulkEditKeeps": "只会保存你新增或修改的行。删除某一行不会删除对应的变量：请使用该行的删除按钮。",
+    "nothingChanged": "没有任何变化，因此没有保存。",
+    "keptPlaceholder": "不输入新值则保持不变",
+    "keptHelp": "机密的值不会再次显示。输入新值以替换它，或留空以保留原值。",
+    "keptNeedsValue": "要修改这一项，请重新输入值：机密的值从不显示，因此无法沿用。"
   },
   "domains": {
     "title": "域名",

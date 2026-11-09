@@ -131,6 +131,14 @@ Skifity works this out from a fingerprint of everything that actually affects
 the image. The panel tells you which kind you are setting before you save it,
 and says afterwards whether it rebuilt.
 
+A variable is changed from its own row: **Edit** opens it with its value, and
+whether it is a secret and read while building, already filled in. A secret's
+box starts empty, because its value is never shown again, and an empty box
+leaves it as it is. **Edit as text** opens with every plain variable as a
+`KEY=value` line and a comment for each secret, and saves only the lines you
+add or change, so saving it untouched restarts nothing. Removing a line there
+does not delete the variable; the row's delete button does.
+
 How a build-time variable reaches the build depends on how the app is built,
 and none of them writes its value anywhere a person can read it afterwards —
 not into the build's own Kubernetes objects, which anybody allowed to list them

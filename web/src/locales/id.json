@@ -1001,7 +1001,16 @@
     "allowedPathsHint": "{{name}} hanya membaca di atau di bawah: {{paths}}.",
     "bulkSaved_other": "{{count}} variabel disimpan",
     "bulkNothing": "Tidak ada baris KEY=value di sini, jadi tidak ada yang disimpan.",
-    "deleteKey": "Hapus {{key}}"
+    "deleteKey": "Hapus {{key}}",
+    "editKey": "Ubah {{key}}",
+    "textSecret": "{{key}} adalah rahasia dan dibiarkan apa adanya",
+    "textReference": "{{key}} dibaca dari {{reference}} dan dibiarkan apa adanya",
+    "textMultiline": "{{key}} terdiri dari lebih dari satu baris dan dibiarkan apa adanya; ubah dari barisnya",
+    "bulkEditKeeps": "Hanya baris yang Anda tambah atau ubah yang disimpan. Menghapus sebuah baris tidak menghapus variabelnya: tombol hapus di barisnya yang melakukannya.",
+    "nothingChanged": "Tidak ada yang berubah, jadi tidak ada yang disimpan.",
+    "keptPlaceholder": "Dibiarkan apa adanya kecuali Anda mengetik nilai baru",
+    "keptHelp": "Nilai rahasia tidak pernah ditampilkan lagi. Ketik nilai baru untuk menggantinya, atau biarkan kosong untuk mempertahankannya.",
+    "keptNeedsValue": "Ketik nilainya lagi untuk mengubah ini: nilai rahasia tidak pernah ditampilkan, jadi tidak bisa dibawa."
   },
   "domains": {
     "title": "Domain",
