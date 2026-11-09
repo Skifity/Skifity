@@ -108,6 +108,19 @@ func LastOwner() *Problem {
 		WithStatus(http.StatusConflict)
 }
 
+// TeamCreationRestricted is somebody who is not a panel administrator asking
+// for a team on a panel that lets only its administrators make one. The owner
+// of a team deploys onto the servers every team shares, so it is the panel's
+// decision, not the account's.
+func TeamCreationRestricted() *Problem {
+	return New("team.creation_restricted", "Only a panel administrator can create a team").
+		WithCause("This panel lets only its administrators create teams, and you are not one.").
+		WithImpact("No team was created.").
+		WithFix("Ask a panel administrator to create the team and add you to it, or to let everyone create teams under Settings, Sign-in.").
+		WithDocs("/docs/configuration#several-teams").
+		WithStatus(http.StatusForbidden)
+}
+
 // PluginNeedsPerson is an API token installing, changing or removing a plugin.
 // Installing mints a token that outlives the request and is bound to no team,
 // which is what creating a token by hand refuses to a token too.

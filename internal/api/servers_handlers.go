@@ -575,8 +575,9 @@ func validUnixName(name string) bool {
 // Every server that joins is given the cluster's join token, and whoever holds
 // the machine holds the token — and a token that joins a control plane is the
 // whole cluster: every team's Secrets and the panel's own. A team admin could
-// add one, and any signed-in user can make a team to be the admin of. Seeing a
-// team's servers, and renaming one, stay the team's.
+// add one, and where the panel lets everyone create teams, any signed-in user
+// can make a team to be the admin of. Seeing a team's servers, and renaming
+// one, stay the team's.
 func serverAdmin(user store.User) error {
 	if !user.IsAdmin {
 		return errdoc.Forbidden("adding, retrying, promoting and removing servers, which only a panel administrator may do")

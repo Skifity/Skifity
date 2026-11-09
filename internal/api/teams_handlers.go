@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/kube"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -41,6 +43,17 @@ type createTeamRequest struct {
 
 func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFrom(r.Context())
+	// Before anything else: whoever makes a team owns it, and an owner
+	// deploys onto the servers every team shares.
+	allowed, err := s.mayCreateTeams(r.Context(), user)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if !allowed {
+		writeError(w, r, errdoc.TeamCreationRestricted())
+		return
+	}
 	if token, ok := apiTokenFrom(r.Context()); ok && token.TeamID != "" {
 		writeError(w, r, errdoc.Forbidden("creating a team with a token made for one team"))
 		return
@@ -67,6 +80,24 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	team.Role = store.RoleOwner
 	s.audit(r, team.ID, "team.created", "team", team.ID, team.Name)
 	writeJSON(w, http.StatusCreated, team)
+}
+
+// mayCreateTeams is whether an account may make a team of its own.
+//
+// Anybody signed in could, and the owner of a team deploys onto the servers
+// every team shares — nothing pins a team's apps to machines of its own. So a
+// viewer of one team, or an account single sign-on made by itself, could run
+// containers on the cluster with a request of their own writing. A panel
+// administrator always may; everybody else only where the setting says so.
+func (s *Server) mayCreateTeams(ctx context.Context, user store.User) (bool, error) {
+	if user.IsAdmin {
+		return true, nil
+	}
+	value, _, err := s.db.GetSetting(ctx, settings.KeyTeamCreation)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(value) == settings.TeamCreationEveryone, nil
 }
 
 func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {

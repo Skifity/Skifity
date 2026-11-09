@@ -236,6 +236,20 @@ definition. Deleting the last project somebody was limited to leaves them with
 no projects, not with all of them. Changing someone's role without ticking the
 box lifts the limit — the form always says the whole of what they can reach.
 
+## Several teams
+
+One panel can hold several teams, each with its own projects, servers,
+connections and people, and nobody in one sees the other.
+
+**Who may create a team** is a panel setting, under **Settings → Sign-in**. By
+default only a panel administrator can. Whoever creates a team is its owner,
+and an owner deploys onto the servers every team on this panel shares — nothing
+keeps a team's apps on machines of its own. Opened to **everyone who can sign
+in**, that includes an account single sign-on made by itself and somebody who is
+only a viewer in another team. Open it when the people who sign in here are
+people you would let run their own containers on your servers. Anybody else is
+refused with `team.creation_restricted`.
+
 ## Accounts
 
 **Settings → Accounts** lists everybody who can sign in to the panel, whatever

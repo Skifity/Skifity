@@ -649,9 +649,11 @@ function SettingField({
             <SelectValue placeholder={setting.placeholder ?? t("common.none")} />
           </SelectTrigger>
           <SelectContent>
+            {/* An option that is a word, such as "everyone", has words of its
+                own; one that is a name, such as "vxlan", is shown as it is. */}
             {(setting.options ?? []).map((option) => (
               <SelectItem key={option} value={option}>
-                {option}
+                {t(`${field}.options.${option}`, { defaultValue: option })}
               </SelectItem>
             ))}
           </SelectContent>

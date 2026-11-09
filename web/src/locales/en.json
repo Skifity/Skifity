@@ -2159,6 +2159,14 @@
         "label": "Certificate authorities for Git hosts",
         "help": "Only for a Git host whose certificate no public authority signed: the certificate, in PEM, of the authority that did. Builds trust it beside the public ones when they clone, and so does the panel when it reads a repository."
       },
+      "signin_team_creation": {
+        "label": "Who may create teams",
+        "help": "Panel administrators can always create a team. Everyone lets any account do it — one single sign-on created, or a viewer in another team — and become the owner of a team that deploys onto this panel's servers.",
+        "options": {
+          "admins": "Panel administrators",
+          "everyone": "Everyone who can sign in"
+        }
+      },
       "storage_default_backups": {
         "label": "Back up new databases",
         "help": "On by default. A database created while the bucket above is set up is backed up every day, at a minute between 02:00 and 05:00 UTC of its own, keeping the last 7. Its Backups tab changes that or turns it off, and whoever creates one can say no. Previews and engines the panel does not back up never get one."
@@ -4414,6 +4422,12 @@
         "cause": "{{0}} run with an API token of this account's, which would be deleted with it and stop them without a word.",
         "impact": "The account was not deleted.",
         "fix": "Remove those plugins under Plugins, and install them again from another administrator's account if they are still wanted. Then delete the account."
+      },
+      "team_creation_restricted": {
+        "title": "Only a panel administrator can create a team",
+        "cause": "This panel lets only its administrators create teams, and you are not one.",
+        "impact": "No team was created.",
+        "fix": "Ask a panel administrator to create the team and add you to it, or to let everyone create teams under Settings, Sign-in."
       },
       "deploy_crashed": {
         "title": "The new version stopped as it started",

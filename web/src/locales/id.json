@@ -2131,6 +2131,14 @@
         "label": "Otoritas sertifikat untuk host Git",
         "help": "Hanya untuk host Git yang sertifikatnya tidak ditandatangani otoritas publik: sertifikat, dalam PEM, dari otoritas yang menandatanganinya. Build memercayainya di samping otoritas publik saat melakukan clone, begitu pula panel saat membaca repositori."
       },
+      "signin_team_creation": {
+        "label": "Siapa yang boleh membuat tim",
+        "help": "Administrator panel selalu bisa membuat tim. Dengan pilihan semua orang, akun mana pun bisa melakukannya — akun yang dibuat oleh single sign-on, atau pengamat di tim lain — dan menjadi pemilik tim yang men-deploy ke server panel ini.",
+        "options": {
+          "admins": "Administrator panel",
+          "everyone": "Semua orang yang bisa masuk"
+        }
+      },
       "storage_default_backups": {
         "label": "Cadangkan database baru",
         "help": "Aktif secara bawaan. Database yang dibuat saat bucket di atas sudah diatur dicadangkan setiap hari, pada menitnya sendiri antara pukul 02.00 dan 05.00 UTC, dengan 7 cadangan terakhir disimpan. Tab Cadangan miliknya bisa mengubah atau mematikannya, dan siapa pun yang membuatnya bisa menolak. Pratinjau dan mesin yang tidak dicadangkan panel tidak pernah mendapatkannya."
@@ -4386,6 +4394,12 @@
         "cause": "{{0}} berjalan dengan token API milik akun ini, yang akan ikut terhapus dan menghentikannya tanpa pemberitahuan.",
         "impact": "Akun tidak dihapus.",
         "fix": "Hapus plugin itu di Plugin, lalu pasang lagi dari akun administrator lain jika masih dibutuhkan. Setelah itu hapus akunnya."
+      },
+      "team_creation_restricted": {
+        "title": "Hanya administrator panel yang bisa membuat tim",
+        "cause": "Panel ini hanya mengizinkan administratornya membuat tim, dan Anda bukan administrator.",
+        "impact": "Tidak ada tim yang dibuat.",
+        "fix": "Minta administrator panel membuat tim itu dan menambahkan Anda, atau mengizinkan semua orang membuat tim di Pengaturan, lalu Masuk."
       },
       "deploy_crashed": {
         "title": "Versi baru berhenti saat menyala",

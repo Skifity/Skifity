@@ -106,6 +106,14 @@ const (
 	FlannelVXLAN = "vxlan"
 )
 
+// Who may create a team: KeyTeamCreation's two values.
+const (
+	// TeamCreationAdmins is panel administrators only. The default.
+	TeamCreationAdmins = "admins"
+	// TeamCreationEveryone is any account that can sign in.
+	TeamCreationEveryone = "everyone"
+)
+
 // IngressServiceAddress is what a Cloudflare tunnel's public hostname points at.
 //
 // k3s ships Traefik in kube-system under this name. It is the address of the
@@ -178,6 +186,7 @@ const (
 	KeySSOGroupsClaim        = "signin.oidc_groups_claim"
 	KeySSOGroupRoles         = "signin.oidc_group_roles"
 	KeyAPIAllowedNetworks    = "signin.api_allowed_networks"
+	KeyTeamCreation          = "signin.team_creation"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
 	KeyGitPrivateHosts       = "git.private_hosts"
@@ -282,6 +291,19 @@ var Definitions = []Definition{
 			"Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere.",
 		Placeholder: "203.0.113.0/24",
 		Validate:    validateNetworks,
+	},
+	{
+		// Making a team makes its owner, and an owner deploys onto the
+		// servers every team shares: nothing pins a team's apps to machines
+		// of its own. Open to every account, that was a viewer of one team,
+		// or an account single sign-on made on its own, running containers on
+		// the cluster with a request of their own writing.
+		Key: KeyTeamCreation, Label: "Who may create teams", Group: GroupSignIn,
+		Help: "Panel administrators can always create a team. Everyone lets any account do it — one single sign-on " +
+			"created, or a viewer in another team — and become the owner of a team that deploys onto this panel's servers.",
+		Options:  []string{TeamCreationAdmins, TeamCreationEveryone},
+		Validate: validateOneOf(TeamCreationAdmins, TeamCreationEveryone),
+		Default:  TeamCreationAdmins,
 	},
 	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
