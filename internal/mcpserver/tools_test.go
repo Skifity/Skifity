@@ -119,6 +119,7 @@ var exampleCalls = map[string]map[string]any{
 	"update_app_settings": {"app_id": "app_1", "port": 3000, "build_command": "npm run build"},
 	"restart_app":         {"app_id": "app_1"},
 	"cancel_deployment":   {"app_id": "app_1", "deployment_id": "dep_2"},
+	"get_attention":       {},
 }
 
 // Every tool, once, against a panel that hands over every secret it holds.

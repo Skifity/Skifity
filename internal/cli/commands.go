@@ -69,6 +69,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdRun(ctx, rest, stdout)
 	case "status":
 		err = cmdStatus(ctx, rest, stdout)
+	case "attention":
+		err = cmdAttention(ctx, rest, stdout)
 	case "events":
 		err = cmdEvents(ctx, rest, stdout)
 	case "drift":
@@ -134,6 +136,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Ctrl-C while a deploy was followed; what stopped was said already.
 	if errors.As(err, new(interrupted)) {
 		return 130
+	}
+	// The list said what is wrong; the status says whether anything is.
+	var needed attentionNeeded
+	if errors.As(err, &needed) {
+		return 1
 	}
 	var exit commandExit
 	if errors.As(err, &exit) {
@@ -257,6 +264,8 @@ Getting started:
 Working with apps:
   deploy                Deploy the current directory's app; --cancel stops one under way
   status                Show an app's live state
+  status --all          What needs attention across the team; exits 1 if anything is broken
+  attention             The same as status --all
   logs                  Show or follow an app's logs
   events                What Kubernetes said about an app's instances, newest first
   drift                 What was changed outside the panel, with kubectl; --repair puts it back
@@ -556,6 +565,7 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("status", flag.ContinueOnError)
 	flags.SetOutput(out)
 	appID := flags.String("app", "", "the app id")
+	all := flags.Bool("all", false, "what needs attention across the team, rather than one app; exits 1 if anything is broken")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	explain := flags.String("explain", "", "print an error code's explanation for pasting into an AI assistant")
 	if err := flags.Parse(args); err != nil {
@@ -563,6 +573,9 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	}
 	if *explain != "" {
 		return explainError(out, *explain)
+	}
+	if *all {
+		return showAttention(ctx, *asJSON, out)
 	}
 
 	cfg, err := LoadConfig()

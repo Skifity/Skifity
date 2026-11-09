@@ -184,6 +184,20 @@ func newFakePanel(t *testing.T) *fakePanel {
 			"reachable": true, "ready_nodes": 1, "total_memory_mb": 4096, "used_memory_mb": 1024,
 			"nodes": []any{map[string]any{"name": "s1", "ready": true, "roles": []string{"control-plane"}}},
 		},
+		"GET /api/teams/{team}/attention": items(
+			map[string]any{
+				"kind": "deploy_failed", "severity": "error", "code": "deploy_failed",
+				"params": map[string]any{"app": "web", "number": 2}, "message": "Deployment #2 of web failed.",
+				"target_type": "app", "target_id": "app_1", "target_label": "web",
+				"project_name": "acme", "environment_name": "production", "since": "2026-09-30T03:00:00Z",
+				"path": "/apps/app_1?tab=deployments&deployment=dep_2",
+			},
+			map[string]any{
+				"kind": "no_channel", "severity": "warning", "code": "no_channel", "params": map[string]any{},
+				"message":     "Nobody is told when something breaks: the team has no notification channel.",
+				"target_type": "team", "target_id": "team_1", "target_label": "", "path": "/settings?tab=notifications",
+			},
+		),
 
 		"GET /api/environments/{env}/apps":       items(app),
 		"POST /api/environments/{env}/apps":      map[string]any{"app": app, "webhook": map[string]any{"registered": false}},

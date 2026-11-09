@@ -560,6 +560,7 @@ func (s *Server) register() {
 	s.registerEvents()
 	s.registerLogDrains()
 	s.registerApps()
+	s.registerAttention()
 }
 
 // --- handlers ---
