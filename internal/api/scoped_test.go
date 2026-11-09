@@ -22,6 +22,8 @@ var limitedMemberMayUse = map[string]string{
 	"GET /api/teams/{teamID}":                                     "the team's name and their own place in it",
 	"GET /api/teams/{teamID}/members":                             "who else is in the team; other people's limits name only projects they can see",
 	"GET /api/teams/{teamID}/projects":                            "the projects they are limited to, and no others",
+	"GET /api/teams/{teamID}/apps":                                "the apps in the projects they are limited to, and no others",
+	"GET /api/teams/{teamID}/attention":                           "what needs attention in their projects; nothing about servers, the team's settings or the panel",
 	"GET /api/teams/{teamID}/git-sources":                         "picking a repository is how an app is created in one of their projects",
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/repositories": "the repositories that picking one is made from",
 	"GET /api/teams/{teamID}/git-sources/{sourceID}/branches":     "and the branches of the one picked",

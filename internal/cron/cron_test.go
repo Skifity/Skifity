@@ -221,3 +221,33 @@ func TestAScheduleThatCannotFireStillSaysSo(t *testing.T) {
 		t.Error("the 30th of February was reported as a time that comes round")
 	}
 }
+
+// Now's own minute belongs to the tick, which takes it on time: catching up
+// on it as well would take the same backup twice.
+func TestLastDueLeavesThisMinuteToTheTick(t *testing.T) {
+	now := time.Date(2026, 3, 4, 3, 0, 30, 0, time.UTC)
+	due, ok := LastDue("0 3 * * *", now.Add(-48*time.Hour), now)
+	if !ok || !due.Equal(time.Date(2026, 3, 3, 3, 0, 0, 0, time.UTC)) {
+		t.Fatalf("last due = %s, %v; want yesterday's", due, ok)
+	}
+	// A minute later, today's is the one.
+	due, ok = LastDue("0 3 * * *", now.Add(-48*time.Hour), now.Add(time.Minute))
+	if !ok || !due.Equal(time.Date(2026, 3, 4, 3, 0, 0, 0, time.UTC)) {
+		t.Fatalf("last due a minute later = %s, %v; want today's", due, ok)
+	}
+}
+
+// A time before the schedule was set, or further back than the horizon, was
+// never this schedule's to miss.
+func TestLastDueLooksNoFurtherBackThanItShould(t *testing.T) {
+	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	if _, ok := LastDue("0 3 29 2 *", now.Add(-365*24*time.Hour), now); ok {
+		t.Error("a schedule that was not due in the last week was found due")
+	}
+	if _, ok := LastDue("0 3 * * *", now.Add(-time.Hour), now); ok {
+		t.Error("a schedule set at 11:00 was found due at 03:00 the same day")
+	}
+	if _, ok := LastDue("not a schedule", time.Time{}, now); ok {
+		t.Error("a schedule that does not parse was found due")
+	}
+}

@@ -356,6 +356,13 @@ func (s *Server) routes() chi.Router {
 
 				team.Get("/projects", s.handleListProjects)
 				team.Post("/projects", s.handleCreateProject)
+				// Every app in the team, wherever it lives, so nothing has to
+				// walk projects and environments to find them. See
+				// team_lists_handlers.go.
+				team.Get("/apps", s.handleListTeamApps)
+				// What needs somebody's attention across the team, built
+				// from what the panel has recorded. See attention_handlers.go.
+				team.Get("/attention", s.handleTeamAttention)
 
 				team.Get("/servers", s.handleListServers)
 				team.Post("/servers", s.handleAddServer)

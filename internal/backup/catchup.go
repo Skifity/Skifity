@@ -10,11 +10,6 @@ import (
 	"skifity/internal/store"
 )
 
-// catchUpHorizon is how far back a missed backup is looked for. A week covers
-// a panel that was down over a long weekend; a policy whose last time is
-// further back than that is weekly or rarer, and its next time is soon.
-const catchUpHorizon = 7 * 24 * time.Hour
-
 // Missed is one scheduled backup whose time passed with nothing taken.
 type Missed struct {
 	Policy store.BackupPolicy
@@ -41,7 +36,7 @@ func (m *Manager) CatchUp(ctx context.Context, now time.Time) []Missed {
 	}
 	var missed []Missed
 	for _, policy := range policies {
-		due, ok := lastDue(policy, now)
+		due, ok := LastDue(policy, now)
 		if !ok {
 			continue
 		}
@@ -59,25 +54,13 @@ func (m *Manager) CatchUp(ctx context.Context, now time.Time) []Missed {
 	return missed
 }
 
-// lastDue is the most recent minute before now's own a policy was due in,
-// no earlier than the policy was last changed and no further back than the
-// horizon. Now's minute is the tick's, which runs it on time.
-func lastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
-	schedule, err := cron.ParseSchedule(policy.Schedule)
-	if err != nil {
-		return time.Time{}, false
-	}
-	now = now.UTC().Truncate(time.Minute)
-	floor := now.Add(-catchUpHorizon)
-	if policy.UpdatedAt.After(floor) {
-		floor = policy.UpdatedAt.UTC()
-	}
-	for at := now.Add(-time.Minute); at.After(floor); at = at.Add(-time.Minute) {
-		if schedule.Matches(at) {
-			return at, true
-		}
-	}
-	return time.Time{}, false
+// LastDue is the most recent minute before now's own a policy was due in, no
+// earlier than the policy was last changed and no further back than
+// cron.CatchUpHorizon. Now's minute is the tick's, which runs it on time. The
+// overview's list of what needs attention asks cron.LastDue the same question,
+// so a backup it calls missed is one this would have caught up on.
+func LastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
+	return cron.LastDue(policy.Schedule, policy.UpdatedAt, now)
 }
 
 // takeMissed starts the late backup and tells the team, with the reason when

@@ -7,7 +7,6 @@ import (
 	"skifity/internal/api"
 	"skifity/internal/errdoc"
 	"skifity/internal/kube"
-	"skifity/internal/store"
 )
 
 // The scaling readiness checker.
@@ -260,20 +259,4 @@ func inspectVariable(key string, isSecret bool, readValue func() string) (api.Sc
 		}, true
 	}
 	return api.ScalingFinding{}, false
-}
-
-// AppsNeedingAttention lists apps whose live state does not match what was
-// asked for, which is what the dashboard's warning badge is built from.
-func (d *Deployer) AppsNeedingAttention(ctx context.Context, envID string) ([]store.App, error) {
-	apps, err := d.db.ListApps(ctx, envID)
-	if err != nil {
-		return nil, err
-	}
-	var out []store.App
-	for _, app := range apps {
-		if app.Status == "failed" || app.Status == "crashing" {
-			out = append(out, app)
-		}
-	}
-	return out, nil
 }

@@ -122,13 +122,13 @@ func TestABackupDueWhileThePanelWasDownIsTakenLateAndSaid(t *testing.T) {
 func TestCatchingUpLeavesThisMinuteToTheTick(t *testing.T) {
 	now := time.Date(2026, 3, 4, 3, 0, 30, 0, time.UTC)
 	policy := store.BackupPolicy{Schedule: "0 3 * * *", UpdatedAt: now.Add(-48 * time.Hour)}
-	due, ok := lastDue(policy, now)
+	due, ok := LastDue(policy, now)
 	if !ok || !due.Equal(time.Date(2026, 3, 3, 3, 0, 0, 0, time.UTC)) {
 		t.Fatalf("last due = %s, %v; want yesterday's", due, ok)
 	}
 	// A schedule nothing matched within the horizon is not missed.
 	policy.Schedule = "0 3 29 2 *"
-	if _, ok := lastDue(policy, now); ok {
+	if _, ok := LastDue(policy, now); ok {
 		t.Fatal("a schedule that was not due in the last week was caught up on")
 	}
 }

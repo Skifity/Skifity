@@ -1153,6 +1153,51 @@ paths:
               schema: {$ref: '#/components/schemas/Project'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/apps:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listTeamApps
+      tags: [Apps]
+      summary: Every app in the team
+      description: >-
+        Every app in every environment of the team, previews included, with
+        the project and environment it lives in, its address and its newest
+        deployment. A member limited to some projects sees theirs.
+      responses:
+        '200':
+          description: The apps.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TeamAppList'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/attention:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: teamAttention
+      tags: [Teams]
+      summary: What needs attention across the team
+      description: >-
+        What is wrong now, errors first, each with the panel page to deal with
+        it on: a failed deploy, an app with no instance running, an alert going
+        off, a database that failed, a backup that failed or was not taken
+        when due, a domain whose certificate could not be issued, a
+        vulnerable or drifted app. Built from what the panel has recorded, so
+        it answers with the cluster down. Previews are left out. A member
+        limited to some projects hears about theirs only; servers are for the
+        rest of the team, certificates and notification channels for whoever
+        can open the team's settings, and the panel's own backup for its
+        administrator.
+      responses:
+        '200':
+          description: The list, which is empty when nothing needs attention.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AttentionList'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/servers:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -5913,6 +5958,75 @@ components:
       required: [items, total]
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/Project'}}
+        total: {type: integer}
+
+    TeamApp:
+      type: object
+      required: [id, name, slug, source_type, status, project_id, project_name, environment_id,
+                 environment_name, environment_kind, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        slug: {type: string}
+        source_type: {type: string, enum: [git, image, upload]}
+        status: {type: string}
+        project_id: {type: string}
+        project_name: {type: string}
+        environment_id: {type: string}
+        environment_name: {type: string}
+        environment_kind: {type: string, enum: [standard, preview]}
+        url: {type: string, description: 'Its address: a domain of the team''s own when there is one, else the panel''s. Absent for an internal app or one with no domain.'}
+        last_deployment:
+          type: object
+          description: The newest deployment, whatever became of it. Absent for an app never deployed.
+          required: [id, number, status, at]
+          properties:
+            id: {type: string}
+            number: {type: integer}
+            status: {type: string, enum: [queued, building, deploying, succeeded, failed, cancelled, superseded]}
+            commit_sha: {type: string}
+            at: {type: string, format: date-time, description: 'When it was asked for.'}
+            finished_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+
+    TeamAppList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/TeamApp'}}
+        total: {type: integer}
+
+    AttentionItem:
+      type: object
+      required: [kind, severity, code, params, message, target_type, target_id, target_label, path]
+      properties:
+        kind:
+          type: string
+          enum: [server_not_ready, deploy_failed, app_unhealthy, database_unwell, backup_failed, backup_missed,
+                 panel_backup_failed, domain_cert_failed, certificate_expiring, app_alert, server_alert,
+                 app_vulnerable, app_drifted, no_channel]
+        severity: {type: string, enum: [error, warning]}
+        code: {type: string, description: 'The sentence, as a translation key: attention.<code> in the panel.'}
+        params:
+          type: object
+          additionalProperties: {type: [string, integer]}
+          description: What fills the sentence in. alerts is a comma-separated list of alert names.
+        message: {type: string, description: 'The same sentence in English.'}
+        target_type: {type: string, enum: [app, domain, database, volume, server, certificate, team, panel]}
+        target_id: {type: string}
+        target_label: {type: string}
+        project_id: {type: string}
+        project_name: {type: string}
+        environment_id: {type: string}
+        environment_name: {type: string}
+        since: {type: string, format: date-time, description: 'When it started, where that is known; for a certificate, when it runs out.'}
+        path: {type: string, description: 'The panel page to deal with it on.'}
+
+    AttentionList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/AttentionItem'}}
         total: {type: integer}
 
     CreateProjectRequest:
