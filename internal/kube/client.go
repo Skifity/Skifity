@@ -509,10 +509,21 @@ type Instance struct {
 	MemoryMB  int64
 	// UsageKnown is false when metrics-server had nothing for the pod.
 	UsageKnown bool
+	// DeploymentID is the panel's deployment this pod was started for, read
+	// from its own annotation. Not from its image: a variable-only redeploy
+	// and every image app run the same image under a new deployment, and a
+	// rollback runs an old image under a new one.
+	DeploymentID string
 }
 
+// DeploymentIDAnnotation names, on a pod, the deployment it was started for.
+var DeploymentIDAnnotation = version.LabelKey("deployment-id")
+
 func describePod(pod corev1.Pod) Instance {
-	inst := Instance{Name: pod.Name, Node: pod.Spec.NodeName, Status: string(pod.Status.Phase)}
+	inst := Instance{
+		Name: pod.Name, Node: pod.Spec.NodeName, Status: string(pod.Status.Phase),
+		DeploymentID: pod.Annotations[DeploymentIDAnnotation],
+	}
 	if pod.Status.StartTime != nil {
 		inst.StartedAt = pod.Status.StartTime.Time
 	}

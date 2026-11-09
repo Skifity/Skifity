@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useSearchParams } from "react-router-dom"
 import {
   ArrowUpRightIcon,
   CircleDotIcon,
@@ -50,19 +51,36 @@ import { formatDuration, formatRelative, shortCommit } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { App, Deployment, LogLine } from "@/lib/types"
 
-const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
+export const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
 
-export function DeploymentsTab({ app }: { app: App }) {
-  const { t } = useTranslation()
+/**
+ * Which version is actually serving: the newest deployment that succeeded.
+ *
+ * A rollback is a new deployment carrying an old image, so the newest
+ * succeeded one is always the live one — but after a rollback the row people
+ * assume is live (the highest number) is a superseded build, and a newer one
+ * may still be building or may have failed. Every place that names the live
+ * version derives it here, during render, from the list itself: there is no
+ * second source to fall out of step with.
+ */
+export function liveDeployment(items: Deployment[]): Deployment | undefined {
+  return items.find((deployment) => deployment.status === "succeeded")
+}
+
+/** Where a deployment is opened: its row on the Deployments tab, log and all. */
+export function deploymentLink(deploymentId: string) {
+  return { search: `?tab=deployments&deployment=${encodeURIComponent(deploymentId)}` }
+}
+
+/**
+ * An app's deployments, newest first, as every view of them reads them: one
+ * query, so the Overview and the Deployments tab share what was fetched.
+ */
+export function useDeployments(appId: string) {
   const { team } = useSession()
-  // null means "nothing chosen yet", which is not the same as "chosen nothing":
-  // a running deployment opens itself until the user closes it.
-  const [opened, setOpened] = useState<string | null>(null)
-  const [touched, setTouched] = useState(false)
-
-  const deployments = useQuery({
-    queryKey: ["deployments", app.id],
-    queryFn: () => api.get<List<Deployment>>(`/api/apps/${app.id}/deployments`),
+  return useQuery({
+    queryKey: ["deployments", appId],
+    queryFn: () => api.get<List<Deployment>>(`/api/apps/${appId}/deployments`),
     // A member limited to some projects is refused the team's event stream,
     // so a deployment of theirs that is under way is polled until it ends:
     // otherwise a row they were not watching the log of said "building" for
@@ -72,18 +90,27 @@ export function DeploymentsTab({ app }: { app: App }) {
         ? 5_000
         : false,
   })
+}
+
+export function DeploymentsTab({ app }: { app: App }) {
+  const { t } = useTranslation()
+  // A deployment named in the address — by the form that started it, or by
+  // a link from the Overview — is the one opened first.
+  const [params] = useSearchParams()
+  const asked = params.get("deployment")
+  // null means "nothing chosen yet", which is not the same as "chosen nothing":
+  // a running deployment opens itself until the user closes it.
+  const [opened, setOpened] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
+
+  const deployments = useDeployments(app.id)
 
   const items = deployments.data?.items ?? []
   const running = items.find((deployment) => !TERMINAL.has(deployment.status))
-  // Which version is actually serving. A rollback is a new deployment carrying
-  // an old image, so the newest succeeded one is always the live one — but
-  // nothing on this list said so, and after a rollback the row people assume
-  // is live (the highest number) is a superseded build. Derived during render
-  // from the list itself: there is no second source to fall out of step with.
-  const live = items.find((deployment) => deployment.status === "succeeded")?.id
+  const live = liveDeployment(items)?.id
 
   // A running deployment opens itself: that is what the user came to look at.
-  const selected = touched ? opened : (running?.id ?? null)
+  const selected = touched ? opened : (asked ?? running?.id ?? null)
   const setSelected = (id: string | null) => {
     setTouched(true)
     setOpened(id)
@@ -518,7 +545,7 @@ function PromoteDialog({
  * did not match any of them: its trigger was the English sentence
  * "rollback to #3", which no language but English ever showed.
  */
-function triggerLabel(t: TFunction, deployment: Deployment): string {
+export function triggerLabel(t: TFunction, deployment: Deployment): string {
   if (deployment.trigger === "rollback" && deployment.rollback_of) {
     return t("deploy.triggerRollbackTo", { number: deployment.rollback_of })
   }

@@ -171,7 +171,7 @@ is not one, it says so and asks for `--app` or `--env` rather than guessing.
 ## Everything else
 
 ```sh
-skifity status                    # running? how many instances? what URL?
+skifity status                    # running? which version is live? what URL?
 skifity logs --follow             # live output
 skifity events --warnings         # what Kubernetes said went wrong, explained
 skifity events --db orders        # the same for a database

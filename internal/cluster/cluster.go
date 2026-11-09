@@ -164,6 +164,7 @@ func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api
 			Name: inst.Name, Status: inst.Status, Ready: inst.Ready,
 			Restarts: inst.Restarts, Node: inst.Node, StartedAt: inst.StartedAt,
 			Message: inst.Message, CPUM: inst.CPUM, MemoryMB: inst.MemoryMB, UsageKnown: inst.UsageKnown,
+			DeploymentID: inst.DeploymentID,
 		})
 	}
 	return out, nil

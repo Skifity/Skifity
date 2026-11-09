@@ -197,7 +197,24 @@ type statusOutput struct {
 		Ready    bool   `json:"ready"`
 		Restarts int    `json:"restarts"`
 		Node     string `json:"node"`
+		// The number of the deployment the instance runs.
+		Deployment int `json:"deployment,omitempty"`
 	} `json:"instances,omitempty"`
+	LiveDeployment *liveDeployment `json:"live_deployment,omitempty"`
+}
+
+// liveDeployment is the version an app serves: its newest deployment that
+// succeeded, which after a rollback is not its newest code.
+type liveDeployment struct {
+	ID            string `json:"id"`
+	Number        int    `json:"number"`
+	Trigger       string `json:"trigger,omitempty"`
+	RollbackOf    int    `json:"rollback_of,omitempty"`
+	Commit        string `json:"commit,omitempty"`
+	CommitMessage string `json:"commit_message,omitempty"`
+	CommitAuthor  string `json:"commit_author,omitempty"`
+	Image         string `json:"image,omitempty"`
+	LiveSince     string `json:"live_since,omitempty"`
 }
 
 type deployInput struct {
@@ -413,7 +430,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_status",
 		Annotations: reads("Get an app's status"),
-		Description: "Describe an app's live state: whether it is running, how many instances are ready, and its URLs. Use this after a deploy to find out what happened.",
+		Description: "Describe an app's live state: whether it is running, how many instances are ready, its URLs, and which deployment is live (live_deployment) and which each instance runs. Use this after a deploy to find out what happened.",
 	}, s.getAppStatus)
 
 	addTool(s, &mcp.Tool{
@@ -650,11 +667,12 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 		ReadyReplicas   int      `json:"ready_replicas"`
 		URLs            []string `json:"urls"`
 		Instances       []struct {
-			Name     string `json:"name"`
-			Status   string `json:"status"`
-			Ready    bool   `json:"ready"`
-			Restarts int    `json:"restarts"`
-			Node     string `json:"node"`
+			Name       string `json:"name"`
+			Status     string `json:"status"`
+			Ready      bool   `json:"ready"`
+			Restarts   int    `json:"restarts"`
+			Node       string `json:"node"`
+			Deployment int    `json:"deployment,omitempty"`
 		} `json:"instances"`
 	}
 	if err := s.client.Do(ctx, "GET", "/api/apps/"+in.AppID+"/status", nil, &raw); err != nil {
@@ -668,6 +686,26 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 	}
 	summary := fmt.Sprintf("%s: %d of %d instances ready. %s",
 		raw.Phase, raw.ReadyReplicas, raw.DesiredReplicas, raw.Detail)
+
+	// Which version that is, from the history: the status alone said an app
+	// was running and not whether it was running the deploy just made.
+	// Without the history the status is still worth answering with.
+	var history struct {
+		Items []store.Deployment `json:"items"`
+	}
+	if err := s.client.Do(ctx, "GET", "/api/apps/"+in.AppID+"/deployments?limit=50", nil, &history); err == nil {
+		if live, ok := cli.LiveDeployment(history.Items); ok {
+			out.LiveDeployment = &liveDeployment{
+				ID: live.ID, Number: live.Number, Trigger: live.Trigger, RollbackOf: live.RollbackOf,
+				Commit: live.CommitSHA, CommitMessage: live.CommitMessage, CommitAuthor: live.CommitAuthor,
+				Image: live.Image,
+			}
+			if !live.FinishedAt.IsZero() {
+				out.LiveDeployment.LiveSince = live.FinishedAt.Format(time.RFC3339)
+			}
+			summary = strings.TrimSpace(summary) + fmt.Sprintf(" Deployment #%d is live.", live.Number)
+		}
+	}
 	return textResult(summary), out, nil
 }
 

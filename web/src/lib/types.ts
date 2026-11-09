@@ -294,6 +294,10 @@ export type Instance = {
   message?: string
   cpu_m: number
   memory_mb: number
+  /** The deployment this instance was started for; absent when unknown. */
+  deployment_id?: string
+  /** That deployment's number, which is the version it runs; 0 when unknown. */
+  deployment: number
 }
 
 export type AppStatus = {

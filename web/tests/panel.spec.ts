@@ -414,9 +414,15 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
   // The button says what it will do, and deploying straight away is the default.
   await page.getByRole("button", { name: /^create and deploy$/i }).click()
 
-  await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
-  await expect(page.getByText("An uploaded folder")).toBeVisible()
+  // The page opens on the build it started, with that deployment open, not on
+  // an Overview that says nothing is running.
+  await expect(page).toHaveURL(/\/apps\/app_\w+\?tab=deployments&deployment=dep_/, {
+    timeout: 30_000,
+  })
+  await expect(page.getByRole("button", { name: /^#1\b/ })).toHaveAttribute("aria-expanded", "true")
   await expect(page.getByRole("button", { name: "Send a new version" })).toBeVisible()
+  await page.getByRole("tab", { name: "Overview" }).click()
+  await expect(page.getByText("An uploaded folder")).toBeVisible()
 
   const appID = page.url().split("/apps/")[1].split(/[/?#]/)[0]
   const variables = await (await page.request.get(`/api/apps/${appID}/variables`)).json()
@@ -428,6 +434,60 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
   expect(deployments.items[0]?.commit_sha, "the deploy does not name the upload").toMatch(
     /^[a-f0-9]{64}$/,
   )
+})
+
+test("a first deployment that failed is said on the Overview, with its reason", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  // Deployed at once, on a panel with no cluster to deploy to: the deployment
+  // fails, and nothing ever goes live.
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "never-live", source_type: "image", image: "nginx:1.27", port: 80, deploy: true },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/apps/${appID}/deployments`)).json()).items[0]?.status,
+      { timeout: 30_000 },
+    )
+    .toBe("failed")
+  const failed = (await (await page.request.get(`/api/apps/${appID}/deployments`)).json()).items[0]
+
+  await page.goto(`/apps/${appID}`)
+  const en = localeStrings("en")
+  const apps = en.apps as Record<string, string>
+  const notice = page.getByRole("alert").filter({ hasText: "Deployment #1 failed" })
+  await expect(notice).toBeVisible()
+  // Its reason in the words the Deployments tab uses: the catalogue's title
+  // for its code, or what the server recorded when the title needs values the
+  // record does not keep.
+  const catalogue = (en.errors as Record<string, Record<string, { title?: string }>>).catalogue
+  const title = catalogue[String(failed.error_code).replaceAll(".", "_")]?.title
+  await expect(notice).toContainText(title && !title.includes("{{") ? title : failed.error_message)
+  // Not the empty state that sends people to start another deploy as though
+  // none had been tried.
+  await expect(page.getByText(apps.noInstancesTitle)).toBeVisible()
+  await expect(page.getByText(/builds the app and starts the first one/)).toHaveCount(0)
+  await expect(page.getByText(apps.liveNone)).toBeVisible()
+
+  await page.getByRole("link", { name: apps.viewBuildLog }).click()
+  await expect(page).toHaveURL(/\?tab=deployments&deployment=dep_/)
+  await expect(page.getByRole("button", { name: /^#1\b/ })).toHaveAttribute("aria-expanded", "true")
 })
 
 test("an app can be put behind a password, and the password never comes back", async ({ page }) => {

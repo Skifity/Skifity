@@ -839,7 +839,27 @@
       "restart": "restart tidak diperlukan: instance dijalankan ulang secara otomatis.",
       "no_port": "Tidak ada port yang dipublikasikan atau di-expose, dan port image-nya tidak diketahui: tidak ada yang bisa menjangkaunya lewat nama. Jika layanan lain terhubung ke sini, beri baris expose dengan port yang didengarnya.",
       "skipped": "Layanan {{name}} tidak bisa dibaca dan dilewati."
-    }
+    },
+    "liveVersion": "Versi yang aktif",
+    "liveNone": "Belum ada yang aktif",
+    "wentLive": "Mulai aktif {{when}}",
+    "wentLiveBy": "Mulai aktif {{when}}, oleh {{who}}",
+    "viewBuildLog": "Lihat log build",
+    "deploymentUnderway": {
+      "queued": "Deployment #{{number}} menunggu dimulai",
+      "building": "Deployment #{{number}} sedang di-build",
+      "deploying": "Deployment #{{number}} sedang menjalankan versi barunya"
+    },
+    "deploymentUnderwayFirst": "Aplikasi aktif begitu ini selesai. Log build menunjukkan sudah sampai mana.",
+    "deploymentUnderwayLive": "#{{number}} tetap melayani sampai versi baru siap.",
+    "deploymentFailed": "Deployment #{{number}} gagal",
+    "deploymentFailedLive": "#{{number}} masih aktif, jadi aplikasi menjalankan versi sebelumnya.",
+    "noInstancesUntil": "Instance pertama dimulai begitu deployment #{{number}} siap.",
+    "noInstancesFailed": "Deployment #{{number}} gagal, jadi tidak ada yang dijalankan. Setelah penyebabnya diperbaiki, {{action}} di bagian atas halaman ini mencobanya lagi.",
+    "instanceVersion": "Versi",
+    "nowLive": "{{name}} sudah aktif",
+    "nowLiveNumber": "Deployment #{{number}} sedang melayani.",
+    "openApp": "Buka"
   },
   "deploy": {
     "title": "Deployment",

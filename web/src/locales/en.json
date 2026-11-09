@@ -851,7 +851,27 @@
       "restart": "restart is not needed: instances are restarted automatically.",
       "no_port": "No port is published or exposed, and its image's is not known: nothing can reach it by name. If another service connects to it, give it an expose line with the port it listens on.",
       "skipped": "The service {{name}} could not be read and was skipped."
-    }
+    },
+    "liveVersion": "Live version",
+    "liveNone": "Nothing is live yet",
+    "wentLive": "Went live {{when}}",
+    "wentLiveBy": "Went live {{when}}, by {{who}}",
+    "viewBuildLog": "View build log",
+    "deploymentUnderway": {
+      "queued": "Deployment #{{number}} is waiting to start",
+      "building": "Deployment #{{number}} is building",
+      "deploying": "Deployment #{{number}} is starting its new version"
+    },
+    "deploymentUnderwayFirst": "The app goes live when it finishes. The build log shows how far it has got.",
+    "deploymentUnderwayLive": "#{{number}} keeps serving until the new version is ready.",
+    "deploymentFailed": "Deployment #{{number}} failed",
+    "deploymentFailedLive": "#{{number}} is still live, so the app runs the version it ran before.",
+    "noInstancesUntil": "The first instance starts when deployment #{{number}} is ready.",
+    "noInstancesFailed": "Deployment #{{number}} failed, so nothing was started. Once its cause is fixed, {{action}} at the top of this page tries again.",
+    "instanceVersion": "Version",
+    "nowLive": "{{name}} is live",
+    "nowLiveNumber": "Deployment #{{number}} is serving.",
+    "openApp": "Open"
   },
   "deploy": {
     "title": "Deployments",

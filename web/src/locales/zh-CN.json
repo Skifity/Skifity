@@ -839,7 +839,27 @@
       "restart": "无需 restart：实例会自动重启。",
       "no_port": "没有发布或暴露任何端口，镜像的端口也未知：任何服务都无法通过名字访问它。如果有其他服务要连接它，请为它添加一行 expose，写明它监听的端口。",
       "skipped": "无法读取服务 {{name}}，已跳过。"
-    }
+    },
+    "liveVersion": "当前版本",
+    "liveNone": "还没有上线的版本",
+    "wentLive": "{{when}}上线",
+    "wentLiveBy": "{{when}}由 {{who}} 上线",
+    "viewBuildLog": "查看构建日志",
+    "deploymentUnderway": {
+      "queued": "部署 #{{number}} 正在等待开始",
+      "building": "部署 #{{number}} 正在构建",
+      "deploying": "部署 #{{number}} 正在启动新版本"
+    },
+    "deploymentUnderwayFirst": "完成后应用即上线。构建日志会显示进行到哪一步。",
+    "deploymentUnderwayLive": "在新版本就绪之前，#{{number}} 会继续提供服务。",
+    "deploymentFailed": "部署 #{{number}} 失败",
+    "deploymentFailedLive": "#{{number}} 仍在运行，应用继续使用之前的版本。",
+    "noInstancesUntil": "部署 #{{number}} 就绪后，第一个实例就会启动。",
+    "noInstancesFailed": "部署 #{{number}} 失败，因此没有启动任何实例。修复原因后，页面顶部的“{{action}}”会重新尝试。",
+    "instanceVersion": "版本",
+    "nowLive": "{{name}} 已上线",
+    "nowLiveNumber": "部署 #{{number}} 正在提供服务。",
+    "openApp": "打开"
   },
   "deploy": {
     "title": "部署记录",

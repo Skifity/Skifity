@@ -303,7 +303,7 @@ func (s AppSpec) Annotations() map[string]string {
 		version.LabelKey("display-name"): s.DisplayName,
 	}
 	if s.DeploymentID != "" {
-		out[version.LabelKey("deployment-id")] = s.DeploymentID
+		out[DeploymentIDAnnotation] = s.DeploymentID
 	}
 	if s.Revision != "" {
 		out[version.LabelKey("revision")] = s.Revision

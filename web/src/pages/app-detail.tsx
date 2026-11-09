@@ -1,12 +1,21 @@
 import { Link, useSearchParams, useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
+import { useRef } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { BoxIcon, ExternalLinkIcon, InfoIcon, RefreshCwIcon, RocketIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { AdvancedTab } from "@/components/app/advanced-tab"
-import { DeployButton, DeploymentsTab } from "@/components/app/deployments-tab"
+import {
+  DeployButton,
+  DeploymentsTab,
+  deploymentLink,
+  liveDeployment,
+  TERMINAL,
+  useDeployments,
+} from "@/components/app/deployments-tab"
+import { announceFirstLive, DeploymentNotice, LiveVersionCard } from "@/components/app/live-version"
 import { SendFolderButton } from "@/components/folder-picker"
 import { DomainsTab } from "@/components/app/domains-tab"
 import { AppFirewall } from "@/components/app/firewall"
@@ -50,7 +59,7 @@ import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { App, AppStatus, Environment, Instance, Project } from "@/lib/types"
+import type { App, AppStatus, Deployment, Environment, Instance, Project } from "@/lib/types"
 
 export function AppDetailPage() {
   const { t } = useTranslation()
@@ -98,12 +107,19 @@ export function AppDetailPage() {
     enabled: Boolean(environment.data?.project_id),
   })
 
+  // The deployments this page has said went live, so that one published
+  // again as its last steps finish is not said twice.
+  const announced = useRef(new Set<string>())
+
   // The team's stream carries every project's events, so a member limited to
   // some projects is refused it; their page keeps up by polling instead.
   useEvents(
     team && !team.scoped ? [`team:${team.id}`] : [],
     {
-      deployment: () => {
+      deployment: (data) => {
+        // Before the list is read again: what it held is how the first
+        // version to go live is told from the ones after it.
+        announceFirstLive(t, appId, app.data?.name ?? "", data as Deployment, announced.current)
         void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })
         void queryClient.invalidateQueries({ queryKey: ["deployments", appId] })
       },
@@ -435,6 +451,14 @@ function Overview({
   onRetry: () => void
 }) {
   const { t } = useTranslation()
+  // The same query as the Deployments tab, so the two share what was read.
+  const deployments = useDeployments(app.id)
+  const history = deployments.data?.items ?? []
+  const newest = history.at(0)
+  const live = liveDeployment(history)
+  const underway = newest && !TERMINAL.has(newest.status) ? newest : undefined
+  // Failed with nothing ever having gone live: the app has no version to run.
+  const neverLive = !live && newest?.status === "failed" ? newest : undefined
 
   if (loading) return <Skeleton className="h-64" />
   // Without this a failed read showed "0 / 0" and "No instances", which is a
@@ -445,7 +469,9 @@ function Overview({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <DeploymentNotice newest={newest} live={live} />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -460,6 +486,7 @@ function Overview({
             <span className="text-muted-foreground"> / {status?.desired_replicas ?? 0}</span>
           </CardContent>
         </Card>
+        <LiveVersionCard live={live} loading={deployments.isLoading} />
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -525,7 +552,20 @@ function Overview({
               // The button's own label, so the sentence names what is actually
               // written at the top of the page: it says "Deploy sekarang" in
               // Indonesian and "立即部署" in Chinese.
-              description={t("apps.noInstancesHelp", { action: t("deploy.deployNow") })}
+              //
+              // Not while a deployment is under way, or after the only one
+              // failed: "press Deploy now" during the first build sent people
+              // to start a second.
+              description={
+                underway
+                  ? t("apps.noInstancesUntil", { number: underway.number })
+                  : neverLive
+                    ? t("apps.noInstancesFailed", {
+                        number: neverLive.number,
+                        action: t("deploy.deployNow"),
+                      })
+                    : t("apps.noInstancesHelp", { action: t("deploy.deployNow") })
+              }
             />
           ) : (
             <Table>
@@ -533,6 +573,9 @@ function Overview({
                 <TableRow>
                   <TableHead>{t("apps.instanceName")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
+                  {/* Which deployment each instance runs: during a rollout,
+                      which are new and which are still the version before. */}
+                  <TableHead>{t("apps.instanceVersion")}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t("apps.node")}</TableHead>
                   <TableHead className="hidden md:table-cell">{t("apps.restarts")}</TableHead>
                   {/* What the instance is using, not what it reserved: the
@@ -556,6 +599,18 @@ function Overview({
                           status={state.tone}
                           label={t(`apps.instanceStatus.${state.key}`)}
                         />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {instance.deployment && instance.deployment_id ? (
+                          <Link
+                            to={deploymentLink(instance.deployment_id)}
+                            className="inline-flex min-h-6 min-w-6 items-center underline-offset-4 hover:underline"
+                          >
+                            #{instance.deployment}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="hidden font-mono text-xs sm:table-cell">
                         {instance.node}

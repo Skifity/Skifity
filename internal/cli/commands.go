@@ -571,10 +571,19 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			Ready    bool   `json:"ready"`
 			Restarts int    `json:"restarts"`
 			Node     string `json:"node"`
+			// The number of the deployment the instance runs; 0 when unknown.
+			Deployment int `json:"deployment"`
 		} `json:"instances"`
+		// LiveDeployment is not the status route's: it is read from the
+		// history, so that one command says what is serving.
+		LiveDeployment *store.Deployment `json:"live_deployment,omitempty"`
 	}
 	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/status", nil, &status); err != nil {
 		return err
+	}
+	live, isLive := readLive(ctx, client, app)
+	if isLive {
+		status.LiveDeployment = &live
 	}
 	if *asJSON {
 		return writeJSON(out, status)
@@ -584,6 +593,9 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	if status.Detail != "" {
 		fmt.Fprintf(out, "%s\n", status.Detail)
 	}
+	if isLive {
+		fmt.Fprintf(out, "\nLive: %s\n", liveLine(live))
+	}
 	fmt.Fprintf(out, "\nInstances: %d of %d ready\n", status.ReadyReplicas, status.DesiredReplicas)
 	for _, instance := range status.Instances {
 		marker := "x"
@@ -591,6 +603,11 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			marker = "."
 		}
 		fmt.Fprintf(out, "  %s %s  %s  on %s", marker, instance.Name, instance.Status, instance.Node)
+		// Said only where it differs from the live one: during a rollout,
+		// which instances are still on the version before.
+		if instance.Deployment > 0 && (!isLive || instance.Deployment != live.Number) {
+			fmt.Fprintf(out, "  #%d", instance.Deployment)
+		}
 		if instance.Restarts > 0 {
 			fmt.Fprintf(out, "  (%d restarts)", instance.Restarts)
 		}

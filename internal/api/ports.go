@@ -107,6 +107,12 @@ type InstanceInfo struct {
 	MemoryMB  int64     `json:"memory_mb"`
 	// UsageKnown is false when metrics-server had nothing for the instance.
 	UsageKnown bool `json:"usage_known"`
+	// DeploymentID is the deployment the instance was started for, and
+	// Deployment its number, which the status handler fills in from the
+	// store: zero when the instance names no deployment of this app that the
+	// panel still has.
+	DeploymentID string `json:"deployment_id,omitempty"`
+	Deployment   int    `json:"deployment"`
 }
 
 // AppRuntimeStatus is what the app page shows at the top.

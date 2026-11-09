@@ -937,6 +937,7 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		status.Phase = "sleeping"
 		status.Detail = "This app is asleep because nobody is using it. The next request starts it again."
 	}
+	s.numberInstances(r.Context(), app.ID, status.Instances)
 	// An internal app has no public address, only the name its environment
 	// reaches it by.
 	if app.Internal {
@@ -957,6 +958,35 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, status)
+}
+
+// numberInstances says which deployment each instance runs, by the number
+// the panel shows.
+//
+// Each pod carries the id of the deployment it was started for, which is the
+// one thing that tells two versions apart: a variable-only redeploy, and
+// every app run from an image, start the same image under a new deployment,
+// and a rollback starts an old image under a new one. An id that is not one
+// of this app's deployments is left unnumbered rather than believed.
+func (s *Server) numberInstances(ctx context.Context, appID string, instances []InstanceInfo) {
+	numbers := map[string]int{}
+	for i := range instances {
+		id := instances[i].DeploymentID
+		if id == "" {
+			continue
+		}
+		number, known := numbers[id]
+		if !known {
+			if deployment, err := s.db.GetDeployment(ctx, id); err == nil && deployment.AppID == appID {
+				number = deployment.Number
+			}
+			numbers[id] = number
+		}
+		if number == 0 {
+			instances[i].DeploymentID = ""
+		}
+		instances[i].Deployment = number
+	}
 }
 
 func (s *Server) handleRestartApp(w http.ResponseWriter, r *http.Request) {

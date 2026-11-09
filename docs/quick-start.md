@@ -139,10 +139,12 @@ The overview has a **New app** button. Press it, paste a Git repository URL, and
 press Create.
 
 That is the whole form. Skifity works out how to build it, gives it a URL, and
-sets `PORT` for it to listen on. The deployment page shows the build as it
-happens.
+sets `PORT` for it to listen on. The app's page opens on its **Deployments**
+tab, with the build log as it happens.
 
-When it finishes, the app has a working address. Press it.
+When it finishes, the panel says the app is live and offers its address. Press
+it. From then on the app's **Overview** names the version that is live, and
+says so at the top whenever a newer one is building or has failed.
 
 **No repository?** If the app is a folder on your computer — which it is, when
 an assistant wrote it — choose **A folder on my computer** instead and pick the

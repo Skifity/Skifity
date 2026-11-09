@@ -849,3 +849,52 @@ func TestARunsOutcomeIsItsContainersExitStatus(t *testing.T) {
 		t.Fatalf("a failed command: exit %d, finished %t, %v", code, finished, err)
 	}
 }
+
+// An instance says which deployment it was started for, read off the pod.
+//
+// The pod template carries the deployment's id among its annotations, and a
+// pod is a copy of its template, so each pod of a rollout names its own
+// version: the old ones the deployment before, the new ones this one — on the
+// same image, which is all a variable-only redeploy changes nothing of.
+func TestAnInstanceNamesTheDeploymentItWasStartedFor(t *testing.T) {
+	labelSet := map[string]string{"app.kubernetes.io/name": "web"}
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns"},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr(int32(2)),
+			Selector: &metav1.LabelSelector{MatchLabels: labelSet},
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "web", Image: "img:1"}}},
+			},
+		},
+	}
+	pod := func(name, deploymentID string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "ns", Labels: labelSet,
+				Annotations: AppSpec{DisplayName: "web", DeploymentID: deploymentID}.Annotations(),
+			},
+			Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "web", Image: "img:1"}}},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+
+	c := &Client{
+		clientset:       fake.NewSimpleClientset(deployment, pod("web-a", "dep_old"), pod("web-b", "dep_new"), pod("web-c", "")),
+		systemNamespace: "skifity-system",
+	}
+	status, err := c.AppStatus(t.Context(), "ns", "web")
+	if err != nil {
+		t.Fatalf("AppStatus: %v", err)
+	}
+	got := map[string]string{}
+	for _, instance := range status.Instances {
+		got[instance.Name] = instance.DeploymentID
+	}
+	want := map[string]string{"web-a": "dep_old", "web-b": "dep_new", "web-c": ""}
+	for name, id := range want {
+		if got[name] != id {
+			t.Errorf("%s was started for %q, want %q", name, got[name], id)
+		}
+	}
+}

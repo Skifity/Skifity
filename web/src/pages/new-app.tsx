@@ -69,7 +69,23 @@ type SourceType = "git" | "image" | "upload"
 const NO_GIT_SOURCE = "__none__"
 
 /** What POST /stack answers with, for a whole file or one service of it. */
-type StackResult = { apps: App[]; notes: StackNote[]; webhook?: WebhookStatus }
+type StackResult = {
+  apps: App[]
+  notes: StackNote[]
+  webhook?: WebhookStatus
+  /** The first deployments it started, when it was asked to deploy. */
+  deployments?: Deployment[]
+}
+
+/**
+ * Where a new app's page opens: on its first deployment's build, when one was
+ * started. Its Overview said nothing was running and to press Deploy now while
+ * that build ran a tab away, and nothing said when it went live.
+ */
+function appPage(appId: string, deployment?: Deployment) {
+  if (!deployment) return `/apps/${appId}`
+  return `/apps/${appId}?tab=deployments&deployment=${encodeURIComponent(deployment.id)}`
+}
 
 /**
  * Creating an app asks for as little as possible.
@@ -368,7 +384,7 @@ export function NewAppPage() {
         }
       }
       sayWebhook(result.webhook)
-      navigate(`/apps/${result.app.id}`)
+      navigate(appPage(result.app.id, result.deployment))
     },
   })
 
@@ -403,7 +419,14 @@ export function NewAppPage() {
     }
     sayWebhook(result.webhook)
     const first = result.apps.find((app) => !app.internal) ?? result.apps[0]
-    if (first) navigate(`/apps/${first.id}`)
+    if (first) {
+      navigate(
+        appPage(
+          first.id,
+          result.deployments?.find((started) => started.app_id === first.id),
+        ),
+      )
+    }
   }
   const stack = useMutation({
     mutationFn: () => postStack(found?.compose ?? []),

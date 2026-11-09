@@ -7029,7 +7029,7 @@ components:
 
     InstanceInfo:
       type: object
-      required: [name, status, ready, restarts, node, cpu_m, memory_mb, usage_known]
+      required: [name, status, ready, restarts, node, cpu_m, memory_mb, usage_known, deployment]
       properties:
         name: {type: string}
         status: {type: string}
@@ -7041,6 +7041,8 @@ components:
         cpu_m: {type: integer}
         memory_mb: {type: integer}
         usage_known: {type: boolean}
+        deployment_id: {type: string, description: 'The deployment the instance was started for, read off the instance itself. Absent when it names none of this app''s.'}
+        deployment: {type: integer, description: 'That deployment''s number, which is the version the instance runs; 0 when unknown.'}
 
     AppRuntimeStatus:
       type: object
