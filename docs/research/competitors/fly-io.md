@@ -679,7 +679,7 @@ Checked against the code on 2026-11-08.
   tokens can already be limited to a project and to reading. `fly skills` and
   `fly setup agent` are the agent skills of `sealos.md` (P1), with the MCP entry
   and the sign-in written in the same command. `fly mpg fork` is the "restore
-  into a new database" that `zeaburopensource.md` found missing: a restore
+  into a new database" that `zeabur-oss.md` found missing: a restore
   replaces the database it was taken from (`POST
   /api/databases/{id}/restore/{backupID}`).
 * **PwnEscape and the servers Skifity looks after.** The hardening report knows
