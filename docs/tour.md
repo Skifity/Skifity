@@ -22,7 +22,7 @@ truth about a panel nothing has been attached to yet, not a placeholder.
 
 | | |
 |---|---|
-| ![The overview: projects, apps, cluster health and recent activity](images/overview.png) | **Overview.** What is running, what changed, and what needs attention. |
+| ![The overview: what needs attention, the team's apps, its projects and servers, cluster health and recent activity](images/overview.png) | **Overview.** What needs attention first, each line a link to where it is fixed; then the apps deployed most recently, the projects and servers, and what changed. |
 | ![The same overview in dark mode](images/overview-dark.png) | **Dark**, which is what most people will see it in. |
 | ![The overview in Russian](images/overview-russian.png) | **Russian.** Five languages, and a missing string fails the build rather than falling back to English. |
 | ![The overview in Indonesian](images/overview-indonesian.png) | **Indonesian.** |

@@ -172,6 +172,7 @@ is not one, it says so and asks for `--app` or `--env` rather than guessing.
 
 ```sh
 skifity status                    # running? which version is live? what URL?
+skifity status --all              # what needs attention across the team; exits 1 if anything is broken
 skifity logs --follow             # live output
 skifity events --warnings         # what Kubernetes said went wrong, explained
 skifity events --db orders        # the same for a database
@@ -250,6 +251,21 @@ Any command takes `--app <id>` to act on something other than the current
 directory's app, and `--json` for output a script can rely on. The human format
 is not stable; the JSON is.
 
+`status --all`, or `attention`, is the overview's list of
+[what needs attention](concepts.md#what-needs-attention) across the team, each
+with the panel page to deal with it on. Its exit status is the answer to "is
+anything broken?": 1 when anything on it is an error — a deploy or a backup
+that failed, an app with no instance running — and 0 for warnings alone or
+nothing, so a cron job can run it and mail on failure.
+
+`export` is the one worth knowing about before you need it. It writes
+`skifity-export.json` — every project, app, domain, database, variable and
+schedule — plus `manifests/<namespace>/<app>.yaml` per app: the Deployment,
+Service, Ingress, autoscaler, disruption budget, volume claims and scheduled
+commands as plain Kubernetes objects. `kubectl apply -f` them on any cluster and
+the apps run there without this panel. Secret values are not included, and the
+README it writes says where they already are.
+
 ### Changing an app's settings
 
 `skifity apps set` changes what the settings tab changes, one flag per setting,
@@ -280,14 +296,6 @@ with no terminal is not asked. `skifity apps rm` deletes an app with its disks,
 so it asks for the app's name to be typed, and with no terminal it does nothing
 without `--yes`. Ctrl-C while a deploy is followed stops the following, not the
 deploy, and prints how to stop that: `skifity deploy --cancel`.
-
-`export` is the one worth knowing about before you need it. It writes
-`skifity-export.json` — every project, app, domain, database, variable and
-schedule — plus `manifests/<namespace>/<app>.yaml` per app: the Deployment,
-Service, Ingress, autoscaler, disruption budget, volume claims and scheduled
-commands as plain Kubernetes objects. `kubectl apply -f` them on any cluster and
-the apps run there without this panel. Secret values are not included, and the
-README it writes says where they already are.
 
 ## Reaching a database
 
@@ -595,6 +603,10 @@ remove the team's own TLS certificates: uploading one means handing over its
 private key, for the same reason as the password, so it is done in the panel or
 with `skifity certs`. `list_domains` still says which certificate each domain is
 served with.
+
+Asked whether anything is wrong, an assistant starts with `get_attention`: the
+same list the overview leads with, errors first, each with a link to the page
+it is dealt with on.
 
 The tools are listed in [llms.txt](../llms.txt). They are named for what someone
 would ask for — `get_app_logs`, `check_scaling_readiness`, `rollback_app` — and

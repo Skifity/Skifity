@@ -1264,6 +1264,47 @@ crossed and once when over:
 An admin sets them on the server's page. `GET /api/servers/{server}/usage` and
 `/api/servers/{server}/alerts` are the same for a script.
 
+## What needs attention
+
+The overview opens with **Needs attention**: what is wrong across the team
+now, errors first, each a sentence that links to the page to deal with it on.
+The bell in the header shows the same list from anywhere, with how many things
+are on it, red when one of them is an error.
+
+* **Errors**: a deploy that failed (until one after it works), an app with no
+  instance running, a database that failed, a backup that failed or that was
+  due and not taken, a domain whose certificate could not be issued, a server
+  that stopped answering or could not be added, and — for the panel's
+  administrator — the panel's own backup of itself having failed.
+* **Warnings**: a usage alert going off, on an app or a server; an app running
+  an image with a critical vulnerability nobody deployed past on purpose; an
+  app changed outside the panel; one of the team's own certificates within 21
+  days of running out (an error in its last day); and a team with no
+  notification channel, where nobody hears about any of the above.
+
+It is built from what the panel has already recorded — the watcher's checks,
+the deploys, the backups, the scans — so it answers with the cluster down, and
+it lists what is wrong now: an alert that has stopped, or a backup that failed
+and then ran, is no longer on it. A backup counts as missed once it is ten
+minutes past due with nothing started, which is the same question the panel
+asks when it [catches up](backups.md#schedules) after a restart. Previews are left out:
+a pull request's build is reported on the pull request.
+
+Each person sees what they could open. A member limited to some projects sees
+those projects' apps, databases and backups, and nothing about servers; the
+team's certificates and its notification channels are for whoever can open the
+team's settings. Somebody limited to projects is not on the team's live
+updates, so their list is asked for again every thirty seconds instead.
+
+Whoever starts a deploy is also told when it ends, wherever in the panel they
+are: one message, with a link to its build, unless they are on that app's page
+watching it already.
+
+`skifity status --all` prints the same list, and exits 1 when anything on it is
+an error, so a cron job or a CI step can ask whether anything is broken; an
+assistant asks with `get_attention`. `GET /api/teams/{team}/attention` is the
+same for a script.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,

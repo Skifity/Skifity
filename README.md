@@ -18,7 +18,7 @@ You give it a server. It gives you URLs.
 </div>
 
 <p align="center">
-  <img src="docs/images/overview-dark.png" alt="The overview in dark mode: projects, apps, cluster health and recent activity" width="880">
+  <img src="docs/images/overview-dark.png" alt="The overview in dark mode: what needs attention, the team's apps, cluster health and recent activity" width="880">
 </p>
 
 Skifity turns the servers you rent into a platform for your own apps. Push a Git
