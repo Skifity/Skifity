@@ -318,7 +318,9 @@
     "welcomeBack": "С возвращением, {{name}}.",
     "readyOfTotal": "{{ready}} из {{total}}",
     "noCluster": "Панель не подключена к кластеру.",
-    "noClusterHelp": "Пока панель не подключена, развернуть ничего нельзя. Панель, установленная установщиком, работает внутри созданного им кластера; эта запущена отдельно — так {{product}} разрабатывают и тестируют."
+    "noClusterHelp": "Пока панель не подключена, развернуть ничего нельзя. Панель, установленная установщиком, работает внутри созданного им кластера; эта запущена отдельно — так {{product}} разрабатывают и тестируют.",
+    "yourApps": "Ваши приложения",
+    "yourAppsHelp": "Сначала те, что развёрнуты последними."
   },
   "activity": {
     "subtitle": "Что изменилось в этой команде, сначала новое.",
@@ -5566,5 +5568,49 @@
     "tokenHint": "токен …{{hint}}",
     "serverCount": "Создано серверов: {{servers}}",
     "checked": "проверен {{when}}"
+  },
+  "attention": {
+    "title": "Требует внимания",
+    "nothing": "Ничто не требует внимания",
+    "bellCount_one": "{{count}} пункт требует внимания",
+    "bellCount_few": "{{count}} пункта требуют внимания",
+    "bellCount_many": "{{count}} пунктов требуют внимания",
+    "bellCount_other": "{{count}} пункта требуют внимания",
+    "openOverview": "Открыть обзор",
+    "showAll": "Показать все ({{total}})",
+    "showFewer": "Показать меньше",
+    "severity": {
+      "error": "Ошибка",
+      "warning": "Предупреждение"
+    },
+    "deploy_failed": "Развёртывание #{{number}} приложения {{app}} не удалось",
+    "app_unhealthy": "У {{app}} нет работающих экземпляров",
+    "app_alert": "{{app}} превышает порог оповещения: {{alerts}}",
+    "app_vulnerable_one": "{{app}} работает на образе с {{count}} критической уязвимостью",
+    "app_vulnerable_few": "{{app}} работает на образе с {{count}} критическими уязвимостями",
+    "app_vulnerable_many": "{{app}} работает на образе с {{count}} критическими уязвимостями",
+    "app_vulnerable_other": "{{app}} работает на образе с {{count}} критическими уязвимостями",
+    "app_drifted": "{{app}} изменили в обход панели",
+    "domain_cert_failed": "У {{hostname}} нет сертификата: выпустить его не удалось",
+    "database_failed": "База данных {{database}} дала сбой",
+    "database_unhealthy": "База данных {{database}} работает неисправно",
+    "backup_failed": "Последнее резервное копирование {{target}} не удалось",
+    "backup_missed": "Резервная копия {{target}} не была снята в срок",
+    "server_not_ready": "Сервер {{server}} не готов",
+    "server_failed": "Не удалось добавить сервер {{server}}",
+    "server_alert": "Сервер {{server}} превышает порог оповещения: {{alerts}}",
+    "certificate_expiring_one": "Сертификат {{certificate}} истекает через {{count}} день",
+    "certificate_expiring_few": "Сертификат {{certificate}} истекает через {{count}} дня",
+    "certificate_expiring_many": "Сертификат {{certificate}} истекает через {{count}} дней",
+    "certificate_expiring_other": "Сертификат {{certificate}} истекает через {{count}} дня",
+    "certificate_expired": "Срок действия сертификата {{certificate}} истёк",
+    "no_channel": "Никто не узнает, если что-то сломается: нет ни одного канала уведомлений",
+    "panel_backup_failed": "Последнее резервное копирование самой панели не удалось"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} работает: развёртывание #{{number}} прошло успешно",
+    "failed": "Развёртывание #{{number}} приложения {{app}} не удалось",
+    "open": "Открыть",
+    "anApp": "Приложение"
   }
 }

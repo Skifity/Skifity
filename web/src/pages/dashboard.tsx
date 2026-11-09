@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
 import {
   ActivityIcon,
+  AppWindowIcon,
   ArrowRightIcon,
   BoxesIcon,
   CpuIcon,
@@ -15,6 +16,7 @@ import {
   ShieldCheckIcon,
 } from "lucide-react"
 
+import { AttentionSection } from "@/components/attention"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader, Section } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
@@ -47,7 +49,7 @@ import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { AuditEvent, ClusterSummary, Server } from "@/lib/types"
+import type { AuditEvent, ClusterSummary, Server, TeamApp } from "@/lib/types"
 
 /**
  * The first screen.
@@ -86,6 +88,9 @@ export function DashboardPage() {
   })
 
   // Anything that changes in this team refreshes the page without a reload.
+  // What needs attention is kept current by the shell, which always listens.
+  const refreshApps = () =>
+    void queryClient.invalidateQueries({ queryKey: ["team-apps", team?.id] })
   useEvents(
     team ? [`team:${team.id}`] : [],
     {
@@ -93,8 +98,13 @@ export function DashboardPage() {
         void queryClient.invalidateQueries({ queryKey: ["servers", team?.id] })
         void queryClient.invalidateQueries({ queryKey: ["cluster", team?.id] })
       },
-      deployment: () =>
-        void queryClient.invalidateQueries({ queryKey: ["audit", team?.id, "recent"] }),
+      deployment: () => {
+        void queryClient.invalidateQueries({ queryKey: ["audit", team?.id, "recent"] })
+        refreshApps()
+      },
+      app: refreshApps,
+      "app.created": refreshApps,
+      "app.deleted": refreshApps,
     },
     Boolean(team) && teamWide,
   )
@@ -204,6 +214,11 @@ export function DashboardPage() {
         <ErrorDisplay error={servers.error} onRetry={() => void servers.refetch()} />
       )}
 
+      {/* What is wrong with what the team has, before what it has. Outside
+          the first-run branch: a panel with no servers yet can still have
+          a failed deploy, and nobody to tell about it. */}
+      <AttentionSection />
+
       {firstRun ? (
         <FirstRun />
       ) : (
@@ -269,6 +284,8 @@ export function DashboardPage() {
               )}
             </Alert>
           )}
+
+          <YourApps newApp={firstEnvironment ? `/environments/${firstEnvironment}/apps/new` : ""} />
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Section
@@ -417,6 +434,86 @@ export function DashboardPage() {
         </>
       )}
     </Page>
+  )
+}
+
+/** How many apps the overview lists. */
+const RECENT_APPS = 6
+
+/**
+ * The team's apps, the ones deployed most recently first.
+ *
+ * The overview said what the team has in projects and servers, and the thing
+ * people come to the panel for — their apps — was two lists deep. Previews
+ * are left out: a pull request's copy belongs on the pull request.
+ */
+function YourApps({ newApp }: { newApp: string }) {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  const apps = useQuery({
+    queryKey: ["team-apps", team?.id],
+    queryFn: () => api.get<List<TeamApp>>(`/api/teams/${team!.id}/apps`),
+    enabled: Boolean(team),
+  })
+
+  const touched = (app: TeamApp) => Date.parse(app.last_deployment?.at ?? app.created_at) || 0
+  const recent = (apps.data?.items ?? [])
+    .filter((app) => app.environment_kind === "standard")
+    .sort((a, b) => touched(b) - touched(a))
+    .slice(0, RECENT_APPS)
+
+  return (
+    <Section title={t("dashboard.yourApps")} description={t("dashboard.yourAppsHelp")}>
+      {apps.isLoading ? (
+        <Skeleton className="h-32" />
+      ) : apps.error ? (
+        <ErrorDisplay error={apps.error} onRetry={() => void apps.refetch()} compact />
+      ) : recent.length === 0 ? (
+        <Empty className="border border-dashed">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <AppWindowIcon />
+            </EmptyMedia>
+            <EmptyTitle>{t("dashboard.noApps")}</EmptyTitle>
+            <EmptyDescription>{t("dashboard.noAppsHelp")}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm" asChild>
+              <Link to={newApp || "/projects"}>
+                <PlusIcon />
+                {t("dashboard.deployFirstApp")}
+              </Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <ItemGroup className="rounded-lg border">
+          {recent.map((app) => (
+            <Item key={app.id} asChild>
+              <Link to={`/apps/${app.id}`}>
+                <ItemMedia variant="icon">
+                  <AppWindowIcon />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{app.name}</ItemTitle>
+                  <ItemDescription>
+                    {app.project_name} · {app.environment_name}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions className="gap-3">
+                  <span className="hidden text-xs text-muted-foreground sm:inline">
+                    {app.last_deployment
+                      ? formatRelative(app.last_deployment.at)
+                      : t("apps.phase.not_deployed")}
+                  </span>
+                  <StatusBadge status={app.status} />
+                </ItemActions>
+              </Link>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
+    </Section>
   )
 }
 

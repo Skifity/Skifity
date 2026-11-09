@@ -298,7 +298,9 @@
     "welcomeBack": "वापसी पर स्वागत है, {{name}}।",
     "readyOfTotal": "{{total}} में से {{ready}}",
     "noCluster": "पैनल किसी क्लस्टर से जुड़ा नहीं है।",
-    "noClusterHelp": "जब तक यह जुड़ा नहीं है, कुछ भी डिप्लॉय नहीं किया जा सकता। इंस्टॉलर से लगाया गया पैनल अपने बनाए क्लस्टर के अंदर चलता है; यह पैनल अलग से चलाया गया है, जैसे {{product}} को विकसित और टेस्ट करते समय चलाया जाता है।"
+    "noClusterHelp": "जब तक यह जुड़ा नहीं है, कुछ भी डिप्लॉय नहीं किया जा सकता। इंस्टॉलर से लगाया गया पैनल अपने बनाए क्लस्टर के अंदर चलता है; यह पैनल अलग से चलाया गया है, जैसे {{product}} को विकसित और टेस्ट करते समय चलाया जाता है।",
+    "yourApps": "आपके ऐप",
+    "yourAppsHelp": "सबसे हाल में तैनात किए गए सबसे पहले।"
   },
   "activity": {
     "subtitle": "इस टीम में क्या बदला, नया सबसे ऊपर।",
@@ -5494,5 +5496,43 @@
     "tokenHint": "टोकन …{{hint}}",
     "serverCount": "इससे बने सर्वर: {{servers}}",
     "checked": "{{when}} जाँचा गया"
+  },
+  "attention": {
+    "title": "ध्यान चाहिए",
+    "nothing": "किसी चीज़ पर ध्यान देने की ज़रूरत नहीं",
+    "bellCount_one": "{{count}} चीज़ पर ध्यान चाहिए",
+    "bellCount_other": "{{count}} चीज़ों पर ध्यान चाहिए",
+    "openOverview": "अवलोकन खोलें",
+    "showAll": "सभी {{total}} दिखाएँ",
+    "showFewer": "कम दिखाएँ",
+    "severity": {
+      "error": "एरर",
+      "warning": "चेतावनी"
+    },
+    "deploy_failed": "{{app}} की तैनाती #{{number}} विफल रही",
+    "app_unhealthy": "{{app}} का कोई इंस्टेंस नहीं चल रहा",
+    "app_alert": "{{app}} {{alerts}} की अलर्ट सीमा से ऊपर है",
+    "app_vulnerable_one": "{{app}} जिस इमेज पर चलता है उसमें {{count}} गंभीर कमज़ोरी है",
+    "app_vulnerable_other": "{{app}} जिस इमेज पर चलता है उसमें {{count}} गंभीर कमज़ोरियाँ हैं",
+    "app_drifted": "{{app}} को पैनल के बाहर बदला गया",
+    "domain_cert_failed": "{{hostname}} के पास प्रमाणपत्र नहीं है: उसे जारी करना विफल रहा",
+    "database_failed": "डेटाबेस {{database}} विफल रहा",
+    "database_unhealthy": "डेटाबेस {{database}} ठीक नहीं है",
+    "backup_failed": "{{target}} का पिछला बैकअप विफल रहा",
+    "backup_missed": "{{target}} का बैकअप तय समय पर नहीं लिया गया",
+    "server_not_ready": "सर्वर {{server}} तैयार नहीं है",
+    "server_failed": "सर्वर {{server}} जोड़ना विफल रहा",
+    "server_alert": "सर्वर {{server}} {{alerts}} की अलर्ट सीमा से ऊपर है",
+    "certificate_expiring_one": "प्रमाणपत्र {{certificate}} {{count}} दिन में ख़त्म हो जाएगा",
+    "certificate_expiring_other": "प्रमाणपत्र {{certificate}} {{count}} दिनों में ख़त्म हो जाएगा",
+    "certificate_expired": "प्रमाणपत्र {{certificate}} ख़त्म हो चुका है",
+    "no_channel": "कुछ टूटने पर किसी को बताया नहीं जाता: कोई सूचना चैनल नहीं है",
+    "panel_backup_failed": "पैनल का अपना पिछला बैकअप विफल रहा"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} चालू है: तैनाती #{{number}} सफल रही",
+    "failed": "{{app}} की तैनाती #{{number}} विफल रही",
+    "open": "खोलें",
+    "anApp": "एक ऐप"
   }
 }

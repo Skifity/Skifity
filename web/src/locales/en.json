@@ -298,7 +298,9 @@
     "welcomeBack": "Welcome back, {{name}}.",
     "readyOfTotal": "{{ready}} of {{total}}",
     "noCluster": "The panel is not connected to a cluster.",
-    "noClusterHelp": "Nothing can be deployed until it is. A panel the installer set up runs inside the cluster it made; this one was started on its own, which is how {{product}} is developed and tested."
+    "noClusterHelp": "Nothing can be deployed until it is. A panel the installer set up runs inside the cluster it made; this one was started on its own, which is how {{product}} is developed and tested.",
+    "yourApps": "Your apps",
+    "yourAppsHelp": "The ones deployed most recently come first."
   },
   "activity": {
     "subtitle": "What changed in this team, newest first.",
@@ -5492,5 +5494,43 @@
     "tokenHint": "token …{{hint}}",
     "serverCount": "Servers created with it: {{servers}}",
     "checked": "checked {{when}}"
+  },
+  "attention": {
+    "title": "Needs attention",
+    "nothing": "Nothing needs attention",
+    "bellCount_one": "{{count}} thing needs attention",
+    "bellCount_other": "{{count}} things need attention",
+    "openOverview": "Open the overview",
+    "showAll": "Show all {{total}}",
+    "showFewer": "Show fewer",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning"
+    },
+    "deploy_failed": "Deployment #{{number}} of {{app}} failed",
+    "app_unhealthy": "{{app}} has no instance running",
+    "app_alert": "{{app}} is over its alert threshold for {{alerts}}",
+    "app_vulnerable_one": "{{app}} runs an image with {{count}} critical vulnerability",
+    "app_vulnerable_other": "{{app}} runs an image with {{count}} critical vulnerabilities",
+    "app_drifted": "{{app}} was changed outside the panel",
+    "domain_cert_failed": "{{hostname}} has no certificate: issuing one failed",
+    "database_failed": "The database {{database}} failed",
+    "database_unhealthy": "The database {{database}} is not healthy",
+    "backup_failed": "The last backup of {{target}} failed",
+    "backup_missed": "{{target}} was not backed up when it was due",
+    "server_not_ready": "The server {{server}} is not ready",
+    "server_failed": "Adding the server {{server}} failed",
+    "server_alert": "The server {{server}} is over its alert threshold for {{alerts}}",
+    "certificate_expiring_one": "The certificate {{certificate}} runs out in {{count}} day",
+    "certificate_expiring_other": "The certificate {{certificate}} runs out in {{count}} days",
+    "certificate_expired": "The certificate {{certificate}} has run out",
+    "no_channel": "Nobody is told when something breaks: the team has no notification channel",
+    "panel_backup_failed": "The panel's last backup of itself failed"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} is live: deployment #{{number}} succeeded",
+    "failed": "Deployment #{{number}} of {{app}} failed",
+    "open": "Open",
+    "anApp": "An app"
   }
 }

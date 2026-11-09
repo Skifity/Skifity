@@ -101,6 +101,45 @@ test("the shell is there, and the empty states say what to do next", async ({ pa
   await expect(page.getByText(/never stored/i)).toBeVisible()
 })
 
+// The overview's first answer is whether anything is wrong, and on a fresh
+// panel with no servers it still gives it: a team with no notification
+// channel is told that nobody would hear about a failure, here and on the
+// bell, and once there is a channel, that nothing needs attention.
+test("the overview and the bell say what needs attention", async ({ page }) => {
+  await signIn(page)
+  await expect(page.getByText("No servers yet")).toBeVisible()
+
+  const nobody = page.getByRole("link", { name: /Nobody is told when something breaks/ })
+  await expect(nobody).toBeVisible()
+  await expect(page.getByTestId("attention-count")).toHaveText("1")
+
+  // The bell opens the same list, which links to where the fix is.
+  await page.getByRole("button", { name: "1 thing needs attention" }).click()
+  await expect(page.getByRole("dialog").getByRole("link", { name: /Nobody is told/ })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  const cookies = await page.context().cookies()
+  const me = await (await page.request.get("/api/me")).json()
+  const created = await page.request.post(`/api/teams/${me.teams[0].id}/notifications`, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+    },
+    data: {
+      kind: "telegram",
+      name: "ops",
+      config: { bot_token: "123456:fake-bot-token-for-e2e", chat_id: "-100" },
+      events: ["deploy.failed"],
+    },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+
+  await page.reload()
+  await expect(page.getByText("Nothing needs attention")).toBeVisible()
+  await expect(page.getByText("No servers yet")).toBeVisible()
+  await expect(page.getByTestId("attention-count")).toHaveCount(0)
+})
+
 test("every language is complete on the pages a new user sees", async ({ page }) => {
   await signIn(page)
 
@@ -674,6 +713,65 @@ test("a variable is changed in place, and Edit as text sends only what changed",
   const secret = after.items.find((v: { key: string }) => v.key === "API_TOKEN")
   expect(secret?.is_secret, "the secret was lost or made plain").toBe(true)
   expect(JSON.stringify(after)).not.toContain("tok_e2e_not_a_real_token")
+})
+
+// The folder deployed above failed, with no cluster to build it on. The
+// overview says so, and the line opens the app's deployments.
+test("a failed deploy is on the overview, and opens its deployments", async ({ page }) => {
+  await signIn(page)
+  const failed = page.getByRole("link", { name: /Deployment #\d+ of .+ failed/ })
+  await expect(failed).toBeVisible({ timeout: 60_000 })
+  await failed.click()
+  await expect(page).toHaveURL(/\/apps\/app_[^/?#]+\?tab=deployments/)
+  await expect(page.getByRole("tab", { name: "Deployments" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+})
+
+// The apps are on the overview once it is past first-run setup, each with the
+// project and environment it lives in. This panel has no servers, so one is
+// put in the answer to make it past that.
+test("the overview lists the team's apps with where they live", async ({ page }) => {
+  await page.route("**/api/teams/*/servers", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "srv_e2e",
+            name: "node-1",
+            host: "203.0.113.9",
+            role: "control-plane",
+            status: "ready",
+            cpu_cores: 2,
+            memory_mb: 4096,
+          },
+        ],
+        total: 1,
+      },
+    }),
+  )
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  expect(apps.items.length, "the suite has made apps by now").toBeGreaterThan(0)
+
+  await page.goto("/")
+  await expect(page.getByRole("heading", { name: "Your apps", level: 2 })).toBeVisible()
+  for (const app of apps.items as {
+    name: string
+    project_name: string
+    environment_name: string
+  }[]) {
+    await expect(
+      page
+        .getByRole("link")
+        .filter({ hasText: app.name })
+        .filter({ hasText: `${app.project_name} · ${app.environment_name}` })
+        .first(),
+      `${app.name} with where it lives`,
+    ).toBeVisible()
+  }
 })
 
 test("Settings asks about new releases only when the button is pressed", async ({ page }) => {

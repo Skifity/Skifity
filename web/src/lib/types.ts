@@ -1615,3 +1615,51 @@ export type ObjectEvent = {
   explanation_code?: string
   explanation_args?: string[]
 }
+
+/**
+ * One thing that needs attention across a team, as GET
+ * /api/teams/{team}/attention answers it. code is the sentence,
+ * attention.<code>, with params filled in; message is the same in English.
+ */
+export type AttentionItem = {
+  kind: string
+  severity: "error" | "warning"
+  code: string
+  params: Record<string, string | number>
+  message: string
+  target_type: string
+  target_id: string
+  target_label: string
+  project_id?: string
+  project_name?: string
+  environment_id?: string
+  environment_name?: string
+  /** When it started where that is known; for a certificate, when it runs out. */
+  since?: string
+  /** The panel page to deal with it on. */
+  path: string
+}
+
+/** An app with where it lives, from GET /api/teams/{team}/apps. */
+export type TeamApp = {
+  id: string
+  name: string
+  slug: string
+  source_type: App["source_type"]
+  status: string
+  project_id: string
+  project_name: string
+  environment_id: string
+  environment_name: string
+  environment_kind: "standard" | "preview"
+  url?: string
+  last_deployment?: {
+    id: string
+    number: number
+    status: Deployment["status"]
+    commit_sha?: string
+    at: string
+    finished_at?: string
+  }
+  created_at: string
+}

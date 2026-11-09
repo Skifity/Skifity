@@ -288,7 +288,9 @@
     "welcomeBack": "欢迎回来，{{name}}。",
     "readyOfTotal": "{{ready}} / {{total}}",
     "noCluster": "面板未连接到集群。",
-    "noClusterHelp": "在连接之前无法部署任何内容。通过安装程序部署的面板运行在它所创建的集群中；这个面板是单独启动的，这是开发和测试 {{product}} 的方式。"
+    "noClusterHelp": "在连接之前无法部署任何内容。通过安装程序部署的面板运行在它所创建的集群中；这个面板是单独启动的，这是开发和测试 {{product}} 的方式。",
+    "yourApps": "你的应用",
+    "yourAppsHelp": "最近部署的排在最前面。"
   },
   "activity": {
     "subtitle": "这个团队里发生的变化，最新的在前。",
@@ -5458,5 +5460,40 @@
     "tokenHint": "令牌 …{{hint}}",
     "serverCount": "用它创建的服务器：{{servers}}",
     "checked": "{{when}} 检查过"
+  },
+  "attention": {
+    "title": "需要处理",
+    "nothing": "没有需要处理的事项",
+    "bellCount_other": "{{count}} 项需要处理",
+    "openOverview": "打开总览",
+    "showAll": "显示全部 {{total}} 项",
+    "showFewer": "收起",
+    "severity": {
+      "error": "错误",
+      "warning": "警告"
+    },
+    "deploy_failed": "{{app}} 的第 {{number}} 次部署失败",
+    "app_unhealthy": "{{app}} 没有实例在运行",
+    "app_alert": "{{app}} 的{{alerts}}超过了告警阈值",
+    "app_vulnerable_other": "{{app}} 运行的镜像有 {{count}} 个严重漏洞",
+    "app_drifted": "{{app}} 在面板之外被修改过",
+    "domain_cert_failed": "{{hostname}} 没有证书：签发失败",
+    "database_failed": "数据库 {{database}} 失败",
+    "database_unhealthy": "数据库 {{database}} 状态异常",
+    "backup_failed": "{{target}} 的上一次备份失败",
+    "backup_missed": "{{target}} 没有按计划备份",
+    "server_not_ready": "服务器 {{server}} 未就绪",
+    "server_failed": "添加服务器 {{server}} 失败",
+    "server_alert": "服务器 {{server}} 的{{alerts}}超过了告警阈值",
+    "certificate_expiring_other": "证书 {{certificate}} 将在 {{count}} 天后过期",
+    "certificate_expired": "证书 {{certificate}} 已过期",
+    "no_channel": "出了问题没有人会收到通知：还没有任何通知渠道",
+    "panel_backup_failed": "面板对自身的上一次备份失败"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} 已上线：第 {{number}} 次部署成功",
+    "failed": "{{app}} 的第 {{number}} 次部署失败",
+    "open": "打开",
+    "anApp": "一个应用"
   }
 }

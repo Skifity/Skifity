@@ -25,6 +25,7 @@ import {
   XIcon,
 } from "lucide-react"
 
+import { AttentionBell } from "@/components/attention"
 import { CommandPalette } from "@/components/command-palette"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { LanguageSwitcher } from "@/components/language-switcher"
@@ -68,6 +69,8 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { useAttentionUpdates } from "@/hooks/use-attention"
+import { useDeployToasts } from "@/hooks/use-deploy-toasts"
 import { usePaletteShortcut } from "@/hooks/use-palette"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
@@ -88,6 +91,10 @@ export function AppShell() {
   const location = useLocation()
   const crumbs = useCrumbs()
   const title = crumbs.at(-1)?.label ?? t("nav.overview")
+  // Both listen to the team's event stream for as long as the panel is open,
+  // which is why they live in the shell rather than on a page.
+  useAttentionUpdates()
+  useDeployToasts()
 
   useEffect(() => {
     document.title = `${title} · Skifity`
@@ -459,6 +466,7 @@ function Header({ onOpenPalette, crumbs }: { onOpenPalette: () => void; crumbs: 
         </KbdGroup>
       </Button>
 
+      <AttentionBell />
       <LanguageSwitcher signedIn />
       <ThemeToggle />
       <AccountMenu />

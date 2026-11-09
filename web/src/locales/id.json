@@ -288,7 +288,9 @@
     "welcomeBack": "Selamat datang kembali, {{name}}.",
     "readyOfTotal": "{{ready}} dari {{total}}",
     "noCluster": "Panel tidak terhubung ke cluster.",
-    "noClusterHelp": "Belum ada yang bisa di-deploy sampai panel terhubung. Panel yang dipasang lewat installer berjalan di dalam cluster yang dibuatnya; panel ini dijalankan sendiri, seperti saat {{product}} dikembangkan dan diuji."
+    "noClusterHelp": "Belum ada yang bisa di-deploy sampai panel terhubung. Panel yang dipasang lewat installer berjalan di dalam cluster yang dibuatnya; panel ini dijalankan sendiri, seperti saat {{product}} dikembangkan dan diuji.",
+    "yourApps": "Aplikasi Anda",
+    "yourAppsHelp": "Yang paling baru di-deploy ada di urutan pertama."
   },
   "activity": {
     "subtitle": "Apa yang berubah di tim ini, terbaru dulu.",
@@ -5458,5 +5460,40 @@
     "tokenHint": "token …{{hint}}",
     "serverCount": "Server yang dibuat dengannya: {{servers}}",
     "checked": "diperiksa {{when}}"
+  },
+  "attention": {
+    "title": "Perlu perhatian",
+    "nothing": "Tidak ada yang perlu diperhatikan",
+    "bellCount_other": "{{count}} hal perlu perhatian",
+    "openOverview": "Buka ringkasan",
+    "showAll": "Tampilkan semua {{total}}",
+    "showFewer": "Tampilkan lebih sedikit",
+    "severity": {
+      "error": "Error",
+      "warning": "Peringatan"
+    },
+    "deploy_failed": "Deployment #{{number}} dari {{app}} gagal",
+    "app_unhealthy": "{{app}} tidak punya instance yang berjalan",
+    "app_alert": "{{app}} melewati ambang peringatan untuk {{alerts}}",
+    "app_vulnerable_other": "{{app}} menjalankan image dengan {{count}} kerentanan kritis",
+    "app_drifted": "{{app}} diubah di luar panel",
+    "domain_cert_failed": "{{hostname}} tidak punya sertifikat: penerbitannya gagal",
+    "database_failed": "Database {{database}} gagal",
+    "database_unhealthy": "Database {{database}} tidak sehat",
+    "backup_failed": "Cadangan terakhir {{target}} gagal",
+    "backup_missed": "{{target}} tidak dicadangkan saat jadwalnya tiba",
+    "server_not_ready": "Server {{server}} tidak siap",
+    "server_failed": "Penambahan server {{server}} gagal",
+    "server_alert": "Server {{server}} melewati ambang peringatan untuk {{alerts}}",
+    "certificate_expiring_other": "Sertifikat {{certificate}} habis masa berlakunya dalam {{count}} hari",
+    "certificate_expired": "Masa berlaku sertifikat {{certificate}} sudah habis",
+    "no_channel": "Tidak ada yang diberi tahu saat ada yang rusak: belum ada saluran notifikasi",
+    "panel_backup_failed": "Cadangan terakhir panel atas dirinya sendiri gagal"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} sudah aktif: deployment #{{number}} berhasil",
+    "failed": "Deployment #{{number}} dari {{app}} gagal",
+    "open": "Buka",
+    "anApp": "Sebuah aplikasi"
   }
 }
