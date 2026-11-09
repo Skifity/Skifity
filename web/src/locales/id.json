@@ -4462,6 +4462,12 @@
         "impact": "Tidak ada yang dibuat.",
         "fix": "Owner atau admin bisa memasangnya sambil memilih Terima image root untuk {{0}}, yang tetap menolak container privileged dan apa pun milik server. Atau pasang di environment yang sudah menerima image root."
       },
+      "blueprint_secrets_missing": {
+        "title": "Rahasia yang diwajibkan skifity.yaml belum diatur",
+        "cause": "Berkas ini mencantumkannya di bawah secrets, dan lingkungan ini tidak memilikinya: {{0}}.",
+        "impact": "Tidak ada aplikasi yang dijalankan atau diubah tanpa rahasia tersebut. Aplikasi yang dibuat dari berkas menunggunya sebelum deploy pertamanya.",
+        "fix": "Atur masing-masing dengan `skifity env set --secret KEY=... --app APP` lalu terapkan lagi, atau tandai optional: true di berkas jika aplikasi bisa berjalan tanpanya."
+      },
       "cli_delete_unconfirmed": {
         "title": "Menghapus aplikasi harus dikonfirmasi",
         "cause": "Tidak ada orang di sini untuk mengetik nama {{0}}, dan --yes tidak diberikan.",

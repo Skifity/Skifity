@@ -422,7 +422,13 @@ apps:
     resources: {cpu: 100, memory: 256}   # reserved: millicores, MB
     variables:
       LOG_LEVEL: info
-    secrets: [STRIPE_KEY]   # named here, set in the panel
+      # The long form says the build reads it, as a front end's public
+      # settings need; left out, a variable keeps what it is.
+      NEXT_PUBLIC_API_URL: {value: https://api.example.com, build: true}
+    secrets:                # values not in the file; each one is required
+      STRIPE_KEY: {from: company-vault:shop#stripe_key}  # read from a secret manager
+      SESSION_SECRET: {}    # set in the panel or with `skifity env set --secret`
+      SENTRY_DSN: {optional: true}  # the app runs without it
     processes:
       worker: npm run worker
       clock: {command: npm run clock, instances: 1}
@@ -460,9 +466,11 @@ Reading /home/you/shop/skifity.yaml.
 
   ~ web: scaling — 2 → 3
   ~ web: variable LOG_LEVEL — "info" → "debug"
-  · web: secret STRIPE_KEY — is not set; set it with `skifity env set --secret STRIPE_KEY=...`
+  · web: secret SENTRY_DSN — is not set; set it with `skifity env set --secret SENTRY_DSN=...`
+  ! web: secret SESSION_SECRET — is required and not set; set it with `skifity env set --secret SESSION_SECRET=... --app app_06gaqcxybny593h2s52m`, or mark it optional
 
 0 to add, 2 to change. `skifity apply` makes these changes.
+web: SESSION_SECRET is required and not set: apply changes nothing until it is.
 ```
 
 What it does, and does not:
@@ -475,8 +483,18 @@ What it does, and does not:
   from a file is a smaller act than removing a database from a cluster, and the
   two are not one step.
 * **Variables in it are not secrets**, because the file is in a repository.
-  `secrets:` names the ones that are; their values are set in the panel or with
-  `skifity env set --secret`, and the plan says which are missing.
+  `secrets:` names the ones that are, as a list or as a map. A secret with
+  `from` is read from one of the team's secret managers, written as
+  `env set --from` takes it, and the file sets it: by reference, so its value
+  is in neither the file nor the panel. The others are set in the panel or with
+  `skifity env set --secret`.
+* **A secret the file lists is required.** While an app that is already in the
+  environment lacks one, `apply` changes nothing at all and stops with
+  `blueprint.secrets_missing`, naming each secret and its app: any change to
+  the app would roll it out without it. An app the file makes is made with
+  everything else and not deployed; set the secret, and the next `apply` gives
+  it its first deploy. `optional: true` marks one the app runs without: the
+  plan says it is not set, and nothing waits for it.
 * **A database's engine, version and size are not changed from it** — each of
   those is a migration of somebody's data. The plan says when the file and the
   database disagree.
@@ -500,8 +518,12 @@ What it does, and does not:
   `0 9 * * 1-5` matches the one the panel keeps, a domain is compared lowercase
   and without `https://`, and a root without its leading slash. A plan straight
   after an apply is empty.
-* **A variable the build reads stays one.** The file gives its value; whether it
-  is read at build time is set in the panel and kept.
+* **Which variables the build reads is said or kept.** `build: true` in a
+  variable's or a secret's long form makes it one the build reads, and
+  `build: false` one read when the app runs. Left out, a variable the
+  environment has keeps what it is, whatever the panel says, and a new one is
+  read when the app runs. A new value of one the build reads builds the app
+  again; any other change to a variable only rolls it out.
 
 The file is read from the current directory or the nearest one above it;
 `--file` names another, and `--env` an environment other than the one this

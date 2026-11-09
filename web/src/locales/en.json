@@ -4490,6 +4490,12 @@
         "impact": "Nothing was created.",
         "fix": "An owner or admin can install it and choose Accepts root images for {{0}}, which still refuses a privileged container and anything of the server's. Or install it into an environment that already accepts root images."
       },
+      "blueprint_secrets_missing": {
+        "title": "A secret skifity.yaml requires is not set",
+        "cause": "The file lists these under secrets, and the environment does not have them: {{0}}.",
+        "impact": "No app was started or changed without them. An app the file makes waits for them before its first deploy.",
+        "fix": "Set each one with `skifity env set --secret KEY=... --app APP` and apply again, or mark it optional: true in the file if the app runs without it."
+      },
       "cli_delete_unconfirmed": {
         "title": "Deleting an app has to be confirmed",
         "cause": "There is nobody here to type {{0}}'s name, and --yes was not given.",

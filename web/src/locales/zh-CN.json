@@ -4462,6 +4462,12 @@
         "impact": "没有创建任何东西。",
         "fix": "所有者或管理员可以在安装时为 {{0}} 选择「接受 root 镜像」，这样仍会拒绝特权容器和服务器上的任何东西。或者把它装到已经接受 root 镜像的环境里。"
       },
+      "blueprint_secrets_missing": {
+        "title": "skifity.yaml 要求的密钥未设置",
+        "cause": "文件在 secrets 下列出了这些，而环境中没有：{{0}}。",
+        "impact": "没有应用在缺少它们的情况下启动或被修改。文件新建的应用会等它们设置好后再进行首次部署。",
+        "fix": "用 `skifity env set --secret KEY=... --app APP` 逐个设置后再次应用；如果应用不需要它也能运行，就在文件中标记 optional: true。"
+      },
       "cli_delete_unconfirmed": {
         "title": "删除应用需要确认",
         "cause": "这里没有人可以输入 {{0}} 的名称，也没有给出 --yes。",

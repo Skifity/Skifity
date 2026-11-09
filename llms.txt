@@ -346,7 +346,10 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
   databases, variables, processes, domains and schedules; `skifity plan` says
   what would change and `skifity apply` does it through this same API. Nothing
   is ever deleted by it: what the environment has and the file does not is
-  reported and left alone. Secrets are named in it, never written in it.
+  reported and left alone. Secrets are named in it, never written in it, or
+  read from a secret manager by reference; a secret it names is required, and
+  an app that lacks one is not changed or first deployed until it is set. A
+  variable's long form, `{value: ..., build: true}`, says the build reads it.
 - **A certificate of your own replaces Let's Encrypt's by name.** Upload one
   for the team and every HTTPS domain it covers (exactly, or one label under a
   wildcard) is served with it; the domain says which, and until when. The key is

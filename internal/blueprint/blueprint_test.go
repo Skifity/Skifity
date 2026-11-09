@@ -31,7 +31,8 @@ apps:
     resources: {cpu: 100, memory: 256}
     variables:
       LOG_LEVEL: info
-    secrets: [STRIPE_KEY]
+    secrets:
+      STRIPE_KEY: {optional: true}
     processes:
       worker: npm run worker
       clock: {command: npm run clock, instances: 0}

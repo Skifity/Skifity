@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"skifity/internal/blueprint"
 	"skifity/internal/errdoc"
@@ -54,28 +55,65 @@ func cmdBlueprint(ctx context.Context, command string, args []string, out io.Wri
 		return err
 	}
 	create, change, note := blueprint.Counts(steps)
+	missing, blocking := blueprint.Missing(steps)
 
 	if command == "plan" {
 		if *asJSON {
-			return writeJSON(out, map[string]any{"file": where, "steps": steps, "create": create, "change": change, "note": note})
+			return writeJSON(out, map[string]any{"file": where, "steps": steps, "create": create, "change": change,
+				"note": note, "missing": len(missing)})
 		}
 		fmt.Fprintf(out, "Reading %s.\n\n", where)
 		for _, step := range steps {
 			printStep(out, step)
 		}
-		if create+change == 0 {
+		switch {
+		case create+change == 0 && len(missing) == 0:
 			fmt.Fprintln(out, "\nNothing to change: the environment is what the file says.")
-			return nil
+		case create+change == 0:
+			fmt.Fprintln(out, "\nNothing to change.")
+		default:
+			fmt.Fprintf(out, "\n%d to add, %d to change. `%s apply` makes these changes.\n", create, change, version.Binary)
 		}
-		fmt.Fprintf(out, "\n%d to add, %d to change. `%s apply` makes these changes.\n", create, change, version.Binary)
+		switch {
+		case len(blocking) > 0:
+			fmt.Fprintf(out, "%s %s required and not set: apply changes nothing until %s.\n",
+				secretNames(missing, nil), isAre(len(missing)), itThey(len(missing)))
+		case len(missing) > 0:
+			fmt.Fprintf(out, "%s %s required and not set: apply makes the rest, and holds back the first deploy of the app that needs %s.\n",
+				secretNames(missing, nil), isAre(len(missing)), itThem(len(missing)))
+		}
 		return nil
 	}
 
-	applied, err := applySteps(ctx, client, state, steps, *asJSON, out)
+	var applied []blueprint.Step
+	var ids map[string]string
+	var stopped error
+	if len(blocking) > 0 {
+		// An app that is here would be rolled out by any change to it, and
+		// start without what the file says it needs: nothing is sent.
+		applied = []blueprint.Step{}
+		if !*asJSON {
+			for _, step := range blocking {
+				printStep(out, step)
+			}
+		}
+		here := map[string]string{}
+		for _, app := range state.Apps {
+			here["app:"+app.App.Name] = app.App.ID
+		}
+		err = errdoc.BlueprintSecretsMissing(secretNames(missing, here))
+	} else {
+		applied, ids, stopped = applySteps(ctx, client, state, steps, *asJSON, out)
+		err = stopped
+		if stopped == nil && len(missing) > 0 {
+			err = errdoc.BlueprintSecretsMissing(secretNames(missing, ids))
+		}
+	}
 	// What was done, not what was planned: after a failure they differ.
 	create, change, _ = blueprint.Counts(applied)
 	if *asJSON {
-		answer := map[string]any{"file": where, "applied": applied, "create": create, "change": change, "note": note}
+		answer := map[string]any{"file": where, "applied": applied, "create": create, "change": change, "note": note,
+			"missing": len(missing)}
 		if err != nil {
 			answer["error"] = errdoc.From(err)
 		}
@@ -84,9 +122,16 @@ func cmdBlueprint(ctx context.Context, command string, args []string, out io.Wri
 		}
 		return err
 	}
-	if err != nil {
+	switch {
+	case len(blocking) > 0:
+		fmt.Fprintln(out, "\nNothing was changed.")
+		return err
+	case stopped != nil:
 		fmt.Fprintf(out, "\nStopped after %d of the changes. What was done stays done; `%s plan` shows what is left.\n",
 			len(applied), version.Binary)
+		return err
+	case len(missing) > 0:
+		fmt.Fprintf(out, "\nDone: %d added, %d changed. A first deploy waits for the secrets the file requires.\n", create, change)
 		return err
 	}
 	if len(applied) == 0 {
@@ -95,6 +140,50 @@ func cmdBlueprint(ctx context.Context, command string, args []string, out io.Wri
 	}
 	fmt.Fprintf(out, "\nDone: %d added, %d changed.\n", create, change)
 	return nil
+}
+
+// secretNames lists missing secrets by app, "web (app_1): STRIPE_KEY", with
+// the app's id when it has one, so the command that sets them can be written
+// out.
+func secretNames(missing []blueprint.Step, made map[string]string) string {
+	byApp := map[string][]string{}
+	var apps []string
+	for _, step := range missing {
+		if _, seen := byApp[step.App]; !seen {
+			apps = append(apps, step.App)
+		}
+		byApp[step.App] = append(byApp[step.App], step.Name)
+	}
+	parts := make([]string, 0, len(apps))
+	for _, app := range apps {
+		label := app
+		if id := made["app:"+app]; id != "" {
+			label += " (" + id + ")"
+		}
+		parts = append(parts, label+": "+strings.Join(byApp[app], ", "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func isAre(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
+}
+
+func itThey(n int) string {
+	if n == 1 {
+		return "it is"
+	}
+	return "they are"
+}
+
+func itThem(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
 }
 
 // readBlueprint finds and parses the file.
@@ -253,9 +342,11 @@ func gitSources(ctx context.Context, client *Client, environment string) ([]stor
 
 // applySteps sends each step's call in order, filling in the ids of what the
 // earlier ones made, and stops at the first that fails. A step with no call
-// that is not a note is part of the next call — the variables of one app are
-// sent together — and is done when that call is.
-func applySteps(ctx context.Context, client *Client, state blueprint.State, steps []blueprint.Step, quiet bool, out io.Writer) ([]blueprint.Step, error) {
+// that is not a note or a missing secret is part of the next call — the
+// variables of one app are sent together — and is done when that call is. It
+// answers what was done, and the ids of everything by name.
+func applySteps(ctx context.Context, client *Client, state blueprint.State, steps []blueprint.Step, quiet bool,
+	out io.Writer) ([]blueprint.Step, map[string]string, error) {
 	ids := map[string]string{}
 	for _, app := range state.Apps {
 		ids["app:"+app.App.Name], ids["app:"+app.App.Slug] = app.App.ID, app.App.ID
@@ -276,8 +367,8 @@ func applySteps(ctx context.Context, client *Client, state blueprint.State, step
 	}
 	for _, step := range steps {
 		if step.Call == nil {
-			if step.Op == "note" {
-				say(stepMarks["note"], []blueprint.Step{step})
+			if step.Op == "note" || step.Op == "missing" {
+				say(stepMarks[step.Op], []blueprint.Step{step})
 			} else {
 				batch = append(batch, step)
 			}
@@ -288,24 +379,24 @@ func applySteps(ctx context.Context, client *Client, state blueprint.State, step
 		call, err := blueprint.Resolve(*step.Call, ids)
 		if err != nil {
 			say("✗", done)
-			return applied, err
+			return applied, ids, err
 		}
 		var answer json.RawMessage
 		if err := client.DoLong(ctx, call.Method, call.Path, call.Body, &answer); err != nil {
 			say("✗", done)
-			return applied, err
+			return applied, ids, err
 		}
 		if call.Creates != "" {
 			id := createdID(answer)
 			if id == "" {
-				return applied, errors.New("the panel made " + call.Creates + " and did not say its id")
+				return applied, ids, errors.New("the panel made " + call.Creates + " and did not say its id")
 			}
 			ids[call.Creates] = id
 		}
 		applied = append(applied, done...)
 		say("✓", done)
 	}
-	return applied, nil
+	return applied, ids, nil
 }
 
 // createdID reads the id out of what a create answered: a database is the
@@ -326,7 +417,7 @@ func createdID(answer json.RawMessage) string {
 	return shape.App.ID
 }
 
-var stepMarks = map[string]string{"create": "+", "change": "~", "note": "·"}
+var stepMarks = map[string]string{"create": "+", "change": "~", "note": "·", "missing": "!"}
 
 func printStep(out io.Writer, step blueprint.Step) {
 	fmt.Fprintf(out, "  %s %s\n", stepMarks[step.Op], describe(step))

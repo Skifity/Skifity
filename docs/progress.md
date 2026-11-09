@@ -5337,6 +5337,36 @@ made; and `skifity plan` and `apply` run by the CLI against the real API —
 everything made, applied twice being applied once, a changed file changing only
 that, and a viewer's apply refused with nothing made.
 
+### Later: the build, secret managers, and secrets a file requires
+
+A variable new to the environment was sent with `build_time` false, so a
+`NEXT_PUBLIC_` or `VITE_` value written in the file missed the build, and the
+documentation said the build was set in the panel. A variable now takes
+`{value: ..., build: true}` as well as its value, and `build_time` is sent
+only when the file says it: left out, the panel keeps what the variable is.
+A new value of one the build reads plans a deploy, as before; a runtime one
+is rolled out by the batch and nothing more (ADR-0007).
+
+`secrets:` is still a list of names, and also a map: `{from:
+connection:path#key}` plans the reference in the same batch as the variables,
+with no value, and `build` and `optional` say the rest. **This changes what an
+existing file does:** a secret a file lists is now required. An apply that used
+to note a missing one and go on now refuses before it changes anything, with
+`blueprint.secrets_missing` naming each secret, its app and the command that
+sets it, while an app that is already here lacks one. An app the file makes is
+made, and its first deploy waits until the secret is set; the next apply gives
+it. `optional: true` keeps the old note.
+
+Tested in `internal/blueprint` (both forms of a variable and of the secrets, a
+typo in either, `build_time` sent only when said, which changes build and which
+only roll out, a reference sent without a value, a missing secret blocking an
+app that is here and holding a new one's deploy) and in `internal/api`, through
+the CLI against the real API: an apply that lacks a required secret changes
+nothing and exits with the code, an optional one is applied and said, a new
+app is made and deployed once its secret is set, and a variable the build
+reads and a secret read from a Vault stand-in reach the panel as the file says,
+with nothing of the secret's value stored.
+
 ## Phase 109 — upgrading the components, and k3s
 
 Gap 12, the last. The installer put k3s on every server and nothing moved it;

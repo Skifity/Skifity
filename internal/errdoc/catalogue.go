@@ -795,6 +795,17 @@ func BlueprintInvalid(detail string) *Problem {
 		WithDocs("/docs/cli#describing-an-environment-in-a-file")
 }
 
+// BlueprintSecretsMissing is a secret skifity.yaml lists, and so requires,
+// that the environment does not have. missing names each, with its app.
+func BlueprintSecretsMissing(missing string) *Problem {
+	return New("blueprint.secrets_missing", "A secret skifity.yaml requires is not set").
+		WithCause("The file lists these under secrets, and the environment does not have them: %s.", missing).
+		WithImpact("No app was started or changed without them. An app the file makes waits for them before its first deploy.").
+		WithFix("Set each one with `skifity env set --secret KEY=... --app APP` and apply again, or mark it optional: true in the file if the app runs without it.").
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/cli#describing-an-environment-in-a-file")
+}
+
 // ProcessNameInvalid is a process name that cannot be one.
 func ProcessNameInvalid(name string) *Problem {
 	return New("process.name_invalid", "That cannot be a process's name").

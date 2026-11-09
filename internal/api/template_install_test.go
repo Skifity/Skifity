@@ -641,24 +641,24 @@ func TestAnInstallThatFailsLeavesTheLevelAsItWas(t *testing.T) {
 // Installed from the built-in catalogue, each now gets the pieces its image
 // reads, from the database's own credentials, the password as a secret.
 func TestWordPressAndGhostGetTheirDatabaseInThePiecesTheyRead(t *testing.T) {
-	h, _ := withStoredDatabases(t)
+	h, databases := withStoredDatabases(t)
 	acme := h.newTenant("acme")
 	h.acceptRoot(t, &acme)
 
+	// The pieces are the link's: the database manager writes them from the
+	// database's own connection and keeps them current after a password
+	// change (internal/dbsvc tests the values). What the install owes is
+	// that each image's link names the variables that image reads.
 	for _, c := range []struct {
 		template string
-		want     map[string]string
-		secret   string
+		want     store.LinkPieces
+		plain    map[string]string
 	}{
-		{"wordpress", map[string]string{
-			"WORDPRESS_DB_HOST": "wordpress-db.acme-production.svc", "WORDPRESS_DB_USER": "app",
-			"WORDPRESS_DB_NAME": "app", "WORDPRESS_DB_PASSWORD": "not-a-real-password",
-		}, "WORDPRESS_DB_PASSWORD"},
-		{"ghost", map[string]string{
-			"database__client": "mysql", "database__connection__host": "ghost-db.acme-production.svc",
-			"database__connection__port": "3306", "database__connection__user": "app",
-			"database__connection__database": "app", "database__connection__password": "not-a-real-password",
-		}, "database__connection__password"},
+		{"wordpress", store.LinkPieces{Host: "WORDPRESS_DB_HOST", Name: "WORDPRESS_DB_NAME",
+			User: "WORDPRESS_DB_USER", Password: "WORDPRESS_DB_PASSWORD"}, nil},
+		{"ghost", store.LinkPieces{Host: "database__connection__host", Port: "database__connection__port",
+			Name: "database__connection__database", User: "database__connection__user",
+			Password: "database__connection__password"}, map[string]string{"database__client": "mysql"}},
 	} {
 		status, body := h.do(acme, http.MethodPost, "/api/templates/"+c.template+"/install",
 			map[string]any{"environment_id": acme.env.ID})
@@ -670,23 +670,22 @@ func TestWordPressAndGhostGetTheirDatabaseInThePiecesTheyRead(t *testing.T) {
 			t.Fatalf("installing %s made %s", c.template, body)
 		}
 		app := installed.Apps[0]
+		if pieces, ok := databases.log.piecesOf(app.ID); !ok || pieces != c.want {
+			t.Errorf("%s was linked with the pieces %+v (given %v), want %+v", c.template, pieces, ok, c.want)
+		}
 		rows, err := h.db.ListVariables(t.Context(), app.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, secret := map[string]string{}, map[string]bool{}
+		got := map[string]string{}
 		for _, row := range rows {
 			if value, err := h.keyring.Open(row.Sealed, variableContext(app.ID, row.Key)); err == nil {
 				got[row.Key] = string(value)
 			}
-			secret[row.Key] = row.IsSecret
 		}
-		for key, value := range c.want {
+		for key, value := range c.plain {
 			if got[key] != value {
 				t.Errorf("%s: %s is %q, want %q", c.template, key, got[key], value)
-			}
-			if secret[key] != (key == c.secret) {
-				t.Errorf("%s: %s is secret %v", c.template, key, secret[key])
 			}
 		}
 	}
