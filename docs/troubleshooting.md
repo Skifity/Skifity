@@ -286,6 +286,31 @@ worked, as for any deployment that fails while rolling out.
 An assistant connected over MCP gets the same lines from
 `get_deployment_history`, as `last_lines` on the deployment that crashed.
 
+## I pushed and nothing happened
+
+Start at the app's **Deployments** tab: a push that reached the panel and was
+skipped is not there, and one that built and failed is.
+
+**The app has no Git connection.** An app made from a public repository without
+a connection has deploy on push on and no webhook, so the Git host never tells
+the panel about a push. Its **Settings** say so under **Deploy on push**.
+Connect your account under **Settings → Git**, choose the connection in the
+app's **Git connection**, and save: the webhook is registered then. See
+[Deploying when you push](concepts.md#deploying-when-you-push).
+
+**The token cannot manage webhooks.** The panel said so when the app was made
+or the connection chosen, with the address to add by hand. Give the token the
+webhook scope, or add the hook yourself with the address and the secret from
+**Settings → Git → Webhook**; then **Register the webhook again** on the app's
+**Settings** checks. At the Git host, the hook's recent deliveries say what the
+panel answered: a 401 is a secret that does not match, and a 202 names each app
+and why it was skipped — another branch, deploy on push off, deploys locked, a
+`[skip ci]`, a path the app does not watch.
+
+**The push landed while the panel was restarting.** The Git host tried once and
+was refused. Press **Redeliver** on that delivery at the host, or **Deploy** on
+the app.
+
 ## Bitbucket refuses the token or a webhook
 
 **Connecting answers that Bitbucket did not accept the token (401).** The token

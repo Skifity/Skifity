@@ -18,6 +18,7 @@ import (
 	"skifity/internal/docsite"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/gitsrc"
 	"skifity/internal/logdrain"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
@@ -46,6 +47,10 @@ type Server struct {
 	// latestRelease asks which release is the newest. Nil means GitHub, through
 	// the guarded client; a test puts its own here.
 	latestRelease func(ctx context.Context, repository string) (string, error)
+	// registerHook asks a Git host to deliver a repository's pushes here. Nil
+	// is gitsrc.EnsureWebhook, through the guarded client, which will not dial
+	// the loopback a test's host listens on; a test puts its own here.
+	registerHook func(ctx context.Context, req gitsrc.HookRequest) gitsrc.HookResult
 
 	// setup guards first-run: it holds the one-time token until an admin exists.
 	setup *setupState
@@ -492,6 +497,8 @@ func (s *Server) routes() chi.Router {
 				app.Put("/password", s.handleSetPassword)
 				app.Delete("/password", s.handleRemovePassword)
 				app.Post("/deploy", s.handleDeployApp)
+				// Deploy on push: ask the repository for its webhook again.
+				app.Post("/webhook", s.handleRegisterWebhook)
 				app.Put("/lock", s.handleLockDeploys)
 				app.Delete("/lock", s.handleUnlockDeploys)
 				app.Get("/template", s.handleGetAppTemplate)

@@ -18,6 +18,7 @@ import { cn } from "cn"
 
 import { AppNeeds, usableVariableName } from "@/components/app-needs"
 import { DetectedProcesses } from "@/components/app/processes"
+import { sayWebhook as sayWebhookStatus } from "@/components/app/push-deploys"
 import { ErrorDisplay, toProblem } from "@/components/error-display"
 import {
   FolderPicker,
@@ -295,17 +296,7 @@ export function NewAppPage() {
   // Whether pushes will deploy is worth knowing now rather than the first
   // time somebody pushes and nothing happens. Said for a stack too, which
   // registers the same webhook.
-  function sayWebhook(webhook?: WebhookStatus) {
-    if (!webhook?.url) return
-    if (webhook.registered) {
-      toast.success(t("git.pushDeploysOn"), { description: t("git.pushDeploysOnHelp") })
-    } else {
-      toast.warning(t("git.pushDeploysManual"), {
-        description: `${t("git.pushDeploysManualHelp")} ${webhook.url}`,
-        duration: 15000,
-      })
-    }
-  }
+  const sayWebhook = (webhook?: WebhookStatus) => sayWebhookStatus(t, navigate, webhook)
 
   type Created = {
     app: App

@@ -38,6 +38,10 @@ type appUpdate struct {
 	// image, which the deploy builds with, and the release command, which
 	// runs only in a deploy. On an app that runs nothing yet, every change.
 	NextDeploy []string `json:"next_deploy"`
+	// Webhook is what the save found out about deploy on push, present when
+	// it asked the repository for its webhook: a connection given, deploy on
+	// push turned on, or the trigger changed.
+	Webhook *webhookStatus `json:"webhook,omitempty"`
 }
 
 // settingsTakingEffect sorts the settings that differ between before and

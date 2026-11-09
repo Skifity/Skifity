@@ -6,6 +6,7 @@ import { BookOpenIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { GPUCard } from "@/components/app/gpu-card"
+import { DeployOnPushNotice, sayWebhook, webhookAnswerKey } from "@/components/app/push-deploys"
 import { MaintenanceCard } from "@/components/app/maintenance"
 import { settingLabels } from "@/components/app/setting-label"
 import { TemplateCard } from "@/components/app/template-card"
@@ -25,10 +26,14 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { api } from "@/lib/api"
+import { useSession } from "@/hooks/use-session"
+import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { App, AppUpdate, Environment, HealthCheck } from "@/lib/types"
+import type { App, AppUpdate, Environment, GitSource, HealthCheck } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
+
+/** The Select's value for no Git connection, which a Select cannot hold as "". */
+const NO_GIT_SOURCE = "__none__"
 
 /** The bounds the server holds the health check to, in seconds; see internal/kube/health.go. */
 const HEALTH_START = { min: 10, max: 1800 }
@@ -64,6 +69,7 @@ export function settingsKey(app: App): string {
     app.tag_pattern,
     app.run_as_user,
     app.internal,
+    app.git_source_id,
   ])
 }
 
@@ -93,11 +99,22 @@ export function SettingsTab({ app }: { app: App }) {
   const [tagPattern, setTagPattern] = useState(app.tag_pattern)
   const [internal, setInternal] = useState(app.internal)
   const [runAsUser, setRunAsUser] = useState(app.run_as_user ? String(app.run_as_user) : "")
+  // The connection it builds and registers its webhook with. Chosen here so
+  // that an app made without one, or left without one when its connection
+  // was removed, need not be made again to deploy on push.
+  const [gitSourceID, setGitSourceID] = useState(app.git_source_id ?? "")
+  const { team } = useSession()
+  const gitSources = useQuery({
+    queryKey: ["git-sources", team?.id],
+    queryFn: () => api.get<List<GitSource>>(`/api/teams/${team!.id}/git-sources`),
+    enabled: Boolean(team) && app.source_type === "git",
+  })
   // An image this panel built always runs as 1000; the uid is for anybody
   // else's image, and the API refuses it for the rest.
   const builtHere = app.source_type === "git" || app.source_type === "upload"
 
   const save = useMutation({
+    mutationKey: webhookAnswerKey(app.id, "save"),
     mutationFn: () =>
       api.patch<AppUpdate>(`/api/apps/${app.id}`, {
         name: name.trim(),
@@ -123,6 +140,7 @@ export function SettingsTab({ app }: { app: App }) {
         tag_pattern: tagPattern.trim(),
         internal,
         ...(builtHere ? {} : { run_as_user: Number(runAsUser) || 0 }),
+        ...(app.source_type === "git" ? { git_source_id: gitSourceID } : {}),
       }),
     // What goes into the image waits for the next deploy, which builds with
     // it: said here, because "Saved" alone after a new build command reads
@@ -134,6 +152,9 @@ export function SettingsTab({ app }: { app: App }) {
           ? t("apps.savedNextDeploy", { settings: settingLabels(t, waiting) })
           : t("common.saved"),
       )
+      // Present when the save asked the repository for its webhook: a
+      // connection given, deploy on push turned on, the trigger changed.
+      sayWebhook(t, navigate, result?.webhook)
       void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
       void queryClient.invalidateQueries({ queryKey: ["app-status", app.id] })
     },
@@ -412,6 +433,26 @@ export function SettingsTab({ app }: { app: App }) {
 
           {app.source_type === "git" && (
             <>
+              <Field>
+                <FieldLabel htmlFor="settings-git-source">{t("apps.gitConnection")}</FieldLabel>
+                <Select
+                  value={gitSourceID || NO_GIT_SOURCE}
+                  onValueChange={(value) => setGitSourceID(value === NO_GIT_SOURCE ? "" : value)}
+                >
+                  <SelectTrigger id="settings-git-source">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_GIT_SOURCE}>{t("common.none")}</SelectItem>
+                    {(gitSources.data?.items ?? []).map((source) => (
+                      <SelectItem key={source.id} value={source.id}>
+                        {source.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>{t("apps.gitConnectionHelp")}</FieldDescription>
+              </Field>
               <Field orientation="horizontal">
                 <FieldContent>
                   <FieldLabel htmlFor="settings-deploy-on-push">
@@ -425,6 +466,7 @@ export function SettingsTab({ app }: { app: App }) {
                   onCheckedChange={setAutoDeploy}
                 />
               </Field>
+              <DeployOnPushNotice app={app} autoDeploy={autoDeploy} gitSourceID={gitSourceID} />
               {/*
                 Every push to the branch, or only the tags somebody releases
                 with. Not both: a tag is put on a commit the branch already

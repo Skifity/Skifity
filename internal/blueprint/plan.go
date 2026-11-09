@@ -166,20 +166,20 @@ func Plan(file File, state State) ([]Step, error) {
 		want := file.Apps[name]
 		have, exists := existingApp[name]
 		ref := "{app:" + name + "}"
+		gitSource, err := gitSourceID(name, want, state.GitSources)
+		if err != nil {
+			return nil, err
+		}
 		if exists {
 			ref = have.App.ID
 		} else {
-			gitSource, err := gitSourceID(name, want, state.GitSources)
-			if err != nil {
-				return nil, err
-			}
 			create, err := createApp(name, want, state.EnvironmentID, gitSource)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, create)
 		}
-		changes, redeploy := appSteps(name, ref, want, have, exists)
+		changes, redeploy := appSteps(name, ref, want, have, exists, gitSource)
 		if redeploy == "" && exists {
 			redeploy = owed(have)
 		}
@@ -309,8 +309,9 @@ func createApp(name string, want App, envID, gitSource string) (Step, error) {
 
 // appSteps are the changes to one app, new or not: its settings, scaling,
 // variables, processes, domains and schedules. redeploy says why the app has
-// to be deployed again for them to take effect, when one does.
-func appSteps(name, ref string, want App, have AppState, exists bool) (steps []Step, redeploy string) {
+// to be deployed again for them to take effect, when one does. gitSource is
+// the id of the connection the file names, or "" when it names none.
+func appSteps(name, ref string, want App, have AppState, exists bool, gitSource string) (steps []Step, redeploy string) {
 	current := have.App
 
 	// Settings, sent together. A new app got most of them when it was made.
@@ -360,6 +361,14 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 		if want.Internal != nil && *want.Internal != current.Internal {
 			patch["internal"] = *want.Internal
 			changed = append(changed, fmt.Sprintf("internal %t → %t", current.Internal, *want.Internal))
+		}
+		// The file's `git:` on an app that has another connection, or none:
+		// an app made from a public repository is given one this way, and
+		// its webhook with it. A connection is not part of the image, so it
+		// is a change and never a redeploy.
+		if gitSource != "" && gitSource != current.GitSourceID && current.SourceType == "git" {
+			patch["git_source_id"] = gitSource
+			changed = append(changed, fmt.Sprintf("git connection → %q", want.Git))
 		}
 	}
 	field("preview seed", "preview_seed", want.PreviewSeed, current.PreviewSeed)

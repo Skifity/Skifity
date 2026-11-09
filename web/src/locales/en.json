@@ -878,6 +878,13 @@
       "no_port": "No port is published or exposed, and its image's is not known: nothing can reach it by name. If another service connects to it, give it an expose line with the port it listens on.",
       "skipped": "The service {{name}} could not be read and was skipped."
     },
+    "gitConnection": "Git connection",
+    "gitConnectionHelp": "What the app's builds clone the repository with, and what registers its webhook. A public repository builds without one; deploying on push needs one.",
+    "pushNoConnection": "No webhook is registered for this app",
+    "pushNoConnectionHelp": "Deploy on push is on, but the app has no Git connection, so nothing asked the repository to tell the panel about a push. Choose a connection above and save, or connect your Git account first.",
+    "pushNotRegistered": "The webhook was not registered",
+    "pushNotRegisteredHelp": "The Git host turned the panel down the last time it asked. Once the connection's token may manage webhooks, ask again.",
+    "registerWebhookAgain": "Register the webhook again",
     "savedNextDeploy": "Saved. These take effect at the next deploy: {{settings}}.",
     "pendingTitle": "Changes waiting for a deploy",
     "pendingBody": "{{names}} changed since the running version was built. They go into the image, so they take effect when a deploy builds with them.",
@@ -4435,6 +4442,12 @@
         "impact": "The new version was not rolled out. If an earlier version worked, the app is put back on it.",
         "fix": "The lines it printed before it stopped are in the deployment log, and usually say why. OOMKilled is a version that needs more memory, set under Scaling. Exit code 126 or 127 is a start command that cannot be run, set under Settings. Exit code 0 is a process that finished, and a web process has to keep running. Anything else is in those lines: most often a variable that is missing."
       },
+      "git_connection_wrong_host": {
+        "title": "That Git connection is for another host",
+        "cause": "{{0}} is a connection to another host than the one {{1}} is on.",
+        "impact": "Nothing was changed. A build would not send that connection's token to this repository's host, and its webhook could not be registered there.",
+        "fix": "Choose a connection to the host the repository is on, or connect one under Settings, then Git."
+      },
       "backup_storage_endpoint_invalid": {
         "title": "The backup storage's endpoint is not an address",
         "cause": "The endpoint {{0}} could not be read: {{1}}",
@@ -4553,7 +4566,11 @@
       "webhookStepFill": "Give it a title, and paste the address above as its URL and the secret above as its Secret.",
       "webhookStepTriggers": "Under Triggers, choose from a full list: Repository Push, and Pull Request Created, Updated, Merged and Declined.",
       "webhookStepSave": "Save. Bitbucket signs every delivery with the secret, and Skifity refuses any delivery that is not signed."
-    }
+    },
+    "pushDeploysNoConnection": "Pushes will not deploy this app yet",
+    "pushDeploysNoConnectionHelp": "No webhook was registered for it, because it has no Git connection to register one with. Connect your Git account under Settings, Git, then choose the connection in the app's settings.",
+    "connectAccount": "Connect a Git account",
+    "pushDeploysWhatToCheck": "What to check"
   },
   "notifications": {
     "title": "Notifications",

@@ -774,10 +774,7 @@ test("an old link to an app's tab opens that tab, and nonsense opens the app", a
 
   await page.goto(`/apps/${appID}/nonsense`)
   await expect(page).toHaveURL(new RegExp(`/apps/${appID}$`))
-  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  )
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true")
   await expect(page.getByText("That page does not exist")).toHaveCount(0)
 })
 
@@ -812,7 +809,10 @@ test("a link to a deployment opens its build at the line that went wrong", async
   await page.route(`**/api/apps/${appID}/deployments`, (route) =>
     route.fulfill({
       json: {
-        items: [deployment("dep_e2e_running", 3, "building"), deployment("dep_e2e_failed", 2, "failed")],
+        items: [
+          deployment("dep_e2e_running", 3, "building"),
+          deployment("dep_e2e_failed", 2, "failed"),
+        ],
         total: 2,
       },
     }),
@@ -1179,6 +1179,31 @@ test("a version that crashed says why first, and opens the tab that fixes it", a
 
   await page.getByRole("link", { name: "Open Scaling" }).click()
   await expect(page).toHaveURL(/[?&]tab=scaling/)
+})
+
+test("an app from a public repository says pushes will not deploy it, and where to fix that", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  // The quick start's own path: a public repository, no Git connection, and
+  // deploy on push on by default. Nothing registers a webhook for it, and
+  // that is said when the app is made rather than after a push does nothing.
+  await page.goto(`/environments/${await firstEnvironment(page)}/apps/new`)
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/acme/public-site")
+  await page.getByRole("button", { name: /^create and deploy$/i }).click()
+
+  await expect(page.getByText("Pushes will not deploy this app yet")).toBeVisible({
+    timeout: 30_000,
+  })
+  await expect(page).toHaveURL(/\/apps\/app_/)
+
+  // The app's settings say the same where it is fixed, with the connection
+  // to choose.
+  const appID = page.url().split("/apps/")[1].split(/[/?#]/)[0]
+  await page.goto(`/apps/${appID}?tab=settings`)
+  await expect(page.getByText("No webhook is registered for this app")).toBeVisible()
+  await expect(page.getByLabel("Git connection", { exact: true })).toBeVisible()
 })
 
 /** The environment first-run setup made: Production of the first project. */

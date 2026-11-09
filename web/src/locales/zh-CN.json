@@ -865,6 +865,13 @@
       "no_port": "没有发布或暴露任何端口，镜像的端口也未知：任何服务都无法通过名字访问它。如果有其他服务要连接它，请为它添加一行 expose，写明它监听的端口。",
       "skipped": "无法读取服务 {{name}}，已跳过。"
     },
+    "gitConnection": "Git 连接",
+    "gitConnectionHelp": "应用的构建用它克隆仓库，也用它注册 Webhook。公开仓库不需要它也能构建；推送即部署需要它。",
+    "pushNoConnection": "这个应用没有注册 Webhook",
+    "pushNoConnectionHelp": "推送时自动部署已开启，但应用没有 Git 连接，所以没有人让仓库在推送时通知面板。请在上方选择一个连接并保存，或先连接你的 Git 账号。",
+    "pushNotRegistered": "Webhook 没有注册成功",
+    "pushNotRegisteredHelp": "上次请求时 Git 托管方拒绝了面板。等连接的令牌有权管理 Webhook 后，再请求一次。",
+    "registerWebhookAgain": "重新注册 Webhook",
     "savedNextDeploy": "已保存。以下设置在下次部署时生效：{{settings}}。",
     "pendingTitle": "等待部署的更改",
     "pendingBody": "自运行中的版本构建以来，{{names}} 已更改。这些内容会进入镜像，因此要等一次部署用它们重新构建后才会生效。",
@@ -4407,6 +4414,12 @@
         "impact": "新版本没有上线。如果之前有可用的版本，应用会回到那个版本。",
         "fix": "它停止前输出的内容在部署日志中，通常会说明原因。OOMKilled 表示该版本需要更多内存，在“扩缩容”中设置。退出码 126 或 127 表示启动命令无法运行，在“设置”中设置。退出码 0 表示进程结束了，而 Web 进程必须持续运行。其他情况的原因都在那些日志行里：最常见的是缺少变量。"
       },
+      "git_connection_wrong_host": {
+        "title": "这个 Git 连接属于另一个主机",
+        "cause": "{{0}} 连接的主机不是 {{1}} 所在的主机。",
+        "impact": "没有做任何更改。构建不会把该连接的令牌发送到这个仓库的主机，它的 Webhook 也无法在那里注册。",
+        "fix": "请选择仓库所在主机的连接，或在“设置”的 Git 中连接一个。"
+      },
       "backup_storage_endpoint_invalid": {
         "title": "备份存储的端点不是一个地址",
         "cause": "无法读取端点 {{0}}：{{1}}",
@@ -4525,7 +4538,11 @@
       "webhookStepFill": "填写标题，将上面的地址粘贴为 URL，将上面的密钥粘贴为 Secret。",
       "webhookStepTriggers": "在 Triggers 下选择 Choose from a full list：Repository Push，以及 Pull Request Created、Updated、Merged 和 Declined。",
       "webhookStepSave": "保存。Bitbucket 会用密钥为每次投递签名，Skifity 会拒绝任何未签名的投递。"
-    }
+    },
+    "pushDeploysNoConnection": "推送暂时不会部署这个应用",
+    "pushDeploysNoConnectionHelp": "没有为它注册 Webhook，因为它没有可用于注册的 Git 连接。请在“设置”的 Git 中连接你的 Git 账号，然后在应用的设置中选择该连接。",
+    "connectAccount": "连接 Git 账号",
+    "pushDeploysWhatToCheck": "检查什么"
   },
   "notifications": {
     "title": "通知",

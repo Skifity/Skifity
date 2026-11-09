@@ -2,6 +2,9 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"regexp"
 	"slices"
@@ -773,5 +776,34 @@ func TestDeploymentHistoryCarriesWhatACrashedVersionPrinted(t *testing.T) {
 	}
 	if !strings.Contains(text, `"error_code":"deploy.crashed"`) || !strings.Contains(text, `"last_lines":"Error: DATABASE_URL is not set"`) {
 		t.Errorf("the history does not carry the crashed version's last lines: %s", text)
+	}
+}
+
+// An app made from a public repository with no Git connection deploys on push
+// by default, and nothing registered a webhook to make that true. An
+// assistant is told, so it does not tell somebody that pushing deploys.
+func TestCreatingAnAppWithNoConnectionSaysPushesWillNotDeployIt(t *testing.T) {
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.Path != "/api/environments/env_1/apps" {
+			http.Error(w, `{"error":{"code":"resource.not_found","title":"no"}}`, http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"app":{"id":"app_1","name":"site"},"webhook":{"registered":false,
+			"reason":"no webhook was registered for this app, because it has no Git connection to register one with",
+			"reason_code":"no_connection"}}`)
+	}))
+	t.Cleanup(panel.Close)
+	session := connect(t, NewRemote(cli.Config{PanelURL: panel.URL, Token: "skf_test", TeamID: "team_1"}, nil))
+
+	text, failed := call(t, session, "create_app", map[string]any{
+		"name": "site", "repo_url": "https://github.com/acme/site", "environment_id": "env_1",
+	})
+	if failed {
+		t.Fatalf("create_app failed: %s", text)
+	}
+	if !strings.Contains(text, `"deploys_on_push":false`) || !strings.Contains(text, "no Git connection") {
+		t.Errorf("create_app answered %s", text)
 	}
 }

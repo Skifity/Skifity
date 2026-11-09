@@ -1526,6 +1526,18 @@ func NoBuilderDetected(repo string) *Problem {
 		With("repository", repo)
 }
 
+// GitConnectionWrongHost refuses an app a Git connection that is for another
+// host than its repository's. The build would decline to send the token and
+// the webhook would be registered nowhere, both without a word.
+func GitConnectionWrongHost(connection, repo string) *Problem {
+	return New("git.connection_wrong_host", "That Git connection is for another host").
+		WithCause("%s is a connection to another host than the one %s is on.", connection, repo).
+		WithImpact("Nothing was changed. A build would not send that connection's token to this repository's host, and its webhook could not be registered there.").
+		WithFix("Choose a connection to the host the repository is on, or connect one under Settings, then Git.").
+		WithStatus(http.StatusBadRequest).
+		With("connection", connection).With("repository", repo)
+}
+
 // RolloutTimedOut reports a deploy whose pods never became ready.
 func RolloutTimedOut(app string, ready, want int, reason string) *Problem {
 	return New("deploy.rollout_timeout", "The new version did not start").

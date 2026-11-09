@@ -500,7 +500,19 @@ type webhookStatus struct {
 	URL string `json:"url,omitempty"`
 	// Reason says why it could not be registered, in words to act on.
 	Reason string `json:"reason,omitempty"`
+	// ReasonCode is hookNoConnection for the one reason the panel, the CLI
+	// and an assistant each say in their own words and act on: there is no
+	// connection to register with. Every other reason is the Git host's own
+	// answer, which has no code to give.
+	ReasonCode string `json:"reason_code,omitempty"`
 }
+
+// hookNoConnection is a Git app that deploys on push with no Git connection,
+// so no webhook was registered for it. Not "pushes can never deploy it": a
+// hook that another of the team's connections has on the same repository is
+// matched by repository and deploys it. But nothing was set up here, and on a
+// team with no connection at all nothing can deliver.
+const hookNoConnection = "no_connection"
 
 // ensureWebhookFor asks the Git host to deliver this repository's pushes here.
 //
@@ -513,8 +525,17 @@ type webhookStatus struct {
 // Never fatal. A read-only token is the right token for somebody who deploys
 // by hand, so a refusal comes back as "here is the URL, add it yourself".
 func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus {
-	if app.SourceType != "git" || app.GitSourceID == "" || !app.AutoDeploy {
+	if app.SourceType != "git" || !app.AutoDeploy {
 		return webhookStatus{}
+	}
+	// Said rather than answered with nothing: an app made from a public
+	// repository, the quick start, deploys on push by default, and the
+	// switch saying so was on with nothing ever registered to make it true.
+	if app.GitSourceID == "" {
+		return webhookStatus{
+			ReasonCode: hookNoConnection,
+			Reason:     "no webhook was registered for this app, because it has no Git connection to register one with",
+		}
 	}
 	source, err := s.db.GetGitSource(r.Context(), app.GitSourceID)
 	if err != nil {
@@ -527,7 +548,11 @@ func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus 
 	}
 
 	token, email := s.gitCredentials(r, source)
-	result := gitsrc.EnsureWebhook(r.Context(), gitsrc.HookRequest{
+	register := s.registerHook
+	if register == nil {
+		register = gitsrc.EnsureWebhook
+	}
+	result := register(r.Context(), gitsrc.HookRequest{
 		RepoURL:   app.RepoURL,
 		Kind:      source.Kind,
 		BaseURL:   source.BaseURL,
@@ -698,6 +723,11 @@ type updateAppRequest struct {
 	HealthCheck          *string `json:"health_check,omitempty"`
 	HealthStartSeconds   *int    `json:"health_start_seconds,omitempty"`
 	HealthTimeoutSeconds *int    `json:"health_timeout_seconds,omitempty"`
+	// GitSourceID is the Git connection the app builds and registers its
+	// webhook with; "" detaches it. An app made without one, or left without
+	// one when its connection was removed, could only be given one by being
+	// made again.
+	GitSourceID *string `json:"git_source_id,omitempty"`
 	// PreviewSeed runs once in each new preview of the app.
 	PreviewSeed   *string `json:"preview_seed,omitempty"`
 	WatchPaths    *string `json:"watch_paths,omitempty"`
@@ -726,8 +756,23 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	deployedTags := app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag
 	before := app
+	// What decides whether the repository is asked for a webhook after the
+	// save. Compared rather than read from the request: the settings form
+	// sends auto_deploy and deploy_trigger with every save, and asking the
+	// Git host on each one would be a request per keystroke's worth of
+	// saves for nothing.
+	sourceWas, autoDeployWas, triggerWas := app.GitSourceID, app.AutoDeploy, app.DeployTrigger
+	// Checked only when it changes: the settings form sends the connection
+	// with every save, and an app made before the host was checked must
+	// still be able to save its port.
+	if req.GitSourceID != nil && strings.TrimSpace(*req.GitSourceID) != app.GitSourceID {
+		if err := s.checkNewGitSource(r, app, strings.TrimSpace(*req.GitSourceID)); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		app.GitSourceID = strings.TrimSpace(*req.GitSourceID)
+	}
 
 	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
 		app.Name = strings.TrimSpace(*req.Name)
@@ -838,21 +883,67 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// GitLab delivers a tag only to a hook that asked for tags, and the
-	// hook this app's repository has may be older than tags were asked for.
-	// The same call that made it adds them, whenever the app starts deploying
-	// tags; it never fails the save.
-	if app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag && !deployedTags {
-		if hook := s.ensureWebhookFor(r, app); hook.Reason != "" {
-			s.log.Warn("the repository may not deliver tags", "app", app.ID, "reason", hook.Reason)
+	// The repository is asked to deliver here whenever deploy on push starts
+	// meaning something new: a connection given or changed, the switch
+	// turned on, or the trigger changed. The last is also how GitLab's hook
+	// is given tags — it delivers a tag only to a hook that asked for them,
+	// and one made before an app could deploy on a tag did not. It never
+	// fails the save, and what it found goes back with the app.
+	answer := appUpdate{App: app}
+	if app.SourceType == "git" && app.AutoDeploy &&
+		(app.GitSourceID != sourceWas || !autoDeployWas || app.DeployTrigger != triggerWas) {
+		hook := s.ensureWebhookFor(r, app)
+		if hook.Reason != "" {
+			s.log.Warn("no webhook was registered after a settings change", "app", app.ID, "reason", hook.Reason)
 		}
+		answer.Webhook = &hook
 	}
 
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "app.updated", "app", app.ID, app.Name)
-	answer := appUpdate{App: app}
 	answer.RolledOut, answer.NextDeploy = settingsTakingEffect(before, app, rolledOut)
 	writeJSON(w, http.StatusOK, answer)
+}
+
+// checkNewGitSource refuses a connection an app cannot be given: another
+// team's, which answers as missing, and one for a host other than the
+// repository's.
+//
+// The second is refused rather than stored because nothing would say so
+// later: the build declines to send a token to a host the connection is not
+// for, so the clone of a private repository fails as though it had none, and
+// the webhook is registered nowhere.
+func (s *Server) checkNewGitSource(r *http.Request, app store.App, sourceID string) error {
+	if sourceID == "" {
+		return nil
+	}
+	if app.SourceType != "git" {
+		return errdoc.BadRequest("Only an app built from a repository has a Git connection.")
+	}
+	if err := s.checkGitSource(r, sourceID, app.EnvironmentID); err != nil {
+		return err
+	}
+	source, err := s.db.GetGitSource(r.Context(), sourceID)
+	if err != nil {
+		return err
+	}
+	if !gitsrc.SameHost(app.RepoURL, source.BaseURL) {
+		return errdoc.GitConnectionWrongHost(source.Name, app.RepoURL)
+	}
+	return nil
+}
+
+// handleRegisterWebhook asks the repository again to deliver its pushes here:
+// after a token was given the scope it lacked, or a hook was deleted at the
+// Git host. Anybody who can change the app can ask, as saving its settings
+// would.
+func (s *Server) handleRegisterWebhook(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.ensureWebhookFor(r, app))
 }
 
 func applyResourceChanges(app *store.App, req updateAppRequest) error {

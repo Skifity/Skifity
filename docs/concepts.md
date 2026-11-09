@@ -883,7 +883,24 @@ its own if you turned those on.
 
 If the token cannot manage that repository's webhooks — a read-only token is
 the right token for somebody who deploys by hand — the panel says so and gives
-you the URL to add yourself. It never fails creating the app over it.
+you the URL to add yourself. It never fails creating the app over it. Once the
+token can, **Register the webhook again** on the app's **Settings** asks once
+more, and `POST /api/apps/{id}/webhook` does the same.
+
+**An app with no Git connection gets no webhook.** One made from a public
+repository without choosing a connection — the quickest start — has deploy on
+push switched on, and nothing asks the repository to tell the panel about a
+push. The panel says so when the app is made, and its **Settings** say so under
+**Deploy on push**. Give it a connection there, in **Git connection**, once the
+account is connected under **Settings → Git**: saving registers the webhook,
+and the app is not built again for it. The connection has to be the team's and
+for the host the repository is on. `git:` in [`skifity.yaml`](cli.md#describing-an-environment-in-a-file)
+does the same for an app that exists. Removing a connection leaves the apps it
+served with none, and the same applies to them.
+
+A push can still reach such an app: the panel matches a delivery to apps by
+repository, so a webhook another of the team's connections registered on the
+same repository deploys it too. What it cannot do is register one of its own.
 
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.

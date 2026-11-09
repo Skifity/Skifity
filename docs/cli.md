@@ -168,6 +168,14 @@ Without the file, a command works out the app from the team: its one project,
 that project's production environment, and the one app in it. When any of those
 is not one, it says so and asks for `--app` or `--env` rather than guessing.
 
+`init` also says whether pushes will deploy the app. A repository on a host the
+team has connected gets a webhook by itself. One read without a connection — a
+public repository, the quickest start — has deploy on push on and no webhook,
+and `init` says so, with the app's settings address, where a Git connection is
+chosen once the account is connected under **Settings → Git**. With `--json`,
+the one document printed carries it as `webhook.reason_code: "no_connection"`.
+See [I pushed and nothing happened](troubleshooting.md#i-pushed-and-nothing-happened).
+
 ## Everything else
 
 ```sh
@@ -399,7 +407,8 @@ databases:
 apps:
   web:
     repo: https://github.com/acme/shop
-    git: acme-github        # private: the team's Git connection to read it through
+    git: acme-github        # the team's Git connection: reads a private repository,
+                            # and registers the webhook; given to an existing app too
     branch: main
     root: apps/web
     start: npm start

@@ -2765,7 +2765,11 @@ paths:
             schema: {$ref: '#/components/schemas/UpdateAppRequest'}
       responses:
         '200':
-          description: The app as it is now, and when each setting that changed takes effect.
+          description: >-
+            The app as it is now, and when each setting that changed takes
+            effect. When the save gave it a Git connection, turned deploy on
+            push on or changed its trigger, the repository was asked for its
+            webhook, and webhook says what it answered.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AppUpdate'}
@@ -2947,6 +2951,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Deployment'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/webhook:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: registerAppWebhook
+      tags: [Apps]
+      summary: Ask the repository for the app's webhook again
+      description: >-
+        Member. For a Git app that deploys on push: after its connection's
+        token was given the scope to manage webhooks, or a hook was deleted at
+        the Git host. Never fails for the host's sake; what it answered is in
+        the result.
+      responses:
+        '200':
+          description: What the Git host answered.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookStatus'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/lock:
@@ -7119,6 +7143,7 @@ components:
                 image, the release command, and on an app that runs nothing yet,
                 every change.
               items: {type: string}
+            webhook: {$ref: '#/components/schemas/WebhookStatus'}
 
     AppDetail:
       allOf:
@@ -7219,6 +7244,10 @@ components:
         registered: {type: boolean, description: 'Pushes will reach the panel with nothing more to set up.'}
         url: {type: string, description: 'Where the Git host should deliver, when somebody has to add it.'}
         reason: {type: string, description: 'Why it could not be registered.'}
+        reason_code:
+          type: string
+          enum: [no_connection]
+          description: 'no_connection is a Git app that deploys on push with no Git connection, so no webhook was registered for it. Give it one with PATCH git_source_id. Other reasons are the Git host''s own answer and have no code.'
 
     StackRequest:
       type: object
@@ -7283,6 +7312,7 @@ components:
         watch_paths: {type: string}
         deploy_trigger: {type: string, enum: [branch, tag]}
         tag_pattern: {type: string}
+        git_source_id: {type: string, description: 'The Git connection the app builds and registers its webhook with, which must be the team''s and for the repository''s host (400 otherwise); an empty string detaches it. Never rebuilds.'}
         run_as_user: {type: integer, minimum: 0, maximum: 2147483647, description: 'The uid for an image that names its user, so it runs at the strict confinement level; 0 leaves it to the image. Refused for an app built here, which runs as 1000.'}
         internal: {type: boolean}
         auto_deploy: {type: boolean}

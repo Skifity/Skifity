@@ -124,7 +124,7 @@ Tools, in the order they are usually needed:
 |---|---|
 | `list_projects` | Projects and the environments inside them. Where an app goes. |
 | `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
-| `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
+| `create_app` | Creates an app from a repository or an image, and optionally deploys it. For a repository, `deploys_on_push` says whether a push will deploy it; with no Git connection it will not, and the note says what to do. |
 | `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, the catalogue it is in, and needs_root for an image that starts as root. |
 | `install_template` | Installs one into an environment: its apps, databases and volumes, wired together, all or nothing. Takes the catalogue_id of a team template, dry_run to see what it would create and what would stop it, and allow_root — only once the person agreed — to let the environment accept an image that starts as root. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |

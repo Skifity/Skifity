@@ -158,7 +158,10 @@ type createAppOutput struct {
 	Name         string `json:"name"`
 	URL          string `json:"url,omitempty"`
 	DeploymentID string `json:"deployment_id,omitempty"`
-	Note         string `json:"note"`
+	// DeploysOnPush is whether a push to the repository will reach the
+	// panel, for an app built from one; the note says why not.
+	DeploysOnPush *bool  `json:"deploys_on_push,omitempty"`
+	Note          string `json:"note"`
 }
 
 type environmentInput struct {
@@ -637,6 +640,12 @@ func (s *Server) createApp(ctx context.Context, _ *mcp.CallToolRequest, in creat
 		Name       string            `json:"name"`
 		App        *store.App        `json:"app"`
 		Deployment *store.Deployment `json:"deployment"`
+		Webhook    *struct {
+			Registered bool   `json:"registered"`
+			URL        string `json:"url"`
+			Reason     string `json:"reason"`
+			ReasonCode string `json:"reason_code"`
+		} `json:"webhook"`
 	}
 	if err := s.client.Do(ctx, "POST", "/api/environments/"+environment+"/apps", body, &response); err != nil {
 		return errorResult(err), createAppOutput{}, nil
@@ -654,6 +663,25 @@ func (s *Server) createApp(ctx context.Context, _ *mcp.CallToolRequest, in creat
 			"call get_app_status or get_deployment_history to see the outcome."
 	default:
 		out.Note = "The app exists but has never been deployed. Call deploy_app to start it."
+	}
+	// Whether a push will deploy it, said now: an assistant that tells
+	// somebody "push and it deploys" about an app with no Git connection has
+	// told them something that will not happen.
+	if in.RepoURL != "" && response.Webhook != nil {
+		hook := response.Webhook
+		deploys := hook.Registered
+		out.DeploysOnPush = &deploys
+		switch {
+		case hook.Registered:
+			out.Note += " A push to its branch deploys it."
+		case hook.ReasonCode == "no_connection":
+			out.Note += " Pushes will not deploy it yet: it has no Git connection, so no webhook was registered. " +
+				"The person connects their Git account in the panel under Settings, Git, and chooses that connection " +
+				"in the app's settings; until then, call deploy_app after each push."
+		case hook.URL != "":
+			out.Note += " Pushes will not deploy it until the repository has a webhook: " + hook.Reason +
+				". It can be added by hand at the Git host, delivering to " + hook.URL + "."
+		}
 	}
 	return textResult(fmt.Sprintf("Created %s (%s). %s", out.Name, out.AppID, out.Note)), out, nil
 }

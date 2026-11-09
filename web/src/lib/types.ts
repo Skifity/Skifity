@@ -329,6 +329,8 @@ export type AppUpdate = App & {
   rolled_out: string[]
   /** Settings that wait for the next deploy: what goes into the image, and the release command. */
   next_deploy: string[]
+  /** Present when the save asked the repository for its webhook. */
+  webhook?: WebhookStatus
 }
 
 export type AppStatus = {
@@ -1483,6 +1485,11 @@ export type WebhookStatus = {
   registered: boolean
   url?: string
   reason?: string
+  /**
+   * no_connection: a Git app that deploys on push with no Git connection, so
+   * no webhook was registered. Other reasons are the Git host's, uncoded.
+   */
+  reason_code?: "no_connection"
 }
 
 /** An app answering visitors with a page instead of itself. */

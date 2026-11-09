@@ -330,6 +330,49 @@ func TestAPrivateRepositoryIsReadThroughTheConnectionNamed(t *testing.T) {
 	}
 }
 
+// An app made from a public repository, with no connection, is given the one
+// the file names: one change, and nothing when it already has it.
+func TestAnExistingAppIsGivenTheConnectionTheFileNames(t *testing.T) {
+	file := mustParse(t, "apps:\n  web:\n    repo: https://github.com/acme/site\n    git: acme-github\n")
+	sources := []store.GitSource{{ID: "gs_1", Name: "acme-github"}}
+	app := store.App{ID: "app_1", Name: "web", Slug: "web", SourceType: "git", RepoURL: "https://github.com/acme/site"}
+	state := State{EnvironmentID: "env_1", GitSources: sources, Apps: []AppState{{App: app, Deployed: true}}}
+
+	steps, err := Plan(file, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var patches []Step
+	for _, step := range steps {
+		if step.Call != nil && step.Call.Method == "PATCH" {
+			patches = append(patches, step)
+		}
+		if step.Kind == "deploy" {
+			t.Errorf("a connection was planned as a redeploy: %+v", step)
+		}
+	}
+	if len(patches) != 1 || patches[0].Op != "change" || patches[0].Call.Body["git_source_id"] != "gs_1" ||
+		patches[0].Call.Path != "/api/apps/app_1" {
+		t.Fatalf("the plan changes %+v", patches)
+	}
+
+	state.Apps[0].App.GitSourceID = "gs_1"
+	steps, err = Plan(file, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range steps {
+		if step.Call != nil && step.Call.Body["git_source_id"] != nil {
+			t.Errorf("an app that has the connection is given it again: %+v", step)
+		}
+	}
+
+	state.GitSources = nil
+	if _, err := Plan(file, state); err == nil || !strings.Contains(err.Error(), "acme-github") {
+		t.Fatalf("a connection the team does not have, on an existing app: %v", err)
+	}
+}
+
 func TestACommandInBracesIsNotAReference(t *testing.T) {
 	call, err := Resolve(Call{Path: "/api/apps/{app:web}/processes/worker",
 		Body: map[string]any{"command": "{ npm run a; npm run b; }", "app_id": "{app:web}"}},
