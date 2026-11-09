@@ -155,6 +155,7 @@ const (
 	KeyS3Bucket              = "storage.s3_bucket"
 	KeyPanelBackupSchedule   = "storage.panel_backup_schedule"
 	KeyPanelBackupKeep       = "storage.panel_backup_keep"
+	KeyDefaultBackups        = "storage.default_backups"
 	KeyBackupPassphrase      = "storage.backup_passphrase"
 	KeyS3AccessKey           = "storage.s3_access_key"
 	KeyS3SecretKey           = "storage.s3_secret_key"
@@ -515,6 +516,12 @@ var Definitions = []Definition{
 		Placeholder: "14",
 		Kind:        KindNumber, Validate: validatePanelBackupKeep,
 		Default: "14",
+	},
+	{
+		Key: KeyDefaultBackups, Label: "Back up new databases", Group: GroupStorage,
+		Help: "On by default. A database created while the bucket above is set up is backed up every day, at a minute between 02:00 and 05:00 UTC of its own, keeping the last 7. " +
+			"Its Backups tab changes that or turns it off, and whoever creates one can say no. Previews and engines the panel does not back up never get one.",
+		Kind: KindBool, Validate: validateBool, Default: "true",
 	},
 	{Key: KeySMTPHost, Label: "SMTP host", Group: GroupEmail, Placeholder: "smtp.example.com",
 		Help: "Needed for email notifications and for password reset emails."},

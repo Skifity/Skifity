@@ -80,11 +80,31 @@ type createDatabaseInput struct {
 	Version       string `json:"version,omitempty" jsonschema:"one of the versions offered, such as 16 for postgres or 8.4 for mysql; left out means the current stable one"`
 	StorageGB     int    `json:"storage_gb,omitempty" jsonschema:"the disk, in GB: at least 5, which is also what it gets when left out. memcached has none"`
 	Instances     int    `json:"instances,omitempty" jsonschema:"PostgreSQL only: an odd number, 3 to survive losing a server. Every other engine runs one"`
+	Backup        *bool  `json:"backup,omitempty" jsonschema:"whether it is backed up every day. Left out, it is, when the panel has backup storage and its administrator has not turned that default off. Pass false only when the person does not want it"`
 }
 
 type createDatabaseOutput struct {
 	Database databaseSummary `json:"database"`
+	Backup   createdBackup   `json:"backup"`
 	Note     string          `json:"note"`
+}
+
+// createdBackup is what creating a database did about its backups.
+type createdBackup struct {
+	Enabled  bool   `json:"enabled"`
+	Reason   string `json:"reason,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+}
+
+// backupReasons say, for the person, why a new database is not backed up.
+// The keys are the panel's: see internal/api/backup_defaults.go.
+var backupReasons = map[string]string{
+	"declined":    "It is not backed up, as asked; list_backups and run_backup still work for it.",
+	"not_offered": "Its engine is not backed up by the panel; the panel's backups page says why.",
+	"preview":     "It is in a preview environment, which is thrown away with its pull request, so it is not backed up.",
+	"turned_off":  "It is not backed up: the panel's administrator turned off backing up new databases. Pass backup true to ask for it.",
+	"no_storage":  "It is not backed up: the panel has no backup storage yet. A panel administrator sets it up under Settings → General → Backup storage.",
+	"failed":      "Its backup schedule could not be saved; the panel's log says why. Tell the person, who can set one on its Backups tab.",
 }
 
 type linkDatabaseInput struct {
@@ -292,14 +312,26 @@ func (s *Server) createDatabase(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if in.Instances > 0 {
 		body["instances"] = in.Instances
 	}
-	var database store.Database
-	if err := s.client.Do(ctx, "POST", "/api/environments/"+url.PathEscape(in.EnvironmentID)+"/databases", body, &database); err != nil {
+	if in.Backup != nil {
+		body["backup"] = *in.Backup
+	}
+	var created struct {
+		store.Database
+		Backup createdBackup `json:"backup"`
+	}
+	if err := s.client.Do(ctx, "POST", "/api/environments/"+url.PathEscape(in.EnvironmentID)+"/databases", body, &created); err != nil {
 		return errorResult(err), createDatabaseOutput{}, nil
+	}
+	database := created.Database
+	backup := "It is backed up every day at " + created.Backup.Schedule + " (cron, UTC)."
+	if !created.Backup.Enabled {
+		backup = backupReasons[created.Backup.Reason]
 	}
 	out := createDatabaseOutput{
 		Database: summariseDatabase(database),
+		Backup:   created.Backup,
 		Note: "It is being created, which takes a minute or two. Give it to an app with link_database now, " +
-			"and call get_database_status to see when it is running.",
+			"and call get_database_status to see when it is running. " + backup,
 	}
 	return textResult(fmt.Sprintf("Creating the %s database %s (%s). %s", database.Engine, database.Name, database.ID, out.Note)), out, nil
 }

@@ -5,13 +5,19 @@ Redis and Valkey — the volumes your apps write files to, and
 [its own database](#the-panel-itself). Dragonfly, ClickHouse and Memcached are
 not backed up, and [why](#what-is-not-backed-up) is below.
 
-Nothing is backed up until you say where to put it.
+Nothing is backed up until there is somewhere to put it. Once there is, every
+new database is backed up every day unless somebody says not to — see
+[schedules](#schedules).
 
 ## Storage
 
 Backups go to S3, or to anything that speaks S3 — MinIO, Backblaze B2,
-Cloudflare R2, Hetzner Object Storage. Set it up under **Settings → Backup
-storage**: an endpoint, a region, a bucket, and a key pair.
+Cloudflare R2, Hetzner Object Storage. A panel administrator sets it up under
+**Settings → General → Backup storage**: an endpoint, a region, a bucket, and a
+key pair. It is the panel's, not a team's: one bucket for everybody's backups,
+and the only people who can see or change it are the panel's administrators.
+Everybody else is told whether there is one, and who to ask when there is not
+— the Backups tab of a database and the form that creates one both say so.
 
 The bucket can be on a private address too: MinIO on one of the cluster's own
 servers, at home, on the office network or over a VPN. Apps are kept away from
@@ -36,7 +42,7 @@ there is nothing to hand out.
 ## Encryption
 
 Whoever runs the bucket can read what is in it. Set a **Backup passphrase**
-under **Settings → Backup storage** and every backup — databases, volumes and
+under **Settings → General → Backup storage** and every backup — databases, volumes and
 the panel's own — is encrypted before it leaves the cluster, with a key the
 bucket's owner never sees.
 
@@ -81,7 +87,31 @@ its key — and asking again while one is waiting or running is the same one.
 
 ## Schedules
 
-Each database has its own schedule, set on its Backups tab, written as cron:
+**A new database is backed up every day.** When there is backup storage, a
+database is given a schedule as it is made — by hand, with a new app, or by a
+template — at a minute between 02:00 and 05:00 UTC of its own, keeping the last
+seven. The minute comes from the database's id, so a panel's databases are not
+all dumped and uploaded at once. **Back up daily** in the form that creates one
+says no; through the API that is `"backup": false`. A preview's database never
+gets one, nor does an engine that is [not backed up](#what-is-not-backed-up), and
+a database copied by cloning an environment keeps its source's schedule, on or
+off.
+
+Creating one does not reach the bucket: it only checks that every setting it
+needs is filled in. A bucket that turns out to be wrong is reported by the
+first backup, as `backup.failed`.
+
+A panel administrator can turn the default off with **Back up new databases**,
+under Settings → General → Backup storage. A database made then has no
+schedule unless whoever made it asked for one.
+
+Databases made before there was storage have none. A team's owner or
+administrator gives every one of them the daily schedule at once from any of
+their Backups tabs — **Back up every database daily** — or with
+`POST /api/teams/{team}/backup-policies/defaults`. A schedule somebody turned
+off is left off.
+
+Each database's schedule can be changed on its Backups tab, written as cron:
 
 ```
 0 3 * * *      every day at 03:00
@@ -185,8 +215,8 @@ A failed backup is worth knowing about immediately, which is why
 channel — for volumes as well as databases. `backup.succeeded` is there for a
 channel that wants every one; a channel with no list of events is not sent it.
 
-**No storage configured.** Nothing has been backed up. Set it up under
-Settings → Backup storage.
+**No storage configured.** Nothing has been backed up. A panel administrator
+sets it up under Settings → General → Backup storage.
 
 **Access denied, or the bucket does not exist.** The key pair cannot write to
 that bucket. Check the bucket name and the region — a wrong region often
@@ -206,7 +236,7 @@ history — is copied to the same bucket, on its own schedule, once backup stora
 is set up. It is a file on the first control plane server, and that server's
 disk is the thing that fails; a copy beside it goes with it.
 
-Under **Settings → Backup storage**:
+Under **Settings → General → Backup storage**:
 
 * **Back up this panel** is when, as cron in UTC. Empty is every day at 03:17;
   `off` turns it off.

@@ -415,6 +415,7 @@ func (s *Server) makeTemplate(r *http.Request, plan templatePlan, made *installe
 			return err
 		}
 		made.Databases = append(made.Databases, record)
+		s.applyDefaultBackupPolicy(ctx, env, record, nil)
 
 		varName := spec.VarName
 		if varName == "" {

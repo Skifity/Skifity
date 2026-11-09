@@ -1524,7 +1524,7 @@
     "backupsOn": "Ambil cadangan otomatis",
     "backupScheduleFieldHelp": "Kapan pencadangan berjalan. Waktu dalam UTC.",
     "retentionHelp": "Cadangan lama dihapus setelah yang baru berhasil.",
-    "backupScheduleHelp": "Cadangan ditulis ke penyimpanan yang Anda atur di Pengaturan.",
+    "backupScheduleHelp": "Cadangan ditulis ke penyimpanan cadangan panel.",
     "retention": "Simpan yang terakhir",
     "restore": "Pulihkan",
     "restoreWarning": "Ini mengganti seluruh isi database saat ini dengan isi cadangan ini. Tindakan ini tidak bisa dibatalkan.",
@@ -1673,7 +1673,14 @@
       "startingAgain": "Dijalankan lagi di disk yang disimpannya.",
       "degraded": "{{ready}} dari {{wanted}} instance siap.",
       "degradedLastOne": "{{ready}} dari {{wanted}} instance siap. Database masih menjawab, tetapi jika instance yang tersisa gagal, database akan mati."
-    }
+    },
+    "backupDaily": "Cadangkan setiap hari",
+    "backupDailyHelp": "Setiap hari antara pukul 02.00 dan 05.00 UTC, dengan 7 cadangan terakhir disimpan. Ubah di tab Cadangan miliknya.",
+    "backupDailyNoStorage": "Belum bisa sampai panel ini punya penyimpanan cadangan.",
+    "noScheduleTitle": "Database ini tidak punya jadwal cadangan",
+    "noScheduleHelp": "Database ini dibuat sebelum ada penyimpanan cadangan, atau dengan cadangan harian dimatikan. Aktifkan jadwal di bawah, atau beri setiap database tim yang belum punya jadwal cadangan harian yang didapat database baru.",
+    "backupDefaults": "Cadangkan setiap database tiap hari",
+    "backupDefaultsApplied_other": "{{count}} database kini dicadangkan setiap hari."
   },
   "templates": {
     "title": "Template",
@@ -2052,6 +2059,10 @@
       "git_ca_bundle": {
         "label": "Otoritas sertifikat untuk host Git",
         "help": "Hanya untuk host Git yang sertifikatnya tidak ditandatangani otoritas publik: sertifikat, dalam PEM, dari otoritas yang menandatanganinya. Build memercayainya di samping otoritas publik saat melakukan clone, begitu pula panel saat membaca repositori."
+      },
+      "storage_default_backups": {
+        "label": "Cadangkan database baru",
+        "help": "Aktif secara bawaan. Database yang dibuat saat bucket di atas sudah diatur dicadangkan setiap hari, pada menitnya sendiri antara pukul 02.00 dan 05.00 UTC, dengan 7 cadangan terakhir disimpan. Tab Cadangan miliknya bisa mengubah atau mematikannya, dan siapa pun yang membuatnya bisa menolak. Pratinjau dan mesin yang tidak dicadangkan panel tidak pernah mendapatkannya."
       }
     },
     "removeMemberConfirm": "{{name}} kehilangan akses ke tim ini beserta seluruh isinya.",
@@ -2231,9 +2242,9 @@
       },
       "backup_storage_not_configured": {
         "title": "Belum ada penyimpanan backup",
-        "cause": "Tim ini belum menyiapkan penyimpanan yang kompatibel dengan S3.",
+        "cause": "Panel ini belum punya penyimpanan yang kompatibel dengan S3.",
         "impact": "Backup tidak bisa jalan, jadi tidak ada yang sedang diamankan.",
-        "fix": "Buka Pengaturan, lalu Penyimpanan, dan tambahkan bucket yang kompatibel dengan S3. Penyedia mana pun bisa: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, atau server MinIO milikmu sendiri."
+        "fix": "Administrator panel menyiapkannya di Pengaturan → Umum → Penyimpanan cadangan. Penyedia mana pun bisa: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, atau server MinIO milikmu sendiri."
       },
       "backup_storage_read_only": {
         "title": "Penyimpanan backup tidak bisa ditulis",
@@ -3277,7 +3288,7 @@
         "title": "Tidak ada tempat untuk mencadangkan lebih dulu",
         "cause": "{{0}} punya disk atau database, dan pembaruan mencadangkannya sebelum dimulai, tetapi pencadangan belum dikonfigurasi.",
         "impact": "Tidak ada yang diubah.",
-        "fix": "Atur penyimpanan cadangan di Settings, atau perbarui tanpa cadangan jika Anda punya cadangan sendiri."
+        "fix": "Minta administrator panel menyiapkan penyimpanan cadangan di Pengaturan → Umum → Penyimpanan cadangan, atau perbarui tanpa cadangan jika Anda punya cadangan sendiri."
       },
       "promote_built_differently": {
         "title": "Aplikasi ini akan membangun versi itu secara berbeda",
@@ -3295,13 +3306,13 @@
         "title": "Cadangan ini tersegel, dan tidak ada frasa sandi untuk membukanya",
         "cause": "Cadangan dienkripsi dengan frasa sandi cadangan, dan saat ini tidak ada yang diatur.",
         "impact": "Tidak ada yang dipulihkan atau diubah.",
-        "fix": "Masukkan frasa sandi yang dipakai untuk menyegelnya di Settings, lalu Storage, dan pulihkan lagi."
+        "fix": "Masukkan frasa sandi yang dipakai untuk menyegelnya di Pengaturan → Umum → Penyimpanan cadangan, dan pulihkan lagi."
       },
       "backup_wrong_passphrase": {
         "title": "Frasa sandi cadangan tidak membuka cadangan ini",
         "cause": "Cadangan ini disegel dengan frasa sandi yang berbeda dari yang diatur sekarang.",
         "impact": "Tidak ada yang dipulihkan atau diubah.",
-        "fix": "Atur frasa sandi yang dipakai untuk menyegelnya di Settings, lalu Storage, pulihkan, lalu kembalikan frasa sandi saat ini."
+        "fix": "Atur frasa sandi yang dipakai untuk menyegelnya di Pengaturan → Umum → Penyimpanan cadangan, pulihkan, lalu kembalikan frasa sandi saat ini."
       },
       "backup_damaged": {
         "title": "Cadangan ini rusak",
@@ -4287,6 +4298,12 @@
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
       },
+      "backup_storage_endpoint_invalid": {
+        "title": "Endpoint penyimpanan cadangan bukan alamat",
+        "cause": "Endpoint {{0}} tidak bisa dibaca: {{1}}",
+        "impact": "Backup tidak bisa jalan, jadi tidak ada yang sedang diamankan.",
+        "fix": "Administrator panel membetulkan endpoint S3 di Pengaturan → Umum → Penyimpanan cadangan: alamat seperti https://s3.eu-central-1.amazonaws.com."
+      },
       "template_input_required": {
         "title": "Template ini memerlukan nilai yang belum diisi",
         "cause": "{{0}} diperlukan untuk memasang {{1}}.",
@@ -4754,7 +4771,13 @@
     "verify": "Verifikasi",
     "verifying": "Memverifikasi…",
     "verified": "Dibuka dan dibaca utuh {{when}}",
-    "verifyFailed": "Tidak terbaca utuh: {{reason}}"
+    "verifyFailed": "Tidak terbaca utuh: {{reason}}",
+    "storage": {
+      "missingTitle": "Tidak ada cadangan yang dibuat",
+      "missing": "Panel ini belum punya penyimpanan cadangan, jadi tidak ada isinya yang dicadangkan.",
+      "askAdmin": "Minta administrator panel menyiapkannya di Pengaturan → Umum → Penyimpanan cadangan.",
+      "openSettings": "Siapkan di Pengaturan → Umum → Penyimpanan cadangan."
+    }
   },
   "processes": {
     "title": "Proses",

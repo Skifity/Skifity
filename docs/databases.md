@@ -3,7 +3,9 @@
 Skifity runs nine kinds of database for your apps, in the same environment as
 the apps that use them. Each is created from a project's page or the
 **Databases** page, connected to an app with one click, and — for six of the
-nine — [backed up](backups.md) on a schedule.
+nine — [backed up](backups.md) on a schedule: every day from the moment it is
+made, once the panel has backup storage, unless you switch **Back up daily**
+off as you create it.
 
 ## The engines
 

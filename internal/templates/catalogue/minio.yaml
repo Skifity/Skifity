@@ -32,4 +32,4 @@ inputs:
   label: Root password
   secret: true
   generate: true
-notes: The console is the address this app gets; the S3 API listens on port 9000 inside the environment. Create a bucket, then point Settings, then Storage at this MinIO to back up your databases. The image starts as root, so the environment needs the baseline pod security level.
+notes: The console is the address this app gets; the S3 API listens on port 9000 inside the environment. Create a bucket, then point Settings → General → Backup storage at this MinIO to back up your databases. The image starts as root, so the environment needs the baseline pod security level.

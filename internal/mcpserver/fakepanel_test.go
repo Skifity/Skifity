@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -127,6 +128,10 @@ func newFakePanel(t *testing.T) *fakePanel {
 		return map[string]any{"items": values, "total": len(values)}
 	}
 
+	// A new database, and what was done about its backups.
+	createdDatabase := maps.Clone(database)
+	createdDatabase["backup"] = map[string]any{"enabled": true, "schedule": "17 3 * * *", "retention": 7}
+
 	// The built-in catalogue, and the same as the team sees it: its own
 	// catalogue's WordPress first, under the same id as the built-in one.
 	builtIn := []any{
@@ -173,7 +178,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/environments/{env}/apps":       items(app),
 		"POST /api/environments/{env}/apps":      map[string]any{"app": app, "webhook": map[string]any{"registered": false}},
 		"GET /api/environments/{env}/databases":  items(database),
-		"POST /api/environments/{env}/databases": database,
+		"POST /api/environments/{env}/databases": createdDatabase,
 
 		"GET /api/apps/{app}/status":                 map[string]any{"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"}},
 		"POST /api/apps/{app}/deploy":                deployment,

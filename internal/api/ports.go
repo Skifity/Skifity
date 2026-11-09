@@ -542,6 +542,11 @@ type CreateDatabaseRequest struct {
 	Version   string `json:"version,omitempty"`
 	StorageGB int    `json:"storage_gb,omitempty"`
 	Instances int    `json:"instances,omitempty"`
+	// Backup is whether the new database is backed up every day. Left out,
+	// the panel's own default decides (storage.default_backups); either way
+	// it needs backup storage and an engine the panel backs up. The
+	// database manager does not read it: see applyDefaultBackupPolicy.
+	Backup *bool `json:"backup,omitempty"`
 }
 
 // DatabaseCredentials is what an app needs to connect.
@@ -572,6 +577,10 @@ type BackupManager interface {
 	RestoreVolume(ctx context.Context, backupID string, overwrite bool) (store.Operation, error)
 	// Verify checks that configured storage is reachable and writable.
 	Verify(ctx context.Context) error
+	// Storage says whether backup storage is set up, from the settings
+	// alone: it does not reach the bucket, so it is cheap enough to ask on
+	// every database created. Verify is the check that it works.
+	Storage(ctx context.Context) (BackupStorage, error)
 	// BackupPanel copies the panel's own database to backup storage.
 	BackupPanel(ctx context.Context, kind string) (store.Backup, error)
 	// VerifyBackup downloads a backup, opens it and reads it through, in the
@@ -581,6 +590,15 @@ type BackupManager interface {
 	// The dump is read and staged before this returns; the rest is the
 	// operation's.
 	Import(ctx context.Context, req ImportRequest) (store.Operation, error)
+}
+
+// BackupStorage is whether backups have somewhere to go. It is shown to
+// every signed-in user, so it says nothing about where.
+type BackupStorage struct {
+	Configured bool `json:"configured"`
+	// Sealed is a backup passphrase being set: every backup is encrypted
+	// before it leaves the cluster.
+	Sealed bool `json:"sealed"`
 }
 
 // RunResult is how a one-off command ended: its exit status, once it has.

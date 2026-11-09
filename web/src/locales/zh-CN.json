@@ -1524,7 +1524,7 @@
     "backupsOn": "自动备份",
     "backupScheduleFieldHelp": "备份运行的时间，使用 UTC。",
     "retentionHelp": "新备份成功后会删除更早的备份。",
-    "backupScheduleHelp": "备份会写入你在设置中配置的存储。",
+    "backupScheduleHelp": "备份会写入面板的备份存储。",
     "retention": "保留最近",
     "restore": "恢复",
     "restoreWarning": "这会用该备份的内容替换数据库中现有的全部数据，且无法撤销。",
@@ -1673,7 +1673,14 @@
       "startingAgain": "正在保留的磁盘上重新启动。",
       "degraded": "{{wanted}} 个实例中有 {{ready}} 个已就绪。",
       "degradedLastOne": "{{wanted}} 个实例中有 {{ready}} 个已就绪。数据库仍在响应，但剩下的这个实例一旦故障，服务就会中断。"
-    }
+    },
+    "backupDaily": "每天备份",
+    "backupDailyHelp": "每天 UTC 02:00 到 05:00 之间，保留最近 7 份。可以在它的「备份」标签页修改。",
+    "backupDailyNoStorage": "要等这个面板有了备份存储才行。",
+    "noScheduleTitle": "这个数据库没有备份计划",
+    "noScheduleHelp": "它是在有备份存储之前创建的，或者创建时关闭了每日备份。可以在下面开启计划，或者给团队里每个没有计划的数据库加上新数据库会得到的每日备份。",
+    "backupDefaults": "每天备份每个数据库",
+    "backupDefaultsApplied_other": "现在有 {{count}} 个数据库每天备份。"
   },
   "templates": {
     "title": "模板",
@@ -2052,6 +2059,10 @@
       "git_ca_bundle": {
         "label": "Git 主机的证书颁发机构",
         "help": "仅用于证书不是由公共颁发机构签发的 Git 主机：签发该证书的颁发机构的 PEM 证书。构建在克隆时会在公共颁发机构之外同时信任它，面板读取仓库时也是如此。"
+      },
+      "storage_default_backups": {
+        "label": "备份新数据库",
+        "help": "默认开启。在上面的存储桶已配置时创建的数据库每天备份一次，时间是 UTC 02:00 到 05:00 之间它自己的一分钟，保留最近 7 份。它的「备份」标签页可以修改或关闭，创建者也可以不要。预览环境和面板不备份的引擎永远不会有。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -2231,9 +2242,9 @@
       },
       "backup_storage_not_configured": {
         "title": "还没有配置备份存储",
-        "cause": "这个团队还没有设置 S3 兼容的存储。",
+        "cause": "这个面板还没有设置 S3 兼容的存储。",
         "impact": "备份无法运行，也就没有任何东西在被保存。",
-        "fix": "打开「设置」→「存储」，添加一个 S3 兼容的存储桶。任何服务商都行：AWS S3、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
+        "fix": "由面板管理员在「设置」→「通用」→「备份存储」中设置。任何服务商都行：AWS S3、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
       },
       "backup_storage_read_only": {
         "title": "备份存储无法写入",
@@ -3277,7 +3288,7 @@
         "title": "没有地方可以先行备份",
         "cause": "{{0}} 有磁盘或数据库，更新开始前会先备份它们，但尚未配置备份。",
         "impact": "没有做任何更改。",
-        "fix": "请在 Settings 中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
+        "fix": "请面板管理员在「设置」→「通用」→「备份存储」中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
       },
       "promote_built_differently": {
         "title": "此应用会以不同方式构建该版本",
@@ -3295,13 +3306,13 @@
         "title": "此备份已加密，但没有可用于打开它的口令",
         "cause": "该备份使用备份口令加密，而当前未设置口令。",
         "impact": "没有恢复或更改任何内容。",
-        "fix": "请在 Settings 的 Storage 中输入加密时使用的口令，然后重新恢复。"
+        "fix": "请在「设置」→「通用」→「备份存储」中输入加密时使用的口令，然后重新恢复。"
       },
       "backup_wrong_passphrase": {
         "title": "备份口令无法打开此备份",
         "cause": "此备份使用的口令与当前设置的不同。",
         "impact": "没有恢复或更改任何内容。",
-        "fix": "请在 Settings 的 Storage 中设置加密时使用的口令，完成恢复后再改回当前口令。"
+        "fix": "请在「设置」→「通用」→「备份存储」中设置加密时使用的口令，完成恢复后再改回当前口令。"
       },
       "backup_damaged": {
         "title": "此备份已损坏",
@@ -4287,6 +4298,12 @@
         "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
         "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
       },
+      "backup_storage_endpoint_invalid": {
+        "title": "备份存储的端点不是一个地址",
+        "cause": "无法读取端点 {{0}}：{{1}}",
+        "impact": "备份无法运行，也就没有任何东西在被保存。",
+        "fix": "由面板管理员在「设置」→「通用」→「备份存储」中改正 S3 端点：例如 https://s3.eu-central-1.amazonaws.com 这样的地址。"
+      },
       "template_input_required": {
         "title": "模板需要一个没人填写的值",
         "cause": "安装 {{1}} 需要 {{0}}。",
@@ -4754,7 +4771,13 @@
     "verify": "验证",
     "verifying": "正在验证…",
     "verified": "已于 {{when}} 打开并完整读取",
-    "verifyFailed": "无法完整读取：{{reason}}"
+    "verifyFailed": "无法完整读取：{{reason}}",
+    "storage": {
+      "missingTitle": "没有在进行任何备份",
+      "missing": "这个面板还没有备份存储，所以上面的任何东西都没有备份。",
+      "askAdmin": "请面板管理员在「设置」→「通用」→「备份存储」中设置。",
+      "openSettings": "在「设置」→「通用」→「备份存储」中设置。"
+    }
   },
   "processes": {
     "title": "进程",

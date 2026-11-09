@@ -330,6 +330,10 @@ func (s *Server) routes() chi.Router {
 				sensitive.Delete("/me/passkeys/{passkeyID}", s.handleRemovePasskey)
 			})
 
+			// Whether backups have somewhere to go: anybody may know, and
+			// only a panel administrator can open the page that changes it.
+			authed.Get("/backup-storage", s.handleGetBackupStorage)
+
 			authed.Get("/teams", s.handleListTeams)
 			authed.Post("/teams", s.handleCreateTeam)
 
@@ -343,6 +347,9 @@ func (s *Server) routes() chi.Router {
 				team.Delete("/invitations/{invitationID}", s.handleRevokeInvitation)
 				team.Delete("/members/{userID}", s.handleRemoveMember)
 				team.Get("/audit", s.handleListAudit)
+				// The daily schedule a new database gets, for the team's
+				// databases that have none. See backup_defaults.go.
+				team.Post("/backup-policies/defaults", s.handleApplyDefaultBackupPolicies)
 				// Everything this team has, in one answer, so that leaving is
 				// a command rather than a project. See export_handlers.go.
 				team.With(refuseScopedTokens).Get("/export", s.handleExportTeam)

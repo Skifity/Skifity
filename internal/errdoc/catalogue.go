@@ -479,7 +479,7 @@ func TemplateNeedsBackups(app string) *Problem {
 	return New("template.needs_backups", "There is nowhere to back up to first").
 		WithCause("%s has disks or databases, and an update backs them up before it starts, but backups are not configured.", app).
 		WithImpact("Nothing was changed.").
-		WithFix("Set up backup storage under Settings, or update without a backup if you have one of your own.").
+		WithFix("Have a panel administrator set up backup storage under Settings → General → Backup storage, or update without a backup if you have one of your own.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/templates#updates")
 }
@@ -647,7 +647,7 @@ func BackupPassphraseMissing() *Problem {
 	return New("backup.passphrase_missing", "This backup is sealed, and there is no passphrase to open it").
 		WithCause("The backup was encrypted with the backup passphrase, and none is set now.").
 		WithImpact("Nothing was restored or changed.").
-		WithFix("Enter the passphrase it was sealed with under Settings, then Storage, and restore again.").
+		WithFix("Enter the passphrase it was sealed with under Settings → General → Backup storage, and restore again.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/backups#encryption")
 }
@@ -682,7 +682,7 @@ func BackupWrongPassphrase() *Problem {
 	return New("backup.wrong_passphrase", "The backup passphrase does not open this backup").
 		WithCause("This backup was sealed with a different passphrase than the one set now.").
 		WithImpact("Nothing was restored or changed.").
-		WithFix("Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back.").
+		WithFix("Set the passphrase it was sealed with under Settings → General → Backup storage, restore, and set the current one back.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/backups#encryption")
 }
@@ -2237,11 +2237,25 @@ func GPUDevicePluginExists(foreign []string) *Problem {
 // --- storage and backups ---
 
 // StorageNotConfigured reports a backup with nowhere to go.
+//
+// The storage is the panel's, not a team's, and only a panel administrator
+// can open the page it is set on: telling a team member to open it sent them
+// looking for a tab they do not have.
 func StorageNotConfigured() *Problem {
 	return New("backup.storage_not_configured", "No backup storage is configured").
-		WithCause("This team has no S3-compatible storage set up yet.").
+		WithCause("No S3-compatible storage is set up for this panel yet.").
 		WithImpact("Backups cannot run, so nothing is being kept safe.").
-		WithFix("Open Settings, then Storage, and add an S3-compatible bucket. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself.").
+		WithFix("A panel administrator sets it up under Settings → General → Backup storage. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself.").
+		WithDocs("/docs/backups#storage").
+		WithStatus(http.StatusBadRequest)
+}
+
+// StorageEndpointInvalid is backup storage whose endpoint is not an address.
+func StorageEndpointInvalid(endpoint, reason string) *Problem {
+	return New("backup.storage_endpoint_invalid", "The backup storage's endpoint is not an address").
+		WithCause("The endpoint %q could not be read: %s", endpoint, reason).
+		WithImpact("Backups cannot run, so nothing is being kept safe.").
+		WithFix("A panel administrator corrects the S3 endpoint under Settings → General → Backup storage: an address such as https://s3.eu-central-1.amazonaws.com.").
 		WithDocs("/docs/backups#storage").
 		WithStatus(http.StatusBadRequest)
 }

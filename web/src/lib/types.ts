@@ -698,6 +698,30 @@ export type BackupPolicy = {
   enabled: boolean
 }
 
+/**
+ * Whether backups have somewhere to go, which anybody may know. Where they go
+ * is a panel administrator's, under Settings → General → Backup storage.
+ */
+export type BackupStorage = {
+  configured: boolean
+  /** A backup passphrase is set, so every backup is encrypted. */
+  sealed: boolean
+  /** A new database is backed up when whoever creates it does not say. */
+  default_backups: boolean
+}
+
+/** Why a new database was not given a daily backup schedule. */
+export type DatabaseBackupReason =
+  "declined" | "not_offered" | "preview" | "turned_off" | "no_storage" | "failed"
+
+/** What creating a database did about its backups. */
+export type DatabaseBackup = {
+  enabled: boolean
+  reason?: DatabaseBackupReason
+  schedule?: string
+  retention?: number
+}
+
 export type NodeInfo = {
   name: string
   ready: boolean

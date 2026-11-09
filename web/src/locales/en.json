@@ -1540,7 +1540,7 @@
     "backupsOn": "Take a backup automatically",
     "backupScheduleFieldHelp": "When the backup runs. Times are UTC.",
     "retentionHelp": "Older backups are deleted when a new one succeeds.",
-    "backupScheduleHelp": "Backups are written to the storage you configured in Settings.",
+    "backupScheduleHelp": "Backups are written to the panel's backup storage.",
     "retention": "Keep the last",
     "restore": "Restore",
     "restoreWarning": "This replaces everything currently in the database with the contents of this backup. It cannot be undone.",
@@ -1689,7 +1689,15 @@
       "startingAgain": "Starting again on the disk it kept.",
       "degraded": "{{ready}} of {{wanted}} instances are ready.",
       "degradedLastOne": "{{ready}} of {{wanted}} instances are ready. The database is answering, but a failure of the one that is left is an outage."
-    }
+    },
+    "backupDaily": "Back up daily",
+    "backupDailyHelp": "Every day between 02:00 and 05:00 UTC, keeping the last 7. Change it on its Backups tab.",
+    "backupDailyNoStorage": "Not until this panel has backup storage.",
+    "noScheduleTitle": "This database has no backup schedule",
+    "noScheduleHelp": "It was made before there was backup storage, or with daily backups switched off. Turn the schedule on below, or give every database of the team that has none the daily one a new database gets.",
+    "backupDefaults": "Back up every database daily",
+    "backupDefaultsApplied_one": "{{count}} database is now backed up every day.",
+    "backupDefaultsApplied_other": "{{count}} databases are now backed up every day."
   },
   "templates": {
     "title": "Templates",
@@ -2078,6 +2086,10 @@
       "git_ca_bundle": {
         "label": "Certificate authorities for Git hosts",
         "help": "Only for a Git host whose certificate no public authority signed: the certificate, in PEM, of the authority that did. Builds trust it beside the public ones when they clone, and so does the panel when it reads a repository."
+      },
+      "storage_default_backups": {
+        "label": "Back up new databases",
+        "help": "On by default. A database created while the bucket above is set up is backed up every day, at a minute between 02:00 and 05:00 UTC of its own, keeping the last 7. Its Backups tab changes that or turns it off, and whoever creates one can say no. Previews and engines the panel does not back up never get one."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -2257,9 +2269,9 @@
       },
       "backup_storage_not_configured": {
         "title": "No backup storage is configured",
-        "cause": "This team has no S3-compatible storage set up yet.",
+        "cause": "No S3-compatible storage is set up for this panel yet.",
         "impact": "Backups cannot run, so nothing is being kept safe.",
-        "fix": "Open Settings, then Storage, and add an S3-compatible bucket. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
+        "fix": "A panel administrator sets it up under Settings → General → Backup storage. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
       },
       "backup_storage_read_only": {
         "title": "The backup storage cannot be written to",
@@ -3303,7 +3315,7 @@
         "title": "There is nowhere to back up to first",
         "cause": "{{0}} has disks or databases, and an update backs them up before it starts, but backups are not configured.",
         "impact": "Nothing was changed.",
-        "fix": "Set up backup storage under Settings, or update without a backup if you have one of your own."
+        "fix": "Have a panel administrator set up backup storage under Settings → General → Backup storage, or update without a backup if you have one of your own."
       },
       "promote_built_differently": {
         "title": "This app would build that version differently",
@@ -3321,13 +3333,13 @@
         "title": "This backup is sealed, and there is no passphrase to open it",
         "cause": "The backup was encrypted with the backup passphrase, and none is set now.",
         "impact": "Nothing was restored or changed.",
-        "fix": "Enter the passphrase it was sealed with under Settings, then Storage, and restore again."
+        "fix": "Enter the passphrase it was sealed with under Settings → General → Backup storage, and restore again."
       },
       "backup_wrong_passphrase": {
         "title": "The backup passphrase does not open this backup",
         "cause": "This backup was sealed with a different passphrase than the one set now.",
         "impact": "Nothing was restored or changed.",
-        "fix": "Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back."
+        "fix": "Set the passphrase it was sealed with under Settings → General → Backup storage, restore, and set the current one back."
       },
       "backup_damaged": {
         "title": "This backup is damaged",
@@ -4313,6 +4325,12 @@
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
       },
+      "backup_storage_endpoint_invalid": {
+        "title": "The backup storage's endpoint is not an address",
+        "cause": "The endpoint {{0}} could not be read: {{1}}",
+        "impact": "Backups cannot run, so nothing is being kept safe.",
+        "fix": "A panel administrator corrects the S3 endpoint under Settings → General → Backup storage: an address such as https://s3.eu-central-1.amazonaws.com."
+      },
       "template_input_required": {
         "title": "The template needs a value nobody gave",
         "cause": "{{0}} is needed to install {{1}}.",
@@ -4783,7 +4801,13 @@
     "verify": "Verify",
     "verifying": "Verifying…",
     "verified": "Opened and read through {{when}}",
-    "verifyFailed": "Did not read through: {{reason}}"
+    "verifyFailed": "Did not read through: {{reason}}",
+    "storage": {
+      "missingTitle": "No backups are being taken",
+      "missing": "This panel has no backup storage yet, so nothing on it is backed up.",
+      "askAdmin": "Ask a panel administrator to set it up under Settings → General → Backup storage.",
+      "openSettings": "Set it up under Settings → General → Backup storage."
+    }
   },
   "processes": {
     "title": "Processes",

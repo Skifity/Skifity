@@ -398,6 +398,29 @@ test("every page in the navigation renders", async ({ page }) => {
   expect(crashes, "a page threw while rendering").toEqual([])
 })
 
+test("a new database says why it cannot be backed up, and where that is fixed", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  // This panel has no bucket, which is the state a new panel is in.
+  const storage = await (await page.request.get("/api/backup-storage")).json()
+  expect(storage.configured).toBe(false)
+
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  await page.goto(`/projects/${projects.items[0].id}`)
+  await page.getByRole("button", { name: "New database" }).first().click()
+
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByRole("switch", { name: "Back up daily" })).toBeDisabled()
+  await expect(dialog.getByText("Not until this panel has backup storage.")).toBeVisible()
+  // The panel's administrator is sent to the page it is set on.
+  await expect(
+    dialog.getByRole("link", { name: "Set it up under Settings → General → Backup storage." }),
+  ).toHaveAttribute("href", "/settings?tab=panel")
+})
+
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
   await signIn(page)
 

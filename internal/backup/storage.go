@@ -80,8 +80,7 @@ func LoadStorage(ctx context.Context, db *store.DB, keyring *crypto.Keyring) (*S
 
 	host, secure, err := splitEndpoint(endpoint)
 	if err != nil {
-		return nil, errdoc.NotConfigured("Backup storage", "Settings, then Storage").
-			WithCause("The endpoint %q could not be read: %s", endpoint, err.Error())
+		return nil, errdoc.StorageEndpointInvalid(endpoint, err.Error())
 	}
 
 	client, err := minio.New(host, &minio.Options{

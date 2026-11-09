@@ -607,6 +607,28 @@ func TestABackupIsOfADatabaseOrAVolume(t *testing.T) {
 	}
 }
 
+// Creating a database passes on whether to back it up, only when the person
+// said, and says what was done about it.
+func TestCreatingADatabaseSaysWhetherItIsBackedUp(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "create_database", map[string]any{"environment_id": "env_1", "name": "db", "engine": "postgres"})
+	if failed || !strings.Contains(text, "backed up every day at 17 3 * * *") {
+		t.Errorf("create_database answered (error=%v): %s", failed, text)
+	}
+	request, _ := panel.last("POST", "/api/environments/env_1/databases")
+	if _, said := request.Body["backup"]; said {
+		t.Errorf("nothing was said about backups, and the request was %v", request.Body)
+	}
+
+	call(t, session, "create_database", map[string]any{"environment_id": "env_1", "name": "db", "engine": "postgres", "backup": false})
+	request, _ = panel.last("POST", "/api/environments/env_1/databases")
+	if request.Body["backup"] != false {
+		t.Errorf("no was not passed on: %v", request.Body)
+	}
+}
+
 // The record somebody types into their DNS provider: the type follows the
 // value, and the address the panel gave the app needs none.
 func TestADomainSaysWhichDNSRecordToCreate(t *testing.T) {

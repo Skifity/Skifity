@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/api"
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
 	"skifity/internal/dbsvc"
@@ -22,6 +24,7 @@ import (
 	"skifity/internal/notify"
 	"skifity/internal/plugins"
 	"skifity/internal/runsafe"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -68,6 +71,32 @@ func (m *Manager) Verify(ctx context.Context) error {
 		return err
 	}
 	return storage.Verify(ctx)
+}
+
+// Storage says whether backup storage is set up, without reaching it.
+//
+// Set up is what LoadStorage accepts: every field it needs is filled in and
+// the endpoint is an address. A bucket that turns out to be wrong is not
+// found here — that needs the network — and is reported by the first backup
+// that runs, the way a scheduled failure always has been.
+func (m *Manager) Storage(ctx context.Context) (api.BackupStorage, error) {
+	var out api.BackupStorage
+	_, err := LoadStorage(ctx, m.db, m.keyring)
+	var problem *errdoc.Problem
+	switch {
+	case err == nil:
+		out.Configured = true
+	case errors.As(err, &problem) && (problem.Code == errdoc.StorageNotConfigured().Code ||
+		problem.Code == errdoc.StorageEndpointInvalid("", "").Code):
+	default:
+		return api.BackupStorage{}, err
+	}
+	passphrase, _, err := m.db.GetSetting(ctx, settings.KeyBackupPassphrase)
+	if err != nil {
+		return api.BackupStorage{}, err
+	}
+	out.Sealed = passphrase != ""
+	return out, nil
 }
 
 // Run takes a backup now.

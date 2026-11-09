@@ -1079,6 +1079,27 @@ paths:
               schema: {$ref: '#/components/schemas/AuditEventList'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/backup-policies/defaults:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    post:
+      operationId: applyDefaultBackupPolicies
+      tags: [Backups]
+      summary: Back up every database of the team that has no schedule
+      description: >-
+        Owner or admin. Gives each of the team's databases with no backup schedule at all the daily one a
+        new database gets: a minute between 02:00 and 04:59 UTC of its own, keeping 7. A schedule somebody
+        turned off is left alone, as are previews and engines Skifity does not back up. Refused with
+        backup.storage_not_configured when there is no backup storage or it cannot be written to. Each
+        schedule made is in the audit log.
+      responses:
+        '200':
+          description: The databases that were given one.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DefaultedDatabaseList'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/export:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -2650,7 +2671,11 @@ paths:
       operationId: createDatabase
       tags: [Databases]
       summary: Create a managed database
-      description: Member. Its operator is installed on first use. It answers at once, while the database is still being made.
+      description: >-
+        Member. Its operator is installed on first use. It answers at once, while the database is still being
+        made. It is backed up every day unless backup says no, there is no backup storage, the engine is not
+        backed up, the environment is a preview, or storage.default_backups is off and backup was left out;
+        backup in the answer says which.
       requestBody:
         required: true
         content:
@@ -2658,10 +2683,10 @@ paths:
             schema: {$ref: '#/components/schemas/CreateDatabaseRequest'}
       responses:
         '202':
-          description: The database, being created.
+          description: The database, being created, and what was done about its backups.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/Database'}
+              schema: {$ref: '#/components/schemas/CreatedDatabase'}
         default: {$ref: '#/components/responses/Error'}
 
   # --- apps ---
@@ -4634,6 +4659,24 @@ paths:
         default: {$ref: '#/components/responses/Error'}
 
   # --- templates ---
+
+  /api/backup-storage:
+    get:
+      operationId: getBackupStorage
+      tags: [Backups]
+      summary: Whether backups have somewhere to go
+      description: >-
+        Anybody signed in. Whether backup storage is set up, read from the settings without reaching the
+        bucket, whether backups are sealed with a passphrase, and whether a new database is backed up when
+        whoever creates it does not say. Never where the storage is or how it is reached: only a panel
+        administrator sets it, under Settings → General → Backup storage.
+      responses:
+        '200':
+          description: The answer.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackupStorage'}
+        default: {$ref: '#/components/responses/Error'}
 
   /api/database-engines:
     get:
@@ -6912,6 +6955,7 @@ components:
               name: {type: string}
               error: {type: string}
               problem: {$ref: '#/components/schemas/Problem'}
+              backup: {$ref: '#/components/schemas/DatabaseBackup'}
         deployment: {$ref: '#/components/schemas/Deployment'}
 
     WebhookStatus:
@@ -8313,6 +8357,58 @@ components:
         version: {type: string}
         storage_gb: {type: integer}
         instances: {type: integer}
+        backup:
+          type: boolean
+          description: >-
+            Whether to back it up every day. Left out, the panel's own default decides
+            (storage.default_backups, on unless an administrator turned it off).
+
+    CreatedDatabase:
+      allOf:
+        - $ref: '#/components/schemas/Database'
+        - type: object
+          required: [backup]
+          properties:
+            backup: {$ref: '#/components/schemas/DatabaseBackup'}
+
+    DatabaseBackup:
+      type: object
+      required: [enabled]
+      description: What creating a database did about its backups.
+      properties:
+        enabled: {type: boolean, description: 'It is backed up on the schedule below.'}
+        reason:
+          type: string
+          enum: [declined, not_offered, preview, turned_off, no_storage, failed]
+          description: >-
+            Why it is not: backup was false; the engine is not backed up; the environment is a preview;
+            storage.default_backups is off; there is no backup storage; or the panel could not read its
+            settings or save the schedule, which its log says.
+        schedule: {type: string, description: 'Five cron fields, in UTC.'}
+        retention: {type: integer, description: 'How many scheduled backups are kept.'}
+
+    BackupStorage:
+      type: object
+      required: [configured, sealed, default_backups]
+      properties:
+        configured: {type: boolean, description: 'Every setting backups need is filled in. The bucket is not reached to say so.'}
+        sealed: {type: boolean, description: 'A backup passphrase is set, so every backup is encrypted before it leaves the cluster.'}
+        default_backups: {type: boolean, description: 'A new database is backed up when whoever creates it does not say.'}
+
+    DefaultedDatabaseList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [database_id, name, schedule]
+            properties:
+              database_id: {type: string}
+              name: {type: string}
+              schedule: {type: string, description: 'Five cron fields, in UTC.'}
+        total: {type: integer}
 
     DatabaseLink:
       type: object

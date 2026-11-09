@@ -188,16 +188,21 @@ func (db *DB) ListDatabasesChangingPassword(ctx context.Context) ([]Database, er
 		WHERE credentials_next_enc != '' ORDER BY created_at`)
 }
 
-// DeleteDatabase removes a database record.
+// DeleteDatabase removes a database record, and its backup schedule with it.
 func (db *DB) DeleteDatabase(ctx context.Context, id string) error {
-	res, err := db.Exec(ctx, `DELETE FROM databases WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("delete database: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM databases WHERE id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("delete database: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNotFound
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM backup_policies WHERE target_type = 'database' AND target_id = ?`, id); err != nil {
+			return fmt.Errorf("delete the database's backup schedule: %w", err)
+		}
+		return nil
+	})
 }
 
 // --- database links ---
@@ -296,10 +301,29 @@ func (db *DB) GetBackupPolicy(ctx context.Context, targetType, targetID string) 
 	return p, nil
 }
 
+// ListDatabasesWithoutBackupPolicy returns a team's databases that have no
+// schedule at all — not one that is off, which somebody chose — outside its
+// previews, which are thrown away with their pull request.
+func (db *DB) ListDatabasesWithoutBackupPolicy(ctx context.Context, teamID string) ([]Database, error) {
+	return db.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases
+		WHERE environment_id IN (SELECT e.id FROM environments e JOIN projects p ON p.id = e.project_id
+			WHERE p.team_id = ? AND e.kind != ?)
+		AND NOT EXISTS (SELECT 1 FROM backup_policies b
+			WHERE b.target_type = 'database' AND b.target_id = databases.id)
+		ORDER BY created_at`, teamID, string(EnvPreview))
+}
+
 // ListEnabledBackupPolicies feeds the scheduler.
+//
+// Only schedules whose database or volume still exists: a policy is not
+// removed with what it belongs to when a whole environment goes, and every
+// new database has one, so a schedule for nothing came round every night to
+// say in the log that its database was not found.
 func (db *DB) ListEnabledBackupPolicies(ctx context.Context) ([]BackupPolicy, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, schedule, retention, destination,
-		enabled, created_at, updated_at FROM backup_policies WHERE enabled = 1`)
+		enabled, created_at, updated_at FROM backup_policies WHERE enabled = 1
+		AND (target_type != 'database' OR target_id IN (SELECT id FROM databases))
+		AND (target_type != 'volume' OR target_id IN (SELECT id FROM volumes))`)
 	if err != nil {
 		return nil, fmt.Errorf("list backup policies: %w", err)
 	}

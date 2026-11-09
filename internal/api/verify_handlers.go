@@ -42,7 +42,7 @@ func (s *Server) handleVerifyPanelBackup(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) startVerification(w http.ResponseWriter, r *http.Request, targetType, targetID string) {
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backupID := chi.URLParam(r, "backupID")

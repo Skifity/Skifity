@@ -79,7 +79,8 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		"database_id": record.ID, "database": record.Name,
 		"engine": record.Engine, "environment_id": record.EnvironmentID,
 	})
-	writeJSON(w, http.StatusAccepted, record)
+	backup := s.applyDefaultBackupPolicy(r.Context(), env, record, req.Backup)
+	writeJSON(w, http.StatusAccepted, createdDatabase{Database: record, Backup: backup})
 }
 
 func (s *Server) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +330,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backup, err := s.backups.Run(r.Context(), "database", record.ID, "manual")
@@ -448,7 +449,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backupID := chi.URLParam(r, "backupID")

@@ -130,6 +130,8 @@ type databaseResult struct {
 	// Problem is Error as a catalogued problem, so the panel can say it in
 	// the reader's language rather than in the server's English.
 	Problem *errdoc.Problem `json:"problem,omitempty"`
+	// Backup is what was done about its backups, once it exists.
+	Backup *databaseBackup `json:"backup,omitempty"`
 }
 
 // maxInitialDatabases bounds one request. An app that needs more than a
@@ -206,6 +208,8 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 			continue
 		}
 		result.DatabaseID, result.Name = record.ID, record.Name
+		backup := s.applyDefaultBackupPolicy(r.Context(), env, record, nil)
+		result.Backup = &backup
 		s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
 		s.plugins.Notify(r.Context(), plugins.EventDatabaseCreated, teamID, map[string]any{
 			"database_id": record.ID, "database": record.Name,
@@ -1968,7 +1972,7 @@ func (s *Server) handleCreateVolumeBackup(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backup, err := s.backups.Run(r.Context(), "volume", volume.ID, "manual")
@@ -1993,7 +1997,7 @@ func (s *Server) handleRestoreVolumeBackup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backupID := chi.URLParam(r, "backupID")

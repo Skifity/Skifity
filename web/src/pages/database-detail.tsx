@@ -19,6 +19,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
+import { BackupStorageMissing, useBackupStorage } from "@/components/backup-storage"
 import { BackupVerification } from "@/components/backup-verification"
 import {
   DatabaseHistory,
@@ -626,8 +627,10 @@ function DatabaseBackups({
   const confirmRestore = useConfirm()
   const databaseId = database.id
   const names = useLinkedAppNames(database, links)
+  const { team } = useSession()
   // A member limited to projects has no live stream to hear of a new backup.
-  const scoped = Boolean(useSession().team?.scoped)
+  const scoped = Boolean(team?.scoped)
+  const backupStorage = useBackupStorage()
 
   const backups = useQuery({
     queryKey: ["backups", databaseId],
@@ -672,6 +675,16 @@ function DatabaseBackups({
     },
   })
 
+  // For a team whose databases were made before there was storage: every one
+  // with no schedule at all gets the daily one a new database gets.
+  const applyDefaults = useMutation({
+    mutationFn: () => api.post<List<unknown>>(`/api/teams/${team?.id}/backup-policies/defaults`),
+    onSuccess: (done) => {
+      toast.success(t("databases.backupDefaultsApplied", { count: done.total }))
+      void queryClient.invalidateQueries({ queryKey: ["backup-policy"] })
+    },
+  })
+
   const backupNow = useMutation({
     mutationFn: () => api.post(`/api/databases/${databaseId}/backups`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["backups", databaseId] }),
@@ -701,8 +714,33 @@ function DatabaseBackups({
     </Button>
   )
 
+  // No row at all, rather than one that is off: made before there was
+  // storage, or with "back up daily" switched off.
+  const noSchedule = current != null && !current.id
+
   return (
     <div className="space-y-6">
+      {backupStorage.data?.configured === false && <BackupStorageMissing />}
+      {backupStorage.data?.configured && noSchedule && isAdmin && !team?.scoped && (
+        <Alert variant="info">
+          <DatabaseBackupIcon />
+          <AlertTitle>{t("databases.noScheduleTitle")}</AlertTitle>
+          <AlertDescription>
+            <p>{t("databases.noScheduleHelp")}</p>
+            {applyDefaults.error != null && <ErrorDisplay error={applyDefaults.error} compact />}
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2"
+              disabled={applyDefaults.isPending}
+              onClick={() => applyDefaults.mutate()}
+            >
+              {applyDefaults.isPending && <Spinner />}
+              {t("databases.backupDefaults")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("databases.backupSchedule")}</CardTitle>

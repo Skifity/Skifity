@@ -173,6 +173,9 @@ func (s *Server) cloneInto(r *http.Request, source, env store.Environment) (clon
 			return out, err
 		}
 		out.Databases = append(out.Databases, made)
+		if err := s.copyBackupPolicy(ctx, database, made); err != nil {
+			return out, err
+		}
 		links, err := s.db.ListLinksForDatabase(ctx, database.ID)
 		if err != nil {
 			return out, err

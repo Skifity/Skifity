@@ -24,6 +24,7 @@ import { CloneEnvironmentDialog } from "@/components/environment-clone"
 import { EnvironmentConfinement } from "@/components/environment-confinement"
 import { EnvironmentPreviews } from "@/components/environment-previews"
 import { EnvironmentQuota } from "@/components/environment-quota"
+import { BackupStorageWhere, useBackupStorage } from "@/components/backup-storage"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader, Section } from "@/components/page"
@@ -47,7 +48,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   Item,
   ItemActions,
@@ -68,6 +69,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDatabaseEngines } from "@/hooks/use-database-engines"
 import { useEvents } from "@/hooks/use-events"
@@ -836,11 +838,20 @@ export function NewDatabaseDialog({
   // copied in when the engine changes.
   const [version, setVersion] = useState<string | null>(null)
   const [storage, setStorage] = useState("10")
+  const backupStorage = useBackupStorage()
+  // null is "what the panel does by default": nothing is sent, and the
+  // panel's own setting decides.
+  const [backup, setBackup] = useState<boolean | null>(null)
 
   const chosen = engines.data?.find((item) => item.name === engine)
   const versionValue = version ?? chosen?.default_version ?? ""
   // A cache keeps nothing on a disk, so it is asked for none.
   const keepsData = chosen?.storage ?? true
+  // A daily backup needs somewhere to put it and an engine the panel backs
+  // up. The engine's reason is the alert below; the storage's is said here.
+  const noStorage = backupStorage.data?.configured === false
+  const canBackUp = (chosen?.backups ?? true) && !noStorage
+  const backupValue = canBackUp && (backup ?? backupStorage.data?.default_backups ?? true)
 
   const create = useMutation({
     mutationFn: () =>
@@ -849,6 +860,7 @@ export function NewDatabaseDialog({
         engine,
         version: versionValue || undefined,
         storage_gb: keepsData ? Number(storage) || 10 : undefined,
+        backup: canBackUp && backup !== null ? backup : undefined,
       }),
     onSuccess: (database) => {
       void queryClient.invalidateQueries({ queryKey: ["databases", environmentId] })
@@ -954,6 +966,30 @@ export function NewDatabaseDialog({
                 onChange={(event) => setStorage(event.target.value)}
               />
               <FieldDescription>{t("databases.storageHelp")}</FieldDescription>
+            </Field>
+          )}
+          {/* Only once it is known whether there is storage: a switch that
+              starts off and turns itself on reads as a decision being made. */}
+          {(chosen?.backups ?? true) && backupStorage.data && (
+            <Field orientation="horizontal" data-disabled={!canBackUp || undefined}>
+              <FieldContent>
+                <FieldLabel htmlFor="database-backup">{t("databases.backupDaily")}</FieldLabel>
+                <FieldDescription>
+                  {noStorage ? (
+                    <>
+                      {t("databases.backupDailyNoStorage")} <BackupStorageWhere />
+                    </>
+                  ) : (
+                    t("databases.backupDailyHelp")
+                  )}
+                </FieldDescription>
+              </FieldContent>
+              <Switch
+                id="database-backup"
+                checked={backupValue}
+                onCheckedChange={setBackup}
+                disabled={!canBackUp}
+              />
             </Field>
           )}
           {create.error && <ErrorDisplay error={create.error} compact />}
