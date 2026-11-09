@@ -2,7 +2,9 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about Netlify that changed are corrected in place, and "Since 2026-09-30"
+> says what changed, with its sources.
 
 Researched 2026-09-30 against live sources. Skifity's side of every comparison was
 checked in the code at commit `7865bc8` (2026-09-30). Two features landed in
@@ -20,14 +22,19 @@ SvelteKit, Eleventy, Hugo and Next.js alike — and since 2025 it has reposition
 around "agent experience" (AX): AI tools such as Bolt.new deploy to it, and its own
 dashboard runs coding agents. **Architecture:** a closed, proprietary control plane
 in front of Netlify's CDN; compute is serverless functions (AWS Lambda-based, with
-15-minute background and cron-triggered variants) and Deno-based edge functions —
+15-minute background and cron-triggered variants) and edge functions written
+against a Deno-style runtime, which since September 2026 run in Unikraft MicroVMs
+inside Netlify's own edge network instead of on a hosted execution service
+(Netlify blog, 2026-09-29; this line said only "Deno-based" on 2026-09-30) —
 **there is no way to run a container or a long-lived process**. State lives in
 **Netlify Blobs** (key-value/object store), **Netlify Database** (managed Postgres
 built with Neon, GA the week of 20 April 2026) and Forms. **Licence:** the service
 is proprietary; the CLI (`netlify/cli`) is MIT. **Pricing:** since 4 September 2025
 new accounts are on **credits** — Free (300 credits, hard cap, sites pause), Personal
 $9/month (1,000), Pro from $20/month (3,000, **unlimited seats**, tiers up to 20,000
-credits for $126/month since 2026-07-14, rollover on 5,000+), Enterprise custom. A
+credits for $126/month since 2026-07-14, rollover on 5,000+), Enterprise custom (on
+2026-11-08 the public pricing page also carries two test prices, $12 or $15 for
+Personal and $20 or $25 for Pro; see "Since 2026-09-30"). A
 production deploy costs 15 credits (about $0.10), compute 10 credits per GB-hour,
 bandwidth 20 credits per GB (about $0.13), web requests 2 credits per 10K, AI
 inference 180 credits per dollar; previews, branch deploys, failed deploys,
@@ -147,10 +154,18 @@ shipped 70 stable releases in 2026 up to 27.10.2 on 2026-09-29.
 * **WAF**: a baseline subset of the OWASP Core Rule Set with anomaly scoring, active
   or passive mode, per-rule block/log/disable — **Enterprise with High-Performance
   Edge only**.
-* **Access control for sites**: a shared password (Pro and above; credit plans call
-  it "project visibility"), **team login** (only members of the Netlify team, SSO
-  through the IdP, strict SSO mode) on Enterprise; protect all deploys or, on
-  Enterprise, only non-production ones.
+* **Access control for sites**: on credit plans, **project visibility** — public,
+  private or (Pro only) a shared password, set separately for production and for
+  previews. A private project is enforced with a Netlify login: on Free and
+  Personal only the Team Owner can see it, on Pro any invited member. Teams created
+  on or after 2026-07-28 start with new projects private, and previews stay
+  private unless that is changed. Since 2026-10-07 functions and edge functions
+  on a private or team-login project read the signed-in visitor as `context.user`
+  (id, email, expiry). **Team login** (only members of the Netlify team, SSO
+  through the IdP, strict SSO mode) remains Enterprise, which has no project
+  visibility setting. On 2026-09-30 this line said credit plans called the
+  password "project visibility"; visibility is a separate setting, and the
+  private-by-default change was already two months old.
 * **Secrets Controller**: a variable marked "contains secret values" is
   **write-only** in the UI, can be restricted further, and is covered by **secret
   scanning**: a build whose output contains a secret variable's value fails, and
@@ -200,7 +215,9 @@ shipped 70 stable releases in 2026 up to 27.10.2 on 2026-09-29.
 * `netlify` CLI (MIT) for deploys, variables (`env:import`, export as `.env`), logs,
   functions, `netlify dev` for local emulation; a REST API; build plugins;
   extensions through the Netlify SDK; outgoing webhooks.
-* **Netlify MCP server**: remote at `https://netlify-mcp.netlify.app/mcp` or local
+* **Netlify MCP server**: remote at `https://mcp.netlify.com/mcp` (the address
+  `https://netlify-mcp.netlify.app/mcp` named here on 2026-09-30 still works for
+  existing connections) or local
   (`npx @netlify/mcp`), personal access token or OAuth; covers the CLI's commands,
   Git and manual deploys, variables, forms, extensions and logs; agent skills in
   `netlify/context-and-tools`.
@@ -285,7 +302,9 @@ shipped 70 stable releases in 2026 up to 27.10.2 on 2026-09-29.
   was deprecated in 2025 and reinstated in 2026, with CMS projects (Decap, Sveltia)
   telling users to stop relying on it in between.
 * **Security gated to Enterprise.** WAF, log drains, UI rate-limit rules, team-login
-  protection for previews and SSO all need Enterprise.
+  protection with SSO and SSO itself all need Enterprise. Keeping previews behind a
+  Netlify login does not: credit plans have had private previews through project
+  visibility since 2026-07-28, which this line missed on 2026-09-30.
 
 ## Security record
 
@@ -321,6 +340,9 @@ Skifity statuses follow `docs/checklist.md`: almost everything cluster-facing is
 **Written, never run** (ADR-0010). "Parity" means the feature exists in code with
 unit tests, not that it has been seen working.
 
+The Netlify column was brought up to 2026-11-08. The Skifity column is as read on
+2026-09-30, and "Since 2026-09-30" lists the rows it no longer describes.
+
 | Capability | Netlify | Skifity (evidence) | Verdict |
 |---|---|---|---|
 | **Deploy sources and builds** | Git (5 hosts incl. Azure DevOps), CLI, anonymous deploys, Drop, Agent Runners; no containers | Git (GitHub, GitLab, Gitea, generic) `internal/api/webhook_handlers.go`; images; folder upload from CLI or browser `internal/cli/up.go`, `internal/upload`; Railpack/Nixpacks/Dockerfile/static `internal/builder/job.go`. Written | Parity on sources; **Skifity ahead** on what can run (any long-lived container) |
@@ -340,7 +362,7 @@ unit tests, not that it has been seen working.
 | **Security, auth, roles, SSO, audit** | Roles incl. Reviewer; SSO/SCIM Enterprise; audit log | Argon2id, TOTP, OIDC free `internal/api/sso_handlers.go`, three roles `internal/store/models.go`, scoped tokens `internal/auth/scopes.go`, audit log; **Works** | **Skifity ahead** on SSO; behind on a reviewer role |
 | Secrets | Write-only secret values, secret scanning of build output, sensitive-variable policy for forks | Sealed and write-only `internal/crypto`; secret by heuristic `logging.LooksSecret`; logs scrubbed `internal/deploy/build.go`; forks get no secrets `copyPreviewVariables`; **no scan of build output** | Ahead on storage; behind on output scanning |
 | Firewall / WAF | IP and geo (incl. subregions) on all plans, separate rules for previews; code rate limits all plans; OWASP WAF Enterprise | Allow/block over address, country, ASN, host, path, method, UA, header `internal/edgerules`, `internal/guard`; no rate limits; not copied to previews; never run through Traefik | **Ahead** on rule expressiveness (ASN, headers, nesting); behind on rate limits and previews |
-| Site access control | Password (Pro), team login with SSO (Enterprise) | A username and password per app on the Firewall tab, Traefik basicAuth, bcrypt hash only, admin-only, inherited by previews `internal/api/password_handlers.go`, `internal/kube/password.go` (`7865bc8`); never run through Traefik; no login with panel accounts | Parity with Pro; behind Enterprise's team login |
+| Site access control | Password (Pro); private projects and private previews behind a Netlify login on every credit plan (since 2026-07-28), the visitor passed to code as `context.user` (since 2026-10-07); team login with SSO (Enterprise) | A username and password per app on the Firewall tab, Traefik basicAuth, bcrypt hash only, admin-only, inherited by previews `internal/api/password_handlers.go`, `internal/kube/password.go` (`7865bc8`); never run through Traefik; no login with panel accounts | Parity on the password; behind on a login, which Netlify now has on every plan, not only Enterprise |
 | **Preview environments** | Per PR, status + comment, branch deploys, Drawer, context variables, DB branch, free | Per PR in its own namespace, fork gets no secrets, removed on close or after 7 idle days `internal/api/webhook_handlers.go`, `internal/watch/watch.go`; commit status + one edited PR comment `internal/deploy/gitreport.go` (`bb30e03`); the app's password carried over (`7865bc8`); no branch deploys, no context variables, no database of its own | Behind |
 | Environments | Deploy contexts (prod, previews, branches, branch patterns) | Unlimited named environments per project, each a namespace; per-app variables; project shared variables apply to all environments | Ahead on real environments, behind on per-context values |
 | Cron | Scheduled functions, 30 s limit, published deploy only | Scheduled commands in the app's image, per minute, no time limit `internal/cron`, `internal/kube/runjob.go` | **Skifity ahead**. Written |
@@ -501,6 +523,186 @@ Skifity already has.
   by the credit. Skifity's job is to be the best target for whatever agent the user
   already runs — the MCP server, `llms.txt`, errors with cause, impact and fix.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. The changelog's feed, the blog, the docs, the pricing page,
+the status page's API, the forum's JSON API, the npm registry and Hacker News
+(Algolia API) were read; GitHub's REST API only through its search endpoint
+(repository and advisory endpoints were refused from this sandbox), and
+Trustpilot refused the request. A web search was not available.
+
+### Product
+
+* **Missed on 2026-09-30, from the days before it.** The project activity feed
+  (2026-09-24): production versions, previews and agent runs in one list on the
+  project's overview, on every plan. A Netlify-managed Git repository for every
+  project that arrives without a Git host (blog, 2026-09-22; first called Netlify
+  Source in August), because "in the last month, 93% of new projects" came from
+  Drop, the API, the MCP or Agent Runners rather than a connected repository; it
+  speaks the ordinary Git protocol and keeps its objects in S3. Edge Functions
+  moved onto MicroVMs (2026-09-29): about 5–6 ms per warm invocation at the
+  median, down from 25–40 ms, with each deploy in its own MicroVM. The Trust
+  Center moved into the dashboard (2026-09-30).
+* **Frameworks.** SvelteKit 3 on the day it shipped (2026-10-02); TanStack Start
+  1.0 (2026-10-13), now what a new Agent Runners project starts with.
+* **Who is visiting** (2026-10-07). On a private project or one behind team login,
+  functions and edge functions get the signed-in Netlify user as `context.user`,
+  set by Netlify rather than by a request header, so a visitor cannot forge it.
+  Netlify's examples: internal dashboards, approval flows, audit trails inside an
+  internal app.
+* **Agents.** Comments on single lines of an agent's diff (2026-10-06); Agent
+  Runners in the public API — start a run, send a follow-up, answer its
+  questions, read the files it changed, with a deploy URL, but not yet open a
+  pull request or publish (changelog, 2026-10-20); a connector for Grok
+  (2026-10-23); subscriptions to deploy, failed-build and form events from ChatGPT
+  (2026-10-07). The MCP server gained a deploys card for clients that render MCP
+  Apps, refreshing while a deploy runs, and a tool through which an agent reports
+  to Netlify where it got stuck (both 2026-11-03). New models in AI Gateway and
+  Agent Runners almost weekly.
+* **A schema for `netlify.toml`** (2026-11-04): a published JSON Schema, named
+  with a `$schema` key, so an editor completes and checks the file and an agent
+  can validate what it generated before deploying it.
+* **Smaller.** The Support Hub, tickets inside the dashboard, for Enterprise
+  (2026-10-16). Form notifications by email must go to a member of the team on
+  every plan but Enterprise and Legacy Business (2026-11-03), with address
+  verification promised.
+* **Terms** (announced 2026-11-04, in force 2026-12-04). An organisation that
+  proves it owns an email domain may be shown that accounts on that domain exist,
+  their plan and their public sites, and an account may be moved into the
+  organisation's own after a notice, unless its owner changes the email address.
+* **CLI.** Fifteen releases from 27.11.0 (2026-10-05) to 27.16.2 (2026-11-02), MIT
+  as before; 1,934 stars and 144 open issues (GitHub search API, 2026-11-08).
+
+### Pricing
+
+* Credit rates are as above on 2026-11-08: 15 credits per production deploy, 10
+  per GB-hour, 20 per GB, 2 per 10,000 requests, Pro tiers of 3,000 to 20,000
+  credits, Personal at 1,000, Free capped at 300.
+* The pricing page's markup holds three variants of the paid prices, shown one
+  per visitor: $9 Personal and $20 Pro (the prices above), $12 and $20, or $15
+  and $25, with "See pricing in your dashboard" in their place for some
+  visitors. That is a price test, not an announced change; the plan docs name no
+  price at all. When it started could not be checked, since the Wayback Machine
+  refused the request.
+
+### Reliability
+
+* Netlify's status page lists eleven incidents between 2026-10-05 and
+  2026-11-04: errors reaching sites on the High-Performance Edge network for 55
+  minutes (2026-10-05, 12:19–13:14 UTC); two major Agent Runner outages
+  (2026-10-20, and 2026-10-27 with build errors); elevated build errors on
+  2026-10-17 and 2026-11-04; build logs reaching the UI late on three occasions
+  (2026-10-21, 2026-10-26, 2026-11-02); late function logs (2026-10-22); and two
+  short error spikes recorded with no impact, in edge functions (2026-10-08) and
+  AI Gateway (2026-10-06).
+
+### What users say
+
+* The forum changed its rules on 2026-09-29: new users wait before they may post,
+  posts can sit in an approval queue, and account problems are to go to a support
+  ticket. On 2026-11-08 the forum's list of newest topics shows two created since
+  then, where the week before it had about twenty a day, most of them about
+  credit flags, suspended accounts and domains held by another team. The public record
+  of complaints this file relies on has thinned; that says nothing about the
+  complaints.
+* One of the two (2026-11-02) is the preview-database problem from outside
+  Netlify Database: a team branching Neon per pull request cannot hand a Deploy
+  Preview its branch's URL in time, because functions read variables as they were
+  when the deploy was created, the first push builds before CI has the URL, and
+  `POST /sites/{id}/builds` with a `review_id` answers 422 for GitHub
+  repositories, so CI can neither start nor restart a preview. The team says it
+  wanted Netlify Database but needed masked copies of production and one database
+  shared by several projects, which it does not offer.
+* On Hacker News the Edge Functions post had 230 points (2026-09-30); no story
+  about Netlify itself since reached 20.
+
+### Security
+
+* No advisory against Netlify's own packages: OSV lists none for `netlify-cli`,
+  `@netlify/plugin-nextjs`, `@netlify/functions`, `@netlify/edge-functions`,
+  `@netlify/blobs` or `@netlify/identity` (2026-11-08). No breach was reported.
+* Framework advisories Netlify relayed, each with what applies on Netlify:
+  * 2026-09-22: remote code execution in `next/og` `ImageResponse` with untrusted
+    input (CVE-2026-94545, critical), fixed in 15.5.26 and 16.3.6. On Netlify a
+    crashed invocation, not code execution.
+  * 2026-09-30: seven Next.js advisories (one high, an image-optimiser SSRF,
+    CVE-2026-94483), fixed in 15.5.27 and 16.3.8 with adapter 5.16.1; and a
+    critical reflected XSS in TanStack Start (CVE-2026-102989).
+  * 2026-10-14: two critical remote code executions — a `use cache` function
+    returning typed arrays (GHSA-673q-mjm6-r5xr) and SVG processing through sharp
+    (CVE-2026-96889) — and a high denial of service in Server Actions, fixed in
+    15.5.28 and 16.4.1.
+  * 2026-11-03: seven medium ones, cache leaks between users and an HttpOnly
+    cookie exposed on Edge routes among them, fixed in 16.4.5 and 15.5.29 with
+    adapter 5.16.6. One, cross-client response injection (CVE-2026-119348),
+    affects only self-hosted apps behind certain proxies.
+* Several are "not affected on Netlify" because its Image CDN replaces Next.js's
+  image optimiser and every request is its own invocation. A self-hosted
+  `next start` has neither defence, so on a user's own server every one of them
+  applies. Netlify adds each time that public previews and branch deploys stay
+  vulnerable until they are deleted.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* **Rows of "Against Skifity" that no longer describe Skifity.** Monorepo: a push
+  deploys only the apps whose paths it touched (Phase 96). Databases: nine engines
+  (`f4f9d09`), and a preview gets databases of its own and a seed command (`1ae3276`,
+  Phase 107). Locked deploys (Phase 94). Observability: log drains (`3731416`),
+  requests, errors and response times per app (`6fa2876`), usage history and
+  alerts (Phases 95 and 99); still no log retention or search inside the panel.
+  Roles: a viewer role and members limited to projects (Phases 85 and 86).
+  Firewall: rate limits exist (`internal/edgerules`). Previews: a value per
+  variable for previews (Phase 93), and a preview can be started through the API
+  (`POST /api/apps/{app}/previews`). MCP: served by the panel over HTTP (Phase 87).
+  Onboarding: v0.1.0 is released, and the `Cluster` workflow runs the installer on
+  a real k3s on every push to `main`.
+* **This file's gaps still open.** Scanning build output for secret values (gap 4;
+  the build-argument half was fixed in `7123905`, nothing in
+  `internal/builder/job.go` compares output with the values); clearing the build
+  cache for one deploy (gap 12; `--import-cache` is always passed); branch deploys
+  (gap 13); firewall rules for previews (gap 10: `previewCopy` in
+  `internal/api/webhook_handlers.go` copies variables, files and the password, not
+  the rules); previews behind a login (gap 7: the viewer role exists, a login in
+  front of an app does not).
+* **What the forum thread asks for, Skifity has.** CI can start a preview through
+  the API, a variable can hold a value for previews alone, and each preview gets
+  databases of its own and a seed command after its first deploy. A
+  copy of production data, masked or not, stays out on purpose ("Things to
+  deliberately not copy"); masking belongs in the seed command.
+* **New gap — previews private by default, behind the panel's own login, with the
+  visitor's identity passed on.** Netlify keeps new projects and all previews
+  private behind its login on every credit plan and gives the code `context.user`;
+  Railway put services and whole environments behind its login on 2026-10-08
+  (`railway.md`). Skifity has a shared basicAuth password per app
+  (`internal/kube/password.go`), carried to previews only when production has one;
+  the guard is already Traefik's forward-auth for a protected app
+  (`internal/guard`) but knows nothing of panel sessions. *Fit:* the guard sends a
+  visitor without a valid cookie to the panel, which checks the session and the
+  person's access to the project and returns a short-lived signed assertion for
+  that one host; the guard sets a cookie on the app's own host, strips any
+  incoming identity headers and adds `X-Skifity-User` and `X-Skifity-Email`; an
+  environment setting "Previews require signing in to the panel", on by default
+  for new environments. Size L; the flow and the signatures without a cluster,
+  Traefik with one.
+* **New gap — a schema for `skifity.yaml`.** The file is read strictly
+  (`DisallowUnknownFields` and `UnmarshalStrict` in `internal/blueprint/blueprint.go`),
+  so a typo fails, but only when `skifity plan` runs against a panel; nothing an
+  editor or an agent can check against before that. Generate a JSON Schema from
+  the blueprint types, publish it in `docs/` and from the panel, test that every
+  field of the types is in it, and put the `# yaml-language-server: $schema=`
+  line in the documentation's examples. Size S; no cluster.
+* **New gap — the pre-build advisory list falls behind.** `internal/builder/advisories.go`
+  holds CVE-2025-29927 and CVE-2025-55182 and nothing since; three Next.js
+  disclosures with a critical or high advisory came in four weeks, and the
+  defences Netlify cites for some of them do not exist on a self-hosted
+  `next start`. The nightly image scan
+  (`internal/vulnscan`, Trivy, which can stop deploys with fixable criticals)
+  reports them once the image exists and Trivy's database has them; the hole is
+  the warning before the build. Add the critical ones, and make keeping the list
+  a step of `docs/releasing.md`. Size S; no cluster.
+
 ## Sources
 
 All read 2026-09-30.
@@ -554,3 +756,42 @@ All read 2026-09-30.
 * https://github.com/netlify/cli (licence) and the GitHub search API (stars, open issues)
 * https://registry.npmjs.org/netlify-cli (release cadence)
 * https://securitylabs.datadoghq.com/articles/nextjs-middleware-auth-bypass/ (CVE-2025-29927 scope)
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://www.netlify.com/changelog/feed.xml (entries from 2026-09-22 to 2026-11-04), in particular:
+  * https://www.netlify.com/changelog/2026-09-24-new-activity-feed/
+  * https://www.netlify.com/changelog/2026-09-30-trust-center-moves/
+  * https://www.netlify.com/changelog/2026-10-01-sveltekit-3/
+  * https://www.netlify.com/changelog/2026-10-06-agent-runners-diff-line-comments/
+  * https://www.netlify.com/changelog/2026-10-07-context-user-in-functions/
+  * https://www.netlify.com/changelog/2026-10-07-subscribe-to-netlify-events-from-chatgpt/
+  * https://www.netlify.com/changelog/2026-10-13-tanstack-start-1-0/
+  * https://www.netlify.com/changelog/2026-10-16-support-tickets-in-the-netlify-ui/
+  * https://www.netlify.com/changelog/2026-11-05-agent-runners-api/ (dated 2026-10-20 in the feed)
+  * https://www.netlify.com/changelog/2026-10-23-netlify-connector-for-grok/
+  * https://www.netlify.com/changelog/2026-11-03-check-netlify-deploys-from-mcp/
+  * https://www.netlify.com/changelog/2026-11-03-agents-can-send-netlify-feedback/
+  * https://www.netlify.com/changelog/2026-11-03-new-email-requirements-for-form-notifications/
+  * https://www.netlify.com/changelog/2026-11-04-json-schema-for-netlify-toml/
+  * https://www.netlify.com/changelog/updates-to-our-terms-and-privacy-statement/ (2026-11-04)
+  * https://www.netlify.com/changelog/2026-07-28-start-with-private-project-urls/
+  * https://www.netlify.com/changelog/2026-09-22-nextjs-imageresponse-vulnerability/
+  * https://www.netlify.com/changelog/2026-09-30-nextjs-react-security-vulnerabilities/
+  * https://www.netlify.com/changelog/2026-09-30-tanstack-start-security-vulnerability/
+  * https://www.netlify.com/changelog/2026-10-14-nextjs-react-security-vulnerabilities/
+  * https://www.netlify.com/changelog/2026-11-03-nextjs-security-vulnerabilities/
+* https://www.netlify.com/blog/ (no post after 2026-09-29), https://www.netlify.com/blog/edge-functions-firecracker-microvms/ (2026-09-29) and https://www.netlify.com/blog/how-we-built-git-storage-for-millions/ (2026-09-22)
+* https://www.netlify.com/press/ (no release after 2026-03-18)
+* https://www.netlify.com/pricing/ (prices, the variants in the page's markup, the plan table)
+* https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/
+* https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/
+* https://docs.netlify.com/manage/security/secure-access-to-sites/password-protection/
+* https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/ (the new remote address)
+* https://www.netlifystatus.com/api/v2/incidents.json (incidents since 2026-09-30)
+* https://answers.netlify.com/latest.json?order=created, https://answers.netlify.com/t/172503 (moderation rules, 2026-09-29) and https://answers.netlify.com/t/172726 (per-PR database URL, 2026-11-02)
+* https://registry.npmjs.org/netlify-cli (releases 27.11.0 to 27.16.2) and the GitHub search API, `repo:netlify/cli` (stars, open issues)
+* https://api.osv.dev/v1/query for `netlify-cli`, `@netlify/plugin-nextjs`, `@netlify/functions`, `@netlify/edge-functions`, `@netlify/blobs` and `@netlify/identity` (no advisories)
+* https://hn.algolia.com/api/v1/search?query=netlify (stories since 2026-09-30), including https://news.ycombinator.com/item?id=49912444
+* Not reachable from this sandbox: GitHub's repository and advisory endpoints, Trustpilot, the Wayback Machine, and web search
+* Skifity: the files named under "Since 2026-09-30", read in this repository on 2026-11-08

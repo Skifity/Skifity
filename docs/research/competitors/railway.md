@@ -2,7 +2,9 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about Railway that changed are corrected in place, and "Since 2026-09-30"
+> says what changed, with its sources.
 
 Researched 2026-09-30 against live sources. Skifity's side of every comparison was
 checked in the code at commit `1ae3276` (2026-09-30). Uncommitted work seen in the
@@ -32,8 +34,10 @@ GB-month of volume, $0.05 per GB of egress, object storage $0.015 per GB-month.
 **Maturity and adoption:** founded 2020; a $100M Series B led by TQ Ventures on
 2026-01-22, when it reported "more than 2 million users", nearly 200,000 new
 developers a month, and 100,000 paid users at 25,000 businesses (SiliconANGLE,
-TechTarget, 2026-01-22); InfoQ put it at 3 million users on 2026-05-30. It ships a
-numbered weekly changelog (#0306 on 2026-09-04).
+TechTarget, 2026-01-22); InfoQ put it at 3 million users on 2026-05-30, and
+Railway itself at "5 million existing users" on 2026-10-26. It ships a numbered
+weekly changelog (#0306 on 2026-09-04; the latest on 2026-11-08 was published
+on 2026-11-05).
 
 ## Feature inventory
 
@@ -70,6 +74,12 @@ numbered weekly changelog (#0306 on 2026-09-04).
 - **Edge Rules** (changelog 2026-08-20): rules evaluated before traffic reaches a
   service, matching IP/CIDR, hostname, path and headers, with actions allow,
   block, challenge, redirect or cache override.
+- **Railway CDN**: Railway's own CDN ("Hikari", built in 30 days, blog
+  2026-06-04), on every plan at no extra cost, off by default and switched on per
+  service; a São Paulo region was added on 2026-09-11. This file left it out on
+  2026-09-30.
+- **Railway Authentication** (2026-10-08): a login in front of a service or a
+  whole environment; see "Since 2026-09-30".
 - Outbound IPv6 for all services (2026-04-24, off by default).
 
 ### Databases and services
@@ -81,7 +91,11 @@ numbered weekly changelog (#0306 on 2026-09-04).
   `railway postgres ha | pitr | pgbouncer` CLI to convert, scale, switch primary,
   restore to a timestamp and watch pool usage (changelog #0306, 2026-09-04).
 - **Redis HA** (Sentinel failover behind HAProxy) and **MySQL HA** in beta
-  (2026-08-20); conversion rewrites the project's variables for you.
+  (2026-08-20); conversion rewrites the project's variables for you. Since then:
+  one-click **Postgres major-version upgrades** (2026-09-11, missed here on
+  2026-09-30), **MySQL point-in-time recovery** (generally available 2026-10-01),
+  **MongoDB HA** in Priority Boarding (2026-10-01), and password rotation across
+  HA clusters (2026-11-05).
 - **Buckets**: S3-compatible object storage on the canvas, $0.015/GB-month with
   free egress.
 - **Functions**: single-file TypeScript services run on Bun.
@@ -134,7 +148,9 @@ numbered weekly changelog (#0306 on 2026-09-04).
   egress, notifying by email, in-app and webhook.
 - **Tracing**: "distributed tracing from Railway's edge through your services,
   with a built-in OpenTelemetry collector and automatic instrumentation" (features
-  page).
+  page). It is in preview: the dashboard's Traces page is behind Priority
+  Boarding (since 2026-09-25) and `railway trace` is open to everyone (since
+  2026-11-05). This line presented it as generally available on 2026-09-30.
 
 ### Security, auth, roles, SSO, audit
 
@@ -335,6 +351,14 @@ capacity is what they bought.
 
 ## Security record
 
+- **2026-10-20 to 22 — a breach of Railway's own systems**, in which environment
+  variables of up to 1.85% of workspaces were decrypted. "Since 2026-09-30" has
+  the detail.
+- **2026-03-30 — other users' pages served from cache.** For 52 minutes a CDN
+  configuration change cached GET responses on about 0.05% of domains that had
+  the CDN switched off, so responses meant for one signed-in user, without a
+  `Set-Cookie`, could be served to another (incident report, 2026-03-30). This
+  file missed it on 2026-09-30.
 - **No CVE or GitHub security advisory against Railway's platform or CLI was found**
   in the GitHub Advisory Database or NVD searches (2026-09-30). Searches for
   "railwayapp", "railway cli" and "nixpacks" returned dependency-level items only
@@ -355,6 +379,10 @@ capacity is what they bought.
 
 ## Against Skifity
 
+The Railway column was brought up to 2026-11-08. The Skifity column is as read on
+2026-09-30 at `1ae3276`, and "Since 2026-09-30" lists the rows it no longer
+describes.
+
 | Capability | Railway | Skifity (evidence) | Verdict |
 |---|---|---|---|
 | Deploy from Git, image, folder | GitHub, image, `railway up`, template | Git (GitHub, GitLab, Gitea), image, `skifity up` and a browser folder upload (`internal/api/webhook_handlers.go`, `internal/cli/up.go`, `internal/upload`). Written, never run on a cluster | Parity (Skifity supports more Git hosts) |
@@ -366,8 +394,8 @@ capacity is what they bought.
 | Custom domains and TLS | CNAME+TXT, automatic certs | cert-manager on first domain; free `sslip.io` address over HTTP (ADR-0015); optional wildcard domain for app subdomains (`internal/settings/settings.go:124`). Written | Parity |
 | TCP proxy | Yes | No: NodePort and LoadBalancer Services are forbidden by the namespace quota (`internal/kube/namespace.go:113-116`) | Absent in Skifity |
 | Edge firewall | Edge Rules (Aug 2026) | Per-app rules on IP, country, ASN, with and/or (`internal/edgerules`, `internal/guard`). Written, never through a live Traefik | Parity |
-| Password in front of an app | None found (Edge Rules can challenge or block, not ask for a password) | HTTP basic auth through Traefik from a bcrypt hash in the app's namespace, inherited by previews, admin-only to change (`internal/api/password_handlers.go`, `internal/kube/password.go`, commit `7865bc8`). Written | Skifity ahead |
-| Managed databases | Postgres (HA, PITR, PgBouncer), MySQL/Redis HA, Mongo, ClickHouse | PostgreSQL via CloudNativePG (replicated), Redis and MySQL single instance only (`internal/dbsvc/manifests.go:107-121`); no PITR, no pooler | Behind |
+| Password or login in front of an app | No password (Edge Rules can challenge or block). Since 2026-10-08, Railway Authentication: a Railway login in front of a service or a whole environment, inherited by environments forked from it, Enterprise on $5,000 a month of committed spend (on 2026-09-30 this row said "None found") | HTTP basic auth through Traefik from a bcrypt hash in the app's namespace, inherited by previews, admin-only to change (`internal/api/password_handlers.go`, `internal/kube/password.go`, commit `7865bc8`); no login with panel accounts. Written | Skifity ahead on a password for everyone; behind on a login |
+| Managed databases | Postgres (HA, PITR, PgBouncer, one-click major upgrades), MySQL (HA, PITR), Redis HA, Mongo (HA in Priority Boarding), ClickHouse | PostgreSQL via CloudNativePG (replicated), Redis and MySQL single instance only (`internal/dbsvc/manifests.go:107-121`); no PITR, no pooler | Behind |
 | Object storage | Buckets | MinIO, Garage, SeaweedFS as templates (`internal/templates/catalogue/minio.yaml` etc.), nothing first-class | Behind |
 | Volumes | Live resize, file browser, CoW backups daily/weekly/monthly | PVC, Recreate strategy, tar backups to S3 on a schedule, restore (`internal/api/api.go:309-316`, `internal/backup/volume.go`); no resize, no browser. Written | Behind on features, ahead on off-site copies |
 | Horizontal autoscaling | None built in | HPA on CPU/memory, scale to zero through KEDA (`internal/kube/manifests.go:362`, `internal/kube/scaletozero.go`). Written | Skifity ahead (on paper) |
@@ -377,7 +405,7 @@ capacity is what they bought.
 | Logs | Explorer, query language, 3–90 day retention | Live stream over SSE plus the previous container's log, filtered in the browser (`web/src/components/app/logs-tab.tsx:30-90`); nothing retained beyond the container | Behind |
 | Metrics | 30 days, per replica, deploy markers, dashboard | Current usage only, from metrics-server (`internal/kube/client.go:324-381`); no history, no charts | Behind |
 | Alerts on thresholds | Monitors on CPU/RAM/disk/egress | Seven events, none a threshold (`internal/notify/notify.go:41-47`) | Absent in Skifity |
-| Tracing | Built-in OTel collector | None | Absent in Skifity |
+| Tracing | Built-in OTel collector, in preview (dashboard behind Priority Boarding; `railway trace` for everyone since 2026-11-05) | None | Absent in Skifity |
 | Secrets | Sealing is opt-in | Every secret write-only on every surface, sealed per value with context (`internal/crypto`, `internal/api/apps_handlers.go`) | Skifity ahead |
 | SSO, roles, audit | SSO, RBAC, environment RBAC and access groups (Enterprise), audit logs | OIDC with PKCE for everyone, three roles, audit log (`internal/auth/oidc.go`, `internal/store/models.go:5-20`, `internal/api/api.go:519`); no per-environment protection | Parity; behind on environment protection |
 | Environments | Persistent, duplicate, sync | Create empty only (`internal/api/teams_handlers.go:429-468`); no duplicate, no sync | Behind |
@@ -391,7 +419,7 @@ capacity is what they bought.
 | Notifications | Email, in-app, webhooks | Telegram, Discord, webhook, email, plus plugin-provided kinds (`internal/notify`, ADR-0021). Written | Parity |
 | Private networking | WireGuard mesh, `*.railway.internal` | One namespace per environment, apps reach each other by Service name, default-deny between environments, WireGuard between nodes (`internal/kube/namespace.go:127-217`, ADR-0003); addresses not shown in the panel. Written | Parity on mechanism, behind on DX |
 | Servers and regions | Railway's regions, no servers | Your servers, one k3s cluster, added over SSH (`internal/provision`); multi-cluster out of scope (`docs/roadmap.md`) | Different model |
-| Blast radius of the vendor | A GCP suspension took every region down | Apps are served by Kubernetes; the panel is not in the request path (checklist item 14). Written | Skifity ahead (structurally) |
+| Blast radius of the vendor | A GCP suspension took every region down; a breach of Railway's systems decrypted variables of up to 1.85% of workspaces, about 100,000, and stopped every customer's builds for most of two days (2026-10-20 to 22) | Apps are served by Kubernetes; the panel is not in the request path (checklist item 14). Written | Skifity ahead (structurally) |
 | Team and cost | Unlimited seats on Pro, usage billing | Unlimited users, no billing (`docs/roadmap.md`, "A hosted version") | Different model |
 | Onboarding | Anonymous deploys, agent, suggested variables | Detection of framework *and* needs (databases, `.env.example`) before the first deploy (`internal/builder/needs.go`); browser folder upload; five languages | Parity |
 
@@ -603,6 +631,213 @@ Skifity forbids NodePorts on purpose (`internal/kube/namespace.go:113-116`).
   terminated legitimate databases. A panel run by its owner has no reason to
   stop that owner's workloads on a heuristic.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. The changelog's feed, the blog, the docs, the pricing page,
+two incident pages on status.railway.com and Hacker News (Algolia API) were read;
+GitHub only through its search API (repository endpoints were refused from this
+sandbox), and Trustpilot refused the request. A web search was not available.
+
+### Product
+
+- **Missed on 2026-09-30, from the three weeks before it.** One-click Postgres
+  major-version upgrades from 14–17 to any newer major, with a compatibility
+  report, a backup before and after, a few minutes of downtime and a limited
+  rollback window (2026-09-11); email forwarding for domains bought through
+  Railway (2026-09-11). **Sandboxes** generally available: Linux VMs for agents,
+  tests or untrusted code, with checkpoints, forks and the environment's private
+  network, managed from a TypeScript SDK, the CLI or the API (2026-09-17). **Free
+  VMs without an account**: `ssh railway.new` gives a 2 vCPU, 2 GB VM with coding
+  agents installed and a preview URL, 60 minutes to build and 24 hours to claim
+  it (2026-09-25).
+- **Databases.** MongoDB HA, a replica set behind HAProxy, in Priority Boarding;
+  MySQL point-in-time recovery generally available, a 7-day archive restored into
+  a separate service (both 2026-10-01). Regenerating a database's password or a
+  bucket's credentials redeploys every service that references them through
+  Railway variables, at their current deployment and without newer commits
+  (2026-10-30); for HA Postgres, MySQL and Redis the change is coordinated across
+  the cluster's members and proxies, with the old password restored if it fails
+  before it is committed (2026-11-05).
+- **Railway Authentication** (blog 2026-10-08, changelog 2026-10-09). An
+  identity-aware proxy puts a service's public domains, or every service of an
+  environment by default, behind a Railway login that only the team's members
+  pass, and environments forked from a protected one inherit it. Railway names
+  staging previews and internal tools as the use, and it needs the $5,000 a month
+  committed-spend tier.
+- **Webhooks** carry custom headers, stored encrypted and not shown again
+  (2026-10-01).
+- **Activity feed** filtered by service and by kind, with image auto-updates,
+  variable changes and volume operations now listed (2026-10-16); manually stopped
+  deployments are recorded with who stopped them (2026-11-05).
+- **Automatic security patches** (2026-10-30): services and functions affected by
+  a known CVE are redeployed on a patched image, and workspace admins are told in
+  the app and by email.
+- **Workspace tokens** (2026-11-05): admins see every token of the workspace, who
+  made it and when, and revoke any; creation and revocation are in the audit log.
+  Before, only a token's creator could see it.
+- **CLI and IaC.** `railway cron list` (recent runs with status, start, duration,
+  the schedule and the next run) and `railway cron run` (2026-10-16); `railway
+  trace` (2026-11-05); `railway redeploy --commit` for one deploy of one commit
+  (merged 2026-10-15); a guided move from `railway.json` to `.railway/railway.ts`
+  with `migrate`, `cutover`, `status` and `undo` (2026-10-16); CDN settings in the
+  IaC file; `--environment` on `config plan`, `apply` and `pull`. The docs still
+  give 2026-12-01 as the day Config as Code stops being read. On 2026-11-08 the
+  CLI has 629 stars and 166 open issues, Railpack 1,265 and 86, Nixpacks 3,557 and
+  97 (GitHub search API); 36 pull requests opened in the CLI since 2026-09-30 were
+  merged, most of them for IaC and the MCP.
+- **Elsewhere.** OpenRouter keys for Railway Agent in beta (2026-10-09); a
+  ChatGPT subscription as its model (2026-09-17, Priority Boarding).
+
+### Pricing
+
+- The per-second rates are unchanged on 2026-11-08. The page now also prices
+  Sandboxes and VMs, at $0.00001929 per vCPU-second and per GB-second while
+  running (about $50 per vCPU-month or GB-month), and lists what committed monthly
+  spend unlocks: $1,000 for HIPAA agreements; $2,000 for log history, RBAC, SSO and
+  audit logs; $5,000 for enterprise support and higher limits (and, by Railway's
+  blog, Railway Authentication); $10,000 for dedicated VMs. Whether the tiers
+  were on the page on 2026-09-30 was not recorded then.
+
+### Incidents and security
+
+- **2026-09-30, 07:35–07:40 UTC.** Every domain on Railway answered 404 to new
+  connections in every region, and private-network lookups failed, because a new
+  version of the routing control plane rolled out before the schema migration it
+  needed; the origin proxies treated a failed lookup as "this domain does not
+  exist" instead of keeping the last route they knew. The change was groundwork
+  for Railway Authentication.
+- **2026-10-20 to 22: a breach.** From the preliminary report (2026-10-22, updated
+  2026-10-26): an attacker after AI providers' API keys escalated privileges in
+  the build infrastructure, pulled encrypted environment variables, then reached
+  credentials for Railway's CI that decrypted artifacts holding more access, and
+  decrypted a subset of customers' variables. Railway puts it at "at most 1.85%
+  of all workspaces", about 100,000; it gave GitHub, GitLab, Anthropic, OpenAI,
+  OpenRouter, Stripe and others the keys it held so they could revoke them (for
+  some services all of them), revoked every Railway token, re-rolled the GitHub
+  App's installations, and asked everybody who signed up before 2026-10-21 to
+  rotate every secret. Running deployments stayed up; builds were stopped twice,
+  and the dashboard, API, CLI and support were down at times until 22:49 UTC on
+  2026-10-22. Builders moved from a multi-tenant design to single-tenant ones,
+  ahead of plan. New signups were still paused on 2026-10-26. The final report had
+  not been published on 2026-11-08.
+- What users said, in the Hacker News thread on the disclosure (603 points, 344
+  comments): keys "created just for railway were running up usage" hours before
+  the email, and "How is it possible to rotate keys if you disable deployments?
+  You're basically telling us to take our services offline" — a new value only
+  reached a running service through a deploy, and deploys were stopped.
+- **From 2026-11-04**, networks and security vendors blocked Railway's addresses
+  after a third party sent scanning traffic with forged Railway source addresses;
+  Railway found no tie to the breach, and the partial outage was still open on
+  2026-11-08.
+- **2026-11-03.** Primcloud's founder accused a Railway product engineer of trying
+  to break into Primcloud; Railway's CEO apologised in public, said the activity
+  looked like an agent "off the rails", and said Railway would ban external
+  testing that is not done by hand (RuntimeWire, from posts on X; what was done
+  and how far it got is not public).
+- The CLI's tracker has three RUSTSEC advisories against its `zip` dependency
+  open since 2026-10-17. OSV lists no advisory against Railway's own packages
+  (2026-11-08).
+
+### What users say
+
+- The CLI's tracker since 2026-09-30, on IaC: `config plan` refused with a project
+  token (#1270, #1333, #1334); `config apply` reports success but leaves build
+  settings the file no longer declares (#1327); `--confirm-destructive` skips a
+  planned bucket deletion and exits 0 (#1266); `config migrate` quietly turns
+  Dockerfile builds into Railpack (#1290); `postgres()` stores its password as an
+  unrendered template (#1304).
+- And on secrets: `railway up` uploads `.gitignore`d files such as `.env` when the
+  folder is not a Git repository (#1331); `railway connect --tunnel-only` prints
+  the database password unless asked not to (#1318); `railway variable list --kv`
+  prints values unquoted, so sourcing the output can run them (#1335).
+- "Show HN: Stackdome – An open source self-hostable Railway alternative on K8s"
+  (2026-10-22, 10 points) is a new project in Skifity's own category, not
+  researched here.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **Rows of "Against Skifity" that no longer describe Skifity.** Watch paths
+  (Phase 96; waiting for CI is still absent). TCP proxy: public TCP and UDP ports
+  (`62d2adb`). Edge firewall: rate limits too (`internal/edgerules`). Managed
+  databases: nine engines (`f4f9d09`), still one instance for all but
+  PostgreSQL, and no PITR, no pooler and no major-version upgrade (the database
+  routes in `internal/api/api.go` stop at resize, stop, start, password, import,
+  backup and restore). Metrics and threshold alerts (Phases 95 and 99). Logs: log
+  drains (`3731416`), still nothing kept in the panel. Environments: cloning
+  (`c09ffc9`), no sync. PR environments: optionally the whole environment, and a
+  seed command (Phase 107). Templates: 374 files. CLI: `db` with `connect`,
+  `password`, `import` and the rest (Phase 105, `6920a57`), `deploy --commit`.
+  MCP: served by the panel (Phase 87), 46 tools, databases, domains, ports and
+  backups among them. IaC: `skifity.yaml` with plan and apply (Phase 108). Notifications: Slack,
+  Mattermost, ntfy, Pushover, Teams and Gotify too (Phase 88, `faeecc1`). Reference
+  variables between apps and the canvas's app-to-app lines are still absent.
+- **Already there, against this period's releases.** Changing a database's
+  password gives every linked app the new connection string in a rollout and keeps
+  the old password working until they have it (`docs/databases.md`, "Changing the
+  password"). Each build runs its own rootless BuildKit, and only its token may
+  write its app's repository (ADR-0026): the single-tenant builder Railway moved
+  to under pressure. A build Job never receives the panel's keyring. A runtime
+  variable is a rollout, not a build (ADR-0007), so a key can be rotated while
+  builds are broken — what Railway's users could not do. `skifity up` leaves out
+  every `.env` and what `.gitignore` leaves out (`internal/upload/upload.go`), the
+  bug in #1331. The guard keeps its previous rules when a new rules file cannot
+  be read (`internal/guard/guard.go`), the opposite of Railway's 2026-09-30
+  failure.
+- **What the breach says about the category.** One hosted platform holding every
+  customer's keys made a single intrusion worth about 100,000 workspaces' secrets
+  and stopped everybody's deploys. A self-hosted panel holds one organisation's,
+  sealed with context by a keyring only that panel has. That is the argument for
+  Skifity's model, and only as strong as the panel's own security.
+- **The same as Railway: `skifity db connect` prints the password.** It shows the
+  connection URL with the password in it (`connectDatabase` in
+  `internal/cli/dbconnect.go`; `docs/cli.md` warns about CI logs), while
+  `skifity db password` prints one only with `--show-password`. A Railway user
+  filed the same behaviour as a bug (#1318). Print the URL with the password
+  masked, and the full one behind `--show-password`.
+- **New gap — what happened to a scheduled command** (as `dokku.md` found).
+  Railway shows each cron service's recent runs with status, start, duration and
+  next run, in the dashboard and now `railway cron list`. Skifity's `AppJob`
+  (`web/src/lib/types.ts`) has no last run, the `/jobs` routes have no list of
+  runs (`internal/api/api.go`), and no event fires when a run fails
+  (`internal/notify/notify.go`). Size M; no cluster for the code.
+- **New gap — a login in front of an app.** Railway Authentication, and Netlify's
+  private projects (`netlify.md`, "Since 2026-09-30", which has the proposal).
+  Railway sells it at $5,000 a month; Skifity's should be free.
+- **New gap — team tokens an admin can see.** Tokens are listed and revoked only
+  by their owner (`/me/tokens` in `internal/api/api.go`, `ListAPITokens(userID)`
+  in `internal/store/users.go`), so an admin can stop a member's token only by
+  removing the member. A team's tokens, with owner, scopes and last use, revocable
+  by an owner or admin and audited. Size S; no cluster.
+- **New gap — headers on a webhook channel.** The webhook kind sends one fixed
+  `X-Skifity-Secret` (`sendWebhook` in `internal/notify/notify.go`), so a receiver
+  that wants `Authorization: Bearer` needs a proxy in between; log drains already
+  take a named header (`internal/logdrain/logdrain.go`). The same header option
+  for webhooks, and an HMAC signature with a timestamp rather than the secret
+  itself. Size S; no cluster.
+- **New gap — filters on the activity page.** The audit API already filters by
+  action and target (`handleListAudit` in `internal/api/teams_handlers.go`); the
+  page (`web/src/pages/activity.tsx`) shows the last hundred events with no
+  filter. Size S; no cluster.
+- **New gap — a database's next major version.** Railway upgrades Postgres in
+  place with a compatibility report, a backup either side and a rollback window.
+  In Skifity a new major means a new database, a dump and `import` by hand.
+  PostgreSQL could use CloudNativePG's own offline major upgrade; the other
+  engines would go through a dump restored into a new database at the new
+  version, then a relink. Size L; needs a cluster.
+- **New gap — applying a fix that the catalogue already has.** Railway now
+  patches images with known CVEs on its own. Skifity scans every running image
+  nightly and says when a new critical appears (`internal/deploy/scan.go`), and
+  offers a template's update with a backup first (Phase 102), but never applies
+  one. An opt-in per app: "update automatically, after a backup, when the update
+  fixes a critical vulnerability". Size M; the rule without a cluster, the update
+  with one.
+- **Lessons for `skifity.yaml`, from Railway's tracker.** `apply` must say what it
+  did not converge rather than report success, a destructive step that was
+  skipped must exit non-zero, and a migration must never change the builder
+  silently. Worth a test each in `internal/blueprint`.
+
 ## Sources
 
 All read 2026-09-30 unless marked.
@@ -665,3 +900,34 @@ All read 2026-09-30 unless marked.
 - https://github.com/advisories/GHSA-cxm3-wv7p-598c (checked: unrelated to Railway)
 - GitHub API via repository search, `org:railwayapp` (stars and open issues for cli, railpack, nixpacks, railway-mcp-server, railway-skills)
 - Skifity: the files cited in the table, at commit `1ae3276`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://railway.com/changelog/rss.xml (entries from 2026-09-11 to 2026-11-05), in particular:
+  - https://railway.com/changelog/2026-09-11-one-click-postgres-major-version-upgrades
+  - https://railway.com/changelog/2026-09-18-railway-sandboxes
+  - https://railway.com/changelog/2026-09-25-free-vms-without-an-account
+  - https://railway.com/changelog/2026-10-02-mongodb-high-availability
+  - https://railway.com/changelog/railway-ios-auth-openrouter (2026-10-09)
+  - https://railway.com/changelog/2026-10-16-activity-feed-filters
+  - https://railway.com/changelog/2026-10-23-october-21-security-incident
+  - https://railway.com/changelog/2026-10-30-automatic-security-updates
+  - https://railway.com/changelog/2026-11-06-workspace-token-management
+- https://blog.railway.com/ (index), and:
+  - https://blog.railway.com/p/incident-report-sept-30-2026-routing-disruption
+  - https://blog.railway.com/p/railway-authentication-identity-aware-proxy (2026-10-08)
+  - https://blog.railway.com/p/security-disclosure-wednesday-october-21st
+  - https://blog.railway.com/p/preliminary-report-october-security-incident (2026-10-22, updated 2026-10-26)
+  - https://blog.railway.com/p/incident-report-march-30-2026-authenticated-user-data-cached
+  - https://blog.railway.com/p/railway-cdn (2026-06-04)
+- https://status.railway.com/incident/QH8L8B3E (the platform outage of 2026-10-21 to 23) and https://status.railway.com/incident/QBCLHG1V (network blocks, from 2026-11-04)
+- https://railway.com/pricing
+- https://docs.railway.com/config-as-code and https://docs.railway.com/infrastructure-as-code (the 2026-12-01 cutoff)
+- https://docs.railway.com/networking/cdn
+- https://docs.railway.com/guides/autoscale-horizontally (still no built-in autoscaler)
+- GitHub search API: `org:railwayapp` repositories (stars, open issues); `repo:railwayapp/cli` issues and merged pull requests created since 2026-09-30 (#1266, #1270, #1289, #1290, #1304, #1318, #1327, #1331, #1333, #1334, #1335, and the RUSTSEC issues #1301–#1303)
+- https://api.osv.dev/v1/query for `railwayapp` (crates.io), `@railway/cli` and `railway` (npm), and Railpack (Go): no advisories
+- https://hn.algolia.com/api/v1/search?query=railway (stories since 2026-09-30) and https://hn.algolia.com/api/v1/items/50188228 (the disclosure thread)
+- https://runtimewire.com/article/railway-cofounder-apologizes-after-employee-accused-of-trying-to-breach-primclou (2026-11-02, US Central time; from posts on X)
+- Not reachable from this sandbox: GitHub's repository endpoints, Trustpilot, Security Boulevard, and web search
+- Skifity: the files named under "Since 2026-09-30", read in this repository on 2026-11-08

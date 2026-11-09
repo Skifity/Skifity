@@ -41,8 +41,10 @@ Performance-2XL $1,500; Private-S $125 to Private-2XL $1,500 and Shield 20% more
 Fir dynos from $25 (1 CPU, 0.5 GB) — up to $1,000 for 16 CPU/32 GB in the rows
 read — all requiring a Private Space, whose own price is not on the pricing page.
 Postgres Essential-0 $5 (1 GB), Essential-1 $9, Essential-2 $20, then Standard,
-Premium, Private and Shield from $50 to $34,000/month; Key-Value Store from $3;
-Kafka from $100. **Adoption:** no current user or app figures were found in the
+Premium, Private and Shield from $50 to $34,000/month; Postgres Advanced (GA
+2026-10-06) from $150 (2 vCPU, 4 GB) to $40,000/month on the Common Runtime, 20%
+more in Private Spaces and 40% more in Shield, with 100 GB-month of storage
+included; Key-Value Store from $3; Kafka from $100. **Adoption:** no current user or app figures were found in the
 sources read; the "An Update on Heroku" thread on Hacker News drew 525 points and
 352 comments.
 
@@ -53,8 +55,9 @@ sources read; the "An Update on Heroku" thread on Hacker News drew 525 points an
 - `git push heroku main`, GitHub integration with automatic deploys, the Container
   Registry and `heroku.yml` Docker builds (**Cedar only** — "Building Docker
   images with `heroku.yml` and the `container` stack are unsupported in Fir").
-- **Buildpacks**: classic buildpacks on Cedar; **Cloud Native Buildpacks required**
-  on Fir. Stacks Heroku-22, -24 (default) and -26 (GA 2026-05-20).
+- **Buildpacks**: classic buildpacks by default on Cedar, with Cloud Native
+  Buildpacks as an opt-in `cnb` stack since 2026-09-03; **Cloud Native Buildpacks
+  required** on Fir. Stacks Heroku-22, -24 (default) and -26 (GA 2026-05-20).
 - **Procfile** process types: `web`, `worker`, any named process, and `release`.
 - **Release phase**: the `release` process runs in a one-off dyno "whenever a new
   release is created" — a build, a config var change, a pipeline promotion, a
@@ -89,7 +92,9 @@ sources read; the "An Update on Heroku" thread on Hacker News drew 525 points an
   month, no rollback, no followers); Standard (rollback 4 days, followers, forks,
   under 1 hour); Premium, Private, Shield (rollback 7 days, **high availability**,
   under 15 minutes). Dataclips, `pg:psql`, `pg:backups`, `pg:diagnose`, pgvector.
-- **Heroku Key-Value Store** (Redis) from $3; **Apache Kafka on Heroku** from $100;
+- **Heroku Key-Value Store** (Valkey: Valkey 9 the default since 2026-08-19,
+  Valkey 7 deprecated with end of life on 2027-02-19) from $3; **Apache Kafka on
+  Heroku** from $100;
   **Heroku Connect** to sync with Salesforce; **AppLink** to call Heroku apps from
   Salesforce.
 - **Elements Marketplace**: 200+ third-party add-ons (logging, APM, search, mail,
@@ -132,9 +137,10 @@ sources read; the "An Update on Heroku" thread on Hacker News drew 525 points an
 
 ### Security, auth, roles, SSO, audit
 
-- MFA; Heroku Teams with admin and member roles and per-app permissions;
-  pipeline permissions **View, Deploy, Operate, Manage**; SSO and audit trails on
-  Heroku Enterprise (no longer sold to new customers).
+- MFA; Heroku Teams with admin and member roles; fine-grained per-app and
+  pipeline permissions **View, Deploy, Operate, Manage**, Enterprise-only until
+  2026-08-20 and on every Heroku Team since; SSO and audit trails on Heroku
+  Enterprise (no longer sold to new customers).
 - **Heroku Shield**: HIPAA- and PCI-capable Private Spaces, dynos and Postgres at a
   20% premium.
 - Private Spaces with trusted IPs and network isolation.
@@ -520,6 +526,172 @@ Size S.
   a GitHub App is added, prefer short-lived installation tokens over stored user
   tokens.
 
+## Since 2026-09-30
+
+Read on 2026-11-08: the Dev Center changelog (its first two pages, back to
+2026-08-12) and the items named below, Heroku's blog feed and the posts named
+below, the pricing page, the "Heroku Generations" page, the status page's
+incidents API, and the git histories of `heroku/cli` and
+`heroku/heroku-mcp-server`, cloned without file contents (tags and
+`CHANGELOG.md` read). GitHub's API refused this session for repositories other
+than Skifity's, so stars and open issues were not read again, and the web search
+had no credits left. NVD and Hacker News were read through their APIs.
+
+### Product
+
+- **Heroku Postgres Advanced, generally available 2026-10-06.** A new tier on
+  new infrastructure built with AWS: compute apart from storage (100 GB
+  included, "200+ TB" possible), storage that grows and shrinks with the data,
+  4 GB and 2 vCPU up to 1,536 GB and 192 vCPU, PostgreSQL 16 to 18, a leader pool
+  and up to five named follower pools of 13 followers in all, each pool attachable
+  to its own app, storage quotas with "Warning" and "Critical" thresholds, and
+  scaling, high availability and credential changes "with zero app downtime".
+  Prices are in the corrected pricing above. The changelog item lists logical
+  replication, and CLI 11.11.0 (2026-10-01) manages it; the announcement puts
+  "native logical replication", server-side pooling, autoscaling, sleep mode,
+  global clusters and migration tooling on its roadmap. PostgreSQL 18 is now the
+  default on every tier (blog, 2026-10-07). It is the largest launch since the
+  sustaining-engineering announcement of 2026-02-06.
+- **Team Authorizations (2026-09-29; blog 2026-09-30).** Team admins create,
+  regenerate and revoke OAuth authorizations that act for a team rather than a
+  person, for CI and integrations; CLI 11.12.0 (2026-10-13) added `--team`. The
+  Platform API gained an OAuth Session resource for listing and deleting a
+  user's sessions (2026-10-21).
+- Shipped before 2026-09-30 and not recorded then (corrected above): per-app
+  View, Deploy, Operate and Manage permissions on every Heroku Team (2026-08-20);
+  Cloud Native Buildpacks on Cedar as an opt-in stack (2026-09-03); Valkey 9 on
+  Key-Value Store (2026-08-19), with Valkey 7's end of life moved to 2027-02-19
+  (2026-10-05); TLS 1.3 and HTTP/2 on `*.herokuapp.com` (2026-08-24).
+- **Patching without redeploys.** The Heroku-22, -24 and -26 base images were
+  updated on 2026-10-08, 2026-10-20 (twice), 2026-10-22 and 2026-10-28 and rolled
+  out over 48 hours with no redeploy: Cedar lays the slug over the newest base
+  image at each dyno start, and Fir rebases the built image onto it. Apps built
+  from a Dockerfile have to be rebuilt.
+- Otherwise maintenance: runtime releases throughout; Python 3.11 deprecated
+  (2026-10-26); Kafka 2.8 and 3.7 at end of life (2026-10-28) and Kafka moving
+  from ZooKeeper to KRaft from 2026-10-19; Claude Opus, Sonnet and Haiku 5.5 and
+  Fable 5.1 in Managed Inference and Agents (2026-10-14); payment methods on a
+  Stripe-hosted page (2026-11-04); SendGrid add-on users need a SendGrid
+  account of their own (from 2026-10-16).
+- **Fir is where it was.** The generations page, last updated 2026-09-11, still
+  lists dyno autoscaling, the Common Runtime, Heroku CI, internal routing, VPC
+  peering, VPN and router maintenance pages as "To Be Added". "We have a lot of
+  great updates coming later this year", with KubeCon on 2026-11-10 to 12
+  named (blog, 2026-10-07).
+- CLI v11.11.0 to v11.12.1 (2026-10-01 to 2026-10-22); 11.12.1 bundles a patched
+  Node.js. MCP server v1.2.10 to v1.2.13 (2026-10-01 to 2026-10-29): dependency
+  updates and a REPL fix only.
+- Unchanged on 2026-11-08: dyno, Essential Postgres, Key-Value Store and Kafka
+  prices.
+
+### Incidents
+
+One on the status page since 2026-09-30: Node.js builds failing at elevated
+rates because of an upstream dependency, 2026-10-28, from 10:55 to 15:59 UTC.
+
+### Security
+
+- No CVE names Heroku (NVD keyword "heroku", 2026-09-30 to 2026-11-08: none).
+- **PHP CVE-2026-109618 and CVE-2026-109619**, critical remote code execution in
+  PHP 5.4 through 8.5.11, published 2026-10-21. Heroku shipped PHP 8.2.35,
+  8.3.36, 8.4.27 and 8.5.12 the same day, rebuilt the end-of-life PHP 8.1.34 on
+  Heroku-22 with a backported fix, and asked PHP users to redeploy.
+- **The eMudhra private key compromise.** Heroku updated `ca-certificates` in
+  every stack with nothing for users to do, and told those whose libraries carry
+  their own roots (Go, Node.js, Ruby's Excon) to update them; CLI users were told
+  to update to 11.12.1 for its bundled Node (blog, 2026-10-29).
+
+### What users said
+
+- Quiet. On Hacker News since 2026-09-30, Heroku is mostly mentioned in passing:
+  "Crazy that Heroku with its head start has become abandonware" (2026-10-01);
+  one migration story, "From Heroku to Convox" (2026-11-03, 1 point). In the
+  "Northflank Breached" thread (2026-10-30) one comment put the self-hosting case
+  in a line: "Everyone knows Fort Knox has gold, and where it is, that's railway,
+  heroku. No one knows where my personal safe is".
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **eMudhra, in Skifity's terms.** The binary is built with Go 1.26.10
+  (`go.mod`), released on 2026-10-19 with the crypto/x509 denylist. An app's image
+  keeps the CA bundle and runtime it was built with until it is rebuilt. Every
+  deployed image is scanned again with Trivy every 12 hours and `app.vulnerable`
+  is sent (`internal/deploy/scan.go`, `internal/vulnscan`), which catches a
+  vulnerable PHP where the image's package database records it; the build-time
+  advisories cover Next.js and React only (`internal/builder/advisories.go`).
+  Nothing moves an image onto a patched base without a build, which a buildpack
+  platform can do and a Dockerfile one cannot; rebuilding without the cache is
+  new gap 3 in `render.md`.
+- **Postgres Advanced's storage quotas** warn before a database fills; Skifity
+  warns about a server's disk only (`render.md`, failure notifications).
+
+This file's gaps, against the code:
+
+- P0, Procfile and `app.json`: **closed** (Phase 100; a Procfile's worker lines
+  run as processes of the same build, Phase 106).
+- P1, promote: **closed** (Phase 103, `POST /api/apps/{app}/promote`).
+- P1, HTTP metrics and alerts: **closed.** Requests, errors and response times
+  per app (`internal/traffic`), thresholds on them (`internal/watch/traffic.go`)
+  and `app.alert`.
+- P1, OS patching: **half.** The hardening report says whether automatic
+  updates are on and whether a reboot is pending
+  (`internal/provision/hardening.go`); nothing applies updates or reboots servers
+  one at a time (still open in `coolify.md`).
+- P2, attach any service: **open.** Only a managed database can be linked after
+  it is made (`POST /api/databases/{id}/link`); a template's services are wired
+  to each other at install time only.
+- P2, an interactive one-off console: **open.** `skifity run` streams a one-off
+  command's output and reads no input; `skifity db connect` (Phase 105) is
+  Heroku's `pg:psql`, not its `run rails console`.
+- P2, a heartbeat: **open.** No setting sends one (`internal/settings`,
+  `internal/watch`).
+- P2, maintenance mode: **closed** (Phase 98).
+
+Rows of the table above that no longer describe Skifity:
+
+- **Procfile** and **`app.json`:** read (Phases 100 and 106).
+- **Maintenance mode:** answered by the guard (Phase 98).
+- **Managed Postgres** and **Redis:** nine engines, Valkey among them; stop,
+  resize, change the password, import a dump (Phase 112). Still no point-in-time
+  recovery, forks or followers.
+- **Add-ons:** 374 templates and a team's own catalogues (Phase 112).
+- **Metrics:** usage history and alerts (Phases 95 and 99) and traffic per app
+  (`internal/traffic`).
+- **OS patching:** the hardening report above.
+- **Roles and permissions:** a viewer role, members limited to projects, a team
+  that requires two factors, teams that follow the identity provider's groups
+  (Phases 85, 86, 91 and 92).
+- **Pipelines and promotion:** Phase 103.
+- **Review apps:** the whole environment, seeded, and started by hand (Phases 107
+  and 112).
+- **CLI:** about forty commands (`internal/cli/commands.go`).
+- **IaC:** `skifity.yaml` with plan and apply (Phase 108).
+- **MCP:** also served by the panel at `/api/mcp` (Phase 87), with more than
+  forty tools, `run_command` and `rollback_app` among them (`internal/mcpserver`).
+
+New gap:
+
+1. **Tokens that belong to the team.** *What:* an API token owned by a team
+   rather than a person, made, rotated and revoked by its admins, with a role and
+   scopes of its own and its own name in the audit log, so that a pipeline keeps
+   working when the person who made its token leaves and a member's departure
+   never has to be weighed against a CI outage. *Evidence:* Heroku's Team
+   Authorizations (2026-09-29); Render's new scoped keys are still a person's and
+   "can never exceed the permissions you already have" (2026-10-27). Skifity's
+   `APIToken` has a `UserID` (`internal/store/models.go`), a token acts through
+   its owner's membership (`membershipIn`, `internal/api/api.go`), and removing a
+   member deletes the membership only (`RemoveMember`,
+   `internal/store/teams.go`), after which every token that person made for the
+   team is answered as if the team did not exist. *Size:* M. *Without a
+   cluster:* entirely.
+
+Worth not copying, from this period: a database tier whose headline features
+(native logical replication, pooling, migration tooling) are on the roadmap of
+its own launch post; and patching that works only for apps built the platform's
+way, leaving Dockerfile users to notice for themselves.
+
 ## Sources
 
 All read 2026-09-30 unless marked.
@@ -562,3 +734,30 @@ All read 2026-09-30 unless marked.
 - https://www.darkreading.com/endpoint-security/heroku-cyberattacker-stolen-oauth-token-customer-account-credentials (via search results)
 - GitHub API via repository search, `org:heroku` (stars and open issues for cli, buildpacks, logplex, heroku-pg-extras)
 - Skifity: the files cited in the table, at commit `1ae3276`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://devcenter.heroku.com/changelog and https://devcenter.heroku.com/changelog?page=2 (items 2026-08-12 to 2026-11-05)
+- https://devcenter.heroku.com/changelog-items/3802 (Postgres Advanced GA, 2026-10-06)
+- https://devcenter.heroku.com/changelog-items/3815 (team authorizations, 2026-09-29) and https://devcenter.heroku.com/changelog-items/3841 (OAuth Session resource, 2026-10-21)
+- https://devcenter.heroku.com/changelog-items/3749 (fine-grained access for all Teams, 2026-08-20)
+- https://devcenter.heroku.com/changelog-items/3803 (Cloud Native Buildpacks on Cedar, 2026-09-03)
+- https://devcenter.heroku.com/changelog-items/3793 and https://devcenter.heroku.com/changelog-items/3794 (Valkey 9 GA and Valkey 7 deprecation, 2026-08-19, schedule updated 2026-10-05)
+- https://devcenter.heroku.com/changelog-items/3796 (`*.herokuapp.com` TLS 1.3 and HTTP/2, 2026-08-24)
+- https://devcenter.heroku.com/changelog-items/3829, 3840, 3842, 3847 and 3892 (stack updates, 2026-10-08 to 2026-10-28)
+- https://devcenter.heroku.com/changelog-items/3845 (PHP CVE-2026-109618 and CVE-2026-109619, 2026-10-21)
+- https://devcenter.heroku.com/changelog-items/3827, 3832, 3833, 3857, 3859, 3896 and 3899 (API docs, Kafka KRaft, Heroku AI models, Python 3.11, Kafka end of life, SendGrid, payments)
+- https://devcenter.heroku.com/articles/generations (last updated 2026-09-11)
+- https://www.heroku.com/blog/feed/ (posts to 2026-10-29)
+- https://www.heroku.com/blog/new-era-managed-databases-announcing-heroku-postgres-advanced/ (2026-10-06)
+- https://www.heroku.com/blog/october-2026-update-heroku-innovations-features/ (2026-10-07)
+- https://www.heroku.com/blog/introducing-team-authorizations/ (2026-09-30)
+- https://www.heroku.com/blog/securing-your-stack-recent-php-and-emudhra-updates-on-heroku/ (2026-10-29)
+- https://www.heroku.com/pricing/ (dynos, Postgres Advanced, Key-Value Store, Kafka)
+- https://status.heroku.com/api/v4/incidents (incident 2966, 2026-10-28)
+- https://github.com/heroku/cli (git tags and `CHANGELOG.md`, v11.11.0 to v11.12.1)
+- https://github.com/heroku/heroku-mcp-server (git tags and `CHANGELOG.md`, v1.2.10 to v1.2.13)
+- https://services.nvd.nist.gov/rest/json/cves/2.0 (keyword "heroku", none; CVE-2026-109618)
+- https://go.dev/doc/devel/release (go1.26.10, 2026-10-19)
+- https://hn.algolia.com/api/v1/search and https://hn.algolia.com/api/v1/search_by_date (stories and comments since 2026-09-30; https://news.ycombinator.com/item?id=50346247 and comments 49917588 and 50310155)
+- Skifity, for "For Skifity": `go.mod`, `internal/store/models.go`, `internal/store/teams.go`, `internal/api/api.go`, `internal/api/teams_handlers.go`, `internal/deploy/scan.go`, `internal/vulnscan`, `internal/builder/advisories.go`, `internal/provision/hardening.go`, `internal/traffic`, `internal/watch/traffic.go`, `internal/cli/commands.go`, `internal/mcpserver`, `docs/progress.md`

@@ -34,12 +34,15 @@ Apache 2.0 until 2025-07-25, when PR #5719 replaced it with the "Sealos
 Sustainable Use License" (the README: internal business and personal
 non-commercial use allowed, "providing cloud services to third parties"
 prohibited) — source-available, not open source, although the homepage FAQ
-still answers "Is Sealos open source?" with "Yes". **Pricing (hosted, read
+still answers "Is Sealos open source?" with "Yes". In October 2026 the App
+Store, App Launchpad and Database frontends left the public repository for one
+that is not public (see "Since 2026-09-30"). **Pricing (hosted, read
 2026-09-30):** fixed monthly resource packages — Starter $34 ($7 for a first
 purchase), Hobby $70 ($25 first purchase), Standard $128, Pro $512, Team $2,030,
 Enterprise $12,451 — plus a 7-day free trial with no card. **Maturity:** the
 last stable release is v5.1.1 (2025-11-17); six release candidates of v5.1.2
-followed, the latest (rc6) on 2026-08-16. **Adoption:** 18,367 stars, 2,481
+followed, the latest (rc6) on 2026-08-16, and there was still no newer tag on
+2026-11-08. **Adoption:** 18,367 stars, 2,481
 forks and 103 open issues on GitHub (GitHub API, 2026-09-30); "87,000 users" on
 Sealos Cloud (Sealos, Hacker News, 2025-05-21); "over 6,000 database instances
 across four regions" (KubeBlocks case study, figures as of December 2024);
@@ -257,13 +260,15 @@ product — an inference from its history, not a measured split.
   publicly available information about your company, other than that it appears
   to be held by a Chinese entity called Labring." Several commenters called the
   post LLM-written.
-- **Self-hosted installs that do not come up.** Open issues in 2026 alone:
+- **Self-hosted installs that do not come up.** Issues in the tracker:
   #6741 "sealos-cloud failed to initialize admin user" (2026-03-01), #6847
   "cannot log in after a self-signed install with install-v2.sh" (2026-03-27),
   #6902 "sealos-cloud unreachable after install" (2026-04-22), #6591 install
   failed on WSL Ubuntu 24.04, #6424 `sealos run` hangs syncing images to the
   5050 registry. Upgrades: #5657 "upgrade from 1.30.x to 1.31.x fails" (open
-  since 2025-06-19); #7326 "support k8s >1.33" (2026-09-13).
+  since 2025-06-19); #7326 "support k8s >1.33" (2026-09-13). On 2026-11-08
+  #6741 was closed (last updated in March), #6902, #6591 and #6424 had been
+  closed in October, and #6847, #5657 and #7326 were open (shields.io).
 - **Heavy for a small server.** 8 CPU/16 GB per node recommended, a wildcard
   domain required, and the Chinese-only self-hosting docs put it out of reach of
   the single-VPS user.
@@ -285,7 +290,9 @@ repository's security advisories page, read 2026-09-30):
 | CVE-2023-36815 / GHSA-vpxf-q44g-w34w | 2023-07-03 | High (7.3) | Billing permission flaw: users controlled the `sealos.io/v1/Payment` resource and could recharge any amount for 1 RMB. |
 
 Nothing since 2023 in NVD (keyword "sealos": 2 results) or the GitHub advisories
-page. A `SECURITY.md` was only requested in August 2025 (issue #5846). Worth
+page. A `SECURITY.md` was requested in August 2025 (issue #5846) and added on
+2025-09-01 (#5894): reports go privately to `security@sealos.io` or through
+GitHub's private reporting, 5.x is supported and 4.x is best-effort. Worth
 noting for the "not copy" list: the documented MCP authentication puts a full
 kubeconfig in a URL (and suggests pasting it into a public online encoder), and
 the install docs show a fixed default admin password. Neither is a CVE; both are
@@ -295,7 +302,10 @@ the kind of thing that becomes one.
 
 Skifity statuses follow `docs/checklist.md`: almost everything cluster-facing is
 **Written, never run** (ADR-0010). A verdict of "Skifity ahead" on a Written
-feature means ahead on paper.
+feature means ahead on paper. The Skifity column is Skifity on 2026-09-30.
+Since then it has been released (v0.1.0 on 2026-10-06, v0.1.1 on 2026-10-21),
+the `Cluster` workflow runs it on a real k3s on every push to `main`, and
+several rows marked "Behind" have been closed; "Since 2026-09-30" says which.
 
 | Capability | Sealos | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -496,6 +506,128 @@ agent skills, whole-stack import, and seeing what an app costs.
   that a missing translation fails the build is the fix, and it applies to
   documentation as much as to the UI.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and web pages refused this sandbox, so
+labring/sealos, labring/sealos-skills and labring-actions/templates were cloned
+instead, counts and issue states came from shields.io, and the issue tracker
+itself was not read.
+
+### Releases and the repository
+
+- **No release.** The newest tag is still v5.1.2-rc6 (2026-08-16) and the last
+  stable one v5.1.1 (2025-11-17): 356 days without a stable release on
+  2026-11-08. Work lands on `main` (37 commits since 2026-09-30, from seven
+  people) and is backported to `release-v5.1` (37 commits).
+- **Three apps left the public repository.** The App Store was removed from it
+  on 2026-10-08 (#7317: "BREAKING CHANGE: Sealos no longer builds or installs
+  the Template app store; use sealos-apps/template"), App Launchpad and the
+  Database frontend on 2026-10-14 (#7352, #7354), and their monitors on
+  2026-10-22 (#7395). `frontend/providers` now holds only `costcenter` and
+  `license`. `sealos-apps/template` could not be reached (git asks for
+  credentials, as GitHub does for a private or missing repository, and
+  raw.githubusercontent.com answers 404; 2026-11-08). The homepage still says
+  "Source-available core 100%" and "Yes. Sealos is open source". The template
+  files themselves are still public in labring-actions/templates, with five
+  commits since 2026-09-30, among them a PostgREST template (2026-11-05).
+- **The web desktop became an OAuth server.** Native clients sign in with the
+  device grant or with an authorization code and PKCE through a loopback
+  callback, and get refresh tokens that rotate on every use, lapse after 30
+  days unused, and revoke the whole session when a used one is replayed
+  (`frontend/desktop/docs/oauth-authorization-code.md`; backported to
+  release-v5.1 as #7368, 2026-10-17). A built-in public client called "Sealox"
+  was registered for both grants (#7392, 2026-10-20), with endpoints for a
+  user's workspaces and roles (#7367) and a workspace's quota (#7402). The
+  commits point to a `sealox/sealox` repository that is not public; what Sealox
+  is could not be established here.
+- **The installer.** `sealos` gained a standalone control-plane mode (#7344,
+  2026-10-28), and the Clusterfile became the authoritative record for it after
+  a recovery journal had deadlocked any run that failed halfway (#7423,
+  2026-10-31). Sealos Cloud's components became one `sealos-cloud` cluster image
+  (#7390, 2026-10-20). Kubernetes newer than 1.33 is still a request (#7326).
+- **Sign-up plumbing.** Invitation codes and first-login rewards (#7359,
+  2026-10-16); Google Analytics events through Tag Manager, with website
+  visitors linked to app accounts through the OAuth hand-off (#7421,
+  2026-10-30); Rybbit tracking (#7366). It serves Sealos Cloud's funnel; whether
+  a self-hosted desktop sends anything depends on its configuration, which was
+  not checked.
+- Sealos Skills has no commit since 2026-09-28, and the blog no post since
+  2026-09-22 (RSS).
+- The docs are as they were: the MCP page still has people URL-encode a
+  kubeconfig with "Method 1: Online Tool (Easiest)", and the English
+  self-hosting pages still carry a Chinese title and no body
+  (sealos.io/llms.txt, 2026-11-08).
+
+### Pricing and adoption
+
+- Pricing is unchanged (2026-11-08): Starter $34 ($7 for a first purchase),
+  Hobby $70 ($25), Standard $128, Pro $512, Team $2,030, Enterprise $12,451, a
+  7-day trial. The Railway comparison on the page says it was verified on
+  2026-08-21.
+- About 18k stars and 2.5k forks, 34 open issues and 25 open pull requests
+  (shields.io, 2026-11-08): 59 together, against 103 on 2026-09-30. The
+  homepage still says "200,000+ developers and teams". Hacker News has no story
+  or comment naming Sealos since 2026-09-30 (Algolia API).
+
+### Security
+
+- No new CVE or advisory. NVD keyword "sealos" still returns the two 2023 CVEs,
+  and OSV the two 2023 GHSAs (2026-11-08).
+- Three hardening fixes landed with no advisory. Admin kubeconfigs are no
+  longer copied to every node, only kept on the first master (#7335,
+  2026-10-08). The desktop refuses to issue, read or rotate the `admin` user's
+  kubeconfig (#7288, 2026-10-30). And #7426 (2026-11-02) closed a privilege
+  escalation in the user controller: every User owns the ServiceAccount
+  `user-system/<name>`, so a User named like an existing one,
+  `user-controller-manager` for instance, "made the reconciler adopt that
+  identity", and the User's kubeconfig "inherited its privileges". The fix
+  rejects reserved names, refuses to adopt a ServiceAccount the User does not
+  control, and replaces the controller's `groups=*,resources=*,verbs=*` grant
+  with explicit rules. Its error message is kept terse on purpose, so as not to
+  describe the attack to the tenants it guards against.
+- Go moved to 1.26.10 for CVE-2026-111943 in `crypto/x509` (#7407,
+  2026-10-22).
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- Of this file's gaps, four are closed: `skifity db connect` (Phase 105,
+  `internal/cli/dbconnect.go`), a Compose file as one stack (Phase 101),
+  MongoDB among nine engines (`internal/dbsvc/engine/engine.go`), and a team's
+  own certificates (`internal/kube/owncert.go`, `internal/cli/certs.go`). Three
+  are still open: agent skills (no `SKILL.md` and no skills command in
+  `internal/cli`), an app's cost in money (no price anywhere in
+  `internal/store`), and live usage on the project canvas (`CanvasNode` in
+  `web/src/lib/types.ts` has a status and no usage).
+- From the table, these now exist: the remote MCP endpoint (Phase 87), usage
+  history and alerts (Phase 95), a read-only role (Phase 85), and declarative
+  config with plan and apply (`skifity.yaml`, Phase 108).
+- Already there, against this period's Sealos fixes. #7426's class, a name a
+  user chooses that spells an identity the platform owns, is what
+  `NamespaceFor` guards against: an environment whose namespace would be the
+  panel's, a component's or the cluster's gets an `env-` prefix
+  (`ReservedNamespace` in `internal/kube/naming.go`), and a namespace without
+  Skifity's `managed-by` label is not deleted (`internal/kube/client.go`).
+  Skifity gives nobody a kubeconfig (nothing in `internal/api` or
+  `web/src/pages` serves one), and the panel's own cluster-admin is a recorded
+  decision (ADR-0014). `go.mod` is already on Go 1.26.10.
+- **New gap — sign the CLI in from the browser.** Sealos's native clients now
+  sign in with the device grant or a loopback callback with PKCE. `skifity
+  login` asks the person to create a token under Account, then Tokens, and
+  paste it (`cmdLogin` in `internal/cli/commands.go`). Better: `skifity login`
+  opens the panel on a page that shows the account and what the CLI will be
+  allowed to do; the person approves; the CLI receives a token with the scopes
+  chosen, named after the machine and listed under Account with its last use. A
+  server with no browser gets a device code to type in on another screen. It
+  needs the same authorisation server as Openship's gap 1, OAuth for the MCP
+  endpoint (`openship.md`), so the two are one piece of work. Size M; no
+  cluster needed.
+- Two more things not to copy, from this period: taking the source of apps out
+  of the public repository one at a time while the homepage still says
+  "Source-available core 100%"; and growth analytics in the product's own
+  frontend, where Skifity "never phones home" (`README.md`).
+
 ## Sources
 
 All read 2026-09-30.
@@ -526,3 +658,18 @@ All read 2026-09-30.
 - https://news.ycombinator.com/item?id=32504992 (installer, 2022)
 - https://dev.to/carsonyang/sealos-cloud-operating-system-simplicity-affordability-and-liberation-in-cloud-management-2ld8
 - Skifity sources cited inline, read in this repository on 2026-09-30.
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://github.com/labring/sealos, cloned (main at 871f713d, 2026-11-06, and `release-v5.1`): tags, commits since 2026-09-30 and the messages of #7288, #7317, #7335, #7344, #7352, #7354, #7359, #7366, #7367, #7368, #7390, #7392, #7395, #7402, #7407, #7421, #7423 and #7426; `frontend/desktop/docs/oauth-authorization-code.md`; `SECURITY.md` (added 2025-09-01 in #5894); `README.md`; `frontend/providers` on 2026-09-30 and on 2026-11-08
+- https://github.com/labring/sealos-skills, cloned (last commit 2026-09-28)
+- https://github.com/labring-actions/templates, cloned (five commits since 2026-09-30)
+- `git ls-remote` and raw.githubusercontent.com for sealos-apps/template, sealos-apps/applaunchpad, sealos-apps/dbprovider and sealox/sealox (none reachable)
+- https://sealos.io/ (homepage, comparison table, FAQ)
+- https://sealos.io/pricing
+- https://sealos.io/rss.xml (no post after 2026-09-22)
+- https://sealos.io/llms.txt (MCP authentication, the self-hosting pages)
+- https://img.shields.io/ JSON badges for labring/sealos: stars, forks, open issues, open pull requests, and the state of #6741, #6847, #6902, #6591, #6424, #5657, #7326 and #5846
+- NVD API keyword search "sealos" (2) and "labring" (0); OSV API query for `github.com/labring/sealos` (2)
+- https://hn.algolia.com/api/v1/search_by_date?query=sealos, filtered to after 2026-09-30 (nothing)
+- Skifity, for "For Skifity": `internal/cli/commands.go` (`cmdLogin`), `internal/kube/naming.go`, `internal/kube/client.go`, `internal/dbsvc/engine/engine.go`, `internal/kube/owncert.go`, `web/src/lib/types.ts`, `deploy/panel.yaml`, `go.mod`, `README.md`, `docs/decisions.md` (ADR-0014), `docs/progress.md`, `docs/research/competitors/openship.md`

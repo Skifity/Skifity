@@ -22,8 +22,9 @@ guides target "10 engineers and no platform team"), in regulated industries
 (fintech, healthcare, insurtech) and, since 2025, for teams letting AI coding
 agents deploy. **Architecture:** a hosted, proprietary control plane (console,
 API, `api.qovery.com`); in each cluster a Qovery agent and a shell agent that
-connect **outbound** to the API (only 80/443 inbound for apps), plus
-ingress-nginx, cert-manager, external-dns and metrics-server if absent; the
+connect **outbound** to the API (only 80/443 inbound for apps), plus a
+Gateway API ingress (Envoy Gateway, the default since May 2026; ingress-nginx
+before it), cert-manager, external-dns and metrics-server if absent; the
 open-source **Qovery Engine** (Rust, GPL-3.0, 2,466 stars on 2026-09-30)
 executes deployments by combining Terraform, Helm and `kubectl`; managed
 clusters autoscale nodes with Karpenter; observability (the paid "Observe"
@@ -37,8 +38,12 @@ a 4 vCPU/8 GB builder, preview environments, 30-day audit log; Enterprise is
 custom (BYOK, self-hosted control plane, custom roles, SSO, policy-as-code,
 HIPAA/HDS/ISO 27001/DORA package); add-ons: Observe $299 per cluster per month,
 a larger builder $150/month. 14-day trial, no free plan. AI agents "don't
-consume user seats". **Maturity and adoption:** a changelog every two weeks
-(latest 2026-09-23); "+200 companies" and "4.8 on G2 with +80 reviews" (pricing
+consume user seats". **By 2026-11-08 this had changed again** (see "Since
+2026-09-30"): Business became Scale at the same price with up to 25 users,
+Starter ($299) and Growth ($899) were added below it, and a Free plan runs on a
+cluster the customer already operates. **Maturity and adoption:** a changelog
+every two weeks (latest 2026-09-23 on that day, 2026-11-04 on 2026-11-08);
+"+200 companies" and "4.8 on G2 with +80 reviews" (pricing
 page, 2026-09-30); 4.7/5 from 69 G2 reviews syndicated to AWS Marketplace (read
 2026-09-30); 40+ case studies; **$13M Series A led by IRIS on 2025-09-30**
 (Tech.eu), after a $4M seed in 2021. One piece of history matters for Skifity:
@@ -74,9 +79,14 @@ significant resources" (Qovery changelog, 2024-11-05).
 
 - Automatic HTTPS through Let's Encrypt; one CNAME per custom domain; wildcard
   domains for environments; custom preview URLs through the CLI.
-- ALB controller on AWS with advanced settings; ingress-nginx elsewhere;
-  documented rate limiting, IP-header authorization and egress filtering
-  through a Squid proxy; static egress IPs on EKS and GKE.
+- ALB controller on AWS with advanced settings; elsewhere Envoy Gateway
+  (Gateway API), the default for non-production clusters since 2026-05-04 and
+  for production since 2026-05-18, with Qovery's support for the community
+  ingress-nginx ended on 2026-08-31 and its removal from every cluster planned
+  for mid-November 2026 (this line said "ingress-nginx elsewhere" on
+  2026-09-30, which was already out of date); documented rate limiting and
+  IP-header authorization (both guides still written for NGINX on 2026-11-08),
+  egress filtering through a Squid proxy; static egress IPs on EKS and GKE.
 - Qovery patched ingress-nginx for CVE-2025-1974 across all managed clusters in
   about a day (changelog, 2025-03-26) and told self-managed users to upgrade
   themselves.
@@ -86,6 +96,10 @@ significant resources" (Qovery changelog, 2024-11-05).
 - PostgreSQL, MySQL, MongoDB, Redis, in two modes: **container** (one instance
   with a volume, for development) or **managed** (RDS, Cloud SQL, Azure
   Database, Scaleway — the cloud's backups and maintenance windows apply).
+  Since 2026-10-07 a new cloud-managed database can only be made from a
+  blueprint (databases made in the old managed mode keep running), and since
+  2026-10-22 "Create new service" no longer offers container databases; a
+  database template still makes one.
 - **Blueprints** (2026): a versioned catalogue (`Qovery/service-catalog`) of
   Terraform or Helm templates — RDS PostgreSQL 14–17, RDS MySQL, ElastiCache
   Redis/Valkey, Memorystore, Scaleway databases, MSK, RabbitMQ, S3, CloudFront,
@@ -124,7 +138,9 @@ significant resources" (Qovery changelog, 2024-11-05).
 
 - Included: live application logs, live metrics, service status, deployment
   logs and history (clusters got the same history on 2026-09-23).
-- **Observe (paid, $299 per cluster per month, "not yet self-service"):**
+- **Observe (paid, $299 per cluster per month, "not yet self-service"; on
+  2026-11-08 $3,588 per cluster per year, included on one cluster in Growth and
+  Scale, while the docs still say "not yet self-service"):**
   Prometheus (7 days) + Thanos (15 days raw, 30 days downsampled), Loki with
   **12-week** log retention, Kubernetes events, P50/P90/P99 latency, 5xx/499
   rates per endpoint, automatic error-log counting, alerts. Data stays in the
@@ -136,13 +152,16 @@ significant resources" (Qovery changelog, 2024-11-05).
 - Five built-in roles — Owner, Admin, DevOps, Billing Manager, Viewer — plus
   custom roles scoped to projects and clusters (unlimited custom roles are
   Enterprise).
-- SSO (SAML and OIDC) on Enterprise.
+- SSO (SAML and OIDC) on Enterprise; on 2026-11-08 also a paid add-on on
+  Growth and Scale.
 - API tokens with roles; **API Policy Tokens (beta)** that constrain a
   credential's allowed operations whatever client uses it.
 - Audit logs of every API call with the tool used (console, Terraform, Git
   push), a JSON view of the post-change object, filters; retention 30 days on
-  Business, custom on Enterprise (the docs still list 3 and 7 days for "User"
-  and "Team" plans that the pricing page no longer sells).
+  Business, custom on Enterprise (on 2026-09-30 the docs still listed 3 and 7
+  days for "User" and "Team" plans that the pricing page no longer sold). On
+  2026-11-08 it is 7, 15 and 30 days on Starter, Growth and Scale, and the docs
+  point to the pricing page instead of naming plans.
 - External secrets from AWS Secrets Manager, Parameter Store, GCP Secret
   Manager and Doppler; variables can be files.
 - SOC 2 Type II and GDPR on Business; HIPAA, HDS, ISO 27001 and DORA packages
@@ -189,9 +208,11 @@ significant resources" (Qovery changelog, 2024-11-05).
   `demo` (a local k3s-in-Docker cluster, "not intended for production").
 - **AI (2025–2026):** a remote MCP server at `mcp.qovery.com/mcp`, OAuth,
   **read-only by default** (write needs `read_write=true` on the URL *and* a
-  console setting); eight Agent Skills (`qovery`, `-onboard`, `-deploy`,
-  `-troubleshoot`, `-optimize`, `-speedup`, `-preview`, `-terraform`) for 14
-  named agent hosts; an AI Copilot (beta) in the console and in Slack; a
+  console setting); eleven Agent Skills (`qovery`, `-onboard`, `-deploy`,
+  `-troubleshoot`, `-optimize`, `-speedup`, `-preview`, `-terraform`, and
+  `-policy-token`, `-signup` and `-assess`, added on 2026-08-18, 2026-08-21
+  and 2026-09-19, which this list missed on 2026-09-30) for 14 named agent
+  hosts; an AI Copilot (beta) in the console and in Slack; a
   "Securing AI agent access" guide with a Claude Code allowlist for the CLI;
   **Agent Tasks** (open beta 2026-09-23): Claude or Bedrock agents run as
   services in the customer's cluster, triggered by cron or webhook, in place or
@@ -225,7 +246,10 @@ significant resources" (Qovery changelog, 2024-11-05).
 - Two onboarding paths: "Install the Qovery Skill ... Say 'Deploy my
   application with Qovery'" (recommended for new users), or the console.
 - Cluster creation on a connected cloud account (IAM permissions documented per
-  cloud); BYOK needs 4 CPUs and 8 GB free and "is for Kubernetes experts only".
+  cloud); BYOK needed 4 CPUs and 8 GB free and "is for Kubernetes experts only"
+  on 2026-09-30. On 2026-11-08 it needs Kubernetes 1.31 or later and a node
+  with 4 vCPU and 8 GiB free for the builder ("A 4 vCPU node is not enough"),
+  and the experts-only label is gone.
 - Web shell into running containers from the console (since April 2024).
 - A month (Business) or three (Enterprise) of onboarding with a solution
   engineer; migration funding "up to $300k credits" through cloud partners.
@@ -254,7 +278,9 @@ significant resources" (Qovery changelog, 2024-11-05).
   free plan until August 2022, then per active user "starting from
   $49/month/user" (Qovery blog, 2022-08-18), then User/Team/Business tiers, and
   in 2026 a single $2,999/month Business floor with no free plan — the
-  audit-log docs still describe the retired "User" and "Team" plans.
+  audit-log docs still described the retired "User" and "Team" plans on
+  2026-09-30. Within six weeks it changed again, to Free, Starter, Growth,
+  Scale and Enterprise (see "Since 2026-09-30").
 - **Builds slower than Heroku.** "build times a little bit longer than that"
   compared with Heroku's sub-minute builds (2025-04-18).
 - **Abstraction limits.** "trade offs if there are specific Kubernetes features
@@ -267,7 +293,8 @@ significant resources" (Qovery changelog, 2024-11-05).
   methodologies are not documented well" (2025-06-20); "we can't define Env Vars
   in the UI for self-managed charts" (2025-06-06).
 - **Setup is still technical.** "Some setup parts are technical" (2025-09-01);
-  BYOK is labelled "For Kubernetes Experts Only".
+  BYOK was labelled "For Kubernetes Experts Only" on 2026-09-30 (no longer on
+  2026-11-08).
 - **A crowded, hard market.** On Hacker News the founder of Digger, a similar
   "DX platform for your cloud account", warned in 2023 that "20+ other
   passionate teams" had chased the same idea; Qovery survived it by moving up
@@ -288,7 +315,10 @@ significant resources" (Qovery changelog, 2024-11-05).
 - **Supply chain handled well:** the ingress-nginx CVE-2025-1974 (CVSS 9.8) was
   patched on all managed clusters between 09:00 on 2025-03-24 and 2025-03-25,
   with a public timeline. Ingress-nginx itself was retired by Kubernetes in
-  March 2026, and Qovery still installs it for BYOK clusters.
+  March 2026. Qovery made Envoy Gateway the default in May 2026, ended its
+  ingress-nginx support on 2026-08-31, and installs Envoy Gateway on BYOK
+  clusters; this sentence said on 2026-09-30 that Qovery still installed
+  ingress-nginx for BYOK clusters, which was already out of date.
 - **Posture:** SOC 2 Type II; CodeQL, secret scanning and Dependabot on their
   repositories (Qovery security page); agents reach out to the API rather than
   the API reaching into clusters; read-only-by-default MCP; the CLI install
@@ -304,7 +334,7 @@ paying customers; Skifity's describes code.
 | Capability | Qovery | Skifity (evidence) | Verdict |
 |---|---|---|---|
 | Where it runs | Hosted control plane; your EKS/GKE/AKS/Kapsule or any K8s | One binary inside the k3s cluster it installs on your servers (ADR-0013) | Different category |
-| Minimum cost | $2,999/month plus the cloud bill | Free; a 1 GB VPS; panel 35 MiB idle (`docs/performance.md`) | Skifity ahead |
+| Minimum cost | $2,999/month plus the cloud bill on 2026-09-30; on 2026-11-08 $0 on a cluster you already run (Free: 3 users, 1,000 deployment minutes a month, a node with 4 vCPU and 8 GiB free for builds), $299/month for one cluster Qovery manages | Free; a 1 GB VPS; panel 35 MiB idle (`docs/performance.md`) | Skifity ahead |
 | Git → build → deploy | Built-in CI, GitHub/GitLab/Bitbucket | In-cluster Railpack/Nixpacks/Dockerfile Job, GitHub/GitLab/Gitea (`internal/builder`, `internal/gitsrc`); Written | Parity (Bitbucket vs Gitea) |
 | Build without a Dockerfile | Agent Skill writes one | Railpack detection, framework detection before the first build (`internal/builder/detect.go`) | Skifity ahead |
 | Build-time variables | Since 2026-09: `ARG`, or secret mounts never written to a layer | Since earlier; but values, including secrets, go as plaintext build args into the build Job (`internal/builder/job.go:452`, `:552`) | Parity in reach; behind on secret handling (see P1) |
@@ -337,10 +367,10 @@ paying customers; Skifity's describes code.
 | IaC | Terraform provider and exporter | Export to JSON + Kubernetes objects, one way (`internal/cli/export.go`) | Behind |
 | CLI | Broad, including `shell` and `port-forward` | Broad, `--json` everywhere, CI by env vars (`internal/cli`); no shell by decision (`docs/roadmap.md`) | Parity |
 | MCP | Remote, OAuth, read-only by default | Local stdio, token-scoped, errors with cause/impact/fix (`internal/mcpserver/server.go`); no read-only mode | Mixed |
-| Agent skills | Eight skills for 14+ hosts | None | Absent in Skifity |
+| Agent skills | Eleven skills for 14+ hosts | None | Absent in Skifity |
 | In-cluster AI agents | Agent Tasks, AI Copilot | None; `llms.txt`, copy-for-assistant errors | Absent in Skifity (by fit) |
 | Multi-cluster / multi-cloud | Yes | One panel, one cluster, by decision (`docs/roadmap.md`) | Different by design |
-| Existing cluster (BYOK) | Yes, any 1.24+ | "Not yet" (`docs/faq.md:81-83`) | Behind |
+| Existing cluster (BYOK) | Yes, any 1.31+ on 2026-11-08 (1.24+ on 2026-09-30); through the Qovery Operator on EKS, GKE and Kapsule since 2026-11-04 | "Not yet" (`docs/faq.md:81-83`) | Behind |
 | Team | Organisations, projects, environments, roles | Teams, projects, environments, invitations (`internal/api/api.go` routes) | Parity |
 | Web shell | Console and `qovery shell` | One-off commands, logged; no interactive shell by decision | Different by design |
 | UI languages | English | Five, CI-enforced (`web/src/locales`) | Skifity ahead |
@@ -460,7 +490,7 @@ fewer steps, not more governance.
 - **What:** ship skills with the binary (`skifity skills install`) and add
   `skifity mcp --read-only`, MCP tool annotations, and a documented Claude Code
   permission allowlist for the `skifity` CLI in `docs/cli.md`.
-- **Evidence:** Qovery's eight skills and its "Securing AI Agent Access" page
+- **Evidence:** Qovery's skills (eleven, not eight) and its "Securing AI Agent Access" page
   (read-only MCP by default, CLI allowlist, policy tokens) are the most complete
   treatment of agent safety of any product in this batch. Skifity already has
   the strongest primitive — tokens scoped to a resource and a direction
@@ -512,18 +542,21 @@ fewer steps, not more governance.
 ## Things to deliberately not copy
 
 - **Governance as the product.** Custom roles, policy tokens, blueprints of
-  external SaaS, compliance packages, 20-seat minimums — Qovery's move upmarket
+  external SaaS, compliance packages, seat caps (20 on 2026-09-30; 3, 10 and 25
+  by plan on 2026-11-08) — Qovery's move upmarket
   is what kept it alive in a market Digger's founder called crowded, and it is
   the wrong direction for a free panel on somebody's VPS.
 - **Observability as a paid, "contact us" add-on.** Qovery's reviewers asked
   for integrated monitoring for years; the answer was a $299-per-cluster add-on
-  that is not self-service. Skifity's version should be small, built in, and
+  that is not self-service (since late 2026 included on one cluster in the
+  $899 Growth plan and above). Skifity's version should be small, built in, and
   sized for 1 GB (see the metrics-history gap in `porter.md`).
 - **Two database modes where one is "cloud-managed".** Wrapping RDS and Cloud
   SQL makes sense when the customer is on a hyperscaler. On a VPS, in-cluster
   databases with tested backups are the whole answer.
 - **Frequent pricing changes.** The one complaint that recurs in otherwise
-  five-star reviews. Skifity has no pricing; if it ever does, change it rarely.
+  five-star reviews, and it happened again in October and November 2026.
+  Skifity has no pricing; if it ever does, change it rarely.
 - **A web shell into containers.** Qovery added one in 2024; Skifity decided
   against an interactive shell for reasons that still hold (`docs/roadmap.md`,
   "Not on this roadmap").
@@ -541,6 +574,218 @@ fewer steps, not more governance.
   first impression of something that is not the product.
 - **Chasing multi-cloud.** Qovery's value is one control plane across clouds;
   Skifity's roadmap already says one panel, one cluster.
+
+## Since 2026-09-30
+
+Read on 2026-11-08: the three changelog releases since this file was written
+(2026-10-07, 2026-10-22 and 2026-11-04), the pricing page, the docs as Markdown,
+three blog posts, and the public repositories `console`, `engine`, `qovery-cli`,
+`terraform-provider-qovery` and `qovery-skills`, cloned with git. GitHub's API
+and its web pages were refused from the sandbox this was written in, so stars
+and the security-advisories pages were not read again.
+
+### Pricing
+
+- The pricing page read on 2026-11-08 has five plans, billed yearly with 20%
+  off: **Free**, $0 "forever" — 3 users plus any number of AI agents, one
+  cluster the customer already runs (Kubernetes 1.31 or later: EKS, GKE, AKS,
+  k3s or on-premise), 1,000 build-and-deploy minutes a month after which
+  deployments pause rather than bill, preview environments and environment
+  cloning, MCP, CLI and skills, community support; **Starter**, $299 a month —
+  3 users, one cluster of the customer's or managed by Qovery, 3,000 minutes,
+  7-day log and audit retention; **Growth**, $899 — 10 users, 2 clusters, 8,000
+  minutes, Observe on one cluster, 15-day retention; **Scale**, $2,999 — up to
+  25 users, 3 clusters then $399 a month each, 30,000 minutes, the SOC 2 report,
+  HIPAA as a $490-a-month add-on; **Enterprise**, custom. SSO is an add-on on
+  Growth and Scale; custom roles are 3 on Growth and up to 10 on Scale.
+- Scale is the Business plan this file described, at the same price with 25
+  users instead of 20. The console's plan picker for Starter, Growth and Scale
+  landed on 2026-10-23 (commit e50f428a5, "activate a 2026 plan"), and the
+  2026-11-04 changelog says "New trials start on the Scale plan". The Free plan
+  is on the pricing page and in its FAQ but in no changelog entry, so when it
+  started is not known.
+- Free is not a small-server plan: Qovery's builder needs a node with 4 vCPU
+  and 8 GiB free, and the BYOK docs say "A 4 vCPU node is not enough".
+- 2026-10-22: DevOps Team Extension, a named Qovery engineer who reviews the
+  customer's infrastructure every month, an add-on from Growth with a free first
+  assessment.
+
+### Product
+
+- **2026-10-07.** Blueprints became the only way to create a cloud-managed
+  database, with a connection-URI button, `qovery port-forward` working against
+  them, and RDS dashboards and alert rules. **Terraform provider 1.0** (tagged
+  2026-10-01) makes the configuration the source of truth: a change made in the
+  console shows in `terraform plan` and the next apply reverts it, and an
+  attribute left out "now plans the Qovery default instead of keeping the last
+  value" — breaking. A **Workloads** tab on each cluster shows CPU and memory
+  reserved by requests, the top five environments, system components and the
+  capacity left. Agent Tasks gained templates, a runs view and each run's cost.
+  Smaller: storage can be added after the first deploy; `qovery application
+  restart` (and container, database) restarts without a redeploy; a warning when
+  the auto-deploy webhook could not be created; JSON log lines formatted and
+  URLs clickable; Observe alerts when a TLS renewal fails; Grafana 13 and SigNoz
+  in the catalogue; denied actions now appear in audit logs.
+- **2026-10-22.** **Qovery Training**, a copy of the console running on fake
+  data with 18 tracks and 68 lessons, where an admin picks tracks and follows a
+  team's progress, and a public console demo with sample data and seven tours.
+  **Deploy by version**: from an environment, choose a commit, image tag or chart
+  version for each service and deploy them in one deployment; a mutable `latest`
+  tag cannot be chosen. **`qovery blueprint upgrade-major`** upgrades a
+  database's major version in place, keeping variables and overrides, with
+  downtime while AWS runs it. Stopping an environment pauses its RDS databases.
+  Sign-up with Google, GitHub, GitLab, Bitbucket, Microsoft or SAML and a single
+  form. Smaller: API and policy tokens show when they were last used; custom
+  roles can grant Shell and Port-forward apart from deploying; builders default
+  to 16 GiB and a build that runs out of memory names the setting to raise;
+  Secret Manager left beta.
+- **2026-11-04.** **BYOK through the Qovery Operator** (Preview, Enterprise
+  plan, EKS, GKE and Kapsule clusters without their own cert-manager, ExternalDNS
+  or Envoy Gateway): the console gives a Helm command, Qovery then installs and
+  updates Loki, Alloy, Envoy Gateway, cert-manager, ExternalDNS and its agents,
+  the Operator only connects outbound, and preflight checks run before each
+  cluster deployment. Secrets: cross-account role assumption for AWS Secrets
+  Manager and Parameter Store, one key inside a JSON secret, and write-only
+  values in Terraform (`value_wo`, provider 1.3.0) so a secret never reaches the
+  state. Remote-access permissions (Shell, Port-forward) for custom roles in the
+  console and Terraform. **Variable overrides**: a conflicting key offers to
+  create an override, and a service's list marks the parent "Overridden in
+  service" and the override "Overrides environment" or "Overrides project".
+  Smaller: Agent Tasks through any Anthropic-compatible gateway; a failed
+  deployment's report shows the Kubernetes evidence and an excerpt of the
+  errors; previews now deploy to their source environment's cluster rather than
+  the organisation's oldest; anti-affinity can be turned off; builds reject
+  certificates from the eMudhra authorities.
+
+### Open source
+
+- `qovery-cli`: 16 releases, v1.171.5 (2026-10-05) to v1.180.0 (2026-11-07).
+  `terraform-provider-qovery`: v1.0.0 on 2026-10-01 to v1.6.2 on 2026-11-06.
+  `engine`: 58 tags, newest v1.395.0 on 2026-10-28, still GPL-3.0.
+- `qovery-skills` has eleven skills (see the corrected list above). Since
+  2026-10-16 the installed skills send usage: an anonymous `skill-started` event
+  at every launch, "even when already signed in", tied to the account once a
+  person signs in and picks an organisation. An opt-out exists; installing sends
+  nothing.
+- The console has a `proto/cost-management` branch (first commit 2026-10-08)
+  with project budgets that "block scale-ups once a project passes 90% of its
+  budget" (2026-10-09). On 2026-11-08 it was in neither `staging` nor `main`.
+
+### The ingress-nginx migration
+
+- Qovery's own account (blog, 2026-10-10): 94% of the clusters it manages had
+  moved to Envoy Gateway; the plan was every cluster by the end of March and it
+  "took until October"; Qovery ended support for community ingress-nginx on
+  2026-08-31 and plans to remove it, load balancers included, by mid-November.
+  "The worst incidents came from our own code changes and our own
+  documentation."
+
+### Security
+
+- No CVE: NVD's keyword search "qovery" still returns nothing, and OSV has
+  nothing for `github.com/Qovery/qovery-cli` (2026-11-08).
+- Disclosed without a CVE, all on 2026-11-04: "Secret values are also no longer
+  written to audit logs or to the stored output of jobs and Terraform services"
+  — so until then they were; builds now reject certificates from "the
+  compromised eMudhra certificate authorities", with no further detail.
+- Hardening, 2026-10-23: Qovery now sends the organisation's ID as
+  `sts:ExternalId` when it assumes the IAM role in a customer's AWS account, and
+  the role's trust policy only accepts that. Before, the guarantee that no other
+  organisation could use the role "relied entirely on Qovery's side".
+- Nothing more was published about the access-control fix of 2026-09-23.
+
+### What users say
+
+- No Hacker News story or comment named Qovery between 2026-09-30 and
+  2026-11-08 (Algolia search API, exact match). G2 and AWS Marketplace reviews
+  were not read again; the pricing page still says "4.8 on G2 with 80+
+  reviews". The planned web search could not be run: the search service's
+  credits had run out.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **Qovery now has a free plan on a cluster you already run, k3s included,
+  with previews and MCP** — the nearest it has come to Skifity's audience since
+  it dropped its single-server k3s offer in 2024. The differences are the ones
+  that matter on a small server: the control plane stays Qovery's (self-hosting
+  is Enterprise), the builder needs 4 vCPU and 8 GiB free, there are 3 users and
+  1,000 minutes a month, and the skills report usage by default. Skifity runs
+  its own control plane on a 1 GB VPS with no limits and never phones home.
+- Closed since this file: previews of the whole environment with their own,
+  seeded databases (Phases 76, 93 and 107); cloning an environment (`POST
+  /api/environments/{envID}/clone`); secret build variables as BuildKit secrets
+  (Phase 79); a Viewer role and members limited to projects (Phases 85 and 86);
+  a remote MCP endpoint (Phase 87); files mounted into instances (Phase 112,
+  `374b40c`); `skifity db connect` (Phase 105). Still open: stopping and
+  starting an environment, and on a schedule (nothing under
+  `/api/environments/{envID}` does it; per-app scale to zero is the nearest
+  thing); variables at environment scope; hooks on an environment's stop or
+  delete.
+- What Qovery shipped that Skifity already has: tokens show when they were last
+  used (`web/src/pages/account.tsx:1241`); a secret-manager reference can name a
+  key inside a JSON secret (`connection:path#key`,
+  `internal/secretmgr/secretmgr.go:315`); `skifity.yaml` only names secrets and
+  never holds their values (Phase 108), which is what `value_wo` gives
+  Terraform; the database tunnel is a team admin's only
+  (`internal/api/tunnel_handlers.go:58`), so deploying never implies it; alerts
+  for a certificate that failed or is expiring (`internal/notify/notify.go`);
+  Grafana and SigNoz templates; a failed rollout explained from Kubernetes'
+  events (`internal/kube/explain.go`). Skifity uses the Traefik that k3s ships,
+  so the ingress-nginx retirement that took Qovery seven months does not touch
+  it.
+- **New gap: upgrade a database's major version.** A database's version is
+  chosen when it is created and never again (`internal/dbsvc/manager.go`, the
+  `EngineVersion` set at creation; no route among `/api/databases/{id}/...` in
+  `internal/api/api.go`), and `skifity apply` leaves a database whose version
+  differs alone. CloudNativePG can upgrade PostgreSQL's major version in place;
+  the other engines need a dump and restore, which Skifity's backups and import
+  already do. Needs a cluster.
+- **New gap: show what an app inherits.** Project-wide variables are listed only
+  on the project page (`web/src/pages/project-detail.tsx`); the app's variables
+  tab (`web/src/components/variables-editor.tsx`) shows the app's own, so nothing
+  says which project variable the app overrides or which one it gets. One
+  endpoint for an app's effective variables (secret values still withheld), and
+  marks in the table.
+- **New gap: say when a build ran out of memory.** A build's memory limit is a
+  fixed 3 GiB (`internal/builder/job.go:168`, and the setting's help text
+  repeats it), and a failed build is reported by stage and exit code only
+  (`failedStage`, `internal/deploy/build.go`), never reading the container's
+  `OOMKilled` reason. A bundler that is killed reads as a build that failed for
+  no reason. Name it, and let the limit be raised.
+- **New gap: keep an app's own secrets out of a command's output and the audit
+  log.** A one-off command's output is scrubbed for secret-shaped text only
+  (`logging.Scrub`, `internal/api/deploy_handlers.go:582`) and a viewer can read
+  it (`RoleViewer`, line 546); the app's actual secret values, which
+  `logging.RedactValues` already removes from cluster events and drift reports,
+  are not removed from it. The command itself is stored in the audit log as
+  typed (line 494), credentials on its command line included. Qovery fixed the
+  same two places on 2026-11-04.
+- **New gap: what is reserved, per environment.** The cluster summary has
+  totals and what is in use (`ClusterSummary`, `internal/api/ports.go:141`),
+  and an environment has its own quota (`/api/environments/{envID}/quota`), but
+  nothing shows across environments what each reserves, what the system
+  components take, and what is left — which is what decides whether the next
+  app, preview or build fits on a small server.
+- **New gap, smaller: deploy a chosen version from the panel.** The API and the
+  CLI deploy a given commit (`commit_sha`, `internal/api/deploy_handlers.go:20`;
+  `skifity deploy --commit`), the panel does not offer it, and nothing deploys
+  several apps at chosen versions together; promote (Phase 103) covers the
+  environment-to-environment case.
+- **New gap, smaller: record refused actions.** Only actions that succeed are
+  audited; a 403 from `authorizeTeam` (`internal/api/api.go:706`) and a failed
+  sign-in (`internal/api/auth_handlers.go:49`) leave no entry. Qovery started
+  auditing denied actions on 2026-10-07.
+- A design point rather than a gap: Qovery's provider 1.0 abandoned "a field
+  left out keeps its value" because it "made it hard to know whether Terraform
+  or the Console was really in charge". That is the rule `skifity apply` follows
+  (Phase 108: "A field left out is left as it is", and it never deletes). Its
+  plan already reports what the file does not cover, which is the part of the
+  problem that hurts.
+- Not to copy: Agent Tasks, the cost-management
+  prototype's budgets (Skifity's usage alerts, Phase 95, warn without refusing),
+  and skills that report usage by default.
 
 ## Sources
 
@@ -588,3 +833,19 @@ All read 2026-09-30.
 - https://docs.docker.com/reference/build-checks/secrets-used-in-arg-or-env/ (ARG/ENV secrets "persist in the final image")
 - https://nvd.nist.gov (API keyword search "qovery")
 - Skifity sources cited inline, read in this repository on 2026-09-30.
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://www.qovery.com/changelog (newest 2026-11-04), https://www.qovery.com/changelog/2026-10-07, https://www.qovery.com/changelog/2026-10-22 and https://www.qovery.com/changelog/2026-11-04
+- https://www.qovery.com/pricing (plans, comparison table and FAQ)
+- https://www.qovery.com/changelog/nginx-ingress-controller-migration (published 2026-02-01, updates of 2026-03-24 and 2026-06-17)
+- https://www.qovery.com/blog/nginx-to-envoy-gateway-what-the-plan-missed (2026-10-10)
+- https://www.qovery.com/blog/strengthening-security-qovery-access-aws-account (2026-10-23)
+- https://www.qovery.com/docs/llms.txt, and as Markdown: configuration/integrations/kubernetes/byok.md and byok-supported-setups.md, getting-started/installation/kubernetes.md, getting-started/security-and-compliance/audit-logs.md, configuration/integrations/observability/qovery-observe.md, configuration/organization/members-rbac.md, configuration/database.md, getting-started/guides/use-cases/preview-environments.md
+- Git clone of https://github.com/Qovery/console (staging at f1dda3890, 2026-11-06): commit e50f428a5 (2026-10-23, the 2026 plans), the `proto/cost-management` branch (2026-10-08 to 2026-10-22), `libs/shared/util-js/src/lib/format-plan-display.ts`
+- Git clones of https://github.com/Qovery/qovery-cli, https://github.com/Qovery/terraform-provider-qovery and https://github.com/Qovery/engine (tags and their dates since 2026-09-30; the engine's `LICENSE`)
+- Git clone of https://github.com/Qovery/qovery-skills (main on 2026-11-08: the skill directories with the dates they were added, `README.md` "Usage Tracking")
+- https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=qovery (no results); https://api.osv.dev/v1/query for `github.com/Qovery/qovery-cli` (no results)
+- https://hn.algolia.com/api/v1/search_by_date?query="qovery" (since 2026-09-30: no results)
+- Not reachable from this sandbox: the GitHub REST API and github.com pages for Qovery (stars, security advisories), and a web search (credits exhausted)
+- Skifity, for "For Skifity": `internal/dbsvc/manager.go`, `internal/api/api.go`, `internal/api/deploy_handlers.go`, `internal/api/tunnel_handlers.go`, `internal/api/auth_handlers.go`, `internal/api/ports.go`, `internal/builder/job.go`, `internal/deploy/build.go`, `internal/logging/logging.go`, `internal/secretmgr/secretmgr.go`, `internal/notify/notify.go`, `internal/settings/settings.go`, `web/src/pages/project-detail.tsx`, `web/src/pages/account.tsx`, `web/src/components/variables-editor.tsx`, `docs/progress.md` (Phases 76, 79, 85 to 87, 93, 95, 103, 105, 107, 108 and 112)
