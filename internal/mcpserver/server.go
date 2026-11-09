@@ -322,6 +322,19 @@ type scaleOutput struct {
 type rollbackInput struct {
 	AppID        string `json:"app_id" jsonschema:"the app's id"`
 	DeploymentID string `json:"deployment_id,omitempty" jsonschema:"which deployment to go back to; omitted means the one before the current version"`
+	DryRun       bool   `json:"dry_run,omitempty" jsonschema:"only say what it would change, and roll nothing back"`
+}
+
+// rollbackOutput is a rollback, or with dry_run the plan of one: what it puts
+// back is in both, because a rollback restores settings as well as code.
+type rollbackOutput struct {
+	DeploymentID string             `json:"deployment_id,omitempty"`
+	Number       int                `json:"number,omitempty"`
+	Status       string             `json:"status,omitempty"`
+	GoesBackTo   int                `json:"goes_back_to"`
+	PutsBack     []store.SpecChange `json:"puts_back"`
+	LeavesAsIs   []string           `json:"leaves_as_is"`
+	Note         string             `json:"note"`
 }
 
 type historyOutput struct {
@@ -495,7 +508,8 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "rollback_app",
 		Annotations: changes("Roll an app back", true, false),
-		Description: "Go back to a previous deployment. This restores the image and the settings that version ran with.",
+		Description: "Go back to a previous deployment. This restores the image and the settings that version ran with — the port, the start command, the health check, scaling and resources — and leaves variables, domains and disks as they are. " +
+			"The answer lists each setting it puts back. Pass dry_run=true first to see that list without rolling anything back, and tell the person.",
 	}, s.rollbackApp)
 
 	addTool(s, &mcp.Tool{
@@ -537,6 +551,7 @@ func (s *Server) register() {
 	s.registerVulnerabilities()
 	s.registerEvents()
 	s.registerLogDrains()
+	s.registerApps()
 }
 
 // --- handlers ---
@@ -946,26 +961,54 @@ func (s *Server) scaleApp(ctx context.Context, _ *mcp.CallToolRequest, in scaleI
 	return textResult(summary), out, nil
 }
 
-func (s *Server) rollbackApp(ctx context.Context, _ *mcp.CallToolRequest, in rollbackInput) (*mcp.CallToolResult, deployOutput, error) {
+func (s *Server) rollbackApp(ctx context.Context, _ *mcp.CallToolRequest, in rollbackInput) (*mcp.CallToolResult, rollbackOutput, error) {
 	target := in.DeploymentID
 	if target == "" {
 		resolved, err := s.previousDeployment(ctx, in.AppID)
 		if err != nil {
-			return errorResult(err), deployOutput{}, nil
+			return errorResult(err), rollbackOutput{}, nil
 		}
 		target = resolved
 	}
 
+	// What it puts back is read first, either way: a rollback that changes
+	// the port back is something the person should hear about from the
+	// assistant, not find out.
+	var plan struct {
+		Target struct {
+			Number int `json:"number"`
+		} `json:"target"`
+		Changes   []store.SpecChange `json:"changes"`
+		Unchanged []string           `json:"unchanged"`
+	}
+	if err := s.client.Do(ctx, "GET", appPath(in.AppID, "/rollback/"+url.PathEscape(target)+"/plan"), nil, &plan); err != nil {
+		return errorResult(err), rollbackOutput{}, nil
+	}
+	out := rollbackOutput{GoesBackTo: plan.Target.Number, PutsBack: plan.Changes, LeavesAsIs: plan.Unchanged}
+	if out.PutsBack == nil {
+		out.PutsBack = []store.SpecChange{}
+	}
+	puts := "no settings, only the code"
+	if len(plan.Changes) > 0 {
+		var changes []string
+		for _, change := range plan.Changes {
+			changes = append(changes, fmt.Sprintf("%s %q → %q", change.Field, change.From, change.To))
+		}
+		puts = strings.Join(changes, ", ")
+	}
+	if in.DryRun {
+		out.Note = fmt.Sprintf("Nothing was rolled back. Going back to #%d would put back %s, and leave %s as they are now.",
+			plan.Target.Number, puts, strings.Join(plan.Unchanged, ", "))
+		return textResult(out.Note), out, nil
+	}
+
 	var deployment store.Deployment
-	if err := s.client.Do(ctx, "POST", "/api/apps/"+in.AppID+"/rollback/"+target, nil, &deployment); err != nil {
-		return errorResult(err), deployOutput{}, nil
+	if err := s.client.Do(ctx, "POST", appPath(in.AppID, "/rollback/"+url.PathEscape(target)), nil, &deployment); err != nil {
+		return errorResult(err), rollbackOutput{}, nil
 	}
-	out := deployOutput{
-		DeploymentID: deployment.ID, Number: deployment.Number,
-		Status: string(deployment.Status),
-		Note:   "The previous image and its settings are being rolled out. No rebuild is needed, so this is fast.",
-	}
-	return textResult(fmt.Sprintf("Rolling back. Deployment #%d started.", deployment.Number)), out, nil
+	out.DeploymentID, out.Number, out.Status = deployment.ID, deployment.Number, string(deployment.Status)
+	out.Note = fmt.Sprintf("Rolling back to #%d, which puts back %s. No rebuild is needed, so this is fast.", plan.Target.Number, puts)
+	return textResult(fmt.Sprintf("Deployment #%d started. %s", deployment.Number, out.Note)), out, nil
 }
 
 func (s *Server) getHistory(ctx context.Context, _ *mcp.CallToolRequest, in appIDInput) (*mcp.CallToolResult, historyOutput, error) {

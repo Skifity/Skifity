@@ -179,10 +179,21 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"POST /api/apps/{app}/deploy":                deployment,
 		"GET /api/apps/{app}/deployments":            items(deployment),
 		"POST /api/apps/{app}/rollback/{deployment}": deployment,
-		"GET /api/apps/{app}/logs":                   map[string]any{"lines": []string{"listening on 8080"}},
-		"POST /api/apps/{app}/run":                   map[string]any{"run": "run_1"},
-		"GET /api/apps/{app}/runs/{run}/logs":        map[string]any{"lines": []string{"migrated"}},
-		"PUT /api/apps/{app}/scaling":                map[string]any{"scaling": map[string]any{"replicas": 2}},
+		"GET /api/apps/{app}/rollback/{deployment}/plan": map[string]any{
+			"target": map[string]any{"number": 1, "commit_sha": "abc1234"}, "current": map[string]any{"number": 2},
+			"changes":      []any{map[string]any{"field": "port", "from": "3000", "to": "8080"}},
+			"can_rollback": true, "unchanged": []string{"variables", "domains", "volumes"},
+		},
+		"POST /api/apps/{app}/deployments/{deployment}/cancel": ok,
+		"POST /api/apps/{app}/restart":                         ok,
+		"PATCH /api/apps/{app}": map[string]any{
+			"id": "app_1", "name": "web", "port": 3000, "build_command": "npm run build",
+			"rolled_out": []string{"port"}, "next_deploy": []string{"build_command"},
+		},
+		"GET /api/apps/{app}/logs":            map[string]any{"lines": []string{"listening on 8080"}},
+		"POST /api/apps/{app}/run":            map[string]any{"run": "run_1"},
+		"GET /api/apps/{app}/runs/{run}/logs": map[string]any{"lines": []string{"migrated"}},
+		"PUT /api/apps/{app}/scaling":         map[string]any{"scaling": map[string]any{"replicas": 2}},
 		"PUT /api/apps/{app}/gpu": map[string]any{
 			"gpu": map[string]any{"count": 1, "vendor": "nvidia", "product": "", "workloads": []any{}},
 			"cluster": map[string]any{"known": true, "vendors": []any{

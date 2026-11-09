@@ -57,6 +57,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdGPUs(ctx, rest, stdout)
 	case "rollback":
 		err = cmdRollback(ctx, rest, stdout)
+	case "restart":
+		err = cmdRestart(ctx, rest, stdout)
 	case "lock":
 		err = cmdLock(ctx, rest, stdout)
 	case "unlock":
@@ -128,6 +130,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// The command's own --help printed its flags; that is what was asked.
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
+	}
+	// Ctrl-C while a deploy was followed; what stopped was said already.
+	if errors.As(err, new(interrupted)) {
+		return 130
 	}
 	var exit commandExit
 	if errors.As(err, &exit) {
@@ -249,7 +255,7 @@ Getting started:
   whoami                Show who you are signed in as
 
 Working with apps:
-  deploy                Deploy the current directory's app
+  deploy                Deploy the current directory's app; --cancel stops one under way
   status                Show an app's live state
   logs                  Show or follow an app's logs
   events                What Kubernetes said about an app's instances, newest first
@@ -262,12 +268,15 @@ Working with apps:
   files                 List, save or remove files the app reads, such as an nginx.conf
   ports                 Open or close a port that is not HTTP, such as a game server's
   preview               Preview a branch without a pull request, or --close it
-  rollback              Go back to a previous deployment
+  rollback              Go back to a previous deployment, after saying what it puts back
+  restart               Replace the app's instances one at a time; nothing is rebuilt
   scan                  Show the known vulnerabilities in the app's image, or scan it now
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
+  apps set              Change an app's port, commands, health check, build or resources
+  apps rm               Delete an app, with its disks
   open                  Print an app's URLs
   domains               List, add or remove an app's domains; --manage-dns creates the record
   git                   List Git connections, and the repositories and branches they read
@@ -486,6 +495,14 @@ func cmdWhoami(ctx context.Context, args []string, out io.Writer) error {
 // --- apps and status ---
 
 func cmdApps(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "set":
+			return cmdAppsSet(ctx, args[1:], out)
+		case "rm", "remove", "delete":
+			return cmdAppsRm(ctx, args[1:], out)
+		}
+	}
 	flags := flag.NewFlagSet("apps", flag.ContinueOnError)
 	flags.SetOutput(out)
 	envID := flags.String("env", "", "the environment id")
@@ -717,9 +734,14 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	follow := flags.Bool("follow", true, "stream the build log until the deploy finishes")
 	accept := flags.Bool("accept-vulnerabilities", false,
 		"deploy even if the image has a critical vulnerability with a fix, when the panel stops those; recorded in the activity log")
+	cancel := flags.Bool("cancel", false, "stop the deployment under way, or the one named by its number or id, instead of deploying")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	positional, err := parseInterspersed(flags, args)
+	if err != nil {
 		return err
+	}
+	if len(positional) > 0 && !*cancel {
+		return errdoc.BadRequest(fmt.Sprintf("%q is not something deploy takes. A commit is --commit; a deployment to stop is --cancel.", positional[0]))
 	}
 
 	cfg, err := LoadConfig()
@@ -730,6 +752,9 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	app, err := resolveApp(ctx, client, cfg, *appID)
 	if err != nil {
 		return err
+	}
+	if *cancel {
+		return cancelDeployment(ctx, client, app, positional, out, *asJSON)
 	}
 
 	var deployment store.Deployment
@@ -753,8 +778,7 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	if !*follow {
 		return nil
 	}
-	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
-	return printFollowed(out, *asJSON, final, err)
+	return followStarted(ctx, client, app, deployment, out, *asJSON)
 }
 
 // followPoll is how often followDeployment asks for the deployment's state
@@ -1306,6 +1330,8 @@ func cmdRollback(ctx context.Context, args []string, out io.Writer) error {
 	appID := flags.String("app", "", "the app id")
 	to := flags.String("to", "", "the deployment id to go back to; defaults to the one before the current version")
 	list := flags.Bool("list", false, "show the deploy history")
+	yes := flags.Bool("yes", false, "roll back without asking, after saying what it puts back")
+	follow := flags.Bool("follow", true, "stream the rollout until it finishes")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -1362,15 +1388,38 @@ func cmdRollback(ctx context.Context, args []string, out io.Writer) error {
 		return errdoc.BadRequest("There is no earlier successful deployment to go back to.")
 	}
 
+	// What it puts back is read and said first. A rollback restores the
+	// settings that version ran with, not only its code, and finding that
+	// out afterwards — the port back to what it was, the start command too —
+	// is a second incident on top of the first.
+	var plan rollbackPlan
+	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/rollback/"+target+"/plan", nil, &plan); err != nil {
+		return err
+	}
+	if !*asJSON {
+		printRollbackPlan(out, plan)
+		if !*yes && isInteractive() {
+			if answer := strings.ToLower(prompt(out, "Roll back? [y/N] ")); answer != "y" && answer != "yes" {
+				fmt.Fprintln(out, "Nothing was changed.")
+				return nil
+			}
+		}
+	}
+
 	var deployment store.Deployment
 	if err := client.Do(ctx, "POST", "/api/apps/"+app+"/rollback/"+target, nil, &deployment); err != nil {
 		return err
 	}
+	if *asJSON && !*follow {
+		return writeJSON(out, deployment)
+	}
 	if !*asJSON {
 		fmt.Fprintf(out, "Rolling back. Deployment #%d started.\n", deployment.Number)
 	}
-	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
-	return printFollowed(out, *asJSON, final, err)
+	if !*follow {
+		return nil
+	}
+	return followStarted(ctx, client, app, deployment, out, *asJSON)
 }
 
 func orDefault(v, fallback string) string {

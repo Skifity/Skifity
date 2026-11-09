@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { GPUCard } from "@/components/app/gpu-card"
 import { MaintenanceCard } from "@/components/app/maintenance"
+import { settingLabels } from "@/components/app/setting-label"
 import { TemplateCard } from "@/components/app/template-card"
 import { useConfirm, useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
@@ -26,7 +27,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { App, Environment, HealthCheck } from "@/lib/types"
+import type { App, AppUpdate, Environment, HealthCheck } from "@/lib/types"
 import { Spinner } from "@/components/ui/spinner"
 
 /** The bounds the server holds the health check to, in seconds; see internal/kube/health.go. */
@@ -98,7 +99,7 @@ export function SettingsTab({ app }: { app: App }) {
 
   const save = useMutation({
     mutationFn: () =>
-      api.patch(`/api/apps/${app.id}`, {
+      api.patch<AppUpdate>(`/api/apps/${app.id}`, {
         name: name.trim(),
         branch: branch.trim(),
         root_dir: rootDir.trim(),
@@ -123,9 +124,18 @@ export function SettingsTab({ app }: { app: App }) {
         internal,
         ...(builtHere ? {} : { run_as_user: Number(runAsUser) || 0 }),
       }),
-    onSuccess: () => {
-      toast.success(t("common.saved"))
+    // What goes into the image waits for the next deploy, which builds with
+    // it: said here, because "Saved" alone after a new build command reads
+    // as a rebuild that never comes. The rest was rolled out already.
+    onSuccess: (result) => {
+      const waiting = result?.next_deploy ?? []
+      toast.success(
+        waiting.length > 0
+          ? t("apps.savedNextDeploy", { settings: settingLabels(t, waiting) })
+          : t("common.saved"),
+      )
       void queryClient.invalidateQueries({ queryKey: ["app", app.id] })
+      void queryClient.invalidateQueries({ queryKey: ["app-status", app.id] })
     },
   })
 

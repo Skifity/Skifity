@@ -865,6 +865,7 @@
       "no_port": "No port is published or exposed, and its image's is not known: nothing can reach it by name. If another service connects to it, give it an expose line with the port it listens on.",
       "skipped": "The service {{name}} could not be read and was skipped."
     },
+    "savedNextDeploy": "Saved. These take effect at the next deploy: {{settings}}.",
     "liveVersion": "Live version",
     "liveNone": "Nothing is live yet",
     "wentLive": "Went live {{when}}",
@@ -4309,6 +4310,18 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "cli_delete_unconfirmed": {
+        "title": "Deleting an app has to be confirmed",
+        "cause": "There is nobody here to type {{0}}'s name, and --yes was not given.",
+        "impact": "Nothing was deleted.",
+        "fix": "Run it again with --yes, once you are sure: the app's disks go with it, and nothing brings them back."
+      },
+      "cli_app_not_found": {
+        "title": "There is no app by that name here",
+        "cause": "The environment has no app called {{0}}. It has: {{1}}.",
+        "impact": "The command did not run.",
+        "fix": "Give one of those names, or --env for another environment."
       }
     }
   },

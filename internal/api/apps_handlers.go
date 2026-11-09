@@ -723,6 +723,7 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	deployedTags := app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag
+	before := app
 
 	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
 		app.Name = strings.TrimSpace(*req.Name)
@@ -824,9 +825,12 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	// Runtime changes are applied by a rollout, never a rebuild: this is the
 	// promise in ADR-0007, and the fix for the most common complaint about
 	// comparable products.
+	rolledOut := false
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
 			s.log.Warn("could not apply app changes to the cluster", "app", app.ID, "error", err)
+		} else {
+			rolledOut = s.appRunning(r.Context(), app.ID)
 		}
 	}
 
@@ -842,7 +846,9 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "app.updated", "app", app.ID, app.Name)
-	writeJSON(w, http.StatusOK, app)
+	answer := appUpdate{App: app}
+	answer.RolledOut, answer.NextDeploy = settingsTakingEffect(before, app, rolledOut)
+	writeJSON(w, http.StatusOK, answer)
 }
 
 func applyResourceChanges(app *store.App, req updateAppRequest) error {

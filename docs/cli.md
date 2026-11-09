@@ -194,7 +194,12 @@ skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, 
 skifity logs --process worker     # and its output
 skifity plan                      # what skifity.yaml would change; see below
 skifity apply                     # and change it
-skifity rollback                  # back to the previous version
+skifity rollback                  # back to the previous version; says what it puts back, then asks
+skifity rollback --yes            # the same without the question, for a script
+skifity restart                   # replace the instances one at a time; nothing is rebuilt
+skifity apps set --port 3000      # change a setting; see below
+skifity apps rm web               # delete an app and its disks; asks for its name
+skifity deploy --cancel           # stop the deploy under way; --cancel 12 stops number 12
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
 skifity upgrade                   # ask which release of the panel is the newest; changes nothing
@@ -244,6 +249,37 @@ skifity api spec                  # the HTTP API, described in OpenAPI; see belo
 Any command takes `--app <id>` to act on something other than the current
 directory's app, and `--json` for output a script can rely on. The human format
 is not stable; the JSON is.
+
+### Changing an app's settings
+
+`skifity apps set` changes what the settings tab changes, one flag per setting,
+and sends only the flags given:
+
+```sh
+skifity apps set --port 3000 --start "node server.js" --health /healthz
+skifity apps set --build "npm run build" --output-dir dist --root apps/web
+skifity apps set --memory-limit 1024 --cpu-request 250
+skifity apps set --internal              # only the environment's other apps reach it
+```
+
+The others are `--name`, `--branch`, `--builder`, `--dockerfile`, `--image`,
+`--release`, `--health-check http|tcp|none`, `--health-start`,
+`--health-timeout`, `--cpu-limit`, `--memory-request` and `--run-as-user`;
+`skifity apps set --help` lists them. It says when each change takes effect:
+what the running app reads — the port, the commands, the health check, the
+resources — is rolled out there and then, without a rebuild, and what goes into
+the image — the branch, the folder, the builder, the build command — waits for
+the next `skifity deploy`, which builds with it. So does the release command,
+which only runs in a deploy. An app that has never been deployed gets
+everything at its first.
+
+`skifity rollback` reads the rollback's plan first and prints it: the version
+running now, the one it goes back to, and each setting it puts back, from what
+to what. On a terminal it then asks; `--yes` skips the question, and a script
+with no terminal is not asked. `skifity apps rm` deletes an app with its disks,
+so it asks for the app's name to be typed, and with no terminal it does nothing
+without `--yes`. Ctrl-C while a deploy is followed stops the following, not the
+deploy, and prints how to stop that: `skifity deploy --cancel`.
 
 `export` is the one worth knowing about before you need it. It writes
 `skifity-export.json` — every project, app, domain, database, variable and
@@ -543,9 +579,13 @@ command does whatever it does — so an assistant's client can ask before those
 and not before `list_apps`.
 
 An assistant can take an app the whole way: install it from a template or
-create it, give it a database, set its variables and files, put it on a domain
-or open a port, back it up and lock its deploys. Three things it cannot do, on
-purpose. It is never shown a database's password: `link_database` gives the app
+create it, give it a database, set its variables and files, fix its port, start
+command, health check or memory with `update_app_settings`, restart it, cancel
+a deploy, put it on a domain or open a port, back it up and lock its deploys.
+`rollback_app` says which settings it puts back, and with `dry_run` says only
+that. Deleting an app is not a tool: its disks go with it for good, so the
+person does it in the panel or with `skifity apps rm`. Three more things it
+cannot do, on purpose. It is never shown a database's password: `link_database` gives the app
 its connection string as a secret variable, and a password that has been in an
 assistant's context is in its provider's logs for good. It cannot restore a
 backup: a restore replaces everything with an older copy and cannot be undone,

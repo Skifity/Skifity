@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"encoding/json"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -114,6 +115,10 @@ var exampleCalls = map[string]map[string]any{
 	"get_events":          {"app_id": "app_1", "warnings_only": true},
 
 	"list_log_drains": {},
+
+	"update_app_settings": {"app_id": "app_1", "port": 3000, "build_command": "npm run build"},
+	"restart_app":         {"app_id": "app_1"},
+	"cancel_deployment":   {"app_id": "app_1", "deployment_id": "dep_2"},
 }
 
 // Every tool, once, against a panel that hands over every secret it holds.
@@ -162,7 +167,8 @@ func TestEveryToolCallsADescribedRouteAndPassesOnNoSecret(t *testing.T) {
 		t.Fatalf("only %d requests reached the panel", len(requests))
 	}
 	for _, request := range requests {
-		if strings.HasSuffix(request.Path, "/credentials") || strings.Contains(request.Path, "/restore/") {
+		if strings.HasSuffix(request.Path, "/credentials") || strings.Contains(request.Path, "/restore/") ||
+			(request.Method == "DELETE" && appItself.MatchString(request.Path)) {
 			t.Errorf("a tool asked for %s %s", request.Method, request.Path)
 		}
 		if !isDescribed(routes, request.Method, request.Path) {
@@ -213,6 +219,12 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		// Nothing else: a vendor, a model and the workloads default to
 		// what the app has, and the count is the whole question.
 		"set_gpus": {"app_id", "count"},
+		// Every setting is left as it is unless it is given.
+		"update_app_settings": {"app_id"},
+		"restart_app":         {"app_id"},
+		// The one under way, when none is named.
+		"cancel_deployment": {"app_id"},
+		"rollback_app":      {"app_id"},
 	}
 	for name, required := range want {
 		tool := byName[name]
@@ -250,6 +262,67 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 	item, _ := set["items"].(map[string]any)
 	if got := schemaStrings(item["required"]); !slices.Equal(got, []string{"key", "value"}) {
 		t.Errorf("a variable in set_variables requires %v", got)
+	}
+}
+
+// appItself is the route of an app, as opposed to anything under it.
+var appItself = regexp.MustCompile(`^/api/apps/[^/]+/?$`)
+
+// Deleting an app takes its disks with it, for good, so no tool does it: the
+// person does, in the panel or with `skifity apps rm`. The comments at the top
+// of apps.go and databases.go say why; this keeps a tool from being added
+// that does it anyway, under any name.
+func TestNoToolDeletesAnApp(t *testing.T) {
+	for _, tool := range listTools(t, New(cli.Config{PanelURL: "https://panel.example", Token: "skf_test"})) {
+		if strings.Contains(tool.Name, "delete_app") || strings.Contains(tool.Name, "remove_app") {
+			t.Errorf("%s is offered, and deleting an app is the person's to do", tool.Name)
+		}
+	}
+}
+
+// A dry run reads the plan and changes nothing; a rollback says what it puts
+// back too, since that is what a person is surprised by afterwards.
+func TestARollbackSaysWhatItPutsBackAndADryRunDoesNothing(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "rollback_app", map[string]any{"app_id": "app_1", "deployment_id": "dep_1", "dry_run": true})
+	if failed || !strings.Contains(text, "port") || !strings.Contains(text, "8080") {
+		t.Fatalf("a dry run answered (error=%v): %s", failed, text)
+	}
+	for _, request := range panel.requests() {
+		if request.Method != "GET" {
+			t.Errorf("a dry run asked for %s %s", request.Method, request.Path)
+		}
+	}
+	text, failed = call(t, session, "rollback_app", map[string]any{"app_id": "app_1", "deployment_id": "dep_1"})
+	if failed || !strings.Contains(text, "8080") {
+		t.Fatalf("a rollback answered (error=%v): %s", failed, text)
+	}
+	if _, ok := panel.last("POST", "/api/apps/app_1/rollback/dep_1"); !ok {
+		t.Error("the rollback was not asked for")
+	}
+}
+
+// Only the settings given are sent, and the answer says which rolled out and
+// which wait for a deploy, so the assistant knows whether to call deploy_app.
+func TestUpdatingSettingsSendsOnlyWhatWasGivenAndSaysWhatWaits(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "update_app_settings", map[string]any{"app_id": "app_1", "port": 3000, "build_command": "npm run build"})
+	if failed {
+		t.Fatalf("update_app_settings failed: %s", text)
+	}
+	request, _ := panel.last("PATCH", "/api/apps/app_1")
+	if want := map[string]any{"port": 3000.0, "build_command": "npm run build"}; !reflect.DeepEqual(request.Body, want) {
+		t.Errorf("the settings sent were %v, want %v", request.Body, want)
+	}
+	if !strings.Contains(text, "deploy_app") || !strings.Contains(text, "build_command") {
+		t.Errorf("the answer does not say what waits for a deploy: %s", text)
+	}
+	if text, failed := call(t, session, "update_app_settings", map[string]any{"app_id": "app_1"}); !failed {
+		t.Errorf("no settings at all was sent on: %s", text)
 	}
 }
 
@@ -299,6 +372,9 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		// Takes a database from its apps; restarts one, and grows a disk
 		// that cannot shrink again.
 		"stop_database", "resize_database",
+		// Rolls out over the running instances, or replaces them; and
+		// throws a build away.
+		"update_app_settings", "restart_app", "cancel_deployment",
 	}
 	additive := []string{
 		"create_app", "install_template", "create_database", "add_domain", "open_port", "lock_deploys",

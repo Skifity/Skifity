@@ -852,6 +852,7 @@
       "no_port": "Tidak ada port yang dipublikasikan atau di-expose, dan port image-nya tidak diketahui: tidak ada yang bisa menjangkaunya lewat nama. Jika layanan lain terhubung ke sini, beri baris expose dengan port yang didengarnya.",
       "skipped": "Layanan {{name}} tidak bisa dibaca dan dilewati."
     },
+    "savedNextDeploy": "Tersimpan. Ini berlaku pada deploy berikutnya: {{settings}}.",
     "liveVersion": "Versi yang aktif",
     "liveNone": "Belum ada yang aktif",
     "wentLive": "Mulai aktif {{when}}",
@@ -4284,6 +4285,18 @@
         "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
+      },
+      "cli_delete_unconfirmed": {
+        "title": "Menghapus aplikasi harus dikonfirmasi",
+        "cause": "Tidak ada orang di sini untuk mengetik nama {{0}}, dan --yes tidak diberikan.",
+        "impact": "Tidak ada yang dihapus.",
+        "fix": "Jalankan lagi dengan --yes setelah Anda yakin: disk aplikasi ikut terhapus, dan tidak ada yang bisa mengembalikannya."
+      },
+      "cli_app_not_found": {
+        "title": "Tidak ada aplikasi dengan nama itu di sini",
+        "cause": "Lingkungan ini tidak punya aplikasi bernama {{0}}. Yang ada: {{1}}.",
+        "impact": "Perintah tidak dijalankan.",
+        "fix": "Berikan salah satu nama tersebut, atau --env untuk lingkungan lain."
       }
     }
   },

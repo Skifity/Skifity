@@ -300,6 +300,14 @@ export type Instance = {
   deployment: number
 }
 
+/** What saving an app's settings answers: the app, and when each change takes effect. */
+export type AppUpdate = App & {
+  /** Settings the running instances were given at once, by a rollout. */
+  rolled_out: string[]
+  /** Settings that wait for the next deploy: what goes into the image, and the release command. */
+  next_deploy: string[]
+}
+
 export type AppStatus = {
   phase: string
   detail?: string

@@ -45,6 +45,10 @@ import (
 // `skifity db import` already reads it. Stopping, starting and resizing are
 // here: each is put back with its opposite, except a disk that has grown,
 // which the tool says.
+//
+// DELETE /api/apps/{id} is left out for the restore's reason: an app's disks
+// go with it and nothing brings them back. apps.go says more, and
+// TestNoToolDeletesAnApp holds it.
 
 type databaseSummary struct {
 	ID        string `json:"id"`

@@ -2686,7 +2686,8 @@ paths:
       summary: Change an app's settings
       description: >-
         Member. Only the fields sent change. A runtime setting is applied by a
-        rollout and never rebuilds the app.
+        rollout and never rebuilds the app; what goes into the image waits for
+        the next deploy, and the answer says which setting was which.
       requestBody:
         required: true
         content:
@@ -2694,10 +2695,10 @@ paths:
             schema: {$ref: '#/components/schemas/UpdateAppRequest'}
       responses:
         '200':
-          description: The app as it is now.
+          description: The app as it is now, and when each setting that changed takes effect.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/App'}
+              schema: {$ref: '#/components/schemas/AppUpdate'}
         default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteApp
@@ -6793,6 +6794,24 @@ components:
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/App'}}
         total: {type: integer}
+
+    AppUpdate:
+      allOf:
+        - $ref: '#/components/schemas/App'
+        - type: object
+          required: [rolled_out, next_deploy]
+          properties:
+            rolled_out:
+              type: array
+              description: The settings the running instances were given now, by a rollout.
+              items: {type: string}
+            next_deploy:
+              type: array
+              description: >-
+                The settings that wait for the next deploy: what goes into the
+                image, the release command, and on an app that runs nothing yet,
+                every change.
+              items: {type: string}
 
     AppDetail:
       allOf:

@@ -46,7 +46,11 @@ skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
 skifity scale --instances 3       Change how many copies run
 skifity gpus --count 1            Give each instance an NVIDIA GPU (--vendor amd|intel, --on web,worker)
-skifity rollback                  Go back to the previous version
+skifity rollback                  Go back to the previous version, after saying which settings it puts back (--yes skips the question)
+skifity restart                   Replace the app's instances one at a time; nothing is rebuilt
+skifity apps set --port 3000      Change a setting: --start, --health, --build, --root, --memory-limit and more; says what rolled out and what waits for a deploy
+skifity apps rm <name>            Delete an app and its disks; asks for its name, or --yes in a script
+skifity deploy --cancel [<n>]     Stop the deploy under way, or deployment number n
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
 skifity upgrade                   Ask which release of the panel is the newest; --latest upgrades to it, --to v0.2.0 names one (an administrator's; copies the database first)
@@ -156,12 +160,18 @@ Tools, in the order they are usually needed:
 | `set_gpus` | Gives each instance of an app GPUs, or takes them away, and says what the cluster offers. |
 | `set_process` | Runs a worker or other process beside an app, on its image, or changes one. |
 | `check_scaling_readiness` | What would break if this app ran more than one instance. |
-| `rollback_app` | Restores a previous version's image and settings. |
+| `update_app_settings` | Changes an app's settings: port, start command, health check, folder, build command, memory and the rest. Says which rolled out at once and which wait for the next deploy. |
+| `restart_app` | Replaces an app's instances one at a time. Nothing is rebuilt or changed. |
+| `cancel_deployment` | Stops a deployment that is building or rolling out; the running version keeps running. |
+| `rollback_app` | Restores a previous version's image and settings, and lists each setting it puts back. `dry_run: true` only lists them. |
 | `lock_deploys` | Stops every deploy and rollback of an app, with a reason, until it is unlocked. |
 | `unlock_deploys` | Lifts that. |
 | `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
 | `get_cluster_status` | Servers, readiness, spare capacity. |
 | `list_log_drains` | Where the team's apps' logs are shipped — Loki, Elasticsearch, Datadog, Axiom, Better Stack, New Relic, syslog or HTTPS — and whether the collector is running. Read-only: adding one takes a credential, so it is done in the panel or with `skifity drains add`. |
+
+Deleting an app is not a tool either: its disks go with it for good, so a
+person does it in the panel or with `skifity apps rm`.
 
 Three things are deliberately not tools. A database's password: an app gets its
 connection string from `link_database`, and a password that has been in an
@@ -201,12 +211,15 @@ GET    /api/environments/{env}/apps           apps
 POST   /api/environments/{env}/apps           create one
 GET    /api/apps/{app}                        an app
 GET    /api/apps/{app}/status                 live state and instances
+PATCH  /api/apps/{app}                        change settings; answers rolled_out and next_deploy, the settings that wait for a deploy
+POST   /api/apps/{app}/restart                replace the instances one at a time
 POST   /api/teams/{team}/detect-upload        what a folder (.tar.gz) is and needs, before any app exists
 GET    /api/teams/{team}/git-sources/{source}/repositories?q=  what a Git connection can read
 GET    /api/teams/{team}/git-sources/{source}/branches?repo=owner/name  one repository's branches
 PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, for an app with no repository
 POST   /api/apps/{app}/deploy                 deploy
 GET    /api/apps/{app}/deployments            deployment history
+POST   /api/apps/{app}/deployments/{deployment}/cancel  stop one under way
 POST   /api/apps/{app}/rollback/{deployment}  roll back
 GET    /api/apps/{app}/rollback/{deployment}/plan  what a rollback would change, and what it leaves
 PUT    /api/apps/{app}/lock                   lock deploys and rollbacks (reason)

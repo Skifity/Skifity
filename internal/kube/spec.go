@@ -362,11 +362,50 @@ func EnvHash(values map[string]string) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// BuildInput is one of an app's settings that goes into its image.
+type BuildInput struct {
+	// Setting is the app's setting as the API names it, or "variable" for
+	// its build-time variables, which are many and named by their keys.
+	Setting string
+	// Parameter is the BuildFingerprint parameter it reaches the build
+	// through. Empty only for an image app's image, which builds nothing:
+	// the image stands for the whole fingerprint.
+	Parameter string
+}
+
+// BuildInputs are the settings that decide what an app's image contains.
+// Changing one waits for the next deploy, which builds with it; changing any
+// other setting is a rollout of the image the app already runs (ADR-0007).
+//
+// Saving settings and the deploy that records what it built both read this
+// list, so the two cannot disagree about what a deploy picks up. A test ties
+// it to BuildFingerprint's parameters, so a new one cannot be added to the
+// fingerprint and forgotten here.
+var BuildInputs = []BuildInput{
+	{Setting: "repo_url", Parameter: "repoURL"},
+	// The branch decides which commit a deploy builds.
+	{Setting: "branch", Parameter: "commitSHA"},
+	{Setting: "root_dir", Parameter: "rootDir"},
+	{Setting: "builder", Parameter: "builder"},
+	{Setting: "dockerfile_path", Parameter: "dockerfilePath"},
+	{Setting: "build_command", Parameter: "buildCommand"},
+	{Setting: "static_dir", Parameter: "staticDir"},
+	{Setting: "image"},
+	{Setting: "variable", Parameter: "buildArgs"},
+}
+
+// IsBuildInput reports whether a setting, by its API name, goes into the
+// image.
+func IsBuildInput(setting string) bool {
+	return slices.ContainsFunc(BuildInputs, func(input BuildInput) bool { return input.Setting == setting })
+}
+
 // BuildFingerprint identifies the inputs that decide what an image contains.
 //
 // This is the mechanism behind ADR-0007: two deploys with the same fingerprint
 // can share an image, so changing an environment variable or a replica count
-// never triggers a rebuild.
+// never triggers a rebuild. BuildInputs names the app setting behind each
+// parameter.
 func BuildFingerprint(repoURL, commitSHA, builder, dockerfilePath, rootDir, buildCommand, staticDir string, buildArgs map[string]string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "repo=%s\ncommit=%s\nbuilder=%s\ndockerfile=%s\nroot=%s\n",
