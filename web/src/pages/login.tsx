@@ -319,7 +319,11 @@ export function LoginPage({ onSignedIn }: { onSignedIn: () => void }) {
                           autoFocus
                         />
                       </Field>
-                      <Button type="submit" className="w-full" disabled={submitting || !code.trim()}>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={submitting || !code.trim()}
+                      >
                         {submitting && <Spinner />}
                         {submitting ? t("auth.signingIn") : t("auth.signIn")}
                       </Button>
