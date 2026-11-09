@@ -430,6 +430,29 @@ func TestInstallingATemplateSendsItsInputsAndRelaysItsNotes(t *testing.T) {
 	}
 }
 
+// A dry run is passed on as one, and answered as what would be created rather
+// than as something installed: an assistant told "Installed" by a dry run
+// would tell the person their app exists.
+func TestADryRunOfATemplateIsPassedOnAndCreatesNothing(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "install_template", map[string]any{
+		"template_id": "plausible", "environment_id": "env_1", "name": "stats", "dry_run": true,
+	})
+	if failed {
+		t.Fatalf("install_template failed: %s", text)
+	}
+	request, _ := panel.last("POST", "/api/templates/plausible/install")
+	if want := map[string]any{"environment_id": "env_1", "name": "stats", "dry_run": true}; !reflect.DeepEqual(request.Body, want) {
+		t.Errorf("the dry run sent %v, want %v", request.Body, want)
+	}
+	if !strings.Contains(text, "Nothing was created") || strings.Contains(text, "Installed") ||
+		!strings.Contains(text, "plausible (ghcr.io/plausible/community-edition:v2.1.5)") {
+		t.Errorf("a dry run answered as an install: %s", text)
+	}
+}
+
 // The search is the tool's own, over the whole catalogue: the template called
 // what was asked for comes first, a category narrows it, and every category
 // is named so the next search can use one.

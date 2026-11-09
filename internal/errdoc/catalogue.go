@@ -564,6 +564,62 @@ func TemplateNotInstallable(id, catalogue, why string) *Problem {
 		WithDocs("/docs/templates#private-catalogues")
 }
 
+// TemplateInputRequired is a template installed without a value it cannot
+// make up. It has a code of its own rather than request.invalid because the
+// install dialog asks for the same value in its own field, and leaves this
+// one out of what it shows from a dry run.
+func TemplateInputRequired(input, template string) *Problem {
+	return New("template.input_required", "The template needs a value nobody gave").
+		WithCause("%s is needed to install %s.", input, template).
+		WithImpact("Nothing was created.").
+		WithFix("Fill it in and install again.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/templates#installing-one")
+}
+
+// TemplateInstallRolledBack is an install that failed after it had made
+// something, and removed everything it had made.
+//
+// The cause is the failure as it was, in its own words, so the person can see
+// what to fix; what this adds is that nothing was left behind for them to
+// clean up first.
+func TemplateInstallRolledBack(template string, cause error, removed []string) *Problem {
+	underlying := From(cause)
+	p := New("template.install_rolled_back", "The template could not be installed, and nothing of it was kept").
+		WithCause("Installing %s stopped at this: %s", template, underlying.Error()).
+		WithImpact("What the install had made was removed again, and nothing was deployed: %s.", strings.Join(removed, ", ")).
+		WithFix("Fix what the cause says, then install again.").
+		WithStatus(rolledBackStatus(underlying)).
+		WithDocs("/docs/templates#installing-one")
+	p.Retryable = underlying.Retryable
+	p.Err = cause
+	return p
+}
+
+// TemplateInstallLeftOver is an install that failed, and whose undo did not
+// remove everything either.
+func TemplateInstallLeftOver(template string, cause error, remains []string) *Problem {
+	underlying := From(cause)
+	p := New("template.install_left_over", "The template could not be installed, and part of it is still there").
+		WithCause("Installing %s stopped at this: %s", template, underlying.Error()).
+		WithImpact("Nothing was deployed, and what the install had made was removed, except %s, which could not be.", strings.Join(remains, ", ")).
+		WithFix("Delete what is left from the environment's page, fix what the cause says, then install again.").
+		WithStatus(rolledBackStatus(underlying)).
+		WithDocs("/docs/templates#installing-one")
+	p.Err = cause
+	return p
+}
+
+// rolledBackStatus answers an undone install with the status of what stopped
+// it: a name taken is still a conflict, a cluster that refused still a bad
+// gateway.
+func rolledBackStatus(cause *Problem) int {
+	if cause.Status == 0 {
+		return http.StatusInternalServerError
+	}
+	return cause.Status
+}
+
 // PromotionBuiltDifferently is an image built from other build settings or
 // build-time variables than the app it is promoted to has.
 func PromotionBuiltDifferently(app string) *Problem {

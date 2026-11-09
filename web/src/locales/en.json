@@ -1772,7 +1772,9 @@
     "withoutGPUHelp": "No server offers one yet, so they run without. Give each one a GPU under its settings once a server does.",
     "noEnvironment": "There is no project to install into yet. Create one first.",
     "stackApps": "Apps it installs",
-    "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name."
+    "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name.",
+    "plannedDatabases_one": "Its database is created as {{names}}.",
+    "plannedDatabases_other": "Its databases are created as {{names}}."
   },
   "settings": {
     "title": "Settings",
@@ -4310,6 +4312,24 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "template_input_required": {
+        "title": "The template needs a value nobody gave",
+        "cause": "{{0}} is needed to install {{1}}.",
+        "impact": "Nothing was created.",
+        "fix": "Fill it in and install again."
+      },
+      "template_install_rolled_back": {
+        "title": "The template could not be installed, and nothing of it was kept",
+        "cause": "Installing {{0}} stopped at this: {{1}}",
+        "impact": "What the install had made was removed again, and nothing was deployed: {{0}}.",
+        "fix": "Fix what the cause says, then install again."
+      },
+      "template_install_left_over": {
+        "title": "The template could not be installed, and part of it is still there",
+        "cause": "Installing {{0}} stopped at this: {{1}}",
+        "impact": "Nothing was deployed, and what the install had made was removed, except {{0}}, which could not be.",
+        "fix": "Delete what is left from the environment's page, fix what the cause says, then install again."
       },
       "cli_delete_unconfirmed": {
         "title": "Deleting an app has to be confirmed",

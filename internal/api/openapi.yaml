@@ -4706,16 +4706,26 @@ paths:
       tags: [Templates]
       summary: Install a template into an environment
       description: >-
-        Member, in the environment named in the body. Its databases are made first,
-        then its apps. catalogue_id names the team catalogue the template is in; it
-        is looked for among the catalogues of the environment's team, so another
-        team's is not found.
+        Member, in the environment named in the body. catalogue_id names the team
+        catalogue the template is in; it is looked for among the catalogues of the
+        environment's team, so another team's is not found. An install is all or
+        nothing: every name, port and input is checked before anything is made, and
+        the first problem is the answer. A failure while it is being made, such as
+        the cluster refusing a database, removes what was made and answers
+        template.install_rolled_back. Its apps are announced and deployed only once
+        all of it exists. With dry_run, nothing is made, and the answer is the plan
+        with every problem found.
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/InstallTemplateRequest'}
       responses:
+        '200':
+          description: With dry_run, what the install would make and what stops it.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateInstallPlan'}
         '201':
           description: What was created.
           content:
@@ -8511,6 +8521,47 @@ components:
           type: object
           description: The template's inputs, by key.
           additionalProperties: {type: string}
+        dry_run: {type: boolean, description: 'Answer the plan and make nothing.'}
+
+    TemplateInstallPlan:
+      type: object
+      required: [apps, databases, volumes, problems]
+      properties:
+        apps:
+          type: array
+          items:
+            type: object
+            required: [service, name, slug, image, public]
+            properties:
+              service: {type: string, description: 'The template''s own name for it.'}
+              name: {type: string}
+              slug: {type: string}
+              image: {type: string}
+              public: {type: boolean}
+        databases:
+          type: array
+          items:
+            type: object
+            required: [name, engine, storage_gb, link_to]
+            properties:
+              name: {type: string, description: 'Named after the app when a template of one app is given a name of its own.'}
+              engine: {type: string}
+              storage_gb: {type: integer, description: 'Nothing for a cache.'}
+              link_to: {type: array, items: {type: string}, description: 'The apps it would be linked to, by name.'}
+        volumes:
+          type: array
+          items:
+            type: object
+            required: [app, name, mount_path, size_gb]
+            properties:
+              app: {type: string}
+              name: {type: string}
+              mount_path: {type: string}
+              size_gb: {type: integer}
+        problems:
+          type: array
+          description: Everything that stops the install, each as the install would answer it. Empty when it can go ahead.
+          items: {$ref: '#/components/schemas/Problem'}
 
     TemplateCatalogue:
       type: object

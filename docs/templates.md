@@ -24,6 +24,31 @@ connection string exists by the time the app looks for it. That is the
 difference between a template that works on the first try and one that
 crash-loops until somebody redeploys it.
 
+### All or nothing
+
+An install either makes everything the template describes or leaves nothing
+behind. Before anything is made, the panel works out every name the install
+takes, every public port it opens and every value it needs, and checks each one
+against what is already there — an app and a database in one environment share
+an address, so the two are checked together. The dialog asks for that check as
+you choose where to install and what to call it, so a name that is taken is said
+beside the name, before **Install** is pressed.
+
+What can only fail while the install is being made — the cluster refusing a
+database, say — removes what it had made, and the error names what was removed
+as well as what stopped it. Nothing is deployed, and nothing appears in the
+activity log as created, until all of it exists.
+
+A template of one app can be installed again in the same environment under a
+name of its own. Its databases are then named after it: WordPress installed a
+second time as `shop` gets the database `shop-db`, beside the first copy's
+`wordpress-db`. A template of several apps keeps the names its apps reach each
+other by, so a second copy of one goes in another environment.
+
+From a terminal or an assistant, `"dry_run": true` on the install answers the
+same check — the apps, databases and disks it would make, and every problem that
+would stop it — and makes nothing.
+
 ## What is in the catalogue
 
 **374 applications**, grouped by what they are for: productivity, developer
@@ -294,7 +319,7 @@ letter.
 Everything a template sets is editable afterwards: variables on the app's
 Variables tab, size and scaling on its settings, the database on its own page.
 Reinstalling the template does not reconcile anything — it installs a second
-copy under a new name.
+copy under a new name; see [All or nothing](#all-or-nothing).
 
 If you outgrow a template, nothing has to be undone. It left you an app and a
 database, and those are the things Skifity actually runs.

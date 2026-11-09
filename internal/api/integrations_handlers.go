@@ -627,6 +627,9 @@ type installTemplateRequest struct {
 	CatalogueID string            `json:"catalogue_id,omitempty"`
 	Name        string            `json:"name,omitempty"`
 	Values      map[string]string `json:"values,omitempty"`
+	// DryRun answers what the install would make and what stops it, and
+	// makes nothing.
+	DryRun bool `json:"dry_run,omitempty"`
 }
 
 func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
@@ -655,7 +658,16 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.installTemplate(r, strings.TrimSpace(req.CatalogueID), tpl, env, user, req.Name, req.Values)
+	plan, err := s.planTemplateInstall(r.Context(), env, tpl, strings.TrimSpace(req.CatalogueID), req.Name, req.Values)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if req.DryRun {
+		writeJSON(w, http.StatusOK, plan)
+		return
+	}
+	created, err := s.installTemplate(r, plan, user)
 	if err != nil {
 		writeError(w, r, err)
 		return

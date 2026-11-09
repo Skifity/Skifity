@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   AlertTriangleIcon,
@@ -44,7 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
-import { api, type List } from "@/lib/api"
+import { api, ApiError, type List, type Problem } from "@/lib/api"
 import { queryClient } from "@/lib/query"
 import type { Environment, Project, Template } from "@/lib/types"
 
@@ -512,6 +512,21 @@ function iconURL(template: Template): string {
     : path
 }
 
+/** What POST /api/templates/{id}/install answers with when asked for a dry run. */
+type InstallPlan = {
+  apps: { service: string; name: string; slug: string }[]
+  databases: { name: string; engine: string }[]
+  volumes: { app: string; mount_path: string; size_gb: number }[]
+  /** Everything that would stop the install, each as the install would answer it. */
+  problems: Problem[]
+}
+
+/**
+ * Problems a dry run reports that the dialog says in its own way: a value the
+ * form already asks for in a field of its own.
+ */
+const SAID_BY_THE_FORM = new Set(["template.input_required"])
+
 /** What POST /api/templates/{id}/install answers with. */
 type Installed = {
   apps: { id: string }[]
@@ -568,22 +583,51 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
   // there are several, nothing is picked for you, because installing into the
   // wrong environment is not a mistake anybody notices straight away.
   const chosen = environmentId || (environments.length === 1 ? environments[0].environment.id : "")
+  const installName = services.length > 1 ? "" : name.trim()
+  const installPath = `/api/templates/${encodeURIComponent(template.id)}/install`
+  // Which catalogue it is in: an id is only unique within one, and the panel
+  // looks for it among this team's own and nobody else's.
+  const catalogue = template.catalogue ? { catalogue_id: template.catalogue.id } : {}
+
+  // What the install would make, and what would stop it, asked before Install
+  // is pressed: a name already taken in that environment is said beside the
+  // name, rather than after a click. The inputs are not sent — the form asks
+  // for them itself — so typing a password is not a request per key.
+  const plan = useQuery({
+    queryKey: ["template-plan", template.id, template.catalogue?.id ?? "", chosen, installName],
+    queryFn: () =>
+      api.post<InstallPlan>(installPath, {
+        environment_id: chosen,
+        ...catalogue,
+        name: installName,
+        dry_run: true,
+      }),
+    enabled: Boolean(chosen),
+    // The previous answer stays while the next is asked, so the problems do
+    // not flicker away and back with every letter of a name.
+    placeholderData: keepPreviousData,
+  })
+  const problems = (plan.data?.problems ?? []).filter(
+    (problem) => !SAID_BY_THE_FORM.has(problem.code),
+  )
+  // Only an answer for what is on screen now stops the install. One for the
+  // name as it was a keystroke ago does not.
+  const blocked = !plan.isPlaceholderData && problems.length > 0
+  const plannedDatabases = (plan.data?.databases ?? []).map((database) => database.name)
 
   const install = useMutation({
     mutationFn: () =>
-      api.post<Installed>(`/api/templates/${encodeURIComponent(template.id)}/install`, {
+      api.post<Installed>(installPath, {
         environment_id: chosen,
-        // Which catalogue it is in: an id is only unique within one, and the
-        // panel looks for it among this team's own and nobody else's.
-        ...(template.catalogue ? { catalogue_id: template.catalogue.id } : {}),
-        name: services.length > 1 ? "" : name.trim(),
+        ...catalogue,
+        name: installName,
         // A generated value is filled in by the panel, so anything left empty
         // is sent empty rather than as an accidental literal.
         values,
       }),
-    // Whatever happened, the lists are asked again: an install that fails
-    // half way has still made the apps before the failure, and the pages
-    // showing that environment had no way to know.
+    // An install is all or nothing, so after a failure the lists are as they
+    // were — unless what it made could not all be removed again, which the
+    // error says, and which these pages had no other way to learn of.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["apps", chosen] })
       void queryClient.invalidateQueries({ queryKey: ["databases", chosen] })
@@ -688,8 +732,24 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
+                {plannedDatabases.length > 0 && (
+                  <FieldDescription>
+                    {t("templates.plannedDatabases", {
+                      count: plannedDatabases.length,
+                      names: plannedDatabases.join(", "),
+                    })}
+                  </FieldDescription>
+                )}
               </Field>
             )}
+
+            {problems.map((problem, index) => (
+              <ErrorDisplay
+                key={`${problem.code}-${index}`}
+                error={new ApiError(problem, 409)}
+                compact
+              />
+            ))}
 
             {asked.map((input) => (
               <Field key={input.key}>
@@ -724,7 +784,7 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={!chosen || install.isPending}>
+            <Button type="submit" disabled={!chosen || blocked || install.isPending}>
               {install.isPending && <Spinner />}
               {install.isPending ? t("templates.installing") : t("templates.install")}
             </Button>

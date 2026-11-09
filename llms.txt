@@ -124,7 +124,7 @@ Tools, in the order they are usually needed:
 | `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
 | `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
 | `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, and the catalogue it is in. |
-| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together. Takes the catalogue_id of a team template. Relays the template's notes. |
+| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together, all or nothing. Takes the catalogue_id of a team template, and dry_run to see what it would create and what would stop it. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
 | `get_app_status` | Whether an app is running, how many instances are ready, its URLs, and which deployment is live (`live_deployment`) and which each instance runs. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
@@ -270,7 +270,7 @@ GET    /api/events?topics=team:{team}         everything happening, as events
 GET    /api/teams/{team}/templates            the templates the team can install: its own catalogues', then the built-in ones
 GET    /api/teams/{team}/template-catalogues  the team's own template catalogues, and why any of their templates is refused
 POST   /api/teams/{team}/template-catalogues  add one (name, url, auth_header_name, auth_header_value); downloaded and read first
-POST   /api/templates/{template}/install      install one (environment_id, catalogue_id for a team template, values)
+POST   /api/templates/{template}/install      install one (environment_id, catalogue_id for a team template, values), all or nothing; dry_run answers the plan and its problems
 GET    /api/teams/{team}/registries           private registries the team pulls from
 PUT    /api/teams/{team}/registries           save one; the registry is asked first
 GET    /api/teams/{team}/certificates         the team's own TLS certificates, and which domains use each; never a key

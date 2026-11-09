@@ -68,6 +68,10 @@ func TestEveryCheckRefusesWhatItIsFor(t *testing.T) {
 			t.Databases[0].LinkTo = []string{"web"}
 		}, "not a service in this template"},
 		{"no storage", CheckDatabases, func(t *Template) { t.Databases[0].StorageGB = 0 }, "GB of storage"},
+		{"a database with a service's name", CheckDatabases, func(t *Template) { t.Databases[0].Name = "notes" }, "share an address"},
+		{"two databases with one name", CheckDatabases, func(t *Template) {
+			t.Databases = append(t.Databases, t.Databases[0])
+		}, "two databases are called"},
 		{"latest", CheckVersions, func(t *Template) { t.Services[0].Image = "example/notes:latest" }, "whatever is newest"},
 		{"no tag", CheckVersions, func(t *Template) { t.Services[0].Image = "example/notes" }, "no tag"},
 		{"a branch", CheckVersions, func(t *Template) { t.Services[0].Image = "example/notes:main-stable" }, "whatever is newest"},

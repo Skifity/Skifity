@@ -1749,7 +1749,8 @@
     "withoutGPUHelp": "Belum ada server yang menyediakannya, jadi aplikasi berjalan tanpa GPU. Beri masing-masing GPU di pengaturannya setelah ada server yang menyediakan.",
     "noEnvironment": "Belum ada proyek untuk tempat memasang. Buat dulu satu proyek.",
     "stackApps": "Aplikasi yang dipasang",
-    "stackAppsHelp": "{{names}}. Masing-masing memakai nama dari template, karena aplikasi lainnya menjangkaunya lewat nama itu."
+    "stackAppsHelp": "{{names}}. Masing-masing memakai nama dari template, karena aplikasi lainnya menjangkaunya lewat nama itu.",
+    "plannedDatabases_other": "Database-nya dibuat dengan nama {{names}}."
   },
   "settings": {
     "title": "Pengaturan",
@@ -4285,6 +4286,24 @@
         "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
+      },
+      "template_input_required": {
+        "title": "Template ini memerlukan nilai yang belum diisi",
+        "cause": "{{0}} diperlukan untuk memasang {{1}}.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Isi nilainya, lalu pasang lagi."
+      },
+      "template_install_rolled_back": {
+        "title": "Template tidak bisa dipasang, dan tidak ada bagiannya yang disimpan",
+        "cause": "Pemasangan {{0}} berhenti di sini: {{1}}",
+        "impact": "Apa yang sudah dibuat pemasangan ini dihapus lagi, dan tidak ada yang di-deploy: {{0}}.",
+        "fix": "Perbaiki apa yang disebut di penyebabnya, lalu pasang lagi."
+      },
+      "template_install_left_over": {
+        "title": "Template tidak bisa dipasang, dan sebagiannya masih ada",
+        "cause": "Pemasangan {{0}} berhenti di sini: {{1}}",
+        "impact": "Tidak ada yang di-deploy, dan apa yang sudah dibuat pemasangan ini dihapus, kecuali {{0}}, yang tidak bisa dihapus.",
+        "fix": "Hapus yang tersisa dari halaman environment, perbaiki apa yang disebut di penyebabnya, lalu pasang lagi."
       },
       "cli_delete_unconfirmed": {
         "title": "Menghapus aplikasi harus dikonfirmasi",

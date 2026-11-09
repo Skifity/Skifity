@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -241,8 +240,7 @@ func TestAnInstallRemembersItsTemplateAndKeepsPrivateServicesInternal(t *testing
 	if tpl.ID == "" {
 		t.Skip("the catalogue has no template with a public and a private service and no databases")
 	}
-	request := httptest.NewRequest(http.MethodPost, "/api/templates/"+tpl.ID+"/install", nil).WithContext(t.Context())
-	result, err := h.api.installTemplate(request, "", tpl, acme.env, acme.user, "", nil)
+	result, err := h.installDirectly(t, acme, tpl, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

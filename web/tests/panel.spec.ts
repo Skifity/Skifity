@@ -291,6 +291,31 @@ test("the template catalogue narrows by category and by search", async ({ page }
   await expect(sections).toHaveCount(1)
 })
 
+// An install is all or nothing, and what would stop one is said before Install
+// is pressed: a second Homer in the same environment would have the first
+// one's name, and the dialog says so beside the name rather than after a click.
+test("the install dialog says a name is taken before Install is pressed", async ({ page }) => {
+  await signIn(page)
+  const environment = await firstEnvironment(page)
+  const installed = await page.request.post("/api/templates/homer/install", {
+    headers: await csrfHeaders(page),
+    data: { environment_id: environment },
+  })
+  expect(installed.ok(), await installed.text()).toBeTruthy()
+
+  await page.goto("/templates")
+  await page.getByPlaceholder("Search templates").fill("homer")
+  await page.getByRole("button", { name: "Install Homer" }).click()
+  const dialog = page.getByRole("dialog")
+  const install = dialog.getByRole("button", { name: "Install", exact: true })
+  await expect(dialog.getByText("That name is already used here")).toBeVisible()
+  await expect(install).toBeDisabled()
+
+  await dialog.getByLabel("App name").fill("homer-two")
+  await expect(dialog.getByText("That name is already used here")).toHaveCount(0)
+  await expect(install).toBeEnabled()
+})
+
 test("the documentation is served from the binary", async ({ page }) => {
   await page.goto("/docs/")
   await expect(page.getByRole("heading", { level: 1 })).toContainText("documentation")
@@ -678,6 +703,25 @@ function totp(secret: string): string {
 }
 
 /** Signs in, unless this context already has a session. */
+/** The CSRF header a request from the signed-in page has to carry. */
+async function csrfHeaders(page: Page) {
+  const cookies = await page.context().cookies()
+  return {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+}
+
+/** The environment first-run setup made: Production of the first project. */
+async function firstEnvironment(page: Page): Promise<string> {
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  return envs.items[0].id
+}
+
 async function signIn(page: Page) {
   await page.goto("/")
 

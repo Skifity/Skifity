@@ -94,6 +94,7 @@ type installTemplateInput struct {
 	EnvironmentID string            `json:"environment_id" jsonschema:"where to install it, as returned by list_projects"`
 	Name          string            `json:"name,omitempty" jsonschema:"what to call the app instead of the template's own name; only for a template with one app, and how a second copy of it gets a name of its own"`
 	Values        map[string]string `json:"values,omitempty" jsonschema:"the template's inputs, by key. Leave out one marked generate and a random secret is made for it"`
+	DryRun        bool              `json:"dry_run,omitempty" jsonschema:"true to see what the install would create and what would stop it, creating nothing"`
 }
 
 type installTemplateOutput struct {
@@ -102,6 +103,25 @@ type installTemplateOutput struct {
 	// Notes are the template's own: the steps it could not do for you.
 	Notes string `json:"notes,omitempty"`
 	Note  string `json:"note"`
+	// Plan is what a dry run answers instead.
+	Plan *installPlan `json:"plan,omitempty"`
+}
+
+// installPlan is what installing a template would create, and what stops it.
+type installPlan struct {
+	Apps      []string `json:"apps"`
+	Databases []string `json:"databases"`
+	Volumes   []string `json:"volumes"`
+	// Problems are each thing that stops the install, as the install would
+	// answer it. None means it can go ahead.
+	Problems []plannedProblem `json:"problems"`
+}
+
+type plannedProblem struct {
+	Code  string `json:"code"`
+	Title string `json:"title"`
+	Cause string `json:"cause,omitempty"`
+	Fix   string `json:"fix,omitempty"`
 }
 
 type installedApp struct {
@@ -129,7 +149,9 @@ func (s *Server) registerTemplates() {
 			"For a template from the team's own catalogue, pass the catalogue_id list_templates gave with it; without one, the built-in template of that id is installed. " +
 			"Pass its inputs as values; ask the person for the ones marked required rather than inventing them, and leave out the ones marked generate so a random secret is made. " +
 			"Returns the apps and databases created, and the template's notes: the steps it could not do automatically, which the person needs to hear. " +
-			"An environment has one app of a name, so installing the same template there again is refused; a second copy of a one-app template needs a name of its own.",
+			"An install is all or nothing: names, ports and inputs are checked before anything is created, and one that fails part way removes what it made. " +
+			"An environment has one app or database of a name, so installing the same template there again is refused; a second copy of a one-app template needs a name of its own, and its databases are then named after it. " +
+			"Pass dry_run to see the apps, databases and disks it would create, and every problem that would stop it, without creating anything.",
 	}, s.installTemplate)
 }
 
@@ -266,6 +288,10 @@ func (s *Server) installTemplate(ctx context.Context, _ *mcp.CallToolRequest, in
 	if len(in.Values) > 0 {
 		body["values"] = in.Values
 	}
+	if in.DryRun {
+		body["dry_run"] = true
+		return s.planTemplate(ctx, in, body)
+	}
 	// The generated secrets are set on the apps and not sent back, so there
 	// is nothing in this answer to keep from the assistant.
 	var response struct {
@@ -298,4 +324,66 @@ func (s *Server) installTemplate(ctx context.Context, _ *mcp.CallToolRequest, in
 		fmt.Fprintf(&b, "\n\nThe template's notes, which are steps it could not do for you. Tell the person:\n%s", response.Notes)
 	}
 	return textResult(b.String()), out, nil
+}
+
+// planTemplate is install_template's dry run: what it would create, and every
+// problem that would stop it, so an assistant can choose another name or ask
+// for a missing value before anything exists.
+func (s *Server) planTemplate(ctx context.Context, in installTemplateInput, body map[string]any) (*mcp.CallToolResult, installTemplateOutput, error) {
+	var response struct {
+		Apps []struct {
+			Name  string `json:"name"`
+			Image string `json:"image"`
+		} `json:"apps"`
+		Databases []struct {
+			Name   string `json:"name"`
+			Engine string `json:"engine"`
+		} `json:"databases"`
+		Volumes []struct {
+			App       string `json:"app"`
+			MountPath string `json:"mount_path"`
+			SizeGB    int    `json:"size_gb"`
+		} `json:"volumes"`
+		Problems []errdoc.Problem `json:"problems"`
+	}
+	if err := s.client.Do(ctx, "POST", "/api/templates/"+url.PathEscape(in.TemplateID)+"/install", body, &response); err != nil {
+		return errorResult(err), installTemplateOutput{}, nil
+	}
+	plan := &installPlan{Apps: []string{}, Databases: []string{}, Volumes: []string{}, Problems: []plannedProblem{}}
+	for _, app := range response.Apps {
+		plan.Apps = append(plan.Apps, fmt.Sprintf("%s (%s)", app.Name, app.Image))
+	}
+	for _, database := range response.Databases {
+		plan.Databases = append(plan.Databases, fmt.Sprintf("%s (%s)", database.Name, database.Engine))
+	}
+	for _, volume := range response.Volumes {
+		plan.Volumes = append(plan.Volumes, fmt.Sprintf("%d GB at %s of %s", volume.SizeGB, volume.MountPath, volume.App))
+	}
+	for _, problem := range response.Problems {
+		plan.Problems = append(plan.Problems, plannedProblem{
+			Code: problem.Code, Title: problem.Title, Cause: problem.Cause, Fix: problem.Fix,
+		})
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Nothing was created. Installing %s would create the apps %s", in.TemplateID, strings.Join(plan.Apps, ", "))
+	if len(plan.Databases) > 0 {
+		fmt.Fprintf(&b, ", the databases %s", strings.Join(plan.Databases, ", "))
+	}
+	if len(plan.Volumes) > 0 {
+		fmt.Fprintf(&b, ", and disks of %s", strings.Join(plan.Volumes, ", "))
+	}
+	b.WriteString(".")
+	if len(plan.Problems) == 0 {
+		b.WriteString(" Nothing stops it: call install_template again without dry_run to install it.")
+	} else {
+		b.WriteString(" It would be refused, for this:")
+		for _, problem := range plan.Problems {
+			fmt.Fprintf(&b, "\n- %s: %s %s (%s)", problem.Title, problem.Cause, problem.Fix, problem.Code)
+		}
+	}
+	return textResult(b.String()), installTemplateOutput{
+		Apps: []installedApp{}, Databases: []databaseSummary{}, Plan: plan,
+		Note: "A dry run: nothing was created.",
+	}, nil
 }

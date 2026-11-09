@@ -269,10 +269,21 @@ func CheckDatabases(template Template) []string {
 	for _, svc := range template.Services {
 		services[svc.Name] = true
 	}
+	databases := map[string]bool{}
 	for _, db := range template.Databases {
 		if db.Name == "" || kube.Slugify(db.Name) != db.Name {
 			add("%s: the database name %q is not a slug", template.ID, db.Name)
 		}
+		// An app and a database in one environment share an address, so
+		// either of these is an install that cannot finish.
+		if services[db.Name] {
+			add("%s: the database %s has a service's name, and an app and a database in one environment share an address",
+				template.ID, db.Name)
+		}
+		if databases[db.Name] {
+			add("%s: two databases are called %s", template.ID, db.Name)
+		}
+		databases[db.Name] = true
 		if !Engines[db.Engine] {
 			add("%s: %q is not an engine Skifity runs", template.ID, db.Engine)
 		}
