@@ -236,6 +236,10 @@ skifity domains                   # the app's domains, and where each one's DNS 
 skifity domains add shop.example.com  # its record is created when the team connected the zone
 skifity domains add shop.example.com --manage-dns=false  # make the record yourself
 skifity domains remove shop.example.com  # and the record the panel created with it
+skifity domains panel             # where the panel itself answers, and a move under way
+skifity domains panel panel.example.com --check  # what its DNS says; nothing is changed
+skifity domains panel panel.example.com  # move the panel there, with HTTPS, and follow it
+skifity domains panel --remove    # cancel a move that stopped, or go back to sslip.io
 skifity dns providers             # the team's DNS providers and their zones
 skifity dns providers add --kind cloudflare --credentials token.txt  # or --credentials - from standard input
 skifity dns providers add --kind route53 --credentials ~/.aws/credentials

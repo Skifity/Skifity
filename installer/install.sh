@@ -2085,7 +2085,8 @@ choose_hostname() {
 		PANEL_HOST="$(printf '%s' "$PUBLIC_IP" | tr '.:' '--').sslip.io"
 		PANEL_SCHEME="http"
 		ok "No domain given, so the panel will answer on $PANEL_HOST"
-		note "For HTTPS, point a domain at this server and run this again with --domain <name>."
+		note "For HTTPS, point a domain at this server and put the panel on it under"
+		note "Settings, General, Panel address, or run this again with --domain <name>."
 	fi
 	PUBLIC_URL="${PANEL_SCHEME}://${PANEL_HOST}"
 }
@@ -2605,7 +2606,8 @@ finish() {
 
 	if [ "$PANEL_SCHEME" = "http" ]; then
 		printf '  %sThis address has no certificate.%s For HTTPS, point a domain at this server\n' "$YELLOW" "$RESET"
-		printf '  and run the installer again with --domain <name>.\n\n'
+		printf '  and put the panel on it under Settings, General, Panel address, or run the\n'
+		printf '  installer again with --domain <name>.\n\n'
 	else
 		printf '  If the page does not load, the DNS record for %s\n' "$PANEL_HOST"
 		printf '  may not have reached your computer yet. Give it a few minutes.\n\n'

@@ -145,7 +145,32 @@ server cannot see: allow TCP 80 and 443 there.
 **A certificate warning.** With no domain of your own, the panel is served over
 plain HTTP at an `sslip.io` address, on purpose: Let's Encrypt rate limits are
 per domain, and every Skifity install in the world shares sslip.io's. Point a
-domain at the server and run the installer again with `--domain` for HTTPS.
+domain at the server and put the panel on it under Settings → General → Panel
+address, or run the installer again with `--domain`.
+
+## The panel is still waiting for its certificate
+
+Moving the panel to a domain of its own waits five minutes for Let's Encrypt's
+certificate, and stops with what cert-manager said last when it does not come.
+The panel is left where it was, and cert-manager keeps asking. It is nearly
+always one of three things:
+
+* **The record does not point at the server yet**, or an old `AAAA` record sits
+  beside the new `A` record. **Check DNS** on the Panel address card says which,
+  and so does `dig +short panel.example.com` from your own computer.
+* **Ports 80 and 443 are closed** in the provider's firewall. Let's Encrypt
+  proves the domain by fetching a file from it over port 80.
+* **Cloudflare's proxy is on** for the record. Set it to DNS only, the grey
+  cloud, until the panel opens over HTTPS.
+
+What the certificate authority answered is on the server:
+
+```sh
+kubectl -n skifity-system describe certificate skifity-panel-tls
+kubectl -n skifity-system describe challenge
+```
+
+Once it is fixed, press **Try again**: what was done already is not done twice.
 
 ## I have lost the setup token
 

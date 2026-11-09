@@ -55,6 +55,10 @@ type Server struct {
 	// setup guards first-run: it holds the one-time token until an admin exists.
 	setup *setupState
 
+	// moves is what is kept about moving the panel to a domain of its own:
+	// see panel_domain_handlers.go.
+	moves panelMoves
+
 	// cluster is the Kubernetes-facing side of the panel. It is an interface so
 	// the API can be tested, and started, without a cluster.
 	cluster Cluster
@@ -239,6 +243,9 @@ func (s *Server) routes() chi.Router {
 	r.Use(s.recoverer)
 	r.Use(s.accessLog)
 	r.Use(s.securityHeaders)
+	// A browser at an address the panel moved away from is sent on to the
+	// one it answers at; webhooks and API tokens are served where they are.
+	r.Use(s.sendOnFromLeftAddresses)
 
 	r.Route("/api", func(api chi.Router) {
 		// First: a caller over the line costs the panel nothing more than this.
@@ -656,6 +663,12 @@ func (s *Server) routes() chi.Router {
 				// The one place the panel asks anybody about new releases, and
 				// only because an administrator pressed the button.
 				admin.Post("/upgrade/check", s.handleUpgradeCheck)
+				// Where the panel answers, and moving it to a domain of its
+				// own. See panel_domain_handlers.go.
+				admin.Get("/panel/domain", s.handleGetPanelDomain)
+				admin.Post("/panel/domain", s.handleSetPanelDomain)
+				admin.Delete("/panel/domain", s.handleRemovePanelDomain)
+				admin.Post("/panel/domain/check", s.handleCheckPanelDomain)
 				admin.Get("/panel/backups", s.handleListPanelBackups)
 				admin.Post("/panel/backups", s.handleBackUpPanel)
 				admin.Post("/panel/backups/{backupID}/verify", s.handleVerifyPanelBackup)
@@ -977,6 +990,7 @@ func (s *Server) Background(ctx context.Context) {
 
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
+	runsafe.Go(s.log, "keeping the panel's route", func() { s.KeepPanelRoute(ctx) })
 	for {
 		select {
 		case <-ctx.Done():
@@ -986,6 +1000,7 @@ func (s *Server) Background(ctx context.Context) {
 				s.log.Debug("forgot the history of finished topics", "topics", dropped)
 			}
 			s.flood.sweep()
+			runsafe.Go(s.log, "keeping the panel's route", func() { s.KeepPanelRoute(ctx) })
 		case <-ticker.C:
 			// A panic costs one hour of housekeeping, not the housekeeping.
 			func() {

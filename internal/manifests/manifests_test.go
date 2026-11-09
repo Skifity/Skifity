@@ -10,6 +10,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/util/jsonpath"
 	"sigs.k8s.io/yaml"
 
@@ -330,6 +331,128 @@ func TestInstallerReadsBackTheRouteItWrites(t *testing.T) {
 	if got := query(empty); got != "panel.example.test " {
 		t.Errorf("with an empty tls list the installer reads %q", got)
 	}
+
+	// And the route the panel writes when it is moved to a domain from
+	// Settings: the domain first, then the addresses it keeps answering on.
+	// The installer has to read the domain, with a certificate, or its next
+	// run puts the panel back on sslip.io.
+	moved, err := PanelRoute(values["NAMESPACE"], "panel.example.test", values["ISSUER"],
+		PanelHost{Host: "203-0-113-10.sslip.io"},
+		PanelHost{Host: "old.example.test", Secret: PreviousCertificateSecret("old.example.test")})
+	if err != nil {
+		t.Fatalf("render the panel's own route: %v", err)
+	}
+	if got, want := query(roundTrip(t, moved)), "panel.example.test skifity-panel-tls skifity-panel-tls-old-example-test"; got != want {
+		t.Errorf("from the panel's own route the installer reads %q, want %q", got, want)
+	}
+}
+
+// TestThePanelRendersItsRouteFromTheInstallersFile: the panel puts itself on a
+// domain by writing ingress-tls.yaml, and nothing else, so the Ingress is the
+// one the installer would have written for that domain, plus the addresses
+// the panel answered on before.
+func TestThePanelRendersItsRouteFromTheInstallersFile(t *testing.T) {
+	route, err := PanelRoute("skifity-system", "panel.example.test", "skifity-letsencrypt",
+		PanelHost{Host: "203-0-113-10.sslip.io"},
+		PanelHost{Host: "panel.example.test"},
+		PanelHost{Host: "old.example.test", Secret: "skifity-panel-tls-old-example-test"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	encoded, err := yaml.Marshal(route)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if placeholderPattern.Match(encoded) {
+		t.Errorf("a placeholder is left in the panel's route:\n%s", encoded)
+	}
+
+	var ingress networkingv1.Ingress
+	if err := yaml.Unmarshal(encoded, &ingress); err != nil {
+		t.Fatalf("the panel's route is not an Ingress: %v", err)
+	}
+	if ingress.Kind != "Ingress" || ingress.Name != "skifity-panel" || ingress.Namespace != "skifity-system" {
+		t.Errorf("rendered %s %s/%s, not the Ingress the installer reads back", ingress.Kind, ingress.Namespace, ingress.Name)
+	}
+	if ingress.Annotations["cert-manager.io/cluster-issuer"] != "skifity-letsencrypt" {
+		t.Errorf("the route asks no issuer for its certificate: %v", ingress.Annotations)
+	}
+
+	var hosts []string
+	for _, rule := range ingress.Spec.Rules {
+		hosts = append(hosts, rule.Host)
+		if rule.HTTP == nil || len(rule.HTTP.Paths) != 1 || rule.HTTP.Paths[0].Backend.Service.Name != "skifity-panel" {
+			t.Errorf("the rule for %s does not reach the panel: %+v", rule.Host, rule.HTTP)
+		}
+	}
+	// The domain is the first rule, which is what the installer reads; a
+	// host given twice is written once.
+	if want := []string{"panel.example.test", "203-0-113-10.sslip.io", "old.example.test"}; strings.Join(hosts, " ") != strings.Join(want, " ") {
+		t.Errorf("the route answers on %v, want %v", hosts, want)
+	}
+	certificates := map[string]string{}
+	for _, entry := range ingress.Spec.TLS {
+		for _, host := range entry.Hosts {
+			certificates[host] = entry.SecretName
+		}
+	}
+	if certificates["panel.example.test"] != "skifity-panel-tls" {
+		t.Errorf("the domain's certificate is in %q, not where the installer looks", certificates["panel.example.test"])
+	}
+	if _, ok := certificates["203-0-113-10.sslip.io"]; ok {
+		t.Error("the sslip.io address asks for a certificate, which ADR-0015 rules out")
+	}
+	if certificates["old.example.test"] != "skifity-panel-tls-old-example-test" {
+		t.Errorf("a domain answered on before keeps no certificate of its own: %v", certificates)
+	}
+
+	// Rules are copies: changing one host's paths does not change another's.
+	again, _ := PanelRoute("skifity-system", "panel.example.test", "skifity-letsencrypt", PanelHost{Host: "203-0-113-10.sslip.io"})
+	rules := again["spec"].(map[string]any)["rules"].([]any)
+	first := rules[0].(map[string]any)["http"].(map[string]any)["paths"].([]any)[0].(map[string]any)
+	second := rules[1].(map[string]any)["http"].(map[string]any)["paths"].([]any)[0].(map[string]any)
+	first["path"] = "/changed"
+	if second["path"] != "/" {
+		t.Error("the copied rule shares its paths with the first")
+	}
+
+	plain, err := PlainPanelRoute("skifity-system", "203-0-113-10.sslip.io")
+	if err != nil {
+		t.Fatalf("render the plain route: %v", err)
+	}
+	if _, ok := plain["spec"].(map[string]any)["tls"]; ok {
+		t.Error("the plain route asks for a certificate")
+	}
+}
+
+// A previous domain's certificate Secret is a name Kubernetes accepts, however
+// long the domain, and two domains do not share one.
+func TestPreviousCertificateSecretsAreValidNames(t *testing.T) {
+	long := strings.Repeat("a", 60) + ".example.test"
+	other := strings.Repeat("a", 60) + ".example.org"
+	for _, host := range []string{"old.example.test", long, other} {
+		name := PreviousCertificateSecret(host)
+		if len(name) > 63 || strings.HasSuffix(name, "-") || strings.ContainsAny(name, ".ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			t.Errorf("%s gets the Secret %q", host, name)
+		}
+	}
+	if PreviousCertificateSecret(long) == PreviousCertificateSecret(other) {
+		t.Error("two long domains share a certificate Secret")
+	}
+}
+
+// roundTrip turns a rendered route into what kubectl would read back.
+func roundTrip(t *testing.T, route map[string]any) map[string]any {
+	t.Helper()
+	encoded, err := yaml.Marshal(route)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := yaml.Unmarshal(encoded, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // TestUninstallerNamesWhatTheInstallerCreated: the uninstaller deletes by

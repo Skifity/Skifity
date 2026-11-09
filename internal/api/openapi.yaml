@@ -5270,6 +5270,95 @@ paths:
               schema: {$ref: '#/components/schemas/UpgradeCheck'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/panel/domain:
+    get:
+      operationId: getPanelDomain
+      tags: [Settings]
+      summary: Where the panel answers, and moving it to a domain of its own
+      description: >-
+        Panel administrators only. The address the panel was started with, the
+        domain set here and where moving to it stands, the addresses it keeps
+        answering on, its certificate, and the record a domain needs.
+      responses:
+        '200':
+          description: Where the panel answers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: setPanelDomain
+      tags: [Settings]
+      summary: Move the panel to a domain of its own, with HTTPS
+      description: >-
+        Panel administrators only. Refuses an IP address, a wildcard, an
+        sslip.io name, a domain an app answers on, and, unless ignore_dns is
+        set, a domain whose DNS does not point at the server. The move runs
+        after the answer: cert-manager is installed if it is not, the panel's
+        route is written for the domain with its current address kept beside
+        it, the certificate is waited for, and then the panel restarts at
+        https:// on the domain. Until the certificate is there nothing about
+        the panel changes. Poll GET for where it stands. Audited as
+        panel.domain_set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PanelDomainRequest'}
+      responses:
+        '202':
+          description: The move has started.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: removePanelDomain
+      tags: [Settings]
+      summary: Take the panel's domain off
+      description: >-
+        Panel administrators only. A move that stopped is cancelled, and its
+        route put back with nothing restarted (200, audited as
+        panel.domain_cancelled). A panel at its domain goes back to its
+        sslip.io address over plain HTTP and restarts there (202, audited as
+        panel.domain_removed).
+      responses:
+        '200':
+          description: The move that stopped was cancelled.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        '202':
+          description: The panel is restarting at the address it goes back to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, restarting]
+                properties:
+                  url: {type: string, format: uri, description: 'Where the panel answers once it has restarted.'}
+                  restarting: {type: boolean, const: true}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/panel/domain/check:
+    post:
+      operationId: checkPanelDomain
+      tags: [Settings]
+      summary: Check a domain's DNS before moving the panel to it
+      description: Panel administrators only. Nothing is changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PanelDomainRequest'}
+      responses:
+        '200':
+          description: What the domain's DNS says, against where it has to point.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSCheck'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/panel/backups:
     get:
       operationId: listPanelBackups
@@ -9588,6 +9677,54 @@ components:
         built: {type: string}
         update_check: {type: string, const: manual}
         note: {type: string}
+
+    PanelDomainRequest:
+      type: object
+      required: [domain]
+      additionalProperties: false
+      properties:
+        domain: {type: string, description: 'A domain of your own, such as panel.example.com.'}
+        ignore_dns:
+          type: boolean
+          description: >-
+            Move although the DNS check says the domain does not point at the
+            server: it reaches the server some way the panel cannot see.
+
+    PanelDomain:
+      type: object
+      required: [url, host, scheme, previous, dns_target, movable]
+      properties:
+        url: {type: string, description: 'The address the panel was started with, and answers at.'}
+        host: {type: string}
+        scheme: {type: string, enum: [http, https]}
+        domain:
+          type: string
+          description: >-
+            The domain set here, while moving to it, once there, or after a
+            move to it stopped. Absent for a panel never moved from Settings.
+        state:
+          type: string
+          enum: [moving, restarting, live, failed]
+        problem: {$ref: '#/components/schemas/Problem'}
+        started_at: {type: string, format: date-time}
+        previous:
+          type: array
+          description: >-
+            Addresses the panel keeps answering on, for the webhooks registered
+            at them. A browser that opens one is sent to the panel's address.
+          items: {type: string}
+        certificate:
+          type: object
+          required: [state]
+          properties:
+            state: {type: string, enum: [none, issuing, ready]}
+            message: {type: string, description: 'What cert-manager said last, while it is not ready.'}
+            not_after: {type: string, format: date-time}
+        dns_target: {type: string, description: 'The address a record for the domain points at.'}
+        dns_target_ipv6: {type: string}
+        free_address: {type: string, description: 'The sslip.io address taking the domain off goes back to.'}
+        movable: {type: boolean, description: 'Whether the panel can change its own address.'}
+        reason: {$ref: '#/components/schemas/Problem'}
 
     UpgradeCheck:
       type: object

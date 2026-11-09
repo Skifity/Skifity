@@ -7254,6 +7254,42 @@ in again; and the header still sits inside the sidebar component's `<main>`.
 stream, the Playwright suite (19 tests) and both smoke tests pass locally on
 the last commit; the screenshots in `docs/images` were taken again from it.
 
+## The panel on a domain of its own, from Settings
+
+Five texts — the installer's closing screen, the README, ADR-0015, the
+troubleshooting page and the configuration page — said that adding a domain in
+Settings turns HTTPS on for the panel. Nothing did: Settings had only the Panel
+URL, which feeds links, and every default install stayed on plain HTTP. Now it
+does, under Settings → General → **Panel address**, with
+`skifity domains panel` beside it and an alert on the administrator's overview
+while the panel is on plain HTTP.
+
+**How.** cert-manager and its issuer if they are missing; the panel's own
+Ingress, `skifity-panel`, rendered by `PanelRoute` in `internal/manifests` from
+`deploy/ingress-tls.yaml`, which `deploy/embed.go` now embeds, with the domain
+first, so the installer's next run reads it back and keeps it; a wait for the
+certificate, during which nothing about the panel changes; then the Panel URL
+setting and a strategic merge patch of `SKIFITY_PUBLIC_URL` alone, which
+restarts the panel. The panel that starts finishes the move
+(`SettlePanelDomain`). The address it left stays on the route: webhooks and API
+tokens are served there, a browser is sent on with a 308, and a browser's API
+request gets `panel.domain_moved`, which the panel's client follows.
+
+**Tested.** The cluster half against a fake clientset: the route keeps the
+sslip.io rule, nothing of the Deployment changes before the certificate is
+Ready, then only that one variable does, and a certificate that never comes
+stops the move with `panel.domain_certificate_pending` and the Deployment
+untouched. The API: administrator only, the names refused, the move recorded,
+audited and one at a time, cancelling, going back, the next start finishing it,
+and the old address serving a webhook and an API token while redirecting a
+browser. The CLI against a fake panel, through the restart. The installer's
+JSONPath against the route the panel writes.
+
+**Not executed.** The `Cluster` workflow step in `test/cluster/verify.sh` that
+moves a real panel to a domain with a certificate from Pebble and back; the two
+Playwright tests, one of which reaches the panel as `panel.localhost`; and the
+two new checks in `test/smoke/installer.sh`. None of them was run here.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,

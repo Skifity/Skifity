@@ -339,6 +339,12 @@ case "$out" in
 *"skifity-uninstall"*) t_fail "the install names skifity-uninstall when it is not there" ;;
 *) t_pass "an uninstaller that is not there is not named" ;;
 esac
+# The way to HTTPS from a plain HTTP install is the panel's own card, or this
+# script again. It used to promise a control in Settings that did not exist.
+case "$out" in
+*"Settings, General, Panel address"*"--domain"*) t_pass "the plain HTTP install names the Panel address card and --domain" ;;
+*) t_fail "the plain HTTP install should name Settings, General, Panel address and --domain, got: $out" ;;
+esac
 
 # --- the options ------------------------------------------------------------
 
@@ -1611,6 +1617,21 @@ if [ "$status" = 0 ] && grep -q "host: panel.example.test" "$FAKE/stub/applied-i
   t_pass "a second run with --public-ip keeps the domain and its certificate"
 else
   t_fail "a second run with --public-ip lost the panel's domain ($status):
+$out"
+fi
+# A domain the panel was moved to from Settings: the route the panel writes
+# has the domain first, its certificate, the certificate of a domain it left,
+# and the sslip.io address over plain HTTP. A second run has to read the
+# domain, with a certificate, and keep it, or it puts the panel back on
+# sslip.io behind the administrator's back.
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_NEEDS_SETUP=false \
+  STUB_ROUTE="panel.example.test skifity-panel-tls skifity-panel-tls-old-example-test" STUB_ISSUER_EMAIL=ops@example.test
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "host: panel.example.test" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null &&
+  grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" && grep -q "https://panel.example.test" "$FAKE/stub/applied-panel.yaml"; then
+  t_pass "a second run keeps a domain set in Settings, over HTTPS"
+else
+  t_fail "a second run lost the domain set in Settings ($status):
 $out"
 fi
 # The sslip.io name is the installer's own, made from the old address, and

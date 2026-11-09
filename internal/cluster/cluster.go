@@ -66,6 +66,10 @@ type Cluster struct {
 	// fenceImage is the panel's own image, read once; see FenceImage.
 	fenceMu    sync.Mutex
 	fenceImage string
+
+	// panelWait is how long moving the panel waits for its certificate, in
+	// a test; zero is panelCertificateWait.
+	panelWait time.Duration
 }
 
 // New builds a Cluster.

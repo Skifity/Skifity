@@ -968,6 +968,34 @@ export type UpgradeStarted = {
   rollback: string[]
 }
 
+/**
+ * Where the panel answers, and moving it to a domain of its own: what GET
+ * /api/panel/domain answers.
+ */
+export type PanelDomain = {
+  /** The address the panel was started with, which it answers at. */
+  url: string
+  host: string
+  scheme: "http" | "https"
+  /** The domain set here: being moved to, answered on, or a move that stopped. */
+  domain?: string
+  state?: "moving" | "restarting" | "live" | "failed"
+  /** Why a move stopped. */
+  problem?: Problem
+  started_at?: string
+  /** Addresses the panel keeps answering on for the webhooks registered there. */
+  previous: string[]
+  certificate?: { state: "none" | "issuing" | "ready"; message?: string; not_after?: string }
+  /** Where a record for the domain points, and the IPv6 address beside it. */
+  dns_target: string
+  dns_target_ipv6?: string
+  /** The sslip.io address taking the domain off goes back to. */
+  free_address?: string
+  /** Whether the panel can change its own address, and why not. */
+  movable: boolean
+  reason?: Problem
+}
+
 export type K3sUpgradePlan = {
   target: string
   steps: {

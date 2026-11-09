@@ -462,6 +462,9 @@
       "cloud_provider.removed": "已移除云服务商",
       "server.create_started": "正在云服务商处创建服务器",
       "server.delete_started": "正在移除服务器并删除其机器",
+      "panel.domain_set": "已设置面板域名",
+      "panel.domain_cancelled": "已取消面板域名迁移",
+      "panel.domain_removed": "已移除面板域名",
       "git_source.updated": "已更改 Git 账户",
       "cloud_provider.token_replaced": "已替换云服务商的令牌",
       "dns_provider.credentials_replaced": "已替换 DNS 服务商的凭据",
@@ -3882,7 +3885,7 @@
         "title": "通行密钥要求面板通过 HTTPS 以域名访问",
         "cause": "浏览器只会向通过 HTTPS 以域名打开、或在 localhost 上打开的页面提供通行密钥。此面板的地址（面板 URL 设置或 SKIFITY_PUBLIC_URL）不属于这两种。",
         "impact": "任何人都无法添加通行密钥或用它登录。密码、双重验证和单点登录照常可用。",
-        "fix": "为面板配置域名，并将 设置 → 通用 → 面板 URL 设为它的 https:// 地址。"
+        "fix": "在“设置”→“通用”→“面板地址”中为面板配置自己的域名，这会为它开启 HTTPS。"
       },
       "auth_passkey_refused": {
         "title": "该通行密钥未被接受",
@@ -4381,6 +4384,66 @@
         "cause": "对 {{0}} 做的最后一件事不是添加它，而重试执行的是添加服务器的步骤。",
         "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
         "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
+      },
+      "panel_domain_dns_mismatch": {
+        "title": "该域名还没有指向这台服务器",
+        "cause": "{{0}} 的 DNS 返回 {{1}}，而这台服务器是 {{2}}。",
+        "impact": "没有改动任何东西。面板仍在当前地址应答。",
+        "fix": "为 {{0}} 创建一条指向 {{1}} 的 A 记录，等几分钟后再迁移面板。如果这个名称经由面板看不到的途径到达这台服务器，比如负载均衡器，就仍然迁移。"
+      },
+      "panel_domain_certificate_pending": {
+        "title": "面板域名的证书还没有到",
+        "cause": "cert-manager 在五分钟内没有拿到 {{0}} 的证书。它最后说的是：{{1}}",
+        "impact": "面板仍在旧地址应答，没有重启。cert-manager 会继续申请证书。",
+        "fix": "确认 {{0}} 指向这台服务器，并且 80 和 443 端口对互联网开放，然后点“重试”。`kubectl -n skifity-system describe certificate skifity-panel-tls` 可以看到证书颁发机构的答复。"
+      },
+      "panel_domain_taken": {
+        "title": "已有应用在该域名上应答",
+        "cause": "{{0}} 是这个面板上某个应用的域名。",
+        "impact": "没有改动任何东西。面板和应用会共用一个主机名，访客到达哪一个将由 ingress 决定，登录 cookie 也一样。",
+        "fix": "为面板换一个名称，或者先把 {{0}} 从应用上移除。"
+      },
+      "panel_domain_busy": {
+        "title": "面板已在迁移中",
+        "cause": "迁移到 {{0}} 尚未完成。",
+        "impact": "没有改动任何东西。",
+        "fix": "等它完成或停止。“设置”→“通用”→“面板地址”会显示进度。"
+      },
+      "panel_domain_unsupported": {
+        "title": "这个面板无法自行迁移到域名",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "这适用于用 install.sh 安装、运行在它所管理的集群内的面板。在其他环境中，请在面板运行的地方为它配置域名，并把 SKIFITY_PUBLIC_URL 设为新地址。"
+      },
+      "panel_domain_move_failed": {
+        "title": "面板无法迁移到它的域名",
+        "cause": "把面板迁移到 {{0}} 已停止：{{1}}",
+        "impact": "面板仍在旧地址应答，没有重启。",
+        "fix": "按原因所说修复后点“重试”。已经完成的步骤不会重复。"
+      },
+      "panel_domain_interrupted": {
+        "title": "面板迁移被中断",
+        "cause": "在 {{0}} 的证书就绪之前面板重启了。",
+        "impact": "面板仍在旧地址应答。",
+        "fix": "点“重试”。已经完成的步骤不会重复。"
+      },
+      "panel_domain_not_restarted": {
+        "title": "面板没有在它的域名上重启",
+        "cause": "它被要求在 https://{{0}} 重启，却在 {{1}} 启动了。",
+        "impact": "证书已签发，域名也能到达面板，但面板自己的链接和登录 cookie 仍使用它启动时的地址。",
+        "fix": "点“重试”。如果再次发生，就带上 --domain {{0}} 重新运行安装程序，它在服务器上做同样的事。"
+      },
+      "panel_domain_no_free_address": {
+        "title": "没有可以回去的地址",
+        "cause": "面板没有记录 sslip.io 地址，集群公网 IP 也不是能据此生成该地址的 IP 地址。",
+        "impact": "没有改动任何东西。面板仍在它的域名上应答。",
+        "fix": "在“设置”→“域名与 HTTPS”→“集群公网 IP”中填写服务器的公网 IP 地址，然后重试。"
+      },
+      "panel_domain_moved": {
+        "title": "这个面板已经迁移",
+        "cause": "它现在在 {{0}} 应答。",
+        "impact": "这个地址仍接收 webhook 和 API 令牌，但不再接受浏览器会话。",
+        "fix": "打开 {{0}} 并在那里登录。"
       },
       "account_last_admin": {
         "title": "这是面板的最后一位管理员",
@@ -5605,6 +5668,48 @@
     "replaceTokenTitle": "替换 {{name}} 的令牌",
     "replaceTokenHelp": "连接保留其服务器。新令牌在保存前会被检查：它必须有效、可写，并且如果有服务器是用此连接创建的，它必须能看到这些服务器的机器。",
     "tokenReplaced": "{{name}} 已使用新令牌，并且可以创建服务器。"
+  },
+  "panelDomain": {
+    "title": "面板地址",
+    "help": "大家打开这个面板的地址。用上自己的域名后，面板通过 HTTPS 提供服务，证书来自 Let's Encrypt。",
+    "answersAt": "访问地址",
+    "https": "HTTPS",
+    "plainHttp": "普通 HTTP",
+    "plainHelp": "在普通 HTTP 下，密码以明文在网络上传输，通行密钥也无法使用。为面板配置自己的域名即可开启 HTTPS。",
+    "certificateReady": "证书有效期至 {{date}}，会自动续期。",
+    "certificateIssuing": "证书正在签发。",
+    "previous": "它仍在 {{hosts}} 上应答，供在那里注册的 webhook 使用。用浏览器打开它会被转到这里。",
+    "domain": "域名",
+    "anotherDomain": "迁移到另一个域名",
+    "domainHelp": "你自己的域名，例如 panel.example.com。请先创建它的 DNS 记录：记录指向这里后才会签发证书。",
+    "move": "迁移面板",
+    "moveAnyway": "仍然迁移",
+    "moveTitle": "把面板迁移到 {{domain}}？",
+    "moveConfirm": "会先申请证书，证书签发之前面板继续在这里应答。之后面板在 https://{{domain}} 重启，所有人都需要在那里重新登录。这个地址会继续接收 webhook。",
+    "moving": "正在把面板迁移到 {{domain}}",
+    "movingHelp": "正在申请证书。证书到来之前面板继续在这里应答，通常一两分钟，然后在 https://{{domain}} 重启。",
+    "restarting": "正在 {{domain}} 重启",
+    "restartingHelp": "证书已签发，面板正在 https://{{domain}} 重启。此页面会自动在那里打开；打开后请重新登录。",
+    "open": "打开 {{url}}",
+    "failed": "迁移到 {{domain}} 已停止",
+    "tryAgain": "重试",
+    "cancel": "取消迁移",
+    "cancelTitle": "取消迁移到 {{domain}}？",
+    "cancelConfirm": "面板的路由恢复为只指向 {{host}}。不会重启任何东西。",
+    "goBack": "回到 {{url}}",
+    "goBackTitle": "移除面板的域名？",
+    "goBackConfirm": "面板会在 {{url}} 以普通 HTTP 重启。",
+    "goBackConsequence": "所有人都会被登出，通行密钥不再可用，在 {{domain}} 注册的 webhook 也将无法送达。",
+    "goingBack": "面板正在 {{url}} 重启。一分钟后在那里打开并重新登录。",
+    "installer": "安装程序在服务器上也能做同样的事：带上 --domain 和域名重新运行它。",
+    "dnsHere": "记录已指向这台服务器，Let's Encrypt 可以签发证书。",
+    "dnsPartly": "{{addresses}} 不是这台服务器，Let's Encrypt 可能被引到那里并拒绝签发证书。删除那条记录，或者改为 {{expected}}。",
+    "dnsElsewhere": "把记录改为 {{expected}}，然后再检查一次。",
+    "dnsUnknown": "这个面板不知道自己的公网地址，所以无法判断它是否指向这里。请在“设置”“域名与 HTTPS”“集群公网 IP”中设置。",
+    "dnsProxied": "这个名称返回的是 Cloudflare 的地址。把记录指向 {{expected}}，并在面板能通过 HTTPS 打开之前设为“仅 DNS”（灰色云朵）：Let's Encrypt 可能无法通过代理访问到它。",
+    "httpAlertTitle": "这个面板正通过普通 HTTP 提供服务",
+    "httpAlert": "密码以明文在网络上传输，通行密钥也无法使用。",
+    "httpAlertAction": "设置 HTTPS"
   },
   "accounts": {
     "tab": "账户",

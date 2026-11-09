@@ -462,6 +462,9 @@
       "cloud_provider.removed": "Penyedia cloud dihapus",
       "server.create_started": "Membuat server di penyedia cloud",
       "server.delete_started": "Menghapus server beserta mesinnya",
+      "panel.domain_set": "Domain panel dipasang",
+      "panel.domain_cancelled": "Pemindahan domain panel dibatalkan",
+      "panel.domain_removed": "Domain panel dilepas",
       "git_source.updated": "Akun Git diubah",
       "cloud_provider.token_replaced": "Token penyedia cloud diganti",
       "dns_provider.credentials_replaced": "Kredensial penyedia DNS diganti",
@@ -3882,7 +3885,7 @@
         "title": "Kunci sandi memerlukan panel di HTTPS dengan domain",
         "cause": "Peramban hanya menawarkan kunci sandi pada halaman yang dibuka lewat HTTPS dengan nama domain, atau di localhost. Alamat panel ini, yaitu pengaturan Panel URL atau SKIFITY_PUBLIC_URL, bukan salah satunya.",
         "impact": "Tidak ada yang bisa menambahkan kunci sandi atau masuk dengannya. Kata sandi, autentikasi dua faktor, dan single sign-on tetap berfungsi seperti biasa.",
-        "fix": "Pasang domain pada panel dan atur Pengaturan → Umum → Panel URL ke alamat https:// miliknya."
+        "fix": "Pasang panel di domainnya sendiri di Pengaturan → Umum → Alamat panel, yang menyalakan HTTPS untuknya."
       },
       "auth_passkey_refused": {
         "title": "Kunci sandi itu tidak diterima",
@@ -4381,6 +4384,66 @@
         "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
+      },
+      "panel_domain_dns_mismatch": {
+        "title": "Domain itu belum mengarah ke server ini",
+        "cause": "DNS untuk {{0}} menjawab {{1}}, sedangkan server ini {{2}}.",
+        "impact": "Tidak ada yang diubah. Panel masih menjawab di alamatnya yang sekarang.",
+        "fix": "Buat record A untuk {{0}} yang mengarah ke {{1}}, tunggu beberapa menit, lalu pindahkan panel lagi. Kalau nama itu sampai ke server ini lewat jalan lain yang tidak terlihat oleh panel, misalnya load balancer, tetap pindahkan."
+      },
+      "panel_domain_certificate_pending": {
+        "title": "Sertifikat untuk domain panel belum tiba",
+        "cause": "cert-manager tidak mendapat sertifikat untuk {{0}} dalam lima menit. Yang terakhir dikatakannya: {{1}}",
+        "impact": "Panel masih menjawab di alamat lamanya dan tidak di-restart. cert-manager terus meminta sertifikatnya.",
+        "fix": "Pastikan {{0}} mengarah ke server ini dan port 80 serta 443 terbuka ke internet, lalu tekan Coba lagi. `kubectl -n skifity-system describe certificate skifity-panel-tls` menunjukkan jawaban otoritas sertifikat."
+      },
+      "panel_domain_taken": {
+        "title": "Sebuah aplikasi sudah menjawab di domain itu",
+        "cause": "{{0}} adalah domain salah satu aplikasi di panel ini.",
+        "impact": "Tidak ada yang diubah. Panel dan aplikasi itu akan menjawab di satu hostname, dan mana yang dicapai pengunjung akan diputuskan oleh ingress, termasuk cookie masuk.",
+        "fix": "Pilih nama lain untuk panel, atau lepas dulu {{0}} dari aplikasinya."
+      },
+      "panel_domain_busy": {
+        "title": "Panel sedang dipindahkan",
+        "cause": "Pemindahan ke {{0}} belum selesai.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Tunggu sampai selesai atau berhenti. Pengaturan → Umum → Alamat panel menunjukkan posisinya."
+      },
+      "panel_domain_unsupported": {
+        "title": "Panel ini tidak bisa memindahkan dirinya ke sebuah domain",
+        "cause": "{{0}}",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Ini berlaku untuk panel yang dipasang dengan install.sh, yang berjalan di dalam cluster yang dikelolanya. Di tempat lain, beri panel domainnya di tempat ia berjalan dan atur SKIFITY_PUBLIC_URL ke alamat baru."
+      },
+      "panel_domain_move_failed": {
+        "title": "Panel tidak bisa dipindahkan ke domainnya",
+        "cause": "Pemindahan panel ke {{0}} berhenti: {{1}}",
+        "impact": "Panel masih menjawab di alamat lamanya dan tidak di-restart.",
+        "fix": "Perbaiki yang disebut penyebabnya, lalu tekan Coba lagi. Yang sudah dikerjakan tidak dikerjakan dua kali."
+      },
+      "panel_domain_interrupted": {
+        "title": "Pemindahan panel terputus",
+        "cause": "Panel restart sebelum sertifikat untuk {{0}} siap.",
+        "impact": "Panel masih menjawab di alamat lamanya.",
+        "fix": "Tekan Coba lagi. Yang sudah dikerjakan tidak dikerjakan dua kali."
+      },
+      "panel_domain_not_restarted": {
+        "title": "Panel tidak restart di domainnya",
+        "cause": "Panel diminta restart di https://{{0}}, tetapi mulai di {{1}}.",
+        "impact": "Sertifikatnya sudah terbit dan domain itu sampai ke panel, tetapi tautan dan cookie masuk panel masih memakai alamat tempat ia mulai.",
+        "fix": "Tekan Coba lagi. Kalau terjadi lagi, jalankan installer lagi dengan --domain {{0}}, yang melakukan hal yang sama dari server."
+      },
+      "panel_domain_no_free_address": {
+        "title": "Tidak ada alamat untuk kembali",
+        "cause": "Panel tidak punya catatan alamat sslip.io, dan IP publik cluster bukan alamat IP yang bisa dijadikan alamat seperti itu.",
+        "impact": "Tidak ada yang diubah. Panel masih menjawab di domainnya.",
+        "fix": "Atur Pengaturan → Domain dan HTTPS → IP publik cluster ke alamat IP publik server, lalu coba lagi."
+      },
+      "panel_domain_moved": {
+        "title": "Panel ini sudah pindah",
+        "cause": "Sekarang panel menjawab di {{0}}.",
+        "impact": "Alamat ini masih menerima webhook dan token API, tetapi tidak sesi browser.",
+        "fix": "Buka {{0}} dan masuk di sana."
       },
       "account_last_admin": {
         "title": "Ini administrator terakhir panel",
@@ -5605,6 +5668,48 @@
     "replaceTokenTitle": "Ganti token {{name}}",
     "replaceTokenHelp": "Koneksi tetap memiliki servernya. Token baru diperiksa sebelum disimpan: token harus berfungsi, bisa menulis, dan, jika ada server yang dibuat dengan koneksi ini, bisa melihat mesin-mesinnya.",
     "tokenReplaced": "{{name}} sudah memakai token barunya, dan token itu bisa membuat server."
+  },
+  "panelDomain": {
+    "title": "Alamat panel",
+    "help": "Tempat orang membuka panel ini. Di domainnya sendiri, panel disajikan lewat HTTPS dengan sertifikat dari Let's Encrypt.",
+    "answersAt": "Menjawab di",
+    "https": "HTTPS",
+    "plainHttp": "HTTP biasa",
+    "plainHelp": "Lewat HTTP biasa, kata sandi melintasi jaringan tanpa enkripsi dan kunci sandi tidak tersedia. Pasang panel di domainnya sendiri untuk menyalakan HTTPS.",
+    "certificateReady": "Sertifikatnya berlaku sampai {{date}} dan diperpanjang dengan sendirinya.",
+    "certificateIssuing": "Sertifikatnya sedang diterbitkan.",
+    "previous": "Panel masih menjawab di {{hosts}} untuk webhook yang didaftarkan di sana. Browser yang membukanya dikirim ke sini.",
+    "domain": "Domain",
+    "anotherDomain": "Pindah ke domain lain",
+    "domainHelp": "Domain milikmu sendiri, misalnya panel.example.com. Buat dulu record DNS-nya: sertifikat diterbitkan begitu record itu mengarah ke sini.",
+    "move": "Pindahkan panel",
+    "moveAnyway": "Tetap pindahkan",
+    "moveTitle": "Pindahkan panel ke {{domain}}?",
+    "moveConfirm": "Sertifikat diminta lebih dulu, dan panel tetap menjawab di sini sampai sertifikat itu terbit. Setelah itu panel restart di https://{{domain}}, dan semua orang masuk lagi di sana. Alamat ini tetap menerima webhook.",
+    "moving": "Memindahkan panel ke {{domain}}",
+    "movingHelp": "Meminta sertifikat. Panel tetap menjawab di sini sampai sertifikat tiba, biasanya dalam satu atau dua menit, lalu restart di https://{{domain}}.",
+    "restarting": "Restart di {{domain}}",
+    "restartingHelp": "Sertifikatnya sudah terbit, dan panel sedang restart di https://{{domain}}. Halaman ini akan terbuka di sana dengan sendirinya; masuk lagi begitu terbuka.",
+    "open": "Buka {{url}}",
+    "failed": "Pemindahan ke {{domain}} berhenti",
+    "tryAgain": "Coba lagi",
+    "cancel": "Batalkan pemindahan",
+    "cancelTitle": "Batalkan pemindahan ke {{domain}}?",
+    "cancelConfirm": "Rute panel kembali ke {{host}} saja. Tidak ada yang di-restart.",
+    "goBack": "Kembali ke {{url}}",
+    "goBackTitle": "Lepas domain panel?",
+    "goBackConfirm": "Panel restart di {{url}}, lewat HTTP biasa.",
+    "goBackConsequence": "Semua orang keluar, kunci sandi berhenti bekerja, dan webhook yang didaftarkan di {{domain}} tidak sampai lagi.",
+    "goingBack": "Panel sedang restart di {{url}}. Buka di sana sebentar lagi dan masuk lagi.",
+    "installer": "Installer melakukan hal yang sama dari server: jalankan lagi dengan --domain dan namanya.",
+    "dnsHere": "Record-nya mengarah ke server ini, jadi Let's Encrypt bisa menerbitkan sertifikatnya.",
+    "dnsPartly": "{{addresses}} bukan server ini, dan Let's Encrypt bisa diarahkan ke sana lalu menolak sertifikatnya. Hapus record itu, atau ubah ke {{expected}}.",
+    "dnsElsewhere": "Ubah record-nya ke {{expected}}, lalu periksa lagi.",
+    "dnsUnknown": "Panel ini tidak tahu alamat publiknya sendiri, jadi tidak bisa memastikan apakah itu di sini. Atur di Pengaturan, Domain dan HTTPS, IP publik cluster.",
+    "dnsProxied": "Nama ini menjawab dengan alamat Cloudflare. Arahkan record-nya ke {{expected}} dan jadikan DNS only, awan abu-abu, sampai panel terbuka lewat HTTPS: Let's Encrypt mungkin tidak bisa menjangkaunya lewat proxy.",
+    "httpAlertTitle": "Panel ini disajikan lewat HTTP biasa",
+    "httpAlert": "Kata sandi melintasi jaringan tanpa enkripsi, dan kunci sandi tidak tersedia.",
+    "httpAlertAction": "Siapkan HTTPS"
   },
   "accounts": {
     "tab": "Akun",

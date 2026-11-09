@@ -322,10 +322,12 @@ Skifity bug. Skipping cert-manager until it is useful also keeps a fresh install
 smaller, which is the same reason every other component installs on first use.
 
 **Consequences.** The first sign-in is over HTTP, and the panel says so rather than
-hiding it. A domain is added by running the installer again with `--domain`, which
-installs cert-manager and switches the Ingress; the panel has no control for it. An
-operator who wants HTTPS from the first minute passes `SKIFITY_DOMAIN` to the
-installer.
+hiding it. A domain is added under Settings → General → Panel address, or by running
+the installer again with `--domain`: either installs cert-manager, switches the
+Ingress and restarts the panel at the domain, and neither needs a reinstall. The
+panel keeps the sslip.io address on its route afterwards, over plain HTTP, for the
+webhooks Git hosts were given there. An operator who wants HTTPS from the first
+minute passes `SKIFITY_DOMAIN` to the installer.
 
 ---
 

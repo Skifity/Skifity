@@ -78,6 +78,7 @@ skifity cloud providers add --kind hetzner --token-file <file>  Connect a Hetzne
 skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
 skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity domains add <hostname>    Put the app on a domain; --manage-dns creates its record at the team's DNS provider
+skifity domains panel <hostname>  Put the panel itself on a domain, with HTTPS (an administrator's; --check asks DNS first, --remove goes back)
 skifity dns providers add --kind cloudflare --credentials token.txt  Connect a DNS provider; credentials from a file or -, never an argument; `update <name> --credentials <file>` replaces them
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
@@ -394,8 +395,9 @@ One release exactly is `releases/download/<tag>/install.sh`, or `--version
 
 Ubuntu 24.04 or Debian 12, 1 GB of memory, 8 GB of disk, root over SSH. The
 installer prints a URL and a one-time setup token. With no domain the panel is
-reached at an `sslip.io` address over HTTP; run the installer again with
-`--domain` and it moves to HTTPS at that name.
+reached at an `sslip.io` address over HTTP; put it on a domain under Settings →
+General → Panel address, with `skifity domains panel panel.example.com`, or by
+running the installer again with `--domain`, and it moves to HTTPS at that name.
 
 Options go after `sh -s --`: `--domain panel.example.com` for HTTPS from the
 start, `--email`, `--public-ip`, `--version`, and `--yes` for a run nobody is

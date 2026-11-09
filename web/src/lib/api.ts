@@ -131,6 +131,28 @@ const REAUTH_CODE = "auth.reauth_required"
  */
 const SIGNED_OUT_CODE = "auth.required"
 
+/**
+ * The code a browser is answered with at an address the panel has moved away
+ * from, with the address it answers at now in its context.
+ */
+const MOVED_CODE = "panel.domain_moved"
+
+/**
+ * Opens the same page at the address the panel moved to. A session from the
+ * old address is not the new one's, so nothing here could carry on there; the
+ * error is still thrown, and says where to go should the browser not follow.
+ */
+function followMove(url: string | undefined) {
+  if (!url) return
+  try {
+    const { pathname, search, hash } = window.location
+    const target = new URL(pathname + search + hash, url)
+    if (target.origin !== window.location.origin) window.location.assign(target.toString())
+  } catch {
+    // Not an address: the error itself says where the panel is.
+  }
+}
+
 type RequestOptions = {
   method?: string
   body?: unknown
@@ -190,6 +212,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (response.status === 401 && problem.code === SIGNED_OUT_CODE && !options.allowAnonymous) {
       onUnauthenticated?.()
     }
+    if (response.status === 410 && problem.code === MOVED_CODE) followMove(problem.context?.url)
     // Turning two-factor off, reading the recovery codes and minting a token
     // each need the password again. The panel says so with a code rather than
     // by failing, so the dialog opens here and the request is repeated — the

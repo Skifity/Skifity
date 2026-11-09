@@ -459,12 +459,53 @@ address (ADR-0015), and on plain HTTP the prefix cannot be used at all. This
 matters more here than on most products, because the applications this panel
 hosts can be on subdomains of the domain the panel answers on. A domain of the
 panel's own is what closes it, and it is also what makes passkeys available.
-There is no control for it in the panel yet: create a DNS record for the name
-pointing at the server, then run the installer again with `--domain
-panel.example.com`. It installs cert-manager, asks Let's Encrypt for a
-certificate, moves the panel's route to the name and restarts the panel at its
-`https://` address. Set the Panel URL under Settings → General to the same
-address if you had set one before.
+
+**From the panel.** Settings → General → **Panel address**, as the panel's
+administrator. Type the domain, and the card shows the DNS record to create —
+an `A` record pointing at the server — and **Check DNS** says whether it does
+yet. Then **Move the panel**:
+
+1. cert-manager is installed if it is not, with its certificate issuer.
+2. The panel's route is written for the domain, with the address the panel
+   answers on now kept beside it.
+3. The panel waits up to five minutes for Let's Encrypt's certificate. Until it
+   is issued nothing about the panel itself changes, and it keeps answering
+   where it was.
+4. The Panel URL setting becomes the `https://` address and the panel restarts
+   there. The page you are on follows it. Everybody signs in again at the new
+   address, because a browser keeps a session per address.
+
+A domain whose record does not point at the server is refused with the record
+to create, because Let's Encrypt asks DNS the same question. When the name
+reaches the server some way the panel cannot see, such as a load balancer,
+**Move anyway** skips that check. An IP address, a wildcard, an `sslip.io` name
+and a domain an app already answers on are refused. The move is in the
+activity log as `panel.domain_set`.
+
+**The old address keeps answering.** A Git host delivers its webhooks to the
+address it was given, and does not follow a redirect on a POST. So the address
+the panel left stays on its route: webhooks and requests with an API token —
+the CLI, an assistant, a script — are served there as before, and a browser
+that opens it is sent to the domain. An `sslip.io` address stays plain HTTP; a
+domain the panel answered on before keeps a certificate of its own. Running the
+installer again writes its route for the domain alone; the panel puts the old
+address back within a few minutes.
+
+**If it stops.** A certificate that does not arrive in five minutes stops the
+move with what cert-manager said last (see [The panel is still waiting for its
+certificate](troubleshooting.md#the-panel-is-still-waiting-for-its-certificate)),
+and the panel is where it was. **Try again** picks it up; **Cancel the move**
+puts the route back. **Go back to** the `sslip.io` address takes the domain off
+again: the panel restarts there over plain HTTP, and webhooks registered at the
+domain stop arriving.
+
+**From the command line.** `skifity domains panel panel.example.com --check`
+says what the name's DNS says, `skifity domains panel panel.example.com` moves
+the panel and follows the move to the end, and `skifity domains panel --remove`
+cancels a move that stopped or goes back. **From the server**, the installer
+does the same: run it again with `--domain panel.example.com`. It is also the
+way for a panel that cannot change its own address, which is one not installed
+by the installer.
 
 Whether cookies are marked `Secure` follows `SKIFITY_PUBLIC_URL` rather than the
 build, because a `Secure` cookie is never stored over plain HTTP: marking them

@@ -23,6 +23,7 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/confirm-dialog"
 import { AccountsPanel } from "@/components/settings/accounts"
 import { K3sUpgradeCard } from "@/components/settings/k3s-upgrade"
+import { PanelDomainCard } from "@/components/settings/panel-domain"
 import { PanelUpgradeCard } from "@/components/settings/panel-upgrade"
 import { BackupVerification } from "@/components/backup-verification"
 import { CloudProvidersCard } from "@/components/settings/cloud-providers"
@@ -305,6 +306,9 @@ export function SettingsPage() {
         <div className="min-w-0 flex-1">
           {shows("panel") && (
             <TabsContent value="panel" className="space-y-6">
+              {/* First, because a panel on plain HTTP is the thing on this
+                  tab most worth changing, and the dashboard links here. */}
+              <PanelDomainCard />
               {/* Git and plugins have tabs of their own. */}
               <SettingGroups except={["git", "plugins"]} draft={draft} onEdit={edit} />
               <PanelBackupsCard />

@@ -201,6 +201,9 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	if err := markInterruptedWork(ctx, db, log); err != nil {
 		return err
 	}
+	// A move of the panel to a domain of its own ends by restarting the
+	// panel, so it is this start that sees it through, or says it did not.
+	server.SettlePanelDomain(ctx)
 	if resumed, err := deployer.ResumeInterrupted(ctx); err != nil {
 		log.Warn("could not pick up interrupted deployments", "error", err)
 	} else if resumed > 0 {

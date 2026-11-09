@@ -1923,11 +1923,16 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 //
 // Both sources are consulted because the panel learns its address in two ways:
 // the installer passes it in the environment, and an operator can set it in
-// Settings afterwards.
+// Settings afterwards. And a panel moved to a domain of its own from Settings
+// answers on the domain while it is being moved there, and on every address
+// it left for the webhooks registered at them, so those are its too.
 func (s *Server) isPanelHostname(ctx context.Context, hostname string) bool {
 	candidates := []string{s.cfg.PublicURL}
 	if configured, _, err := s.db.GetSetting(ctx, settings.KeyPanelURL); err == nil {
 		candidates = append(candidates, configured)
+	}
+	if moved, err := s.db.GetPanelDomain(ctx); err == nil {
+		candidates = append(append(candidates, moved.Domain), moved.Previous...)
 	}
 	for _, candidate := range candidates {
 		if host := hostOf(candidate); host != "" && host == hostname {

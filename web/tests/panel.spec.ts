@@ -1255,6 +1255,73 @@ async function firstEnvironment(page: Page): Promise<string> {
   return envs.items[0].id
 }
 
+test("Settings shows the record a domain for the panel needs, and what DNS says", async ({
+  page,
+}) => {
+  // The panel under test runs outside any cluster, so it cannot move itself:
+  // where it answers and what DNS says are stubbed. What is checked is the
+  // card, which is what somebody on a fresh install uses to leave plain HTTP.
+  await page.route("**/api/panel/domain", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: {
+            url: "http://203-0-113-10.sslip.io",
+            host: "203-0-113-10.sslip.io",
+            scheme: "http",
+            previous: [],
+            dns_target: "203.0.113.10",
+            free_address: "203-0-113-10.sslip.io",
+            movable: true,
+          },
+        })
+      : route.fallback(),
+  )
+  await page.route("**/api/panel/domain/check", (route) =>
+    route.fulfill({
+      json: {
+        hostname: "panel.example.com",
+        status: "missing",
+        points_here: false,
+        found: [],
+        expected: ["203.0.113.10"],
+        checked_at: new Date().toISOString(),
+      },
+    }),
+  )
+
+  await signIn(page)
+  await page.goto("/settings?tab=panel")
+  const card = page.locator("#panel-address")
+  await expect(card.getByText("Panel address", { exact: true })).toBeVisible()
+  await expect(card.getByText("Plain HTTP", { exact: true })).toBeVisible()
+
+  // The record to create is there as soon as the name is, before anything
+  // is asked of anybody.
+  await card.getByLabel("Domain", { exact: true }).fill("panel.example.com")
+  await expect(card.getByText("203.0.113.10", { exact: true })).toBeVisible()
+  await card.getByRole("button", { name: "Check DNS" }).click()
+  await expect(card.getByText("No DNS record yet")).toBeVisible()
+})
+
+test("an administrator on plain HTTP is told, and taken to where it changes", async ({
+  page,
+  baseURL,
+}) => {
+  // 127.0.0.1 is this machine, where plain HTTP is development and nothing is
+  // said; *.localhost reaches the same panel under a name that is not.
+  const elsewhere = new URL(baseURL ?? "http://127.0.0.1")
+  elsewhere.hostname = "panel.localhost"
+  await page.goto(elsewhere.toString())
+  await page.getByLabel(/^email$/i).fill(EMAIL)
+  await page.getByLabel(/^password$/i).fill(PASSWORD)
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  await expect(page.getByText("This panel is served over plain HTTP")).toBeVisible()
+  await page.getByRole("link", { name: "Set up HTTPS" }).click()
+  await expect(page).toHaveURL(/\/settings\?tab=panel/)
+  await expect(page.locator("#panel-address")).toBeVisible()
+})
+
 /** Signs in, unless this context already has a session. */
 async function signIn(page: Page) {
   await page.goto("/")

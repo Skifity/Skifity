@@ -291,6 +291,7 @@ Working with apps:
   apps rm               Delete an app, with its disks
   open                  Print an app's URLs
   domains               List, add or remove an app's domains; --manage-dns creates the record
+  domains panel         Put the panel on a domain of its own, with HTTPS, or say where it answers
   git                   List Git connections, and the repositories and branches they read
 
 Described in a file:

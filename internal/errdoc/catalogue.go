@@ -897,7 +897,7 @@ func PasskeysUnavailable(address string) *Problem {
 	p := New("auth.passkeys_unavailable", "Passkeys need the panel on HTTPS at a domain").
 		WithCause("A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.").
 		WithImpact("Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.").
-		WithFix("Put a domain on the panel and set Settings → General → Panel URL to its https:// address.").
+		WithFix("Put the panel on a domain of its own under Settings → General → Panel address, which turns HTTPS on for it.").
 		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
 		WithStatus(http.StatusConflict)
 	if address != "" {
@@ -1948,6 +1948,137 @@ func DNSLookupFailed(hostname string, err error) *Problem {
 		Retry().
 		With("hostname", hostname).
 		Wrap(err)
+}
+
+// --- the panel's own domain ---
+//
+// Moving the panel to a domain of its own, from Settings → General: a
+// certificate is asked for, the panel's route is rewritten and the panel
+// restarts at the new address. The panel keeps answering where it did until
+// the certificate is there, so most of these leave it exactly where it was.
+
+// PanelDomainDNSMismatch is a domain whose DNS does not point at this server
+// when the panel is asked to move to it. Let's Encrypt checks the name the same
+// way, so moving would only wait five minutes for a certificate that cannot
+// come.
+func PanelDomainDNSMismatch(domain, found, target string) *Problem {
+	return New("panel.domain_dns_mismatch", "That domain does not point at this server yet").
+		WithCause("DNS for %s answers %s, and this server is %s.", domain, found, target).
+		WithImpact("Nothing was changed. The panel still answers at its current address.").
+		WithFix("Create an A record for %s pointing at %s, wait a few minutes, and move the panel again. "+
+			"If the name reaches this server another way the panel cannot see, such as a load balancer, move it anyway.", domain, target).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		With("domain", domain)
+}
+
+// PanelCertificatePending is a move that waited for the domain's certificate
+// and did not get it. The route keeps asking, so it can still arrive.
+func PanelCertificatePending(domain, said string) *Problem {
+	return New("panel.domain_certificate_pending", "The certificate for the panel's domain has not arrived").
+		WithCause("cert-manager was not issued a certificate for %s within five minutes. What it said last: %s", domain, said).
+		WithImpact("The panel still answers at its old address, and was not restarted. cert-manager keeps asking for the certificate.").
+		WithFix("Check that %s points at this server, and that ports 80 and 443 are open to the internet, then press Try again. "+
+			"`kubectl -n skifity-system describe certificate skifity-panel-tls` shows what the certificate authority answered.", domain).
+		WithDocs("/docs/troubleshooting#the-panel-is-still-waiting-for-its-certificate").
+		WithStatus(http.StatusGatewayTimeout).
+		Retry().
+		With("domain", domain)
+}
+
+// PanelDomainTaken is a domain an app already answers on.
+func PanelDomainTaken(domain string) *Problem {
+	return New("panel.domain_taken", "An app already answers on that domain").
+		WithCause("%s is a domain of one of the apps on this panel.", domain).
+		WithImpact("Nothing was changed. The panel and the app would answer on one hostname, and which one a visitor reached would be decided by the ingress, sign-in cookies included.").
+		WithFix("Choose another name for the panel, or take %s off the app first.", domain).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusBadRequest).
+		With("domain", domain)
+}
+
+// PanelDomainBusy is a second move, or a removal, while one is under way.
+func PanelDomainBusy(domain string) *Problem {
+	return New("panel.domain_busy", "The panel is already being moved").
+		WithCause("A move to %s has not finished yet.", domain).
+		WithImpact("Nothing was changed.").
+		WithFix("Wait for it to finish or stop. Settings → General → Panel address says where it stands.").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainUnsupported is a panel that cannot change its own address: it
+// does not run in the cluster it manages, or its route is not the one the
+// installer made.
+func PanelDomainUnsupported(detail string) *Problem {
+	return New("panel.domain_unsupported", "This panel cannot move itself to a domain").
+		WithCause("%s", detail).
+		WithImpact("Nothing was changed.").
+		WithFix("This works on a panel installed with install.sh, which runs inside the cluster it manages. " +
+			"Anywhere else, give the panel its domain where it runs and set SKIFITY_PUBLIC_URL to the new address.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithSeverity(SeverityInfo).
+		WithStatus(http.StatusBadRequest)
+}
+
+// PanelDomainMoveFailed is a step of a move that did not work.
+func PanelDomainMoveFailed(domain string, err error) *Problem {
+	return New("panel.domain_move_failed", "The panel could not be moved to its domain").
+		WithCause("Moving the panel to %s stopped: %s", domain, err.Error()).
+		WithImpact("The panel still answers at its old address, and was not restarted.").
+		WithFix("Fix what the cause says, then press Try again. What was done already is not done twice.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err)
+}
+
+// PanelDomainInterrupted is a move the panel restarted in the middle of,
+// before it was told to restart at the domain.
+func PanelDomainInterrupted(domain string) *Problem {
+	return New("panel.domain_interrupted", "Moving the panel was interrupted").
+		WithCause("The panel restarted before the certificate for %s was ready.", domain).
+		WithImpact("The panel still answers at its old address.").
+		WithFix("Press Try again. What was done already is not done twice.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainNotRestarted is a panel told to restart at its domain that
+// started somewhere else.
+func PanelDomainNotRestarted(domain, address string) *Problem {
+	return New("panel.domain_not_restarted", "The panel did not restart at its domain").
+		WithCause("It was told to restart at https://%s, and started at %s.", domain, address).
+		WithImpact("The certificate is issued and the domain reaches the panel, but its own links and sign-in cookies still use the address it started at.").
+		WithFix("Press Try again. If it happens again, run the installer again with --domain %s, which does the same from the server.", domain).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainNoFreeAddress is taking the domain off a panel that has no
+// sslip.io address to go back to and nothing to make one from.
+func PanelDomainNoFreeAddress() *Problem {
+	return New("panel.domain_no_free_address", "There is no address to go back to").
+		WithCause("The panel has no sslip.io address on record, and the cluster's public IP is not an IP address it can make one from.").
+		WithImpact("Nothing was changed. The panel still answers at its domain.").
+		WithFix("Set Settings → Domains and HTTPS → Cluster public IP to the server's public IP address, then try again.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict)
+}
+
+// PanelMoved is a browser asking the panel at an address it has moved away
+// from. The address keeps answering webhooks and API tokens; a browser's
+// session belongs to the new one.
+func PanelMoved(url string) *Problem {
+	return New("panel.domain_moved", "This panel has moved").
+		WithCause("It answers at %s now.", url).
+		WithImpact("This address still takes webhooks and API tokens, but not a browser's session.").
+		WithFix("Open %s and sign in there.", url).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusGone).
+		With("url", url)
 }
 
 // --- DNS providers ---

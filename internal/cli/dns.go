@@ -347,6 +347,7 @@ type domainAnswer struct {
 //	                                                  DNS provider when a connected zone covers it
 //	skifity domains add shop.example.com --manage-dns=false
 //	skifity domains remove shop.example.com
+//	skifity domains panel panel.example.com           the panel's own domain: see runPanelDomain
 func cmdDomains(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("domains", flag.ContinueOnError)
 	flags.SetOutput(out)
@@ -355,6 +356,12 @@ func cmdDomains(ctx context.Context, args []string, out io.Writer) error {
 		"left out, it is whenever a connected zone covers the domain, and true where none does is refused")
 	noTLS := flags.Bool("no-tls", false, "serve plain HTTP only, with no certificate")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
+	// `domains panel`: the panel's own address.
+	check := flags.Bool("check", false, "with panel: check the domain's DNS and change nothing")
+	ignoreDNS := flags.Bool("ignore-dns", false, "with panel: move although DNS says the domain does not point at the server, "+
+		"which it reaches some way the panel cannot see")
+	remove := flags.Bool("remove", false, "with panel: cancel a move that stopped, or take the domain off and go back to sslip.io")
+	noWait := flags.Bool("no-wait", false, "with panel: start the move and return, rather than follow it")
 	positional, err := parseInterspersed(flags, args)
 	if err != nil {
 		return err
@@ -375,6 +382,11 @@ func cmdDomains(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	client := NewClient(cfg)
+	if action == "panel" {
+		return runPanelDomain(ctx, client, positional, panelDomainOptions{
+			check: *check, ignoreDNS: *ignoreDNS, remove: *remove, wait: !*noWait, asJSON: *asJSON,
+		}, out)
+	}
 	app, err := resolveApp(ctx, client, cfg, *appID)
 	if err != nil {
 		return err
@@ -444,7 +456,7 @@ func cmdDomains(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintln(out, ".")
 		return nil
 	}
-	return errdoc.BadRequest(fmt.Sprintf("domains takes ls, add or remove, not %q.", action))
+	return errdoc.BadRequest(fmt.Sprintf("domains takes ls, add, remove or panel, not %q.", action))
 }
 
 // describeRecord says where a domain's record stands, in a few words.

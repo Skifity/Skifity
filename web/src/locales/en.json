@@ -472,6 +472,9 @@
       "cloud_provider.removed": "Cloud provider removed",
       "server.create_started": "Creating a server at a cloud provider",
       "server.delete_started": "Removing a server and deleting its machine",
+      "panel.domain_set": "Panel domain set",
+      "panel.domain_cancelled": "Panel domain move cancelled",
+      "panel.domain_removed": "Panel domain taken off",
       "git_source.updated": "Git account changed",
       "cloud_provider.token_replaced": "Cloud provider's token replaced",
       "dns_provider.credentials_replaced": "DNS provider's credentials replaced",
@@ -3910,7 +3913,7 @@
         "title": "Passkeys need the panel on HTTPS at a domain",
         "cause": "A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.",
         "impact": "Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.",
-        "fix": "Put a domain on the panel and set Settings → General → Panel URL to its https:// address."
+        "fix": "Put the panel on a domain of its own under Settings → General → Panel address, which turns HTTPS on for it."
       },
       "auth_passkey_refused": {
         "title": "That passkey was not accepted",
@@ -4409,6 +4412,66 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "panel_domain_dns_mismatch": {
+        "title": "That domain does not point at this server yet",
+        "cause": "DNS for {{0}} answers {{1}}, and this server is {{2}}.",
+        "impact": "Nothing was changed. The panel still answers at its current address.",
+        "fix": "Create an A record for {{0}} pointing at {{1}}, wait a few minutes, and move the panel again. If the name reaches this server another way the panel cannot see, such as a load balancer, move it anyway."
+      },
+      "panel_domain_certificate_pending": {
+        "title": "The certificate for the panel's domain has not arrived",
+        "cause": "cert-manager was not issued a certificate for {{0}} within five minutes. What it said last: {{1}}",
+        "impact": "The panel still answers at its old address, and was not restarted. cert-manager keeps asking for the certificate.",
+        "fix": "Check that {{0}} points at this server, and that ports 80 and 443 are open to the internet, then press Try again. `kubectl -n skifity-system describe certificate skifity-panel-tls` shows what the certificate authority answered."
+      },
+      "panel_domain_taken": {
+        "title": "An app already answers on that domain",
+        "cause": "{{0}} is a domain of one of the apps on this panel.",
+        "impact": "Nothing was changed. The panel and the app would answer on one hostname, and which one a visitor reached would be decided by the ingress, sign-in cookies included.",
+        "fix": "Choose another name for the panel, or take {{0}} off the app first."
+      },
+      "panel_domain_busy": {
+        "title": "The panel is already being moved",
+        "cause": "A move to {{0}} has not finished yet.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for it to finish or stop. Settings → General → Panel address says where it stands."
+      },
+      "panel_domain_unsupported": {
+        "title": "This panel cannot move itself to a domain",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "This works on a panel installed with install.sh, which runs inside the cluster it manages. Anywhere else, give the panel its domain where it runs and set SKIFITY_PUBLIC_URL to the new address."
+      },
+      "panel_domain_move_failed": {
+        "title": "The panel could not be moved to its domain",
+        "cause": "Moving the panel to {{0}} stopped: {{1}}",
+        "impact": "The panel still answers at its old address, and was not restarted.",
+        "fix": "Fix what the cause says, then press Try again. What was done already is not done twice."
+      },
+      "panel_domain_interrupted": {
+        "title": "Moving the panel was interrupted",
+        "cause": "The panel restarted before the certificate for {{0}} was ready.",
+        "impact": "The panel still answers at its old address.",
+        "fix": "Press Try again. What was done already is not done twice."
+      },
+      "panel_domain_not_restarted": {
+        "title": "The panel did not restart at its domain",
+        "cause": "It was told to restart at https://{{0}}, and started at {{1}}.",
+        "impact": "The certificate is issued and the domain reaches the panel, but its own links and sign-in cookies still use the address it started at.",
+        "fix": "Press Try again. If it happens again, run the installer again with --domain {{0}}, which does the same from the server."
+      },
+      "panel_domain_no_free_address": {
+        "title": "There is no address to go back to",
+        "cause": "The panel has no sslip.io address on record, and the cluster's public IP is not an IP address it can make one from.",
+        "impact": "Nothing was changed. The panel still answers at its domain.",
+        "fix": "Set Settings → Domains and HTTPS → Cluster public IP to the server's public IP address, then try again."
+      },
+      "panel_domain_moved": {
+        "title": "This panel has moved",
+        "cause": "It answers at {{0}} now.",
+        "impact": "This address still takes webhooks and API tokens, but not a browser's session.",
+        "fix": "Open {{0}} and sign in there."
       },
       "account_last_admin": {
         "title": "This is the panel's last administrator",
@@ -5640,6 +5703,48 @@
     "replaceTokenTitle": "Replace the token of {{name}}",
     "replaceTokenHelp": "The connection keeps its servers. The new token is checked before it is saved: it has to work, be able to write and, when servers were created with this connection, see their machines.",
     "tokenReplaced": "{{name}} has its new token, and it can create servers."
+  },
+  "panelDomain": {
+    "title": "Panel address",
+    "help": "Where people open this panel. On a domain of its own it is served over HTTPS, with a certificate from Let's Encrypt.",
+    "answersAt": "Answers at",
+    "https": "HTTPS",
+    "plainHttp": "Plain HTTP",
+    "plainHelp": "Over plain HTTP, passwords cross the network unencrypted and passkeys are not available. Put the panel on a domain of its own to turn on HTTPS.",
+    "certificateReady": "The certificate is valid until {{date}}, and is renewed by itself.",
+    "certificateIssuing": "The certificate is being issued.",
+    "previous": "It still answers at {{hosts}}, for the webhooks registered there. A browser that opens it is sent here.",
+    "domain": "Domain",
+    "anotherDomain": "Move to another domain",
+    "domainHelp": "A domain of your own, such as panel.example.com. Create its DNS record first: the certificate is issued once the record points here.",
+    "move": "Move the panel",
+    "moveAnyway": "Move anyway",
+    "moveTitle": "Move the panel to {{domain}}?",
+    "moveConfirm": "A certificate is asked for first, and the panel keeps answering here until it is issued. Then it restarts at https://{{domain}}, and everybody signs in again there. This address keeps taking webhooks.",
+    "moving": "Moving the panel to {{domain}}",
+    "movingHelp": "Asking for a certificate. The panel keeps answering here until it arrives, usually within a minute or two, then restarts at https://{{domain}}.",
+    "restarting": "Restarting at {{domain}}",
+    "restartingHelp": "The certificate is issued, and the panel is restarting at https://{{domain}}. This page opens there by itself; sign in again when it does.",
+    "open": "Open {{url}}",
+    "failed": "The move to {{domain}} stopped",
+    "tryAgain": "Try again",
+    "cancel": "Cancel the move",
+    "cancelTitle": "Cancel the move to {{domain}}?",
+    "cancelConfirm": "The panel's route goes back to {{host}} alone. Nothing restarts.",
+    "goBack": "Go back to {{url}}",
+    "goBackTitle": "Take the panel's domain off?",
+    "goBackConfirm": "The panel restarts at {{url}}, over plain HTTP.",
+    "goBackConsequence": "Everybody is signed out, passkeys stop working, and webhooks registered at {{domain}} stop arriving.",
+    "goingBack": "The panel is restarting at {{url}}. Open it there in a minute and sign in again.",
+    "installer": "The installer does the same from the server: run it again with --domain and the name.",
+    "dnsHere": "The record points at this server, so Let's Encrypt can issue the certificate.",
+    "dnsPartly": "{{addresses}} is not this server, and Let's Encrypt may be sent there and refuse the certificate. Remove that record, or change it to {{expected}}.",
+    "dnsElsewhere": "Change the record to {{expected}}, then check again.",
+    "dnsUnknown": "This panel does not know its own public address, so it cannot tell whether that is here. Set it under Settings, Domains and HTTPS, Cluster public IP.",
+    "dnsProxied": "The name answers with Cloudflare's addresses. Point the record at {{expected}} and set it to DNS only, the grey cloud, until the panel opens over HTTPS: Let's Encrypt may not reach it through the proxy.",
+    "httpAlertTitle": "This panel is served over plain HTTP",
+    "httpAlert": "Passwords cross the network unencrypted, and passkeys are not available.",
+    "httpAlertAction": "Set up HTTPS"
   },
   "accounts": {
     "tab": "Accounts",

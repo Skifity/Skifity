@@ -3393,6 +3393,108 @@ elif [ -n "$SECOND_ID" ]; then
 	fi
 fi
 
+# --- the panel on a domain of its own ---------------------------------------
+
+# Last, because it restarts the panel at another address, and everything above
+# talks to it at the one it was installed with. It goes back at the end.
+if wants 5; then
+	step "The panel moved to a domain of its own, from Settings"
+	if [ -z "$VERIFY_ACME_DIRECTORY" ] || [ -z "$VERIFY_ACME_ADDRESS" ] || [ -z "$VERIFY_ACME_ROOT" ]; then
+		skip "moving the panel to a domain" "no ACME server; set VERIFY_ACME_DIRECTORY, VERIFY_ACME_CA, VERIFY_ACME_ADDRESS and VERIFY_ACME_ROOT to check it"
+	else
+		# The issuer is pointed at the ACME server the way a person points it
+		# at one of their own, in case phase 1 did not run.
+		ACME_SETTINGS=$(python3 -c '
+import json, sys
+print(json.dumps({"values": {"domains.acme_server": sys.argv[1], "domains.acme_ca_bundle": open(sys.argv[2]).read()}}))
+' "$VERIFY_ACME_DIRECTORY" "$VERIFY_ACME_CA")
+		api PUT /api/settings "$ACME_SETTINGS" >/dev/null || no "the ACME settings were refused"
+		OLD_URL=$(panel_public_url)
+		OLD_HOST=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$OLD_URL")
+		# A name that resolves to this machine for the ACME server, and is not
+		# an sslip.io one, which the panel refuses for itself (ADR-0015). Its
+		# DNS answers with this machine's address on the ACME server's network,
+		# not the cluster's public one, which is the "reaches the server some
+		# other way" the panel is told about with ignore_dns.
+		PANEL_DOMAIN="panel.$(printf '%s' "$VERIFY_ACME_ADDRESS" | tr . -).nip.io"
+		MOVED=$(api_any POST /api/panel/domain "{\"domain\":\"$PANEL_DOMAIN\",\"ignore_dns\":true}" || true)
+		case "$(printf '%s' "$MOVED" | pick state 2>/dev/null || echo "")" in
+		moving) ok "moving the panel to $PANEL_DOMAIN started" ;;
+		*) no "moving the panel to $PANEL_DOMAIN was refused: $(printf '%s' "$MOVED" | head -c 300)" ;;
+		esac
+		NEW_URL=""
+		for _ in $(seq 1 90); do
+			NEW_URL=$(kubectl -n "$PANEL_NS" get deploy skifity-panel \
+				-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SKIFITY_PUBLIC_URL")].value}' 2>/dev/null || true)
+			[ "$NEW_URL" = "https://$PANEL_DOMAIN" ] && break
+			sleep 5
+		done
+		if [ "$NEW_URL" != "https://$PANEL_DOMAIN" ]; then
+			no "the panel was not restarted at https://$PANEL_DOMAIN in seven minutes; what it says is below"
+			{
+				api_any GET /api/panel/domain
+				kubectl -n "$PANEL_NS" describe certificate,certificaterequest,order,challenge 2>&1 | tail -60
+			} >>"$REPORT" 2>&1
+		else
+			ok "the panel's certificate was issued, and the panel was restarted at its domain"
+			kubectl -n "$PANEL_NS" rollout status deploy/skifity-panel --timeout=300s >>"$REPORT" 2>&1 \
+				|| no "the panel did not come back after it was moved"
+			stop_forward
+			start_forward
+			ROOT_PEM=$(mktemp)
+			curl -fsS --cacert "$VERIFY_ACME_CA" "$VERIFY_ACME_ROOT" -o "$ROOT_PEM" 2>>"$REPORT" || true
+			CODE=""
+			for _ in $(seq 1 12); do
+				CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --cacert "$ROOT_PEM" \
+					--resolve "$PANEL_DOMAIN:443:127.0.0.1" "https://$PANEL_DOMAIN/api/health" 2>>"$REPORT" || true)
+				[ "$CODE" = "200" ] && break
+				sleep 5
+			done
+			[ "$CODE" = "200" ] \
+				&& ok "the panel answers at https://$PANEL_DOMAIN, trusted from the ACME server's own root" \
+				|| no "https://$PANEL_DOMAIN answered '$CODE' when checked against the ACME server's root"
+			rm -f "$ROOT_PEM"
+			STATE=$(api GET /api/panel/domain 2>/dev/null | pick state 2>/dev/null || echo "")
+			[ "$STATE" = "live" ] \
+				&& ok "the panel that started at the domain finished the move" \
+				|| no "after the restart the move is '${STATE:-unknown}', not live"
+			if [ -n "$OLD_HOST" ]; then
+				# A Git host's webhook to the address it was given: not sent on,
+				# because a provider does not follow a redirect on a POST. The
+				# source does not exist, so the panel itself answers 404.
+				CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST -H "Host: $OLD_HOST" \
+					-H 'Content-Type: application/json' -d '{}' "http://127.0.0.1/api/webhooks/git/gsrc_00000000000000000000" || true)
+				case "$CODE" in
+				308 | 410 | 000 | 5??) no "a webhook to the old address $OLD_HOST answered $CODE; it has to reach the panel" ;;
+				*) ok "a webhook to the old address $OLD_HOST still reaches the panel ($CODE)" ;;
+				esac
+				REDIRECT=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 -H "Host: $OLD_HOST" \
+					"http://127.0.0.1/settings?tab=panel" || true)
+				case "$REDIRECT" in
+				"308 https://$PANEL_DOMAIN/settings?tab=panel") ok "a browser at the old address is sent to the domain, page and all" ;;
+				*) no "a browser at the old address got '$REDIRECT', not a 308 to https://$PANEL_DOMAIN/settings?tab=panel" ;;
+				esac
+			fi
+
+			# And back, which is a move too.
+			api DELETE /api/panel/domain >/dev/null 2>&1 || no "taking the panel's domain off was refused"
+			for _ in $(seq 1 60); do
+				NEW_URL=$(kubectl -n "$PANEL_NS" get deploy skifity-panel \
+					-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SKIFITY_PUBLIC_URL")].value}' 2>/dev/null || true)
+				case "$NEW_URL" in http://*) break ;; esac
+				sleep 5
+			done
+			kubectl -n "$PANEL_NS" rollout status deploy/skifity-panel --timeout=300s >>"$REPORT" 2>&1 || true
+			stop_forward
+			start_forward
+			case "$NEW_URL" in
+			http://*.sslip.io) ok "taking the domain off put the panel back on $NEW_URL" ;;
+			*) no "after taking the domain off the panel is at '${NEW_URL:-nothing}'" ;;
+			esac
+		fi
+	fi
+fi
+
 # --- what it costs ---------------------------------------------------------
 
 phase "What it costs, measured"

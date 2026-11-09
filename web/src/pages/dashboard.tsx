@@ -18,6 +18,7 @@ import {
 
 import { AttentionSection } from "@/components/attention"
 import { ErrorDisplay } from "@/components/error-display"
+import { PANEL_ADDRESS_LINK } from "@/components/settings/panel-domain"
 import { Page, PageHeader, Section } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -50,6 +51,12 @@ import { api, type List } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
 import { queryClient } from "@/lib/query"
 import type { AuditEvent, ClusterSummary, Server, TeamApp } from "@/lib/types"
+
+/** Whether this page came over plain HTTP from somewhere other than this machine. */
+function servedInTheClear(): boolean {
+  const { protocol, hostname } = window.location
+  return protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(hostname)
+}
 
 /**
  * The first screen.
@@ -202,6 +209,23 @@ export function DashboardPage() {
             <span>{t("auth.recoveryKeyIntro", { product: meta?.product ?? "Skifity" })}</span>
             <Button size="sm" variant="outline" asChild>
               <Link to="/account?recovery=1">{t("auth.download")}</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Plain HTTP is the default install (ADR-0015), and only the panel's
+          administrator can change it, from the card this links to. Read
+          from the address bar, so it is never wrong about the page in it;
+          a panel opened on this machine for development is left alone. */}
+      {user?.is_admin && servedInTheClear() && (
+        <Alert variant="warning">
+          <ShieldAlertIcon />
+          <AlertTitle>{t("panelDomain.httpAlertTitle")}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{t("panelDomain.httpAlert")}</span>
+            <Button size="sm" variant="outline" asChild>
+              <Link to={PANEL_ADDRESS_LINK}>{t("panelDomain.httpAlertAction")}</Link>
             </Button>
           </AlertDescription>
         </Alert>
