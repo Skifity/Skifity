@@ -962,6 +962,9 @@
     "deployAnywayConfirm": "Ini men-deploy image tersebut meskipun ada kerentanan kritis yang sudah punya perbaikan. Tindakan ini dicatat di log aktivitas, dengan nama Anda.",
     "acceptedVulnerabilities": "Kerentanan diterima",
     "started": "Deployment #{{number}} dimulai.",
+    "promoteNowhere": "Tidak ada aplikasi bernama {{app}} di {{environments}}, jadi tidak ada tujuan promosi: sebuah versi dipromosikan ke aplikasi bernama sama di lingkungan lain.",
+    "promoteCreateThere": "Buat {{app}} di {{environment}}",
+    "promoteClone": "Klon lingkungan ini",
     "failure": {
       "crashed": {
         "out_of_memory": "Versi baru kehabisan memori saat menyala, lalu dihentikan.",
@@ -4390,6 +4393,12 @@
         "cause": "Lingkungan ini tidak punya aplikasi bernama {{0}}. Yang ada: {{1}}.",
         "impact": "Perintah tidak dijalankan.",
         "fix": "Berikan salah satu nama tersebut, atau --env untuk lingkungan lain."
+      },
+      "cli_promote_no_target": {
+        "title": "Tidak ada aplikasi tujuan promosi di sana",
+        "cause": "Sebuah versi dipromosikan ke aplikasi bernama sama di lingkungan lain dalam proyek, dan {{0}} tidak punya. Versi aplikasi ini bisa dipromosikan ke {{1}}.",
+        "impact": "Tidak ada yang dipromosikan.",
+        "fix": "Buat aplikasi dengan nama yang sama di {{0}}, atau klon lingkungan ini di panel, lalu promosikan lagi."
       }
     }
   },

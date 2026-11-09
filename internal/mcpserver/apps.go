@@ -56,6 +56,21 @@ type appSettingsOutput struct {
 	Note       string   `json:"note"`
 }
 
+type promoteInput struct {
+	AppID         string `json:"app_id" jsonschema:"the app whose version is promoted, in the environment it runs in now, such as staging's"`
+	ToEnvironment string `json:"to_environment" jsonschema:"the environment to run it in, by name or id, such as production"`
+	DeploymentID  string `json:"deployment_id,omitempty" jsonschema:"the version to promote; omitted means the one the app runs now"`
+	Force         bool   `json:"force,omitempty" jsonschema:"run the image even though the other app would build it differently; only when the person has agreed to that"`
+}
+
+type promoteOutput struct {
+	DeploymentID string `json:"deployment_id"`
+	Number       int    `json:"number"`
+	AppID        string `json:"app_id"`
+	Environment  string `json:"environment"`
+	Note         string `json:"note"`
+}
+
 type cancelDeploymentInput struct {
 	AppID        string `json:"app_id" jsonschema:"the app's id"`
 	DeploymentID string `json:"deployment_id,omitempty" jsonschema:"the deployment to stop; omitted means the one under way"`
@@ -87,6 +102,17 @@ func (s *Server) registerApps() {
 		Description: "Replace an app's instances one at a time, on the version and settings it has. Nothing is rebuilt or changed. " +
 			"For an app that is stuck, or that reads something only when it starts.",
 	}, s.restartApp)
+
+	addTool(s, &mcp.Tool{
+		Name: "promote_app",
+		// Destructive: the other environment's running version is replaced.
+		Annotations: changes("Promote a version", true, false),
+		Description: "Run the exact image an app runs — staging's, say — in the same app in another environment of the project, such as production, without building it again. " +
+			"The other app keeps its own variables, domains and scaling. A version goes to the app of the same name and kind; when the environment has none, " +
+			"the answer says so, and the person creates it there or clones the environment in the panel. " +
+			"When the other app would build the image differently — its build-time variables differ — it is refused with the reason: tell the person, " +
+			"and call again with force only if they want it run as it was built.",
+	}, s.promoteApp)
 
 	addTool(s, &mcp.Tool{
 		Name: "cancel_deployment",
@@ -186,4 +212,68 @@ func (s *Server) cancelDeployment(ctx context.Context, _ *mcp.CallToolRequest, i
 		return errorResult(err), doneOutput{}, nil
 	}
 	return done(fmt.Sprintf("Deployment %s is cancelled. The version that was running keeps running.", target))
+}
+
+func (s *Server) promoteApp(ctx context.Context, _ *mcp.CallToolRequest, in promoteInput) (*mcp.CallToolResult, promoteOutput, error) {
+	var targets struct {
+		Items []struct {
+			AppID           string `json:"app_id"`
+			EnvironmentID   string `json:"environment_id"`
+			EnvironmentName string `json:"environment_name"`
+		} `json:"items"`
+	}
+	if err := s.client.Do(ctx, "GET", appPath(in.AppID, "/promote"), nil, &targets); err != nil {
+		return errorResult(err), promoteOutput{}, nil
+	}
+	to := strings.TrimSpace(in.ToEnvironment)
+	out := promoteOutput{}
+	var names []string
+	for _, target := range targets.Items {
+		if target.EnvironmentID == to || strings.EqualFold(target.EnvironmentName, to) {
+			out.AppID, out.Environment = target.AppID, target.EnvironmentName
+		}
+		names = append(names, target.EnvironmentName)
+	}
+	if out.AppID == "" {
+		where := "nowhere: no other environment of the project has an app of the same name and kind"
+		if len(names) > 0 {
+			where = strings.Join(names, ", ")
+		}
+		return errorResult(errdoc.PromotionNotPossible(fmt.Sprintf(
+			"%s has no app of the same name and kind as this one, and a version is promoted to that app. This app's versions can go to %s. "+
+				"The person can create the app there, or clone this environment in the panel.", to, where))), promoteOutput{}, nil
+	}
+
+	version := in.DeploymentID
+	if version == "" {
+		var history struct {
+			Items []store.Deployment `json:"items"`
+		}
+		if err := s.client.Do(ctx, "GET", appPath(in.AppID, "/deployments?limit=20"), nil, &history); err != nil {
+			return errorResult(err), promoteOutput{}, nil
+		}
+		for _, deployment := range history.Items {
+			if deployment.Status == store.DeploySucceeded {
+				version = deployment.ID
+				break
+			}
+		}
+		if version == "" {
+			return errorResult(errdoc.PromotionNotPossible("This app has not deployed a version yet, so there is nothing to promote.")), promoteOutput{}, nil
+		}
+	}
+	body := map[string]any{"deployment_id": version}
+	if in.Force {
+		body["force"] = true
+	}
+	var deployment store.Deployment
+	// A refusal comes back whole: built_differently says why, and what the
+	// person can choose.
+	if err := s.client.Do(ctx, "POST", appPath(out.AppID, "/promote"), body, &deployment); err != nil {
+		return errorResult(err), promoteOutput{}, nil
+	}
+	out.DeploymentID, out.Number = deployment.ID, deployment.Number
+	out.Note = fmt.Sprintf("Deployment #%d runs the version in %s, without building it. Call get_app_status with app_id %s for the outcome.",
+		deployment.Number, out.Environment, out.AppID)
+	return textResult(out.Note), out, nil
 }

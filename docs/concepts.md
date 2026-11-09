@@ -510,9 +510,17 @@ for the other environment. **Promote anyway** runs it as it was built; deploying
 normally builds it with the app's own. Make those variables runtime ones, or
 the same in both, and promotion is always the same build.
 
+A version goes to the app of the same name and kind, so production needs a
+`web` before staging's `web` can be promoted to it. When no other environment
+of the project has one, **Promote** is shown greyed out on the version that is
+live, saying so, with the two ways to make one: create the app there, or clone
+the environment.
+
 Only a version whose image is still kept can be promoted, the same ten as for a
-rollback. `POST /api/apps/{app}/promote` with the version's `deployment_id` is
-the same for a script; `GET` lists where an app's versions can go.
+rollback. `skifity promote --to production` does it from a terminal, with
+`--force` for a version built differently, and `promote_app` from an assistant.
+`POST /api/apps/{app}/promote` with the version's `deployment_id` is the same
+for a script; `GET` lists where an app's versions can go.
 
 ## Release command
 

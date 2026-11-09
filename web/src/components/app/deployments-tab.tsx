@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -49,7 +50,7 @@ import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatDuration, formatRelative, shortCommit } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { App, Deployment, LogLine } from "@/lib/types"
+import type { App, Deployment, Environment, LogLine } from "@/lib/types"
 
 export const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
 
@@ -129,6 +130,26 @@ export function DeploymentsTab({ app }: { app: App }) {
   })
   const promoteTargets = targets.data?.items ?? []
   const [promoting, setPromoting] = useState<Deployment | null>(null)
+  // The project's other environments, for when none has this app: Promote
+  // was simply not there, and nothing said that it goes to the app of the
+  // same name, so the way to make one was never found. Keyed as the app page
+  // and the project page key them, so they come from the cache.
+  const environment = useQuery({
+    queryKey: ["environment", app.environment_id],
+    queryFn: () => api.get<Environment>(`/api/environments/${app.environment_id}`),
+  })
+  const projectId = environment.data?.project_id
+  const environments = useQuery({
+    queryKey: ["environments", projectId],
+    queryFn: () => api.get<List<Environment>>(`/api/projects/${projectId}/environments`),
+    enabled: Boolean(projectId),
+  })
+  const elsewhere =
+    targets.isSuccess && promoteTargets.length === 0
+      ? (environments.data?.items ?? []).filter(
+          (other) => other.id !== app.environment_id && other.kind === "standard",
+        )
+      : []
 
   const cancel = useMutation({
     mutationFn: (deploymentID: string) =>
@@ -235,6 +256,12 @@ export function DeploymentsTab({ app }: { app: App }) {
                         {t("deploy.promote")}
                       </Button>
                     )}
+                  {deployment.id === live && elsewhere.length > 0 && (
+                    <Button variant="outline" size="sm" disabled>
+                      <ArrowUpRightIcon className="size-3.5" />
+                      {t("deploy.promote")}
+                    </Button>
+                  )}
 
                   {TERMINAL.has(deployment.status) ? (
                     // Not on the version that is already serving: rolling back to
@@ -276,6 +303,14 @@ export function DeploymentsTab({ app }: { app: App }) {
                     </Button>
                   )}
                 </div>
+
+                {deployment.id === live && elsewhere.length > 0 && projectId && (
+                  <PromoteNowhere
+                    app={app}
+                    projectId={projectId}
+                    environments={elsewhere}
+                  />
+                )}
 
                 {deployment.error_message && (
                   <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
@@ -406,6 +441,44 @@ function RollbackDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Why Promote cannot be pressed: a version goes to the app of the same name in
+ * another environment, and none of the project's others has one. The two ways
+ * to make one are offered: create it there, or clone this environment.
+ */
+function PromoteNowhere({
+  app,
+  projectId,
+  environments,
+}: {
+  app: App
+  projectId: string
+  environments: Environment[]
+}) {
+  const { t } = useTranslation()
+  const first = environments[0]
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span>
+        {t("deploy.promoteNowhere", {
+          app: app.slug,
+          environments: environments.map((environment) => environment.name).join(", "),
+        })}
+      </span>
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+        <Link to={`/environments/${first.id}/apps/new`}>
+          {t("deploy.promoteCreateThere", { app: app.slug, environment: first.name })}
+        </Link>
+      </Button>
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+        <Link to={`/projects/${projectId}?clone=${app.environment_id}`}>
+          {t("deploy.promoteClone")}
+        </Link>
+      </Button>
+    </div>
   )
 }
 

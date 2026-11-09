@@ -211,8 +211,9 @@ func newFakePanel(t *testing.T) *fakePanel {
 				map[string]any{"setting": "variable", "key": "NEXT_PUBLIC_API"},
 			},
 		},
-		"POST /api/apps/{app}/deploy":                deployment,
-		"GET /api/apps/{app}/deployments":            items(deployment, crashed),
+		"POST /api/apps/{app}/deploy": deployment,
+		"GET /api/apps/{app}/deployments": items(deployment, crashed,
+			map[string]any{"id": "dep_0", "app_id": "app_1", "number": 0, "status": "succeeded"}),
 		"POST /api/apps/{app}/rollback/{deployment}": deployment,
 		"GET /api/apps/{app}/rollback/{deployment}/plan": map[string]any{
 			"target": map[string]any{"number": 1, "commit_sha": "abc1234"}, "current": map[string]any{"number": 2},
@@ -221,6 +222,10 @@ func newFakePanel(t *testing.T) *fakePanel {
 		},
 		"POST /api/apps/{app}/deployments/{deployment}/cancel": ok,
 		"POST /api/apps/{app}/restart":                         ok,
+		"GET /api/apps/{app}/promote": items(map[string]any{
+			"app_id": "app_9", "app_name": "web", "environment_id": "env_2", "environment_name": "Production",
+		}),
+		"POST /api/apps/{app}/promote": map[string]any{"id": "dep_9", "app_id": "app_9", "number": 4, "status": "queued", "trigger": "promote"},
 		"PATCH /api/apps/{app}": map[string]any{
 			"id": "app_1", "name": "web", "port": 3000, "build_command": "npm run build",
 			"rolled_out": []string{"port"}, "next_deploy": []string{"build_command"},

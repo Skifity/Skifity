@@ -962,6 +962,9 @@
     "deployAnywayConfirm": "即使镜像中有已提供修复的严重漏洞，也会部署它。此操作会连同你的名字记录在活动日志中。",
     "acceptedVulnerabilities": "已接受漏洞",
     "started": "部署 #{{number}} 已开始。",
+    "promoteNowhere": "{{environments}} 中没有名为 {{app}} 的应用，因此无处可推广：版本会推广到另一个环境中同名的应用。",
+    "promoteCreateThere": "在 {{environment}} 中创建 {{app}}",
+    "promoteClone": "克隆此环境",
     "failure": {
       "crashed": {
         "out_of_memory": "新版本在启动时内存不足，已被停止。",
@@ -4390,6 +4393,12 @@
         "cause": "该环境中没有名为 {{0}} 的应用。现有：{{1}}。",
         "impact": "命令未执行。",
         "fix": "请给出其中一个名称，或用 --env 指定其他环境。"
+      },
+      "cli_promote_no_target": {
+        "title": "那里没有可推广到的应用",
+        "cause": "版本会推广到项目另一个环境中同名的应用，而 {{0}} 中没有。此应用的版本可以推广到：{{1}}。",
+        "impact": "没有推广任何内容。",
+        "fix": "在 {{0}} 中创建同名应用，或在面板中克隆此环境，然后再次推广。"
       }
     }
   },

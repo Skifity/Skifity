@@ -59,6 +59,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdRollback(ctx, rest, stdout)
 	case "restart":
 		err = cmdRestart(ctx, rest, stdout)
+	case "promote":
+		err = cmdPromote(ctx, rest, stdout)
 	case "lock":
 		err = cmdLock(ctx, rest, stdout)
 	case "unlock":
@@ -279,6 +281,7 @@ Working with apps:
   preview               Preview a branch without a pull request, or --close it
   rollback              Go back to a previous deployment, after saying what it puts back
   restart               Replace the app's instances one at a time; nothing is rebuilt
+  promote               Run the version this app runs in another environment, unbuilt
   scan                  Show the known vulnerabilities in the app's image, or scan it now
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop

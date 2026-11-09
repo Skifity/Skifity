@@ -975,6 +975,9 @@
     "deployAnywayConfirm": "This deploys the image although it has critical vulnerabilities that have a fix. It is recorded in the activity log, with your name.",
     "acceptedVulnerabilities": "Vulnerabilities accepted",
     "started": "Deployment #{{number}} started.",
+    "promoteNowhere": "No app called {{app}} in {{environments}}, so there is nowhere to promote to: a version goes to the app of the same name in another environment.",
+    "promoteCreateThere": "Create {{app}} in {{environment}}",
+    "promoteClone": "Clone this environment",
     "failure": {
       "crashed": {
         "out_of_memory": "The new version ran out of memory as it started, and was stopped.",
@@ -4418,6 +4421,12 @@
         "cause": "The environment has no app called {{0}}. It has: {{1}}.",
         "impact": "The command did not run.",
         "fix": "Give one of those names, or --env for another environment."
+      },
+      "cli_promote_no_target": {
+        "title": "There is no app to promote to there",
+        "cause": "A version is promoted to the app of the same name in another environment of the project, and {{0}} has none. This app's versions can go to {{1}}.",
+        "impact": "Nothing was promoted.",
+        "fix": "Create the app in {{0}} with the same name, or clone this environment in the panel, then promote again."
       }
     }
   },

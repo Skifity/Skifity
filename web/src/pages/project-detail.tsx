@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -97,6 +97,10 @@ export function ProjectDetailPage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const [newEnvironment, setNewEnvironment] = useState(false)
   const [cloning, setCloning] = useState(false)
+  // ?clone=<environment> opens the copy of that environment: where an app's
+  // Promote, with nowhere to promote to, sends somebody to make somewhere.
+  const [params, setParams] = useSearchParams()
+  const cloneFrom = params.get("clone")
   const [editing, setEditing] = useState(false)
   // The API's own lines: a member may change a project's name, only an
   // admin may delete one of its environments.
@@ -141,11 +145,14 @@ export function ProjectDetailPage() {
   // repair it, and that effect would render the broken state first.
   const environmentId = items.some((environment) => environment.id === chosen)
     ? chosen!
-    : (items[0]?.id ?? "")
+    : items.some((environment) => environment.id === cloneFrom)
+      ? cloneFrom!
+      : (items[0]?.id ?? "")
   const setEnvironmentId = setChosen
   // Derived from the same list rather than fetched again: the row is already
   // here, and a second query would be a second source of truth for it.
   const chosenEnvironment = items.find((environment) => environment.id === environmentId)
+  const cloneAsked = cloneFrom === environmentId && chosenEnvironment?.kind === "standard"
 
   const remove = useMutation({
     mutationFn: () => api.delete(`/api/projects/${projectId}`),
@@ -345,8 +352,20 @@ export function ProjectDetailPage() {
       />
       <CloneEnvironmentDialog
         environment={chosenEnvironment}
-        open={cloning}
-        onOpenChange={setCloning}
+        open={cloning || cloneAsked}
+        onOpenChange={(open) => {
+          setCloning(open)
+          if (!open && cloneFrom !== null) {
+            setParams(
+              (previous) => {
+                const next = new URLSearchParams(previous)
+                next.delete("clone")
+                return next
+              },
+              { replace: true },
+            )
+          }
+        }}
         onCloned={(environment) => setEnvironmentId(environment.id)}
       />
       {/* Mounted only while open, so it starts from the project as it is now

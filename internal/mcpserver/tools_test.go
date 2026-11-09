@@ -120,6 +120,7 @@ var exampleCalls = map[string]map[string]any{
 	"restart_app":         {"app_id": "app_1"},
 	"cancel_deployment":   {"app_id": "app_1", "deployment_id": "dep_2"},
 	"get_attention":       {},
+	"promote_app":         {"app_id": "app_1", "to_environment": "production"},
 }
 
 // Every tool, once, against a panel that hands over every secret it holds.
@@ -226,6 +227,8 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		// The one under way, when none is named.
 		"cancel_deployment": {"app_id"},
 		"rollback_app":      {"app_id"},
+		// The version is the one running, unless another is named.
+		"promote_app": {"app_id", "to_environment"},
 	}
 	for name, required := range want {
 		tool := byName[name]
@@ -344,6 +347,26 @@ func TestTheStatusSaysWhatWaitsForADeployAndASetSaysItRebuilt(t *testing.T) {
 	}
 }
 
+// A version is promoted to the app of the same name in the environment named,
+// and an environment with none is said rather than guessed at.
+func TestPromoteFindsTheEnvironmentAndSaysWhenThereIsNone(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "promote_app", map[string]any{"app_id": "app_1", "to_environment": "production"})
+	if failed || !strings.Contains(text, "#4") {
+		t.Fatalf("promote_app answered (error=%v): %s", failed, text)
+	}
+	request, ok := panel.last("POST", "/api/apps/app_9/promote")
+	if !ok || request.Body["deployment_id"] != "dep_0" || request.Body["force"] != nil {
+		t.Errorf("the promotion sent %+v", request)
+	}
+	text, failed = call(t, session, "promote_app", map[string]any{"app_id": "app_1", "to_environment": "staging"})
+	if !failed || !strings.Contains(text, "Production") || !strings.Contains(text, "promote.not_possible") {
+		t.Errorf("promoting to an environment with no such app answered (error=%v): %s", failed, text)
+	}
+}
+
 func schemaOf(t *testing.T, tool *mcp.Tool) map[string]any {
 	t.Helper()
 	encoded, err := json.Marshal(tool.InputSchema)
@@ -393,6 +416,8 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		// Rolls out over the running instances, or replaces them; and
 		// throws a build away.
 		"update_app_settings", "restart_app", "cancel_deployment",
+		// Replaces what the other environment runs.
+		"promote_app",
 	}
 	additive := []string{
 		"create_app", "install_template", "create_database", "add_domain", "open_port", "lock_deploys",

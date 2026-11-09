@@ -201,6 +201,7 @@ skifity restart                   # replace the instances one at a time; nothing
 skifity apps set --port 3000      # change a setting; see below
 skifity apps rm web               # delete an app and its disks; asks for its name
 skifity deploy --cancel           # stop the deploy under way; --cancel 12 stops number 12
+skifity promote --to production   # run the version this app runs in production, unbuilt
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
 skifity upgrade                   # ask which release of the panel is the newest; changes nothing
@@ -288,6 +289,13 @@ the image — the branch, the folder, the builder, the build command — waits f
 the next `skifity deploy`, which builds with it. So does the release command,
 which only runs in a deploy. An app that has never been deployed gets
 everything at its first.
+
+`skifity promote --to production`, run where the staging app is, deploys the
+version it runs — or `--deployment 12` — to the app of the same name in
+production, without building it again. When production would build that image
+differently, because its build-time variables differ, it stops and says why;
+`--force` says it again and promotes anyway. An environment with no app of the
+same name is said too, with the ones the app can go to.
 
 `skifity rollback` reads the rollback's plan first and prints it: the version
 running now, the one it goes back to, and each setting it puts back, from what
@@ -589,7 +597,8 @@ and not before `list_apps`.
 An assistant can take an app the whole way: install it from a template or
 create it, give it a database, set its variables and files, fix its port, start
 command, health check or memory with `update_app_settings`, restart it, cancel
-a deploy, put it on a domain or open a port, back it up and lock its deploys.
+a deploy, promote a version to another environment with `promote_app`, put it
+on a domain or open a port, back it up and lock its deploys.
 `rollback_app` says which settings it puts back, and with `dry_run` says only
 that. Deleting an app is not a tool: its disks go with it for good, so the
 person does it in the panel or with `skifity apps rm`. Three more things it
