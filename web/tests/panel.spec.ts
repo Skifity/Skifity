@@ -1046,16 +1046,6 @@ test("a version that crashed says why first, and opens the tab that fixes it", a
   await expect(page).toHaveURL(/[?&]tab=scaling/)
 })
 
-/** Signs in, unless this context already has a session. */
-/** The CSRF header a request from the signed-in page has to carry. */
-async function csrfHeaders(page: Page) {
-  const cookies = await page.context().cookies()
-  return {
-    "Content-Type": "application/json",
-    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
-  }
-}
-
 /** The environment first-run setup made: Production of the first project. */
 async function firstEnvironment(page: Page): Promise<string> {
   const me = await (await page.request.get("/api/me")).json()
@@ -1066,6 +1056,7 @@ async function firstEnvironment(page: Page): Promise<string> {
   return envs.items[0].id
 }
 
+/** Signs in, unless this context already has a session. */
 async function signIn(page: Page) {
   await page.goto("/")
 
