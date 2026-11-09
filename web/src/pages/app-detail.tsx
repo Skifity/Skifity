@@ -43,6 +43,7 @@ import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock
 import { PreviewBranchButton } from "@/components/app/preview-branch"
 import { DriftNotice } from "@/components/app/drift"
 import { MaintenanceNotice } from "@/components/app/maintenance"
+import { PendingChangesNotice } from "@/components/app/pending-changes"
 import { UsageCard } from "@/components/app/usage-card"
 import { Page, PageHeader } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
@@ -266,6 +267,7 @@ export function AppDetailPage() {
       {restart.error != null && <ErrorDisplay error={restart.error} />}
       <DeployLockNotice app={current} />
       <MaintenanceNotice app={current} />
+      <PendingChangesNotice appId={appId} status={status.data} />
       {/* Not on the Advanced tab itself, which lists the same thing in full. */}
       {tab !== "advanced" && <DriftNotice app={current} onOpen={() => openTab("advanced")} />}
 

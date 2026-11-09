@@ -861,6 +861,9 @@
       "skipped": "无法读取服务 {{name}}，已跳过。"
     },
     "savedNextDeploy": "已保存。以下设置在下次部署时生效：{{settings}}。",
+    "pendingTitle": "等待部署的更改",
+    "pendingBody": "自运行中的版本构建以来，{{names}} 已更改。这些内容会进入镜像，因此要等一次部署用它们重新构建后才会生效。",
+    "pendingVariable": "构建时变量 {{key}}",
     "liveVersion": "当前版本",
     "liveNone": "还没有上线的版本",
     "wentLive": "{{when}}上线",
@@ -920,7 +923,8 @@
       "rollback": "一次回滚",
       "promote": "从另一个环境提升",
       "tag": "推送了一个标签",
-      "refresh": "密钥管理器中的值发生了变化"
+      "refresh": "密钥管理器中的值发生了变化",
+      "variables": "构建时变量已更改"
     },
     "rollbackTitle": "回滚到 #{{number}}",
     "rollbackFrom": "当前运行",
@@ -1032,6 +1036,10 @@
     "bulkSaved_other": "已保存 {{count}} 个变量",
     "bulkNothing": "这里没有 KEY=value 格式的行，因此没有可保存的内容。",
     "deleteKey": "删除 {{key}}",
+    "rebuildStarted": "已保存。构建会读取该值，因此正在用它重新构建应用当前运行的版本：部署 #{{number}}。",
+    "rebuildLocked": "已保存。构建会读取该值，而部署已被锁定，因此它会在解锁后的第一次部署时生效。",
+    "rebuildFirstDeploy": "已保存。构建会读取该值，应用的第一次部署会用它构建。",
+    "rebuildNextDeploy": "已保存。构建会读取该值，但无法开始重新构建，因此它会在下次部署时生效。",
     "editKey": "编辑 {{key}}",
     "textSecret": "{{key}} 是机密，保持不变",
     "textReference": "{{key}} 从 {{reference}} 读取，保持不变",

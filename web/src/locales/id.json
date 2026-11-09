@@ -861,6 +861,9 @@
       "skipped": "Layanan {{name}} tidak bisa dibaca dan dilewati."
     },
     "savedNextDeploy": "Tersimpan. Ini berlaku pada deploy berikutnya: {{settings}}.",
+    "pendingTitle": "Perubahan menunggu deploy",
+    "pendingBody": "{{names}} berubah sejak versi yang berjalan dibangun. Semuanya masuk ke image, jadi baru berlaku saat sebuah deploy membangunnya.",
+    "pendingVariable": "variabel waktu build {{key}}",
     "liveVersion": "Versi yang aktif",
     "liveNone": "Belum ada yang aktif",
     "wentLive": "Mulai aktif {{when}}",
@@ -920,7 +923,8 @@
       "rollback": "Sebuah rollback",
       "promote": "Dipromosikan dari environment lain",
       "tag": "Tag yang di-push",
-      "refresh": "Nilai di pengelola rahasia berubah"
+      "refresh": "Nilai di pengelola rahasia berubah",
+      "variables": "Variabel waktu build berubah"
     },
     "rollbackTitle": "Rollback ke #{{number}}",
     "rollbackFrom": "Berjalan sekarang",
@@ -1032,6 +1036,10 @@
     "bulkSaved_other": "{{count}} variabel disimpan",
     "bulkNothing": "Tidak ada baris KEY=value di sini, jadi tidak ada yang disimpan.",
     "deleteKey": "Hapus {{key}}",
+    "rebuildStarted": "Tersimpan. Build membacanya, jadi versi yang dijalankan aplikasi sedang dibangun ulang dengannya: deployment #{{number}}.",
+    "rebuildLocked": "Tersimpan. Build membacanya, dan deploy sedang dikunci, jadi ini berlaku pada deploy pertama setelah kuncinya dibuka.",
+    "rebuildFirstDeploy": "Tersimpan. Build membacanya, dan deploy pertama aplikasi akan membangun dengannya.",
+    "rebuildNextDeploy": "Tersimpan. Build membacanya, dan build ulang tidak bisa dimulai, jadi ini berlaku pada deploy berikutnya.",
     "editKey": "Ubah {{key}}",
     "textSecret": "{{key}} adalah rahasia dan dibiarkan apa adanya",
     "textReference": "{{key}} dibaca dari {{reference}} dan dibiarkan apa adanya",

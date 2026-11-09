@@ -874,6 +874,9 @@
       "skipped": "The service {{name}} could not be read and was skipped."
     },
     "savedNextDeploy": "Saved. These take effect at the next deploy: {{settings}}.",
+    "pendingTitle": "Changes waiting for a deploy",
+    "pendingBody": "{{names}} changed since the running version was built. They go into the image, so they take effect when a deploy builds with them.",
+    "pendingVariable": "the build-time variable {{key}}",
     "liveVersion": "Live version",
     "liveNone": "Nothing is live yet",
     "wentLive": "Went live {{when}}",
@@ -933,7 +936,8 @@
       "rollback": "A rollback",
       "promote": "Promoted from another environment",
       "tag": "A pushed tag",
-      "refresh": "A value in a secret manager changed"
+      "refresh": "A value in a secret manager changed",
+      "variables": "A build-time variable changed"
     },
     "rollbackTitle": "Roll back to #{{number}}",
     "rollbackFrom": "Running now",
@@ -1046,6 +1050,10 @@
     "bulkSaved_other": "{{count}} variables saved",
     "bulkNothing": "There are no KEY=value lines here, so there is nothing to save.",
     "deleteKey": "Delete {{key}}",
+    "rebuildStarted": "Saved. The build reads it, so the version the app runs is being rebuilt with it: deployment #{{number}}.",
+    "rebuildLocked": "Saved. The build reads it, and deploys are locked, so it takes effect at the first deploy after they are unlocked.",
+    "rebuildFirstDeploy": "Saved. The build reads it, and the app's first deploy builds with it.",
+    "rebuildNextDeploy": "Saved. The build reads it, and a rebuild could not be started, so it takes effect at the next deploy.",
     "editKey": "Edit {{key}}",
     "textSecret": "{{key}} is a secret and is left as it is",
     "textReference": "{{key}} is read from {{reference}} and is left as it is",

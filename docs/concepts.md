@@ -125,7 +125,11 @@ and the difference matters:
   restarts the app with the new value. That takes seconds, and no rebuild.
 * A **build-time variable** is baked into the image, which front-end builds do
   with things like a public API URL. Changing one means the image is wrong, so
-  the app is rebuilt.
+  the version the app runs is built again with it — at the commit it runs,
+  when its deploy recorded one, rather than whatever the branch holds now —
+  and the answer names the deployment doing it. Removing one is a rebuild too. An app whose deploys are locked is not
+  rebuilt: the value waits for the first deploy after the unlock, and an app
+  never deployed gets it at its first.
 
 Skifity works this out from a fingerprint of everything that actually affects
 the image. The panel tells you which kind you are setting before you save it,
@@ -138,6 +142,25 @@ leaves it as it is. **Edit as text** opens with every plain variable as a
 `KEY=value` line and a comment for each secret, and saves only the lines you
 add or change, so saving it untouched restarts nothing. Removing a line there
 does not delete the variable; the row's delete button does.
+### What rolls out, and what waits for a deploy
+
+Settings divide the same way. What the running app reads is given to it the
+moment it is saved, by a rollout of the image it already has: the port, the
+start command, the health check, the CPU and memory, the user it runs as, and
+whether it is internal. What goes into the image waits for the next deploy,
+which builds with it: the repository, the branch, the root directory, the
+builder, the Dockerfile, the build command, the output folder, and an image
+app's image. So does the release command, which only ever runs in a deploy.
+
+Saving says which was which, in the panel, in `skifity apps set` and to an
+assistant. And until a deploy has built with them, the app's page says what is
+waiting — **Changes waiting for a deploy: Branch, Build command** — with a
+button to deploy now. Each deployment records what it was built from, so this
+is a comparison, not a guess; `skifity status` and the `pending_changes` of
+`GET /api/apps/{app}/status` say the same. A build-time variable is named there
+and never shown: the record keeps a digest of its value, sealed with the
+panel's master key. A value read from a secret manager is compared by where it
+is read from; one that changed inside the manager is what **Refresh** finds.
 
 How a build-time variable reaches the build depends on how the app is built,
 and none of them writes its value anywhere a person can read it afterwards —

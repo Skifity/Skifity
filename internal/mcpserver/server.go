@@ -191,7 +191,10 @@ type statusOutput struct {
 	ReadyInstances  int      `json:"ready_instances"`
 	WantedInstances int      `json:"wanted_instances"`
 	URLs            []string `json:"urls,omitempty"`
-	Instances       []struct {
+	// WaitingForDeploy are saved settings and build-time variables the
+	// running version was not built with: deploy_app builds with them.
+	WaitingForDeploy []store.BuildChange `json:"waiting_for_deploy,omitempty"`
+	Instances        []struct {
 		Name     string `json:"name"`
 		Status   string `json:"status"`
 		Ready    bool   `json:"ready"`
@@ -497,7 +500,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "set_variable",
 		Annotations: changes("Set a variable", true, true),
-		Description: "Set an environment variable. A runtime variable is rolled out without rebuilding; a build-time variable causes a rebuild on the next deploy.",
+		Description: "Set an environment variable. A runtime variable is rolled out without rebuilding; a build-time variable rebuilds the version the app runs, with it. The answer says which happened.",
 	}, s.setVariable)
 
 	addTool(s, &mcp.Tool{
@@ -698,6 +701,7 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 			Node       string `json:"node"`
 			Deployment int    `json:"deployment,omitempty"`
 		} `json:"instances"`
+		PendingChanges []store.BuildChange `json:"pending_changes"`
 	}
 	if err := s.client.Do(ctx, "GET", "/api/apps/"+in.AppID+"/status", nil, &raw); err != nil {
 		return errorResult(err), statusOutput{}, nil
@@ -706,7 +710,7 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 	out := statusOutput{
 		Phase: raw.Phase, Explanation: raw.Detail,
 		ReadyInstances: raw.ReadyReplicas, WantedInstances: raw.DesiredReplicas,
-		URLs: raw.URLs, Instances: raw.Instances,
+		URLs: raw.URLs, Instances: raw.Instances, WaitingForDeploy: raw.PendingChanges,
 	}
 	summary := fmt.Sprintf("%s: %d of %d instances ready. %s",
 		raw.Phase, raw.ReadyReplicas, raw.DesiredReplicas, raw.Detail)
@@ -729,6 +733,18 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 			}
 			summary = strings.TrimSpace(summary) + fmt.Sprintf(" Deployment #%d is live.", live.Number)
 		}
+	}
+	if len(raw.PendingChanges) > 0 {
+		waiting := make([]string, 0, len(raw.PendingChanges))
+		for _, change := range raw.PendingChanges {
+			if change.Setting == "variable" {
+				waiting = append(waiting, "the build-time variable "+change.Key)
+			} else {
+				waiting = append(waiting, change.Setting)
+			}
+		}
+		summary += fmt.Sprintf(" Saved and not built yet: %s. The running version does not have them until deploy_app builds with them.",
+			strings.Join(waiting, ", "))
 	}
 	return textResult(summary), out, nil
 }
@@ -912,17 +928,12 @@ func (s *Server) setVariable(ctx context.Context, _ *mcp.CallToolRequest, in set
 	if in.IsSecret != nil {
 		body["is_secret"] = *in.IsSecret
 	}
-	var response struct {
-		RequiresRebuild bool `json:"requires_rebuild"`
-	}
+	var response variableEffect
 	if err := s.client.Do(ctx, "PUT", "/api/apps/"+in.AppID+"/variables", body, &response); err != nil {
 		return errorResult(err), setVariableOutput{}, nil
 	}
 
-	note := "Rolled out to the running instances without rebuilding."
-	if response.RequiresRebuild {
-		note = "This value is used during the build, so the next deploy will rebuild the image."
-	}
+	note := response.note()
 	out := setVariableOutput{Key: in.Key, RequiresRebuild: response.RequiresRebuild, Note: note}
 	return textResult(in.Key + " set. " + note), out, nil
 }

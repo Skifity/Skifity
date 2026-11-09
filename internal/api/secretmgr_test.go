@@ -203,7 +203,8 @@ func TestAVariableFromASecretManagerNeverShowsItsValue(t *testing.T) {
 			"from": map[string]string{"connection": "company-vault", "path": "shop", "key": "public_key"}},
 		{"key": "LOG_LEVEL", "value": "info"},
 	}}))
-	if status != http.StatusOK || !strings.Contains(body, `"requires_rebuild":true`) {
+	// The app has never run, so its first deploy builds with it.
+	if status != http.StatusOK || !strings.Contains(body, `"not_rebuilt":"not_deployed"`) {
 		t.Fatalf("a batch with a build-time reference: %d %s", status, body)
 	}
 	// And a shared one.

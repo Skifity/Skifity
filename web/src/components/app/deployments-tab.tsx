@@ -546,6 +546,7 @@ export function triggerLabel(t: TFunction, deployment: Deployment): string {
     "rollback",
     "promote",
     "refresh",
+    "variables",
   ]
   if (known.includes(deployment.trigger)) return t(`deploy.trigger.${deployment.trigger}`)
   return deployment.trigger

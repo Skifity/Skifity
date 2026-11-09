@@ -323,7 +323,13 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
 - **Changing a variable does not rebuild the app.** Skifity separates what goes
   into the image from what the container reads at runtime. A runtime change is a
   rollout in seconds. Only a variable marked "needed while building" causes a
-  rebuild, and the panel says so before you save.
+  rebuild — of the version the app runs, started when it is saved — and the
+  panel says so before you save.
+- **Some settings wait for a deploy.** The branch, root directory, builder,
+  Dockerfile, build command, output folder and an image app's image go into the
+  image, so saving one changes nothing until the next deploy builds with it.
+  Saving says so (`next_deploy`), and `get_app_status` lists what is waiting
+  (`pending_changes` in the API) until a deploy has it.
 - **Rolling back restores settings, not just the image.** The deployment record
   holds both.
 - **Secrets are write-only.** Once stored, a secret's value is never returned by

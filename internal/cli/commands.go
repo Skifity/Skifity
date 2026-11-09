@@ -606,7 +606,8 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 		} `json:"instances"`
 		// LiveDeployment is not the status route's: it is read from the
 		// history, so that one command says what is serving.
-		LiveDeployment *store.Deployment `json:"live_deployment,omitempty"`
+		LiveDeployment *store.Deployment   `json:"live_deployment,omitempty"`
+		PendingChanges []store.BuildChange `json:"pending_changes,omitempty"`
 	}
 	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/status", nil, &status); err != nil {
 		return err
@@ -649,8 +650,24 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			fmt.Fprintf(out, "  %s\n", u)
 		}
 	}
+	if len(status.PendingChanges) > 0 {
+		fmt.Fprintf(out, "\nSaved, and waiting for a deploy to build with them:\n")
+		for _, change := range status.PendingChanges {
+			fmt.Fprintf(out, "  %s\n", describeBuildChange(change))
+		}
+		fmt.Fprintf(out, "Deploy with `%s deploy`.\n", version.Binary)
+	}
 	fmt.Fprintln(out)
 	return nil
+}
+
+// describeBuildChange is one change waiting for a deploy, as a line: a
+// setting from what to what, or a build-time variable by its name alone.
+func describeBuildChange(change store.BuildChange) string {
+	if change.Setting == "variable" {
+		return "the build-time variable " + change.Key
+	}
+	return fmt.Sprintf("%s: %s -> %s", change.Setting, orDefault(change.From, "(none)"), orDefault(change.To, "(none)"))
 }
 
 func cmdOpen(ctx context.Context, args []string, out io.Writer) error {
@@ -1146,8 +1163,8 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 			set = append(set, item)
 		}
 		var result struct {
-			Set             []store.Variable `json:"set"`
-			RequiresRebuild bool             `json:"requires_rebuild"`
+			Set []store.Variable `json:"set"`
+			variableEffect
 		}
 		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"set": set}, &result); err != nil {
 			return err
@@ -1155,12 +1172,7 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		if *asJSON {
 			return writeJSON(out, result)
 		}
-		names := strings.Join(order, ", ")
-		if result.RequiresRebuild {
-			fmt.Fprintf(out, "%s set. Used during the build, so the next deploy will rebuild.\n", names)
-		} else {
-			fmt.Fprintf(out, "%s set and rolled out, once. No rebuild was needed.\n", names)
-		}
+		fmt.Fprintf(out, "%s set. %s\n", strings.Join(order, ", "), result.note())
 		for _, variable := range result.Set {
 			if variable.IsSecret {
 				fmt.Fprintf(out, "%s is stored as a secret: it will not be shown again.\n", variable.Key)
@@ -1172,13 +1184,17 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		if len(values) == 0 {
 			return errdoc.BadRequest("Give at least one variable name.")
 		}
-		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"unset": values}, nil); err != nil {
+		var result variableEffect
+		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"unset": values}, &result); err != nil {
 			return err
 		}
 		if *asJSON {
-			return writeJSON(out, map[string]any{"unset": values})
+			return writeJSON(out, struct {
+				Unset []string `json:"unset"`
+				variableEffect
+			}{values, result})
 		}
-		fmt.Fprintf(out, "%s removed.\n", strings.Join(values, ", "))
+		fmt.Fprintf(out, "%s removed. %s\n", strings.Join(values, ", "), result.note())
 		return nil
 
 	default:
@@ -1203,8 +1219,8 @@ func setFromSecretManager(ctx context.Context, client *Client, app, sub string, 
 		body["build_time"] = buildTime
 	}
 	var result struct {
-		Variable        store.Variable `json:"variable"`
-		RequiresRebuild bool           `json:"requires_rebuild"`
+		Variable store.Variable `json:"variable"`
+		variableEffect
 	}
 	if err := client.Do(ctx, "PUT", "/api/apps/"+app+"/variables", body, &result); err != nil {
 		return err
@@ -1218,11 +1234,7 @@ func setFromSecretManager(ctx context.Context, client *Client, app, sub string, 
 	}
 	fmt.Fprintf(out, "%s is read from %s at every deploy. It was read once to check it, and its value is not stored in the panel.\n",
 		values[0], where)
-	if result.RequiresRebuild {
-		fmt.Fprintln(out, "It is used during the build, so the next deploy will rebuild.")
-	} else {
-		fmt.Fprintln(out, "Rolled out. No rebuild was needed.")
-	}
+	fmt.Fprintln(out, result.note())
 	return nil
 }
 

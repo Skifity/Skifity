@@ -56,7 +56,12 @@ import { useSession } from "@/hooks/use-session"
 import { dotEnvLine, parseDotEnv } from "@/lib/dotenv"
 import { api, type List } from "@/lib/api"
 import { queryClient } from "@/lib/query"
-import type { SecretManager, SecretReference, VariablesRefresh } from "@/lib/types"
+import type {
+  SecretManager,
+  SecretReference,
+  VariableEffect,
+  VariablesRefresh,
+} from "@/lib/types"
 
 type EditableVariable = {
   id: string
@@ -78,6 +83,27 @@ type NewVariable = {
   is_secret?: boolean
   build_time?: boolean
   from?: { connection: string; path: string; key?: string }
+}
+
+/**
+ * What saving did, in a sentence: rolled out, rebuilt — with the deployment
+ * doing it — or, for a value the build reads, why it waits for a deploy.
+ */
+function effectMessage(t: TFunction, result?: VariableEffect): string {
+  if (result?.requires_rebuild) {
+    return result.deployment
+      ? t("variables.rebuildStarted", { number: result.deployment.number })
+      : t("variables.rebuildQueued")
+  }
+  switch (result?.not_rebuilt) {
+    case "locked":
+      return t("variables.rebuildLocked")
+    case "not_deployed":
+      return t("variables.rebuildFirstDeploy")
+    case "failed":
+      return t("variables.rebuildNextDeploy")
+  }
+  return t("deploy.noRebuildNeeded")
 }
 
 /** A reference as the CLI writes it: connection:path#key. */
@@ -188,22 +214,25 @@ export function VariablesEditor({
   const invalidate = () => void queryClient.invalidateQueries({ queryKey })
 
   const save = useMutation({
-    mutationFn: (variable: NewVariable) =>
-      api.put<{ requires_rebuild: boolean }>(`${base}/variables`, variable),
+    mutationFn: (variable: NewVariable) => api.put<VariableEffect>(`${base}/variables`, variable),
     // The answer to "does changing this rebuild my app?" is the single most
     // asked question about this screen, so the panel answers it every time
     // rather than leaving the user to watch the deployments tab.
     onSuccess: (result) => {
       invalidate()
-      toast.success(
-        result?.requires_rebuild ? t("variables.rebuildQueued") : t("deploy.noRebuildNeeded"),
-      )
+      toast.success(effectMessage(t, result))
     },
   })
 
   const remove = useMutation({
-    mutationFn: (key: string) => api.delete(`${base}/variables/${encodeURIComponent(key)}`),
-    onSuccess: invalidate,
+    mutationFn: (key: string) =>
+      api.delete<VariableEffect>(`${base}/variables/${encodeURIComponent(key)}`),
+    onSuccess: (result) => {
+      invalidate()
+      // Only a removal the build read is worth a word: the image is built
+      // again without it, or waits for a deploy to be.
+      if (result?.requires_rebuild || result?.not_rebuilt) toast.success(effectMessage(t, result))
+    },
   })
 
   // Read the ones from secret managers again. The answer says which changed
@@ -257,7 +286,7 @@ export function VariablesEditor({
       // half a configuration.
       // build_time is left out for the same reason: false took every variable
       // the build reads out of the build, and the next build went without it.
-      return api.post<{ requires_rebuild?: boolean }>(`${base}/variables/batch`, { set })
+      return api.post<VariableEffect>(`${base}/variables/batch`, { set })
     },
     // Said, as a single variable's save is: it closed with nothing on the
     // screen, the same whether thirty lines were saved or none.
@@ -265,9 +294,7 @@ export function VariablesEditor({
       invalidate()
       setBulk(null)
       toast.success(t("variables.bulkSaved", { count: set.length }), {
-        description: result?.requires_rebuild
-          ? t("variables.rebuildQueued")
-          : t("deploy.noRebuildNeeded"),
+        description: effectMessage(t, result),
       })
     },
   })

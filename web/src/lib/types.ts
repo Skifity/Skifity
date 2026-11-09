@@ -324,6 +324,23 @@ export type AppStatus = {
   urls?: string[]
   /** How the environment's other apps reach an internal one: name and port. */
   internal_address?: string
+  /** Saved settings and build-time variables the running version was not built with. */
+  pending_changes?: BuildChange[]
+}
+
+/** One saved change waiting for a deploy: a setting, or a build-time variable by its key. */
+export type BuildChange = {
+  setting: string
+  key?: string
+  from?: string
+  to?: string
+}
+
+/** What changing variables did: a rebuild of the version the app runs, or why there was none. */
+export type VariableEffect = {
+  requires_rebuild?: boolean
+  deployment?: Deployment
+  not_rebuilt?: "locked" | "not_deployed" | "failed"
 }
 
 export type DeploymentStatus =

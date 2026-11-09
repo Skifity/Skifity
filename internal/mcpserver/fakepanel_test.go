@@ -204,7 +204,13 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/environments/{env}/databases":  items(database),
 		"POST /api/environments/{env}/databases": createdDatabase,
 
-		"GET /api/apps/{app}/status":                 map[string]any{"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"}},
+		"GET /api/apps/{app}/status": map[string]any{
+			"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"},
+			"pending_changes": []any{
+				map[string]any{"setting": "build_command", "from": "npm run build", "to": "npm run build:prod"},
+				map[string]any{"setting": "variable", "key": "NEXT_PUBLIC_API"},
+			},
+		},
 		"POST /api/apps/{app}/deploy":                deployment,
 		"GET /api/apps/{app}/deployments":            items(deployment, crashed),
 		"POST /api/apps/{app}/rollback/{deployment}": deployment,
@@ -240,7 +246,8 @@ func newFakePanel(t *testing.T) *fakePanel {
 				"connection_id": "sm_1", "connection": "company-vault", "kind": "vault", "path": "shop", "key": "stripe_key",
 			}},
 		),
-		"PUT /api/apps/{app}/variables":          map[string]any{"variable": map[string]any{"key": "GREETING"}, "requires_rebuild": false},
+		"PUT /api/apps/{app}/variables": map[string]any{"variable": map[string]any{"key": "GREETING"}, "requires_rebuild": true,
+			"deployment": map[string]any{"id": "dep_3", "number": 3, "status": "queued", "trigger": "variables"}},
 		"POST /api/apps/{app}/variables/batch":   map[string]any{"set": []any{map[string]any{"key": "GREETING", "is_secret": false}}, "unset": []string{"OLD"}, "requires_rebuild": false},
 		"DELETE /api/apps/{app}/variables/{key}": ok,
 		"POST /api/apps/{app}/variables/refresh": map[string]any{

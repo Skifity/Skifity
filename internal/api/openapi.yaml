@@ -3410,8 +3410,10 @@ paths:
       tags: [Variables]
       summary: Set one variable
       description: >-
-        Member. A runtime variable is rolled out; a build-time one takes effect
-        at the next build, and the answer says which.
+        Member. A runtime variable is rolled out. A build-time one rebuilds the
+        version the app runs, at its commit; on an app whose deploys are locked,
+        or that has never been deployed, it waits for the next deploy. The
+        answer says which.
       requestBody:
         required: true
         content:
@@ -3423,11 +3425,12 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [variable, requires_rebuild]
-                properties:
-                  variable: {$ref: '#/components/schemas/Variable'}
-                  requires_rebuild: {type: boolean}
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - type: object
+                    required: [variable]
+                    properties:
+                      variable: {$ref: '#/components/schemas/Variable'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/batch:
@@ -3449,16 +3452,17 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [set, unset, requires_rebuild]
-                properties:
-                  set:
-                    type: array
-                    items: {$ref: '#/components/schemas/Variable'}
-                  unset:
-                    type: [array, 'null']
-                    items: {type: string}
-                  requires_rebuild: {type: boolean}
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - type: object
+                    required: [set, unset]
+                    properties:
+                      set:
+                        type: array
+                        items: {$ref: '#/components/schemas/Variable'}
+                      unset:
+                        type: [array, 'null']
+                        items: {type: string}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/refresh:
@@ -3490,9 +3494,16 @@ paths:
       operationId: deleteVariable
       tags: [Variables]
       summary: Remove a variable
-      description: Member.
+      description: Member. One the build read rebuilds the version the app runs without it.
       responses:
-        '200': {$ref: '#/components/responses/OK'}
+        '200':
+          description: Removed, and what that did to the app.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - $ref: '#/components/schemas/OK'
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/{key}/preview:
@@ -7251,6 +7262,33 @@ components:
         image: {type: string}
         urls: {type: array, items: {type: string}}
         internal_address: {type: string, description: 'How the environment''s other apps reach an internal app, such as api:8080.'}
+        pending_changes:
+          type: array
+          description: >-
+            Saved settings and build-time variables the app's version was not
+            built with, which the next deploy builds with. Absent when nothing
+            waits.
+          items: {$ref: '#/components/schemas/BuildChange'}
+
+    BuildChange:
+      type: object
+      required: [setting]
+      properties:
+        setting: {type: string, description: 'A setting by its API name, such as branch or build_command, or variable.'}
+        key: {type: string, description: 'The build-time variable''s name, for the setting variable. Never its value.'}
+        from: {type: string}
+        to: {type: string}
+
+    VariableEffect:
+      type: object
+      required: [requires_rebuild]
+      properties:
+        requires_rebuild: {type: boolean, description: 'A build-time change that is being built now.'}
+        deployment: {$ref: '#/components/schemas/Deployment'}
+        not_rebuilt:
+          type: string
+          enum: [locked, not_deployed, failed]
+          description: Why a build-time change was not built now; it takes effect at the next deploy.
 
     AppMetrics:
       type: object

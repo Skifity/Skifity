@@ -327,6 +327,23 @@ func TestUpdatingSettingsSendsOnlyWhatWasGivenAndSaysWhatWaits(t *testing.T) {
 	}
 }
 
+// What waits for a deploy is said, by setting and by a variable's name, and
+// a build-time value that was rebuilt says which deployment is doing it.
+func TestTheStatusSaysWhatWaitsForADeployAndASetSaysItRebuilt(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "get_app_status", map[string]any{"app_id": "app_1"})
+	if failed || !strings.Contains(text, "build_command") || !strings.Contains(text, "NEXT_PUBLIC_API") ||
+		!strings.Contains(text, "deploy_app") {
+		t.Errorf("get_app_status answered (error=%v): %s", failed, text)
+	}
+	text, failed = call(t, session, "set_variable", map[string]any{"app_id": "app_1", "key": "NEXT_PUBLIC_API", "value": "x", "build_time": true})
+	if failed || !strings.Contains(text, "rebuilt") || !strings.Contains(text, "#3") {
+		t.Errorf("set_variable answered (error=%v): %s", failed, text)
+	}
+}
+
 func schemaOf(t *testing.T, tool *mcp.Tool) map[string]any {
 	t.Helper()
 	encoded, err := json.Marshal(tool.InputSchema)

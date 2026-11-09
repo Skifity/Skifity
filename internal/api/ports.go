@@ -135,6 +135,9 @@ type AppRuntimeStatus struct {
 	// InternalAddress is how the environment's other apps reach an internal
 	// one: its name and port, as in Compose.
 	InternalAddress string `json:"internal_address,omitempty"`
+	// PendingChanges are the saved settings and build-time variables the
+	// app's version was not built with, which the next deploy builds with.
+	PendingChanges []store.BuildChange `json:"pending_changes,omitempty"`
 }
 
 // LogOptions is what to read from an app's logs, and from where.

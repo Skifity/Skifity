@@ -13,7 +13,7 @@ import (
 
 const deploymentColumns = `id, app_id, number, status, trigger, rollback_of, commit_sha, commit_message,
 	commit_author, image, build_fingerprint, runtime_spec, error_code, error_message, error_hint, created_by,
-	accepted_vulnerabilities, created_at, started_at, finished_at, error_problem`
+	accepted_vulnerabilities, created_at, started_at, finished_at, error_problem, build_spec_enc`
 
 func scanDeployment(row interface{ Scan(...any) error }) (Deployment, error) {
 	var d Deployment
@@ -23,7 +23,7 @@ func scanDeployment(row interface{ Scan(...any) error }) (Deployment, error) {
 	err := row.Scan(&d.ID, &d.AppID, &d.Number, &d.Status, &d.Trigger, &d.RollbackOf, &d.CommitSHA,
 		&d.CommitMessage, &d.CommitAuthor, &d.Image, &d.BuildFingerprint, &d.RuntimeSpec, &d.ErrorCode,
 		&d.ErrorMessage, &d.ErrorHint, &d.CreatedBy, &d.AcceptedVulnerabilities, &created, &started, &finished,
-		&problem)
+		&problem, &d.BuildSpec)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return d, ErrNotFound
@@ -67,11 +67,11 @@ func (db *DB) CreateDeployment(ctx context.Context, d *Deployment) error {
 		d.Number = int(next.Int64) + 1
 		_, err := tx.ExecContext(ctx, `INSERT INTO deployments
 			(id, app_id, number, status, trigger, rollback_of, commit_sha, commit_message, commit_author,
-			 image, build_fingerprint, runtime_spec, created_by, accepted_vulnerabilities, created_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			 image, build_fingerprint, runtime_spec, created_by, accepted_vulnerabilities, created_at, build_spec_enc)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			d.ID, d.AppID, d.Number, d.Status, defaultStr(d.Trigger, "manual"), d.RollbackOf, d.CommitSHA,
 			d.CommitMessage, d.CommitAuthor, d.Image, d.BuildFingerprint, d.RuntimeSpec, d.CreatedBy,
-			d.AcceptedVulnerabilities, now)
+			d.AcceptedVulnerabilities, now, d.BuildSpec)
 		if err != nil {
 			return fmt.Errorf("insert deployment: %w", err)
 		}

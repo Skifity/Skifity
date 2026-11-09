@@ -532,6 +532,10 @@ type Deployment struct {
 	CreatedAt               time.Time `json:"created_at"`
 	StartedAt               time.Time `json:"started_at,omitzero"`
 	FinishedAt              time.Time `json:"finished_at,omitzero"`
+	// BuildSpec is what the deployment was built from, as a sealed BuildSpec
+	// (see buildspec.go). Never answered: it is for telling which saved
+	// settings the running version does not have, which the API says by name.
+	BuildSpec string `json:"-"`
 
 	// CanRollback is worked out when a list is built, not stored. The panel
 	// keeps far more deployment records than the registry keeps images, so an

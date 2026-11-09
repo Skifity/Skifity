@@ -928,17 +928,20 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// What is waiting for a deploy is the panel's to know, cluster or not.
+	pending := s.pendingChanges(r.Context(), app.ID)
 	if s.cluster == nil {
 		writeJSON(w, http.StatusOK, AppRuntimeStatus{
-			Phase: "unknown", Detail: NoClusterDetail, DetailKey: "noCluster",
+			Phase: "unknown", Detail: NoClusterDetail, DetailKey: "noCluster", PendingChanges: pending,
 		})
 		return
 	}
 	status, err := s.cluster.AppStatus(r.Context(), env.Namespace, app.Slug)
 	if err != nil {
-		writeJSON(w, http.StatusOK, AppRuntimeStatus{Phase: "unknown", Detail: err.Error()})
+		writeJSON(w, http.StatusOK, AppRuntimeStatus{Phase: "unknown", Detail: err.Error(), PendingChanges: pending})
 		return
 	}
+	status.PendingChanges = pending
 	// An app that is asleep is not an app that is down. The cluster only knows
 	// that the last instance is gone, so it says "stopped"; the panel knows the
 	// user asked for exactly that and that the next request brings the app
@@ -1144,7 +1147,7 @@ func secretness(asked *bool, wasSecret bool, key, value string) bool {
 }
 
 func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1202,14 +1205,11 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A build-time variable changes the build fingerprint, so it does rebuild.
-	// A runtime variable only rolls out. Either way the user is told which.
-	rebuilt := variable.BuildTime
-	if s.deployer != nil && !rebuilt {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable change", "app", app.ID, "error", err)
-		}
-	}
+	// A build-time variable changes the build fingerprint, so the version the
+	// app runs is built again with it. A runtime variable only rolls out.
+	// Either way the user is told which.
+	rebuild := variable.BuildTime && buildReads(app)
+	effect := s.applyVariableChanges(r, app, user.ID, !rebuild, rebuild)
 
 	// The value is never audited, only the key; for a reference, also where
 	// it is read from, which is not secret.
@@ -1219,7 +1219,10 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, teamID, "variable.set", "app", app.ID, key)
 	}
 	variable.Value = ""
-	writeJSON(w, http.StatusOK, map[string]any{"variable": variable, "requires_rebuild": rebuilt})
+	writeJSON(w, http.StatusOK, struct {
+		Variable store.Variable `json:"variable"`
+		variableEffect
+	}{variable, effect})
 }
 
 type changeVariablesRequest struct {
@@ -1237,7 +1240,7 @@ const maxVariableChanges = 500
 // app thirty times, and the first twenty-nine of those ran with half a
 // configuration.
 func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1272,17 +1275,16 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if s.deployer != nil && batch.rollout {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable changes", "app", app.ID, "error", err)
-		}
-	}
+	rebuild := batch.rebuild && buildReads(app)
+	effect := s.applyVariableChanges(r, app, user.ID, batch.rollout || batch.rebuild && !rebuild, rebuild)
 
 	// Keys only, as for one variable: a value is never audited.
 	s.audit(r, teamID, "variables.changed", "app", app.ID, batch.label())
-	writeJSON(w, http.StatusOK, map[string]any{
-		"set": batch.answer(), "unset": req.Unset, "requires_rebuild": batch.rebuild,
-	})
+	writeJSON(w, http.StatusOK, struct {
+		Set   []store.Variable `json:"set"`
+		Unset []string         `json:"unset"`
+		variableEffect
+	}{batch.answer(), req.Unset, effect})
 }
 
 // handleChangeSharedVariables is handleChangeVariables for a project's shared
@@ -1415,6 +1417,10 @@ func (s *Server) prepareVariableChanges(ctx context.Context, teamID, projectID s
 		}
 		seen[key] = true
 		batch.keys = append(batch.keys, "-"+key)
+		// The build read it, so the image has it until it is built again.
+		if wasBuildTime[key] {
+			batch.rebuild = true
+		}
 	}
 	return batch, nil
 }
@@ -1475,24 +1481,36 @@ func (s *Server) handleSetVariablePreview(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	key := chi.URLParam(r, "key")
+	existing, err := s.db.ListVariables(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	wasBuildTime := false
+	for _, row := range existing {
+		if row.Key == key {
+			wasBuildTime = row.BuildTime
+		}
+	}
 	if err := s.db.DeleteVariable(r.Context(), app.ID, key); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if s.deployer != nil {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable removal", "app", app.ID, "error", err)
-		}
-	}
+	// One the build read is in the image until it is built again.
+	rebuild := wasBuildTime && buildReads(app)
+	effect := s.applyVariableChanges(r, app, user.ID, !rebuild, rebuild)
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "variable.deleted", "app", app.ID, key)
-	writeOK(w)
+	writeJSON(w, http.StatusOK, struct {
+		OK bool `json:"ok"`
+		variableEffect
+	}{true, effect})
 }
 
 func (s *Server) handleListSharedVariables(w http.ResponseWriter, r *http.Request) {

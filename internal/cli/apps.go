@@ -283,6 +283,30 @@ func cancelDeployment(ctx context.Context, client *Client, app string, named []s
 	return nil
 }
 
+// variableEffect is what changing variables did to the app, as the panel
+// answers it: a rebuild of the version it runs, or why there was none.
+type variableEffect struct {
+	RequiresRebuild bool              `json:"requires_rebuild"`
+	Deployment      *store.Deployment `json:"deployment,omitempty"`
+	NotRebuilt      string            `json:"not_rebuilt,omitempty"`
+}
+
+// note says it in a sentence.
+func (e variableEffect) note() string {
+	switch {
+	case e.RequiresRebuild && e.Deployment != nil:
+		return fmt.Sprintf("The build reads it, so the version the app runs is being rebuilt with it: deployment #%d. "+
+			"Follow it with `%s status`.", e.Deployment.Number, version.Binary)
+	case e.NotRebuilt == "locked":
+		return "The build reads it, and deploys are locked, so it takes effect at the first deploy after they are unlocked."
+	case e.NotRebuilt == "not_deployed":
+		return "The build reads it. The app has not been deployed yet, and its first deploy builds with it."
+	case e.NotRebuilt != "":
+		return fmt.Sprintf("The build reads it, and a rebuild could not be started, so it takes effect at the next `%s deploy`.", version.Binary)
+	}
+	return "Rolled out, once. No rebuild was needed."
+}
+
 // interrupted is Ctrl-C while a deployment was being followed. What stopped
 // is the following; the exit status says so the way a shell expects.
 type interrupted struct{}

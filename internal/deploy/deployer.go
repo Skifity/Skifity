@@ -36,9 +36,10 @@ import (
 // The API asks the last two only of a deployer that has them, so without
 // these a renamed method would compile and quietly stop being asked.
 var (
-	_ api.Deployer     = (*Deployer)(nil)
-	_ api.WorkReporter = (*Deployer)(nil)
-	_ api.RunChecker   = (*Deployer)(nil)
+	_ api.Deployer        = (*Deployer)(nil)
+	_ api.WorkReporter    = (*Deployer)(nil)
+	_ api.RunChecker      = (*Deployer)(nil)
+	_ api.PendingReporter = (*Deployer)(nil)
 )
 
 // Deployer implements api.Deployer.
@@ -173,6 +174,10 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 		RuntimeSpec:             runtimeSpec,
 		CreatedBy:               req.CreatedBy,
 		AcceptedVulnerabilities: req.AcceptVulnerabilities,
+		// What this deploy builds with, to tell later which saved changes
+		// the version does not have. A promotion records this app's own:
+		// the image matched them, or somebody chose to run it anyway.
+		BuildSpec: d.sealedBuildSpec(ctx, app),
 	}
 
 	// The heart of ADR-0007: when the build inputs have not changed, the
@@ -902,7 +907,9 @@ func (d *Deployer) Rollback(ctx context.Context, appID, deploymentID, actorID st
 		Image:            previous.Image,
 		BuildFingerprint: previous.BuildFingerprint,
 		RuntimeSpec:      previous.RuntimeSpec,
-		CreatedBy:        actorID,
+		// It runs the old image, so it was built from what that was.
+		BuildSpec: previous.BuildSpec,
+		CreatedBy: actorID,
 	}
 	if err := d.db.CreateDeployment(ctx, &deployment); err != nil {
 		return store.Deployment{}, err
