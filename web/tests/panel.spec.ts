@@ -740,11 +740,12 @@ test("a variable is changed in place, and Edit as text sends only what changed",
   expect(JSON.stringify(after)).not.toContain("tok_e2e_not_a_real_token")
 })
 
-// The folder deployed above failed, with no cluster to build it on. The
-// overview says so, and the line opens the app's deployments.
+// The folder deployed above failed, with no cluster to build it on, and so did
+// every app the tests before made. The overview says so, and a line opens its
+// app's deployments.
 test("a failed deploy is on the overview, and opens its deployments", async ({ page }) => {
   await signIn(page)
-  const failed = page.getByRole("link", { name: /Deployment #\d+ of .+ failed/ })
+  const failed = page.getByRole("link", { name: /Deployment #\d+ of .+ failed/ }).first()
   await expect(failed).toBeVisible({ timeout: 60_000 })
   await failed.click()
   await expect(page).toHaveURL(/\/apps\/app_[^/?#]+\?tab=deployments/)
