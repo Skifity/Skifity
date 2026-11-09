@@ -511,7 +511,9 @@ export function VariablesEditor({
                         // a click, where it used to stop at the column's edge
                         // with no way to read the rest, and copied in one.
                         <TableCell className="max-w-xs font-mono text-xs text-muted-foreground">
-                          <div className="flex max-w-xs min-w-0 items-start gap-1">
+                          {/* At least wide enough to read when opened: a
+                              wrapped value's narrowest is one character. */}
+                          <div className="flex max-w-xs min-w-40 items-start gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
