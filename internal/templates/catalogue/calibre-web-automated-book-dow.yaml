@@ -7,6 +7,7 @@ website: https://github.com/calibrain/calibre-web-automated-book-downloader
 services:
 - name: calibre-web-automated
   image: crocodilestick/calibre-web-automated:v4.0.6
+  needs_root: true
   port: 8083
   public: true
   mem_request_mb: 128
@@ -22,6 +23,7 @@ services:
     size_gb: 5
 - name: calibre-web-downloader
   image: ghcr.io/calibrain/calibre-web-automated-book-downloader:1.0
+  needs_root: true
   port: 8084
   public: true
   mem_request_mb: 128
@@ -39,3 +41,4 @@ notes: In the original this stack shares /cwa-book-ingest between calibre-web-au
   Skifity gives each app storage of its own, so those are separate directories here. If the apps need
   to see the same files, point them at object storage — MinIO is in this catalogue — rather than a path.
   This template installs 2 apps. They reach each other by name inside the environment, so keep them together.
+  Their images start as root, so the environment needs the baseline pod security level.

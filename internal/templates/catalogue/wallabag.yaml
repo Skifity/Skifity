@@ -6,6 +6,7 @@ website: https://wallabag.org
 services:
 - name: wallabag
   image: wallabag/wallabag:2.6.14
+  needs_root: true
   port: 80
   public: true
   health_path: /api/info

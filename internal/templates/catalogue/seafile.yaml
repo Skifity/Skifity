@@ -6,6 +6,7 @@ website: https://manual.seafile.com
 services:
 - name: seafile
   image: seafileltd/seafile-mc:13.0.25
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -35,4 +36,4 @@ databases:
   - seafile
   var_name: DATABASE_URL
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The seafile image starts as root, so the environment needs the baseline pod security level.

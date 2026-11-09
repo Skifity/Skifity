@@ -7,6 +7,7 @@ website: https://github.com/RobinLinus/snapdrop
 services:
 - name: snapdrop
   image: linuxserver/snapdrop:version-b8b78cc2
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -21,3 +22,4 @@ services:
   - name: snapdrop-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

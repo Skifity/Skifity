@@ -6,6 +6,7 @@ website: https://docs.speedtest-tracker.dev
 services:
 - name: speedtest-tracker
   image: linuxserver/speedtest-tracker:1.15.0
+  needs_root: true
   port: 80
   public: true
   variables:

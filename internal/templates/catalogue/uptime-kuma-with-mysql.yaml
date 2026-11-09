@@ -7,6 +7,7 @@ website: https://github.com/louislam/uptime-kuma
 services:
 - name: uptime-kuma
   image: louislam/uptime-kuma:2.5.5
+  needs_root: true
   port: 3001
   public: true
   mem_request_mb: 128
@@ -24,3 +25,4 @@ databases:
   link_to:
   - uptime-kuma
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

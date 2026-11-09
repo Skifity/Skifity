@@ -6,6 +6,7 @@ website: https://chartdb.io
 services:
 - name: chartdb
   image: ghcr.io/chartdb/chartdb:1.20.1
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 32

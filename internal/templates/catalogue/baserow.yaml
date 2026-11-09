@@ -6,6 +6,7 @@ website: https://baserow.io
 services:
 - name: baserow
   image: baserow/baserow:2.4.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 1024

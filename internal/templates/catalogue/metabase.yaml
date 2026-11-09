@@ -7,6 +7,7 @@ website: https://www.metabase.com
 services:
 - name: metabase
   image: metabase/metabase:v0.63.18
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -22,3 +23,4 @@ databases:
   link_to:
   - metabase
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

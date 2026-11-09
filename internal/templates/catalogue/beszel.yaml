@@ -6,6 +6,7 @@ website: https://beszel.dev
 services:
 - name: beszel
   image: henrygd/beszel:0.20.0
+  needs_root: true
   port: 8090
   public: true
   health_path: /api/health

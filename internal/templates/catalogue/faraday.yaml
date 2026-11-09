@@ -6,6 +6,7 @@ website: https://faradaysec.com/
 services:
 - name: faraday
   image: faradaysec/faraday:5.24.0
+  needs_root: true
   port: 5985
   public: true
   mem_request_mb: 128
@@ -23,3 +24,4 @@ databases:
   link_to:
   - faraday
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

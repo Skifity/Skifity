@@ -6,6 +6,7 @@ website: https://wordpress.org
 services:
 - name: wordpress
   image: wordpress:7.1
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -23,3 +24,4 @@ databases:
   link_to:
   - wordpress
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

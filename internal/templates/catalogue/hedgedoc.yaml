@@ -6,6 +6,7 @@ website: https://hedgedoc.org
 services:
 - name: hedgedoc
   image: quay.io/hedgedoc/hedgedoc:1.12.0
+  needs_root: true
   port: 3000
   public: true
   health_path: /_health

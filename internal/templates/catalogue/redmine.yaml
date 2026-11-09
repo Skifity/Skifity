@@ -6,6 +6,7 @@ website: https://www.redmine.org/
 services:
 - name: redmine
   image: redmine:6.1.4-alpine
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -26,3 +27,4 @@ databases:
   link_to:
   - redmine
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

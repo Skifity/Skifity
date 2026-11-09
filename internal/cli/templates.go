@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -44,6 +45,30 @@ type templateAnswer struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"catalogue,omitempty"`
+	// NeedsRoot is a template with an image that starts as root, which an
+	// environment at the strictest level refuses. The panel says it of each
+	// service; the list says it of the template.
+	NeedsRoot bool `json:"needs_root,omitempty"`
+}
+
+// UnmarshalJSON reads the services the panel lists, which are what needs_root
+// is worked out from, without printing them back with --json.
+func (t *templateAnswer) UnmarshalJSON(body []byte) error {
+	type plain templateAnswer
+	var read struct {
+		plain
+		Services []struct {
+			NeedsRoot bool `json:"needs_root"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(body, &read); err != nil {
+		return err
+	}
+	*t = templateAnswer(read.plain)
+	for _, service := range read.Services {
+		t.NeedsRoot = t.NeedsRoot || service.NeedsRoot
+	}
+	return nil
 }
 
 // cmdTemplates lists the templates a team can install, and manages the
@@ -119,15 +144,27 @@ func listTemplates(ctx context.Context, client *Client, teamID, search string, a
 		return nil
 	}
 	table := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(table, "ID\tNAME\tCATEGORY\tCATALOGUE")
+	fmt.Fprintln(table, "ID\tNAME\tCATEGORY\tCATALOGUE\tROOT")
+	root := false
 	for _, template := range shown {
 		catalogue := "built in"
 		if template.Catalogue != nil {
 			catalogue = template.Catalogue.Name
 		}
-		fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", template.ID, template.Name, template.Category, catalogue)
+		starts := ""
+		if template.NeedsRoot {
+			starts, root = "yes", true
+		}
+		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", template.ID, template.Name, template.Category, catalogue, starts)
 	}
-	return table.Flush()
+	if err := table.Flush(); err != nil {
+		return err
+	}
+	if root {
+		fmt.Fprintln(out, "\nROOT: its image starts as root, which an environment at the strictest level refuses. "+
+			"Install it where root images are accepted, or have an owner or admin accept them while installing it in the panel.")
+	}
+	return nil
 }
 
 // templateCatalogues is `templates catalogues`, whose own flags are the ones

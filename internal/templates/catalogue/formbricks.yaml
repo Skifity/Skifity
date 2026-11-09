@@ -23,6 +23,7 @@ services:
     size_gb: 5
 - name: minio
   image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+  needs_root: true
   port: 9000
   public: false
   mem_request_mb: 128
@@ -43,4 +44,5 @@ databases:
 notes: 'This stack has a set-up step that runs once and exits — minio-init. Skifity runs apps, not one-shot
   containers, so that step is not installed: do it yourself from the app''s Commands tab, or follow the
   project''s own instructions, before expecting everything to work. This template installs 2 apps. They
-  reach each other by name inside the environment, so keep them together.'
+  reach each other by name inside the environment, so keep them together. The minio image starts as root,
+  so the environment needs the baseline pod security level.'

@@ -7,6 +7,7 @@ website: https://docs.gitea.com
 services:
 - name: gitea
   image: gitea/gitea:1.27
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -30,3 +31,4 @@ databases:
   link_to:
   - gitea
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -1804,7 +1804,11 @@
     "noEnvironment": "还没有可以安装到的项目。请先创建一个。",
     "stackApps": "将安装的应用",
     "stackAppsHelp": "{{names}}。每个应用都沿用模板给出的名称，因为其他应用通过这个名称访问它。",
-    "plannedDatabases_other": "它的数据库将创建为 {{names}}。"
+    "plannedDatabases_other": "它的数据库将创建为 {{names}}。",
+    "needsRootTitle": "这个镜像以 root 启动",
+    "needsRoot_other": "{{names}} 以 root 启动，再切换到自己的用户，而 {{environment}} 处于最严格的级别，不允许这样做。按现在的样子安装，它永远不会启动。",
+    "acceptRoot": "让 {{environment}} 接受 root 镜像，然后安装",
+    "needsRootMember": "只有所有者或管理员才能让环境接受 root 镜像。请他们中的一位来做，或者选择一个已经接受 root 镜像的环境。"
   },
   "settings": {
     "title": "设置",
@@ -4368,6 +4372,12 @@
         "cause": "安装 {{0}} 停在了这里：{{1}}",
         "impact": "没有部署任何东西，这次安装已经创建的东西也删除了，只有 {{0}} 没能删除。",
         "fix": "在环境页面上删除剩下的东西，按「原因」里说的修好，然后再安装一次。"
+      },
+      "template_needs_root_images": {
+        "title": "这个模板的镜像以 root 启动，而这个环境拒绝这样做",
+        "cause": "{{0}} 的镜像以 root 启动，而 {{1}} 处于最严格的级别，会拒绝这样的镜像。",
+        "impact": "没有创建任何东西。",
+        "fix": "所有者或管理员可以在安装时为 {{0}} 选择「接受 root 镜像」，这样仍会拒绝特权容器和服务器上的任何东西。或者把它装到已经接受 root 镜像的环境里。"
       },
       "cli_delete_unconfirmed": {
         "title": "删除应用需要确认",

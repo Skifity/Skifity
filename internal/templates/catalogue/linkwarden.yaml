@@ -6,6 +6,7 @@ website: https://linkwarden.app
 services:
 - name: linkwarden
   image: ghcr.io/linkwarden/linkwarden:v2.16.3
+  needs_root: true
   port: 3000
   public: true
   volumes:

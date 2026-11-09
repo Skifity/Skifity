@@ -240,6 +240,7 @@ func TestAnInstallRemembersItsTemplateAndKeepsPrivateServicesInternal(t *testing
 	if tpl.ID == "" {
 		t.Skip("the catalogue has no template with a public and a private service and no databases")
 	}
+	h.acceptRoot(t, &acme)
 	result, err := h.installDirectly(t, acme, tpl, "", nil)
 	if err != nil {
 		t.Fatal(err)

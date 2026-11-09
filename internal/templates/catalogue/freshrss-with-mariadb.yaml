@@ -6,6 +6,7 @@ website: https://freshrss.org/index.html
 services:
 - name: freshrss
   image: freshrss/freshrss:1.30.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -26,3 +27,4 @@ databases:
   link_to:
   - freshrss
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

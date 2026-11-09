@@ -6,6 +6,7 @@ website: https://portabase.io
 services:
 - name: portabase
   image: portabase/portabase:1.31.0
+  needs_root: true
   port: 80
   public: true
   health_path: /api/health

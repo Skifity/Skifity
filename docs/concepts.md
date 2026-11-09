@@ -75,7 +75,10 @@ Nextcloud, MediaWiki and phpMyAdmin all start as root and drop privileges
 themselves, which is an ordinary and long-standing thing for a container to do,
 and this level has no way to permit it. An app like that never starts, and the
 panel says exactly that on the app's page rather than leaving you with the
-kubelet's wording.
+kubelet's wording. A template knows which of its images start as root, so
+installing one says so before anything is made, and an owner or admin can let
+the environment accept root images in the same step; see
+[Templates](templates.md#an-image-that-starts-as-root).
 
 **Accepts root images** is the other level, chosen per environment under the
 project. It permits that one thing and nothing else. Still refused, at both

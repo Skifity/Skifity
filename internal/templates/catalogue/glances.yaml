@@ -6,6 +6,7 @@ website: https://nicolargo.github.io/glances/
 services:
 - name: glances
   image: nicolargo/glances:4.5.6
+  needs_root: true
   port: 61208
   public: true
   mem_request_mb: 128
@@ -14,3 +15,4 @@ services:
   cpu_limit_m: 1000
   variables:
     GLANCES_OPT: -w
+notes: The image starts as root, so the environment needs the baseline pod security level.

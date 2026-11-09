@@ -643,28 +643,37 @@ func (s *Server) handleUpdateEnvironment(w http.ResponseWriter, r *http.Request)
 			"That is not a confinement level. It is \"restricted\" or \"baseline\"."))
 		return
 	}
-	if err := s.db.SetEnvironmentPodSecurity(r.Context(), env.ID, req.PodSecurity); err != nil {
+	if err := s.setPodSecurity(r, &env, project, req.PodSecurity); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	env.PodSecurity = req.PodSecurity
-	s.audit(r, project.TeamID, "environment.pod_security_changed", "environment", env.ID,
-		env.Name+" → "+req.PodSecurity)
+	writeJSON(w, http.StatusOK, env)
+}
+
+// setPodSecurity changes how strictly an environment confines its pods: the
+// saved level, the activity log, and the label on its namespace. The caller
+// has checked the caller is an admin of it. A template install that needs
+// root images, asked for by an admin, changes it the same way.
+func (s *Server) setPodSecurity(r *http.Request, env *store.Environment, project store.Project, level string) error {
+	if err := s.db.SetEnvironmentPodSecurity(r.Context(), env.ID, level); err != nil {
+		return err
+	}
+	env.PodSecurity = level
+	s.audit(r, project.TeamID, "environment.pod_security_changed", "environment", env.ID, env.Name+" → "+level)
 
 	// The label on the live namespace is what Kubernetes actually enforces, so
 	// a saved row that never reached the cluster is the setting doing nothing.
 	if s.cluster != nil {
-		if err := s.cluster.EnsureNamespace(r.Context(), env, project.TeamID, project.ID); err != nil {
-			writeError(w, r, errdoc.New("environment.level_not_applied",
+		if err := s.cluster.EnsureNamespace(r.Context(), *env, project.TeamID, project.ID); err != nil {
+			return errdoc.New("environment.level_not_applied",
 				"The level was saved, but the namespace was not changed").
 				WithCause("%s", err).
 				WithImpact("Kubernetes is still enforcing the previous level, so a deploy will behave as it did before.").
 				WithFix("Fix what the cause says and save the level again.").
-				WithStatus(http.StatusBadGateway))
-			return
+				WithStatus(http.StatusBadGateway)
 		}
 	}
-	writeJSON(w, http.StatusOK, env)
+	return nil
 }
 
 // handleEnvironmentQuota reports how much of an environment's ceiling is used.

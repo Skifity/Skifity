@@ -471,6 +471,39 @@ func TestADryRunOfATemplateIsPassedOnAndCreatesNothing(t *testing.T) {
 	}
 }
 
+// A template whose image starts as root says so in the list, and accepting
+// root images is passed on only when asked for: it changes the whole
+// environment, and the tool's description tells an assistant to ask first.
+func TestATemplateThatNeedsRootSaysSoAndAllowRootIsPassedOn(t *testing.T) {
+	panel := newFakePanel(t)
+	s := New(panel.config())
+
+	_, out, _ := s.listTemplates(t.Context(), nil, listTemplatesInput{Query: "wordpress", Category: "cms"})
+	for _, template := range out.Templates {
+		if template.ID == "wordpress" && template.CatalogueID == "" && !template.NeedsRoot {
+			t.Errorf("the built-in WordPress does not say it needs root: %+v", template)
+		}
+		if template.CatalogueID != "" && template.NeedsRoot {
+			t.Errorf("a template that does not need root says it does: %+v", template)
+		}
+	}
+
+	session := connect(t, New(panel.config()))
+	for _, allow := range []bool{false, true} {
+		args := map[string]any{"template_id": "wordpress", "environment_id": "env_1"}
+		if allow {
+			args["allow_root"] = true
+		}
+		if text, failed := call(t, session, "install_template", args); failed {
+			t.Fatalf("install_template failed: %s", text)
+		}
+		request, _ := panel.last("POST", "/api/templates/wordpress/install")
+		if sent, _ := request.Body["allow_root"].(bool); sent != allow {
+			t.Errorf("asked with allow_root %v, the install sent %v", allow, request.Body)
+		}
+	}
+}
+
 // The search is the tool's own, over the whole catalogue: the template called
 // what was asked for comes first, a category narrows it, and every category
 // is named so the next search can use one.

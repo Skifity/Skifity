@@ -6,6 +6,7 @@ website: https://ghost.org
 services:
 - name: ghost
   image: ghost:5.130.6-alpine
+  needs_root: true
   port: 2368
   health_path: /
   variables:
@@ -27,4 +28,5 @@ databases:
   link_to:
   - ghost
   var_name: DATABASE_URL
-notes: Set the mail settings in Ghost's admin area, or it cannot send member emails.
+notes: Set the mail settings in Ghost's admin area, or it cannot send member emails. The image starts
+  as root, so the environment needs the baseline pod security level.

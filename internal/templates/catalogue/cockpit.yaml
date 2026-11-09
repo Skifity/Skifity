@@ -6,6 +6,7 @@ website: https://getcockpit.com/documentation/
 services:
 - name: cockpit
   image: cockpithq/cockpit:core-2.14.1
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -19,3 +20,4 @@ services:
   - name: cockpit-spaces
     mount_path: /var/www/html/.spaces
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

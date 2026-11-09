@@ -6,6 +6,7 @@ website: https://geoserver.org
 services:
 - name: geoserver
   image: docker.osgeo.org/geoserver:3.0.1
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 768

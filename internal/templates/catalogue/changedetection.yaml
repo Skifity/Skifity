@@ -6,6 +6,7 @@ website: https://github.com/dgtlmoon/changedetection.io/
 services:
 - name: changedetection
   image: ghcr.io/dgtlmoon/changedetection.io:0.60
+  needs_root: true
   port: 5000
   public: true
   mem_request_mb: 128
@@ -26,4 +27,5 @@ services:
   cpu_request_m: 50
   cpu_limit_m: 1000
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The changedetection image starts as root, so the environment needs the baseline pod security
+  level.

@@ -6,6 +6,7 @@ website: https://linkding.link/
 services:
 - name: linkding
   image: sissbruecker/linkding:1.47.0
+  needs_root: true
   port: 9090
   public: true
   mem_request_mb: 128
@@ -16,3 +17,4 @@ services:
   - name: linkding-data
     mount_path: /etc/linkding/data
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

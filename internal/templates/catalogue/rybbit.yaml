@@ -17,6 +17,7 @@ services:
     NODE_ENV: production
 - name: rybbit-backend
   image: ghcr.io/rybbit-io/rybbit-backend:v2.2.3
+  needs_root: true
   port: 3001
   public: false
   mem_request_mb: 128
@@ -28,6 +29,7 @@ services:
     TRUST_PROXY: 'true'
 - name: rybbit-clickhouse
   image: clickhouse/clickhouse-server:25.4.2
+  needs_root: true
   port: 8123
   public: false
   mem_request_mb: 128
@@ -47,4 +49,5 @@ databases:
   - rybbit-backend
   var_name: DATABASE_URL
 notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The rybbit-backend and rybbit-clickhouse images start as root, so the environment needs the
+  baseline pod security level.

@@ -6,6 +6,7 @@ website: https://www.activepieces.com/docs/getting-started/introduction
 services:
 - name: activepieces
   image: ghcr.io/activepieces/activepieces:0.75.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -19,3 +20,4 @@ databases:
   link_to:
   - activepieces
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

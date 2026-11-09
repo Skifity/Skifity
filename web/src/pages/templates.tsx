@@ -11,6 +11,7 @@ import {
   InfoIcon,
   LibraryIcon,
   SearchIcon,
+  ShieldAlertIcon,
 } from "lucide-react"
 import { cn } from "cn"
 
@@ -20,6 +21,7 @@ import { Page, PageHeader } from "@/components/page"
 import { TemplateCataloguesSheet, useTemplateCatalogues } from "@/components/template-catalogues"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
@@ -31,7 +33,13 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -45,6 +53,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, ApiError, type List, type Problem } from "@/lib/api"
+import { confinesEnvironments } from "@/lib/permissions"
 import { queryClient } from "@/lib/query"
 import type { Environment, Project, Template } from "@/lib/types"
 
@@ -523,9 +532,10 @@ type InstallPlan = {
 
 /**
  * Problems a dry run reports that the dialog says in its own way: a value the
- * form already asks for in a field of its own.
+ * form already asks for in a field of its own, and an image that starts as
+ * root, which it warns about with the choice that fixes it beside it.
  */
-const SAID_BY_THE_FORM = new Set(["template.input_required"])
+const SAID_BY_THE_FORM = new Set(["template.input_required", "template.needs_root_images"])
 
 /** What POST /api/templates/{id}/install answers with. */
 type Installed = {
@@ -534,12 +544,19 @@ type Installed = {
   notes?: string
   /** Services that use a GPU where there is one, installed without: no server offers one. */
   without_gpu?: string[]
+  /** The environment was set to accept root images on the way. */
+  accepts_root?: boolean
 }
 
 function InstallDialog({ template, onClose }: { template: Template; onClose: () => void }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { team } = useSession()
   const [environmentId, setEnvironmentId] = useState("")
+  // The environment an admin agreed to let root images into. Kept as which
+  // one rather than as a tick, so choosing another environment does not carry
+  // the agreement over to it.
+  const [rootAcceptedFor, setRootAcceptedFor] = useState("")
   const [name, setName] = useState(template.name)
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries((template.inputs ?? []).map((input) => [input.key, input.default ?? ""])),
@@ -559,6 +576,10 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
     })),
   })
 
+  // The services whose image starts as root, which the strictest level — the
+  // default — refuses.
+  const rootServices = services.filter((service) => service.needs_root)
+
   const environments = useMemo(() => {
     const out: { environment: Environment; project: Project }[] = []
     environmentQueries.forEach((query, index) => {
@@ -569,8 +590,17 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
         out.push({ environment, project: projectItems[index] })
       }
     })
+    // An image that starts as root runs where root images are accepted, so
+    // those environments come first; the order is otherwise left alone.
+    if (rootServices.length > 0) {
+      out.sort(
+        (a, b) =>
+          Number(b.environment.pod_security === "baseline") -
+          Number(a.environment.pod_security === "baseline"),
+      )
+    }
     return out
-  }, [environmentQueries, projectItems])
+  }, [environmentQueries, projectItems, rootServices.length])
   // Loading, failing and having nowhere to install are three different
   // things to say. They were all the same sentence about what a project is.
   const loadingTargets = projects.isLoading || environmentQueries.some((query) => query.isLoading)
@@ -583,6 +613,17 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
   // there are several, nothing is picked for you, because installing into the
   // wrong environment is not a mistake anybody notices straight away.
   const chosen = environmentId || (environments.length === 1 ? environments[0].environment.id : "")
+  const chosenEnvironment = environments.find(
+    (entry) => entry.environment.id === chosen,
+  )?.environment
+  // Said before anything is made: the app would otherwise be created and
+  // never start, and the person learn why from its page afterwards.
+  const refusesRoot =
+    rootServices.length > 0 &&
+    chosenEnvironment != null &&
+    chosenEnvironment.pod_security !== "baseline"
+  const mayAcceptRoot = confinesEnvironments(team)
+  const allowRoot = refusesRoot && rootAcceptedFor === chosen
   const installName = services.length > 1 ? "" : name.trim()
   const installPath = `/api/templates/${encodeURIComponent(template.id)}/install`
   // Which catalogue it is in: an id is only unique within one, and the panel
@@ -624,11 +665,18 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
         // A generated value is filled in by the panel, so anything left empty
         // is sent empty rather than as an accidental literal.
         values,
+        ...(allowRoot ? { allow_root: true } : {}),
       }),
     // An install is all or nothing, so after a failure the lists are as they
     // were — unless what it made could not all be removed again, which the
     // error says, and which these pages had no other way to learn of.
-    onSettled: () => {
+    onSettled: (result) => {
+      // The level shows on the project page, and the install changed it.
+      if (result?.accepts_root && chosenEnvironment) {
+        void queryClient.invalidateQueries({
+          queryKey: ["environments", chosenEnvironment.project_id],
+        })
+      }
       void queryClient.invalidateQueries({ queryKey: ["apps", chosen] })
       void queryClient.invalidateQueries({ queryKey: ["databases", chosen] })
       void queryClient.invalidateQueries({ queryKey: ["canvas"] })
@@ -743,6 +791,47 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
               </Field>
             )}
 
+            {refusesRoot && (
+              <Alert className="border-warning/40 bg-warning/5">
+                <ShieldAlertIcon />
+                <AlertTitle>{t("templates.needsRootTitle")}</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>
+                    {t("templates.needsRoot", {
+                      count: rootServices.length,
+                      names: rootServices.map((service) => service.name).join(", "),
+                      environment: chosenEnvironment?.name ?? "",
+                    })}
+                  </p>
+                  {mayAcceptRoot ? (
+                    <Field orientation="horizontal">
+                      <Checkbox
+                        id="install-accept-root"
+                        checked={allowRoot}
+                        onCheckedChange={(checked) =>
+                          setRootAcceptedFor(checked === true ? chosen : "")
+                        }
+                      />
+                      <FieldContent>
+                        <FieldLabel htmlFor="install-accept-root">
+                          {t("templates.acceptRoot", {
+                            environment: chosenEnvironment?.name ?? "",
+                          })}
+                        </FieldLabel>
+                        {/* What the level gives up, in the words the
+                            environment's own switch uses to ask. */}
+                        <FieldDescription>
+                          {t("environments.confinementLowerConfirm")}
+                        </FieldDescription>
+                      </FieldContent>
+                    </Field>
+                  ) : (
+                    <p>{t("templates.needsRootMember")}</p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {problems.map((problem, index) => (
               <ErrorDisplay
                 key={`${problem.code}-${index}`}
@@ -784,7 +873,10 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={!chosen || blocked || install.isPending}>
+            <Button
+              type="submit"
+              disabled={!chosen || blocked || (refusesRoot && !allowRoot) || install.isPending}
+            >
               {install.isPending && <Spinner />}
               {install.isPending ? t("templates.installing") : t("templates.install")}
             </Button>

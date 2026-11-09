@@ -6,6 +6,7 @@ website: https://www.kavitareader.com
 services:
 - name: kavita
   image: jvmilazz0/kavita:0.9.1
+  needs_root: true
   port: 5000
   public: true
   mem_request_mb: 256

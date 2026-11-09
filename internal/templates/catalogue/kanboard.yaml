@@ -6,6 +6,7 @@ website: https://kanboard.org
 services:
 - name: kanboard
   image: kanboard/kanboard:v1.2.54
+  needs_root: true
   port: 80
   public: true
   health_path: /healthcheck.php

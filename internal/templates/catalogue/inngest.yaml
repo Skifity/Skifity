@@ -6,6 +6,7 @@ website: https://www.inngest.com/docs/self-hosting
 services:
 - name: inngest
   image: inngest/inngest:v1.27.0
+  needs_root: true
   port: 8288
   public: true
   mem_request_mb: 128
@@ -19,3 +20,4 @@ databases:
   link_to:
   - inngest
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -966,7 +966,14 @@ export type Template = {
   beta?: boolean
   /** The logo's file name, when the panel has one for this template. */
   icon?: string
-  services: { name: string; image: string; port: number; public: boolean }[]
+  services: {
+    name: string
+    image: string
+    port: number
+    public: boolean
+    /** The image starts as root, which the strictest level refuses. */
+    needs_root?: boolean
+  }[]
   databases: { name: string; engine: string }[]
   inputs?: {
     key: string

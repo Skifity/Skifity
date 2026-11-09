@@ -6,6 +6,7 @@ website: https://openpanel.dev/docs
 services:
 - name: openpanel-dashboard
   image: lindesvard/openpanel-dashboard:2.3.0
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -17,6 +18,7 @@ services:
     SELF_HOSTED: 'true'
 - name: openpanel-api
   image: lindesvard/openpanel-api:2.3.0
+  needs_root: true
   port: 3000
   public: false
   mem_request_mb: 128
@@ -28,6 +30,7 @@ services:
     SELF_HOSTED: 'true'
 - name: openpanel-worker
   image: lindesvard/openpanel-worker:2.3.0
+  needs_root: true
   port: 0
   public: false
   mem_request_mb: 128
@@ -39,6 +42,7 @@ services:
     SELF_HOSTED: 'true'
 - name: clickhouse
   image: clickhouse/clickhouse-server:25.10.2.65
+  needs_root: true
   port: 8123
   public: false
   mem_request_mb: 128
@@ -64,4 +68,4 @@ databases:
   - openpanel-worker
   var_name: DATABASE_URL
 notes: This template installs 4 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. Their images start as root, so the environment needs the baseline pod security level.

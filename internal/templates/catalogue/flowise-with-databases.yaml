@@ -26,6 +26,7 @@ services:
     size_gb: 5
 - name: qdrant
   image: qdrant/qdrant:v1.19
+  needs_root: true
   port: 6333
   public: true
   mem_request_mb: 128
@@ -44,4 +45,4 @@ databases:
   - flowise
   var_name: DATABASE_URL
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The qdrant image starts as root, so the environment needs the baseline pod security level.

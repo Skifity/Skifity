@@ -6,6 +6,7 @@ website: https://teable.io
 services:
 - name: teable
   image: ghcr.io/teableio/teable:release.2026-09-30T04-47-05Z.3276
+  needs_root: true
   port: 3000
   public: true
   variables:

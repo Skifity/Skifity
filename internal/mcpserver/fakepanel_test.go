@@ -152,7 +152,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 		},
 		map[string]any{
 			"id": "wordpress", "name": "WordPress", "category": "cms", "description": "The blogging platform.",
-			"services": []any{map[string]any{"name": "wordpress"}},
+			"services": []any{map[string]any{"name": "wordpress", "needs_root": true}},
 		},
 		map[string]any{
 			"id": "plausible", "name": "Plausible Analytics", "category": "analytics", "beta": true,

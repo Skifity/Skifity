@@ -6,6 +6,7 @@ website: https://github.com/go-shiori/shiori
 services:
 - name: shiori
   image: ghcr.io/go-shiori/shiori:v1.8.0
+  needs_root: true
   port: 8080
   public: true
   variables:

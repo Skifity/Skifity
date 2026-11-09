@@ -27,6 +27,7 @@ services:
     CLICKHOUSE_CLUSTER_ENABLED: 'false'
 - name: clickhouse
   image: clickhouse/clickhouse-server:26.2.4.23
+  needs_root: true
   port: 9000
   public: false
   mem_request_mb: 128
@@ -49,4 +50,4 @@ databases:
   - langfuse-worker
   var_name: DATABASE_URL
 notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The clickhouse image starts as root, so the environment needs the baseline pod security level.

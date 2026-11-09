@@ -7,6 +7,7 @@ website: https://mediacms.io
 services:
 - name: mediacms
   image: mediacms/mediacms:7.2.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 1024

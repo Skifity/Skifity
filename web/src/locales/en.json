@@ -1829,7 +1829,12 @@
     "stackApps": "Apps it installs",
     "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name.",
     "plannedDatabases_one": "Its database is created as {{names}}.",
-    "plannedDatabases_other": "Its databases are created as {{names}}."
+    "plannedDatabases_other": "Its databases are created as {{names}}.",
+    "needsRootTitle": "This image starts as root",
+    "needsRoot_one": "{{names}} starts as root and drops to its own user, and {{environment}} is held to the strictest level, which refuses that. Installed as it is, it would never start.",
+    "needsRoot_other": "{{names}} start as root and drop to their own users, and {{environment}} is held to the strictest level, which refuses that. Installed as they are, they would never start.",
+    "acceptRoot": "Accept root images in {{environment}}, and install",
+    "needsRootMember": "Only an owner or an admin can let an environment accept root images. Ask one of them to, or choose an environment that already does."
   },
   "settings": {
     "title": "Settings",
@@ -4395,6 +4400,12 @@
         "cause": "Installing {{0}} stopped at this: {{1}}",
         "impact": "Nothing was deployed, and what the install had made was removed, except {{0}}, which could not be.",
         "fix": "Delete what is left from the environment's page, fix what the cause says, then install again."
+      },
+      "template_needs_root_images": {
+        "title": "This template's image starts as root, and this environment refuses that",
+        "cause": "The image of {{0}} starts as root, and {{1}} is held to the strictest level, which refuses an image that does.",
+        "impact": "Nothing was created.",
+        "fix": "An owner or admin can install it and choose Accepts root images for {{0}}, which still refuses a privileged container and anything of the server's. Or install it into an environment that already accepts root images."
       },
       "cli_delete_unconfirmed": {
         "title": "Deleting an app has to be confirmed",

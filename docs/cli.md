@@ -239,7 +239,7 @@ skifity drains remove Axiom       # nothing more is sent to it
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches
-skifity templates                 # what the team can install; --search narrows it
+skifity templates                 # what the team can install; --search narrows it, ROOT marks an image that starts as root
 skifity templates catalogues      # the team's own template catalogues; add, refresh, remove
 skifity db                        # the managed databases
 skifity db connect orders         # reach one from this computer; see below

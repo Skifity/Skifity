@@ -6,6 +6,7 @@ website: https://archivebox.io
 services:
 - name: archivebox
   image: archivebox/archivebox:0.9.71
+  needs_root: true
   port: 5797
   public: true
   variables:

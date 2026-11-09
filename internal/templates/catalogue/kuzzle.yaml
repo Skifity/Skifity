@@ -6,6 +6,7 @@ website: https://kuzzle.io
 services:
 - name: elasticsearch
   image: kuzzleio/elasticsearch:7.17.26
+  needs_root: true
   port: 9200
   public: false
   mem_request_mb: 128
@@ -14,6 +15,7 @@ services:
   cpu_limit_m: 1000
 - name: kuzzle
   image: kuzzleio/kuzzle:2.58.0
+  needs_root: true
   port: 7512
   public: true
   mem_request_mb: 128
@@ -35,4 +37,4 @@ databases:
   - kuzzle
   var_name: DATABASE_URL
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. Their images start as root, so the environment needs the baseline pod security level.

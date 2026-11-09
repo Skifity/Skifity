@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,11 +83,21 @@ func TestEveryTemplateDatabaseArrivesAsAVariable(t *testing.T) {
 	}
 }
 
+// acceptRoot lets an environment run images that start as root, which two
+// thirds of the catalogue's templates have, for a test about something else.
+func (h *harness) acceptRoot(t *testing.T, as *tenant) {
+	t.Helper()
+	if err := h.db.SetEnvironmentPodSecurity(t.Context(), as.env.ID, "baseline"); err != nil {
+		t.Fatal(err)
+	}
+	as.env.PodSecurity = "baseline"
+}
+
 // installDirectly plans and installs a template the way the handler does,
 // for a template that is not in any catalogue the handler could look it up in.
 func (h *harness) installDirectly(t *testing.T, as tenant, tpl templates.Template, name string, values map[string]string) (installedTemplate, error) {
 	t.Helper()
-	plan, err := h.api.planTemplateInstall(t.Context(), as.env, tpl, "", name, values)
+	plan, err := h.api.planTemplateInstall(t.Context(), as.env, tpl, installTemplateRequest{Name: name, Values: values})
 	if err != nil {
 		return installedTemplate{}, err
 	}
@@ -291,9 +302,7 @@ func noAppAnnounced(t *testing.T, stream *events.Subscription) {
 func TestASecondCopyOfATemplateTakesNamesOfItsOwn(t *testing.T) {
 	h, _ := withStoredDatabases(t)
 	acme := h.newTenant("acme")
-	if err := h.db.SetEnvironmentPodSecurity(t.Context(), acme.env.ID, "baseline"); err != nil {
-		t.Fatal(err)
-	}
+	h.acceptRoot(t, &acme)
 
 	for _, name := range []string{"WordPress", "shop"} {
 		status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
@@ -371,9 +380,7 @@ func TestADatabaseRefusedRemovesTheAppsMadeBeforeIt(t *testing.T) {
 	h, databases := withStoredDatabases(t)
 	databases.failFor = "mariadb"
 	acme := h.newTenant("acme")
-	if err := h.db.SetEnvironmentPodSecurity(t.Context(), acme.env.ID, "baseline"); err != nil {
-		t.Fatal(err)
-	}
+	h.acceptRoot(t, &acme)
 	before := h.rowCounts(t)
 	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
 	defer stream.Close()
@@ -431,7 +438,7 @@ func TestTheAppsNameIsCheckedAgainstTheDatabases(t *testing.T) {
 		Services: []templates.Service{{Name: "notes", Image: "example/notes:2.4.1", Port: 8080, Public: true}}}
 	before := h.rowCounts(t)
 
-	plan, err := h.api.planTemplateInstall(t.Context(), acme.env, tpl, "", "", nil)
+	plan, err := h.api.planTemplateInstall(t.Context(), acme.env, tpl, installTemplateRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,6 +456,7 @@ func TestTheAppsNameIsCheckedAgainstTheDatabases(t *testing.T) {
 func TestADryRunSaysWhatAnInstallWouldDoAndDoesNothing(t *testing.T) {
 	h, _ := withStoredDatabases(t)
 	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
 	if status, body := h.do(acme, http.MethodPost, "/api/templates/homer/install",
 		map[string]any{"environment_id": acme.env.ID}); status != http.StatusCreated {
 		t.Fatalf("installing Homer: %d %s", status, body)
@@ -519,5 +527,126 @@ func TestADatabaseIsRenamedAfterItsApp(t *testing.T) {
 		if got := renamedDatabase("shop", c.name, c.all); got != c.want {
 			t.Errorf("%s is renamed %s, want %s", c.name, got, c.want)
 		}
+	}
+}
+
+// A template whose image starts as root.
+//
+// The strictest level is the default and refuses such an image, and only an
+// admin can change it. The install used to make the app anyway, and the
+// person found out afterwards from an app that never started — and a member
+// could do nothing about it. Now it is said before anything is made, and an
+// admin can accept root images for the environment in the same step.
+
+// namespaceCluster records the namespaces it is asked to bring up to date.
+type namespaceCluster struct {
+	Cluster
+	mu      sync.Mutex
+	ensured []string
+}
+
+func (c *namespaceCluster) EnsureNamespace(_ context.Context, env store.Environment, _, _ string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensured = append(c.ensured, env.Namespace+"="+env.PodSecurity)
+	return nil
+}
+
+func withRootCluster(t *testing.T) (*harness, *namespaceCluster, *storedDatabases) {
+	t.Helper()
+	h := newHarness(t)
+	cluster := &namespaceCluster{}
+	h.withCluster(cluster)
+	databases := &storedDatabases{fakeDatabases: fakeDatabases{log: &recorder{}, db: h.db}}
+	h.api.databases = databases
+	return h, cluster, databases
+}
+
+func TestATemplateThatNeedsRootIsRefusedBeforeAnythingIsMade(t *testing.T) {
+	if tpl, _ := templates.Lookup("wordpress"); !tpl.Services[0].NeedsRoot {
+		t.Fatal("the WordPress template no longer says its image starts as root; pick another for this test")
+	}
+	h, cluster, databases := withRootCluster(t)
+	acme := h.newTenant("acme")
+	member := h.newMember(acme, "mia", store.RoleMember)
+	before := h.rowCounts(t)
+
+	status, body := h.do(member, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID})
+	if status != http.StatusConflict || problemCode(body) != "template.needs_root_images" ||
+		!strings.Contains(body, "wordpress") || !strings.Contains(body, "production") {
+		t.Fatalf("a member installing WordPress at the strictest level answered %d %s", status, body)
+	}
+	// Asking for the level to be lowered is an admin's to ask, and refused
+	// before anything is read or written.
+	status, body = h.do(member, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if status != http.StatusForbidden {
+		t.Fatalf("a member asking to accept root images answered %d %s", status, body)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("a refused install changed %v into %v", before, after)
+	}
+	if events := databases.log.all(); len(events) != 0 {
+		t.Errorf("a refused install asked for a database: %v", events)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity == "baseline" || len(cluster.ensured) != 0 {
+		t.Errorf("a refused install changed the level to %q, applying %v", env.PodSecurity, cluster.ensured)
+	}
+}
+
+func TestAnAdminCanAcceptRootImagesAsPartOfTheInstall(t *testing.T) {
+	h, cluster, _ := withRootCluster(t)
+	acme := h.newTenant("acme")
+
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if status != http.StatusCreated || !strings.Contains(body, `"accepts_root":true`) {
+		t.Fatalf("an owner accepting root images answered %d %s", status, body)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity != "baseline" {
+		t.Errorf("the environment is at %q", env.PodSecurity)
+	}
+	if !slices.Equal(cluster.ensured, []string{"acme-production=baseline"}) {
+		t.Errorf("the namespace was brought up to date as %v", cluster.ensured)
+	}
+	entries, err := h.db.ListAudit(t.Context(), acme.team.ID, "environment.pod_security_changed", acme.env.ID, 10)
+	if err != nil || len(entries) != 1 {
+		t.Errorf("the change of level is recorded as %+v (%v)", entries, err)
+	}
+	if apps, _ := h.db.ListApps(t.Context(), acme.env.ID); len(apps) != 1 {
+		t.Errorf("the install made %+v", apps)
+	}
+
+	// Into an environment that accepts root images already, nothing has to
+	// be asked, and the level is not touched again.
+	if status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "name": "shop"}); status != http.StatusCreated ||
+		strings.Contains(body, "accepts_root") {
+		t.Fatalf("a second WordPress into an environment that accepts root answered %d %s", status, body)
+	}
+	if len(cluster.ensured) != 1 {
+		t.Errorf("the level was applied again: %v", cluster.ensured)
+	}
+}
+
+// An install that fails after the level was lowered — or that would have —
+// leaves the environment as it was, because the level changes last of what
+// can fail.
+func TestAnInstallThatFailsLeavesTheLevelAsItWas(t *testing.T) {
+	h, cluster, databases := withRootCluster(t)
+	databases.failFor = "mariadb"
+	acme := h.newTenant("acme")
+
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if problemCode(body) != "template.install_rolled_back" {
+		t.Fatalf("a refused database answered %d %s", status, body)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity == "baseline" || len(cluster.ensured) != 0 {
+		t.Errorf("an install that was undone left the level at %q, applying %v", env.PodSecurity, cluster.ensured)
 	}
 }

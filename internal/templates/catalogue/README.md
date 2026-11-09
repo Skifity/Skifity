@@ -13,6 +13,7 @@ services:
   - name: example                # a slug; it becomes a Kubernetes object
     image: example/app:2.4.1     # a release, never `latest` or `2` — see below
     run_as_user: 65534           # only if the image's USER is a name: its uid
+    needs_root: true             # only if the image starts as root; see below
     port: 8080
     public: true                 # gets a domain; a worker would not
     health_path: /healthz        # optional, and only if it really exists
@@ -107,6 +108,30 @@ ask for:
   has no setting for a URL. Each piece arrives under the name given; the
   password as a secret. They are written once at install, unlike `var_name`,
   which the panel keeps linked.
+
+## Which user an image starts as
+
+Every environment starts at the strictest confinement level, which refuses an
+image that starts as root and one whose `USER` is a name, because the kubelet
+cannot see that a name is not root. So a template says which of the three its
+images are:
+
+* **A number other than 0** needs nothing.
+* **A name** — `USER node`, `USER nobody` — needs `run_as_user` with that name's
+  uid, and then runs at the strictest level.
+* **Root**, or no `USER` at all, needs `needs_root: true` on the service, and a
+  sentence in `notes` saying the environment needs the baseline pod security
+  level; a test checks the two agree. The install dialog then says so before
+  anything is made, and an owner or admin can let the environment accept root
+  images in the same step. Try `run_as_user` first where the image documents
+  running as an ordinary user — many PHP images do — because an image that runs
+  without root runs everywhere.
+
+`python3 hack/resolve_tags.py --users` asks each image's registry which user it
+starts as and prints every service whose template does not say so yet. It is run
+by hand, like the rest of `hack/`; nothing in `make check` asks a registry. Seven
+images would not answer the last time it ran — codimd, convex, openobserve,
+rocketchat, unstructured and weaviate — and are not marked either way.
 
 ## The two rules that are not obvious
 

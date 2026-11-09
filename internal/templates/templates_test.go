@@ -118,6 +118,27 @@ func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 	report(t, CheckWiring)
 }
 
+// TestNotesAndNeedsRootAgree: a template whose image starts as root says so
+// twice — needs_root, which the install acts on, and its notes, which are read
+// on the page the install lands on. The notes were once the only place, in 56
+// templates, and 200 more said it nowhere; hack/resolve_tags.py --users is what
+// found them. Either without the other is one of them being wrong.
+func TestNotesAndNeedsRootAgree(t *testing.T) {
+	for _, tpl := range All() {
+		needs := false
+		for _, svc := range tpl.Services {
+			needs = needs || svc.NeedsRoot
+		}
+		says := strings.Contains(tpl.Notes, "baseline")
+		switch {
+		case needs && !says:
+			t.Errorf("%s needs root and its notes do not say the environment needs the baseline level", tpl.ID)
+		case says && !needs:
+			t.Errorf("%s says the environment needs the baseline level, and no service has needs_root", tpl.ID)
+		}
+	}
+}
+
 // The catalogue is read from files at startup. A file that does not parse is a
 // build-time mistake and has to fail here rather than at run time, where it
 // would be an empty Templates page and no reason for it.

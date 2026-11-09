@@ -355,6 +355,30 @@ test("the install dialog says a name is taken before Install is pressed", async 
   await expect(install).toBeEnabled()
 })
 
+// WordPress starts as root, and the environment first-run setup made is at the
+// strictest level, which refuses that. The dialog says so before anything is
+// made, and the owner can accept root images for it in the same step: Install
+// waits for the box. Nothing is installed here, so the level stays as it was
+// for every test after this one.
+test("a template that starts as root asks the owner before it is installed", async ({ page }) => {
+  await signIn(page)
+  await page.goto("/templates")
+  await page.getByPlaceholder("Search templates").fill("wordpress")
+  await page.getByRole("button", { name: "Install WordPress", exact: true }).click()
+
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByText("This image starts as root")).toBeVisible()
+  const accept = dialog.getByRole("checkbox", { name: /Accept root images in Production/ })
+  const install = dialog.getByRole("button", { name: "Install", exact: true })
+  await expect(accept).not.toBeChecked()
+  await expect(install).toBeDisabled()
+
+  await accept.check()
+  await expect(install).toBeEnabled()
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  await expect(dialog).toBeHidden()
+})
+
 test("the documentation is served from the binary", async ({ page }) => {
   await page.goto("/docs/")
   await expect(page.getByRole("heading", { level: 1 })).toContainText("documentation")

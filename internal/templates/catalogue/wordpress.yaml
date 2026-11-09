@@ -6,6 +6,7 @@ website: https://wordpress.org
 services:
 - name: wordpress
   image: wordpress:6.9.4-apache
+  needs_root: true
   port: 80
   health_path: /wp-admin/install.php
   volumes:
@@ -25,4 +26,4 @@ databases:
   - wordpress
   var_name: WORDPRESS_DB_URL
 notes: Open the site to finish the WordPress installer. The uploads folder is on a volume, so it survives
-  redeploys.
+  redeploys. The image starts as root, so the environment needs the baseline pod security level.

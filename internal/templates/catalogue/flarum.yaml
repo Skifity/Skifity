@@ -6,6 +6,7 @@ website: https://flarum.org
 services:
 - name: flarum
   image: crazymax/flarum:1.8.19
+  needs_root: true
   port: 8000
   public: true
   mem_request_mb: 128

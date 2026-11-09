@@ -7,6 +7,7 @@ website: https://docs.litellm.ai
 services:
 - name: litellm
   image: ghcr.io/berriai/litellm-database:v1.101.0
+  needs_root: true
   port: 4000
   public: true
   mem_request_mb: 128
@@ -20,3 +21,4 @@ databases:
   link_to:
   - litellm
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

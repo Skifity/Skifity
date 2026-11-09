@@ -6,6 +6,7 @@ website: https://docs.usesend.com/self-hosting/overview
 services:
 - name: usesend
   image: usesend/usesend:v1.9.8
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -21,3 +22,4 @@ databases:
   link_to:
   - usesend
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

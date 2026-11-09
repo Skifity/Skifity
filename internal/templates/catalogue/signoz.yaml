@@ -6,6 +6,7 @@ website: https://signoz.io/docs/introduction/
 services:
 - name: zookeeper
   image: signoz/zookeeper:3.9.3
+  needs_root: true
   port: 2181
   public: false
   mem_request_mb: 128
@@ -18,6 +19,7 @@ services:
     size_gb: 5
 - name: clickhouse
   image: clickhouse/clickhouse-server:25.5.6-alpine
+  needs_root: true
   port: 9000
   public: false
   mem_request_mb: 128
@@ -32,6 +34,7 @@ services:
     size_gb: 20
 - name: signoz
   image: signoz/signoz:v0.97.1
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -65,4 +68,5 @@ notes: 'This stack has a set-up step that runs once and exits — init-clickhous
   schema-migrator-sync. Skifity runs apps, not one-shot containers, so that step is not installed: do
   it yourself from the app''s Commands tab, or follow the project''s own instructions, before expecting
   everything to work. This template installs 4 apps. They reach each other by name inside the environment,
-  so keep them together.'
+  so keep them together. The zookeeper, clickhouse and signoz images start as root, so the environment
+  needs the baseline pod security level.'

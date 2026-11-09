@@ -6,6 +6,7 @@ website: https://dozzle.dev/
 services:
 - name: dozzle
   image: amir20/dozzle:v11.1
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -14,3 +15,4 @@ services:
   cpu_limit_m: 1000
   variables:
     DOZZLE_AUTH_PROVIDER: simple
+notes: The image starts as root, so the environment needs the baseline pod security level.

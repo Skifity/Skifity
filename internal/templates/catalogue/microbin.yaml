@@ -6,6 +6,7 @@ website: https://github.com/szabodanika/microbin
 services:
 - name: microbin
   image: danielszabo99/microbin:2.1.4
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 32
@@ -34,5 +35,6 @@ inputs:
   label: Admin password
   secret: true
   generate: true
-notes: Anyone who can reach MicroBin can create pastes. Set MICROBIN_READONLY to true and a
-  MICROBIN_UPLOADER_PASSWORD if only you should. The admin page is at /admin.
+notes: Anyone who can reach MicroBin can create pastes. Set MICROBIN_READONLY to true and a MICROBIN_UPLOADER_PASSWORD
+  if only you should. The admin page is at /admin. The image starts as root, so the environment needs
+  the baseline pod security level.

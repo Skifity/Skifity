@@ -7,6 +7,7 @@ website: https://mosquitto.org/documentation/
 services:
 - name: mosquitto
   image: eclipse-mosquitto:2.0.22
+  needs_root: true
   # MQTT is not HTTP, so there is no domain: the broker is reached on port
   # 1883 of any server.
   port: 0

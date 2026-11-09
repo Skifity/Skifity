@@ -198,6 +198,12 @@ func CheckServices(template Template) []string {
 		if svc.RunAsUser < 0 || svc.RunAsUser > 1<<31-1 {
 			add("%s/%s runs as %d, which is not a uid", template.ID, svc.Name, svc.RunAsUser)
 		}
+		// A uid is given so the image runs at the strictest level, and
+		// needs_root says it cannot: the two cannot both be true.
+		if svc.NeedsRoot && svc.RunAsUser > 0 {
+			add("%s/%s needs root and runs as %d; an image given a uid does not start as root",
+				template.ID, svc.Name, svc.RunAsUser)
+		}
 		if svc.GPU != nil {
 			vendor, count := svc.GPU.Wants()
 			if err := kube.ValidateGPURequest(kube.GPURequest{Count: count, Vendor: vendor}); err != nil || count < 1 {

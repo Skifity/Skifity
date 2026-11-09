@@ -6,6 +6,7 @@ website: https://doc.evolution-api.com/v2/en/get-started/introduction
 services:
 - name: api
   image: evoapicloud/evolution-api:v2.3.7
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -23,3 +24,4 @@ databases:
   link_to:
   - api
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

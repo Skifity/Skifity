@@ -266,6 +266,7 @@ func TestATemplatesGPUIsUsedWhenThereIsOne(t *testing.T) {
 		h := newHarness(t)
 		h.withCluster(&gpuClusterFake{summary: summary})
 		acme := h.newTenant("acme")
+		h.acceptRoot(t, &acme)
 		status, body := h.do(acme, http.MethodPost, "/api/templates/ollama-with-open-webui/install",
 			map[string]any{"environment_id": acme.env.ID})
 		if status != http.StatusCreated {

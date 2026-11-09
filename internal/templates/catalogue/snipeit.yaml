@@ -6,6 +6,7 @@ website: https://snipeitapp.com
 services:
 - name: snipeit
   image: snipe/snipe-it:v8.8.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 256

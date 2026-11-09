@@ -577,6 +577,20 @@ func TemplateInputRequired(input, template string) *Problem {
 		WithDocs("/docs/templates#installing-one")
 }
 
+// TemplateNeedsRootImages is a template whose image starts as root, installed
+// into an environment held to the strictest level, which refuses one. The
+// install would have made an app that never starts, and only an admin can
+// change the level, so the fix names who.
+func TemplateNeedsRootImages(apps, environment string) *Problem {
+	return New("template.needs_root_images", "This template's image starts as root, and this environment refuses that").
+		WithCause("The image of %s starts as root, and %s is held to the strictest level, which refuses an image that does.", apps, environment).
+		WithImpact("Nothing was created.").
+		WithFix("An owner or admin can install it and choose Accepts root images for %s, which still refuses a privileged container and anything of the server's. Or install it into an environment that already accepts root images.", environment).
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#how-strictly-an-environment-confines-its-apps").
+		With("environment", environment)
+}
+
 // TemplateInstallRolledBack is an install that failed after it had made
 // something, and removed everything it had made.
 //

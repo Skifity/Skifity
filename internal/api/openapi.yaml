@@ -8714,6 +8714,7 @@ components:
               cpu_request_m: {type: integer}
               cpu_limit_m: {type: integer}
               public: {type: boolean, description: 'Gets a domain. A worker does not.'}
+              needs_root: {type: boolean, description: 'Its image starts as root, which an environment at the strictest level refuses.'}
               gpu:
                 type: object
                 description: A card it uses when a server offers one; installed without on a cluster with none.
@@ -8775,6 +8776,13 @@ components:
           description: The template's inputs, by key.
           additionalProperties: {type: string}
         dry_run: {type: boolean, description: 'Answer the plan and make nothing.'}
+        allow_root:
+          type: boolean
+          description: >-
+            When the template has an image that starts as root and the environment is
+            at the strictest level, set the environment to accept root images, last of
+            what can fail and before anything deploys. Admin, as changing the level is:
+            a member asking for it is refused with 403 before anything is written.
 
     TemplateInstallPlan:
       type: object
@@ -8791,6 +8799,7 @@ components:
               slug: {type: string}
               image: {type: string}
               public: {type: boolean}
+              needs_root: {type: boolean}
         databases:
           type: array
           items:
@@ -8815,6 +8824,7 @@ components:
           type: array
           description: Everything that stops the install, each as the install would answer it. Empty when it can go ahead.
           items: {$ref: '#/components/schemas/Problem'}
+        accepts_root: {type: boolean, description: 'The install would set the environment to accept root images, as allow_root asked.'}
 
     TemplateCatalogue:
       type: object
@@ -8995,6 +9005,7 @@ components:
           type: array
           items: {type: string}
           description: The services that use a GPU when there is one and were installed without, because no server offers one.
+        accepts_root: {type: boolean, description: 'The environment was set to accept root images on the way.'}
 
     # --- plugins ---
 

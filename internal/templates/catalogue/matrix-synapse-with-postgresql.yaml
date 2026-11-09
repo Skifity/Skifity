@@ -6,6 +6,7 @@ website: https://element-hq.github.io/synapse/latest/welcome_and_overview.html
 services:
 - name: synapse
   image: matrixdotorg/synapse:v1.161.0
+  needs_root: true
   port: 8008
   public: true
   mem_request_mb: 128
@@ -23,3 +24,4 @@ databases:
   link_to:
   - synapse
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

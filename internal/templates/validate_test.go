@@ -61,6 +61,9 @@ func TestEveryCheckRefusesWhatItIsFor(t *testing.T) {
 		{"a port that is not a port", CheckServices, func(t *Template) {
 			t.Services[0].Ports = []PortSpec{{Port: 25565, Protocol: "sctp"}}
 		}, "notes/notes"},
+		{"root and a uid at once", CheckServices, func(t *Template) {
+			t.Services[0].NeedsRoot, t.Services[0].RunAsUser = true, 1000
+		}, "needs root and runs as 1000"},
 		{"a public worker", CheckWorkers, func(t *Template) { t.Services[0].Name = "worker" }, "named for a worker"},
 		{"an engine nobody runs", CheckDatabases, func(t *Template) { t.Databases[0].Engine = "oracle" }, "not an engine"},
 		{"a database linked to nothing", CheckDatabases, func(t *Template) { t.Databases[0].LinkTo = nil }, "linked to nothing"},

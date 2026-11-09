@@ -7,6 +7,7 @@ website: https://docs.observium.org/
 services:
 - name: observium
   image: mbixtech/observium:24.12
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -27,3 +28,4 @@ databases:
   link_to:
   - observium
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

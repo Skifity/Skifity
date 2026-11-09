@@ -6,6 +6,7 @@ website: https://pocket-id.org/docs/setup/installation
 services:
 - name: pocket-id
   image: ghcr.io/pocket-id/pocket-id:v1.13
+  needs_root: true
   port: 1411
   public: true
   mem_request_mb: 128
@@ -25,3 +26,4 @@ databases:
   link_to:
   - pocket-id
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

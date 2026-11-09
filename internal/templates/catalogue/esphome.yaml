@@ -6,6 +6,7 @@ website: https://esphome.io/guides/getting_started_command_line/
 services:
 - name: esphome
   image: ghcr.io/esphome/esphome:2025.12.4
+  needs_root: true
   port: 6052
   public: true
   mem_request_mb: 128
@@ -16,3 +17,4 @@ services:
   - name: esp-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

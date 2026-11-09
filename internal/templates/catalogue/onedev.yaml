@@ -6,6 +6,7 @@ website: https://docs.onedev.io/
 services:
 - name: onedev
   image: 1dev/server:16.6
+  needs_root: true
   port: 6610
   public: true
   mem_request_mb: 128
@@ -29,3 +30,4 @@ databases:
   link_to:
   - onedev
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

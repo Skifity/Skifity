@@ -6,6 +6,7 @@ website: https://homarr.dev
 services:
 - name: homarr
   image: ghcr.io/homarr-labs/homarr:v1.40.0
+  needs_root: true
   port: 7575
   public: true
   mem_request_mb: 128
@@ -22,3 +23,4 @@ inputs:
   help: 64 hexadecimal characters. Make one with `openssl rand -hex 32` and keep a copy — the integrations Homarr stores cannot be read without it.
   secret: true
   required: true
+notes: The image starts as root, so the environment needs the baseline pod security level.

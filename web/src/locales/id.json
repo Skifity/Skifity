@@ -1804,7 +1804,11 @@
     "noEnvironment": "Belum ada proyek untuk tempat memasang. Buat dulu satu proyek.",
     "stackApps": "Aplikasi yang dipasang",
     "stackAppsHelp": "{{names}}. Masing-masing memakai nama dari template, karena aplikasi lainnya menjangkaunya lewat nama itu.",
-    "plannedDatabases_other": "Database-nya dibuat dengan nama {{names}}."
+    "plannedDatabases_other": "Database-nya dibuat dengan nama {{names}}.",
+    "needsRootTitle": "Image ini mulai sebagai root",
+    "needsRoot_other": "{{names}} mulai sebagai root lalu beralih ke penggunanya sendiri, dan {{environment}} dipegang pada level paling ketat, yang menolak itu. Kalau dipasang begitu saja, tidak akan pernah berjalan.",
+    "acceptRoot": "Terima image root di {{environment}}, lalu pasang",
+    "needsRootMember": "Hanya owner atau admin yang bisa membuat environment menerima image root. Minta salah satu dari mereka, atau pilih environment yang sudah menerimanya."
   },
   "settings": {
     "title": "Pengaturan",
@@ -4368,6 +4372,12 @@
         "cause": "Pemasangan {{0}} berhenti di sini: {{1}}",
         "impact": "Tidak ada yang di-deploy, dan apa yang sudah dibuat pemasangan ini dihapus, kecuali {{0}}, yang tidak bisa dihapus.",
         "fix": "Hapus yang tersisa dari halaman environment, perbaiki apa yang disebut di penyebabnya, lalu pasang lagi."
+      },
+      "template_needs_root_images": {
+        "title": "Image template ini mulai sebagai root, dan environment ini menolaknya",
+        "cause": "Image {{0}} mulai sebagai root, dan {{1}} dipegang pada level paling ketat, yang menolak image seperti itu.",
+        "impact": "Tidak ada yang dibuat.",
+        "fix": "Owner atau admin bisa memasangnya sambil memilih Terima image root untuk {{0}}, yang tetap menolak container privileged dan apa pun milik server. Atau pasang di environment yang sudah menerima image root."
       },
       "cli_delete_unconfirmed": {
         "title": "Menghapus aplikasi harus dikonfirmasi",

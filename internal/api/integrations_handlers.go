@@ -630,6 +630,10 @@ type installTemplateRequest struct {
 	// DryRun answers what the install would make and what stops it, and
 	// makes nothing.
 	DryRun bool `json:"dry_run,omitempty"`
+	// AllowRoot sets the environment to accept images that start as root
+	// when the template has one and the environment refuses it. An admin's to
+	// ask for, as changing the level is.
+	AllowRoot bool `json:"allow_root,omitempty"`
 }
 
 func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
@@ -643,6 +647,16 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, err)
 		return
+	}
+	// Accepting root images is a decision about the whole environment, and an
+	// admin's (see handleUpdateEnvironment). Asking for it takes one, whether
+	// or not this template turns out to need it, and a member is refused
+	// before anything is read or written.
+	if req.AllowRoot {
+		if _, _, err := s.authorizeEnvironment(r, env.ID, store.RoleAdmin); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 	// The template is found by the catalogue it is in and the team of the
 	// environment it is going into, so a catalogue of another team is not
@@ -658,7 +672,7 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan, err := s.planTemplateInstall(r.Context(), env, tpl, strings.TrimSpace(req.CatalogueID), req.Name, req.Values)
+	plan, err := s.planTemplateInstall(r.Context(), env, tpl, req)
 	if err != nil {
 		writeError(w, r, err)
 		return

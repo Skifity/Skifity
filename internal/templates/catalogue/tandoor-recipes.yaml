@@ -6,6 +6,7 @@ website: https://tandoor.dev
 services:
 - name: tandoor
   image: vabene1111/recipes:2.6.15
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 256

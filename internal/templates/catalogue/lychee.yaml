@@ -6,6 +6,7 @@ website: https://lycheeorg.dev
 services:
 - name: lychee
   image: lycheeorg/lychee:v7.10.0
+  needs_root: true
   port: 8000
   public: true
   mem_request_mb: 512

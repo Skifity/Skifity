@@ -7,6 +7,7 @@ website: https://answer.apache.org
 services:
 - name: answer
   image: apache/answer:2.0.2
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128

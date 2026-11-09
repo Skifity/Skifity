@@ -7,6 +7,7 @@ website: https://nocodb.com/
 services:
 - name: nocodb
   image: nocodb/nocodb:2026.09.0
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -17,3 +18,4 @@ services:
   - name: nocodb-data
     mount_path: /usr/app/data/
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

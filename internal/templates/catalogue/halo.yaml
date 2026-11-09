@@ -6,6 +6,7 @@ website: https://www.halo.run
 services:
 - name: halo
   image: halohub/halo:2.26.1
+  needs_root: true
   port: 8090
   public: true
   mem_request_mb: 512

@@ -6,6 +6,7 @@ website: https://github.com/Smaug6739/Alexandrie/tree/main/docs
 services:
 - name: frontend
   image: ghcr.io/smaug6739/alexandrie-frontend:v8.10.0
+  needs_root: true
   port: 8200
   public: true
   mem_request_mb: 128
@@ -52,4 +53,4 @@ databases:
   - rustfs
   var_name: DATABASE_URL
 notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The frontend image starts as root, so the environment needs the baseline pod security level.

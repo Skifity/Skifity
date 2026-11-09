@@ -200,6 +200,15 @@ type Service struct {
 	// prom/prometheus's nobody — so it runs at the strict confinement
 	// level, where the kubelet refuses a user it cannot see is not root.
 	RunAsUser int `json:"run_as_user,omitempty"`
+	// NeedsRoot is an image that starts as root and drops to its own user,
+	// as the official WordPress, Matomo and every linuxserver.io image do.
+	// The strictest level refuses one, and it is the default, so the install
+	// says so before anything is made rather than leaving an app that never
+	// starts: the environment has to accept root images first.
+	//
+	// Said here rather than only in the notes, which were the one place 56
+	// templates said it, read by nobody until after the install.
+	NeedsRoot bool `json:"needs_root,omitempty"`
 	// GPU is a card the service uses when the cluster has one: Ollama,
 	// ComfyUI. Only ever a preference. On a cluster with none it is
 	// installed without, and runs on the CPU the way these do, so no

@@ -27,6 +27,9 @@ type installedTemplate struct {
 	// and were installed without, because no server offers one. Each can be
 	// given one under its settings once a server does.
 	WithoutGPU []string `json:"without_gpu,omitempty"`
+	// AcceptsRoot says the environment was set to accept images that start
+	// as root on the way, because an admin allowed it for this install.
+	AcceptsRoot bool `json:"accepts_root,omitempty"`
 }
 
 // What installing a template makes is worked out before any of it is.
@@ -55,6 +58,10 @@ type templatePlan struct {
 	// Problems are everything that stops the install, each as the install
 	// would answer it. An install with any writes nothing.
 	Problems []*errdoc.Problem `json:"problems"`
+	// AcceptsRoot is an install that sets its environment to accept images
+	// that start as root before it deploys: one of them does, the environment
+	// refuses that, and an admin allowed it.
+	AcceptsRoot bool `json:"accepts_root,omitempty"`
 
 	env         store.Environment
 	tpl         templates.Template
@@ -72,6 +79,8 @@ type plannedTemplateApp struct {
 	Slug    string `json:"slug"`
 	Image   string `json:"image"`
 	Public  bool   `json:"public"`
+	// NeedsRoot is an image that starts as root.
+	NeedsRoot bool `json:"needs_root,omitempty"`
 }
 
 // plannedTemplateDatabase is a database an install would make.
@@ -97,11 +106,13 @@ type plannedTemplateVolume struct {
 // what stops it. It writes nothing; it does read, so a name or a port taken
 // since a dry run is still found by the install itself.
 //
-// catalogueID is the team catalogue the template came from, "" for the
+// req.CatalogueID is the team catalogue the template came from, "" for the
 // built-in one, and is remembered with each app so an update is looked for in
-// the same place.
+// the same place. req.AllowRoot is taken as asked: whoever calls this has
+// checked the caller may change the environment's level.
 func (s *Server) planTemplateInstall(ctx context.Context, env store.Environment, tpl templates.Template,
-	catalogueID, nameOverride string, values map[string]string) (templatePlan, error) {
+	req installTemplateRequest) (templatePlan, error) {
+	catalogueID, nameOverride, values := strings.TrimSpace(req.CatalogueID), req.Name, req.Values
 	plan := templatePlan{
 		Apps: []plannedTemplateApp{}, Databases: []plannedTemplateDatabase{}, Volumes: []plannedTemplateVolume{},
 		Problems: []*errdoc.Problem{}, env: env, tpl: tpl, catalogueID: catalogueID, values: map[string]string{},
@@ -163,7 +174,8 @@ func (s *Server) planTemplateInstall(ctx context.Context, env store.Environment,
 		if nameOverride != "" && len(tpl.Services) == 1 {
 			name = nameOverride
 		}
-		app := plannedTemplateApp{Service: svc.Name, Name: name, Slug: kube.Slugify(name), Image: svc.Image, Public: svc.Public}
+		app := plannedTemplateApp{Service: svc.Name, Name: name, Slug: kube.Slugify(name), Image: svc.Image,
+			Public: svc.Public, NeedsRoot: svc.NeedsRoot}
 		if err := claim(app.Slug); err != nil {
 			return plan, err
 		}
@@ -196,6 +208,24 @@ func (s *Server) planTemplateInstall(ctx context.Context, env store.Environment,
 			})
 		}
 		plan.Apps = append(plan.Apps, app)
+	}
+
+	// An image that starts as root never starts at the strictest level, which
+	// is the default. Said now, while nothing exists, and to whoever can do
+	// something about it: the level is an admin's to change, and an admin
+	// can change it as part of this install.
+	var root []string
+	for _, app := range plan.Apps {
+		if app.NeedsRoot {
+			root = append(root, app.Name)
+		}
+	}
+	if len(root) > 0 && !kube.NormalizePodSecurity(env.PodSecurity).AllowsRoot() {
+		if req.AllowRoot {
+			plan.AcceptsRoot = true
+		} else {
+			plan.Problems = append(plan.Problems, errdoc.TemplateNeedsRootImages(strings.Join(root, ", "), env.Name))
+		}
 	}
 
 	if len(tpl.Databases) > 0 && s.databases == nil {
@@ -282,8 +312,22 @@ func (s *Server) installTemplate(r *http.Request, plan templatePlan, user store.
 		return installedTemplate{}, plan.Problems[0]
 	}
 	made := installedTemplate{Notes: plan.tpl.Notes, Apps: []store.App{}, Databases: []store.Database{}}
+	undo := context.WithoutCancel(r.Context())
 	if err := s.makeTemplate(r, plan, &made); err != nil {
-		return installedTemplate{}, s.undoTemplate(context.WithoutCancel(r.Context()), plan.tpl, made, err)
+		return installedTemplate{}, s.undoTemplate(undo, plan.tpl, made, err)
+	}
+	// The level changes last of what can fail, so an install that fails
+	// sooner leaves the environment as it was — and first of what the
+	// cluster sees, so the apps deploy into a namespace that accepts them.
+	if plan.AcceptsRoot {
+		project, err := s.db.GetProject(r.Context(), plan.env.ProjectID)
+		if err == nil {
+			err = s.setPodSecurity(r, &plan.env, project, string(kube.PodSecurityBaseline))
+		}
+		if err != nil {
+			return installedTemplate{}, s.undoTemplate(undo, plan.tpl, made, err)
+		}
+		made.AcceptsRoot = true
 	}
 
 	// As one made by hand or from a Compose file is: the activity log names

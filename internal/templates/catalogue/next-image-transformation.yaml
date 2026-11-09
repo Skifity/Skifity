@@ -6,6 +6,7 @@ website: https://github.com/coollabsio/next-image-transformation
 services:
 - name: next-image-transformation
   image: ghcr.io/coollabsio/next-image-transformation:0.0.3
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -27,4 +28,5 @@ services:
     IMGPROXY_JPEG_PROGRESSIVE: 'true'
     IMGPROXY_USE_ETAG: 'true'
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The next-image-transformation image starts as root, so the environment needs the baseline
+  pod security level.

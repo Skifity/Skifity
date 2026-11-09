@@ -24,6 +24,30 @@ connection string exists by the time the app looks for it. That is the
 difference between a template that works on the first try and one that
 crash-loops until somebody redeploys it.
 
+### An image that starts as root
+
+Two thirds of the catalogue run an image that starts as root and drops to its
+own user — the official WordPress, Ghost and Nextcloud images, everything from
+linuxserver.io, a good part of what is written in PHP. That is ordinary for a container, and
+it is exactly what the strictest confinement level refuses, which is the level
+every environment starts at; see
+[How strictly an environment confines its apps](concepts.md#how-strictly-an-environment-confines-its-apps).
+
+So the install dialog says so before anything is made, for the environment you
+chose. An owner or an admin sees a checkbox to let that environment accept root
+images, and Install waits until it is ticked; the install then changes the
+environment's level on the way, which the activity log records like any other
+change of level. A member is told that only an owner or an admin can do that,
+and environments that already accept root images are listed first. Without one of
+those, the install is refused with nothing made, rather than leaving an app that
+never starts. From a terminal or an assistant, the install takes `"allow_root":
+true` to do the same, from an owner or an admin only; `skifity templates` marks
+these templates in its ROOT column, and the assistant's `list_templates` says
+`needs_root`.
+
+If the install then fails, the environment keeps the level it had: the level is
+changed last of everything that can fail.
+
 ### All or nothing
 
 An install either makes everything the template describes or leaves nothing

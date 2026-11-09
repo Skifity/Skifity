@@ -6,6 +6,7 @@ website: https://github.com/librespeed/speedtest
 services:
 - name: librespeed
   image: ghcr.io/librespeed/speedtest:6.3
+  needs_root: true
   port: 82
   public: true
   mem_request_mb: 128
@@ -17,3 +18,4 @@ services:
     TELEMETRY: 'false'
     DISTANCE: km
     WEBPORT: '82'
+notes: The image starts as root, so the environment needs the baseline pod security level.
