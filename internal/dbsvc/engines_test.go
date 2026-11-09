@@ -413,7 +413,7 @@ func TestLinkingDeliversEachEnginesURL(t *testing.T) {
 			t.Fatal(err)
 		}
 		variable := engine.DefaultVariable(name) + "_" + strings.ToUpper(name)
-		if err := m.Link(ctx, database.ID, app.ID, variable); err != nil {
+		if err := m.Link(ctx, database.ID, app.ID, variable, nil); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if got := linkedValue(t, m, db, app.ID, variable); got != s.ConnectionURL() || got == "" {

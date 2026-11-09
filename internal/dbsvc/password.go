@@ -862,7 +862,7 @@ func (m *Manager) resyncLinkedApps(ctx context.Context, databaseID string) (sync
 		return 0, 1
 	}
 	for _, link := range links {
-		if err := m.relink(ctx, databaseID, link.AppID, link.VarName); err != nil {
+		if err := m.relink(ctx, link); err != nil {
 			m.log.Warn("could not give an app the database's new connection string",
 				"database", databaseID, "app", link.AppID, "error", err)
 			missed++
@@ -873,25 +873,26 @@ func (m *Manager) resyncLinkedApps(ctx context.Context, databaseID string) (sync
 	return synced, missed
 }
 
-// relink is Link for an app already linked under a name: the variable is
-// sealed again from the current credentials and the app rolled out. Unlike
-// Link, a rollout that fails is a failure here, because a password change
-// takes the old password away only from apps that were rolled out.
-func (m *Manager) relink(ctx context.Context, databaseID, appID, varName string) error {
-	credentials, err := m.Credentials(ctx, databaseID)
+// relink is Link for an app already linked: the connection string and every
+// piece of it the link delivers are sealed again from the current
+// credentials, in one change, and the app rolled out. Unlike Link, a rollout
+// that fails is a failure here, because a password change takes the old
+// password away only from apps that were rolled out — and an app given the
+// new URL and the old password piece was one that could not sign in.
+func (m *Manager) relink(ctx context.Context, link store.DatabaseLink) error {
+	credentials, err := m.Credentials(ctx, link.DatabaseID)
 	if err != nil {
 		return err
 	}
-	sealed, err := m.keyring.Seal([]byte(credentials.URL), "variable:"+appID+":"+varName)
+	set, err := m.linkVariables(credentials, link)
 	if err != nil {
 		return err
 	}
-	variable := store.Variable{AppID: appID, Key: varName, IsSecret: true}
-	if err := m.db.SetVariable(ctx, &variable, sealed); err != nil {
+	if err := m.db.ChangeVariables(ctx, link.AppID, set, nil); err != nil {
 		return err
 	}
 	if m.deployer != nil {
-		return m.deployer.Sync(ctx, appID)
+		return m.deployer.Sync(ctx, link.AppID)
 	}
 	return nil
 }

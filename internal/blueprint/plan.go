@@ -31,6 +31,8 @@ type AppState struct {
 	Jobs      []store.AppJob
 	// Links are its databases: variable name to database id.
 	Links map[string]string
+	// Pieces are what each of its links delivers in pieces, by database id.
+	Pieces map[string]store.LinkPieces
 	// Deployed is whether it has ever been deployed. An app made by an apply
 	// that stopped before its first deploy is still owed one.
 	Deployed bool
@@ -201,16 +203,25 @@ func Plan(file File, state State) ([]Step, error) {
 				return nil, errdoc.BlueprintInvalid(fmt.Sprintf(
 					"app %s links the database %s, which is neither in the file nor in the environment", name, database))
 			}
-			variable := want.Databases[database]
+			link := want.Databases[database]
+			variable := link.URL
 			if variable == "" {
 				variable = DefaultVariable(engine)
 			}
-			if exists && have.Links[variable] == id {
+			// Pieces the file does not name are left as the link has them.
+			pieces := link.Pieces()
+			named := pieces != store.LinkPieces{}
+			if exists && have.Links[variable] == id && (!named || have.Pieces[id] == pieces) {
 				continue
 			}
-			steps = append(steps, Step{Op: "create", Kind: "link", App: name, Name: database, Detail: "as " + variable,
-				Call: &Call{Method: "POST", Path: "/api/databases/" + id + "/link",
-					Body: map[string]any{"app_id": ref, "var_name": variable}}})
+			body := map[string]any{"app_id": ref, "var_name": variable}
+			detail := "as " + variable
+			if named {
+				body["pieces"] = pieces
+				detail += ", and " + strings.Join(pieces.Names(), ", ")
+			}
+			steps = append(steps, Step{Op: "create", Kind: "link", App: name, Name: database, Detail: detail,
+				Call: &Call{Method: "POST", Path: "/api/databases/" + id + "/link", Body: body}})
 		}
 	}
 

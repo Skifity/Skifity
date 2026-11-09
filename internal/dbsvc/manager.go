@@ -3,10 +3,8 @@ package dbsvc
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
@@ -377,51 +375,67 @@ func (m *Manager) Credentials(ctx context.Context, databaseID string) (api.Datab
 	return credentials, nil
 }
 
-// Link injects a database's connection string into an app as a variable.
-func (m *Manager) Link(ctx context.Context, databaseID, appID, varName string) error {
-	// The app's links as they are: another database already under this name
-	// would have its connection string overwritten, and unlinking either
-	// deleted the variable the other still needed. The same database under
-	// another name is being renamed, and its old variable goes.
+// Link injects a database's connection string into an app as a variable,
+// and the pieces of it that pieces names as variables of their own. nil
+// pieces keeps the ones the link has: none for a new link, the same ones for
+// a link being renamed.
+func (m *Manager) Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error {
+	// The app's links as they are: another database already under one of
+	// these names would have its connection overwritten, and unlinking
+	// either deleted the variable the other still needed. The same database
+	// under other names is being changed, and the names it no longer uses go.
 	links, err := m.db.ListLinksForApp(ctx, appID)
 	if err != nil {
 		return err
 	}
-	previous := ""
+	var before *store.DatabaseLink
+	taken := map[string]bool{}
 	for _, link := range links {
-		switch {
-		case link.DatabaseID != databaseID && link.VarName == varName:
-			return errdoc.New("database.variable_taken", "That variable already connects another database").
-				WithCause("This app's %s is the connection string of another database linked to it.", varName).
-				WithImpact("Nothing was changed.").
-				WithFix("Link this database under another name, or unlink the other one first.").
-				WithStatus(http.StatusConflict)
-		case link.DatabaseID == databaseID && link.VarName != varName:
-			previous = link.VarName
+		if link.DatabaseID == databaseID {
+			before = &link
+			continue
 		}
+		for _, name := range link.Variables() {
+			taken[name] = true
+		}
+	}
+	link := store.DatabaseLink{DatabaseID: databaseID, AppID: appID, VarName: varName}
+	switch {
+	case pieces != nil:
+		link.Pieces = *pieces
+	case before != nil:
+		link.Pieces = before.Pieces
 	}
 	credentials, err := m.Credentials(ctx, databaseID)
 	if err != nil {
 		return err
 	}
-	sealed, err := m.keyring.Seal([]byte(credentials.URL), "variable:"+appID+":"+varName)
+	if err := checkPieces(credentials.Engine, varName, link.Pieces); err != nil {
+		return err
+	}
+	for _, name := range link.Variables() {
+		if taken[name] {
+			return errdoc.DatabaseVariableTaken(name)
+		}
+	}
+	set, err := m.linkVariables(credentials, link)
 	if err != nil {
 		return err
 	}
-	// The connection string is a secret: it carries the password.
-	variable := store.Variable{AppID: appID, Key: varName, IsSecret: true}
-	if err := m.db.SetVariable(ctx, &variable, sealed); err != nil {
+	var unset []string
+	if before != nil {
+		unset = leftBehind(*before, link)
+	}
+	if err := m.db.ChangeVariables(ctx, appID, set, unset); err != nil {
 		return err
 	}
 	if err := m.db.LinkDatabase(ctx, databaseID, appID, varName); err != nil {
 		return err
 	}
-	if previous != "" {
-		if err := m.db.DeleteVariable(ctx, appID, previous); err != nil && !errors.Is(err, store.ErrNotFound) {
-			return err
-		}
+	if err := m.db.SetLinkPieces(ctx, databaseID, appID, link.Pieces); err != nil {
+		return err
 	}
-	// Roll the app so the new variable actually reaches its instances.
+	// Roll the app so the new variables actually reach its instances.
 	if m.deployer != nil {
 		if err := m.deployer.Sync(ctx, appID); err != nil {
 			m.log.Warn("could not apply the database link", "app", appID, "error", err)
@@ -430,7 +444,8 @@ func (m *Manager) Link(ctx context.Context, databaseID, appID, varName string) e
 	return nil
 }
 
-// Unlink removes the injected variable.
+// Unlink removes the injected variables: the connection string and its
+// pieces.
 func (m *Manager) Unlink(ctx context.Context, databaseID, appID string) error {
 	links, err := m.db.ListLinksForApp(ctx, appID)
 	if err != nil {
@@ -440,7 +455,7 @@ func (m *Manager) Unlink(ctx context.Context, databaseID, appID string) error {
 		if link.DatabaseID != databaseID {
 			continue
 		}
-		if err := m.db.DeleteVariable(ctx, appID, link.VarName); err != nil && !strings.Contains(err.Error(), "not found") {
+		if err := m.db.ChangeVariables(ctx, appID, nil, link.Variables()); err != nil {
 			return err
 		}
 	}
@@ -505,8 +520,8 @@ func (m *Manager) Delete(ctx context.Context, databaseID string) error {
 			"database", databaseID, "error", err)
 	}
 	for _, link := range links {
-		if err := m.db.DeleteVariable(ctx, link.AppID, link.VarName); err != nil {
-			m.log.Warn("could not remove a linked app's database variable",
+		if err := m.db.ChangeVariables(ctx, link.AppID, nil, link.Variables()); err != nil {
+			m.log.Warn("could not remove a linked app's database variables",
 				"database", databaseID, "app", link.AppID, "error", err)
 		}
 		if m.deployer != nil {

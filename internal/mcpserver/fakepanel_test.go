@@ -304,7 +304,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/apps/{app}/volumes":                         items(map[string]any{"id": "vol_1", "app_id": "app_1", "name": "data", "mount_path": "/data", "size_gb": 1}),
 		"GET /api/apps/{app}/volumes/{volume}/backups":        items(),
 		"POST /api/apps/{app}/volumes/{volume}/backups":       backup,
-		"GET /api/databases/{db}":                             map[string]any{"database": database, "links": []any{map[string]any{"database_id": "db_1", "app_id": "app_1", "var_name": "DATABASE_URL"}}},
+		"GET /api/databases/{db}":                             map[string]any{"database": database, "links": []any{map[string]any{"database_id": "db_1", "app_id": "app_1", "var_name": "DATABASE_URL", "pieces": map[string]any{"host": "DB_HOST", "password": "DB_PASSWORD"}}}},
 		"POST /api/databases/{db}/link":                       ok,
 		"POST /api/databases/{db}/stop":                       database,
 		"POST /api/databases/{db}/start":                      database,

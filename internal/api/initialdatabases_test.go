@@ -26,6 +26,24 @@ import (
 type recorder struct {
 	mu     sync.Mutex
 	events []string
+	// pieces are what each app's links were asked to deliver in pieces.
+	pieces map[string]store.LinkPieces
+}
+
+func (r *recorder) notePieces(appID string, pieces store.LinkPieces) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pieces == nil {
+		r.pieces = map[string]store.LinkPieces{}
+	}
+	r.pieces[appID] = pieces
+}
+
+func (r *recorder) piecesOf(appID string) (store.LinkPieces, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	pieces, ok := r.pieces[appID]
+	return pieces, ok
 }
 
 func (r *recorder) note(event string) {
@@ -56,8 +74,11 @@ func (f *fakeDatabases) Create(_ context.Context, env store.Environment, req Cre
 	return store.Database{ID: "db_" + req.Engine, Name: req.Name, Engine: req.Engine, EnvironmentID: env.ID}, nil
 }
 
-func (f *fakeDatabases) Link(ctx context.Context, databaseID, appID, varName string) error {
+func (f *fakeDatabases) Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error {
 	f.log.note("link " + databaseID + " as " + varName)
+	if pieces != nil {
+		f.log.notePieces(appID, *pieces)
+	}
 	variable := store.Variable{AppID: appID, Key: varName, IsSecret: true}
 	return f.db.SetVariable(ctx, &variable, "sealed-in-test")
 }

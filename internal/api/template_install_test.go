@@ -105,14 +105,6 @@ func (h *harness) installDirectly(t *testing.T, as tenant, tpl templates.Templat
 	return h.api.installTemplate(request, plan, as.user)
 }
 
-// piecesDatabases is fakeDatabases with a connection to hand out in pieces.
-type piecesDatabases struct{ fakeDatabases }
-
-func (piecesDatabases) Credentials(context.Context, string) (DatabaseCredentials, error) {
-	return DatabaseCredentials{Engine: "mysql", Host: "assets-db-rw.acme.svc", Port: 3306,
-		Database: "assets", Username: "assets", Password: "not-a-real-password", URL: "mysql://x"}, nil
-}
-
 // A template can say how its image starts, give it the files it is
 // configured by, and hand it its database as a host, a port, a user and a
 // password — the three things software written for Compose takes for
@@ -120,7 +112,7 @@ func (piecesDatabases) Credentials(context.Context, string) (DatabaseCredentials
 func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing.T) {
 	h := newHarness(t)
 	log := &recorder{}
-	h.api.databases = &piecesDatabases{fakeDatabases{log: log, db: h.db}}
+	h.api.databases = &fakeDatabases{log: log, db: h.db}
 	h.api.deployer = &fakeDeployer{log: log}
 	acme := h.newTenant("acme")
 
@@ -178,28 +170,21 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 		}
 	}
 
+	// The pieces are the link's to write, keep current and remove: the
+	// install hands them to it, and writes none of them itself.
+	want := store.LinkPieces{Host: "DB_HOST", Port: "DB_PORT", Name: "DB_DATABASE", User: "DB_USERNAME", Password: "DB_PASSWORD"}
 	for _, name := range []string{"web", "worker"} {
+		if pieces, ok := log.piecesOf(apps[name].ID); !ok || pieces != want {
+			t.Errorf("%s was linked with the pieces %+v (given %v)", name, pieces, ok)
+		}
 		rows, err := h.db.ListVariables(t.Context(), apps[name].ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := map[string]string{}
-		secret := map[string]bool{}
 		for _, row := range rows {
-			if value, err := h.keyring.Open(row.Sealed, variableContext(apps[name].ID, row.Key)); err == nil {
-				got[row.Key] = string(value)
+			if slices.Contains(want.Names(), row.Key) {
+				t.Errorf("%s: the install wrote %s itself, outside the link", name, row.Key)
 			}
-			secret[row.Key] = row.IsSecret
-		}
-		want := map[string]string{"DB_HOST": "assets-db-rw.acme.svc", "DB_PORT": "3306", "DB_DATABASE": "assets",
-			"DB_USERNAME": "assets", "DB_PASSWORD": "not-a-real-password"}
-		for key, value := range want {
-			if got[key] != value {
-				t.Errorf("%s: %s is %q, want %q", name, key, got[key], value)
-			}
-		}
-		if !secret["DB_PASSWORD"] || secret["DB_HOST"] {
-			t.Errorf("%s: the password is secret %v, the host %v", name, secret["DB_PASSWORD"], secret["DB_HOST"])
 		}
 	}
 }
@@ -233,11 +218,11 @@ func (f *storedDatabases) Create(ctx context.Context, env store.Environment, req
 	return record, nil
 }
 
-func (f *storedDatabases) Link(ctx context.Context, databaseID, appID, varName string) error {
+func (f *storedDatabases) Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error {
 	if err := f.db.LinkDatabase(ctx, databaseID, appID, varName); err != nil {
 		return err
 	}
-	return f.fakeDatabases.Link(ctx, databaseID, appID, varName)
+	return f.fakeDatabases.Link(ctx, databaseID, appID, varName, pieces)
 }
 
 func (f *storedDatabases) Credentials(ctx context.Context, databaseID string) (DatabaseCredentials, error) {

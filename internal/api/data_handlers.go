@@ -178,6 +178,9 @@ func (s *Server) handleDatabaseCredentials(w http.ResponseWriter, r *http.Reques
 type linkDatabaseRequest struct {
 	AppID   string `json:"app_id"`
 	VarName string `json:"var_name,omitempty"`
+	// Pieces names the variables the connection also arrives in, piece by
+	// piece. Left out, a link being changed keeps the ones it has.
+	Pieces *store.LinkPieces `json:"pieces,omitempty"`
 }
 
 func (s *Server) handleLinkDatabase(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +221,12 @@ func (s *Server) handleLinkDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	if err := s.databases.Link(r.Context(), record.ID, app.ID, varName); err != nil {
+	if req.Pieces != nil {
+		for _, field := range []*string{&req.Pieces.Host, &req.Pieces.Port, &req.Pieces.Name, &req.Pieces.User, &req.Pieces.Password} {
+			*field = strings.TrimSpace(*field)
+		}
+	}
+	if err := s.databases.Link(r.Context(), record.ID, app.ID, varName, req.Pieces); err != nil {
 		writeError(w, r, err)
 		return
 	}

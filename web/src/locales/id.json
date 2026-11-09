@@ -1735,7 +1735,19 @@
     "noScheduleTitle": "Database ini tidak punya jadwal cadangan",
     "noScheduleHelp": "Database ini dibuat sebelum ada penyimpanan cadangan, atau dengan cadangan harian dimatikan. Aktifkan jadwal di bawah, atau beri setiap database tim yang belum punya jadwal cadangan harian yang didapat database baru.",
     "backupDefaults": "Cadangkan setiap database tiap hari",
-    "backupDefaultsApplied_other": "{{count}} database kini dicadangkan setiap hari."
+    "backupDefaultsApplied_other": "{{count}} database kini dicadangkan setiap hari.",
+    "pieces": {
+      "title": "Juga sebagai variabel terpisah",
+      "help": "Untuk perangkat lunak yang membaca host, port, pengguna, dan kata sandi alih-alih URL. Semuanya tetap terbaru saat kata sandi diganti.",
+      "fieldsHelp": "Kosongkan sebuah nama untuk tidak menyertakan bagian itu. Hanya kata sandi yang rahasia.",
+      "notDelivered": "Tidak disertakan",
+      "listed": "Juga {{names}}",
+      "host": "Host",
+      "port": "Port",
+      "name": "Nama database",
+      "user": "Pengguna",
+      "password": "Kata sandi"
+    }
   },
   "templates": {
     "title": "Template",
@@ -3459,7 +3471,7 @@
       },
       "database_variable_taken": {
         "title": "Variabel itu sudah menghubungkan database lain",
-        "cause": "{{0}} pada aplikasi ini adalah string koneksi database lain yang terhubung dengannya.",
+        "cause": "{{0}} pada aplikasi ini sudah membawa koneksi database lain yang terhubung dengannya.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Hubungkan database ini dengan nama lain, atau putuskan database yang lain terlebih dahulu."
       },
@@ -4386,6 +4398,18 @@
         "cause": "Endpoint {{0}} tidak bisa dibaca: {{1}}",
         "impact": "Backup tidak bisa jalan, jadi tidak ada yang sedang diamankan.",
         "fix": "Administrator panel membetulkan endpoint S3 di Pengaturan → Umum → Penyimpanan cadangan: alamat seperti https://s3.eu-central-1.amazonaws.com."
+      },
+      "database_pieces_clash": {
+        "title": "Dua bagian koneksi akan memakai satu variabel",
+        "cause": "{{0}} dipakai untuk lebih dari satu di antara string koneksi, host, port, nama, pengguna, dan kata sandi.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Beri masing-masing variabelnya sendiri, atau tidak usah sertakan yang tidak dibaca aplikasi."
+      },
+      "database_piece_not_offered": {
+        "title": "Bagian koneksi itu tidak bisa diberikan sendiri",
+        "cause": "{{0}} tidak punya {{1}} yang bisa diberikan link ke aplikasi sebagai variabel tersendiri.",
+        "impact": "Tidak ada yang diubah.",
+        "fix": "Jangan sertakan. Aplikasi bisa membaca semua yang dimiliki database dari string koneksi."
       },
       "template_input_required": {
         "title": "Template ini memerlukan nilai yang belum diisi",

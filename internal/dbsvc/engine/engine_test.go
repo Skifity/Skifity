@@ -171,3 +171,28 @@ func TestMongoDB8IsNotTheDefaultWhereItWillNotStart(t *testing.T) {
 		}
 	}
 }
+
+// Every engine gives its host and port on their own, its password where it
+// has one, and a name to suggest for each piece. The Redis family gives no
+// user: its connection string signs in as "default", whatever the
+// credentials call the user.
+func TestEveryEngineGivesItsConnectionInPieces(t *testing.T) {
+	for _, e := range All() {
+		if !e.OffersPiece(PieceHost) || !e.OffersPiece(PiecePort) {
+			t.Errorf("%s does not give its host and port on their own", e.Name)
+		}
+		if e.OffersPiece(PiecePassword) != e.Password {
+			t.Errorf("%s gives a password piece %v, and has a password %v", e.Name, e.OffersPiece(PiecePassword), e.Password)
+		}
+		for _, p := range e.Pieces {
+			if p.Variable == "" {
+				t.Errorf("%s suggests no name for its %s", e.Name, p.Piece)
+			}
+		}
+	}
+	for _, name := range []string{Redis, Valkey, Dragonfly} {
+		if e, _ := Lookup(name); e.OffersPiece(PieceUser) || e.OffersPiece(PieceName) {
+			t.Errorf("%s gives a user or a database name the URL does not use", name)
+		}
+	}
+}

@@ -466,12 +466,13 @@ func (s *Server) makeTemplate(r *http.Request, plan templatePlan, made *installe
 			varName = defaultVarNameFor(spec.Engine)
 		}
 		for _, target := range spec.LinkTo {
-			if err := s.databases.Link(ctx, record.ID, created[target].ID, varName); err != nil {
+			// The pieces are the link's, so a password change reaches them
+			// as it reaches the URL, and unlinking takes them away.
+			pieces := store.LinkPieces{Host: spec.Vars.Host, Port: spec.Vars.Port, Name: spec.Vars.Name,
+				User: spec.Vars.User, Password: spec.Vars.Password}
+			if err := s.databases.Link(ctx, record.ID, created[target].ID, varName, &pieces); err != nil {
 				return err
 			}
-		}
-		if err := s.setDatabasePieces(r, record.ID, spec, created); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -544,36 +545,6 @@ func (s *Server) setTemplateFile(r *http.Request, appID string, file templates.F
 		AppID: appID, Path: file.Path, Size: len(file.Content),
 		IsSecret: file.Secret, Executable: file.Executable,
 	}, sealed)
-}
-
-// setDatabasePieces delivers a database's connection in pieces to the
-// services it is linked to, for software with no setting for a URL.
-//
-// They are variables of the app, written once here, where the URL is a link
-// the panel keeps: unlinking the database does not remove them. The password
-// is a secret like the URL it is part of.
-func (s *Server) setDatabasePieces(r *http.Request, databaseID string, spec templates.DatabaseSpec, created map[string]store.App) error {
-	pieces := spec.Vars.Pieces()
-	if len(pieces) == 0 {
-		return nil
-	}
-	credentials, err := s.databases.Credentials(r.Context(), databaseID)
-	if err != nil {
-		return err
-	}
-	values := map[string]string{
-		"host": credentials.Host, "port": strconv.Itoa(credentials.Port), "name": credentials.Database,
-		"user": credentials.Username, "password": credentials.Password,
-	}
-	for _, target := range spec.LinkTo {
-		app := created[target]
-		for name, piece := range pieces {
-			if err := s.setTemplateVariable(r, app.ID, name, values[piece], piece == "password"); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // protocolOr is a template port's protocol, tcp when it names none.

@@ -205,6 +205,13 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	} else if resumed > 0 {
 		log.Info("picked up deployments a restart interrupted", "count", resumed)
 	}
+	// Once: the database links template installs made before a link kept
+	// its pieces are given them, so a password change reaches them too.
+	if attached, err := databases.AttachTemplatePieces(ctx, server.InstalledTemplate); err != nil {
+		log.Warn("could not give template apps' database links their pieces", "error", err)
+	} else if attached > 0 {
+		log.Info("gave template apps' database links their pieces", "links", attached)
+	}
 
 	background, stopBackground := context.WithCancel(ctx)
 	defer stopBackground()

@@ -216,7 +216,7 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 			"engine": record.Engine, "environment_id": record.EnvironmentID,
 		})
 
-		if err := s.databases.Link(r.Context(), record.ID, app.ID, want.Variable); err != nil {
+		if err := s.databases.Link(r.Context(), record.ID, app.ID, want.Variable, nil); err != nil {
 			result.Error, result.Problem = problemText(err), errdoc.From(err)
 			results = append(results, result)
 			continue

@@ -1,6 +1,7 @@
 package blueprint
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -477,5 +478,105 @@ func TestDeployingOnATagIsDescribedInTheFile(t *testing.T) {
 	_, err = Parse([]byte("apps:\n  web:\n    repo: https://github.com/acme/shop\n    deploy_trigger: nightly\n    tag_pattern: \"v[\"\n"))
 	if err == nil || !strings.Contains(err.Error(), `not "nightly"`) || !strings.Contains(err.Error(), `tag_pattern "v["`) {
 		t.Fatalf("a wrong trigger and pattern: %v", err)
+	}
+}
+
+// A link's long form names the variables its pieces arrive as. The short
+// form still means what it did, and a piece the file does not name is left
+// as the link has it.
+func TestALinkCanGiveItsPieces(t *testing.T) {
+	file := mustParse(t, `
+apps:
+  web:
+    image: example/notes:1.2.3
+    databases:
+      main: {url: DATABASE_URL, host: DB_HOST, password: DB_PASSWORD}
+      cache: REDIS_URL
+`)
+	web := file.Apps["web"]
+	if got := web.Databases["main"]; got.URL != "DATABASE_URL" || got.Pieces() != (store.LinkPieces{Host: "DB_HOST", Password: "DB_PASSWORD"}) {
+		t.Fatalf("the long form read as %+v", got)
+	}
+	if got := web.Databases["cache"]; got != (Link{URL: "REDIS_URL"}) {
+		t.Fatalf("the short form read as %+v", got)
+	}
+
+	state := State{EnvironmentID: "env_1",
+		Databases: []store.Database{
+			{ID: "db_main", Name: "main", Slug: "main", Engine: "postgres"},
+			{ID: "db_cache", Name: "cache", Slug: "cache", Engine: "redis"},
+		},
+		Apps: []AppState{{
+			App:      store.App{ID: "app_web", Name: "web", Slug: "web", SourceType: "image", Image: "example/notes:1.2.3"},
+			Deployed: true,
+			// Both linked, under the right names; main without its pieces
+			// and cache with some the file does not mention.
+			Links:  map[string]string{"DATABASE_URL": "db_main", "REDIS_URL": "db_cache"},
+			Pieces: map[string]store.LinkPieces{"db_cache": {Host: "REDIS_HOST"}},
+		}},
+	}
+	steps, err := Plan(file, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var linked []Step
+	for _, step := range steps {
+		if step.Kind == "link" {
+			linked = append(linked, step)
+		}
+	}
+	if len(linked) != 1 || linked[0].Name != "main" || linked[0].Call.Body["pieces"] != (store.LinkPieces{Host: "DB_HOST", Password: "DB_PASSWORD"}) ||
+		linked[0].Detail != "as DATABASE_URL, and DB_HOST, DB_PASSWORD" {
+		t.Fatalf("the links planned are %+v", linked)
+	}
+
+	// Once the link has them, there is nothing to do.
+	state.Apps[0].Pieces["db_main"] = store.LinkPieces{Host: "DB_HOST", Password: "DB_PASSWORD"}
+	steps, _ = Plan(file, state)
+	for _, step := range steps {
+		if step.Kind == "link" {
+			t.Errorf("a link that matches is planned again: %+v", step)
+		}
+	}
+}
+
+// What is wrong with a link's names is said with everything else wrong.
+func TestALinksPiecesAreCheckedWithTheRest(t *testing.T) {
+	_, err := Parse([]byte(`
+apps:
+  web:
+    image: example/notes:1.2.3
+    port: 0
+    databases:
+      main: {url: DATABASE_URL, host: db-host, password: DATABASE_URL}
+`))
+	var problem *errdoc.Problem
+	if !errors.As(err, &problem) {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, says := range []string{`gives its host as "db-host"`, "gives two things as DATABASE_URL", "port 0 is not a port"} {
+		if !strings.Contains(problem.Cause, says) {
+			t.Errorf("the problems do not say %q: %s", says, problem.Cause)
+		}
+	}
+	if _, err := Parse([]byte("apps:\n  web:\n    image: x:1\n    databases:\n      main: {url: A, socket: B}\n")); err == nil {
+		t.Error("a piece that does not exist was read")
+	}
+}
+
+// A link with no pieces is written the short way, as a person would.
+func TestALinkIsWrittenTheWayItIsRead(t *testing.T) {
+	for _, link := range []Link{{URL: "DATABASE_URL"}, {URL: "DATABASE_URL", Host: "DB_HOST"}} {
+		encoded, err := json.Marshal(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var back Link
+		if err := json.Unmarshal(encoded, &back); err != nil || back != link {
+			t.Errorf("%+v went to %s and came back as %+v (%v)", link, encoded, back, err)
+		}
+	}
+	if encoded, _ := json.Marshal(Link{URL: "DATABASE_URL"}); string(encoded) != `"DATABASE_URL"` {
+		t.Errorf("the short form is written as %s", encoded)
 	}
 }

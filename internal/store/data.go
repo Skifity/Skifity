@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -218,6 +219,24 @@ func (db *DB) LinkDatabase(ctx context.Context, databaseID, appID, varName strin
 	return nil
 }
 
+// SetLinkPieces records the variables a link delivers its database's
+// connection in, piece by piece. A zero LinkPieces is none.
+func (db *DB) SetLinkPieces(ctx context.Context, databaseID, appID string, pieces LinkPieces) error {
+	encoded, err := json.Marshal(pieces)
+	if err != nil {
+		return err
+	}
+	res, err := db.Exec(ctx, `UPDATE database_links SET pieces = ? WHERE database_id = ? AND app_id = ?`,
+		string(encoded), databaseID, appID)
+	if err != nil {
+		return fmt.Errorf("record the link's pieces: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // UnlinkDatabase removes the injection.
 func (db *DB) UnlinkDatabase(ctx context.Context, databaseID, appID string) error {
 	res, err := db.Exec(ctx, `DELETE FROM database_links WHERE database_id = ? AND app_id = ?`, databaseID, appID)
@@ -232,12 +251,12 @@ func (db *DB) UnlinkDatabase(ctx context.Context, databaseID, appID string) erro
 
 // ListLinksForApp returns the databases linked into one app.
 func (db *DB) ListLinksForApp(ctx context.Context, appID string) ([]DatabaseLink, error) {
-	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, created_at FROM database_links WHERE app_id = ?`, appID)
+	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, pieces, created_at FROM database_links WHERE app_id = ?`, appID)
 }
 
 // ListLinksForDatabase returns the apps a database is linked into.
 func (db *DB) ListLinksForDatabase(ctx context.Context, databaseID string) ([]DatabaseLink, error) {
-	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, created_at FROM database_links WHERE database_id = ?`, databaseID)
+	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, pieces, created_at FROM database_links WHERE database_id = ?`, databaseID)
 }
 
 func (db *DB) queryLinks(ctx context.Context, query string, args ...any) ([]DatabaseLink, error) {
@@ -249,9 +268,12 @@ func (db *DB) queryLinks(ctx context.Context, query string, args ...any) ([]Data
 	out := []DatabaseLink{}
 	for rows.Next() {
 		var l DatabaseLink
-		var created string
-		if err := rows.Scan(&l.DatabaseID, &l.AppID, &l.VarName, &created); err != nil {
+		var pieces, created string
+		if err := rows.Scan(&l.DatabaseID, &l.AppID, &l.VarName, &pieces, &created); err != nil {
 			return nil, fmt.Errorf("scan database link: %w", err)
+		}
+		if err := json.Unmarshal([]byte(pieces), &l.Pieces); err != nil {
+			return nil, fmt.Errorf("read the pieces of a database link: %w", err)
 		}
 		l.CreatedAt, _ = ParseTime(created)
 		out = append(out, l)

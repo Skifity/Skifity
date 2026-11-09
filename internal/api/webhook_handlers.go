@@ -608,7 +608,9 @@ func (s *Server) previewCopy(r *http.Request, env store.Environment, app store.A
 	}
 	linked := map[string]bool{}
 	for _, link := range links {
-		linked[link.VarName] = true
+		for _, name := range link.Variables() {
+			linked[name] = true
+		}
 	}
 	if err := s.copyPreviewVariables(r, app.ID, previewApp.ID, fork, linked); err != nil {
 		return undo(err)
@@ -853,7 +855,7 @@ func (s *Server) previewDatabases(r *http.Request, env store.Environment, previe
 			}
 			s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
 		}
-		if err := s.databases.Link(r.Context(), record.ID, previewApp.ID, link.VarName); err != nil {
+		if err := s.databases.Link(r.Context(), record.ID, previewApp.ID, link.VarName, &link.Pieces); err != nil {
 			s.log.Warn("could not link a preview's database",
 				"app", previewApp.ID, "database", record.ID, "error", err)
 			continue

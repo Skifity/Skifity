@@ -1752,7 +1752,19 @@
     "noScheduleHelp": "It was made before there was backup storage, or with daily backups switched off. Turn the schedule on below, or give every database of the team that has none the daily one a new database gets.",
     "backupDefaults": "Back up every database daily",
     "backupDefaultsApplied_one": "{{count}} database is now backed up every day.",
-    "backupDefaultsApplied_other": "{{count}} databases are now backed up every day."
+    "backupDefaultsApplied_other": "{{count}} databases are now backed up every day.",
+    "pieces": {
+      "title": "Also as separate variables",
+      "help": "For software that reads a host, a port, a user and a password instead of a URL. They stay current when the password changes.",
+      "fieldsHelp": "Empty a name to leave that piece out. Only the password is a secret.",
+      "notDelivered": "Not delivered",
+      "listed": "Also {{names}}",
+      "host": "Host",
+      "port": "Port",
+      "name": "Database name",
+      "user": "User",
+      "password": "Password"
+    }
   },
   "templates": {
     "title": "Templates",
@@ -3487,7 +3499,7 @@
       },
       "database_variable_taken": {
         "title": "That variable already connects another database",
-        "cause": "This app's {{0}} is the connection string of another database linked to it.",
+        "cause": "This app's {{0}} already carries the connection of another database linked to it.",
         "impact": "Nothing was changed.",
         "fix": "Link this database under another name, or unlink the other one first."
       },
@@ -4414,6 +4426,18 @@
         "cause": "The endpoint {{0}} could not be read: {{1}}",
         "impact": "Backups cannot run, so nothing is being kept safe.",
         "fix": "A panel administrator corrects the S3 endpoint under Settings → General → Backup storage: an address such as https://s3.eu-central-1.amazonaws.com."
+      },
+      "database_pieces_clash": {
+        "title": "Two parts of the connection would share one variable",
+        "cause": "{{0}} is named for more than one of the connection string, host, port, name, user and password.",
+        "impact": "Nothing was changed.",
+        "fix": "Give each its own variable, or leave out the ones the app does not read."
+      },
+      "database_piece_not_offered": {
+        "title": "That part of the connection cannot be given on its own",
+        "cause": "{{0}} has no {{1}} a link can give an app as a variable of its own.",
+        "impact": "Nothing was changed.",
+        "fix": "Leave it out. The app can read everything the database has from the connection string."
       },
       "template_input_required": {
         "title": "The template needs a value nobody gave",

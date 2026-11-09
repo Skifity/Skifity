@@ -1735,7 +1735,19 @@
     "noScheduleTitle": "这个数据库没有备份计划",
     "noScheduleHelp": "它是在有备份存储之前创建的，或者创建时关闭了每日备份。可以在下面开启计划，或者给团队里每个没有计划的数据库加上新数据库会得到的每日备份。",
     "backupDefaults": "每天备份每个数据库",
-    "backupDefaultsApplied_other": "现在有 {{count}} 个数据库每天备份。"
+    "backupDefaultsApplied_other": "现在有 {{count}} 个数据库每天备份。",
+    "pieces": {
+      "title": "同时作为单独的变量",
+      "help": "给读取主机、端口、用户名和密码而不是 URL 的软件使用。修改密码时它们也会一起更新。",
+      "fieldsHelp": "清空某个名称就不提供该部分。只有密码是机密。",
+      "notDelivered": "不提供",
+      "listed": "另有 {{names}}",
+      "host": "主机",
+      "port": "端口",
+      "name": "数据库名",
+      "user": "用户名",
+      "password": "密码"
+    }
   },
   "templates": {
     "title": "模板",
@@ -3459,7 +3471,7 @@
       },
       "database_variable_taken": {
         "title": "该变量已连接另一个数据库",
-        "cause": "此应用的 {{0}} 是与其关联的另一个数据库的连接字符串。",
+        "cause": "此应用的 {{0}} 已经承载着与其关联的另一个数据库的连接。",
         "impact": "未做任何更改。",
         "fix": "请用其他名称关联此数据库，或先取消关联另一个数据库。"
       },
@@ -4386,6 +4398,18 @@
         "cause": "无法读取端点 {{0}}：{{1}}",
         "impact": "备份无法运行，也就没有任何东西在被保存。",
         "fix": "由面板管理员在「设置」→「通用」→「备份存储」中改正 S3 端点：例如 https://s3.eu-central-1.amazonaws.com 这样的地址。"
+      },
+      "database_pieces_clash": {
+        "title": "连接的两个部分会共用一个变量",
+        "cause": "{{0}} 被用于连接字符串、主机、端口、数据库名、用户名和密码中的多于一项。",
+        "impact": "未做任何更改。",
+        "fix": "给每一项单独的变量，或者去掉应用不读取的那些。"
+      },
+      "database_piece_not_offered": {
+        "title": "连接的这一部分不能单独提供",
+        "cause": "{{0}} 没有可以由关联作为单独变量提供给应用的 {{1}}。",
+        "impact": "未做任何更改。",
+        "fix": "去掉它。应用可以从连接字符串中读取数据库的全部信息。"
       },
       "template_input_required": {
         "title": "模板需要一个没人填写的值",

@@ -4441,7 +4441,9 @@ paths:
       operationId: linkDatabase
       tags: [Databases]
       summary: Give an app the database's connection string
-      description: Member, on both. As a secret variable, in the same environment only.
+      description: >-
+        Member, on both. As a secret variable, in the same environment only, and the pieces of it that pieces
+        names as variables of their own.
       requestBody:
         required: true
         content:
@@ -8701,7 +8703,22 @@ components:
         database_id: {type: string}
         app_id: {type: string}
         var_name: {type: string}
+        pieces: {$ref: '#/components/schemas/LinkPieces'}
         created_at: {type: string, format: date-time}
+
+    LinkPieces:
+      type: object
+      additionalProperties: false
+      description: >-
+        The variables a link also delivers the connection in, piece by piece, for software that has no
+        setting for a URL. Each is rewritten with the URL when the password changes and removed with it.
+        A piece left out is not delivered; only the password is a secret.
+      properties:
+        host: {type: string}
+        port: {type: string}
+        name: {type: string, description: 'The database the app uses.'}
+        user: {type: string}
+        password: {type: string}
 
     LinkDatabaseRequest:
       type: object
@@ -8709,6 +8726,14 @@ components:
       additionalProperties: false
       properties:
         app_id: {type: string}
+        pieces:
+          allOf:
+            - $ref: '#/components/schemas/LinkPieces'
+          description: >-
+            Also deliver these pieces. Left out, a link being changed keeps the ones it has, and a new one has
+            none. Refused with database.piece_not_offered for a piece the engine does not have on its own (see
+            pieces in GET /api/database-engines), and with database.variable_taken for a name another
+            database's link already writes.
         var_name: {type: string, description: 'The engine''s own default when left out: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse and MEMCACHED_URL for memcached. GET /api/database-engines lists them.'}
 
     DatabaseCredentials:
@@ -8747,6 +8772,19 @@ components:
           type: array
           items: {type: string, enum: [sql, custom, archive, archive-gzip, rdb]}
           description: 'The dump formats a file can be imported in. Empty for an engine that imports none.'
+        pieces:
+          type: array
+          description: >-
+            The parts of its connection a link can also deliver as variables of their own, in the order host,
+            port, name, user, password, each with the variable the interface suggests: the one the engine's own
+            clients or images read. Redis, Valkey and Dragonfly have no name or user here, and Memcached only a
+            host and a port.
+          items:
+            type: object
+            required: [piece, variable]
+            properties:
+              piece: {type: string, enum: [host, port, name, user, password]}
+              variable: {type: string}
 
     DatabaseEngineList:
       type: object

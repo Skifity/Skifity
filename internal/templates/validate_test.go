@@ -97,6 +97,9 @@ func TestEveryCheckRefusesWhatItIsFor(t *testing.T) {
 		{"two pieces under one name", CheckDatabasePieces, func(t *Template) {
 			t.Databases[0].Vars.Password = "DB_HOST"
 		}, "delivers two things"},
+		{"a piece the engine does not have", CheckDatabasePieces, func(t *Template) {
+			t.Databases[0].Engine, t.Databases[0].Vars.User = "redis", "REDIS_USER"
+		}, "does not have on its own"},
 	}
 	for _, c := range cases {
 		template := good()

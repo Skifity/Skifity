@@ -63,6 +63,26 @@ func (db *DB) GetAppTemplate(ctx context.Context, appID string) (AppTemplate, er
 	return t, nil
 }
 
+// ListAppTemplates returns every app installed from a template, and which.
+func (db *DB) ListAppTemplates(ctx context.Context) ([]AppTemplate, error) {
+	rows, err := db.QueryContext(ctx, `SELECT app_id, template_id, catalogue_id, service, installed_image, installed_at,
+		update_status, update_to, update_error FROM app_templates ORDER BY installed_at`)
+	if err != nil {
+		return nil, fmt.Errorf("list the apps installed from templates: %w", err)
+	}
+	defer rows.Close()
+	var out []AppTemplate
+	for rows.Next() {
+		var t AppTemplate
+		if err := rows.Scan(&t.AppID, &t.TemplateID, &t.CatalogueID, &t.Service, &t.InstalledImage, &t.InstalledAt,
+			&t.UpdateStatus, &t.UpdateTo, &t.UpdateError); err != nil {
+			return nil, fmt.Errorf("read an app installed from a template: %w", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // SetTemplateUpdate records where an update through the template stands.
 func (db *DB) SetTemplateUpdate(ctx context.Context, appID, status, to, reason string) error {
 	if _, err := db.Exec(ctx, `UPDATE app_templates SET update_status = ?, update_to = ?, update_error = ? WHERE app_id = ?`,

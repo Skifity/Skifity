@@ -509,11 +509,20 @@ func CheckFiles(template Template) []string {
 
 // CheckDatabasePieces holds a database's pieces to their names. They arrive
 // as variables, so each needs a name a container can carry, and two pieces
-// under one name would leave one of them missing.
+// under one name would leave one of them missing. Each has to be a piece the
+// engine has on its own, or the link refuses it once the apps are made.
 func CheckDatabasePieces(template Template) []string {
 	var problems []string
 	for _, db := range template.Databases {
 		names := map[string]bool{db.VarName: db.VarName != ""}
+		kind, known := engine.Lookup(db.Engine)
+		for _, pair := range [][2]string{{engine.PieceHost, db.Vars.Host}, {engine.PiecePort, db.Vars.Port},
+			{engine.PieceName, db.Vars.Name}, {engine.PieceUser, db.Vars.User}, {engine.PiecePassword, db.Vars.Password}} {
+			if pair[1] != "" && known && !kind.OffersPiece(pair[0]) {
+				problems = append(problems, fmt.Sprintf("%s/%s asks for a %s, which %s does not have on its own",
+					template.ID, db.Name, pair[0], kind.Title))
+			}
+		}
 		for _, name := range []string{db.Vars.Host, db.Vars.Port, db.Vars.Name, db.Vars.User, db.Vars.Password} {
 			if name == "" {
 				continue

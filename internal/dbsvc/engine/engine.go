@@ -45,6 +45,42 @@ const (
 	FormatRDB = "rdb"
 )
 
+// The pieces of a connection a link can deliver on their own.
+const (
+	PieceHost     = "host"
+	PiecePort     = "port"
+	PieceName     = "name"
+	PieceUser     = "user"
+	PiecePassword = "password"
+)
+
+// Piece is a part of a connection a link can deliver on its own, with the
+// variable the interface suggests for it: the one the engine's own clients or
+// images read, where there is one.
+type Piece struct {
+	Piece    string `json:"piece"`
+	Variable string `json:"variable"`
+}
+
+// pieces lists an engine's pieces, each with the variable suggested for it,
+// from the variables in the order host, port, name, user, password; "" is a
+// piece the engine does not have on its own.
+func pieces(host, port, name, user, password string) []Piece {
+	var out []Piece
+	for _, p := range []Piece{{PieceHost, host}, {PiecePort, port}, {PieceName, name}, {PieceUser, user}, {PiecePassword, password}} {
+		if p.Variable != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+var (
+	// Laravel's, which is most of the PHP that asks for them.
+	mysqlPieces = pieces("DB_HOST", "DB_PORT", "DB_DATABASE", "DB_USERNAME", "DB_PASSWORD")
+	redisPieces = pieces("REDIS_HOST", "REDIS_PORT", "", "", "REDIS_PASSWORD")
+)
+
 // Engine is one kind of database.
 type Engine struct {
 	Name string `json:"name"`
@@ -72,6 +108,13 @@ type Engine struct {
 	// Variable is what a linked app reads the connection string from when
 	// nobody names one.
 	Variable string `json:"variable"`
+	// Pieces are the parts of its connection a link can also deliver as
+	// variables of their own, for software that asks for a host and a
+	// password and has no setting for a URL: host and port for every engine,
+	// and the database's name and user where the URL names them. The Redis
+	// family's URL signs in as "default", whatever the credentials call the
+	// user, so it offers no user and no name to get wrong.
+	Pieces []Piece `json:"pieces"`
 	// StorageGB is the disk a new database gets when the request names none.
 	StorageGB int `json:"storage_gb"`
 	// MinMemoryMB is the least memory limit a resize may give it: below it
@@ -119,6 +162,8 @@ var catalogue = []Engine{
 		Name: Postgres, Title: "PostgreSQL", Port: 5432,
 		DefaultVersion: "17", Versions: []string{"18", "17", "16"},
 		Backups: true, Replicated: true, Storage: true, Password: true, Variable: "DATABASE_URL",
+		// libpq's own: psql and every driver built on libpq read them.
+		Pieces:    pieces("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"),
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		MinMemoryMB: 256, Imports: []string{FormatSQL, FormatCustom},
 		// CloudNativePG's own images, which it keeps patched under the
@@ -129,6 +174,7 @@ var catalogue = []Engine{
 		Name: MySQL, Title: "MySQL", Port: 3306,
 		DefaultVersion: "8.4", Versions: []string{"9.7", "8.4"},
 		Backups: true, Storage: true, Password: true, Variable: "MYSQL_URL",
+		Pieces:    mysqlPieces,
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		MinMemoryMB: 512, Imports: []string{FormatSQL},
 		// Both are long-term releases: 8.4 is what most software is tested
@@ -147,6 +193,7 @@ var catalogue = []Engine{
 		// its apps were linked under MYSQL_URL. A blueprint that links one by
 		// default must keep finding the same name.
 		Variable:  "MYSQL_URL",
+		Pieces:    mysqlPieces,
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		MinMemoryMB: 256, Imports: []string{FormatSQL},
 		// Long-term releases only.
@@ -162,6 +209,7 @@ var catalogue = []Engine{
 		Name: MongoDB, Title: "MongoDB", Port: 27017,
 		DefaultVersion: "8.0", Versions: []string{"8.0", "7.0"},
 		Backups: true, Storage: true, Password: true, Variable: "MONGODB_URI",
+		Pieces:    pieces("MONGO_HOST", "MONGO_PORT", "MONGO_DATABASE", "MONGO_USERNAME", "MONGO_PASSWORD"),
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		// WiredTiger's smallest cache is 256 MB, a quarter of the limit.
 		MinMemoryMB: 1024, Imports: []string{FormatArchive, FormatArchiveGzip},
@@ -177,7 +225,8 @@ var catalogue = []Engine{
 		Backups: true, Storage: true, Password: true, Variable: "REDIS_URL",
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		MinMemoryMB: 64, Imports: []string{FormatRDB},
-		open: func(version string) string { return "redis:" + version + "-alpine" },
+		open:   func(version string) string { return "redis:" + version + "-alpine" },
+		Pieces: redisPieces,
 	},
 	{
 		Name: Valkey, Title: "Valkey", Port: 6379,
@@ -185,6 +234,7 @@ var catalogue = []Engine{
 		// REDIS_URL, because Valkey is a drop-in for Redis and that is the
 		// name the software that uses it reads.
 		Backups: true, Storage: true, Password: true, Variable: "REDIS_URL",
+		Pieces:    redisPieces,
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		MinMemoryMB: 64, Imports: []string{FormatRDB},
 		images: map[string]string{
@@ -200,6 +250,7 @@ var catalogue = []Engine{
 		// Redis snapshot is taken from outside the server, and its own
 		// snapshots stay on its own disk. See docs/backups.md.
 		Backups: false, Storage: true, Password: true, Variable: "REDIS_URL",
+		Pieces:    redisPieces,
 		StorageGB: 5, CPURequestM: 100, MemRequestMB: 256, MemLimitMB: 1024,
 		// It refuses to start with less than 256 MB for data, which is three
 		// quarters of the limit (BuildDragonfly).
@@ -218,6 +269,8 @@ var catalogue = []Engine{
 		// command needs the bucket's credentials inside the database, which
 		// is what ADR-0012 keeps out of every namespace.
 		Backups: false, Storage: true, Password: true, Variable: "CLICKHOUSE_URL",
+		// The official image's.
+		Pieces: pieces("CLICKHOUSE_HOST", "CLICKHOUSE_PORT", "CLICKHOUSE_DB", "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD"),
 		// Analytical queries want memory; a gigabyte is the least ClickHouse
 		// is comfortable with, two leaves room for a query.
 		StorageGB: 10, CPURequestM: 250, MemRequestMB: 512, MemLimitMB: 2048,
@@ -239,6 +292,7 @@ var catalogue = []Engine{
 		// SASL would need a binary protocol most clients no longer speak.
 		// The environment's network policy is what keeps it private.
 		Backups: false, Storage: false, Password: false, Variable: "MEMCACHED_URL",
+		Pieces:    pieces("MEMCACHED_HOST", "MEMCACHED_PORT", "", "", ""),
 		StorageGB: 0, CPURequestM: 50, MemRequestMB: 64, MemLimitMB: 256,
 		MinMemoryMB: 64,
 		images: map[string]string{
@@ -251,9 +305,7 @@ var catalogue = []Engine{
 func All() []Engine {
 	out := make([]Engine, len(catalogue))
 	for i, e := range catalogue {
-		e.Versions = slices.Clone(e.Versions)
-		e.Imports = append([]string{}, e.Imports...)
-		out[i] = e
+		out[i] = e.copied()
 	}
 	return out
 }
@@ -271,12 +323,25 @@ func Names() []string {
 func Lookup(name string) (Engine, bool) {
 	for _, e := range catalogue {
 		if e.Name == name {
-			e.Versions = slices.Clone(e.Versions)
-			e.Imports = append([]string{}, e.Imports...)
-			return e, true
+			return e.copied(), true
 		}
 	}
 	return Engine{}, false
+}
+
+// copied is the engine with lists of its own, so a caller that changes one
+// does not change the catalogue.
+func (e Engine) copied() Engine {
+	e.Versions = slices.Clone(e.Versions)
+	e.Imports = append([]string{}, e.Imports...)
+	e.Pieces = slices.Clone(e.Pieces)
+	return e
+}
+
+// OffersPiece reports whether a link can deliver this piece of its
+// connection on its own.
+func (e Engine) OffersPiece(piece string) bool {
+	return slices.ContainsFunc(e.Pieces, func(p Piece) bool { return p.Piece == piece })
 }
 
 // Known reports whether a name is an engine Skifity runs.

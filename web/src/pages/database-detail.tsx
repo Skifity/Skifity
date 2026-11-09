@@ -36,7 +36,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -70,6 +76,8 @@ import type {
   Database,
   DatabaseCredentials,
   DatabaseLink,
+  LinkPiece,
+  LinkPieces,
 } from "@/lib/types"
 
 export function DatabaseDetailPage() {
@@ -415,7 +423,22 @@ function LinkedApps({
   // What an app reads when the name is left empty is the engine's, not
   // always DATABASE_URL: MYSQL_URL, MONGODB_URI, REDIS_URL...
   const engines = useDatabaseEngines()
-  const defaultVariable = engines.data?.find((item) => item.name === database.engine)?.variable
+  const kind = engines.data?.find((item) => item.name === database.engine)
+  const defaultVariable = kind?.variable
+  // The connection in pieces as well, for software with no setting for a
+  // URL. A name left as it was is the engine's suggestion; one emptied is a
+  // piece not delivered.
+  const [withPieces, setWithPieces] = useState(false)
+  const [pieceNames, setPieceNames] = useState<LinkPieces>({})
+  const offeredPieces = kind?.pieces ?? []
+  const pieceName = (piece: LinkPiece, suggested: string) => pieceNames[piece] ?? suggested
+  const pieces = withPieces
+    ? Object.fromEntries(
+        offeredPieces
+          .map(({ piece, variable }) => [piece, pieceName(piece, variable).trim()] as const)
+          .filter(([, name]) => name !== ""),
+      )
+    : undefined
 
   const apps = useQuery({
     queryKey: ["apps", database.environment_id],
@@ -427,11 +450,14 @@ function LinkedApps({
       api.post(`/api/databases/${database.id}/link`, {
         app_id: appId,
         var_name: varName.trim(),
+        pieces,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["database", database.id] })
       setAppId("")
       setVarName("")
+      setWithPieces(false)
+      setPieceNames({})
     },
   })
 
@@ -474,7 +500,16 @@ function LinkedApps({
                         {byId.get(entry.app_id)?.name ?? entry.app_id}
                       </Link>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{entry.var_name}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {entry.var_name}
+                      {entry.pieces && Object.keys(entry.pieces).length > 0 && (
+                        <p className="mt-0.5 font-sans text-muted-foreground">
+                          {t("databases.pieces.listed", {
+                            names: Object.values(entry.pieces).filter(Boolean).join(", "),
+                          })}
+                        </p>
+                      )}
+                    </TableCell>
                     {canChange && (
                       <TableCell>
                         <Button
@@ -550,6 +585,38 @@ function LinkedApps({
                   />
                 </Field>
               </div>
+              {offeredPieces.length > 0 && (
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldLabel htmlFor="link-pieces">{t("databases.pieces.title")}</FieldLabel>
+                    <FieldDescription>{t("databases.pieces.help")}</FieldDescription>
+                  </FieldContent>
+                  <Switch id="link-pieces" checked={withPieces} onCheckedChange={setWithPieces} />
+                </Field>
+              )}
+              {withPieces && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {offeredPieces.map(({ piece, variable }) => (
+                    <Field key={piece}>
+                      <FieldLabel htmlFor={`link-piece-${piece}`}>
+                        {t(`databases.pieces.${piece}`)}
+                      </FieldLabel>
+                      <Input
+                        id={`link-piece-${piece}`}
+                        value={pieceName(piece, variable)}
+                        onChange={(event) =>
+                          setPieceNames((current) => ({ ...current, [piece]: event.target.value }))
+                        }
+                        placeholder={t("databases.pieces.notDelivered")}
+                        className="font-mono"
+                      />
+                    </Field>
+                  ))}
+                  <FieldDescription className="sm:col-span-2">
+                    {t("databases.pieces.fieldsHelp")}
+                  </FieldDescription>
+                </div>
+              )}
               {link.error != null && <ErrorDisplay error={link.error} compact />}
               <div className="flex justify-end">
                 <Button type="submit" disabled={!appId || link.isPending}>

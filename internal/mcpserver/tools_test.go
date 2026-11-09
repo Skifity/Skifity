@@ -705,6 +705,31 @@ func TestCreatingADatabaseSaysWhetherItIsBackedUp(t *testing.T) {
 	}
 }
 
+// Linking with pieces passes them on, and says which the link delivers.
+func TestLinkingADatabaseCanGiveItsPieces(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "link_database", map[string]any{
+		"database_id": "db_1", "app_id": "app_1", "variable": "DATABASE_URL",
+		"pieces": map[string]any{"host": "DB_HOST", "password": "DB_PASSWORD"},
+	})
+	if failed || !strings.Contains(text, "DB_HOST, DB_PASSWORD") {
+		t.Errorf("link_database answered (error=%v): %s", failed, text)
+	}
+	request, _ := panel.last("POST", "/api/databases/db_1/link")
+	pieces, _ := request.Body["pieces"].(map[string]any)
+	if pieces["host"] != "DB_HOST" || pieces["password"] != "DB_PASSWORD" || len(pieces) != 2 {
+		t.Errorf("the pieces were sent as %v", request.Body)
+	}
+
+	call(t, session, "link_database", map[string]any{"database_id": "db_1", "app_id": "app_1"})
+	request, _ = panel.last("POST", "/api/databases/db_1/link")
+	if _, sent := request.Body["pieces"]; sent {
+		t.Errorf("pieces nobody named were sent: %v", request.Body)
+	}
+}
+
 // The record somebody types into their DNS provider: the type follows the
 // value, and the address the panel gave the app needs none.
 func TestADomainSaysWhichDNSRecordToCreate(t *testing.T) {

@@ -2607,6 +2607,40 @@ func DatabasePasswordNotOffered(database, engine string) *Problem {
 		With("database", database).With("engine", engine)
 }
 
+// DatabaseVariableTaken is a link that would write a variable another
+// database's link already writes: its connection string or one of its
+// pieces. Two links on one name overwrite each other, and unlinking either
+// takes the other's away.
+func DatabaseVariableTaken(variable string) *Problem {
+	return New("database.variable_taken", "That variable already connects another database").
+		WithCause("This app's %s already carries the connection of another database linked to it.", variable).
+		WithImpact("Nothing was changed.").
+		WithFix("Link this database under another name, or unlink the other one first.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusConflict)
+}
+
+// DatabasePiecesClash is one variable named for two parts of a connection.
+func DatabasePiecesClash(variable string) *Problem {
+	return New("database.pieces_clash", "Two parts of the connection would share one variable").
+		WithCause("%s is named for more than one of the connection string, host, port, name, user and password.", variable).
+		WithImpact("Nothing was changed.").
+		WithFix("Give each its own variable, or leave out the ones the app does not read.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusBadRequest)
+}
+
+// DatabasePieceNotOffered is a piece of the connection an engine does not
+// have on its own: a Redis's user, a Memcached's password.
+func DatabasePieceNotOffered(engine, piece string) *Problem {
+	return New("database.piece_not_offered", "That part of the connection cannot be given on its own").
+		WithCause("%s has no %s a link can give an app as a variable of its own.", engine, piece).
+		WithImpact("Nothing was changed.").
+		WithFix("Leave it out. The app can read everything the database has from the connection string.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusBadRequest)
+}
+
 // DatabasePasswordRejected is a password somebody chose that would break a
 // connection string or a statement.
 func DatabasePasswordRejected() *Problem {

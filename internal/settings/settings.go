@@ -201,6 +201,10 @@ const (
 	// KeyPanelID is this panel's own name for itself, made once by migration
 	// 0057, which a DNS record it creates carries in its note.
 	KeyPanelID = "maintenance.panel_id"
+	// KeyTemplatePiecesAttached is when the links template installs made
+	// before a link kept its pieces were given them, once (migration 0063,
+	// internal/dbsvc/pieces.go).
+	KeyTemplatePiecesAttached = "maintenance.template_pieces_attached"
 )
 
 // Definitions is the whole catalogue, in display order.

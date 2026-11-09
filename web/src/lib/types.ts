@@ -673,7 +673,16 @@ export type DatabaseEngine = {
   password_restarts: boolean
   /** The dump formats it imports; empty for none. */
   imports: DumpFormat[]
+  /** The parts of its connection a link can also deliver on their own, each
+   * with the variable suggested for it. */
+  pieces: { piece: LinkPiece; variable: string }[]
 }
+
+/** A part of a database's connection a link can deliver on its own. */
+export type LinkPiece = "host" | "port" | "name" | "user" | "password"
+
+/** The variables a link delivers the connection in, piece by piece. */
+export type LinkPieces = Partial<Record<LinkPiece, string>>
 
 /** A dump format an import takes. */
 export type DumpFormat = "sql" | "custom" | "archive" | "archive-gzip" | "rdb"
@@ -1105,6 +1114,8 @@ export type DatabaseLink = {
   database_id: string
   app_id: string
   var_name: string
+  /** Kept current with the URL: a password change reaches them too. */
+  pieces?: LinkPieces
   created_at: string
 }
 

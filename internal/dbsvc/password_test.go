@@ -350,6 +350,40 @@ func TestAPasswordChangeReachesTheDatabaseTheSecretAndTheApps(t *testing.T) {
 	}
 }
 
+// The pieces a link delivers are the link's, so a password change gives the
+// app its new password in them as it does in the URL. A template's password
+// piece used to be written once, outside the link, and kept the old password
+// after the change took that one away: the app could no longer sign in, and
+// the panel said the change had worked.
+func TestAPasswordChangeReachesTheLinksPieces(t *testing.T) {
+	h := newLifeHarness(t, EngineMySQL, nil)
+	pieces := store.LinkPieces{Host: "DB_HOST", User: "DB_USERNAME", Password: "DB_PASSWORD"}
+	if err := h.m.Link(t.Context(), h.record.ID, h.app.ID, "MYSQL_URL", &pieces); err != nil {
+		t.Fatal(err)
+	}
+	if values, _ := variableValues(t, h.m, h.app.ID); values["DB_PASSWORD"] != plantedPassword {
+		t.Fatalf("before the change DB_PASSWORD is %q", values["DB_PASSWORD"])
+	}
+
+	op, err := h.m.ChangePassword(t.Context(), h.record.ID, newPassword, "usr_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done := h.waitForOperation(op.ID); done.Status != store.OpSucceeded {
+		t.Fatalf("the change ended %s: %s", done.Status, done.ErrorMsg)
+	}
+	values, secret := variableValues(t, h.m, h.app.ID)
+	if values["DB_PASSWORD"] != newPassword || !secret["DB_PASSWORD"] {
+		t.Errorf("after the change DB_PASSWORD is %q (secret %v)", values["DB_PASSWORD"], secret["DB_PASSWORD"])
+	}
+	if !strings.Contains(values["MYSQL_URL"], newPassword) {
+		t.Error("the connection string was not given the new password")
+	}
+	if values["DB_USERNAME"] != h.spec.Username || values["DB_HOST"] != h.spec.ServiceHost() {
+		t.Errorf("the other pieces are %q and %q", values["DB_USERNAME"], values["DB_HOST"])
+	}
+}
+
 // A job that cannot change it changes nothing else: the panel keeps the old
 // password, forgets the new one, and no app is touched.
 func TestAPasswordTheDatabaseRefusedChangesNothingElse(t *testing.T) {

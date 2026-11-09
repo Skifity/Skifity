@@ -429,6 +429,13 @@ apps:
     port: 6379
     internal: true
 
+  blog:
+    image: example/blog:4.2.0
+    databases:
+      # The long form also gives the connection in pieces, for software that
+      # has no setting for a URL. See databases.md#in-pieces.
+      main: {url: BLOG_DATABASE_URL, host: DB_HOST, port: DB_PORT, name: DB_NAME, user: DB_USER, password: DB_PASSWORD}
+
   auth:
     image: quay.io/keycloak/keycloak:26.0
     port: 8080

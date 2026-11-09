@@ -592,10 +592,61 @@ type Database struct {
 
 // DatabaseLink injects a database's connection string into an app.
 type DatabaseLink struct {
-	DatabaseID string    `json:"database_id"`
-	AppID      string    `json:"app_id"`
-	VarName    string    `json:"var_name"`
-	CreatedAt  time.Time `json:"created_at"`
+	DatabaseID string `json:"database_id"`
+	AppID      string `json:"app_id"`
+	VarName    string `json:"var_name"`
+	// Pieces are the variables the connection also arrives in, piece by
+	// piece, kept current with the URL: a password change gives the app its
+	// new password in both.
+	Pieces    LinkPieces `json:"pieces,omitzero"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// Variables are every variable the link writes: its URL's, then its pieces'.
+func (l DatabaseLink) Variables() []string {
+	return append([]string{l.VarName}, l.Pieces.Names()...)
+}
+
+// LinkPieces names the variables a link delivers a database's connection in,
+// piece by piece, for software that asks for a host, a port, a user and a
+// password and has no setting for a URL. A piece left empty is not delivered.
+type LinkPieces struct {
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// PiecePair is one delivered piece of a connection and the variable it
+// arrives as.
+type PiecePair struct {
+	// Piece is host, port, name, user or password.
+	Piece    string
+	Variable string
+}
+
+// Pairs are the delivered pieces, each with its variable, in the order host,
+// port, name, user, password.
+func (p LinkPieces) Pairs() []PiecePair {
+	var out []PiecePair
+	for _, pair := range []PiecePair{
+		{"host", p.Host}, {"port", p.Port}, {"name", p.Name}, {"user", p.User}, {"password", p.Password},
+	} {
+		if pair.Variable != "" {
+			out = append(out, pair)
+		}
+	}
+	return out
+}
+
+// Names are the delivered pieces' variables, in the same order.
+func (p LinkPieces) Names() []string {
+	var out []string
+	for _, pair := range p.Pairs() {
+		out = append(out, pair.Variable)
+	}
+	return out
 }
 
 // BackupPolicy schedules backups for a database or a volume.

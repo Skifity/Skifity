@@ -143,7 +143,7 @@ Tools, in the order they are usually needed:
 | `set_file` | Saves a config file at a path, or replaces it. Rolled out, never rebuilt. |
 | `list_databases` | The managed databases in an environment. |
 | `create_database` | Creates a database: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached. Backed up daily when the panel has storage, unless `backup` is false; it says which. |
-| `link_database` | Gives an app a database's connection string as a secret variable. |
+| `link_database` | Gives an app a database's connection string as a secret variable, and with `pieces` its host, port, name, user and password as variables of their own, kept current when the password changes. |
 | `get_database_status` | Whether a database is running, and which apps use it. Never the password. |
 | `list_backups` | A database's or an app's volumes' backups, newest first. |
 | `run_backup` | Backs one up now. Counts against the retention, so the oldest may go. |
@@ -266,6 +266,7 @@ PUT    /api/apps/{app}/firewall               replace them
 GET    /api/environments/{env}/databases      databases
 POST   /api/environments/{env}/databases      create one (name, engine, version, storage_gb, backup); backed up daily by default when there is storage
 GET    /api/backup-storage                    whether backups have somewhere to go; never where
+POST   /api/databases/{db}/link               give an app its connection string (app_id, var_name, pieces: {host, port, name, user, password})
 POST   /api/teams/{team}/backup-policies/defaults  the daily schedule for every database of the team that has none
 GET    /api/database-engines                  the engines, their versions, and which are backed up
 GET    /api/databases/{db}/backups            backups

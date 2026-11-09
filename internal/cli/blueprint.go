@@ -158,6 +158,7 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 
 	// Which app reads which database as what.
 	links := map[string]map[string]string{}
+	pieces := map[string]map[string]store.LinkPieces{}
 	for _, database := range databases.Items {
 		var detail struct {
 			Links []store.DatabaseLink `json:"links"`
@@ -168,13 +169,15 @@ func fetchState(ctx context.Context, client *Client, environment string, file bl
 		for _, link := range detail.Links {
 			if links[link.AppID] == nil {
 				links[link.AppID] = map[string]string{}
+				pieces[link.AppID] = map[string]store.LinkPieces{}
 			}
 			links[link.AppID][link.VarName] = database.ID
+			pieces[link.AppID][database.ID] = link.Pieces
 		}
 	}
 
 	for _, app := range apps.Items {
-		one := blueprint.AppState{App: app, Links: links[app.ID]}
+		one := blueprint.AppState{App: app, Links: links[app.ID], Pieces: pieces[app.ID]}
 		_, byName := file.Apps[app.Name]
 		_, bySlug := file.Apps[app.Slug]
 		if byName || bySlug {

@@ -501,9 +501,11 @@ type DatabaseManager interface {
 	Delete(ctx context.Context, databaseID string) error
 	// Credentials returns the connection details, decrypted.
 	Credentials(ctx context.Context, databaseID string) (DatabaseCredentials, error)
-	// Link injects a connection string into an app as a variable.
-	Link(ctx context.Context, databaseID, appID, varName string) error
-	// Unlink removes the injected variable.
+	// Link injects a connection string into an app as a variable, and the
+	// pieces of it pieces names as variables of their own. nil pieces keeps
+	// the ones the link has; a new link then has none.
+	Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error
+	// Unlink removes the injected variables.
 	Unlink(ctx context.Context, databaseID, appID string) error
 	// Status refreshes a database's state from the cluster.
 	Status(ctx context.Context, databaseID string) (string, string, error)

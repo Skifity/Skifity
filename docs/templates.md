@@ -251,6 +251,10 @@ templates:
         storage_gb: 5
         link_to: [wiki]
         var_name: DATABASE_URL
+        # The connection in pieces as well, for software with no setting
+        # for a URL. Each is the link's: kept current when the password
+        # changes, removed when the database is unlinked.
+        vars: {host: DB_HOST, port: DB_PORT, name: DB_NAME, user: DB_USER, password: DB_PASSWORD}
     inputs:
       - key: SESSION_SECRET
         label: Session secret
@@ -264,8 +268,9 @@ Every template in a catalogue is held to the checks the built-in ones are held
 to in the panel's own tests: an id that is a slug, an https website, at least
 one service somebody can open, an image that names a release — never `latest`,
 a branch or a bare major version — mount paths that are absolute, databases of
-an engine Skifity runs and linked to services the template has, no database
-wired by hand, ports and files that can be opened and mounted, and inputs that
+an engine Skifity runs and linked to services the template has, pieces of a
+database's connection that engine has on its own (see
+[databases](databases.md#in-pieces)), no database wired by hand, ports and files that can be opened and mounted, and inputs that
 are asked for or filled in. A field the panel does not know is refused rather
 than ignored, so a misspelt `mount_path` is an error rather than a volume that
 is mounted nowhere.

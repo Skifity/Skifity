@@ -44,7 +44,7 @@ func (m *previewDatabaseManager) Create(_ context.Context, env store.Environment
 	return record, nil
 }
 
-func (m *previewDatabaseManager) Link(ctx context.Context, databaseID, appID, varName string) error {
+func (m *previewDatabaseManager) Link(ctx context.Context, databaseID, appID, varName string, _ *store.LinkPieces) error {
 	sealed, err := m.keyring.Seal([]byte("postgres://preview-db"), variableContext(appID, varName))
 	if err != nil {
 		return err

@@ -35,6 +35,7 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
+	"skifity/internal/store"
 )
 
 // FileName is where the CLI looks for a blueprint.
@@ -85,8 +86,9 @@ type App struct {
 	Processes map[string]Process  `json:"processes,omitempty"`
 	Domains   []string            `json:"domains,omitempty"`
 	Schedules map[string]Schedule `json:"schedules,omitempty"`
-	// Databases links a database by name to the variable it is read from.
-	Databases map[string]string `json:"databases,omitempty"`
+	// Databases links a database by name to the variable it is read from,
+	// and in the long form to the variables its pieces are; see Link.
+	Databases map[string]Link `json:"databases,omitempty"`
 
 	DeployOnPush *bool `json:"deploy_on_push,omitempty"`
 	// DeployTrigger is branch, every push to the branch, or tag, only a pushed
@@ -140,6 +142,63 @@ func (h *Health) UnmarshalJSON(data []byte) error {
 	}
 	*h = Health(long)
 	return nil
+}
+
+// Link is how an app reads a database. `main: DATABASE_URL` is the variable
+// its connection string arrives as, which is all the file took before the
+// rest could be chosen, and still means what it meant. The long form names
+// the variables its pieces arrive as too, for software that has no setting
+// for a URL; a piece left out is not delivered:
+//
+//	databases:
+//	  main: {url: DATABASE_URL, host: DB_HOST, port: DB_PORT, password: DB_PASSWORD}
+//
+// Pieces the file does not name are left as the link has them, as anything
+// else the file leaves out is.
+type Link struct {
+	URL      string `json:"url,omitempty"`
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// UnmarshalJSON takes the variable on its own as well as the long form.
+func (l *Link) UnmarshalJSON(data []byte) error {
+	var variable string
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		*l = Link{}
+		return nil
+	}
+	if err := json.Unmarshal(data, &variable); err == nil {
+		*l = Link{URL: variable}
+		return nil
+	}
+	type plain Link
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var long plain
+	if err := decoder.Decode(&long); err != nil {
+		return err
+	}
+	*l = Link(long)
+	return nil
+}
+
+// MarshalJSON writes the short form when there are no pieces, which is how
+// a file somebody wrote by hand says it.
+func (l Link) MarshalJSON() ([]byte, error) {
+	if l.Pieces() == (store.LinkPieces{}) {
+		return json.Marshal(l.URL)
+	}
+	type plain Link
+	return json.Marshal(plain(l))
+}
+
+// Pieces are the pieces the file names.
+func (l Link) Pieces() store.LinkPieces {
+	return store.LinkPieces{Host: l.Host, Port: l.Port, Name: l.Name, User: l.User, Password: l.Password}
 }
 
 // Autoscale is instances decided by load.
@@ -314,9 +373,20 @@ func Parse(data []byte) (File, error) {
 				say("%s: schedule %s: %q is not five cron fields, such as \"0 3 * * *\"", where, schedule, s.Schedule)
 			}
 		}
-		for database, variable := range app.Databases {
-			if variable != "" && !validVariable.MatchString(variable) {
-				say("%s: database %s is linked as %q, which is not a variable name", where, database, variable)
+		for _, database := range sortedKeys(app.Databases) {
+			link := app.Databases[database]
+			if link.URL != "" && !validVariable.MatchString(link.URL) {
+				say("%s: database %s is linked as %q, which is not a variable name", where, database, link.URL)
+			}
+			named := map[string]bool{link.URL: link.URL != ""}
+			for _, pair := range link.Pieces().Pairs() {
+				if !validVariable.MatchString(pair.Variable) {
+					say("%s: database %s gives its %s as %q, which is not a variable name", where, database, pair.Piece, pair.Variable)
+				}
+				if named[pair.Variable] {
+					say("%s: database %s gives two things as %s", where, database, pair.Variable)
+				}
+				named[pair.Variable] = true
 			}
 		}
 	}

@@ -1,0 +1,11 @@
+-- The pieces of a database's connection a link delivers beside its URL.
+--
+-- A link gave an app one variable, the connection string, and a template that
+-- needed a host, a port, a user and a password wrote those once, as plain
+-- variables the link knew nothing about. Changing the database's password
+-- gave the app a new connection string and left its password piece as it
+-- was; once the old password was taken away, the app could not sign in, and
+-- the panel said the change had worked. The link now names each piece's
+-- variable, as JSON ({"host": "DB_HOST", "password": "DB_PASSWORD"}), and
+-- every place that writes or removes its URL writes or removes them too.
+ALTER TABLE database_links ADD COLUMN pieces TEXT NOT NULL DEFAULT '{}';
