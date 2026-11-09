@@ -1,7 +1,14 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { BookOpenIcon, GlobeIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
+import {
+  BookOpenIcon,
+  GlobeIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { useDeleteConfirm } from "@/components/confirm-dialog"
@@ -9,6 +16,14 @@ import { ErrorDisplay } from "@/components/error-display"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -64,6 +79,8 @@ export function DNSProvidersCard() {
   const providers = useDNSProviders()
 
   const [adding, setAdding] = useState(false)
+  // The connection whose credentials are being replaced.
+  const [replacing, setReplacing] = useState<DNSProvider | null>(null)
   const [kind, setKind] = useState<DNSProviderKind>("cloudflare")
   const [name, setName] = useState("")
   const [token, setToken] = useState("")
@@ -184,6 +201,10 @@ export function DNSProvidersCard() {
                           )}
                           {t("dnsProviders.test")}
                         </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setReplacing(provider)}>
+                          <KeyRoundIcon className="size-3.5" />
+                          {t("dnsProviders.replace")}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -226,6 +247,13 @@ export function DNSProvidersCard() {
 
         {test.error != null && <ErrorDisplay error={test.error} compact />}
         {remove.error != null && <ErrorDisplay error={remove.error} compact />}
+        {replacing && (
+          <ReplaceDNSCredentialsDialog
+            key={replacing.id}
+            provider={replacing}
+            onClose={() => setReplacing(null)}
+          />
+        )}
 
         {adding && (
           <form
@@ -321,5 +349,115 @@ export function DNSProvidersCard() {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Giving a connection new credentials where it is: a token that expired or
+ * was revoked, or a key rotated. The connection keeps the records the panel
+ * created through it, which removing it would forget, and the new
+ * credentials have to see every zone those records are in.
+ */
+function ReplaceDNSCredentialsDialog({
+  provider,
+  onClose,
+}: {
+  provider: DNSProvider
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  const [token, setToken] = useState("")
+  const [accessKeyID, setAccessKeyID] = useState("")
+  const [secret, setSecret] = useState("")
+  const route53 = provider.kind === "route53"
+
+  const replace = useMutation({
+    mutationFn: () =>
+      api.patch<DNSProvider>(
+        `/api/teams/${team?.id}/dns-providers/${provider.id}`,
+        route53 ? { access_key_id: accessKeyID, secret_access_key: secret } : { token },
+      ),
+    onSuccess: (replaced) => {
+      void queryClient.invalidateQueries({ queryKey: ["dns-providers", team?.id] })
+      void queryClient.invalidateQueries({ queryKey: ["domains"] })
+      toast.success(
+        t("dnsProviders.replaced", {
+          name: replaced.name,
+          zones: replaced.zones.map((zone) => zone.name).join(", "),
+        }),
+      )
+      onClose()
+    },
+  })
+
+  const complete = route53 ? accessKeyID.trim() && secret.trim() : token.trim()
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            replace.mutate()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("dnsProviders.replaceTitle", { name: provider.name })}</DialogTitle>
+            <DialogDescription>{t("dnsProviders.replaceHelp")}</DialogDescription>
+          </DialogHeader>
+          {route53 ? (
+            <>
+              <Field>
+                <FieldLabel htmlFor="dns-replace-access-key">
+                  {t("dnsProviders.accessKeyID")}
+                </FieldLabel>
+                <Input
+                  id="dns-replace-access-key"
+                  value={accessKeyID}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => setAccessKeyID(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="dns-replace-secret">
+                  {t("dnsProviders.secretAccessKey")}
+                </FieldLabel>
+                <Input
+                  id="dns-replace-secret"
+                  type="password"
+                  value={secret}
+                  autoComplete="new-password"
+                  onChange={(event) => setSecret(event.target.value)}
+                />
+              </Field>
+            </>
+          ) : (
+            <Field>
+              <FieldLabel htmlFor="dns-replace-token">{t("dnsProviders.token")}</FieldLabel>
+              <Input
+                id="dns-replace-token"
+                type="password"
+                value={token}
+                autoComplete="new-password"
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </Field>
+          )}
+          <FieldDescription>{t(`dnsProviders.formHelp.${provider.kind}`)}</FieldDescription>
+          {replace.error != null && <ErrorDisplay error={replace.error} compact />}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={replace.isPending || !complete}>
+              {replace.isPending && <Spinner />}
+              {t("dnsProviders.replace")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

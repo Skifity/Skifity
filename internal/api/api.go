@@ -376,6 +376,7 @@ func (s *Server) routes() chi.Router {
 				team.Post("/servers/cloud", s.handleCreateCloudServer)
 				team.Get("/cloud-providers", s.handleListCloudProviders)
 				team.Post("/cloud-providers", s.handleAddCloudProvider)
+				team.Patch("/cloud-providers/{providerID}", s.handleReplaceCloudProviderToken)
 				team.Delete("/cloud-providers/{providerID}", s.handleDeleteCloudProvider)
 				team.Post("/cloud-providers/{providerID}/test", s.handleTestCloudProvider)
 				team.Get("/cloud-providers/{providerID}/options", s.handleCloudProviderOptions)
@@ -405,11 +406,13 @@ func (s *Server) routes() chi.Router {
 				// domains' records. See dns_providers.go.
 				team.Get("/dns-providers", s.handleListDNSProviders)
 				team.Post("/dns-providers", s.handleConnectDNSProvider)
+				team.Patch("/dns-providers/{providerID}", s.handleReplaceDNSProviderCredentials)
 				team.Delete("/dns-providers/{providerID}", s.handleDeleteDNSProvider)
 				team.Post("/dns-providers/{providerID}/test", s.handleTestDNSProvider)
 				team.Get("/dns-providers/{providerID}/zones", s.handleListDNSZones)
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
+				team.Patch("/git-sources/{sourceID}", s.handleUpdateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)
 				team.Get("/git-sources/{sourceID}/webhook", s.handleGetGitSourceWebhook)
 				// What a connection can read, so the app form offers it.

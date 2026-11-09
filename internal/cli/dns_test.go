@@ -148,3 +148,88 @@ func TestAWSKeysAreReadFromEitherShape(t *testing.T) {
 		}
 	}
 }
+
+// `dns providers update` replaces a connection's credentials, from a file or
+// standard input and never an argument, in the shape its kind takes.
+func TestDNSProviderCredentialsAreReplacedFromAFile(t *testing.T) {
+	const token = "cf-test-token-not-real-111111111111111111"
+	var mu sync.Mutex
+	var sent []map[string]any
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/me":
+			_, _ = io.WriteString(w, `{"teams":[{"id":"team_1","name":"acme"}]}`)
+		case "GET /api/teams/team_1/dns-providers":
+			_, _ = io.WriteString(w, `{"items":[{"id":"dnsp_1","kind":"cloudflare","name":"Cloudflare","title":"Cloudflare",
+				"zones":[{"id":"z1","name":"example.com"}],"records":2},{"id":"dnsp_2","kind":"route53","name":"AWS",
+				"title":"Amazon Route 53","zones":[{"id":"z2","name":"example.org"}],"records":0}],"total":2}`)
+		case "PATCH /api/teams/team_1/dns-providers/dnsp_1", "PATCH /api/teams/team_1/dns-providers/dnsp_2":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sent = append(sent, body)
+			_, _ = io.WriteString(w, `{"id":"dnsp_1","kind":"cloudflare","name":"Cloudflare","title":"Cloudflare",
+				"zones":[{"id":"z1","name":"example.com"}],"records":2}`)
+		default:
+			http.Error(w, `{"error":{"code":"resource.not_found","title":"no"}}`, http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(panel.Close)
+	t.Setenv("SKIFITY_CONFIG", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("SKIFITY_URL", panel.URL)
+	t.Setenv("SKIFITY_TOKEN", "skf_not_a_real_token")
+	t.Setenv("SKIFITY_TEAM", "")
+
+	file := filepath.Join(t.TempDir(), "token.txt")
+	if err := os.WriteFile(file, []byte(token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := cmdDNS(t.Context(), []string{"providers", "update", "Cloudflare", "--credentials", file}, &out); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if !strings.Contains(out.String(), "Cloudflare has its new credentials") || strings.Contains(out.String(), token) {
+		t.Errorf("update printed %q", out.String())
+	}
+
+	// Route 53 takes its key pair, here from standard input.
+	dnsStdin = strings.NewReader("AWS_ACCESS_KEY_ID=AKIAEXAMPLENOTREAL01\nAWS_SECRET_ACCESS_KEY=not/a/real/secret/either\n")
+	t.Cleanup(func() { dnsStdin = os.Stdin })
+	out.Reset()
+	if err := cmdDNS(t.Context(), []string{"providers", "update", "aws", "--credentials", "-", "--json"}, &out); err != nil {
+		t.Fatalf("update route53: %v", err)
+	}
+	if !json.Valid(out.Bytes()) {
+		t.Errorf("--json printed %q", out.String())
+	}
+
+	empty := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(empty, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"an empty file":    {"providers", "update", "Cloudflare", "--credentials", empty},
+		"no credentials":   {"providers", "update", "Cloudflare"},
+		"the token itself": {"providers", "update", "Cloudflare", "--credentials", "cfTestTokenNotReal000000000000"},
+		"a --token flag":   {"providers", "update", "Cloudflare", "--token", token},
+		"an unknown one":   {"providers", "update", "Hetzner", "--credentials", file},
+	} {
+		if err := cmdDNS(t.Context(), args, &out); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent) != 2 {
+		t.Fatalf("%d replacements reached the panel: %v", len(sent), sent)
+	}
+	if len(sent[0]) != 1 || sent[0]["token"] != token {
+		t.Errorf("the panel was sent %v for Cloudflare", sent[0])
+	}
+	if sent[1]["access_key_id"] != "AKIAEXAMPLENOTREAL01" || sent[1]["secret_access_key"] != "not/a/real/secret/either" || sent[1]["kind"] != nil {
+		t.Errorf("the panel was sent %v for Route 53", sent[1])
+	}
+}

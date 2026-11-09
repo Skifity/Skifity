@@ -312,9 +312,9 @@ Databases:
 Cluster:
   servers               List the servers in a team
   servers create        Create a server at Hetzner Cloud and join it to the cluster
-  cloud providers       List, add, test or remove the team's cloud connections
+  cloud providers       List, add, update, test or remove the team's cloud connections
   certs                 List, upload or remove the team's own TLS certificates
-  dns providers         List, connect, test or remove the team's DNS providers
+  dns providers         List, connect, update, test or remove the team's DNS providers
   drains                List, add, test or remove where the team's logs are shipped
   upgrade               Ask which release is the newest, and upgrade the panel to it
 

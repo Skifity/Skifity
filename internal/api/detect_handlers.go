@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -104,16 +103,9 @@ func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
 // A failure is not reported: a public repository needs no token, and the lookup
 // that follows will say plainly whether it could be read.
 func (s *Server) gitCredentials(r *http.Request, source store.GitSource) (token, email string) {
-	if source.ConfigEnc == "" {
-		return "", ""
-	}
-	raw, err := s.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
+	config, err := s.gitSourceConfig(source)
 	if err != nil {
 		s.log.Warn("could not read a Git connection's token", "git_source", source.ID, "error", err)
-		return "", ""
-	}
-	var config map[string]string
-	if err := json.Unmarshal(raw, &config); err != nil {
 		return "", ""
 	}
 	return config["token"], config["email"]

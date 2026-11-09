@@ -151,6 +151,52 @@ func (db *DB) SetDNSProviderZones(ctx context.Context, teamID, id string, zones 
 	return nil
 }
 
+// ReplaceDNSProviderCredentials gives a connection new credentials, sealed
+// under the same connection, and the zones they can see.
+func (db *DB) ReplaceDNSProviderCredentials(ctx context.Context, teamID, id, sealed string, zones []DNSZone) error {
+	if sealed == "" {
+		return errors.New("a DNS provider's credentials are replaced with sealed ones")
+	}
+	if zones == nil {
+		zones = []DNSZone{}
+	}
+	data, err := json.Marshal(zones)
+	if err != nil {
+		return err
+	}
+	now := Now()
+	res, err := db.Exec(ctx, `UPDATE dns_providers SET credentials_enc = ?, zones = ?, zones_listed_at = ?, updated_at = ?
+		WHERE team_id = ? AND id = ?`, sealed, string(data), now, now, teamID, id)
+	if err != nil {
+		return fmt.Errorf("replace a DNS provider's credentials: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DNSRecordZones returns the zones a connection holds records in, with or
+// without a domain: what credentials that replace its own have to reach, or
+// those records could be neither followed nor removed.
+func (db *DB) DNSRecordZones(ctx context.Context, teamID, providerID string) ([]DNSZone, error) {
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT zone_id, zone_name FROM dns_records
+		WHERE team_id = ? AND provider_id = ? ORDER BY zone_name, zone_id`, teamID, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("list the zones a DNS provider holds records in: %w", err)
+	}
+	defer rows.Close()
+	out := []DNSZone{}
+	for rows.Next() {
+		var zone DNSZone
+		if err := rows.Scan(&zone.ID, &zone.Name); err != nil {
+			return nil, fmt.Errorf("read a zone a DNS provider holds records in: %w", err)
+		}
+		out = append(out, zone)
+	}
+	return out, rows.Err()
+}
+
 // DeleteDNSProvider removes a connection, and with it the panel's books of
 // the records it made through it. It answers how many there were: those
 // records stay at the provider.

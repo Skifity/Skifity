@@ -1399,9 +1399,23 @@ func CloudProviderInUse(count int) *Problem {
 	return New("cloud.provider_in_use", "Servers were created with this connection").
 		WithCause("%d server(s) in the panel were created with this connection, and deleting one of their machines needs it.", count).
 		WithImpact("The connection was not removed.").
-		WithFix("Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection.").
+		WithFix("Remove those servers first, deleting their machines or keeping them. To use a new token, replace this connection's token instead: that is allowed while its servers are there.").
 		WithDocs(cloudDocs).
 		WithStatus(http.StatusConflict)
+}
+
+// CloudTokenOtherProject is a replacement token that the provider accepts and
+// that cannot see a single machine the panel created with the connection: a
+// token for another project or account. Saved, it would leave those machines
+// where only the provider's console could delete them, and billed until then.
+func CloudTokenOtherProject(provider, connection string) *Problem {
+	return New("cloud.token_other_project", "That token is for another project").
+		WithCause("%s accepts the token, and it cannot see any of the machines the panel created with %s.", provider, connection).
+		WithImpact("The token was not replaced. The connection keeps the one it has.").
+		WithFix("Create the token in the project or account those servers are in, and replace the token with that one. If their machines were deleted in the provider's console, remove those servers in the panel first.").
+		WithDocs("/docs/adding-servers#replacing-the-token").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
 }
 
 // CloudNameTaken is a name the cluster already has a node or a server under.
@@ -1978,6 +1992,20 @@ func DNSNoZones(provider string) *Problem {
 		WithImpact("Nothing was saved: a connection with no zones would never be used.").
 		WithFix("Give the token the zones it should manage — at Cloudflare, under Zone Resources, include the zones or every zone of the account — and connect it again.").
 		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// DNSZonesUnseen is replacement credentials that cannot see a zone the panel
+// keeps records in through the connection: credentials for another account,
+// which would leave every record there one the panel could neither move nor
+// remove.
+func DNSZonesUnseen(provider, connection, zones string) *Problem {
+	return New("dns.zones_unseen", "These credentials cannot see every zone the panel keeps records in").
+		WithCause("%s accepted them, and they do not see %s, where the panel keeps records through %s.", provider, zones, connection).
+		WithImpact("Nothing was saved. The connection keeps its credentials, and its records are left as they are.").
+		WithFix("Give the credentials those zones too, or use credentials of the account the zones are in, and replace them again.").
+		WithDocs("/docs/concepts#replacing-the-credentials").
 		WithStatus(http.StatusBadRequest).
 		With("provider", provider)
 }

@@ -27,6 +27,14 @@ const Token = "hcloud-test-read-write-token-not-real"
 // ReadOnlyToken is a token the fake accepts for GET requests only.
 const ReadOnlyToken = "hcloud-test-read-only-token-not-real"
 
+// RotatedToken is a second read-write token for the same project, as a
+// rotated token is.
+const RotatedToken = "hcloud-test-rotated-token-not-real-0002"
+
+// OtherProjectToken is a read-write token for another project: it is
+// accepted everywhere, and sees none of the machines this project has.
+const OtherProjectToken = "hcloud-test-other-project-token-not-real"
+
 // Request is one request the fake answered.
 type Request struct {
 	Method string
@@ -202,8 +210,11 @@ func (f *Hetzner) serve(w http.ResponseWriter, r *http.Request) {
 
 	// https://docs.hetzner.cloud/reference/cloud#authentication, and the
 	// 401 codes under #errors.
+	otherProject := false
 	switch r.Header.Get("Authorization") {
-	case "Bearer " + Token:
+	case "Bearer " + Token, "Bearer " + RotatedToken:
+	case "Bearer " + OtherProjectToken:
+		otherProject = true
 	case "Bearer " + ReadOnlyToken:
 		if r.Method != http.MethodGet {
 			fail(w, http.StatusUnauthorized, "token_readonly", "The token is only allowed to perform GET requests.")
@@ -215,6 +226,15 @@ func (f *Hetzner) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	// Another project has none of this one's machines.
+	if otherProject && parts[0] == "servers" && r.Method != http.MethodPost {
+		if len(parts) == 1 {
+			f.page(w, r, "servers", []any{})
+			return
+		}
+		fail(w, http.StatusNotFound, "not_found", "server not found")
+		return
+	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/locations":
 		f.page(w, r, "locations", locations())

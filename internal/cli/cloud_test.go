@@ -19,10 +19,11 @@ const fakeCloudToken = "hcloud-cli-test-token-not-real-0000"
 // cloudPanel answers the cloud routes for one team, and remembers what it was
 // sent.
 type cloudPanel struct {
-	mu      sync.Mutex
-	added   []map[string]string
-	ordered []map[string]any
-	polls   int
+	mu       sync.Mutex
+	added    []map[string]string
+	replaced []map[string]string
+	ordered  []map[string]any
+	polls    int
 }
 
 func (p *cloudPanel) serve(t *testing.T) {
@@ -43,6 +44,11 @@ func (p *cloudPanel) serve(t *testing.T) {
 			p.added = append(p.added, body)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"id":"cld_2","kind":"hetzner","title":"Hetzner Cloud","name":"`+body["name"]+`","token_hint":"0000"}`)
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/teams/team_1/cloud-providers/cld_1":
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			p.replaced = append(p.replaced, body)
+			_, _ = io.WriteString(w, `{"id":"cld_1","kind":"hetzner","title":"Hetzner Cloud","name":"eu","token_hint":"0001","servers":1}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/teams/team_1/servers/cloud":
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
@@ -153,5 +159,61 @@ func TestServersCreateOrdersAndFollows(t *testing.T) {
 	if order["provider_id"] != "cld_1" || order["name"] != "web-1" || order["server_type"] != "cax11" ||
 		order["image"] != "ubuntu-24.04" || order["ssh_access"] != "anywhere" {
 		t.Errorf("ordered %v", order)
+	}
+}
+
+// `cloud providers update` replaces a connection's token from a file or
+// standard input, and never takes it from the command line.
+func TestACloudTokenIsReplacedFromAFileOrStandardInput(t *testing.T) {
+	panel := &cloudPanel{}
+	panel.serve(t)
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte(fakeCloudToken+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdCloud(t.Context(), []string{"providers", "update", "eu", "--token-file", tokenFile}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "eu has its new token") || strings.Contains(out.String(), fakeCloudToken) {
+		t.Errorf("update printed %q", out.String())
+	}
+	cloudStdin = strings.NewReader(fakeCloudToken)
+	t.Cleanup(func() { cloudStdin = os.Stdin })
+	out.Reset()
+	if err := cmdCloud(t.Context(), []string{"providers", "update", "hetzner", "--token-file", "-", "--json"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(out.Bytes()) {
+		t.Errorf("--json printed %q", out.String())
+	}
+
+	empty := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(empty, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"an empty file":    {"providers", "update", "eu", "--token-file", empty},
+		"no file":          {"providers", "update", "eu"},
+		"the token itself": {"providers", "update", "eu", "--token-file", fakeCloudToken},
+		"a --token flag":   {"providers", "update", "eu", "--token", fakeCloudToken},
+		"no connection":    {"providers", "update", "--token-file", tokenFile},
+		"an unknown one":   {"providers", "update", "us", "--token-file", tokenFile},
+	} {
+		if err := cmdCloud(t.Context(), args, &out); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+
+	panel.mu.Lock()
+	defer panel.mu.Unlock()
+	if len(panel.replaced) != 2 {
+		t.Fatalf("%d replacements reached the panel", len(panel.replaced))
+	}
+	for _, body := range panel.replaced {
+		if len(body) != 1 || body["token"] != fakeCloudToken {
+			t.Errorf("the panel was sent %v", body)
+		}
 	}
 }

@@ -452,6 +452,22 @@ tunnel, or a wildcard one that covers it. A zone at another provider cannot
 point at a tunnel; there the record gets the cluster's address if it has one,
 and is refused if it does not.
 
+### Replacing the credentials
+
+A token that expired or was revoked, or a key that was rotated, is replaced on
+the connection: **Replace credentials** under **Settings → DNS providers**, or
+`skifity dns providers update NAME --credentials FILE`. The connection keeps
+its name and the records the panel created through it. Removing it and
+connecting again would not: the records would stay at the provider, and the
+panel would forget them, so it would neither point them at a new address nor
+remove them with their domains.
+
+The new credentials are checked as connecting checks them, and one thing
+more: they have to see every zone the panel keeps records in through this
+connection, by the zone's own id. Credentials for another account can list a
+zone of the same name and still not reach those records, so they are refused,
+naming the zones they cannot see. Nothing is saved until every check passes.
+
 ### What is not here
 
 Wildcard certificates. A certificate for `*.example.com` needs the DNS-01
@@ -942,6 +958,11 @@ Before the connection is saved the panel asks Bitbucket what the token can
 read, so a token Bitbucket refuses, or a workspace it cannot see, is said then
 rather than at the first deploy. The token and the email are stored encrypted
 and never shown again.
+
+An API token has an expiry date. When it is near, **Replace token** on the
+connection under **Settings → Git** takes the new one, with its account's
+email, and Bitbucket is asked about it before it is saved; the webhooks and
+the apps stay as they are. See [Replacing a token](configuration.md#replacing-a-token).
 
 A build clones with the token and Bitbucket's own user name for one,
 `x-token-auth`; the email never goes into the build.

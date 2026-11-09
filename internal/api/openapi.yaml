@@ -1294,6 +1294,30 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/providerID'
+    patch:
+      operationId: replaceCloudProviderToken
+      tags: [Servers]
+      summary: Replace a cloud connection's token
+      description: >-
+        Admin. Allowed while servers created with the connection are in the
+        panel. The new token is checked as a new connection's is
+        (cloud.token_invalid, cloud.token_read_only), and when servers were
+        created with it, it has to see at least one of their machines, or it
+        is a token for another project (cloud.token_other_project). Nothing
+        changes unless every check passes. It is sealed under the same
+        connection and never shown again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReplaceCloudTokenRequest'}
+      responses:
+        '200':
+          description: The connection, with the new token's hint and when it was checked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudProvider'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteCloudProvider
       tags: [Servers]
@@ -1686,6 +1710,29 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/providerID'
+    patch:
+      operationId: replaceDNSProviderCredentials
+      tags: [Domains]
+      summary: Replace a DNS provider's credentials
+      description: >-
+        Admin. The connection, its name and the records the panel keeps
+        through it stay. The new credentials are checked as connecting checks
+        them (dns.cloudflare_global_key, dns.provider_refused, dns.no_zones),
+        and have to see every zone the panel keeps records in through this
+        connection, by the zone's id (dns.zones_unseen). Nothing is saved
+        unless they do. The zones they see are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReplaceDNSCredentialsRequest'}
+      responses:
+        '200':
+          description: The connection, with the zones the new credentials see.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSProvider'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteDNSProvider
       tags: [Domains]
@@ -1782,6 +1829,31 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/sourceID'
+    patch:
+      operationId: updateGitSource
+      tags: [Git]
+      summary: Replace a Git connection's token, or rename it
+      description: >-
+        Admin. The connection keeps its id, so the webhooks on its
+        repositories and the apps it serves are unchanged, and it keeps its
+        webhook secret. A connection made before each had a secret of its own
+        keeps the token it had as its secret, so the hooks signed with it are
+        still accepted; it is never shown. A Bitbucket token, email or
+        workspace is checked with Bitbucket before anything is saved. A name
+        another of the team's connections has answers 409. The kind and the
+        server address cannot change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateGitSourceRequest'}
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GitSource'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteGitSource
       tags: [Git]
@@ -6433,6 +6505,13 @@ components:
         name: {type: string, description: 'The provider''s name when left empty.'}
         token: {type: string, format: password, description: 'A Read & Write API token for one project.'}
 
+    ReplaceCloudTokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: {type: string, format: password, description: 'A Read & Write API token for the project the connection is for.'}
+
     CloudOptions:
       type: object
       required: [locations, server_types, images, default_image]
@@ -6727,6 +6806,16 @@ components:
             to, to send the token with Basic auth. Left empty, the token is sent
             as a bearer token, which is how an access token is sent. Sealed
             with the token and never shown again.
+
+    UpdateGitSourceRequest:
+      type: object
+      additionalProperties: false
+      description: Every field is optional; one left out is kept.
+      properties:
+        name: {type: string, description: 'Empty keeps the name.'}
+        account: {type: string, description: 'For Bitbucket, the workspace.'}
+        token: {type: string, format: password, description: 'Replaces the stored token. Cannot be empty but for generic. Never shown again.'}
+        email: {type: string, format: password, description: 'Bitbucket only: the Atlassian account email an API token belongs to. Empty sends the token on its own, as an access token is.'}
 
     CreatedGitSource:
       type: object
@@ -8273,6 +8362,15 @@ components:
             access token with the domain scopes.
         access_key_id: {type: string, description: 'Route 53.'}
         secret_access_key: {type: string, description: 'Route 53.'}
+
+    ReplaceDNSCredentialsRequest:
+      type: object
+      additionalProperties: false
+      description: A token, or for Route 53 an access key. The kind is the connection's.
+      properties:
+        token: {type: string, format: password}
+        access_key_id: {type: string, description: 'Route 53.'}
+        secret_access_key: {type: string, format: password, description: 'Route 53.'}
 
     # --- scaling and processes ---
 

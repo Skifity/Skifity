@@ -1206,6 +1206,45 @@ test("an app from a public repository says pushes will not deploy it, and where 
   await expect(page.getByLabel("Git connection", { exact: true })).toBeVisible()
 })
 
+test("a Git connection's token is replaced where it is", async ({ page }) => {
+  await signIn(page)
+
+  // Made through the API with an obviously fake token: creating a GitHub
+  // connection asks GitHub nothing, and nor does replacing its token.
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const connected = await page.request.post(`/api/teams/${me.teams[0].id}/git-sources`, {
+    headers,
+    data: {
+      kind: "github_pat",
+      name: "Expiring GitHub",
+      token: "ghp_e2efaketoken0000000000000000000000",
+    },
+  })
+  expect(connected.ok(), await connected.text()).toBeTruthy()
+  const sourceID = (await connected.json()).source.id
+
+  await page.goto("/settings?tab=git")
+  const card = page.locator('[data-slot="card"]').filter({ hasText: "Expiring GitHub" })
+  await card.getByRole("button", { name: "Replace token" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog
+    .getByLabel("Access token", { exact: true })
+    .fill("ghp_e2efaketoken1111111111111111111111")
+  await dialog.getByRole("button", { name: "Replace token" }).click()
+  await expect(page.getByText("Expiring GitHub has its new token.")).toBeVisible()
+  await expect(dialog).toHaveCount(0)
+
+  // The same connection, and the token is never sent back.
+  const sources = await (await page.request.get(`/api/teams/${me.teams[0].id}/git-sources`)).text()
+  expect(sources).toContain(sourceID)
+  expect(sources).not.toContain("ghp_e2efaketoken")
+})
+
 /** The environment first-run setup made: Production of the first project. */
 async function firstEnvironment(page: Page): Promise<string> {
   const me = await (await page.request.get("/api/me")).json()

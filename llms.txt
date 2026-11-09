@@ -74,11 +74,11 @@ skifity db import <name> <file|->  Load a dump; a backup is taken first
 skifity apps                      List apps
 skifity servers                   List servers
 skifity servers create <name> --provider hetzner --location fsn1 --type cx22  Create a server at Hetzner Cloud or DigitalOcean (--provider digitalocean) and join it (a panel administrator's; it costs money)
-skifity cloud providers add --kind hetzner --token-file <file>  Connect a Hetzner Cloud project, or --kind digitalocean; `cloud providers`, `test <name>`, `remove <name>`
+skifity cloud providers add --kind hetzner --token-file <file>  Connect a Hetzner Cloud project, or --kind digitalocean; `cloud providers`, `test <name>`, `update <name> --token-file <file>` for a new token, `remove <name>`
 skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
 skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity domains add <hostname>    Put the app on a domain; --manage-dns creates its record at the team's DNS provider
-skifity dns providers add --kind cloudflare --credentials token.txt  Connect a DNS provider; credentials from a file or -, never an argument
+skifity dns providers add --kind cloudflare --credentials token.txt  Connect a DNS provider; credentials from a file or -, never an argument; `update <name> --credentials <file>` replaces them
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
 skifity api spec                  The HTTP API, described in OpenAPI 3.1
@@ -209,6 +209,7 @@ GET    /api/teams/{team}/servers              servers
 POST   /api/teams/{team}/servers              add one (returns an operation)
 POST   /api/teams/{team}/servers/cloud        create one at a cloud provider and join it (returns an operation)
 GET    /api/teams/{team}/cloud-providers      the team's cloud connections; never a token
+PATCH  /api/teams/{team}/cloud-providers/{provider}  a new token (token); with servers, it has to see their machines
 GET    /api/teams/{team}/cluster              cluster summary
 GET    /api/projects/{project}/environments   environments
 GET    /api/environments/{env}/apps           apps
@@ -220,6 +221,7 @@ POST   /api/apps/{app}/restart                replace the instances one at a tim
 GET    /api/apps/{app}/promote                where this app's versions can be promoted to: the same app in other environments
 POST   /api/apps/{app}/promote                run another environment's version here (deployment_id, force)
 POST   /api/teams/{team}/detect-upload        what a folder (.tar.gz) is and needs, before any app exists
+PATCH  /api/teams/{team}/git-sources/{source}  a new token or name; its id, webhooks, secret and apps stay
 GET    /api/teams/{team}/git-sources/{source}/repositories?q=  what a Git connection can read
 GET    /api/teams/{team}/git-sources/{source}/branches?repo=owner/name  one repository's branches
 PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, for an app with no repository
@@ -286,6 +288,7 @@ PUT    /api/teams/{team}/registries           save one; the registry is asked fi
 GET    /api/teams/{team}/certificates         the team's own TLS certificates, and which domains use each; never a key
 GET    /api/teams/{team}/dns-providers        the DNS providers the team connected, with their zones; never a credential
 POST   /api/teams/{team}/dns-providers        connect one (kind, name, token or access_key_id and secret_access_key); its zones are listed first
+PATCH  /api/teams/{team}/dns-providers/{provider}  new credentials; they have to see every zone it keeps records in
 GET    /api/teams/{team}/dns-providers/{provider}/zones  its zones, asked now
 POST   /api/teams/{team}/certificates         upload one (name, certificate, private_key); a name that exists is replaced
 DELETE /api/teams/{team}/certificates/{certificate}  remove one; its hostnames go back to Let's Encrypt

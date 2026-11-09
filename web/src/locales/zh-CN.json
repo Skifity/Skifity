@@ -462,6 +462,9 @@
       "cloud_provider.removed": "已移除云服务商",
       "server.create_started": "正在云服务商处创建服务器",
       "server.delete_started": "正在移除服务器并删除其机器",
+      "git_source.updated": "已更改 Git 账户",
+      "cloud_provider.token_replaced": "已替换云服务商的令牌",
+      "dns_provider.credentials_replaced": "已替换 DNS 服务商的凭据",
       "auth.recovery_code_used": "使用恢复码登录",
       "account.two_factor_reset": "管理员重置了双重验证",
       "account.password_reset": "从服务器重置了密码",
@@ -4226,7 +4229,7 @@
         "title": "已经有服务器是用这个连接创建的",
         "cause": "面板中有 {{0}} 台服务器是用这个连接创建的，删除它们的机器时需要它。",
         "impact": "连接没有被移除。",
-        "fix": "先移除这些服务器，删除或保留它们的机器都可以。要换新令牌，就再添加一个连接。"
+        "fix": "先移除这些服务器，删除或保留它们的机器都可以。要换新令牌，请改为替换此连接的令牌：在服务器还在时也可以这样做。"
       },
       "cloud_name_taken": {
         "title": "已经有同名的服务器",
@@ -4420,6 +4423,18 @@
         "impact": "没有做任何更改。构建不会把该连接的令牌发送到这个仓库的主机，它的 Webhook 也无法在那里注册。",
         "fix": "请选择仓库所在主机的连接，或在“设置”的 Git 中连接一个。"
       },
+      "cloud_token_other_project": {
+        "title": "该令牌属于另一个项目",
+        "cause": "{{0}} 接受该令牌，但它看不到面板用 {{1}} 创建的任何机器。",
+        "impact": "令牌未被替换。连接保留现有的令牌。",
+        "fix": "在这些服务器所在的项目或账户中创建令牌，然后用它替换令牌。如果它们的机器已在服务商控制台中删除，请先在面板中移除这些服务器。"
+      },
+      "dns_zones_unseen": {
+        "title": "这些凭据看不到面板保存记录的所有区域",
+        "cause": "{{0}} 接受了凭据，但它们看不到 {{1}}，面板通过 {{2}} 在其中保存记录。",
+        "impact": "未保存任何内容。连接保留原有凭据，其记录保持不变。",
+        "fix": "也给凭据授予这些区域，或使用这些区域所在账户的凭据，然后再次替换。"
+      },
       "backup_storage_endpoint_invalid": {
         "title": "备份存储的端点不是一个地址",
         "cause": "无法读取端点 {{0}}：{{1}}",
@@ -4516,7 +4531,7 @@
     "pushDeploysManualHelp": "Skifity 无法自行添加 Webhook，请将此 URL 添加到仓库的 Webhook 设置中，并使用“设置 → Git → Webhook”中显示的密钥。",
     "webhookSecret": "Webhook 密钥",
     "webhookSecretHelp": "将此粘贴为 Webhook 的密钥。它只属于这个连接，因此可以交给仓库而不泄露令牌。",
-    "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名。重新连接该账号即可为其生成独立密钥。",
+    "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名——如果令牌后来被替换，则是当时的那个令牌——该令牌不会显示。重新连接该账号即可为其生成独立密钥。",
     "showWebhook": "Webhook",
     "chooseRepository": "从 {{source}} 中选择",
     "searchRepositories": "搜索仓库",
@@ -4548,7 +4563,11 @@
     "pushDeploysNoConnection": "推送暂时不会部署这个应用",
     "pushDeploysNoConnectionHelp": "没有为它注册 Webhook，因为它没有可用于注册的 Git 连接。请在“设置”的 Git 中连接你的 Git 账号，然后在应用的设置中选择该连接。",
     "connectAccount": "连接 Git 账号",
-    "pushDeploysWhatToCheck": "检查什么"
+    "pushDeploysWhatToCheck": "检查什么",
+    "replaceToken": "替换令牌",
+    "replaceTokenTitle": "替换 {{name}} 的令牌",
+    "replaceTokenHelp": "连接保持不变：其仓库上的 Webhook、Webhook 的密钥，以及它服务的应用。新令牌从下一次构建、列表和状态起使用。",
+    "tokenReplaced": "{{name}} 已使用新令牌。"
   },
   "notifications": {
     "title": "通知",
@@ -5407,7 +5426,11 @@
     "removeConfirm": "面板将不再通过 {{name}} 创建和删除记录。",
     "removeConsequence": "面板通过它创建的记录会留在服务商处，此后归你管理：{{number}} 条。",
     "recordsKept": "由面板维护的记录：{{number}}",
-    "zonesListed": "截至 {{when}}"
+    "zonesListed": "截至 {{when}}",
+    "replace": "替换凭据",
+    "replaceTitle": "替换 {{name}} 的凭据",
+    "replaceHelp": "连接保留其名称以及面板通过它创建的记录。新凭据在保存前会被检查，并且必须能看到这些记录所在的每个区域。",
+    "replaced": "{{name}} 已使用新凭据：{{zones}}"
   },
   "logDrains": {
     "help": "把应用输出的所有内容发送到集群外的服务，在那里保存、搜索并设置告警。每台服务器上的采集器会把每一行发送到其所属团队的投递目标。",
@@ -5576,7 +5599,11 @@
     "removeConfirm": "令牌会从面板中删除。也请在服务商的控制台里吊销它。",
     "tokenHint": "令牌 …{{hint}}",
     "serverCount": "用它创建的服务器：{{servers}}",
-    "checked": "{{when}} 检查过"
+    "checked": "{{when}} 检查过",
+    "replaceToken": "替换令牌",
+    "replaceTokenTitle": "替换 {{name}} 的令牌",
+    "replaceTokenHelp": "连接保留其服务器。新令牌在保存前会被检查：它必须有效、可写，并且如果有服务器是用此连接创建的，它必须能看到这些服务器的机器。",
+    "tokenReplaced": "{{name}} 已使用新令牌，并且可以创建服务器。"
   },
   "accounts": {
     "tab": "账户",

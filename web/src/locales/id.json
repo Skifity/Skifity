@@ -462,6 +462,9 @@
       "cloud_provider.removed": "Penyedia cloud dihapus",
       "server.create_started": "Membuat server di penyedia cloud",
       "server.delete_started": "Menghapus server beserta mesinnya",
+      "git_source.updated": "Akun Git diubah",
+      "cloud_provider.token_replaced": "Token penyedia cloud diganti",
+      "dns_provider.credentials_replaced": "Kredensial penyedia DNS diganti",
       "auth.recovery_code_used": "Masuk dengan kode pemulihan",
       "account.two_factor_reset": "Dua faktor direset oleh administrator",
       "account.password_reset": "Kata sandi direset dari server",
@@ -4226,7 +4229,7 @@
         "title": "Ada server yang dibuat dengan koneksi ini",
         "cause": "{{0}} server di panel dibuat dengan koneksi ini, dan menghapus mesinnya memerlukan koneksi ini.",
         "impact": "Koneksi tidak dihapus.",
-        "fix": "Hapus server-server itu terlebih dahulu, dengan atau tanpa menghapus mesinnya. Untuk memakai token baru, tambahkan koneksi kedua."
+        "fix": "Hapus server-server itu terlebih dahulu, dengan atau tanpa menghapus mesinnya. Untuk memakai token baru, ganti saja token koneksi ini: itu boleh selama servernya masih ada."
       },
       "cloud_name_taken": {
         "title": "Sudah ada server dengan nama itu",
@@ -4420,6 +4423,18 @@
         "impact": "Tidak ada yang diubah. Build tidak akan mengirim token koneksi itu ke host repositori ini, dan webhook-nya tidak bisa didaftarkan di sana.",
         "fix": "Pilih koneksi ke host tempat repositori berada, atau hubungkan satu di Pengaturan, lalu Git."
       },
+      "cloud_token_other_project": {
+        "title": "Token itu untuk proyek lain",
+        "cause": "{{0}} menerima token itu, tetapi token itu tidak bisa melihat satu pun mesin yang dibuat panel dengan {{1}}.",
+        "impact": "Token tidak diganti. Koneksi tetap memakai token yang dimilikinya.",
+        "fix": "Buat token di proyek atau akun tempat server-server itu berada, lalu ganti token dengan token itu. Jika mesinnya sudah dihapus di konsol penyedia, hapus dulu server-server itu di panel."
+      },
+      "dns_zones_unseen": {
+        "title": "Kredensial ini tidak bisa melihat setiap zona tempat panel menyimpan record",
+        "cause": "{{0}} menerimanya, tetapi kredensial itu tidak melihat {{1}}, tempat panel menyimpan record melalui {{2}}.",
+        "impact": "Tidak ada yang disimpan. Koneksi tetap memakai kredensialnya, dan record-nya dibiarkan apa adanya.",
+        "fix": "Beri kredensial itu akses ke zona-zona tersebut juga, atau pakai kredensial dari akun tempat zona itu berada, lalu ganti lagi."
+      },
       "backup_storage_endpoint_invalid": {
         "title": "Endpoint penyimpanan cadangan bukan alamat",
         "cause": "Endpoint {{0}} tidak bisa dibaca: {{1}}",
@@ -4516,7 +4531,7 @@
     "pushDeploysManualHelp": "Skifity tidak bisa menambahkan webhook sendiri, jadi tambahkan URL ini di pengaturan webhook repositori, dengan secret yang ditampilkan di Pengaturan, Git, Webhook.",
     "webhookSecret": "Secret webhook",
     "webhookSecretHelp": "Tempel ini sebagai secret webhook. Secret ini hanya milik koneksi ini, jadi bisa diberikan ke repositori tanpa memberikan token.",
-    "webhookSecretIsToken": "Koneksi ini dibuat sebelum setiap koneksi punya secret sendiri, jadi webhook-nya ditandatangani dengan token. Hubungkan akun lagi agar koneksi ini punya secret sendiri.",
+    "webhookSecretIsToken": "Koneksi ini dibuat sebelum setiap koneksi punya secret sendiri, jadi webhook-nya ditandatangani dengan token — token yang dimilikinya saat itu, jika sudah diganti sejak itu — yang tidak ditampilkan. Hubungkan akun lagi agar koneksi ini punya secret sendiri.",
     "showWebhook": "Webhook",
     "chooseRepository": "Pilih dari {{source}}",
     "searchRepositories": "Cari repositori",
@@ -4548,7 +4563,11 @@
     "pushDeploysNoConnection": "Push belum akan men-deploy aplikasi ini",
     "pushDeploysNoConnectionHelp": "Tidak ada webhook yang didaftarkan untuknya, karena aplikasi ini tidak punya koneksi Git untuk mendaftarkannya. Hubungkan akun Git Anda di Pengaturan, Git, lalu pilih koneksinya di pengaturan aplikasi.",
     "connectAccount": "Hubungkan akun Git",
-    "pushDeploysWhatToCheck": "Apa yang perlu diperiksa"
+    "pushDeploysWhatToCheck": "Apa yang perlu diperiksa",
+    "replaceToken": "Ganti token",
+    "replaceTokenTitle": "Ganti token {{name}}",
+    "replaceTokenHelp": "Koneksi tetap seperti adanya: webhook di repositorinya, secret-nya, dan aplikasi yang dilayaninya. Token baru dipakai mulai build, daftar, dan status berikutnya.",
+    "tokenReplaced": "{{name}} sudah memakai token barunya."
   },
   "notifications": {
     "title": "Notifikasi",
@@ -5407,7 +5426,11 @@
     "removeConfirm": "Panel berhenti membuat dan menghapus record melalui {{name}}.",
     "removeConsequence": "Record yang dibuat panel melaluinya tetap ada di penyedia, dan sejak itu menjadi milik Anda: {{number}}.",
     "recordsKept": "Record yang dikelola: {{number}}",
-    "zonesListed": "per {{when}}"
+    "zonesListed": "per {{when}}",
+    "replace": "Ganti kredensial",
+    "replaceTitle": "Ganti kredensial {{name}}",
+    "replaceHelp": "Koneksi tetap memiliki namanya dan record yang dibuat panel melaluinya. Kredensial baru diperiksa sebelum disimpan, dan harus bisa melihat setiap zona tempat record itu berada.",
+    "replaced": "{{name}} sudah memakai kredensial barunya: {{zones}}"
   },
   "logDrains": {
     "help": "Kirim semua yang dicetak aplikasi Anda ke layanan di luar klaster, tempat log disimpan, dicari, dan dipakai untuk peringatan. Kolektor di setiap server mengirim setiap baris ke saluran milik tim yang memilikinya.",
@@ -5576,7 +5599,11 @@
     "removeConfirm": "Token dihapus dari panel. Cabut juga token itu di konsol penyedia.",
     "tokenHint": "token …{{hint}}",
     "serverCount": "Server yang dibuat dengannya: {{servers}}",
-    "checked": "diperiksa {{when}}"
+    "checked": "diperiksa {{when}}",
+    "replaceToken": "Ganti token",
+    "replaceTokenTitle": "Ganti token {{name}}",
+    "replaceTokenHelp": "Koneksi tetap memiliki servernya. Token baru diperiksa sebelum disimpan: token harus berfungsi, bisa menulis, dan, jika ada server yang dibuat dengan koneksi ini, bisa melihat mesin-mesinnya.",
+    "tokenReplaced": "{{name}} sudah memakai token barunya, dan token itu bisa membuat server."
   },
   "accounts": {
     "tab": "Akun",

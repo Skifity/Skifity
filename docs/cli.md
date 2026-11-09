@@ -228,6 +228,7 @@ skifity servers create web-3 --provider digitalocean --location fra1 --type s-2v
 skifity cloud providers add --token-file hcloud.token  # connect a Hetzner Cloud project; `-` reads stdin
 skifity cloud providers add --kind digitalocean --token-file do.token  # or a DigitalOcean account
 skifity cloud providers           # the team's cloud connections; test NAME, remove NAME
+skifity cloud providers update eu --token-file new.token  # a new token, while its servers stay; `-` reads stdin
 skifity certs                     # the team's own TLS certificates, and what uses each
 skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version
 skifity certs remove wildcard     # its hostnames go back to Let's Encrypt
@@ -239,6 +240,7 @@ skifity dns providers             # the team's DNS providers and their zones
 skifity dns providers add --kind cloudflare --credentials token.txt  # or --credentials - from standard input
 skifity dns providers add --kind route53 --credentials ~/.aws/credentials
 skifity dns providers test Cloudflare  # sign in again and list its zones
+skifity dns providers update Cloudflare --credentials new-token.txt  # new credentials; its records stay kept
 skifity dns providers remove Cloudflare  # the records it made stay at the provider
 skifity drains                    # where the team's logs are shipped, and the collector
 skifity drains add Axiom --kind axiom --set dataset=apps  # asks for the token; a test line is sent first

@@ -79,6 +79,32 @@ There was a group here for a GitHub App — an app id, a client id, a client
 secret, a private key — and nothing ever read one of them, so it is gone until
 the code behind it exists.
 
+### Replacing a token
+
+A personal access token expires, and a token can be revoked. **Replace token**
+on the connection's row gives it a new one where it is: the connection keeps
+its id, so the webhook on every repository it registered one on still reaches
+the panel, signed with the same secret, and every app it serves keeps it. The
+next build clones with the new token, and the next list, commit status and
+pull request comment use it. A Bitbucket token, and its account's email, are
+checked with Bitbucket before anything is saved, as they are when it is
+connected.
+
+Disconnecting and connecting again is not the same thing. The apps it served
+are left with no connection, and the new connection has a new id, so every
+webhook on a repository, which is addressed to the old one, is refused from
+then on.
+
+A connection made before each had a webhook secret of its own signs its
+webhooks with its token. Replacing the token keeps the old one as the secret,
+so those webhooks are still accepted, and it is never shown; **Webhook** says
+so. Connecting the account again is still what gives it a secret of its own.
+
+`PATCH /api/teams/{team}/git-sources/{source}` does the same, with a `token`,
+and renames a connection with a `name`. Two of a team's connections cannot
+share a name: the CLI, `git:` in `skifity.yaml` and an assistant find one by
+it.
+
 ### Git hosts on your own network
 
 A build runs somebody's install scripts, so builds are kept off private

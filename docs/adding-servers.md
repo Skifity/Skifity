@@ -71,7 +71,8 @@ anything, before it keeps it — a read-only token is refused there, not at the
 first order. The token is sealed under that connection, is rotated with every
 other secret when the master key is, and is never shown again; the list shows
 its last four characters. A connection that servers were created with cannot
-be removed until they are, because deleting their machines needs it.
+be removed until they are, because deleting their machines needs it; its
+token can be replaced, below.
 
 **Pick what to order.** Locations, server types and images come from the
 provider as they are now: only types that can be ordered in the location picked
@@ -140,6 +141,22 @@ still carries the label the panel gave it (a tag, at DigitalOcean): a machine so
 any server that was added with an address rather than created, is never
 deleted — it is left for you to delete in the provider's console. Without the box
 ticked, the machine keeps running, and keeps being billed.
+
+### Replacing the token
+
+A token that expired, was revoked or is being rotated is replaced on the
+connection: **Replace token** under **Settings → Cloud providers**, or
+`skifity cloud providers update NAME --token-file FILE`. It is allowed while
+servers created with the connection are in the panel, which removing it is
+not.
+
+The provider is asked before anything is saved, as it is for a new
+connection: whether the token works, and whether it may write. When servers
+were created with the connection, the new token also has to see their
+machines. A token for another project passes every other check and sees none
+of them, and saving it would leave those machines where only the provider's
+console could delete them, still billed; it is refused. If the machines were
+deleted in the console, remove their servers in the panel first.
 
 ## The password
 

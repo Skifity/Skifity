@@ -46,6 +46,7 @@ var dnsKinds = []string{"cloudflare", "hetzner", "digitalocean", "route53"}
 //	pass show cf | skifity dns providers add --kind cloudflare --credentials -
 //	skifity dns providers test Cloudflare                    sign in again and list its zones
 //	skifity dns providers zones Cloudflare                   the zones, asked now
+//	skifity dns providers update Cloudflare --credentials new-token.txt
 //	skifity dns providers remove Cloudflare
 //
 // The credentials are read from a file or from standard input, or typed at a
@@ -64,7 +65,7 @@ func cmdDNS(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if len(positional) == 0 || positional[0] != "providers" {
-		return errdoc.BadRequest(fmt.Sprintf("Use `%s dns providers`, with list, add, test, zones or remove.", version.Binary))
+		return errdoc.BadRequest(fmt.Sprintf("Use `%s dns providers`, with list, add, update, test, zones or remove.", version.Binary))
 	}
 	positional = positional[1:]
 	action := "list"
@@ -183,6 +184,27 @@ func cmdDNS(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "%s answers, and serves %d zone(s): %s.\n", answer.Name, len(answer.Zones), zoneNames(answer))
 		return nil
 
+	case "update":
+		// The connection stays, with the records the panel created through
+		// it; removing it and connecting again would forget them.
+		provider, err := find()
+		if err != nil {
+			return err
+		}
+		body, err := dnsCredentials(provider.Kind, *credentials, out)
+		if err != nil {
+			return err
+		}
+		var replaced dnsProviderAnswer
+		if err := client.Do(ctx, "PATCH", path+"/"+url.PathEscape(provider.ID), body, &replaced); err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeJSON(out, replaced)
+		}
+		fmt.Fprintf(out, "%s has its new credentials, which see %d zone(s): %s.\n", replaced.Name, len(replaced.Zones), zoneNames(replaced))
+		return nil
+
 	case "remove", "rm", "delete":
 		provider, err := find()
 		if err != nil {
@@ -204,7 +226,7 @@ func cmdDNS(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintln(out)
 		return nil
 	}
-	return errdoc.BadRequest(fmt.Sprintf("dns providers takes ls, add, test, zones or remove, not %q.", action))
+	return errdoc.BadRequest(fmt.Sprintf("dns providers takes ls, add, update, test, zones or remove, not %q.", action))
 }
 
 func zoneNames(p dnsProviderAnswer) string {

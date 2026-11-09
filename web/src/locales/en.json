@@ -472,6 +472,9 @@
       "cloud_provider.removed": "Cloud provider removed",
       "server.create_started": "Creating a server at a cloud provider",
       "server.delete_started": "Removing a server and deleting its machine",
+      "git_source.updated": "Git account changed",
+      "cloud_provider.token_replaced": "Cloud provider's token replaced",
+      "dns_provider.credentials_replaced": "DNS provider's credentials replaced",
       "auth.recovery_code_used": "Signed in with a recovery code",
       "account.two_factor_reset": "Two-factor reset by an administrator",
       "account.password_reset": "Password reset from the server",
@@ -4254,7 +4257,7 @@
         "title": "Servers were created with this connection",
         "cause": "{{0}} server(s) in the panel were created with this connection, and deleting one of their machines needs it.",
         "impact": "The connection was not removed.",
-        "fix": "Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection."
+        "fix": "Remove those servers first, deleting their machines or keeping them. To use a new token, replace this connection's token instead: that is allowed while its servers are there."
       },
       "cloud_name_taken": {
         "title": "There is already a server with that name",
@@ -4448,6 +4451,18 @@
         "impact": "Nothing was changed. A build would not send that connection's token to this repository's host, and its webhook could not be registered there.",
         "fix": "Choose a connection to the host the repository is on, or connect one under Settings, then Git."
       },
+      "cloud_token_other_project": {
+        "title": "That token is for another project",
+        "cause": "{{0}} accepts the token, and it cannot see any of the machines the panel created with {{1}}.",
+        "impact": "The token was not replaced. The connection keeps the one it has.",
+        "fix": "Create the token in the project or account those servers are in, and replace the token with that one. If their machines were deleted in the provider's console, remove those servers in the panel first."
+      },
+      "dns_zones_unseen": {
+        "title": "These credentials cannot see every zone the panel keeps records in",
+        "cause": "{{0}} accepted them, and they do not see {{1}}, where the panel keeps records through {{2}}.",
+        "impact": "Nothing was saved. The connection keeps its credentials, and its records are left as they are.",
+        "fix": "Give the credentials those zones too, or use credentials of the account the zones are in, and replace them again."
+      },
       "backup_storage_endpoint_invalid": {
         "title": "The backup storage's endpoint is not an address",
         "cause": "The endpoint {{0}} could not be read: {{1}}",
@@ -4544,7 +4559,7 @@
     "pushDeploysManualHelp": "Skifity could not add the webhook itself, so add this URL to the repository's webhook settings, with the secret shown under Settings, Git, Webhook.",
     "webhookSecret": "Webhook secret",
     "webhookSecretHelp": "Paste this as the webhook's secret. It belongs to this connection alone, so it can be given to a repository without giving away the token.",
-    "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token. Connect the account again to give it a secret of its own.",
+    "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token — the one it had then, if it has been replaced since — which is not shown. Connect the account again to give it a secret of its own.",
     "showWebhook": "Webhook",
     "chooseRepository": "Choose from {{source}}",
     "searchRepositories": "Search repositories",
@@ -4576,7 +4591,11 @@
     "pushDeploysNoConnection": "Pushes will not deploy this app yet",
     "pushDeploysNoConnectionHelp": "No webhook was registered for it, because it has no Git connection to register one with. Connect your Git account under Settings, Git, then choose the connection in the app's settings.",
     "connectAccount": "Connect a Git account",
-    "pushDeploysWhatToCheck": "What to check"
+    "pushDeploysWhatToCheck": "What to check",
+    "replaceToken": "Replace token",
+    "replaceTokenTitle": "Replace the token of {{name}}",
+    "replaceTokenHelp": "The connection stays as it is: the webhooks on its repositories, their secret and the apps it serves. The new token is used from the next build, list and status on.",
+    "tokenReplaced": "{{name}} has its new token."
   },
   "notifications": {
     "title": "Notifications",
@@ -5442,7 +5461,11 @@
     "removeConfirm": "The panel stops creating and removing records through {{name}}.",
     "removeConsequence": "Records the panel created through it stay at the provider, and are yours from then on: {{number}}.",
     "recordsKept": "Records kept: {{number}}",
-    "zonesListed": "as of {{when}}"
+    "zonesListed": "as of {{when}}",
+    "replace": "Replace credentials",
+    "replaceTitle": "Replace the credentials of {{name}}",
+    "replaceHelp": "The connection keeps its name and the records the panel created through it. The new credentials are checked before they are saved, and have to see every zone those records are in.",
+    "replaced": "{{name}} has its new credentials: {{zones}}"
   },
   "logDrains": {
     "help": "Ship everything your apps print to a service outside the cluster, where it is kept, searched and alerted on. A collector on every server sends each line to the drains of the team it belongs to.",
@@ -5611,7 +5634,11 @@
     "removeConfirm": "The token is deleted from the panel. Revoke it in the provider's console too.",
     "tokenHint": "token …{{hint}}",
     "serverCount": "Servers created with it: {{servers}}",
-    "checked": "checked {{when}}"
+    "checked": "checked {{when}}",
+    "replaceToken": "Replace token",
+    "replaceTokenTitle": "Replace the token of {{name}}",
+    "replaceTokenHelp": "The connection keeps its servers. The new token is checked before it is saved: it has to work, be able to write and, when servers were created with this connection, see their machines.",
+    "tokenReplaced": "{{name}} has its new token, and it can create servers."
   },
   "accounts": {
     "tab": "Accounts",

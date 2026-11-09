@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -140,6 +141,60 @@ func (m *Manager) Refresh(ctx context.Context, teamID, id string) (store.DNSProv
 		return store.DNSProvider{}, err
 	}
 	if err := m.DB.SetDNSProviderZones(ctx, teamID, id, zones); err != nil {
+		return store.DNSProvider{}, err
+	}
+	return m.DB.GetDNSProvider(ctx, teamID, id)
+}
+
+// Replace gives a saved connection new credentials: a token that expired or
+// was revoked, or a key rotated. They are checked as Connect checks them, and
+// one thing more: they have to see every zone the panel keeps records in
+// through this connection, by the zone's own id. Credentials for another
+// account would sign in and list zones of the same name, and every record
+// the panel made would then be one it could neither point at a new address
+// nor remove. Nothing is changed unless all of that holds.
+func (m *Manager) Replace(ctx context.Context, teamID, id string, creds Credentials) (store.DNSProvider, error) {
+	provider, err := m.DB.GetDNSProvider(ctx, teamID, id)
+	if err != nil {
+		return store.DNSProvider{}, err
+	}
+	creds = Credentials{
+		Token:           strings.TrimSpace(creds.Token),
+		AccessKeyID:     strings.TrimSpace(creds.AccessKeyID),
+		SecretAccessKey: strings.TrimSpace(creds.SecretAccessKey),
+	}
+	if err := CheckCredentials(provider.Kind, creds); err != nil {
+		if errors.Is(err, ErrGlobalKey) {
+			return store.DNSProvider{}, errdoc.DNSGlobalKey()
+		}
+		return store.DNSProvider{}, errdoc.BadRequest(capitalise(err.Error()) + ".")
+	}
+	zones, err := m.listZones(ctx, provider.Kind, creds)
+	if err != nil {
+		return store.DNSProvider{}, err
+	}
+	held, err := m.DB.DNSRecordZones(ctx, teamID, id)
+	if err != nil {
+		return store.DNSProvider{}, err
+	}
+	var unseen []string
+	for _, zone := range held {
+		if !slices.ContainsFunc(zones, func(z store.DNSZone) bool { return z.ID == zone.ID }) {
+			unseen = append(unseen, zone.Name)
+		}
+	}
+	if len(unseen) > 0 {
+		return store.DNSProvider{}, errdoc.DNSZonesUnseen(Title(provider.Kind), provider.Name, strings.Join(unseen, ", "))
+	}
+	data, err := json.Marshal(creds)
+	if err != nil {
+		return store.DNSProvider{}, err
+	}
+	sealed, err := m.Keyring.Seal(data, store.DNSProviderContext(teamID, id))
+	if err != nil {
+		return store.DNSProvider{}, err
+	}
+	if err := m.DB.ReplaceDNSProviderCredentials(ctx, teamID, id, sealed, zones); err != nil {
 		return store.DNSProvider{}, err
 	}
 	return m.DB.GetDNSProvider(ctx, teamID, id)

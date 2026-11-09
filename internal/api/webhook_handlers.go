@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -136,14 +135,12 @@ func (s *Server) webhookSecretFor(r *http.Request, source store.GitSource) (stri
 	if source.ConfigEnc == "" {
 		return "", errors.New("this Git connection has no stored credentials")
 	}
-	raw, err := s.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
+	config, err := s.gitSourceConfig(source)
 	if err != nil {
 		return "", err
 	}
-	var config map[string]string
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return "", err
-	}
+	// Replacing the token of such a connection keeps the one it had as its
+	// secret, here, so its hooks are not refused for it.
 	if secret := config["webhook_secret"]; secret != "" {
 		return secret, nil
 	}
