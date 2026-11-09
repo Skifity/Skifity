@@ -171,6 +171,13 @@ domain is yours.
 > node, and Skifity records it during setup rather than asking you to add a
 > machine you are already looking at. `⌘K` has the same **New app** action from
 > anywhere.
+>
+> The form says where the app goes, under its title: **In First project ·
+> Production**. With one environment that is the only choice and is made for
+> you. Once there are more — a staging environment, a second project — **Create
+> it in** starts empty and Create waits until you choose, so nothing lands in
+> production by default. **New app** on a project's own page starts on the
+> environment you were looking at.
 
 ## 4. Add your own domain
 

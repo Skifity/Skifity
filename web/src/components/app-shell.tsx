@@ -27,6 +27,7 @@ import {
 
 import { AttentionBell } from "@/components/attention"
 import { CommandPalette } from "@/components/command-palette"
+import { pickedOrOnly, useEnvironmentTargets } from "@/components/environment-picker"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { Logo } from "@/components/logo"
@@ -492,17 +493,32 @@ const TOP_PAGES = new Set(["templates", "plugins", "activity", "settings", "acco
  */
 function useCrumbs(): Crumb[] {
   const { t } = useTranslation()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const [first = "", second, third, fourth] = pathname.split("/").filter(Boolean)
 
-  const appId = first === "apps" ? second : undefined
+  // The New app form, from a project's environment or from anywhere. "new"
+  // is not an app: asking for it was a 404 that labelled the crumb "App".
+  const newApp =
+    (first === "apps" && second === "new") ||
+    (first === "environments" && third === "apps" && fourth === "new")
+  const appId = first === "apps" && second !== "new" ? second : undefined
   const app = useQuery({
     queryKey: ["app", appId],
     queryFn: () => api.get<App>(`/api/apps/${appId}`),
     enabled: Boolean(appId),
   }).data
 
-  const environmentId = first === "environments" ? second : app?.environment_id
+  // Where the form will make the app, as it decides it: the environment
+  // chosen on it, then the one it was opened from, then the only one there
+  // is. The same queries as the form's, so nothing more is asked.
+  const destinations = useEnvironmentTargets(undefined, newApp && first === "apps")
+  const environmentId = newApp
+    ? new URLSearchParams(search).get("environment") ||
+      (first === "environments" ? second : pickedOrOnly("", destinations.targets)) ||
+      undefined
+    : first === "environments"
+      ? second
+      : app?.environment_id
   const environment = useQuery({
     queryKey: ["environment", environmentId],
     queryFn: () => api.get<Environment>(`/api/environments/${environmentId}`),
@@ -543,7 +559,11 @@ function useCrumbs(): Crumb[] {
     case "projects":
       return second ? [projects, { label: projectCrumb.label }] : [{ label: t("nav.projects") }]
     case "environments":
-      if (third === "apps" && fourth === "new") {
+    case "apps":
+      // Somewhere chosen, it is named; nothing chosen yet, the form is all
+      // there is to say.
+      if (newApp) {
+        if (!environmentId) return [{ label: t("apps.newApp") }]
         return [
           projects,
           projectCrumb,
@@ -551,9 +571,9 @@ function useCrumbs(): Crumb[] {
           { label: t("apps.newApp") },
         ]
       }
-      break
-    case "apps":
-      if (second) return [projects, projectCrumb, { label: app?.name ?? t("nav.app") }]
+      if (first === "apps" && second) {
+        return [projects, projectCrumb, { label: app?.name ?? t("nav.app") }]
+      }
       break
     case "databases":
       return second

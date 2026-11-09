@@ -22,7 +22,6 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { useFirstEnvironment } from "@/hooks/use-first-environment"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
@@ -101,8 +100,6 @@ export function CommandPalette({
     queryFn: () => gatherApps(client, projects?.items ?? []),
     enabled: open && projectIds !== "",
   })
-
-  const firstEnvironment = useFirstEnvironment(open)
 
   const go = (path: string) => {
     onOpenChange(false)
@@ -228,8 +225,9 @@ export function CommandPalette({
 
         <CommandSeparator />
         <CommandGroup heading={t("common.actions")}>
-          {firstEnvironment && (
-            <CommandItem onSelect={() => go(`/environments/${firstEnvironment}/apps/new`)}>
+          {/* The form asks which project and environment; it needs one to exist. */}
+          {(projects?.items.length ?? 0) > 0 && (
+            <CommandItem onSelect={() => go("/apps/new")}>
               <PlusIcon />
               {t("apps.newApp")}
             </CommandItem>

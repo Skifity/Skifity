@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
-import { keepPreviousData, useMutation, useQueries, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   AlertTriangleIcon,
@@ -16,6 +16,12 @@ import {
 import { cn } from "cn"
 
 import { EmptyState } from "@/components/empty-state"
+import {
+  EnvironmentPicker,
+  pickedOrOnly,
+  targetOf,
+  useEnvironmentTargets,
+} from "@/components/environment-picker"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { TemplateCataloguesSheet, useTemplateCatalogues } from "@/components/template-catalogues"
@@ -50,12 +56,11 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, ApiError, type List, type Problem } from "@/lib/api"
 import { confinesEnvironments } from "@/lib/permissions"
 import { queryClient } from "@/lib/query"
-import type { Environment, Project, Template } from "@/lib/types"
+import type { Template } from "@/lib/types"
 
 /** What the category picker holds for "every category": a Select item cannot be empty. */
 const EVERY_CATEGORY = "__all__"
@@ -112,7 +117,8 @@ export function TemplatesPage() {
   // English and somewhere else entirely in Russian, for a reason nobody can see.
   const counts = useMemo(() => {
     const out = new Map<string, number>()
-    for (const template of searched) out.set(template.category, (out.get(template.category) ?? 0) + 1)
+    for (const template of searched)
+      out.set(template.category, (out.get(template.category) ?? 0) + 1)
     return out
   }, [searched])
   const categories = [...counts.keys()].sort((a, b) =>
@@ -185,7 +191,10 @@ export function TemplatesPage() {
               value={active || EVERY_CATEGORY}
               onValueChange={(value) => setCategory(value === EVERY_CATEGORY ? "" : value)}
             >
-              <SelectTrigger className="w-full sm:w-56 md:hidden" aria-label={t("templates.category")}>
+              <SelectTrigger
+                className="w-full sm:w-56 md:hidden"
+                aria-label={t("templates.category")}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -565,57 +574,26 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
   // names its services reach each other by, and the panel ignored a new one.
   const services = template.services ?? []
 
-  const projects = useProjects()
-
-  const projectItems = useMemo(() => projects.data?.items ?? [], [projects.data])
-  // See below: `chosen` is what the form actually installs into.
-  const environmentQueries = useQueries({
-    queries: projectItems.map((project) => ({
-      queryKey: ["environments", project.id],
-      queryFn: () => api.get<List<Environment>>(`/api/projects/${project.id}/environments`),
-    })),
-  })
+  const destinations = useEnvironmentTargets()
 
   // The services whose image starts as root, which the strictest level — the
   // default — refuses.
   const rootServices = services.filter((service) => service.needs_root)
 
+  // Every environment but a pull request's preview; `chosen` is what the form
+  // actually installs into. An image that starts as root runs where root
+  // images are accepted, so those environments come first; the order is
+  // otherwise left alone.
   const environments = useMemo(() => {
-    const out: { environment: Environment; project: Project }[] = []
-    environmentQueries.forEach((query, index) => {
-      for (const environment of query.data?.items ?? []) {
-        // A pull request's preview is deleted when the request closes, and
-        // whatever was installed into it with it.
-        if (environment.kind === "preview") continue
-        out.push({ environment, project: projectItems[index] })
-      }
-    })
-    // An image that starts as root runs where root images are accepted, so
-    // those environments come first; the order is otherwise left alone.
-    if (rootServices.length > 0) {
-      out.sort(
-        (a, b) =>
-          Number(b.environment.pod_security === "baseline") -
-          Number(a.environment.pod_security === "baseline"),
-      )
-    }
-    return out
-  }, [environmentQueries, projectItems, rootServices.length])
-  // Loading, failing and having nowhere to install are three different
-  // things to say. They were all the same sentence about what a project is.
-  const loadingTargets = projects.isLoading || environmentQueries.some((query) => query.isLoading)
-  const targetsError = projects.error ?? environmentQueries.find((query) => query.error)?.error
-
-  // One click means one click. Almost every panel has exactly one environment —
-  // first-run setup makes it — and the form opened with the picker empty and
-  // the button greyed out, so "install" started with a decision that had one
-  // possible answer. Derived rather than copied into state by an effect: when
-  // there are several, nothing is picked for you, because installing into the
-  // wrong environment is not a mistake anybody notices straight away.
-  const chosen = environmentId || (environments.length === 1 ? environments[0].environment.id : "")
-  const chosenEnvironment = environments.find(
-    (entry) => entry.environment.id === chosen,
-  )?.environment
+    if (rootServices.length === 0) return destinations.targets
+    return [...destinations.targets].sort(
+      (a, b) =>
+        Number(b.environment.pod_security === "baseline") -
+        Number(a.environment.pod_security === "baseline"),
+    )
+  }, [destinations.targets, rootServices.length])
+  const chosen = pickedOrOnly(environmentId, environments)
+  const chosenEnvironment = targetOf(chosen, environments)?.environment
   // Said before anything is made: the app would otherwise be created and
   // never start, and the person learn why from its page afterwards.
   const refusesRoot =
@@ -702,7 +680,7 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
         })
       }
       onClose()
-      const project = environments.find((entry) => entry.environment.id === chosen)?.project
+      const project = targetOf(chosen, environments)?.project
       // The notes ride along so the shell can show them where you land: they
       // are the steps Skifity cannot do for you, and a dialog you just closed
       // is the one place they are of no use.
@@ -736,31 +714,15 @@ function InstallDialog({ template, onClose }: { template: Template; onClose: () 
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="install-environment">{t("templates.installWhere")}</FieldLabel>
-              {loadingTargets ? (
-                <Skeleton className="h-9" />
-              ) : targetsError ? (
-                <ErrorDisplay error={targetsError} compact />
-              ) : environments.length === 0 ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <FieldDescription>{t("templates.noEnvironment")}</FieldDescription>
-                  <Button type="button" variant="outline" size="sm" asChild>
-                    <Link to="/projects">{t("projects.newProject")}</Link>
-                  </Button>
-                </div>
-              ) : (
-                <Select value={chosen} onValueChange={setEnvironmentId}>
-                  <SelectTrigger id="install-environment">
-                    <SelectValue placeholder={t("projects.environments")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {environments.map(({ environment, project }) => (
-                      <SelectItem key={environment.id} value={environment.id}>
-                        {project.name} · {environment.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <EnvironmentPicker
+                id="install-environment"
+                value={chosen}
+                onChange={setEnvironmentId}
+                targets={environments}
+                loading={destinations.loading}
+                error={destinations.error}
+                empty={t("templates.noEnvironment")}
+              />
             </Field>
 
             {services.length > 1 ? (

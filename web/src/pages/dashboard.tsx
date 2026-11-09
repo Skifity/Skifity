@@ -44,7 +44,6 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useEvents } from "@/hooks/use-events"
-import { useFirstEnvironment } from "@/hooks/use-first-environment"
 import { useProjects } from "@/hooks/use-projects"
 import { useSession } from "@/hooks/use-session"
 import { api, type List } from "@/lib/api"
@@ -125,7 +124,11 @@ export function DashboardPage() {
   // empty one, and taking it for one showed first-run setup to a team with
   // servers whenever the request hiccuped.
   const firstRun = teamWide && servers.isSuccess && serverItems.length === 0
-  const firstEnvironment = useFirstEnvironment(!firstRun)
+  // "New app" asks where the app goes, so all it needs is somewhere it could:
+  // a project. It used to go straight to the first project's first
+  // environment, and an app was made in production by somebody who never
+  // chose it.
+  const newApp = projectItems.length > 0 ? "/apps/new" : ""
 
   return (
     <Page>
@@ -150,9 +153,9 @@ export function DashboardPage() {
               New app. The quick start even told them to press a button that is
               not on this screen.
             */}
-            {firstEnvironment ? (
+            {newApp ? (
               <Button asChild>
-                <Link to={`/environments/${firstEnvironment}/apps/new`}>
+                <Link to={newApp}>
                   <PlusIcon />
                   {t("apps.newApp")}
                 </Link>
@@ -309,7 +312,7 @@ export function DashboardPage() {
             </Alert>
           )}
 
-          <YourApps newApp={firstEnvironment ? `/environments/${firstEnvironment}/apps/new` : ""} />
+          <YourApps newApp={newApp} />
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Section

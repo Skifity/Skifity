@@ -485,6 +485,25 @@ test("a new database says why it cannot be backed up, and where that is fixed", 
   ).toHaveAttribute("href", "/settings?tab=panel")
 })
 
+// With one place an app can go, New app is already pointed there and says
+// so: a source is all Create waits for. The breadcrumb is named from the form,
+// and nothing asks the API for an app called "new".
+test("New app with one place to put it is already pointed there", async ({ page }) => {
+  await signIn(page)
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  await page.goto("/apps/new")
+  await expect(page.getByRole("combobox", { name: "Create it in" })).toContainText(" · Production")
+  await expect(page.getByText(/^In .+ · Production$/)).toBeVisible()
+  const create = page.getByRole("button", { name: /^create and deploy$/i })
+  await expect(create).toBeDisabled()
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/example/site")
+  await expect(create).toBeEnabled()
+  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Production")
+  expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
+})
+
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
   await signIn(page)
 
@@ -1490,3 +1509,57 @@ async function signIn(page: Page) {
   }
   await expect(accountMenu).toBeVisible()
 }
+
+// With more than one place, New app on the overview chooses none: Create
+// waits for a choice, and the choice is said under the title and in the
+// breadcrumb. From a project's environment, that one is chosen, and choosing
+// another keeps what was typed.
+test("New app asks which project and environment when there is a choice", async ({ page }) => {
+  await signIn(page)
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const first = projects.items[0] as { id: string; name: string }
+  const second = await page.request.post(`/api/teams/${me.teams[0].id}/projects`, {
+    headers,
+    data: { name: "Second project" },
+  })
+  expect(second.ok(), await second.text()).toBeTruthy()
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  await page.goto("/")
+  await page.getByRole("link", { name: "New app", exact: true }).first().click()
+  await expect(page).toHaveURL(/\/apps\/new$/)
+  await page.getByRole("button", { name: "Container image" }).click()
+  await page.getByLabel("Image", { exact: true }).fill("nginx:1.27")
+  await expect(page.getByRole("button", { name: /^create and deploy$/i })).toBeDisabled()
+  await expect(page.getByText(/production and staging are not the same place/)).toBeVisible()
+
+  await page.getByRole("combobox", { name: "Create it in" }).click()
+  await page.getByRole("option", { name: "Second project · Production" }).click()
+  await expect(page.getByText("In Second project · Production")).toBeVisible()
+  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Second project")
+  expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
+
+  // No cluster here to build on, so it is made without a deploy.
+  await page.getByRole("checkbox", { name: "Deploy now" }).uncheck()
+  await page.getByRole("button", { name: /^create$/i }).click()
+  await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
+  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Second project")
+
+  await page.goto(`/projects/${first.id}`)
+  await page.getByRole("link", { name: "New app", exact: true }).first().click()
+  await expect(page.getByText(`In ${first.name} · Production`)).toBeVisible()
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/example/kept")
+  await page.getByRole("combobox", { name: "Create it in" }).click()
+  await page.getByRole("option", { name: "Second project · Production" }).click()
+  await expect(page.getByText("In Second project · Production")).toBeVisible()
+  await expect(page.getByLabel("Repository", { exact: true })).toHaveValue(
+    "https://github.com/example/kept",
+  )
+})
