@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"skifity/internal/errdoc"
+)
 
 // Role is a team membership role. Roles are ordered:
 // owner > admin > member > viewer.
@@ -515,7 +519,12 @@ type Deployment struct {
 	ErrorCode        string `json:"error_code,omitempty"`
 	ErrorMessage     string `json:"error_message,omitempty"`
 	ErrorHint        string `json:"error_hint,omitempty"`
-	CreatedBy        string `json:"created_by"`
+	// Problem is the whole of what a failed deployment was failed with: the
+	// sentences, the values that go into them and the context — an exit code,
+	// the last lines a crashed container printed. Absent for one that did not
+	// fail, and for one that failed before it was kept (migration 0063).
+	Problem   *errdoc.Problem `json:"problem,omitempty"`
+	CreatedBy string          `json:"created_by"`
 	// AcceptedVulnerabilities is a deploy somebody asked to go ahead even if
 	// its image has a critical vulnerability with a fix, when the panel is set
 	// to stop those. See migration 0048.

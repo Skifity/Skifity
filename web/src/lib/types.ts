@@ -298,6 +298,10 @@ export type Instance = {
   deployment_id?: string
   /** That deployment's number, which is the version it runs; 0 when unknown. */
   deployment: number
+  /** How it last stopped, in the kubelet's word: OOMKilled, Error, Completed. */
+  last_reason?: string
+  /** The exit code it last stopped with; absent means 0. */
+  last_exit_code?: number
 }
 
 /** What saving an app's settings answers: the app, and when each change takes effect. */
@@ -341,6 +345,12 @@ export type Deployment = {
   error_code?: string
   error_message?: string
   error_hint?: string
+  /**
+   * The whole problem a failed deployment was failed with: its values, and
+   * a context that for deploy.crashed says how the instance stopped and holds
+   * the last lines it printed. Absent on one that failed before it was kept.
+   */
+  problem?: Problem
   created_by: string
   /** Deployed past the check that stops critical vulnerabilities with a fix. */
   accepted_vulnerabilities?: boolean

@@ -1271,6 +1271,13 @@ moves traffic, and only then stops the old one. Nothing is dropped: the old
 instance also pauses for five seconds before it is told to stop, so every proxy
 has seen it leave before it goes.
 
+A new version that stops as it starts is not waited on: the deploy fails as soon
+as an instance has stopped twice, or once for running out of memory, says how
+it stopped, and keeps the lines it printed. The old version is serving the
+whole time, and its configuration is applied again so the new instance that
+keeps restarting goes. See
+[The new version crashed on start](troubleshooting.md#the-new-version-crashed-on-start).
+
 **Except when the app has a disk.** One disk can only be written by one
 instance at a time, so the old instance has to stop before the new one starts,
 and there are a few seconds when nothing answers. The panel says so on the

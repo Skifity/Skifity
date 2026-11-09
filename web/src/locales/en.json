@@ -636,7 +636,13 @@
       "updating": "{{ready}} of {{desired}} instances are ready.",
       "starting": "The instances are starting.",
       "crashing": "The app starts and then exits. The last log lines usually say why.",
-      "noCluster": "The panel is not connected to a cluster, so it cannot see this app's instances."
+      "noCluster": "The panel is not connected to a cluster, so it cannot see this app's instances.",
+      "crashingKind": {
+        "out_of_memory": "The app keeps stopping: it runs out of memory.",
+        "not_runnable": "The app keeps stopping: its start command cannot be run (exit code {{code}}).",
+        "exited_cleanly": "The app keeps stopping: its process finishes by itself, and a web process has to keep running.",
+        "exited": "The app keeps stopping, with exit code {{code}}. The last log lines usually say why."
+      }
     },
     "mountPath": "Mount path",
     "sizeGB": "Size (GB)",
@@ -962,7 +968,29 @@
     "deployAnyway": "Deploy anyway",
     "deployAnywayConfirm": "This deploys the image although it has critical vulnerabilities that have a fix. It is recorded in the activity log, with your name.",
     "acceptedVulnerabilities": "Vulnerabilities accepted",
-    "started": "Deployment #{{number}} started."
+    "started": "Deployment #{{number}} started.",
+    "failure": {
+      "crashed": {
+        "out_of_memory": "The new version ran out of memory as it started, and was stopped.",
+        "not_runnable": "The new version's start command could not be run: it ended with exit code {{code}}.",
+        "exited_cleanly": "The new version's process finished by itself, with exit code 0, and a web process has to keep running.",
+        "exited": "The new version stopped as it started, with exit code {{code}}."
+      },
+      "fix": {
+        "out_of_memory": "Give it more memory under Scaling, then deploy again.",
+        "not_runnable": "Check the start command under Settings: it names a program the image does not have, or one that cannot be run.",
+        "exited_cleanly": "Under Settings, make the start command run the server in the foreground rather than start it and return.",
+        "exited": "Its last lines, under Details, say why. Most often it is a variable it needs and does not have."
+      },
+      "open": {
+        "scaling": "Open Scaling",
+        "settings": "Open Settings",
+        "variables": "Open Variables",
+        "logs": "Open Logs"
+      },
+      "diagnosis": "diagnosis",
+      "lastLines": "The last lines it printed before it stopped:"
+    }
   },
   "variables": {
     "title": "Variables",
@@ -2173,12 +2201,6 @@
         "cause": "Nobody on this panel uses {{0}}.",
         "impact": "Nothing was changed.",
         "fix": "Run `{{0}} admin list-users` to see the accounts that do exist."
-      },
-      "app_crash_loop": {
-        "title": "This app keeps restarting",
-        "cause": "{{0}} has restarted {{1}} times in a row. Kubernetes is backing off between restarts.",
-        "impact": "The app is not serving traffic reliably.",
-        "fix": "Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three."
       },
       "app_not_started": {
         "title": "No instance of this app has started yet",
@@ -4333,6 +4355,12 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "deploy_crashed": {
+        "title": "The new version stopped as it started",
+        "cause": "The new version of {{0}} stopped as it started. Stops so far: {{1}}. The last ended with exit code {{2}} ({{3}}).",
+        "impact": "The new version was not rolled out. If an earlier version worked, the app is put back on it.",
+        "fix": "The lines it printed before it stopped are in the deployment log, and usually say why. OOMKilled is a version that needs more memory, set under Scaling. Exit code 126 or 127 is a start command that cannot be run, set under Settings. Exit code 0 is a process that finished, and a web process has to keep running. Anything else is in those lines: most often a variable that is missing."
       },
       "backup_storage_endpoint_invalid": {
         "title": "The backup storage's endpoint is not an address",

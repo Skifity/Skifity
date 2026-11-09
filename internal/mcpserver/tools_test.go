@@ -659,3 +659,18 @@ func TestADomainSaysWhichDNSRecordToCreate(t *testing.T) {
 		t.Errorf("add_domain answered (error=%v): %s", failed, text)
 	}
 }
+
+// A version that crashed as it started says why in the history, without an
+// assistant having to know to ask for the previous container's log.
+func TestDeploymentHistoryCarriesWhatACrashedVersionPrinted(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, NewRemote(panel.config(), nil))
+
+	text, failed := call(t, session, "get_deployment_history", map[string]any{"app_id": "app_1"})
+	if failed {
+		t.Fatalf("the history failed: %s", text)
+	}
+	if !strings.Contains(text, `"error_code":"deploy.crashed"`) || !strings.Contains(text, `"last_lines":"Error: DATABASE_URL is not set"`) {
+		t.Errorf("the history does not carry the crashed version's last lines: %s", text)
+	}
+}

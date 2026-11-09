@@ -220,9 +220,13 @@ Skifity does. Add a server, or raise the build memory limit in Settings.
 **No Dockerfile and nothing detected.** Skifity could not tell what the project
 is. Add a Dockerfile, or set the builder explicitly in the app's settings.
 
-**The app starts and immediately stops.** Almost always the port. Your app must
-listen on the port in the `PORT` variable, which Skifity sets. Listening on a
-hardcoded 3000 when Skifity asked for 8080 produces exactly this.
+**The new version stopped as it started.** The deployment fails within a
+minute and says how it stopped; see
+[The new version crashed on start](#the-new-version-crashed-on-start).
+
+**The app starts and never becomes ready.** Almost always the port. Your app
+must listen on the port in the `PORT` variable, which Skifity sets. Listening on
+a hardcoded 3000 when Skifity asked for 8080 produces exactly this.
 
 **Health checks never pass.** The health check path returns something other
 than 200, or the app takes longer to start than the check allows. Both are in
@@ -245,6 +249,41 @@ by an authority of your own. Add its certificate, in PEM, under
 `/bin/sh: no such file or directory`.** Each runs its command through a shell,
 and the image has none: one built on `scratch` or a distroless base. See
 [Processes](concepts.md#processes).
+
+## The new version crashed on start
+
+A new version whose instances stop as soon as they start is not waited on. The
+deployment fails as *The new version stopped as it started* once an instance
+has stopped twice, or once for running out of memory, which waiting does not
+change. Its log says how it stopped and holds the last lines it printed before
+it did; on the **Deployments** tab they are under **Details**, beside a button
+to the setting that usually fixes it and **Copy diagnosis**, which copies the
+lot for an assistant. A secret variable's value in those lines is replaced by
+`[redacted]`.
+
+| How it stopped | What it usually is | Where it is fixed |
+| --- | --- | --- |
+| Out of memory (`OOMKilled`) | The version needs more memory than its limit allows. | **Scaling**, the memory limit. |
+| Exit code 127 or 126 | The start command is not in the image (127) or cannot be run (126): a typo, a program the image does not have, a script without its executable bit. | **Settings**, the start command. |
+| Exit code 0 | The process finished. A web process has to keep running, so a command that starts a server in the background and returns, or a script that does its work and exits, ends here. Run the server in the foreground. | **Settings**, the start command. |
+| Any other code | The app stopped itself, and its last lines say why: most often a variable it needs and does not have, or a database it connects to at start that it cannot reach. | **Variables**, or the lines themselves. |
+
+An instance that the health check stopped is not one of these: it is slow, or
+answering somewhere else, and its log says nothing went wrong. That one is
+given its whole **Time to start**, and if it never answers the deployment fails
+as *The new version did not start*, naming the instance and what it was waiting
+for: the health check's own answer, such as a 404 from the health path, or a
+server with no room for it.
+
+**What happens to the app.** One that updates by rolling kept its previous
+version serving throughout. Once the deployment fails, that version's
+configuration is applied again, so the new version's instance that kept
+restarting beside it is removed; the log says so. An app with a volume had its
+old version stopped first, so it is rolled back to the last version that
+worked, as for any deployment that fails while rolling out.
+
+An assistant connected over MCP gets the same lines from
+`get_deployment_history`, as `last_lines` on the deployment that crashed.
 
 ## Bitbucket refuses the token or a webhook
 

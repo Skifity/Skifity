@@ -1471,15 +1471,28 @@ func ImagePullFailed(image, reason string) *Problem {
 		With("image", image)
 }
 
-// CrashLoop reports an app whose container keeps exiting.
-func CrashLoop(app string, restarts int, logTail string) *Problem {
-	return New("app.crash_loop", "This app keeps restarting").
-		WithCause("%s has restarted %d times in a row. Kubernetes is backing off between restarts.", app, restarts).
-		WithImpact("The app is not serving traffic reliably.").
-		WithFix("Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three.").
-		WithDocs("/docs/troubleshooting#an-app-is-crashing").
+// DeployCrashed reports a new version whose instances stopped as they
+// started, which ends the wait for it at once instead of at the rollout's
+// deadline.
+//
+// How it stopped decides the fix, so the cause carries it as the kubelet
+// recorded it — an exit code and the kubelet's word for it, OOMKilled — and
+// the fix says where each one is changed. The panel picks the one sentence and
+// the button that applies from kind and exit_code; the lines the container
+// printed before it stopped are in log_tail, already redacted.
+func DeployCrashed(app, instance string, stops, exitCode int, reason, kind, logTail string) *Problem {
+	return New("deploy.crashed", "The new version stopped as it started").
+		WithCause("The new version of %s stopped as it started. Stops so far: %d. The last ended with exit code %d (%s).",
+			app, stops, exitCode, reason).
+		WithImpact("The new version was not rolled out. If an earlier version worked, the app is put back on it.").
+		WithFix("The lines it printed before it stopped are in the deployment log, and usually say why. "+
+			"OOMKilled is a version that needs more memory, set under Scaling. Exit code 126 or 127 is a start command that cannot be run, set under Settings. "+
+			"Exit code 0 is a process that finished, and a web process has to keep running. Anything else is in those lines: most often a variable that is missing.").
+		WithDocs("/docs/troubleshooting#the-new-version-crashed-on-start").
 		WithStatus(http.StatusBadGateway).
-		With("app", app).With("restarts", itoa(restarts)).With("log_tail", tail(logTail, 4000))
+		With("app", app).With("instance", instance).With("stops", itoa(stops)).
+		With("exit_code", itoa(exitCode)).With("reason", reason).With("kind", kind).
+		With("log_tail", tail(logTail, 4000))
 }
 
 // AppNotStarted is an app whose log was asked for before any instance had

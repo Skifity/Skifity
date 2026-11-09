@@ -8,6 +8,12 @@ import { toast } from "sonner"
 
 import { AdvancedTab } from "@/components/app/advanced-tab"
 import {
+  CRASH_FIX_TAB,
+  OpenTabButton,
+  stopKind,
+  type StopKind,
+} from "@/components/app/deploy-failure"
+import {
   DeployButton,
   DeploymentsTab,
   deploymentLink,
@@ -372,8 +378,12 @@ function phaseDetail(t: TFunction, status: AppStatus): string {
         ready: status.ready_replicas,
         desired: status.desired_replicas,
       })
+    case "crashing": {
+      const crash = crashOf(status)
+      if (crash) return t(`apps.detail.crashingKind.${crash.kind}`, { code: crash.code })
+      return t("apps.detail.crashing", { defaultValue: english })
+    }
     case "starting":
-    case "crashing":
     case "sleeping":
     case "stopped":
     case "not_deployed":
@@ -381,6 +391,21 @@ function phaseDetail(t: TFunction, status: AppStatus): string {
     default:
       return status.detail_key === "noCluster" ? t("apps.detail.noCluster") : english
   }
+}
+
+/**
+ * How a crash-looping app's instances last stopped, when the instance list
+ * says. "Crashing" was all the page said, and running out of memory and a
+ * start command that is not there are fixed on different tabs.
+ */
+function crashOf(status?: AppStatus): { kind: StopKind; code: number } | null {
+  if (status?.phase !== "crashing") return null
+  const stopped = status.instances?.find(
+    (instance) => instance.status.includes("CrashLoop") && instance.last_reason,
+  )
+  if (!stopped?.last_reason) return null
+  const code = stopped.last_exit_code ?? 0
+  return { kind: stopKind(stopped.last_reason, code), code }
 }
 
 /** What an instance's state is called and how loudly it reads. */
@@ -466,6 +491,7 @@ function Overview({
   if (error != null && !status) return <ErrorDisplay error={error} onRetry={onRetry} />
 
   const instances = status?.instances ?? []
+  const crash = crashOf(status)
 
   return (
     <div className="space-y-6">
@@ -520,7 +546,15 @@ function Overview({
       {status?.detail && (
         <Alert variant={detailTone(status.phase)}>
           <InfoIcon />
-          <AlertDescription>{phaseDetail(t, status)}</AlertDescription>
+          <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="min-w-0 flex-1">{phaseDetail(t, status)}</span>
+            {/* The same button as a deployment that crashed, to where this
+                crash is fixed; the reason itself is in the log from before
+                the restart, so a crash with no better place opens Logs. */}
+            {crash && (
+              <OpenTabButton tab={crash.kind === "exited" ? "logs" : CRASH_FIX_TAB[crash.kind]} />
+            )}
+          </AlertDescription>
         </Alert>
       )}
 

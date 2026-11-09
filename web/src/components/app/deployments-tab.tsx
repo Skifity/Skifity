@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "cn"
 
-import { recordedTitle } from "@/components/app/recorded-title"
+import { DeployFailure } from "@/components/app/deploy-failure"
 import { DeployAnywayButton } from "@/components/app/security-tab"
 import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
@@ -279,20 +279,7 @@ export function DeploymentsTab({ app }: { app: App }) {
 
                 {deployment.error_message && (
                   <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                    {/* The headline in the reader's language, from the error's
-                      code; the particulars below are the server's, which
-                      carry the names and numbers a translation cannot. */}
-                    {deployment.error_code && (
-                      <p className="font-medium">
-                        {recordedTitle(t, deployment.error_code, deployment.error_message)}
-                      </p>
-                    )}
-                    <p className={deployment.error_code ? "mt-1" : "font-medium"}>
-                      {deployment.error_message}
-                    </p>
-                    {deployment.error_hint && (
-                      <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
-                    )}
+                    <DeployFailure deployment={deployment} />
                     {/* Only the newest: an older one stopped the same way was
                       followed by something else, and deploying it now would
                       go back past that. */}

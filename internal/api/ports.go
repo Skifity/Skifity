@@ -113,6 +113,11 @@ type InstanceInfo struct {
 	// panel still has.
 	DeploymentID string `json:"deployment_id,omitempty"`
 	Deployment   int    `json:"deployment"`
+	// LastReason and LastExitCode are how the instance last stopped, so the
+	// panel can say "out of memory" and point at Scaling rather than say
+	// "crashing". LastReason is empty for one that has not stopped.
+	LastReason   string `json:"last_reason,omitempty"`
+	LastExitCode int32  `json:"last_exit_code,omitempty"`
 }
 
 // AppRuntimeStatus is what the app page shows at the top.

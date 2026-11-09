@@ -338,15 +338,22 @@ type rollbackOutput struct {
 }
 
 type historyOutput struct {
-	Deployments []struct {
-		ID      string `json:"id"`
-		Number  int    `json:"number"`
-		Status  string `json:"status"`
-		Commit  string `json:"commit,omitempty"`
-		Error   string `json:"error,omitempty"`
-		Hint    string `json:"hint,omitempty"`
-		Created string `json:"created"`
-	} `json:"deployments"`
+	Deployments []historyEntry `json:"deployments"`
+}
+
+type historyEntry struct {
+	ID        string `json:"id"`
+	Number    int    `json:"number"`
+	Status    string `json:"status"`
+	Commit    string `json:"commit,omitempty"`
+	ErrorCode string `json:"error_code,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Hint      string `json:"hint,omitempty"`
+	// LastLines is what a version that crashed as it started printed before
+	// it stopped, redacted: the reason is nearly always in it, and without
+	// it an assistant had to know to ask for the previous container's log.
+	LastLines string `json:"last_lines,omitempty"`
+	Created   string `json:"created"`
 }
 
 type clusterOutput struct {
@@ -515,7 +522,8 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_deployment_history",
 		Annotations: reads("Get deployment history"),
-		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed.",
+		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed. " +
+			"A version that crashed as it started (error_code deploy.crashed) carries the last lines it printed, which usually say why.",
 	}, s.getHistory)
 
 	// Servers are read here and changed nowhere in this server, deliberately.
@@ -1021,19 +1029,15 @@ func (s *Server) getHistory(ctx context.Context, _ *mcp.CallToolRequest, in appI
 
 	var out historyOutput
 	for _, deployment := range response.Items {
-		out.Deployments = append(out.Deployments, struct {
-			ID      string `json:"id"`
-			Number  int    `json:"number"`
-			Status  string `json:"status"`
-			Commit  string `json:"commit,omitempty"`
-			Error   string `json:"error,omitempty"`
-			Hint    string `json:"hint,omitempty"`
-			Created string `json:"created"`
-		}{
+		entry := historyEntry{
 			ID: deployment.ID, Number: deployment.Number, Status: string(deployment.Status),
-			Commit: deployment.CommitSHA, Error: deployment.ErrorMessage,
+			Commit: deployment.CommitSHA, ErrorCode: deployment.ErrorCode, Error: deployment.ErrorMessage,
 			Hint: deployment.ErrorHint, Created: deployment.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}
+		if deployment.Problem != nil && deployment.ErrorCode == "deploy.crashed" {
+			entry.LastLines = deployment.Problem.Context["log_tail"]
+		}
+		out.Deployments = append(out.Deployments, entry)
 	}
 	return textResult(fmt.Sprintf("%d deployment(s).", len(out.Deployments))), out, nil
 }

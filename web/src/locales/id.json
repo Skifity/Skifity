@@ -625,7 +625,13 @@
       "updating": "{{ready}} dari {{desired}} instance sudah siap.",
       "starting": "Instance sedang dinyalakan.",
       "crashing": "Aplikasi menyala lalu berhenti. Baris log terakhir biasanya menjelaskan sebabnya.",
-      "noCluster": "Panel tidak terhubung ke cluster, jadi instance app ini tidak dapat dilihat."
+      "noCluster": "Panel tidak terhubung ke cluster, jadi instance app ini tidak dapat dilihat.",
+      "crashingKind": {
+        "out_of_memory": "Aplikasi terus berhenti: kehabisan memori.",
+        "not_runnable": "Aplikasi terus berhenti: perintah start-nya tidak bisa dijalankan (kode keluar {{code}}).",
+        "exited_cleanly": "Aplikasi terus berhenti: prosesnya selesai dengan sendirinya, padahal proses web harus terus berjalan.",
+        "exited": "Aplikasi terus berhenti, dengan kode keluar {{code}}. Baris log terakhir biasanya menjelaskan sebabnya."
+      }
     },
     "mountPath": "Lokasi mount",
     "sizeGB": "Ukuran (GB)",
@@ -949,7 +955,29 @@
     "deployAnyway": "Tetap deploy",
     "deployAnywayConfirm": "Ini men-deploy image tersebut meskipun ada kerentanan kritis yang sudah punya perbaikan. Tindakan ini dicatat di log aktivitas, dengan nama Anda.",
     "acceptedVulnerabilities": "Kerentanan diterima",
-    "started": "Deployment #{{number}} dimulai."
+    "started": "Deployment #{{number}} dimulai.",
+    "failure": {
+      "crashed": {
+        "out_of_memory": "Versi baru kehabisan memori saat menyala, lalu dihentikan.",
+        "not_runnable": "Perintah start versi baru tidak bisa dijalankan: berakhir dengan kode keluar {{code}}.",
+        "exited_cleanly": "Proses versi baru selesai dengan sendirinya, dengan kode keluar 0, padahal proses web harus terus berjalan.",
+        "exited": "Versi baru berhenti saat menyala, dengan kode keluar {{code}}."
+      },
+      "fix": {
+        "out_of_memory": "Beri memori lebih di Scaling, lalu deploy lagi.",
+        "not_runnable": "Periksa perintah start di Pengaturan: perintah itu menyebut program yang tidak ada di image, atau yang tidak bisa dijalankan.",
+        "exited_cleanly": "Di Pengaturan, buat perintah start menjalankan server di foreground, bukan menyalakannya lalu kembali.",
+        "exited": "Baris terakhirnya, di Detail, menjelaskan sebabnya. Paling sering itu variabel yang dibutuhkan tetapi tidak ada."
+      },
+      "open": {
+        "scaling": "Buka Scaling",
+        "settings": "Buka Pengaturan",
+        "variables": "Buka Variabel",
+        "logs": "Buka Log"
+      },
+      "diagnosis": "diagnosis",
+      "lastLines": "Baris terakhir yang dicetaknya sebelum berhenti:"
+    }
   },
   "variables": {
     "title": "Variabel",
@@ -2146,12 +2174,6 @@
         "cause": "Tidak ada yang memakai {{0}} di panel ini.",
         "impact": "Tidak ada yang diubah.",
         "fix": "Jalankan `{{0}} admin list-users` untuk melihat akun yang ada."
-      },
-      "app_crash_loop": {
-        "title": "Aplikasi ini terus mengulang start",
-        "cause": "{{0}} sudah restart {{1}} kali berturut-turut. Kubernetes memberi jeda makin lama di antara restart.",
-        "impact": "Aplikasi tidak melayani trafik dengan andal.",
-        "fix": "Baca baris log terakhir di bawah: penyebabnya hampir selalu ada di situ. Tiga yang paling sering: variabel lingkungan yang kurang, database yang tidak terjangkau, dan port yang sebenarnya tidak didengarkan aplikasi."
       },
       "app_not_started": {
         "title": "Belum ada instance aplikasi ini yang berjalan",
@@ -4306,6 +4328,12 @@
         "cause": "Hal terakhir yang dilakukan pada {{0}} bukan menambahkannya, sedangkan Coba lagi menjalankan langkah-langkah untuk menambahkan server.",
         "impact": "Tidak ada yang diubah. Mencoba lagi akan menggabungkan server ini ke cluster lagi.",
         "fix": "Jika pengeluarannya gagal, keluarkan lagi: langkah yang sudah selesai aman diulang. Jika promosinya gagal, baca langkah yang gagal di halaman server, lalu keluarkan server dan tambahkan lagi sebagai server control plane."
+      },
+      "deploy_crashed": {
+        "title": "Versi baru berhenti saat menyala",
+        "cause": "Versi baru {{0}} berhenti saat menyala. Jumlah berhenti sejauh ini: {{1}}. Yang terakhir berakhir dengan kode keluar {{2}} ({{3}}).",
+        "impact": "Versi baru tidak di-rollout. Jika ada versi sebelumnya yang berhasil, aplikasi dikembalikan ke versi itu.",
+        "fix": "Baris yang dicetaknya sebelum berhenti ada di log deployment, dan biasanya menjelaskan sebabnya. OOMKilled berarti versi itu butuh memori lebih, diatur di Scaling. Kode keluar 126 atau 127 berarti perintah start tidak bisa dijalankan, diatur di Pengaturan. Kode keluar 0 berarti prosesnya selesai, padahal proses web harus terus berjalan. Selain itu, jawabannya ada di baris-baris tersebut: paling sering variabel yang tidak ada."
       },
       "backup_storage_endpoint_invalid": {
         "title": "Endpoint penyimpanan cadangan bukan alamat",

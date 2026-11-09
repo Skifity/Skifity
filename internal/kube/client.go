@@ -514,6 +514,12 @@ type Instance struct {
 	// and every image app run the same image under a new deployment, and a
 	// rollback runs an old image under a new one.
 	DeploymentID string
+	// LastReason and LastExitCode are how a container last stopped — OOMKilled
+	// and 137 — and LastReason is empty for one that has not stopped. A crash
+	// loop said only "crashing", and out of memory and a start command that is
+	// not there are different fixes on different tabs.
+	LastReason   string
+	LastExitCode int32
 }
 
 // DeploymentIDAnnotation names, on a pod, the deployment it was started for.
@@ -534,6 +540,17 @@ func describePod(pod corev1.Pod) Instance {
 	}
 	for _, cs := range pod.Status.ContainerStatuses {
 		inst.Restarts += int(cs.RestartCount)
+		if stopped := lastStop(cs); stopped != nil && inst.LastReason == "" {
+			inst.LastReason, inst.LastExitCode = stopped.Reason, stopped.ExitCode
+			if inst.LastReason == "" {
+				// The runtime always names it; a fake or an odd one may not,
+				// and the field doubles as "has stopped".
+				inst.LastReason = "Error"
+				if stopped.ExitCode == 0 {
+					inst.LastReason = "Completed"
+				}
+			}
+		}
 		switch {
 		case cs.State.Waiting != nil:
 			// The waiting reason is the single most useful thing on this
@@ -570,6 +587,34 @@ func describePod(pod corev1.Pod) Instance {
 	return inst
 }
 
+// lastStop is how a container last stopped: now, if it is stopped, or before
+// it was last started.
+func lastStop(cs corev1.ContainerStatus) *corev1.ContainerStateTerminated {
+	if cs.State.Terminated != nil {
+		return cs.State.Terminated
+	}
+	return cs.LastTerminationState.Terminated
+}
+
+// crashDetail is the sentence for a crash-looping instance, with how it last
+// stopped when that is known.
+func crashDetail(inst Instance) string {
+	if inst.LastReason == "" {
+		return "The app starts and then exits. The last log lines usually say why."
+	}
+	switch StopKind(inst.LastReason, inst.LastExitCode) {
+	case StopOutOfMemory:
+		return "The app keeps stopping: it ran out of memory. Give it more under Scaling."
+	case StopNotRunnable:
+		return fmt.Sprintf("The app keeps stopping: its start command could not be run (exit code %d). "+
+			"Check the start command under Settings.", inst.LastExitCode)
+	case StopExitedCleanly:
+		return "The app keeps stopping: it exited with code 0, and a web process has to keep running."
+	}
+	return fmt.Sprintf("The app keeps stopping: it exited with code %d. The last log lines usually say why.",
+		inst.LastExitCode)
+}
+
 // summarisePhase turns the Deployment's conditions into one sentence.
 func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, string) {
 	desired := int32(1)
@@ -595,7 +640,7 @@ func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, st
 	case status.ReadyReplicas == 0 && len(status.Instances) > 0:
 		for _, inst := range status.Instances {
 			if strings.Contains(inst.Status, "CrashLoop") {
-				return "crashing", "The app starts and then exits. The last log lines usually say why."
+				return "crashing", crashDetail(inst)
 			}
 			if strings.Contains(inst.Status, "ImagePull") || strings.Contains(inst.Status, "ErrImage") {
 				return "failed", ExplainImagePull(inst.Message)
@@ -913,6 +958,10 @@ var pullCheckAfter = 30 * time.Second
 // or a tag that does not exist used to be waited on until the rollout timed
 // out — five minutes and more of a deployment that could only ever fail, and a
 // timeout message where the node had said exactly what was wrong.
+//
+// It gives up early with a CrashError, too, when the new revision's instances
+// keep stopping as they start (see crashed), and otherwise with a
+// RolloutTimeout that names the instance it was still waiting for.
 func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, timeout time.Duration) error {
 	started := time.Now()
 	deadline := started.Add(timeout)
@@ -930,6 +979,9 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 				return refused
 			}
 		}
+		if crash := c.crashed(ctx, deployment); crash != nil {
+			return crash
+		}
 		desired := int32(1)
 		if deployment.Spec.Replicas != nil {
 			desired = *deployment.Spec.Replicas
@@ -944,7 +996,7 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		}
 		for _, cond := range deployment.Status.Conditions {
 			if cond.Type == appsv1.DeploymentProgressing && cond.Status == corev1.ConditionFalse {
-				return fmt.Errorf("the rollout stopped making progress: %s", cond.Message)
+				return c.rolloutTimeout(ctx, deployment, timeout, desired, true, cond.Message)
 			}
 			if cond.Type == appsv1.DeploymentReplicaFailure && cond.Status == corev1.ConditionTrue {
 				lastMessage = cond.Message
@@ -952,11 +1004,7 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		}
 
 		if time.Now().After(deadline) {
-			if lastMessage == "" {
-				lastMessage = fmt.Sprintf("%d of %d instances became ready",
-					deployment.Status.ReadyReplicas, desired)
-			}
-			return fmt.Errorf("the rollout did not finish in %s: %s", timeout, lastMessage)
+			return c.rolloutTimeout(ctx, deployment, timeout, desired, false, lastMessage)
 		}
 		select {
 		case <-ctx.Done():
@@ -964,6 +1012,28 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		case <-ticker.C:
 		}
 	}
+}
+
+// rolloutTimeout says which of the new revision's instances a rollout that
+// did not finish was still waiting for, and what for.
+func (c *Client) rolloutTimeout(ctx context.Context, deployment *appsv1.Deployment, timeout time.Duration,
+	desired int32, stalled bool, message string) *RolloutTimeout {
+	out := &RolloutTimeout{Timeout: timeout, Stalled: stalled, Message: message, Desired: desired}
+	// The new revision's own instances: the Deployment's ready count is the
+	// old revision's too, and "1 of 1 instances became ready" was what a
+	// rolling update that never started a working instance reported.
+	pods := c.newRevisionPods(ctx, deployment)
+	for _, pod := range pods {
+		if podReady(pod) {
+			out.Ready++
+		}
+	}
+	// A quota that refused the instances is the reason, and there is no
+	// instance to name: none was made.
+	if message == "" || stalled {
+		out.Instance, out.Waiting = c.stalledInstance(ctx, pods)
+	}
+	return out
 }
 
 // pullRefused reads a rolling Deployment's instances for one whose image,

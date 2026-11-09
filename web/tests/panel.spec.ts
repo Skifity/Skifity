@@ -818,6 +818,111 @@ function totp(secret: string): string {
   const offset = mac[mac.length - 1] & 0x0f
   return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0")
 }
+test("a version that crashed says why first, and opens the tab that fixes it", async ({ page }) => {
+  await signIn(page)
+
+  // No cluster here to crash on, so the deployment is the panel's answer for
+  // one: the history an out-of-memory crash leaves, as the API serves it.
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "crashes", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  const at = new Date().toISOString()
+  const crashed = {
+    id: "dep_e2e_crashed",
+    app_id: appID,
+    number: 1,
+    status: "failed",
+    trigger: "manual",
+    commit_sha: "",
+    commit_message: "",
+    commit_author: "",
+    image: "nginx:1.27",
+    build_fingerprint: "image:nginx:1.27",
+    error_code: "deploy.crashed",
+    error_message:
+      "The new version stopped as it started: The new version of crashes stopped as it started. Stops so far: 1. The last ended with exit code 137 (OOMKilled).",
+    error_hint: "The lines it printed before it stopped are in the deployment log.",
+    created_by: "",
+    created_at: at,
+    started_at: at,
+    finished_at: at,
+    can_rollback: false,
+    problem: {
+      code: "deploy.crashed",
+      title: "The new version stopped as it started",
+      cause:
+        "The new version of crashes stopped as it started. Stops so far: 1. The last ended with exit code 137 (OOMKilled).",
+      args: { cause: ["crashes", "1", "137", "OOMKilled"] },
+      severity: "error",
+      retryable: false,
+      at,
+      context: {
+        kind: "out_of_memory",
+        exit_code: "137",
+        reason: "OOMKilled",
+        stops: "1",
+        log_tail: "allocating the cache\nFATAL: out of memory",
+      },
+    },
+  }
+  await page.route(
+    (url) => url.pathname === `/api/apps/${appID}/deployments`,
+    (route) => route.fulfill({ json: { items: [crashed], total: 1 } }),
+  )
+
+  for (const language of LANGUAGES) {
+    await page.goto(`/apps/${appID}?tab=deployments`)
+    await page.locator('[data-slot="language-switcher"]').click()
+    await page.getByRole("menuitem", { name: language.name }).click()
+
+    const words = localeStrings(language.code)
+    const failure = words.deploy.failure as Record<string, Record<string, string> | string>
+    const common = words.common as Record<string, string>
+    const shown = page.locator('[data-slot="deploy-failure"]')
+
+    // The cause comes first after the headline, in the reader's language,
+    // and says what it was rather than "did not start".
+    await expect(shown.locator("p").nth(1), `the cause in ${language.name}`).toHaveText(
+      (failure.crashed as Record<string, string>).out_of_memory,
+    )
+    await expect(
+      shown.getByRole("link", { name: (failure.open as Record<string, string>).scaling }),
+      `the button to Scaling in ${language.name}`,
+    ).toBeVisible()
+    await expect(
+      shown.getByRole("button", {
+        name: common.copyValue.replace("{{name}}", failure.diagnosis as string),
+      }),
+      `Copy diagnosis in ${language.name}`,
+    ).toBeVisible()
+  }
+
+  // In English again, saved to the account, for every test after this one;
+  // then the button goes where the memory limit is.
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/me") && response.request().method() === "PATCH",
+  )
+  await page.locator('[data-slot="language-switcher"]').click()
+  await page.getByRole("menuitem", { name: "English" }).click()
+  await saved
+
+  await page.getByRole("link", { name: "Open Scaling" }).click()
+  await expect(page).toHaveURL(/[?&]tab=scaling/)
+})
 
 /** Signs in, unless this context already has a session. */
 /** The CSRF header a request from the signed-in page has to carry. */

@@ -79,6 +79,16 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"engine_version": "17", "status": "running", "instances": 1, "storage_gb": 5,
 	}
 	deployment := map[string]any{"id": "dep_2", "app_id": "app_1", "number": 2, "status": "queued"}
+	// A version that crashed as it started, with what it printed.
+	crashed := map[string]any{
+		"id": "dep_1", "app_id": "app_1", "number": 1, "status": "failed", "error_code": "deploy.crashed",
+		"error_message": "The new version stopped as it started: The new version of web stopped as it started.",
+		"problem": map[string]any{
+			"code": "deploy.crashed", "title": "The new version stopped as it started", "severity": "error",
+			"retryable": false, "at": "2026-09-30T09:00:00Z",
+			"context": map[string]any{"kind": "exited", "exit_code": "1", "log_tail": "Error: DATABASE_URL is not set"},
+		},
+	}
 	backup := map[string]any{
 		"id": "bak_1", "target_type": "database", "target_id": "db_1", "status": "succeeded",
 		"kind": "manual", "location": "skifity/databases/db_1/bak_1.sql.gz", "size_bytes": 2048,
@@ -182,7 +192,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 
 		"GET /api/apps/{app}/status":                 map[string]any{"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"}},
 		"POST /api/apps/{app}/deploy":                deployment,
-		"GET /api/apps/{app}/deployments":            items(deployment),
+		"GET /api/apps/{app}/deployments":            items(deployment, crashed),
 		"POST /api/apps/{app}/rollback/{deployment}": deployment,
 		"GET /api/apps/{app}/rollback/{deployment}/plan": map[string]any{
 			"target": map[string]any{"number": 1, "commit_sha": "abc1234"}, "current": map[string]any{"number": 2},

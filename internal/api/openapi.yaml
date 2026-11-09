@@ -7119,6 +7119,8 @@ components:
         usage_known: {type: boolean}
         deployment_id: {type: string, description: 'The deployment the instance was started for, read off the instance itself. Absent when it names none of this app''s.'}
         deployment: {type: integer, description: 'That deployment''s number, which is the version the instance runs; 0 when unknown.'}
+        last_reason: {type: string, description: 'How the instance last stopped, in the kubelet''s word: OOMKilled, Error, Completed. Absent for one that has not stopped.'}
+        last_exit_code: {type: integer, description: 'The exit code it last stopped with, beside last_reason.'}
 
     AppRuntimeStatus:
       type: object
@@ -7463,6 +7465,9 @@ components:
         error_code: {type: string}
         error_message: {type: string}
         error_hint: {type: string}
+        problem:
+          $ref: '#/components/schemas/Problem'
+          description: 'The whole of what a failed deployment was failed with, with its values and context. For deploy.crashed the context carries kind, exit_code, reason, stops and log_tail, the last lines the instance printed, redacted.'
         created_by: {type: string}
         accepted_vulnerabilities: {type: boolean, description: 'Deployed with critical vulnerabilities that have a fix accepted, past the check that stops those.'}
         created_at: {type: string, format: date-time}
