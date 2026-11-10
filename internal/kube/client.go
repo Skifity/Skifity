@@ -261,6 +261,7 @@ func (c *Client) Summary(ctx context.Context) (Summary, error) {
 		}
 	}
 	c.describeGPUs(ctx, out.Nodes)
+	c.describeEntry(ctx, out.Nodes)
 	sort.Slice(out.Nodes, func(i, j int) bool { return out.Nodes[i].Name < out.Nodes[j].Name })
 	// Embedded etcd needs three members to survive losing one.
 	out.HighAvailability = controlPlanes >= 3
@@ -317,6 +318,12 @@ type Node struct {
 	// GPUPlugin is the panel's device plugin on this server, when one has
 	// been placed here.
 	GPUPlugin *GPUPluginState
+
+	// Entry is whether the server takes the traffic that reaches it on ports
+	// 80 and 443, and EntryReason why not; see entry.go. Both are empty when
+	// the cluster cannot say.
+	Entry       string
+	EntryReason string
 }
 
 func describeNode(node corev1.Node) Node {

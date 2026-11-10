@@ -1596,7 +1596,23 @@
     "stopAddingTitle": "Hentikan penambahan {{name}}?",
     "stopAddingConfirm": "Langkah yang sedang berjalan dihentikan dan server ditandai gagal. Apa yang sudah dilakukan di mesin tidak dibatalkan: Coba lagi melanjutkan dari titik berhenti, dan Keluarkan server mengeluarkannya.",
     "stopAddingCloud": "Mesin yang sudah dipesan di penyedia tetap berjalan dan tetap ditagih sampai Anda mengeluarkan server beserta mesinnya.",
-    "alertsSaved": "Ambang peringatan sudah disimpan."
+    "alertsSaved": "Ambang peringatan sudah disimpan.",
+    "entry": {
+      "title": "Lalu lintas",
+      "serving": "Menerima lalu lintas di port 80 dan 443",
+      "notServing": "Tidak menerima lalu lintas",
+      "none": "Bukan jalan masuk: load balancer tidak berjalan di sini",
+      "alertTitle_other": "{{count}} server menyala tetapi tidak menerima lalu lintas",
+      "alertTitleThis": "Server ini menyala tetapi tidak menerima lalu lintas",
+      "alertHelp": "Pengunjung yang diarahkan DNS ke alamatnya menunggu jawaban yang tidak pernah datang: DNS tidak bisa membedakan server yang menyala dari server yang melayani. Panel tidak mengubah record DNS untuk ini. Keluarkan alamat itu dari nama tersebut sampai server diperbaiki, atau gunakan DNS dengan pemeriksaan kesehatan.",
+      "docs": "Apa yang diperiksa, dan apa yang tidak",
+      "reason": {
+        "node_not_ready": "Server tidak siap.",
+        "balancer_not_ready": "Load balancer di server ini tidak siap, jadi tidak ada yang menjawab di port 80 dan 443.",
+        "no_ingress": "Tidak ada Traefik yang siap di cluster, jadi tidak ada server yang menerima lalu lintas.",
+        "no_ingress_here": "Tidak ada Traefik yang siap di server ini, dan Traefik hanya menjawab pengunjung yang sampai di server tempat ia berjalan."
+      }
+    }
   },
   "databases": {
     "title": "Database",

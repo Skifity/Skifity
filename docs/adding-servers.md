@@ -253,6 +253,52 @@ that is sick.** A machine that accepts the connection and then answers nothing
 is one DNS gives out for as long as the record exists. Good enough for a great
 many installs, and it costs nothing.
 
+#### Which servers are taking traffic
+
+The panel watches for the sick half, and says so; it does not act on it.
+
+**Servers** says of each server whether it takes traffic on ports 80 and 443,
+read from the cluster while the page is open. A server takes traffic while it
+is ready, the load balancer k3s runs on it (ServiceLB) is ready, and a Traefik
+on it is ready — Traefik answers only the visitors who reach the server it runs
+on, because that is how it keeps their address (see
+[Knowing who the visitor is](firewall.md#knowing-who-the-visitor-is)); with a
+Traefik you configured without that, a ready one anywhere will do. These are
+the rules k3s itself uses to decide which addresses its load balancer offers.
+A server that is up and fails one of them is marked **Not taking traffic**,
+counts among the servers that need attention, and its own page says which rule
+it fails. When Traefik is what is missing, such a server drops a connection
+rather than refusing it, so a browser sent there waits before it tries another
+address, if it tries at all.
+
+What it does not see:
+
+* **The outside.** This is the cluster's own view, not a request from the
+  internet. A provider's firewall closing port 443, a broken route between your
+  visitors and the server, or a Traefik that is ready and answers everything
+  with an error all look healthy here.
+* **Anything but k3s's load balancer.** With ServiceLB turned off — MetalLB, a
+  provider's load balancer — or Traefik replaced, the cluster does not say
+  which servers take traffic, and the panel says nothing rather than guess.
+* **Nobody is told.** It is shown, not sent: a server that is up and not
+  serving does not reach the team's notification channels. A server that stops
+  answering altogether does, as **not responding**.
+
+**It does not change your DNS.** The records at a round-robin name are yours,
+and the panel only ever changes or deletes a record it created (see
+[Connecting a DNS provider](concepts.md#connecting-a-dns-provider)); the
+records it creates name one address, not one per server. Take the sick
+server's address out of the name by hand until it is fixed. Doing that
+automatically was considered and left out: the panel would need to own every
+address at the name, a resolver keeps the old answer for the record's TTL
+after it changes, and a check from inside the cluster would remove an address
+for a reason the outside never saw, or keep one the outside cannot reach. A
+health-checking DNS service, below, does this properly from outside.
+
+> **Not run against a real cluster.** The rules are tested against a fake one;
+> no run has yet stopped Traefik on one server of several and watched
+> **Servers** say so.
+
 ### DNS with health checks — automatic, a few dollars
 
 Cloudflare Load Balancing, Route 53 health checks, and most managed DNS

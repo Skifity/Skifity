@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/empty-state"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { sayServerStatus } from "@/components/operation-progress"
+import { NotTakingTrafficAlert, notTakingTraffic } from "@/components/server-entry"
 import { EnableGPUsButton, GPUSummary, useGPUComponent } from "@/components/server-gpus"
 import { StatusBadge } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -60,8 +61,9 @@ export function ServersPage() {
     Boolean(team) && !team?.scoped,
   )
 
-  // The live side of each server — its GPUs — keyed by node. The same
-  // question the dashboard asks, so the answer is shared.
+  // The live side of each server — its GPUs, whether it takes traffic —
+  // keyed by node. The same question the dashboard asks, so the answer is
+  // shared.
   const cluster = useQuery({
     queryKey: ["cluster", team?.id],
     queryFn: () => api.get<ClusterSummary>(`/api/teams/${team!.id}/cluster`),
@@ -69,7 +71,10 @@ export function ServersPage() {
     enabled: Boolean(team) && !team?.scoped,
     refetchInterval: 15_000,
   })
-  const nodes = new Map((cluster.data?.nodes ?? []).map((node) => [node.name, node]))
+  const nodes = useMemo(
+    () => new Map((cluster.data?.nodes ?? []).map((node) => [node.name, node])),
+    [cluster.data],
+  )
   const anyGPU = (cluster.data?.nodes ?? []).some(
     (node) => (node.gpus ?? []).length > 0 || node.gpu_hardware != null,
   )
@@ -87,9 +92,22 @@ export function ServersPage() {
 
   const items = useMemo(() => servers.data?.items ?? [], [servers.data])
 
+  // Up, as far as Kubernetes goes, and not answering visitors: what
+  // round-robin DNS cannot see, so the panel says it.
+  const notServing = useMemo(
+    () => items.filter((server) => notTakingTraffic(server, nodes.get(server.node_name))),
+    [items, nodes],
+  )
+
   const needsAttention = useMemo(
-    () => items.filter((server) => server.status === "failed" || server.status === "not_ready"),
-    [items],
+    () =>
+      items.filter(
+        (server) =>
+          server.status === "failed" ||
+          server.status === "not_ready" ||
+          notServing.includes(server),
+      ),
+    [items, notServing],
   )
 
   const shown = useMemo(() => {
@@ -156,6 +174,8 @@ export function ServersPage() {
               </AlertDescription>
             </Alert>
           )}
+
+          {notServing.length > 0 && <NotTakingTrafficAlert count={notServing.length} />}
 
           <div className="flex flex-wrap items-center gap-2">
             <InputGroup className="max-w-xs">
@@ -247,6 +267,11 @@ export function ServersPage() {
                           {server.status_detail && (
                             <span className="mt-1 block max-w-48 truncate text-xs text-muted-foreground">
                               {sayServerStatus(t, server)}
+                            </span>
+                          )}
+                          {notServing.includes(server) && (
+                            <span className="mt-1 block max-w-48 truncate text-xs text-warning">
+                              {t("servers.entry.notServing")}
                             </span>
                           )}
                         </TableCell>

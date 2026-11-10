@@ -1613,7 +1613,24 @@
     "stopAddingTitle": "Stop adding {{name}}?",
     "stopAddingConfirm": "The step that is running is stopped and the server is marked as failed. Nothing already done on the machine is undone: Retry carries on from where it stopped, and Remove takes the server out.",
     "stopAddingCloud": "A machine already ordered at the provider keeps running, and is billed, until you remove the server and its machine.",
-    "alertsSaved": "The alert thresholds are saved."
+    "alertsSaved": "The alert thresholds are saved.",
+    "entry": {
+      "title": "Traffic",
+      "serving": "Takes traffic on ports 80 and 443",
+      "notServing": "Not taking traffic",
+      "none": "Not a way in: the load balancer does not run here",
+      "alertTitle_one": "{{count}} server is up and not taking traffic",
+      "alertTitle_other": "{{count}} servers are up and not taking traffic",
+      "alertTitleThis": "This server is up and not taking traffic",
+      "alertHelp": "Visitors whose DNS sends them to its address wait for an answer that does not come: DNS cannot tell a server that is up from one that serves. The panel does not change DNS records for this. Take the address out of the name until the server is fixed, or use DNS with health checks.",
+      "docs": "What is checked, and what is not",
+      "reason": {
+        "node_not_ready": "The server is not ready.",
+        "balancer_not_ready": "The load balancer on this server is not ready, so nothing on it answers on ports 80 and 443.",
+        "no_ingress": "No Traefik in the cluster is ready, so no server takes traffic.",
+        "no_ingress_here": "No Traefik on this server is ready, and Traefik answers only the visitors who reach the server it runs on."
+      }
+    }
   },
   "databases": {
     "title": "Databases",

@@ -401,6 +401,10 @@ type serverSummary struct {
 	Ready  bool     `json:"ready"`
 	Roles  []string `json:"roles"`
 	Reason string   `json:"reason,omitempty"`
+	// Entry is whether it takes the traffic that reaches it: a server can be
+	// ready and not serving, which round-robin DNS cannot tell.
+	Entry       string `json:"entry,omitempty"`
+	EntryReason string `json:"entry_reason,omitempty"`
 }
 
 type readinessOutput struct {
@@ -567,7 +571,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_cluster_status",
 		Annotations: reads("Get the cluster's status"),
-		Description: "Describe the servers in the cluster: how many are ready, whether it survives losing one, and how much capacity is left.",
+		Description: "Describe the servers in the cluster: how many are ready, which take traffic on ports 80 and 443, whether it survives losing one, and how much capacity is left.",
 	}, s.getCluster)
 
 	addTool(s, &mcp.Tool{

@@ -112,6 +112,7 @@ func (c *Cluster) Summary(ctx context.Context) (api.ClusterSummary, error) {
 			Labels: n.Labels, Schedulable: n.Schedulable,
 			GPUs: nodeGPUs(n.GPUs), GPUHardware: n.GPUHardware, NFD: n.NFD, GPULabelled: n.GPULabelled,
 			GPUPlugin: pluginState(n.GPUPlugin),
+			Entry:     n.Entry, EntryReason: n.EntryReason,
 		})
 	}
 	return out, nil

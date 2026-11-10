@@ -59,6 +59,15 @@ type NodeInfo struct {
 	// GPUPlugin is the panel's NVIDIA device plugin on this server, when it
 	// has been placed here.
 	GPUPlugin *GPUPluginState `json:"gpu_plugin,omitempty"`
+
+	// Entry is whether the server takes the traffic that reaches it on ports
+	// 80 and 443: "serving"; "not_serving", with EntryReason saying why; or
+	// "none", a server k3s's load balancer does not run on. Empty when the
+	// cluster cannot say, because something other than k3s's load balancer
+	// fronts the ingress. Round-robin DNS cannot tell a server that is up
+	// and not serving from one that is, and this can (kube/entry.go).
+	Entry       string `json:"entry,omitempty"`
+	EntryReason string `json:"entry_reason,omitempty"`
 }
 
 // NodeGPU is one vendor's cards on a server.

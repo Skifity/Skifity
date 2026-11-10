@@ -6758,6 +6758,19 @@ components:
           properties:
             ready: {type: boolean}
             reason: {type: string, description: 'Why it is not running, in the kubelet''s words.'}
+        entry:
+          type: string
+          enum: [serving, not_serving, none]
+          description: >-
+            Whether the server takes the traffic that reaches it on ports 80
+            and 443, as k3s's load balancer decides: its pod on the server
+            ready and, under the Local traffic policy, a ready Traefik there.
+            "none" is a server the load balancer does not run on. Absent when
+            the cluster cannot say, because something else fronts the ingress.
+        entry_reason:
+          type: string
+          enum: [node_not_ready, balancer_not_ready, no_ingress, no_ingress_here]
+          description: Why a server is not_serving.
 
     NodeGPU:
       type: object

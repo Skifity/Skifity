@@ -172,7 +172,7 @@ Tools, in the order they are usually needed:
 | `lock_deploys` | Stops every deploy and rollback of an app, with a reason, until it is unlocked. |
 | `unlock_deploys` | Lifts that. |
 | `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
-| `get_cluster_status` | Servers, readiness, spare capacity. |
+| `get_cluster_status` | Servers, readiness, which take traffic, spare capacity. |
 | `get_attention` | What needs attention across the team, errors first: failed deploys, apps with no instance running, alerts going off, failed or missed backups, failed databases, domains without a certificate, vulnerable or drifted apps, servers that stopped answering. Each with the panel page to deal with it on. Read-only. |
 | `list_log_drains` | Where the team's apps' logs are shipped — Loki, Elasticsearch, Datadog, Axiom, Better Stack, New Relic, syslog or HTTPS — and whether the collector is running. Read-only: adding one takes a credential, so it is done in the panel or with `skifity drains add`. |
 

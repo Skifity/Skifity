@@ -819,7 +819,20 @@ export type NodeInfo = {
   gpu_labelled?: boolean
   /** The panel's NVIDIA device plugin on this server, once placed here. */
   gpu_plugin?: { ready: boolean; reason?: string }
+  /**
+   * Whether it takes the traffic that reaches it on ports 80 and 443. Absent
+   * when the cluster cannot say: something other than k3s's load balancer
+   * fronts the ingress.
+   */
+  entry?: ServerEntry
+  /** Why it is not_serving. */
+  entry_reason?: ServerEntryReason
 }
+
+export type ServerEntry = "serving" | "not_serving" | "none"
+
+export type ServerEntryReason =
+  "node_not_ready" | "balancer_not_ready" | "no_ingress" | "no_ingress_here"
 
 export type GPUVendor = "nvidia" | "amd" | "intel"
 

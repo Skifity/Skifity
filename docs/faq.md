@@ -69,7 +69,10 @@ that traffic goes through Cloudflare and your domain lives on their DNS.
 
 Otherwise: round-robin DNS is free and handles a server that is *off* but not
 one that is *sick*; managed DNS with health checks fixes that for a few dollars;
-a floating IP or a provider load balancer is the most reliable.
+a floating IP or a provider load balancer is the most reliable. **Servers**
+marks a server that is up and not taking traffic, so you know which address to
+take out of a round-robin name; the panel does not change those records itself
+([why](adding-servers.md#which-servers-are-taking-traffic)).
 
 **kube-vip and MetalLB will not work** on most VPS — they hold an address by
 answering ARP, which does not cross a router, so the nodes must share a network

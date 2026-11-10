@@ -1596,7 +1596,23 @@
     "stopAddingTitle": "停止添加 {{name}}？",
     "stopAddingConfirm": "正在运行的步骤会被停止，服务器会被标记为失败。机器上已经完成的操作不会被撤销：重试会从停下的地方继续，移除则会把服务器移出。",
     "stopAddingCloud": "已经在服务商处订购的机器会继续运行并计费，直到你连同机器一起移除这台服务器。",
-    "alertsSaved": "警告阈值已保存。"
+    "alertsSaved": "警告阈值已保存。",
+    "entry": {
+      "title": "流量",
+      "serving": "在 80 和 443 端口接收流量",
+      "notServing": "未接收流量",
+      "none": "不是入口：负载均衡器不在此运行",
+      "alertTitle_other": "{{count}} 台服务器在运行，但未接收流量",
+      "alertTitleThis": "这台服务器在运行，但未接收流量",
+      "alertHelp": "被 DNS 指向它地址的访问者会一直等待一个不会到来的响应：DNS 分不清在运行的服务器和正在提供服务的服务器。面板不会为此修改 DNS 记录。在服务器修好之前，把它的地址从该域名中移除，或使用带健康检查的 DNS。",
+      "docs": "检查了什么，没检查什么",
+      "reason": {
+        "node_not_ready": "服务器未就绪。",
+        "balancer_not_ready": "这台服务器上的负载均衡器未就绪，因此它的 80 和 443 端口上没有任何响应。",
+        "no_ingress": "集群中没有就绪的 Traefik，因此没有服务器接收流量。",
+        "no_ingress_here": "这台服务器上没有就绪的 Traefik，而 Traefik 只响应到达它所在服务器的访问者。"
+      }
+    }
   },
   "databases": {
     "title": "数据库",
