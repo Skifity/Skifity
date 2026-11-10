@@ -4790,7 +4790,7 @@ paths:
       operationId: storeCatalogue
       tags: [Plugins]
       summary: The plugin store's catalogue
-      description: Panel administrators only. Read from the configured store, and checked against its signing key when one is set.
+      description: Panel administrators only. Read from the configured store, and checked against its signing key when one is set. The Skifity store, which is not published yet, is not read, and the answer says so in not_published.
       responses:
         '200':
           description: The catalogue, and which of its plugins are installed here.
@@ -9608,6 +9608,11 @@ components:
           type: object
           description: The installed version of each plugin, by id.
           additionalProperties: {type: string}
+        not_published:
+          type: boolean
+          description: >-
+            The address is the Skifity store and nothing is published there
+            yet. Nothing was fetched, and the catalogue is empty.
 
     # --- panel administration ---
 

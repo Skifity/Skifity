@@ -421,7 +421,7 @@ Every picture is captured by a test against the real binary, not drawn.
 <tr>
 <td><img src="docs/images/templates.png" alt="The template catalogue, grouped by category"><br><b>Templates.</b> 374 applications, every one on a version checked to exist.</td>
 <td><img src="docs/images/plugins.png" alt="The plugins page: installed plugins, the store, or one from an address"><br><b>Plugins</b>, each in a container of its own with only the permissions it declared.</td>
-<td><img src="docs/images/plugins-store.png" alt="An error explaining that the plugin store could not be reached, with what it means and how to fix it"><br><b>Errors explain themselves.</b> Here, the plugin store, which is not published yet.</td>
+<td><img src="docs/images/plugins-store.png" alt="The Store tab, marked not published yet, saying how to install a plugin without it"><br><b>Said plainly.</b> The plugin store is not published yet, and the tab says so.</td>
 </tr>
 <tr>
 <td><img src="docs/images/activity.png" alt="The activity log"><br><b>Activity.</b> Who did what, and when.</td>
@@ -586,9 +586,10 @@ never been run; [`docs/checklist.md`](docs/checklist.md) says which of the eight
 platform is judged on that proves, and [`docs/progress.md`](docs/progress.md)
 what each run found. Try it on a spare VPS first.
 
-**The plugin store is not published.** `plugins.skifity.com` does not resolve,
-so the Store tab says it could not reach anything. A plugin is installed by
-giving its address or pasting its manifest.
+**The plugin store is not published.** Nothing is at `plugins.skifity.com`,
+so the Store tab is marked *Not published yet* and says so, without trying the
+address. A plugin is installed by giving its address or pasting its manifest,
+or from a store of your own.
 
 ## Licence
 

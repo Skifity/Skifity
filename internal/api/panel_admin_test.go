@@ -17,6 +17,8 @@ import (
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/plugins"
+	"skifity/internal/pluginstore"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -42,6 +44,38 @@ func TestOnlyAPanelAdministratorManagesPlugins(t *testing.T) {
 	}
 	if status, body := h.do(admin, http.MethodGet, "/api/plugins", nil); status != http.StatusOK {
 		t.Fatalf("an administrator listing plugins answered %d: %s", status, truncate(body, 120))
+	}
+}
+
+// TestTheSkifityStoreIsSaidToBeUnpublished: nothing is published at the
+// default address, whose name does not resolve. The Store tab reported that as
+// a store it could not reach, with a fix about this cluster's network. It now
+// says the store is not published, and the address is not dialled — so this
+// answers at once, with no network, whether the setting is empty or the
+// default spelt out.
+func TestTheSkifityStoreIsSaidToBeUnpublished(t *testing.T) {
+	if pluginstore.DefaultPublished {
+		t.Skip("the Skifity store is published")
+	}
+	h := newHarness(t)
+	admin := adminTenant(h, "ops")
+
+	for _, stored := range []string{"", pluginstore.DefaultIndexURL} {
+		if err := h.db.SetSetting(t.Context(), settings.KeyPluginStoreURL, stored, false, admin.user.ID); err != nil {
+			t.Fatal(err)
+		}
+		status, body := h.do(admin, http.MethodGet, "/api/plugins/store", nil)
+		if status != http.StatusOK {
+			t.Fatalf("with the store address %q the catalogue answered %d: %s", stored, status, truncate(body, 200))
+		}
+		var answer storeCatalogueResponse
+		if err := json.Unmarshal([]byte(body), &answer); err != nil {
+			t.Fatal(err)
+		}
+		if !answer.NotPublished || answer.URL != pluginstore.DefaultIndexURL || len(answer.Index.Plugins) != 0 {
+			t.Errorf("with the store address %q: not_published=%v url=%q plugins=%d, want true, the default, none",
+				stored, answer.NotPublished, answer.URL, len(answer.Index.Plugins))
+		}
 	}
 }
 

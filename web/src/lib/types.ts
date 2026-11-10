@@ -1516,6 +1516,8 @@ export type StoreCatalogue = {
   unsigned: boolean
   url: string
   installed: Record<string, string>
+  /** The address is the Skifity store, and nothing is published there yet. */
+  not_published?: boolean
 }
 
 /** One repository a Git connection can read, as the create form offers it. */

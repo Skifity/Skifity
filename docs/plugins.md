@@ -450,5 +450,7 @@ signature at all — the panel just says so.
 > **There is no store at `plugins.skifity.com` yet.** The panel can read one,
 > verify one and install from one; nothing is published at that address. Until
 > something is, a plugin is installed by pasting a manifest or giving its
-> address, and the Store tab will say it could not reach anything. See the
+> address. While the store address is the default, the Store tab is marked
+> *Not published yet*, says so, and the panel does not try the address; a store
+> of your own, set under Settings, then Plugins, is read as usual. See the
 > Status section of the README.

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import {
   BadgeCheckIcon,
   ExternalLinkIcon,
+  InfoIcon,
   OctagonAlertIcon,
   PuzzleIcon,
   ShieldAlertIcon,
@@ -69,6 +70,10 @@ export function PluginsPage() {
     queryKey: ["plugins"],
     queryFn: () => api.get<List<InstalledPlugin>>("/api/plugins"),
   })
+  // Read here as well as in the tab, so the tab can say before it is opened
+  // that the Skifity store is not published yet. That answer needs no network;
+  // a store of one's own is now read when the page opens, not the tab.
+  const store = useStoreCatalogue()
 
   function review(
     inspection: PluginInspection,
@@ -85,7 +90,14 @@ export function PluginsPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="installed">{t("plugins.installed")}</TabsTrigger>
-          <TabsTrigger value="store">{t("plugins.store")}</TabsTrigger>
+          <TabsTrigger value="store">
+            {t("plugins.store")}
+            {store.data?.not_published && (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                {t("plugins.storeNotPublished")}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="manual">{t("plugins.fromAddress")}</TabsTrigger>
         </TabsList>
 
@@ -106,7 +118,7 @@ export function PluginsPage() {
         </TabsContent>
 
         <TabsContent value="store" className="pt-4">
-          <StoreTab onReview={review} />
+          <StoreTab onReview={review} onManual={() => setTab("manual")} />
         </TabsContent>
 
         <TabsContent value="manual" className="pt-4">
@@ -353,20 +365,27 @@ function InstalledCard({ plugin }: { plugin: InstalledPlugin }) {
   )
 }
 
-/** The store's catalogue, and what is known about who vouched for it. */
-function StoreTab({
-  onReview,
-}: {
-  onReview: (inspection: PluginInspection, from: { url?: string; sha256?: string }) => void
-}) {
-  const { t } = useTranslation()
-  const [inspecting, setInspecting] = useState<string | null>(null)
-
-  const store = useQuery({
+/** The store's catalogue, as the page and its Store tab both read it. */
+function useStoreCatalogue() {
+  return useQuery({
     queryKey: ["plugin-store"],
     queryFn: () => api.get<StoreCatalogue>("/api/plugins/store"),
     retry: false,
   })
+}
+
+/** The store's catalogue, and what is known about who vouched for it. */
+function StoreTab({
+  onReview,
+  onManual,
+}: {
+  onReview: (inspection: PluginInspection, from: { url?: string; sha256?: string }) => void
+  onManual: () => void
+}) {
+  const { t } = useTranslation()
+  const [inspecting, setInspecting] = useState<string | null>(null)
+
+  const store = useStoreCatalogue()
 
   const inspect = useMutation({
     mutationFn: (entry: StoreEntry) =>
@@ -384,6 +403,23 @@ function StoreTab({
   }
   const catalogue = store.data
   if (!catalogue) return null
+
+  // Not a fault and not an empty store: there is nothing there yet, and the
+  // way to a plugin today is its address.
+  if (catalogue.not_published) {
+    return (
+      <Alert variant="info">
+        <InfoIcon />
+        <AlertTitle>{t("plugins.storeNotPublishedTitle")}</AlertTitle>
+        <AlertDescription>
+          <p>{t("plugins.storeNotPublishedHelp", { url: catalogue.url })}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={onManual}>
+            {t("plugins.fromAddress")}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <div className="space-y-3">

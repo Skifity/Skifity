@@ -9,6 +9,7 @@ import {
   CopyIcon,
   DatabaseBackupIcon,
   DownloadIcon,
+  InfoIcon,
   KeyRoundIcon,
   LinkIcon,
   PackagePlusIcon,
@@ -1076,10 +1077,20 @@ function StoreCheckCard() {
 
         {check.error != null && <ErrorDisplay error={check.error} />}
 
+        {catalogue?.not_published === true && (
+          <Alert variant="info">
+            <InfoIcon />
+            <AlertTitle>{t("plugins.storeNotPublishedTitle")}</AlertTitle>
+            <AlertDescription>
+              {t("plugins.storeNotPublishedHelp", { url: catalogue.url })}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Unsigned is a warning and not a fault: the catalogue was read, and
             nobody vouched for it. Red here would be red for something that
             works, which teaches people to ignore red. */}
-        {catalogue != null && (
+        {catalogue != null && catalogue.not_published !== true && (
           <Alert variant={catalogue.verified ? "success" : "warning"}>
             {catalogue.verified ? <CheckCircle2Icon /> : <ShieldAlertIcon />}
             <AlertTitle>
