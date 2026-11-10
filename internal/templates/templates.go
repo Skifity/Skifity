@@ -214,6 +214,20 @@ type Service struct {
 	// installed without, and runs on the CPU the way these do, so no
 	// template needs a GPU to be installed.
 	GPU *ServiceGPU `json:"gpu,omitempty"`
+
+	// How the service's instances are checked, and how long they have, as
+	// an app's health settings say; each left out is what any app gets.
+	// The software is what knows: GitLab reconfigures for minutes before it
+	// listens, and the default two minutes restart it in a loop; WordPress's
+	// health path asks its database, and on a server apart from that
+	// database one check took longer than the default three seconds.
+	//
+	// HealthCheck is http, tcp or none, and follows health_path when left
+	// out. Runtime settings, like the rest of an app's health check: they
+	// reach the probes and never the build (ADR-0007).
+	HealthCheck          string `json:"health_check,omitempty"`
+	HealthStartSeconds   int    `json:"health_start_seconds,omitempty"`
+	HealthTimeoutSeconds int    `json:"health_timeout_seconds,omitempty"`
 }
 
 // ServiceGPU is the cards a template's service uses when there are some.

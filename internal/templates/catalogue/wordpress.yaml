@@ -9,6 +9,8 @@ services:
   needs_root: true
   port: 80
   health_path: /wp-admin/install.php
+  health_start_seconds: 300
+  health_timeout_seconds: 10
   volumes:
   - name: content
     mount_path: /var/www/html/wp-content

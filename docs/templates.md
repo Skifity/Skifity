@@ -24,6 +24,14 @@ connection string exists by the time the app looks for it. That is the
 difference between a template that works on the first try and one that
 crash-loops until somebody redeploys it.
 
+Software that is slow to start is given the time. Where a template knows its
+first start migrates a database, installs itself or warms up a JVM before it
+listens — GitLab, SonarQube, Baserow, Ghost and others — it gives the app
+a longer **Time to start** than the default two minutes, and where its health
+path asks the database on every check, as WordPress's does, a longer **Check
+timeout**. Both are the app's own settings afterwards; see
+[Health checks](concepts.md#health-checks).
+
 ### An image that starts as root
 
 Two thirds of the catalogue run an image that starts as root and drops to its
@@ -283,7 +291,8 @@ one service somebody can open, an image that names a release — never `latest`,
 a branch or a bare major version — mount paths that are absolute, databases of
 an engine Skifity runs and linked to services the template has, pieces of a
 database's connection that engine has on its own (see
-[databases](databases.md#in-pieces)), no database wired by hand, ports and files that can be opened and mounted, and inputs that
+[databases](databases.md#in-pieces)), no database wired by hand, ports and files that can be opened and mounted, health
+settings an app could have, and inputs that
 are asked for or filled in. A field the panel does not know is refused rather
 than ignored, so a misspelt `mount_path` is an error rather than a volume that
 is mounted nowhere.

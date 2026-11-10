@@ -10,6 +10,8 @@ services:
   port: 3000
   public: true
   health_path: /_health
+  health_start_seconds: 300
+  health_timeout_seconds: 10
   variables:
     FILE_STORAGE: local
     FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data

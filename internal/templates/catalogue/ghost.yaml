@@ -9,6 +9,8 @@ services:
   needs_root: true
   port: 2368
   health_path: /
+  health_start_seconds: 600
+  health_timeout_seconds: 10
   variables:
     NODE_ENV: production
     database__client: mysql

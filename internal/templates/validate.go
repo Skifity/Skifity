@@ -181,6 +181,9 @@ func CheckServices(template Template) []string {
 			if svc.HealthPath != "" {
 				add("%s/%s has a health path and no port to check it on", template.ID, svc.Name)
 			}
+			if svc.HealthCheck != "" || svc.HealthStartSeconds != 0 || svc.HealthTimeoutSeconds != 0 {
+				add("%s/%s says how it is checked and has no port to check it on", template.ID, svc.Name)
+			}
 		} else if svc.Port < 1 || svc.Port > 65535 {
 			add("%s/%s listens on %d", template.ID, svc.Name, svc.Port)
 		}
@@ -214,6 +217,7 @@ func CheckServices(template Template) []string {
 		if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
 			add("%s/%s has the health path %q, which is not a path", template.ID, svc.Name, svc.HealthPath)
 		}
+		problems = append(problems, checkHealth(template.ID, svc)...)
 		if svc.MemLimitMB > 0 && svc.MemRequestMB > svc.MemLimitMB {
 			add("%s/%s asks for more memory than it is allowed, so it can never be scheduled", template.ID, svc.Name)
 		}
@@ -240,6 +244,34 @@ func CheckServices(template Template) []string {
 	}
 	if public == 0 {
 		add("%s has no public service, so nothing it installs can be opened", template.ID)
+	}
+	return problems
+}
+
+// checkHealth holds a service's health settings to the bounds an app's are
+// held to, because they become an app's: a value its settings would refuse is
+// one the install refuses too, on a template the catalogue offered as fine.
+// Zero is a setting left out, which the install fills with the default.
+func checkHealth(id string, svc Service) []string {
+	var problems []string
+	add := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
+	if svc.HealthCheck != "" && !kube.ValidHealthCheck(svc.HealthCheck) {
+		add("%s/%s is checked by %q, which is not http, tcp or none", id, svc.Name, svc.HealthCheck)
+	}
+	// An app falls back to a connect when it has no path to ask, which is not
+	// what a template that says http meant.
+	if svc.HealthCheck == kube.HealthHTTP && svc.HealthPath == "" {
+		add("%s/%s is checked over http and has no health path to ask", id, svc.Name)
+	}
+	if start := svc.HealthStartSeconds; start != 0 &&
+		(start < kube.MinHealthStartSeconds || start > kube.MaxHealthStartSeconds) {
+		add("%s/%s has %d seconds to start, which is not between %d and %d",
+			id, svc.Name, start, kube.MinHealthStartSeconds, kube.MaxHealthStartSeconds)
+	}
+	if timeout := svc.HealthTimeoutSeconds; timeout != 0 &&
+		(timeout < kube.MinHealthTimeoutSeconds || timeout > kube.MaxHealthTimeoutSeconds) {
+		add("%s/%s waits %d seconds for a check, which is not between %d and %d",
+			id, svc.Name, timeout, kube.MinHealthTimeoutSeconds, kube.MaxHealthTimeoutSeconds)
 	}
 	return problems
 }

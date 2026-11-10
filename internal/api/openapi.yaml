@@ -9182,6 +9182,9 @@ components:
               cpu_limit_m: {type: integer}
               public: {type: boolean, description: 'Gets a domain. A worker does not.'}
               needs_root: {type: boolean, description: 'Its image starts as root, which an environment at the strictest level refuses.'}
+              health_check: {type: string, enum: [http, tcp, none], description: 'How its instances are checked. Left out, http with a health_path and tcp without.'}
+              health_start_seconds: {type: integer, minimum: 10, maximum: 1800, description: 'How long a new instance may take to answer. Left out, two minutes.'}
+              health_timeout_seconds: {type: integer, minimum: 1, maximum: 60, description: 'How long one check waits for an answer. Left out, three seconds.'}
               gpu:
                 type: object
                 description: A card it uses when a server offers one; installed without on a cluster with none.

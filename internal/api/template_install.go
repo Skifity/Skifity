@@ -185,6 +185,11 @@ func (s *Server) planTemplateInstall(ctx context.Context, env store.Environment,
 		if err := refuse(s.checkImageReference(ctx, svc.Image, env.Namespace)); err != nil {
 			return plan, err
 		}
+		// Validate holds these to an app's bounds; this is the install not
+		// taking that on trust, before anything is written.
+		if err := refuse(templateHealth(svc, &store.App{HealthPath: svc.HealthPath})); err != nil {
+			return plan, err
+		}
 		// The same number outside as inside: a Minecraft client dials 25565
 		// unless told otherwise. A second install finds it taken and says so,
 		// rather than opening something else quietly.
@@ -386,6 +391,9 @@ func (s *Server) makeTemplate(r *http.Request, plan templatePlan, made *installe
 			Internal: !svc.Public,
 			Status:   "created",
 		}
+		if err := templateHealth(svc, &app); err != nil {
+			return err
+		}
 		if err := s.db.CreateApp(ctx, &app); err != nil {
 			return err
 		}
@@ -517,6 +525,32 @@ func (s *Server) undoTemplate(ctx context.Context, tpl templates.Template, made 
 		return errdoc.TemplateInstallLeftOver(tpl.Name, cause, remains)
 	}
 	return errdoc.TemplateInstallRolledBack(tpl.Name, cause, removed)
+}
+
+// templateHealth gives an app made from a template's service the health check
+// and the start budget the template says its software needs, through the same
+// code an app's settings go through: a check left out follows the health path,
+// and a number left out stays the default. Every templated app had two minutes
+// to start and three seconds to answer before a template could say otherwise:
+// GitLab, which configures itself for longer than that before it listens, was
+// restarted in a loop, and WordPress on a server apart from its database had
+// its install page time out and its deploy fail.
+//
+// Runtime settings: they reach the probes and never the build (ADR-0007), so
+// they can be changed afterwards under Settings like any app's.
+func templateHealth(svc templates.Service, app *store.App) error {
+	var check *string
+	if svc.HealthCheck != "" {
+		check = &svc.HealthCheck
+	}
+	var start, timeout *int
+	if svc.HealthStartSeconds != 0 {
+		start = &svc.HealthStartSeconds
+	}
+	if svc.HealthTimeoutSeconds != 0 {
+		timeout = &svc.HealthTimeoutSeconds
+	}
+	return applyHealthSettings(app, check, start, timeout, false)
 }
 
 func (s *Server) setTemplateVariable(r *http.Request, appID, key, value string, secret bool) error {

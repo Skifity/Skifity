@@ -21,6 +21,7 @@ func good() Template {
 		Services: []Service{{
 			Name: "notes", Image: "example/notes:2.4.1", Port: 8080, Public: true,
 			HealthPath: "/healthz", Variables: map[string]string{"TZ": "UTC"},
+			HealthCheck: "http", HealthStartSeconds: 600, HealthTimeoutSeconds: 10,
 			Volumes: []VolumeSpec{{Name: "data", MountPath: "/var/lib/notes", SizeGB: 1}},
 			Files:   []FileSpec{{Path: "/etc/notes/config.yml", Content: "listen: 8080\n"}},
 		}},
@@ -88,6 +89,15 @@ func TestEveryCheckRefusesWhatItIsFor(t *testing.T) {
 		{"an installer nobody is told about", CheckKnownImages, func(t *Template) {
 			t.Services[0].Image, t.Services[0].Files = "drupal:10.6.18-apache", nil
 		}, "asks for its database in its own installer"},
+		{"a start budget under the floor", CheckServices, func(t *Template) { t.Services[0].HealthStartSeconds = 5 }, "5 seconds to start"},
+		{"a start budget over the ceiling", CheckServices, func(t *Template) { t.Services[0].HealthStartSeconds = 4000 }, "4000 seconds to start"},
+		{"a negative start budget", CheckServices, func(t *Template) { t.Services[0].HealthStartSeconds = -1 }, "-1 seconds to start"},
+		{"a check timeout over the ceiling", CheckServices, func(t *Template) { t.Services[0].HealthTimeoutSeconds = 61 }, "waits 61 seconds"},
+		{"a check that is not one of the three", CheckServices, func(t *Template) { t.Services[0].HealthCheck = "grpc" }, `checked by "grpc"`},
+		{"an http check with no path to ask", CheckServices, func(t *Template) { t.Services[0].HealthPath = "" }, "no health path to ask"},
+		{"health settings on a worker with no port", CheckServices, func(t *Template) {
+			t.Services = append(t.Services, Service{Name: "indexer", Image: "example/notes:2.4.1", HealthStartSeconds: 300})
+		}, "notes/indexer says how it is checked and has no port"},
 		{"a public worker", CheckWorkers, func(t *Template) { t.Services[0].Name = "worker" }, "named for a worker"},
 		{"an engine nobody runs", CheckDatabases, func(t *Template) { t.Databases[0].Engine = "oracle" }, "not an engine"},
 		{"a database linked to nothing", CheckDatabases, func(t *Template) { t.Databases[0].LinkTo = nil }, "linked to nothing"},

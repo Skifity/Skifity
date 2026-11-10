@@ -9,6 +9,7 @@ services:
   image: kestra/kestra:v2.0.4
   run_as_user: 1000
   port: 8080
+  health_start_seconds: 300
   public: true
   mem_request_mb: 1024
   mem_limit_mb: 4096

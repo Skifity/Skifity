@@ -17,6 +17,9 @@ services:
     port: 8080
     public: true                 # gets a domain; a worker would not
     health_path: /healthz        # optional, and only if it really exists
+    health_check: http           # optional; http, tcp or none — see below
+    health_start_seconds: 600    # optional; how long its first start may take
+    health_timeout_seconds: 10   # optional; how long one check may wait
     variables:                   # what the app needs, not what wires it up
       TZ: UTC
     volumes:
@@ -108,6 +111,39 @@ ask for:
   has no setting for a URL. Each piece arrives under the name given; the
   password as a secret. They are written once at install, unlike `var_name`,
   which the panel keeps linked.
+
+## How it is checked, and how long it has
+
+An app installed from a template is checked as any app is, and gets what any
+app gets unless its template says otherwise: a check that follows
+`health_path`, two minutes to start, three seconds to answer. Three fields say
+otherwise, each only for software that needs it:
+
+* **`health_start_seconds`**, from 10 to 1800, is how long a new instance may
+  take before it has to answer. Software that migrates its database, installs
+  itself or warms up a JVM before it opens its port needs longer than two
+  minutes on its first start, and without it the startup probe restarts it
+  part-way, again and again. Give it as long as the slowest first start takes,
+  with room for a database on another server: 300 for most that migrate or
+  install themselves first, 600 where that takes a few minutes, 900 for GitLab.
+  A test asks for more than the default from every template whose notes say
+  the first start takes minutes.
+* **`health_timeout_seconds`**, from 1 to 60, is how long one check waits for
+  an answer. Raise it for a health path that asks the database on every check,
+  such as WordPress's `/wp-admin/install.php`. An app and its database can land
+  on different servers: on two servers 40 ms and some lost packets apart, that
+  answer took longer than three seconds, the instance was killed at the end of
+  its start budget and the install's deploy failed. Ten is plenty. Read the
+  image's source for what its health path does rather than guessing from the
+  name; `/healthz` is as often a constant as a query.
+* **`health_check`** is `http`, `tcp` or `none`, and is best left out: it is
+  `http` when there is a `health_path` and `tcp` when there is not. `http`
+  needs a `health_path`, and `none` means nothing checks the app at all.
+
+A worker has no port and so no checks, and a test refuses any of these on one.
+They are the app's own health settings once it is installed, changed under its
+**Settings** like any app's, and runtime settings: they never rebuild anything,
+and an update of the template moves only the image.
 
 ## Which variables a database arrives as
 
@@ -248,8 +284,10 @@ carry, absolute mount paths and no volume over one of the server's own files,
 every `link_to` naming a real service, every engine one Skifity provisions, no
 floating or major-only tags, no service named for a worker that is public, no
 database wiring, no URL pointing at a host the template does not install, a
-well-known image given the database variables it reads, and `needs_root` and the
-notes agreeing.
+well-known image given the database variables it reads, `needs_root` and the
+notes agreeing, health settings an app could have and none on a worker, and a
+start budget above the default wherever the notes say the first start takes
+minutes.
 
 Run `make check` before opening a pull request. A template that fails is not a
 template.

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"skifity/internal/kube"
 )
 
 // The catalogue is data, and data goes wrong quietly.
@@ -191,6 +193,72 @@ func TestNotesAndNeedsRootAgree(t *testing.T) {
 		case says && !needs:
 			t.Errorf("%s says the environment needs the baseline level, and no service has needs_root", tpl.ID)
 		}
+	}
+}
+
+// TestSlowStartersAreGivenTheTimeTheyNeed: a new instance has two minutes to
+// answer unless its template says otherwise, and software that migrates its
+// database or configures itself before it listens takes longer than that on
+// its first start. Its startup probe then restarts it part-way, again and
+// again, which FreeScout's notes describe and GitLab did. A template whose
+// notes say the first start takes minutes has to say so where the probe reads
+// it too.
+func TestSlowStartersAreGivenTheTimeTheyNeed(t *testing.T) {
+	takesMinutes := regexp.MustCompile(`(?i)\b(takes?|needs?)\s+(a|a few|several|some|about a)\s+minutes?\b`)
+	// Slow whatever their notes say: GitLab configures itself for minutes,
+	// SonarQube and Baserow migrate before they listen.
+	slow := map[string]bool{"gitlab": true, "sonarqube": true, "baserow": true}
+	for id := range slow {
+		if _, ok := Lookup(id); !ok {
+			t.Errorf("%s is not in the catalogue, and this test names it", id)
+		}
+	}
+	for _, tpl := range All() {
+		if !slow[tpl.ID] && !takesMinutes.MatchString(tpl.Notes) {
+			continue
+		}
+		longest := 0
+		for _, svc := range tpl.Services {
+			longest = max(longest, svc.HealthStartSeconds)
+		}
+		if longest <= kube.DefaultHealthStartSeconds {
+			t.Errorf("%s takes minutes to start the first time, and none of its services has longer than "+
+				"the default %d seconds: give the one that does the work health_start_seconds",
+				tpl.ID, kube.DefaultHealthStartSeconds)
+		}
+	}
+}
+
+// TestAHealthPathThatAsksTheDatabaseHasTimeToHearBack: a check waits three
+// seconds unless its template says otherwise. WordPress, installed on a server
+// 40 ms and some lost packets away from its MariaDB, answered its health path
+// slower than that, was killed at the end of its start budget, and its deploy
+// failed; on one server the same install passed. Each of these asks its
+// database on every check — read in its source, not guessed from its name.
+func TestAHealthPathThatAsksTheDatabaseHasTimeToHearBack(t *testing.T) {
+	asks := map[string]string{
+		"wordpress/wordpress":   "/wp-admin/install.php asks MariaDB whether WordPress is installed",
+		"ghost/ghost":           "/ is the home page, read from MySQL",
+		"outline/outline":       "/_health runs SELECT 1 and pings Redis",
+		"ghostfolio/ghostfolio": "/api/v1/health asks PostgreSQL and Redis",
+		"authorizer/authorizer": "/healthz checks its storage",
+	}
+	seen := 0
+	for _, tpl := range All() {
+		for _, svc := range tpl.Services {
+			what, listed := asks[tpl.ID+"/"+svc.Name]
+			if !listed {
+				continue
+			}
+			seen++
+			if svc.HealthTimeoutSeconds <= kube.DefaultHealthTimeoutSeconds {
+				t.Errorf("%s/%s: %s, and waits only the default %d seconds for it",
+					tpl.ID, svc.Name, what, kube.DefaultHealthTimeoutSeconds)
+			}
+		}
+	}
+	if seen != len(asks) {
+		t.Errorf("%d of the %d services this names are in the catalogue", seen, len(asks))
 	}
 }
 

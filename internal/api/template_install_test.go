@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
@@ -186,6 +188,127 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 				t.Errorf("%s: the install wrote %s itself, outside the link", name, row.Key)
 			}
 		}
+	}
+}
+
+// A template says how long its software takes to start and how long a check
+// may wait, and the app it installs is given exactly that. Every templated app
+// had two minutes and three seconds before, so GitLab was restarted in a loop
+// before it ever listened, and WordPress on a server apart from its database
+// failed its deploy on a health check that timed out.
+func TestAnInstallGivesTheAppTheHealthSettingsItsTemplateSays(t *testing.T) {
+	h := newHarness(t)
+	h.api.deployer = &fakeDeployer{log: &recorder{}}
+	acme := h.newTenant("acme")
+
+	tpl := templates.Template{
+		ID: "forge", Name: "Forge",
+		Services: []templates.Service{
+			{Name: "forge", Image: "example/forge:19.1.8", Port: 80, Public: true,
+				HealthStartSeconds: 900, HealthTimeoutSeconds: 10},
+			// Says nothing, and gets what any app gets.
+			{Name: "docs", Image: "example/docs:2.0.1", Port: 8080, HealthPath: "/healthz"},
+		},
+	}
+	result, err := h.installDirectly(t, acme, tpl, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apps := map[string]store.App{}
+	for _, made := range result.Apps {
+		app, err := h.db.GetApp(t.Context(), made.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		apps[app.Name] = app
+	}
+	forge, docs := apps["forge"], apps["docs"]
+	// The check left out follows the path, as an app's settings derive it.
+	if forge.HealthCheck != kube.HealthTCP || forge.HealthStartSeconds != 900 || forge.HealthTimeoutSeconds != 10 {
+		t.Errorf("forge was stored with %q, %d s to start, %d s to answer",
+			forge.HealthCheck, forge.HealthStartSeconds, forge.HealthTimeoutSeconds)
+	}
+	if docs.HealthCheck != kube.HealthHTTP || docs.HealthStartSeconds != kube.DefaultHealthStartSeconds ||
+		docs.HealthTimeoutSeconds != kube.DefaultHealthTimeoutSeconds {
+		t.Errorf("docs said nothing and was stored with %q, %d s to start, %d s to answer",
+			docs.HealthCheck, docs.HealthStartSeconds, docs.HealthTimeoutSeconds)
+	}
+
+	// And the probe the cluster is given allows it: a budget that stayed in
+	// the panel's database would change nothing.
+	deployment := kube.BuildDeployment(kube.AppSpec{
+		Name: forge.Slug, Namespace: acme.env.Namespace, Image: forge.Image, Port: forge.Port,
+		HealthPath: forge.HealthPath, HealthCheck: forge.HealthCheck,
+		HealthStartSeconds: forge.HealthStartSeconds, HealthTimeoutSeconds: forge.HealthTimeoutSeconds,
+	})
+	var probe *corev1.Probe
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == forge.Slug {
+			probe = container.StartupProbe
+		}
+	}
+	if probe == nil {
+		t.Fatal("the deployment has no startup probe for forge")
+	}
+	if allowed := probe.PeriodSeconds * probe.FailureThreshold; allowed < 900 {
+		t.Errorf("the startup probe allows %d s, and the template asked for 900", allowed)
+	}
+	if probe.TimeoutSeconds != 10 || probe.TCPSocket == nil {
+		t.Errorf("the startup probe waits %d s and connects %v", probe.TimeoutSeconds, probe.TCPSocket != nil)
+	}
+	if deadline := deployment.Spec.ProgressDeadlineSeconds; deadline == nil || *deadline < 900 {
+		t.Errorf("the rollout would be called failed while the app was still allowed to start: %v", deadline)
+	}
+}
+
+// WordPress, the template the two-servers-apart run failed on, arrives with
+// what its catalogue file says, through the handler a person installs with.
+func TestWordPressIsGivenTimeToHearBackFromItsDatabase(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+	tpl, ok := templates.Lookup("wordpress")
+	if !ok {
+		t.Fatal("the catalogue has no WordPress")
+	}
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("installing WordPress: %d %s", status, body)
+	}
+	apps, err := h.db.ListApps(t.Context(), acme.env.ID)
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("the install made %+v (%v)", apps, err)
+	}
+	want := tpl.Services[0]
+	got := apps[0]
+	if got.HealthTimeoutSeconds != want.HealthTimeoutSeconds || got.HealthStartSeconds != want.HealthStartSeconds ||
+		got.HealthTimeoutSeconds <= kube.DefaultHealthTimeoutSeconds || got.HealthCheck != kube.HealthHTTP {
+		t.Errorf("WordPress was given %q, %d s to start and %d s to answer; its template says %d and %d",
+			got.HealthCheck, got.HealthStartSeconds, got.HealthTimeoutSeconds,
+			want.HealthStartSeconds, want.HealthTimeoutSeconds)
+	}
+}
+
+// A template's health settings are refused before anything is made when an
+// app's settings would refuse them. A team's catalogue is checked when it is
+// read; the install does not take that on trust.
+func TestAHealthSettingAnAppCouldNotHaveStopsTheInstall(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	before := h.rowCounts(t)
+	tpl := templates.Template{
+		ID: "slow", Name: "Slow",
+		Services: []templates.Service{
+			{Name: "slow", Image: "example/slow:1.2.3", Port: 80, Public: true, HealthStartSeconds: 4000},
+		},
+	}
+	_, err := h.installDirectly(t, acme, tpl, "", nil)
+	if problem := errdoc.From(err); problem == nil || problem.Code != "app.health_start_out_of_range" {
+		t.Fatalf("a start budget of 4000 s answered %v", err)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("a refused install changed %v into %v", before, after)
 	}
 }
 
