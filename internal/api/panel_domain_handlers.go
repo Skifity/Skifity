@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -699,6 +700,22 @@ func (s *Server) leftAddresses(ctx context.Context) *leftAddresses {
 	return left
 }
 
+// samePanelPath is the path and query a browser asked for, to be put after
+// the panel's own address. Always a path: RequestURI gives back the opaque
+// part of a request line such as "x:.example.net/", which a client can send
+// and a browser never does, and joined onto the address that would have named
+// another host.
+func samePanelPath(u *url.URL) string {
+	path := u.EscapedPath()
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	return path
+}
+
 // sendOnFromLeftAddresses answers a browser at an address the panel moved
 // away from with the address it is at now.
 //
@@ -722,7 +739,7 @@ func (s *Server) sendOnFromLeftAddresses(next http.Handler) http.Handler {
 		if !strings.HasPrefix(r.URL.Path, "/api/") {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead {
 				w.Header().Set("Cache-Control", "no-store")
-				http.Redirect(w, r, left.target+r.URL.RequestURI(), http.StatusPermanentRedirect)
+				http.Redirect(w, r, left.target+samePanelPath(r.URL), http.StatusPermanentRedirect)
 				return
 			}
 			next.ServeHTTP(w, r)

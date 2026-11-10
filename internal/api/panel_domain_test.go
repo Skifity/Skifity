@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -369,5 +371,43 @@ func TestTheNextStartFinishesTheMove(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A browser at an old address is sent on to the panel's own address, whatever
+// the request line said. A client can write a target in the opaque form,
+// "x:.example.net/steal", which RequestURI gives back without its slash, and
+// joined onto the panel's address that named another host.
+func TestAnOldAddressSendsOnOnlyToThePanel(t *testing.T) {
+	h := movingHarness(t, "https://"+panelDomain, newMoverCluster(panelDomain, sslipHost))
+	if err := h.db.StartPanelDomain(t.Context(), store.PanelDomain{Domain: panelDomain, Previous: []string{sslipHost}, State: store.PanelDomainLive}); err != nil {
+		t.Fatal(err)
+	}
+	h.api.SettlePanelDomain(t.Context())
+	handler := h.api.sendOnFromLeftAddresses(http.NotFoundHandler())
+
+	for target, want := range map[string]string{
+		"/settings?tab=panel":          "/settings?tab=panel",
+		"x:.attacker.example/steal":    "/",
+		"//attacker.example/elsewhere": "//attacker.example/elsewhere",
+	} {
+		parsed, err := url.ParseRequestURI(target)
+		if err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = sslipHost
+		req.URL = parsed
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, req)
+
+		location, err := url.Parse(recorder.Header().Get("Location"))
+		if recorder.Code != http.StatusPermanentRedirect || err != nil || location.Host != panelDomain {
+			t.Errorf("%s was sent to %q (%d)", target, recorder.Header().Get("Location"), recorder.Code)
+			continue
+		}
+		if got := location.RequestURI(); got != want {
+			t.Errorf("%s was sent on to the path %q, want %q", target, got, want)
+		}
 	}
 }
