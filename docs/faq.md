@@ -139,22 +139,25 @@ take the whole thing.
 
 ## Does it support Docker Compose?
 
-It reads one. Paste the repository address when you create an app and press
+Yes, as a stack. Paste the repository address when you create an app and press
 "Check this repository": if there is a Compose file, Skifity lists the services
-it found — what each one runs, the port it listens on, the variables it sets —
-and you pick the service this app is. The form fills itself in from it, the
-variables come with it, and the app is created like any other.
+it found — what each one runs, the port it listens on, the variables it sets.
+**Create all as a stack** then makes every service an app in the environment in
+one action and deploys them, the ones a service `depends_on` first. They reach
+each other by name and port, as they do in Compose; a service the file publishes
+gets an address, and the rest are internal. Or pick one service, and the form
+fills itself in from it. [A Compose file](concepts.md#a-compose-file) has what
+carries over and how.
 
-What it does not do is import the whole file in one action. Skifity runs one
-service per app, so several services means creating the app several times, once
-per service, in the same environment. There they reach each other by name, which
-is what the links in a Compose file become. A service that is really a database
-is better created as a managed database in the panel, which gets you backups.
+A database in the file comes over as an app running its image with a disk, as
+it was in Compose, without the backups a managed database gets. For production,
+create a managed database in the panel and point the app's variable at it.
 
 Whatever cannot carry over is named rather than dropped: `privileged`,
 `cap_add`, `devices`, host networking and `extends` are listed against the
-service they came from, because a conversion that half-works is worse than one
-that clearly needs attention.
+service they came from, and so is a folder mounted from the machine that ran
+Compose, because a conversion that half-works is worse than one that clearly
+needs attention.
 
 ## Can an AI assistant use it?
 

@@ -143,8 +143,9 @@ rebuilding. Implemented in `internal/deploy`.
 auto-detection > prebuilt image. Nixpacks stays selectable.
 
 Compose is in that order as a reader, not a builder. A Compose file describes several services and an
-app runs one, so finding one means reading it and offering its services to choose from, with what did
-not carry over named against the service it came from. There is no `compose` build, and `compose` is
+app runs one, so finding one means reading it and offering its services — all of them at once as a
+stack of apps (`internal/api/stack_handlers.go`), or one to choose — with what did not carry over
+named against the service it came from. There is no `compose` build, and `compose` is
 not a source an app can have: the choice produces an ordinary Git or image app. For a while it was
 one — the API accepted it, stored it, and then deployed the app as a Git app with no repository.
 
