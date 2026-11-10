@@ -39,9 +39,9 @@ Nothing is marked Works because it looks right.
 | 18 | Documentation | Works (it is served and its links resolve) | Go tests; Phase 6 is a person |
 
 Sixteen are Works end to end and two in part. What is left is what no
-machine GitHub lends can show: delivery to the six notification services the
-crosscheck runs no server for — Telegram, Discord, Slack, Mattermost,
-Microsoft Teams and Pushover — and the person phase 6 is.
+machine GitHub lends can show: delivery to the five notification services the
+crosscheck runs no server for — Telegram, Discord, Slack, Microsoft Teams and
+Pushover — and the person phase 6 is.
 
 ## Where each one is
 
@@ -192,7 +192,8 @@ own Email settings, and so does a password reset, whose link sets a new
 password and works once. Delivery to the five services the crosscheck runs no
 server for — Telegram, Discord, Slack, Microsoft Teams and Pushover, each a
 service on the internet rather than something to run — has never been seen
-end to end.
+end to end, and the form for adding a channel marks those five *Not tested end
+to end*. A Go test holds that mark to the channels `verify.sh` makes.
 
 **18. Documentation.** Thirteen pages, served from inside the binary so they work on
 a machine with no other browser and no outbound network — which is exactly when

@@ -7251,6 +7251,12 @@ components:
               options: {type: array, items: {type: string}}
               secret: {type: boolean}
               required: {type: boolean}
+        untested:
+          type: boolean
+          description: >-
+            A built-in kind whose delivery to the real service has never been
+            seen end to end: what it sends is checked against a local listener,
+            and the cluster crosscheck runs no server for it.
 
     ChannelKindList:
       type: object

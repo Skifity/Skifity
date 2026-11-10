@@ -4874,6 +4874,8 @@
     "onlyProjects": "Only {{projects}}",
     "noProjectsLeft": "Its projects were deleted: only server events reach it",
     "kindFixed": "A channel's kind cannot be changed. Add another channel instead.",
+    "untested": "Not tested end to end",
+    "untestedHelp": "Skifity's tests check what is sent to {{service}} against a local stand-in, never against {{service}} itself. Once the channel is added, use Send a test and make sure the message arrives.",
     "noEventsChosen": "None chosen: the channel is sent every event except successful backups.",
     "limitToProjects": "Only some projects",
     "limitToProjectsHelp": "Events about an app, a database or a backup are sent only from the projects you choose. Events about servers and the panel itself go to every channel, because they affect every project.",

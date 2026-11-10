@@ -4844,6 +4844,8 @@
     "onlyProjects": "仅 {{projects}}",
     "noProjectsLeft": "它的项目已被删除：只会收到服务器事件",
     "kindFixed": "渠道的类型无法更改。请改为添加另一个渠道。",
+    "untested": "未经端到端测试",
+    "untestedHelp": "Skifity 的测试只在本地替身上检查发往 {{service}} 的内容，从未在 {{service}} 本身上验证过。添加渠道后，请使用“发送测试”并确认消息已送达。",
     "noEventsChosen": "未选择任何事件：该渠道会收到除备份成功外的所有事件。",
     "limitToProjects": "仅限部分项目",
     "limitToProjectsHelp": "关于应用、数据库或备份的事件只会从你选择的项目发送。关于服务器和面板本身的事件会发送到每个渠道，因为它们影响所有项目。",

@@ -4844,6 +4844,8 @@
     "onlyProjects": "Hanya {{projects}}",
     "noProjectsLeft": "Proyeknya sudah dihapus: hanya peristiwa server yang sampai",
     "kindFixed": "Jenis saluran tidak dapat diubah. Tambahkan saluran lain sebagai gantinya.",
+    "untested": "Belum diuji ujung ke ujung",
+    "untestedHelp": "Pengujian Skifity memeriksa apa yang dikirim ke {{service}} terhadap pengganti lokal, tidak pernah terhadap {{service}} itu sendiri. Setelah saluran ditambahkan, gunakan Kirim uji coba dan pastikan pesannya sampai.",
     "noEventsChosen": "Tidak ada yang dipilih: saluran ini dikirimi semua peristiwa kecuali pencadangan yang berhasil.",
     "limitToProjects": "Hanya beberapa proyek",
     "limitToProjectsHelp": "Peristiwa tentang aplikasi, database, atau pencadangan hanya dikirim dari proyek yang Anda pilih. Peristiwa tentang server dan panel itu sendiri dikirim ke setiap saluran, karena memengaruhi semua proyek.",

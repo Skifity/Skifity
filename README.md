@@ -234,8 +234,9 @@ while the installer is running.
 > across a link that delays and drops packets, with one of them switched off
 > without warning, and as an upgrade from the last release. It has not met
 > Let's Encrypt itself, a bucket that is not a stand-in, two servers in
-> different places, or anybody attacking it on purpose. Try it on a spare VPS
-> before you move production onto it, and
+> different places, Telegram, Discord, Slack, Microsoft Teams or Pushover, or
+> anybody attacking it on purpose. Try it on a spare VPS before you move
+> production onto it, and
 > [open an issue](https://github.com/Skifity/Skifity/issues) with whatever you
 > find. More in [Status](#status).
 

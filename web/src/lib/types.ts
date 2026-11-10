@@ -1316,6 +1316,8 @@ export type NotificationKind = {
   description?: string
   provider?: string
   fields?: NotificationField[]
+  /** A built-in kind whose delivery to the real service has never been seen end to end. */
+  untested?: boolean
 }
 
 /** A command that runs on a schedule, in the app's own image. */

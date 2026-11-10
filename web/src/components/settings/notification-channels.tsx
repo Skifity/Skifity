@@ -409,12 +409,25 @@ function ChannelForm({
                 {available.map((candidate) => (
                   <SelectItem key={candidate.kind} value={candidate.kind}>
                     {label(candidate.kind, candidate.name)}
+                    {candidate.untested === true && (
+                      <span className="text-xs text-muted-foreground">
+                        {t("notifications.untested")}
+                      </span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {existing != null && (
               <FieldDescription>{t("notifications.kindFixed")}</FieldDescription>
+            )}
+            {/* Said where the choice is made: the list of kinds otherwise
+                reads as ten services proven the same way, and five of them
+                have only met a stand-in. */}
+            {chosenKind?.untested === true && (
+              <FieldDescription>
+                {t("notifications.untestedHelp", { service: label(kind, chosenKind.name) })}
+              </FieldDescription>
             )}
             {chosenKind?.provider != null && (
               <FieldDescription>

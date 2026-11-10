@@ -162,6 +162,14 @@ settings above.
 Every one of them is sent from the panel through the same guarded client as a
 webhook, so none can be pointed at an address inside the cluster.
 
+A webhook, email, ntfy, Gotify and Mattermost are delivered to and read back
+by the crosscheck that installs the panel on a real server. **Telegram,
+Discord, Slack, Microsoft Teams and Pushover have never been seen end to
+end**: what each is sent is checked against a local listener in Go tests, but
+each is a service on the internet that needs an account, and the crosscheck
+runs none. The form marks them *Not tested end to end*. After adding one,
+press **Send a test** and check the message arrives before relying on it.
+
 ### What a notification says
 
 A notification says what happened and, when there is something to do about it,
