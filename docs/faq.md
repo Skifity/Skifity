@@ -3,8 +3,14 @@
 ## Is this production-ready?
 
 Depends on your production. A single Skifity server runs real applications with
-HTTPS, automatic certificates, health checks, backups and rollback. Three
-control plane servers survive losing one.
+HTTPS, automatic certificates, health checks, backups and rollback.
+
+A fresh install has one control plane server, and it is a single point of
+failure: lose that server for good and you lose the cluster, however many
+workers there are. Three control plane servers survive losing one, if they are
+in one place and on fast disks; [Control plane
+servers](adding-servers.md#control-plane-servers) has what they need and how to
+get there.
 
 What it is not is a managed service: nobody is on call for you. If the server
 goes down at 3am, that is your 3am.

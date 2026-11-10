@@ -246,7 +246,9 @@ wherever there is room, and an app whose server dies is restarted on another
 without anyone being woken up. An app with a volume is the exception: the
 default storage keeps a volume on the server that made it, so that app waits
 for its server to come back, and its data is only as safe as that disk and its
-backups. Three control plane servers survive losing one.
+backups. A fresh install has one control plane server, and the cluster does not
+survive losing it; three do survive losing one, on servers in one place with
+fast disks ([Control plane servers](docs/adding-servers.md#control-plane-servers)).
 
 **Adding a server is an IP address and a password.** Skifity connects, checks
 the machine, installs a key of its own, configures the firewall, checks that it

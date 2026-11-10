@@ -279,7 +279,10 @@ server, installs a key of its own, configures the firewall, joins the server to
 the cluster, and starts placing instances on it. The password you type is used
 once and never stored.
 
-Three control plane servers is the point at which losing one changes nothing.
+The server you installed on is the only control plane server, and the cluster
+does not survive losing it. Three control plane servers is the point at which
+losing one changes nothing; [Control plane
+servers](adding-servers.md#control-plane-servers) says what they need.
 
 ## What next
 

@@ -335,15 +335,55 @@ connected DNS provider too (see
 
 ## Control plane servers
 
-The first server runs the control plane. Others join as workers unless you
-promote them.
+The first server runs the control plane: etcd, which holds the cluster's
+state, and the Kubernetes API. Others join as workers unless you add them as
+control plane servers or promote them.
 
-With one control plane server, rebooting it means the cluster cannot be changed
-for a few minutes. Your apps keep running the whole time; you just cannot deploy.
+**A fresh install has one control plane server, and it is a single point of
+failure for the whole cluster.** Rebooting it means the cluster cannot be
+changed for a few minutes; your apps keep running the whole time, you just
+cannot deploy. Losing it for good loses the cluster: nothing can be deployed,
+moved or restarted on another server, the panel goes with it, and the way back
+starts with a new install (see
+[Restoring after losing the panel's server](troubleshooting.md#restoring-after-losing-the-panels-server)).
+Adding workers adds capacity, not this.
 
 With three, losing one changes nothing at all *to the cluster*. Two is worse
 than one: a two-member etcd cluster cannot form a majority when either member is
 lost, so the panel refuses to leave you there.
+
+### Going to three
+
+Three control plane servers are what a cluster you depend on should have, and
+they ask more of the servers than workers do:
+
+* **An odd number.** Three, or five. etcd needs a majority of its members to
+  agree on every change, so three carry on with one lost and five with two.
+  Four survive no more than three do, and two, as above, are worse than one.
+* **One place.** Every change to the cluster waits until a majority has
+  written it, so the round trip between members is added to every change, and
+  a link that drops packets has members miss each other and elect a new
+  leader. Keep them in one region, a few milliseconds apart, as servers in one
+  data centre are. Servers far apart make good workers and poor control planes.
+* **A fast disk.** etcd waits for every write to reach the disk before it
+  answers. A local SSD keeps up; a virtual disk on shared network storage often
+  does not, and shows up as `slow fdatasync` in the k3s log and a cluster that
+  stalls (see [The cluster is unreachable](troubleshooting.md#the-cluster-is-unreachable)).
+* **Room.** 2 GB of memory, 20 GB of disk and two cores each, against 1 GB,
+  8 GB and one core for a worker, because etcd and the Kubernetes API run there
+  too. This is checked before anything is touched.
+
+The first server is one; add two more. Tick **Control plane server** when you
+add each one, or when you order it at a cloud provider (`--control-plane` with
+`skifity servers create`), or add them as workers and press **Make it a control
+plane server** on each one's page, which the panel allows once the cluster has
+three servers.
+
+Neither way has been run on a real cluster yet: the `Two servers` workflow
+adds its second server as a worker, so joining or promoting a control plane
+server, and three of them surviving the loss of one, have unit tests but have
+not been seen working. Try it on servers you can rebuild before you depend on
+it.
 
 Three control planes do not make the panel highly available. The panel is one
 pod, with its database and master key on one server's disk, and it runs where

@@ -1616,7 +1616,9 @@ The first server runs the control plane: the Kubernetes API, the panel and its
 database. Others join it.
 
 With one control plane server, a reboot means a few minutes of downtime for the
-cluster's control — your apps keep running. With three, losing one changes
+cluster's control — your apps keep running — and losing it for good loses the
+cluster; [Control plane servers](adding-servers.md#control-plane-servers) has
+the way to three and what they need. With three, losing one changes
 nothing *for the cluster*: the panel itself is one pod with its database on one
 server's disk, and it is not replicated. If that server is lost the panel is
 down until you put it back on another (see
