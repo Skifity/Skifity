@@ -90,6 +90,12 @@ shows the figure before you agree to it.
 | Longhorn | 700 MiB **per server** | You turn it on |
 | Prometheus and Grafana | 900 MiB | You turn it on |
 
+Longhorn's figure is paid on every server, so on 2 GB servers it is
+impractical: the first has about 1 GB left once Kubernetes and the panel are
+running, and on a 1 GB worker it leaves nothing for apps. A PostgreSQL with
+three instances keeps a database through the loss of a server without it. No
+cluster run has installed Longhorn, so that figure has never been measured.
+
 There is no builder in the table, because none runs between builds: each build
 starts a BuildKit of its own and it goes with the build. A build is the most
 memory-hungry thing that happens, and it is transient: its BuildKit and the work

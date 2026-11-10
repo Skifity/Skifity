@@ -693,7 +693,8 @@ answering cannot be emptied first, so it is not waited on: its instances start
 on the other servers as soon as it is removed. An app or database that kept
 its data on that server's own disk cannot start anywhere else, and the removal
 says which: restore those from a backup. Cross-node storage (Longhorn, under
-Settings) is what lets a volume outlive the server it was on.
+Settings) is what lets a volume outlive the server it was on, at about 700 MB
+of memory on every server ([What it costs](performance.md)).
 
 ## Restoring after losing the panel's server
 

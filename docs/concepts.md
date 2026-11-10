@@ -1667,3 +1667,10 @@ installed the first time you need them.
 | Log collector | You add a [log drain](log-drains.md) | 100 MB per server |
 
 Settings shows what is installed and what each one costs before you agree to it.
+
+Cross-node storage is the one that does not fit small servers. Its 700 MB is
+paid on every server: most of what a 2 GB server has left once Kubernetes and
+the panel are running, and on a 1 GB worker nothing is left for apps. On
+servers that size, keep data that must survive a server in a PostgreSQL with
+three instances, which copies it between servers without it
+([Databases](databases.md)).

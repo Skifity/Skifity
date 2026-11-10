@@ -22,8 +22,13 @@ gets them wherever there is room, and a stateless app whose server dies is
 restarted elsewhere without you doing anything. An app with a volume is not: the
 default storage keeps a volume on the server that made it, so the app waits for
 that server to come back. For data that must survive a server, use a managed
-Postgres with more than one instance, or install Longhorn. Adding a server adds capacity; nothing
-has to be told which app lives where.
+PostgreSQL with three instances, which copies the data between servers itself
+([Databases](databases.md)). Cross-node storage (Longhorn, under **Settings →
+Components**) lets any volume move, but it costs about 700 MB of memory on
+every server, which is impractical on 2 GB servers: Kubernetes and the panel
+already use about 1 GB of the first, and on a 1 GB worker it leaves nothing for
+apps. No cluster run has installed it yet. Adding a server adds capacity;
+nothing has to be told which app lives where.
 
 The trade is that Kubernetes needs more memory than running containers on one
 machine. Skifity keeps that down by installing almost nothing until you use it.
