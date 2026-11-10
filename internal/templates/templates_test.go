@@ -237,7 +237,7 @@ func TestSlowStartersAreGivenTheTimeTheyNeed(t *testing.T) {
 // database on every check — read in its source, not guessed from its name.
 func TestAHealthPathThatAsksTheDatabaseHasTimeToHearBack(t *testing.T) {
 	asks := map[string]string{
-		"wordpress/wordpress":   "/wp-admin/install.php asks MariaDB whether WordPress is installed",
+		"wordpress/wordpress":   "/wp-admin/install.php?step=1 asks MariaDB whether WordPress is installed",
 		"ghost/ghost":           "/ is the home page, read from MySQL",
 		"outline/outline":       "/_health runs SELECT 1 and pings Redis",
 		"ghostfolio/ghostfolio": "/api/v1/health asks PostgreSQL and Redis",
@@ -446,4 +446,26 @@ func TestATemplateWithNoIconSaysSoRatherThanBreaking(t *testing.T) {
 	if _, _, ok := ReadIcon("a-template-that-does-not-exist"); ok {
 		t.Error("an icon was served for a template that does not exist")
 	}
+}
+
+// TestWordPressIsCheckedWithoutCallingOut: the install page's step 0, the
+// language chooser, asks api.wordpress.org for the translations on every
+// request until WordPress is installed — an https and then an http request of
+// up to three seconds each (wp-admin/includes/translation-install.php, 6.9.4),
+// with nowhere to keep the answer before the tables exist. On a server whose
+// way out was slow, every check of the bare page took longer than its ten
+// seconds and the deploy failed. Step 1 shows the form and asks only MariaDB.
+func TestWordPressIsCheckedWithoutCallingOut(t *testing.T) {
+	for _, tpl := range All() {
+		if tpl.ID != "wordpress" {
+			continue
+		}
+		for _, svc := range tpl.Services {
+			if svc.Name == "wordpress" && svc.HealthPath != "/wp-admin/install.php?step=1" {
+				t.Errorf("WordPress is checked at %q, which may call out to wordpress.org on every check", svc.HealthPath)
+			}
+		}
+		return
+	}
+	t.Fatal("the catalogue has no WordPress")
 }

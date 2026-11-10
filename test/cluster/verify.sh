@@ -2927,7 +2927,7 @@ else
 		no "WordPress, installed with its database, did not deploy"
 	else
 		WP_HOST=$(api GET "/api/apps/$WP_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
-		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WP_HOST" "http://127.0.0.1/wp-admin/install.php")
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WP_HOST" "http://127.0.0.1/wp-admin/install.php?step=1")
 		[ "$CODE" = "200" ] \
 			&& ok "WordPress, installed from the catalogue with its database, answers its installer" \
 			|| no "WordPress's installer answered $CODE; it cannot reach its database, or did not start"

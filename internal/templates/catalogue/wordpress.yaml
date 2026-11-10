@@ -8,7 +8,7 @@ services:
   image: wordpress:6.9.4-apache
   needs_root: true
   port: 80
-  health_path: /wp-admin/install.php
+  health_path: /wp-admin/install.php?step=1
   health_start_seconds: 300
   health_timeout_seconds: 10
   volumes:

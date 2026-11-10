@@ -130,12 +130,16 @@ otherwise, each only for software that needs it:
   the first start takes minutes.
 * **`health_timeout_seconds`**, from 1 to 60, is how long one check waits for
   an answer. Raise it for a health path that asks the database on every check,
-  such as WordPress's `/wp-admin/install.php`. An app and its database can land
+  such as WordPress's `/wp-admin/install.php?step=1`. An app and its database can land
   on different servers: on two servers 40 ms and some lost packets apart, that
   answer took longer than three seconds, the instance was killed at the end of
   its start budget and the install's deploy failed. Ten is plenty. Read the
   image's source for what its health path does rather than guessing from the
-  name; `/healthz` is as often a constant as a query.
+  name; `/healthz` is as often a constant as a query. And check that it does not
+  call out: WordPress's install page without `?step=1` asks api.wordpress.org
+  for its translations on every request until WordPress is installed, two
+  requests of up to three seconds each, so a server whose way out is slow fails
+  every check whatever the timeout.
 * **`health_check`** is `http`, `tcp` or `none`, and is best left out: it is
   `http` when there is a `health_path` and `tcp` when there is not. `http`
   needs a `health_path`, and `none` means nothing checks the app at all.
