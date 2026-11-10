@@ -2152,6 +2152,22 @@
         "label": "Build sekaligus",
         "help": "Berapa build yang berjalan bersamaan. Selebihnya menunggu giliran, sesuai urutan datangnya, dan menyatakannya di log. Setiap build bisa memakai hingga 3 GiB memori, diambil dari jatah aplikasi."
       },
+      "cluster_etcd_round_trip_ms": {
+        "label": "Peringatkan bila jarak antar server control plane lebih dari",
+        "help": "Milidetik. Sebelum sebuah server menjadi server control plane, entah ditambahkan sebagai control plane atau dipromosikan, panel mengukur 20 koneksi darinya ke setiap server control plane yang sudah ada, dan memperingatkan bila rata-rata waktu bolak-baliknya lebih lama dari ini. etcd, yang menyimpan keadaan cluster, menunggu mayoritas dari mereka pada setiap perubahan, jadi mereka sebaiknya berada di satu lokasi. Peringatan tidak pernah menghentikan apa pun; 0 mematikannya."
+      },
+      "cluster_etcd_jitter_ms": {
+        "label": "Peringatkan bila waktu bolak-baliknya bervariasi lebih dari",
+        "help": "Milidetik: simpangan baku dari waktu bolak-balik yang sama. Jalur yang biasanya cepat tapi kadang lambat membuat sebagian perubahan menunggu jauh lebih lama dari yang ditunjukkan rata-ratanya, dan lonjakan yang cukup panjang untuk menunda heartbeat etcd membuatnya sibuk mengadakan pemilihan alih-alih menjawab. 0 mematikan peringatan ini."
+      },
+      "cluster_etcd_loss_percent": {
+        "label": "Peringatkan bila koneksi yang hilang lebih dari",
+        "help": "Persen dari koneksi-koneksi tadi yang memakan waktu satu detik atau lebih, yaitu harga sebuah paket yang hilang bagi koneksi baru. 0 mematikan peringatan ini."
+      },
+      "cluster_etcd_disk_sync_ms": {
+        "label": "Peringatkan bila disk server control plane menyinkronkan lebih lambat dari",
+        "help": "Milidetik untuk membuat satu penulisan kecil benar-benar tersimpan: rata-rata dari 200 penulisan, diukur dengan dd di server sebelum ia menjadi server control plane. etcd menunggu ini pada setiap perubahan, dan panduannya sendiri adalah di bawah 10 ms untuk hampir semuanya, jadi rata-rata yang mendekati angka itu sudah tergolong lambat. 0 mematikan peringatan ini."
+      },
       "signin_api_allowed_networks": {
         "label": "Token API hanya dari",
         "help": "Alamat atau jaringan, satu per baris, seperti 203.0.113.7 atau 10.0.0.0/8. Jika diisi, token API — milik CLI, pekerjaan CI, atau asisten — ditolak dari tempat lain, meskipun tokennya valid. Masuk ke panel lewat peramban tidak terpengaruh. Kosongkan untuk menerima token dari mana saja."
@@ -2871,6 +2887,42 @@
         "cause": "Kernel ini tidak punya modul WireGuard, sementara cluster ini mengenkripsi lalu lintas antar server dengan WireGuard.",
         "impact": "Server tidak jadi ditambahkan. Tidak ada yang diubah di sana.",
         "fix": "Pasang di server ini: apt-get install -y wireguard-tools (lalu reboot kalau modulnya masih tidak mau termuat). Kalau kernelnya memang tidak bisa sama sekali, ganti seluruh cluster ke vxlan di Pengaturan -> Klaster -> Jaringan pod, yang mematikan enkripsi itu untuk semua server."
+      },
+      "preflight_etcd_round_trip": {
+        "title": "Server ini mungkin menjadi server control plane yang lambat",
+        "cause": "Waktu bolak-balik dari server ini ke {{0}} rata-rata {{1}} ms, lebih dari {{2}} ms yang menjadi batas peringatan panel ini.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Server control plane di jalur yang lambat memperlambat setiap perubahan pada cluster.",
+        "fix": "etcd, yang menyimpan keadaan cluster, menunggu mayoritas server control plane pada setiap perubahan, jadi setiap perubahan menunggu jalur ini, dan jalur yang cukup lambat untuk menunda heartbeat k3s yang setengah detik membuat mereka sibuk mengadakan pemilihan alih-alih menjawab. Tempatkan server control plane di satu lokasi, dan tambahkan server di tempat lain sebagai worker. Batasnya ada di Pengaturan, lalu Klaster."
+      },
+      "preflight_etcd_jitter": {
+        "title": "Server ini mungkin menjadi server control plane yang lambat",
+        "cause": "Waktu bolak-balik dari server ini ke {{0}} bervariasi {{1}} ms, lebih dari {{2}} ms yang menjadi batas peringatan panel ini.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Perubahan pada cluster menunggu saat-saat lambat jalur ini, bukan rata-ratanya.",
+        "fix": "Jalur yang biasanya cepat tapi kadang lambat membuat sebagian perubahan menunggu jauh lebih lama dari yang ditunjukkan rata-ratanya, dan lonjakan yang cukup panjang untuk menunda heartbeat etcd membuat server control plane sibuk mengadakan pemilihan alih-alih menjawab. Tempatkan mereka di satu lokasi, tanpa VPN atau jalur yang padat di antaranya. Batasnya ada di Pengaturan, lalu Klaster."
+      },
+      "preflight_etcd_loss": {
+        "title": "Server ini mungkin menjadi server control plane yang lambat",
+        "cause": "{{0}}% koneksi dari server ini ke {{1}} kehilangan paket, lebih dari {{2}}% yang menjadi batas peringatan panel ini.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Setiap paket yang hilang menahan heartbeat dan perubahan etcd sampai paket itu dikirim ulang.",
+        "fix": "etcd mengirim heartbeat dan setiap perubahan lewat jalur ini, dan setiap paket yang hilang menahannya sampai paket itu dikirim ulang. Cari di mana paket hilang, misalnya dengan mtr, sebelum menjadikan ini server control plane, atau biarkan ia tetap worker. Batasnya ada di Pengaturan, lalu Klaster."
+      },
+      "preflight_etcd_disk_sync": {
+        "title": "Server ini mungkin menjadi server control plane yang lambat",
+        "cause": "Satu penulisan kecil ke disk server ini rata-rata butuh {{0}} ms untuk benar-benar tersimpan, lebih dari {{1}} ms yang menjadi batas peringatan panel ini.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Disk yang lambat memperlambat setiap perubahan pada cluster dan bisa membuatnya kehilangan leader.",
+        "fix": "etcd membuat setiap perubahan benar-benar tersimpan sebelum menjawab, jadi disk yang lambat memperlambat seluruh cluster dan bisa membuatnya kehilangan leader. Pakai server dengan SSD atau NVMe lokal, bukan penyimpanan jaringan atau disk bersama yang sibuk. Batasnya ada di Pengaturan, lalu Klaster."
+      },
+      "preflight_etcd_round_trip_unmeasured": {
+        "title": "Sebagian pemeriksaan control plane ini tidak bisa dijalankan",
+        "cause": "Waktu bolak-balik dari server ini ke {{0}} tidak bisa diukur.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Belum diketahui apakah server ini cukup dekat dengan yang lain untuk etcd.",
+        "fix": "Tidak ada yang dihentikan. Panel mengukur koneksi TCP ke port 6443 dengan bash dan timeout, jadi server tanpa keduanya, atau yang tidak bisa menjangkau port itu, tidak bisa diukur. Ukur sendiri latensi di antara keduanya sebelum mengandalkan server control plane ini."
+      },
+      "preflight_etcd_disk_sync_unmeasured": {
+        "title": "Sebagian pemeriksaan control plane ini tidak bisa dijalankan",
+        "cause": "Berapa lama disk server ini membuat penulisan benar-benar tersimpan tidak bisa diukur.",
+        "impact": "Tidak ada yang dihentikan; ini hanya peringatan. Belum diketahui apakah disk ini cukup cepat untuk etcd.",
+        "fix": "Tidak ada yang dihentikan. Panel mengukur 200 penulisan kecil yang disinkronkan dengan dd di bawah /var/lib, yang butuh akses tulis di sana serta dd dan date dari GNU. Ukur sendiri disknya, dengan fio seperti panduan etcd sendiri, sebelum mengandalkan server control plane ini."
       },
       "release_failed": {
         "title": "Perintah rilis gagal",

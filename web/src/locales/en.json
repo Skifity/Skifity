@@ -2181,6 +2181,22 @@
         "label": "Builds at once",
         "help": "How many builds run at the same time. More wait their turn, in the order they came, and say so in their log. Each build can use up to 3 GiB of memory, taken from what the apps have."
       },
+      "cluster_etcd_round_trip_ms": {
+        "label": "Warn when control plane servers are further apart than",
+        "help": "Milliseconds. Before a server becomes a control plane server, added as one or promoted, the panel times 20 connections from it to each control plane server already there, and warns when the average round trip is longer than this. etcd, which keeps the cluster's state, waits for a majority of them on every change, so they belong in one location. A warning never stops anything; 0 turns it off."
+      },
+      "cluster_etcd_jitter_ms": {
+        "label": "Warn when their round trip varies by more than",
+        "help": "Milliseconds: the standard deviation of those same round trips. A link that is usually quick and sometimes slow makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats makes it hold elections instead of answering. 0 turns the warning off."
+      },
+      "cluster_etcd_loss_percent": {
+        "label": "Warn when more of their connections are lost than",
+        "help": "Per cent of those connections that took a second or more, which is what a lost packet costs a new connection. 0 turns the warning off."
+      },
+      "cluster_etcd_disk_sync_ms": {
+        "label": "Warn when a control plane server's disk syncs slower than",
+        "help": "Milliseconds for one small write to be made durable: the average of 200, timed with dd on the server before it becomes a control plane server. etcd waits for this on every change, and its own guidance is under 10 ms for nearly all of them, so an average near that is already slow. 0 turns the warning off."
+      },
       "signin_api_allowed_networks": {
         "label": "API tokens only from",
         "help": "Addresses or networks, one per line, such as 203.0.113.7 or 10.0.0.0/8. When set, an API token — the CLI's, a CI job's, an assistant's — is refused from anywhere else, even though it is valid. Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere."
@@ -2900,6 +2916,42 @@
         "cause": "This kernel does not have the WireGuard module, and this cluster encrypts traffic between servers with WireGuard.",
         "impact": "The server was not added. Nothing was changed on it.",
         "fix": "Install it on this server: apt-get install -y wireguard-tools (then reboot if the module still does not load). If the kernel cannot have it at all, switch the whole cluster to vxlan in Settings -> Cluster -> Pod network, which turns that encryption off for every server."
+      },
+      "preflight_etcd_round_trip": {
+        "title": "This server may make a slow control plane server",
+        "cause": "The round trip from this server to {{0}} averaged {{1}} ms, more than the {{2}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. A control plane server on a slow link slows every change to the cluster.",
+        "fix": "etcd, which keeps the cluster's state, waits for a majority of the control plane servers on every change, so every change waits on this link, and one slow enough to delay k3s's half-second heartbeats makes them hold elections instead of answering. Keep the control plane servers in one location, and add servers elsewhere as workers. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_jitter": {
+        "title": "This server may make a slow control plane server",
+        "cause": "The round trip from this server to {{0}} varied by {{1}} ms, more than the {{2}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. Changes to the cluster wait for this link's slow moments, not its average.",
+        "fix": "A link that is usually quick and sometimes slow makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats makes the control plane servers hold elections instead of answering. Keep them in one location, without a VPN or a busy link between them. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_loss": {
+        "title": "This server may make a slow control plane server",
+        "cause": "{{0}}% of the connections from this server to {{1}} lost a packet, more than the {{2}}% this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. Every lost packet holds up etcd's heartbeats and changes until it is sent again.",
+        "fix": "etcd sends its heartbeats and every change over this link, and each lost packet holds them up until it is sent again. Find where the loss is, with mtr for instance, before making this a control plane server, or keep it a worker. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_disk_sync": {
+        "title": "This server may make a slow control plane server",
+        "cause": "A small write to this server's disk took {{0}} ms on average to be made durable, more than the {{1}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. A slow disk slows every change to the cluster and can cost it its leader.",
+        "fix": "etcd makes every change durable before it answers, so a slow disk slows the whole cluster and can cost it its leader. Use a server with a local SSD or NVMe disk rather than network storage or a busy shared one. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_round_trip_unmeasured": {
+        "title": "Part of this control plane check could not be run",
+        "cause": "The round trip from this server to {{0}} could not be measured.",
+        "impact": "Nothing was stopped; this is a warning. Whether this server is close enough to the others for etcd is not known.",
+        "fix": "Nothing was stopped. The panel times TCP connections to port 6443 with bash and timeout, so a server without them, or one that cannot reach that port, cannot be timed. Measure the latency between the two yourself before relying on this control plane server."
+      },
+      "preflight_etcd_disk_sync_unmeasured": {
+        "title": "Part of this control plane check could not be run",
+        "cause": "How long this server's disk takes to make a write durable could not be measured.",
+        "impact": "Nothing was stopped; this is a warning. Whether this disk is fast enough for etcd is not known.",
+        "fix": "Nothing was stopped. The panel times 200 small synced writes with dd under /var/lib, which needs write access there and GNU dd and date. Measure the disk yourself, with fio as etcd's own guidance does, before relying on this control plane server."
       },
       "release_failed": {
         "title": "The release command failed",

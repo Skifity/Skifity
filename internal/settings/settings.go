@@ -189,6 +189,10 @@ const (
 	KeyTeamCreation          = "signin.team_creation"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
+	KeyEtcdRoundTripMs       = "cluster.etcd_round_trip_ms"
+	KeyEtcdJitterMs          = "cluster.etcd_jitter_ms"
+	KeyEtcdLossPercent       = "cluster.etcd_loss_percent"
+	KeyEtcdDiskSyncMs        = "cluster.etcd_disk_sync_ms"
 	KeyGitPrivateHosts       = "git.private_hosts"
 	KeyGitCABundle           = "git.ca_bundle"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
@@ -339,6 +343,48 @@ var Definitions = []Definition{
 		Kind:        KindNumber,
 		Validate:    validateBuildConcurrency,
 		Default:     strconv.Itoa(DefaultBuildConcurrency),
+	},
+	// What a server that is about to run etcd is measured against. Warnings
+	// only: a threshold here never stops a server being added or promoted.
+	{
+		Key: KeyEtcdRoundTripMs, Label: "Warn when control plane servers are further apart than", Group: GroupCluster,
+		Help: "Milliseconds. Before a server becomes a control plane server, added as one or promoted, the panel times 20 connections " +
+			"from it to each control plane server already there, and warns when the average round trip is longer than this. " +
+			"etcd, which keeps the cluster's state, waits for a majority of them on every change, so they belong in one location. " +
+			"A warning never stops anything; 0 turns it off.",
+		Placeholder: strconv.Itoa(DefaultEtcdRoundTripMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdRoundTripMs),
+	},
+	{
+		Key: KeyEtcdJitterMs, Label: "Warn when their round trip varies by more than", Group: GroupCluster,
+		Help: "Milliseconds: the standard deviation of those same round trips. A link that is usually quick and sometimes slow " +
+			"makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats " +
+			"makes it hold elections instead of answering. 0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdJitterMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdJitterMs),
+	},
+	{
+		Key: KeyEtcdLossPercent, Label: "Warn when more of their connections are lost than", Group: GroupCluster,
+		Help: "Per cent of those connections that took a second or more, which is what a lost packet costs a new connection. " +
+			"0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdLossPercent),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(100),
+		Default:     strconv.Itoa(DefaultEtcdLossPercent),
+	},
+	{
+		Key: KeyEtcdDiskSyncMs, Label: "Warn when a control plane server's disk syncs slower than", Group: GroupCluster,
+		Help: "Milliseconds for one small write to be made durable: the average of 200, timed with dd on the server before it " +
+			"becomes a control plane server. etcd waits for this on every change, and its own guidance is under 10 ms for nearly " +
+			"all of them, so an average near that is already slow. 0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdDiskSyncMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdDiskSyncMs),
 	},
 	{
 		Key: KeyGitPrivateHosts, Label: "Git hosts on your own network", Group: GroupGit, Multiline: true,
@@ -1058,6 +1104,38 @@ func validateInt(value string) error {
 
 // DefaultBuildConcurrency is how many builds run at once when nobody said.
 const DefaultBuildConcurrency = 2
+
+// What a server about to run etcd is warned about when nobody said otherwise.
+//
+// k3s runs etcd with a half-second heartbeat and a five-second election
+// timeout, well clear of etcd's own 100 ms and one second, so 50 ms is not
+// where elections start. It is where every change to the cluster, which waits
+// for a majority to answer across that link, starts to wait noticeably, and
+// far beyond what servers in one location see. A disk that takes 10 ms to sync
+// is etcd's own line for "too slow". One lost connection in twenty is already
+// more than the 1 per cent here, which is the point: on the link etcd uses,
+// any loss is worth a look.
+const (
+	DefaultEtcdRoundTripMs = 50
+	DefaultEtcdJitterMs    = 10
+	DefaultEtcdLossPercent = 1
+	DefaultEtcdDiskSyncMs  = 10
+)
+
+// validateWarningThreshold accepts a whole number from 0, which turns the
+// warning off, up to max.
+func validateWarningThreshold(maxValue int) func(string) error {
+	return func(value string) error {
+		if value == "" {
+			return nil
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n < 0 || n > maxValue {
+			return fmt.Errorf("enter a number between 0 and %d", maxValue)
+		}
+		return nil
+	}
+}
 
 // DefaultScanSchedule is when running apps are scanned again when nobody
 // said: once a day, at a minute nobody else picked, in the quiet hours of

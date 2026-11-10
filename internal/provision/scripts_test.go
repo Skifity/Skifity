@@ -61,6 +61,69 @@ func TestGeneratedScriptsAreValidShell(t *testing.T) {
 		JoinAgentScript("", "a-token", "https://203.0.113.10:6443", "203.0.113.12",
 			map[string]string{"skifity.com/location": "frankfurt", "skifity.com/size": "small"}))
 	checkShellSyntax(t, "ConnectivityScript", ConnectivityScript("203.0.113.10", 6443))
+	checkShellSyntax(t, "EtcdFitnessScript", EtcdFitnessScript([]string{"203.0.113.10", "203.0.113.11"}))
+	checkShellSyntax(t, "EtcdFitnessScript (no peers)", EtcdFitnessScript(nil))
+}
+
+// TestTheEtcdMeasurementRunsUnderDash runs the script that times a would-be
+// control plane server, under dash, against a port that is really listening
+// and a disk that is really there, and reads what it printed back. A script
+// that only passes `sh -n` can still time nothing: a bash-only expansion
+// outside bash, or a clock with no microseconds, prints no numbers, and every
+// server would then be warned about as unmeasured.
+func TestTheEtcdMeasurementRunsUnderDash(t *testing.T) {
+	dash, err := exec.LookPath("dash")
+	if err != nil {
+		t.Skip("dash is not installed here")
+	}
+	for _, tool := range []string{"bash", "timeout", "dd", "date", "mktemp"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed here", tool)
+		}
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	disk := t.TempDir()
+	peers := []string{"127.0.0.1"}
+	cmd := exec.Command(dash, "-c", etcdFitnessScript(peers, port, []string{filepath.Join(disk, "absent"), disk}))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the script failed under dash: %v\n%s", err, output)
+	}
+
+	fitness := ParseEtcdFitness(string(output), peers)
+	if got := len(fitness.Peers[0].Micros); got != etcdProbeConnects {
+		t.Fatalf("timed %d connects, want %d:\n%s", got, etcdProbeConnects, output)
+	}
+	if fitness.DiskWrites != etcdProbeWrites || fitness.DiskMicros <= 0 {
+		t.Fatalf("the disk was not timed:\n%s", output)
+	}
+	// Loopback answers in microseconds; the default thresholds have nothing
+	// to say about it, except perhaps the disk, which is this machine's.
+	limits := DefaultEtcdThresholds()
+	limits.DiskSyncMs = 0
+	if problems := EvaluateEtcd(fitness, limits); len(problems) != 0 {
+		t.Fatalf("loopback was warned about: %v\n%s", etcdCodes(problems), output)
+	}
+	// And the probe cleaned up after itself.
+	if left, _ := os.ReadDir(disk); len(left) != 0 {
+		t.Fatalf("the disk probe left %d entries behind", len(left))
+	}
 }
 
 // TestTheConnectivityCheckWorksWhereShIsDash: /bin/sh is dash on Debian and
@@ -443,6 +506,7 @@ func TestNothingATypedValueContainsBecomesACommand(t *testing.T) {
 		"InstallKeyScript":    InstallKeyScript("ssh-ed25519 AAAA test", hostile),
 		"FirewallScript":      FirewallScript([]string{hostile}, true),
 		"ConnectivityScript":  ConnectivityScript(hostile, 6443),
+		"EtcdFitnessScript":   EtcdFitnessScript([]string{hostile}),
 		"InstallServerScript": InstallServerScript(hostile, hostile, "203.0.113.10", "", nil),
 		"JoinAgentScript":     JoinAgentScript("", hostile, hostile, "203.0.113.12", nil),
 	}

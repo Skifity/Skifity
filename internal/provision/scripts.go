@@ -641,6 +641,92 @@ echo "reachable=no"
 `, shellsafe.Quote(targetIP), port)
 }
 
+// How much the etcd measurement does: connections to each control plane
+// server, and small synced writes to the disk.
+const (
+	etcdProbeConnects = 20
+	etcdProbeWrites   = 200
+)
+
+// etcdProbeDirs are where the disk is timed: etcd's own directory when k3s
+// already runs a server here, and otherwise the filesystem it will be made on.
+var etcdProbeDirs = []string{"/var/lib/rancher/k3s/server/db", "/var/lib/rancher", "/var/lib"}
+
+// EtcdFitnessScript measures, on a server about to run etcd, the two things
+// etcd is most sensitive to: the round trip to the control plane servers
+// already there, and how long the disk takes to make a small write durable.
+//
+// It prints numbers and decides nothing; EvaluateEtcd compares them with the
+// thresholds. It writes about half a megabyte under /var/lib and removes it
+// again; nothing else on the machine changes.
+func EtcdFitnessScript(peers []string) string {
+	return etcdFitnessScript(peers, 6443, etcdProbeDirs)
+}
+
+func etcdFitnessScript(peers []string, port int, dirs []string) string {
+	quotedPeers := make([]string, 0, len(peers))
+	for _, peer := range peers {
+		quotedPeers = append(quotedPeers, shellsafe.Quote(peer))
+	}
+	quotedDirs := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		quotedDirs = append(quotedDirs, shellsafe.Quote(dir))
+	}
+	return fmt.Sprintf(`
+set -u
+PORT=%d
+CONNECTS=%d
+WRITES=%d
+
+# The round trip to each control plane server, timed as a TCP connect to its
+# API server: a connect is one round trip. Port 6443 is the one the network
+# check reached and is open between servers, where ICMP, which ping needs, often
+# is not. A connect that takes a second or more lost a packet on the way, since
+# that is when Linux sends it again. bash's clock is read without starting a
+# process; date is the fallback where bash is older than 5.
+if command -v bash >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+  for peer in %s; do
+    timeout 30 bash -c '
+      clock() {
+        if [ -n "${EPOCHREALTIME:-}" ]; then now=${EPOCHREALTIME//[!0-9]/}; else now=$(date +%%s%%6N); fi
+      }
+      for ((i = 0; i < $3; i++)); do
+        clock; start=$now
+        if : 3<>"/dev/tcp/$1/$2"; then
+          clock; end=$now
+          case "$start$end" in *[!0-9]*) exit 0 ;; esac
+          echo "etcd_peer=$1 connect_us=$((end - start))"
+        else
+          echo "etcd_peer=$1 connect_failed=yes"
+        fi
+      done' probe "$peer" "$PORT" "$CONNECTS" 2>/dev/null
+  done
+fi
+
+# How long the disk takes to make a small write durable, which etcd does before
+# it answers any change. oflag=dsync syncs every block, and 2300 bytes is the
+# write etcd's own guidance times.
+for dir in %s; do
+  [ -d "$dir" ] && break
+done
+probe=$(mktemp -d "$dir/.skifity-disk-probe.XXXXXX" 2>/dev/null) || probe=""
+if [ -n "$probe" ] && command -v timeout >/dev/null 2>&1; then
+  start=$(date +%%s%%6N)
+  timeout 60 dd if=/dev/zero of="$probe/probe" bs=2300 count="$WRITES" oflag=dsync 2>/dev/null
+  status=$?
+  end=$(date +%%s%%6N)
+  rm -rf "$probe"
+  # 124 is timeout's: too slow to finish, which is a measurement too.
+  case "$status:$start$end" in
+    0:*[!0-9]*|124:*[!0-9]*) ;;
+    0:*|124:*) echo "disk_writes=$WRITES disk_us=$((end - start))" ;;
+  esac
+elif [ -n "$probe" ]; then
+  rm -rf "$probe"
+fi
+`, port, etcdProbeConnects, etcdProbeWrites, strings.Join(quotedPeers, " "), strings.Join(quotedDirs, " "))
+}
+
 // sortedPairs returns a map's entries in key order, so a generated command is
 // stable and two runs produce the same thing.
 func sortedPairs(m map[string]string) [][2]string {

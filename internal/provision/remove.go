@@ -553,6 +553,9 @@ func (p *Provisioner) runPromote(ctx context.Context, op store.Operation, server
 		p.failStep(ctx, op, "", StepPreflight, err)
 		return
 	}
+	// A worker is in the cluster already, so it can reach the control plane
+	// servers to be timed against them. Warnings only, like the others.
+	p.warnAboutEtcd(ctx, check)
 	check.client.Close()
 	p.setStep(ctx, op, StepPreflight, store.StepSucceeded, check.lastNote, "")
 

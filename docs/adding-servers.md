@@ -310,6 +310,26 @@ address.
 Promoting a server moves its instances elsewhere first, then rejoins it as a
 control plane member.
 
+Before a server becomes a control plane server, added as one or promoted, the
+panel measures it for etcd, which keeps the cluster's state and, on every
+change, waits for a majority of the control plane servers and for its own disk.
+It times 20 TCP connections from the server to port 6443 on each control plane
+server already there, and 200 small writes to its disk with `dd` and
+`oflag=dsync` under `/var/lib`, about half a megabyte that it removes again. An
+average round trip over 50 ms, round trips that vary by more than 10 ms, more
+than 1% of connections losing a packet, or a write that takes more than 10 ms
+on average to be made durable is shown as a warning: under the network check
+when adding, under the preflight when promoting. A warning never stops
+anything. The four thresholds are under **Settings → Cluster**, where 0 turns
+one off. What could not be measured, on a server without bash or one that
+cannot reach a control plane server's port 6443, is said as well rather than
+passed over.
+
+It is a few seconds of one link, timed from one side. It does not show that a
+link stays good, it does not time the other control plane servers against each
+other, and it is no substitute for etcd's own disk guidance, which uses fio and
+runs for longer.
+
 ## Hardening
 
 Adding a server opens the cluster's ports to the other members, on a firewall

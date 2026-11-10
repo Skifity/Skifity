@@ -474,17 +474,7 @@ func (p *Provisioner) stepPreflight(ctx context.Context, state *addState) error 
 	// The warnings, in the reader's language. They used to be joined into one
 	// English string in a column the interface only read for a failed step, so
 	// every non-fatal preflight finding was collected and shown to nobody.
-	for _, problem := range problems {
-		state.lastNote.Details = append(state.lastNote.Details,
-			store.StepDetail{
-				Text: problem.Detail, Key: "preflight." + problem.Code + ".detail",
-				Args: problem.Args.Detail,
-			},
-			store.StepDetail{
-				Text: problem.Fix, Key: "preflight." + problem.Code + ".fix",
-				Args: problem.Args.Fix,
-			})
-	}
+	appendWarnings(&state.lastNote, problems)
 	return nil
 }
 
@@ -614,6 +604,7 @@ func (p *Provisioner) stepConnectivity(ctx context.Context, state *addState) err
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			state.lastNote = store.StepNote{Message: "This is the first server, so there is nothing to connect to yet", Key: "connectivityFirstServer"}
+			p.warnAboutEtcd(ctx, state)
 			return nil
 		}
 		return err
@@ -635,6 +626,7 @@ func (p *Provisioner) stepConnectivity(ctx context.Context, state *addState) err
 	}
 	message, args := errdoc.Sprintf("Reached %s on port 6443", target)
 	state.lastNote = store.StepNote{Message: message, Key: "reached", Args: args}
+	p.warnAboutEtcd(ctx, state)
 	return nil
 }
 
