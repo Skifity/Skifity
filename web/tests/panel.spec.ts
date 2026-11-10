@@ -516,6 +516,20 @@ test("New app takes no environment from the address that the team does not have"
   await expect(page.getByRole("combobox", { name: "Create it in" })).toContainText(" · Production")
 })
 
+// An id in a page's address becomes part of the path of every request the page
+// sends, with the session and the CSRF header. "..%2F" in it used to be
+// resolved by the browser into another route of the API; such a path is
+// refused before anything is sent.
+test("a page opened with dot segments in its address sends nothing elsewhere", async ({ page }) => {
+  await signIn(page)
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  await page.goto(`/apps/${encodeURIComponent("../../teams/elsewhere")}`)
+  await expect(page.getByText("The request was not sent").first()).toBeVisible()
+  expect(asked.filter((path) => path.startsWith("/api/teams/elsewhere"))).toEqual([])
+})
+
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
   await signIn(page)
 

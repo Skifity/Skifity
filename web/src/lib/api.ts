@@ -163,8 +163,41 @@ type RequestOptions = {
   steppedUp?: boolean
 }
 
+/**
+ * Whether a request path has a "." or ".." segment, written plainly or
+ * percent-encoded: the browser resolves either before sending, so the request
+ * goes to another route than the one it was built for.
+ */
+function hasDotSegment(path: string): boolean {
+  const route = path.split(/[?#]/, 1)[0]
+  return route.split("/").some((segment) => /^(\.|%2e){1,2}$/i.test(segment))
+}
+
+/**
+ * The problem for a path with a dot segment, refused before it is sent. Paths
+ * are built from ids, and an id can come from the address bar: a page opened
+ * at /apps/..%2F..%2Fteams%2F… would otherwise send its requests, with the
+ * session and the CSRF header, to another route of the API. No route of the
+ * panel has such a segment.
+ */
+function refusedPathProblem(path: string): Problem {
+  return {
+    code: "request.refused",
+    title: "The request was not sent",
+    cause: `The address the page built, ${path}, would have reached another part of the panel than the one it was meant for.`,
+    impact:
+      "Nothing was sent. The page was probably opened from a link with something odd in its address.",
+    fix: "Open the page from the panel's own navigation rather than the link.",
+    args: { cause: [path] },
+    severity: "error",
+    retryable: false,
+    at: new Date().toISOString(),
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET"
+  if (hasDotSegment(path)) throw new ApiError(refusedPathProblem(path), 0)
   const headers: Record<string, string> = { Accept: "application/json" }
 
   const raw = options.body instanceof Blob

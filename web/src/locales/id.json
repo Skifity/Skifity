@@ -4679,6 +4679,12 @@
         "cause": "Sebuah versi dipromosikan ke aplikasi bernama sama di lingkungan lain dalam proyek, dan {{0}} tidak punya. Versi aplikasi ini bisa dipromosikan ke {{1}}.",
         "impact": "Tidak ada yang dipromosikan.",
         "fix": "Buat aplikasi dengan nama yang sama di {{0}}, atau klon lingkungan ini di panel, lalu promosikan lagi."
+      },
+      "request_refused": {
+        "title": "Permintaan tidak dikirim",
+        "cause": "Alamat yang disusun halaman, {{0}}, akan mengarah ke bagian panel yang lain dari yang dimaksud.",
+        "impact": "Tidak ada yang dikirim. Halaman ini kemungkinan dibuka dari tautan yang alamatnya janggal.",
+        "fix": "Buka halaman ini dari navigasi panel sendiri, bukan dari tautan tersebut."
       }
     }
   },

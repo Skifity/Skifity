@@ -4709,6 +4709,12 @@
         "cause": "A version is promoted to the app of the same name in another environment of the project, and {{0}} has none. This app's versions can go to {{1}}.",
         "impact": "Nothing was promoted.",
         "fix": "Create the app in {{0}} with the same name, or clone this environment in the panel, then promote again."
+      },
+      "request_refused": {
+        "title": "The request was not sent",
+        "cause": "The address the page built, {{0}}, would have reached another part of the panel than the one it was meant for.",
+        "impact": "Nothing was sent. The page was probably opened from a link with something odd in its address.",
+        "fix": "Open the page from the panel's own navigation rather than the link."
       }
     }
   },
