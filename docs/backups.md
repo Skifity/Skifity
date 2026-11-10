@@ -322,12 +322,21 @@ keeps the last twelve, which is three days:
 ls /var/lib/rancher/k3s/server/db/snapshots/
 ```
 
-They are a copy on the same disk. They save you from a bad upgrade or an object
-somebody deleted; they do not save you from losing the server, which is what
-copying that folder somewhere else is for. Skifity does not do that for you.
+They are a copy on the same disk, and they are not sent to the backup bucket.
+They save you from a bad upgrade or an object somebody deleted, on the server
+that took them. They do not save you from losing that server: with one control
+plane server, which is what the installer makes, they go with it.
 
-To put one back on a single-server cluster, stop k3s and reset the cluster from
-the snapshot:
+**Losing that server is recovered from the panel's own backup**, not from these.
+Install Skifity on a new server, put [the panel's database](#the-panel-itself)
+and the master key back, and the panel applies what it has recorded to the new
+cluster. [Restoring after losing the panel's server](troubleshooting.md#restoring-after-losing-the-panels-server)
+says how, and what comes back by itself and what does not. With [three control
+plane servers](adding-servers.md#control-plane-servers), losing one loses
+nothing of etcd: the other two hold it.
+
+To put a snapshot back on a single-server cluster, stop k3s and reset the
+cluster from it:
 
 ```sh
 sudo systemctl stop k3s
@@ -338,6 +347,49 @@ sudo systemctl start k3s
 This has not been run against a real cluster by the people who wrote it. Read
 [k3s's own page on it](https://docs.k3s.io/datastore/backup-restore) first, and
 do it on a server you can rebuild.
+
+### Sending them somewhere else yourself
+
+k3s can upload each snapshot to a bucket as well. Skifity does not turn that on,
+for three reasons:
+
+* k3s uploads them itself, so it needs the bucket's key: in its configuration
+  on every control plane server, or in a Secret in the cluster, which is then
+  inside every snapshot. The panel's own backups never hand the key to anything
+  ([storage](#storage) says how).
+* A snapshot opens only with the server's token,
+  `/var/lib/rancher/k3s/server/token`, and whoever has both has the cluster's
+  certificate authorities and every Secret in it. The token needs a home of its
+  own, away from the bucket.
+* Put back on a new server, a snapshot brings back objects that point at the
+  old one: volumes held on a server that is gone, images in a registry whose
+  disk went with it. The panel's database has neither problem, because the
+  panel applies what it records to whatever cluster it finds.
+
+If you want them off the server anyway, use k3s's own options, in a file the
+installer does not write, with a bucket and a key of their own rather than the
+backup bucket's. On each control plane server:
+
+```yaml
+# /etc/rancher/k3s/config.yaml.d/30-etcd-s3.yaml, readable by root alone
+etcd-s3: true
+etcd-s3-endpoint: s3.example.com
+etcd-s3-bucket: example-cluster-etcd
+etcd-s3-folder: snapshots
+etcd-s3-access-key: EXAMPLEKEY
+etcd-s3-secret-key: example-secret
+```
+
+then `sudo systemctl restart k3s`. Each scheduled snapshot is then uploaded as
+well as kept on disk, and k3s keeps as many in the bucket as Skifity asks it to
+keep on disk — twelve, but for the whole cluster rather than for each server —
+unless `etcd-s3-retention` says otherwise. Keep a copy of the token somewhere
+else too. With this file in place, restoring from the bucket takes the
+snapshot's file name alone as `--cluster-reset-restore-path`, and restoring one
+from the disk needs `--etcd-s3=false` beside the full path; [k3s's page on
+snapshots](https://docs.k3s.io/cli/etcd-snapshot) has both, and restoring onto
+a new server with `--token`. None of this has been run by the people who wrote
+Skifity.
 
 ## What is not backed up
 
