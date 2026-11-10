@@ -152,7 +152,7 @@ stateDiagram-v2
     Fingerprint --> Preflight: OS, RAM, disk, ports, conflicts
     Preflight --> KeyInstall: install panel-owned key, forget the password
     KeyInstall --> Firewall: allow cluster ports from member IPs only
-    Firewall --> Connectivity: verify both directions
+    Firewall --> Connectivity: reach a control plane on TCP 6443
     Connectivity --> Agent: install k3s agent and join
     Agent --> Ready: wait for node Ready, apply labels
     Ready --> [*]

@@ -239,11 +239,11 @@ wherever there is room, and an app whose server dies is restarted on another
 without anyone being woken up. Three control plane servers survive losing one.
 
 **Adding a server is an IP address and a password.** Skifity connects, checks
-the machine, installs a key of its own, configures the firewall, verifies the
-network in both directions, installs k3s and joins the cluster — seven steps,
-each shown as it happens. The password is used exactly once and never stored;
-a test scans every column of the database for it. Or let it order the server
-for you at Hetzner Cloud or DigitalOcean.
+the machine, installs a key of its own, configures the firewall, checks that it
+can reach the cluster's API server, installs k3s and joins the cluster — seven
+steps, each shown as it happens. The password is used exactly once and never
+stored; a test scans every column of the database for it. Or let it order the
+server for you at Hetzner Cloud or DigitalOcean.
 
 **Changing a setting does not rebuild your app.** What goes into the image is
 kept apart from what the container reads at start-up, so changing a variable is

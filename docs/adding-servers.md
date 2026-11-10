@@ -35,9 +35,13 @@ The panel shows these as they happen, and says what each one found.
 4. **Configuring the firewall.** The cluster's ports are opened to the other
    servers' addresses only, never to the world. The rules are checked before
    they are added, so running this again changes nothing.
-5. **Checking the network.** Both directions, before anything long-running
-   starts. Without this step, a firewall in the provider's control panel shows
-   up as a five-minute Kubernetes install that times out with no explanation.
+5. **Checking the network.** The new server opens a connection to a control
+   plane server on port 6443, before anything long-running starts. Without this
+   step, a firewall in the provider's control panel shows up as a five-minute
+   Kubernetes install that times out with no explanation. It is one port in one
+   direction: the pod network's UDP ports, etcd's ports between control plane
+   servers and connections towards the new server are not tested, here or
+   after the join. See [When a step fails](#when-a-step-fails).
 6. **Installing Kubernetes.** k3s joins the existing cluster, with the same pod
    network as every other server. That is normally WireGuard, which encrypts
    traffic between servers; a server whose kernel has no WireGuard module is
@@ -372,6 +376,22 @@ press Retry.
 servers. Providers such as Hetzner and DigitalOcean have their own firewall in
 the control panel, which the server cannot see or change. That is the usual
 cause.
+
+**The server is ready, but apps on it cannot reach the others.** The network
+check tries only TCP 6443 from the new server to a control plane server, and
+a node reports ready without a single packet of pod traffic having crossed to
+another server. Instances on it then time out talking to a database or an app
+on another server, and requests through another server's ingress to an
+instance on it hang. That is the pod network: UDP 51820 and 51821 with
+WireGuard, the default, or UDP 8472 with vxlan, between every pair of servers
+and in both directions. A control plane server also needs TCP 2379 and 2380
+to and from the other control plane servers; without them etcd cannot take it
+in, and the join stops at the five-minute wait for the server to be ready. The
+new server's own firewall is opened to the other servers for all of these, and
+so is the provider firewall of every server the panel created at a cloud
+provider. Nothing else is: a firewall running on a server that was already in
+the cluster, or one in your provider's control panel in front of a server you
+brought yourself, has to let them in from the new server's address.
 
 **Kubernetes did not install.** The log at
 `/var/log/skifity/provision-<id>.log` on the panel's server has the installer's
