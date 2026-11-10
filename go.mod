@@ -14,11 +14,11 @@ require (
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.47.0
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.1
-	k8s.io/metrics v0.37.1
-	k8s.io/streaming v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
+	k8s.io/metrics v0.37.2
+	k8s.io/streaming v0.37.2
 	modernc.org/sqlite v1.60.1
 	rsc.io/qr v0.2.0
 	sigs.k8s.io/yaml v1.6.0
