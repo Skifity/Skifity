@@ -615,17 +615,27 @@ echo "uninstalled=yes"
 //
 // It is run on the server being added and pointed at an existing member, which
 // tests the direction that a provider firewall usually blocks.
+//
+// The fallback for a server without nc is bash's /dev/tcp, and it is asked of
+// bash by name. It used to be `sh -c`, and sh is dash on Debian and Ubuntu,
+// which has no /dev/tcp: on the two distributions Skifity is tested on, a
+// server without nc reported every open port closed, and joining stopped at a
+// firewall that was not there. The address reaches bash as an argument rather
+// than spliced into the script bash runs, so it is never read as shell twice.
+//
+// A failed nc falls through to bash rather than settling it, because an nc
+// without -z, which some distributions ship, fails the way a closed port does.
 func ConnectivityScript(targetIP string, port int) string {
 	return fmt.Sprintf(`
 set -u
 TARGET=%s
 PORT=%d
 
-# Prefer a real TCP connect; fall back to whatever the machine has.
 if command -v nc >/dev/null 2>&1; then
   if nc -z -w 5 "$TARGET" "$PORT" 2>/dev/null; then echo "reachable=yes"; exit 0; fi
-elif command -v timeout >/dev/null 2>&1; then
-  if timeout 5 sh -c "exec 3<>/dev/tcp/$TARGET/$PORT" 2>/dev/null; then echo "reachable=yes"; exit 0; fi
+fi
+if command -v bash >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+  if timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/$2"' probe "$TARGET" "$PORT" 2>/dev/null; then echo "reachable=yes"; exit 0; fi
 fi
 echo "reachable=no"
 `, shellsafe.Quote(targetIP), port)
