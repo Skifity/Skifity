@@ -1,7 +1,8 @@
 # Progress
 
 Read this file, `CLAUDE.md` and `docs/decisions.md` first if you are picking this
-project up cold.
+project up cold. For where it stands in one page, read
+[Where Skifity stands](status.md); this file is the log behind it.
 
 ## Sandbox constraints (important)
 

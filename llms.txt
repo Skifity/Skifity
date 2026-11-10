@@ -424,5 +424,6 @@ to, through POST /api/upgrade/check.
 ## Source
 
 <https://github.com/Skifity/Skifity>. `CLAUDE.md` in the repository is the
-working guide, `docs/decisions.md` records why things are the way they are, and
-`docs/architecture.md` has the diagrams.
+working guide, `docs/decisions.md` records why things are the way they are,
+`docs/architecture.md` has the diagrams, and `docs/status.md` says where the
+project stands, including what has never been run.

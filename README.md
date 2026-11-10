@@ -533,6 +533,7 @@ For people working on Skifity rather than running it:
 
 | | |
 |---|---|
+| [Where it stands](docs/status.md) | One page: the releases, what runs on every push, and what has never run |
 | [Architecture](docs/architecture.md) | How it fits together |
 | [Decisions](docs/decisions.md) | Why it is like this |
 | [Progress](docs/progress.md) | Where the work stands, including what has never run |
@@ -580,7 +581,8 @@ restart that put both of an app's instances on one server, builds that could
 not clone from a Git host on one's own network, a removed server taking its
 ingress away mid-request, single sign-on refused on a fresh install, an app
 made from a clone URL that no push ever deployed — and each is fixed.
-[`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
+[Where it stands](docs/status.md) is the one-page summary, including what has
+never been run; [`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
 platform is judged on that proves, and [`docs/progress.md`](docs/progress.md)
 what each run found. Try it on a spare VPS first.
 
