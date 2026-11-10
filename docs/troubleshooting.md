@@ -714,17 +714,108 @@ The panel's database and master key live on the first control plane server, in
 2. Install Skifity on the new server.
 3. Stop the panel: `kubectl -n skifity-system scale deploy/skifity-panel --replicas=0`
 4. Put `/root/panel-backup.db` in place as `/var/lib/skifity/panel.db`, and copy
-   `/etc/skifity/master.key` across.
+   `/etc/skifity/master.key` across. Code sent from a folder is kept beside the
+   database, in `/var/lib/skifity/uploads`: copy that too.
 5. Start it again: `kubectl -n skifity-system scale deploy/skifity-panel --replicas=1`
 
 If the old server is gone rather than being moved, the copy is the newest one
 in the backup bucket under `skifity/panel/`. Install Skifity on the new server,
-put the master key in place, and follow [Putting it back](backups.md#putting-it-back):
-`skifity admin restore-db` checks the copy before it replaces anything.
+with the same `--domain` if the panel had one, put the master key in place, and
+follow [Putting it back](backups.md#putting-it-back): `skifity admin restore-db`
+checks the copy before it replaces anything.
 
 Without the master key the database is unreadable, which is the point of the
 recovery key you were asked to download. [Configuration](configuration.md) has
 the full list of what to back up.
+
+### What comes back onto a new cluster
+
+When the old server is gone, the cluster that was on it usually went with it,
+and the panel starts on a new, empty one with everything it had recorded. What
+that brings back depends on where each thing lived: in the panel's database, or
+on the old server's disk. This is read from the code; a restore into a
+different cluster has not yet been run from start to finish by the people who
+wrote it.
+
+**Comes back by itself.** Accounts, teams, projects, environments, apps and
+their settings, variables, domains, schedules, notification channels, backup
+storage and history: they are the database, and their secrets open with the
+master key the backup was taken with. The collector that ships logs to drains
+is applied again within five minutes, and the image registry the first time
+anything is built.
+
+**Does not come back by itself:**
+
+* **The apps.** Within a few minutes the panel compares each deployed app with
+  the new cluster, finds its objects gone, marks it **Changed outside
+  Skifity** and sends `app.drifted` once. An app set to **Put back
+  automatically** is applied again by itself; every other one waits, since that
+  is off by default ([why](#changed-outside-skifity)).
+* **The images the panel built.** They were in the registry inside the cluster,
+  on the old server's disk, and that is not backed up. An app the panel built
+  that is only put back stops at an image that cannot be pulled, and so does a
+  rollback to any earlier version. Images pushed to an **External registry**,
+  under Settings, are still there.
+* **Code sent from a folder**, which was in `/var/lib/skifity/uploads` and is
+  not in the backup.
+* **What was on volumes and in managed databases.** With the storage k3s ships,
+  it was on the old server's disk. A managed database's own objects are not
+  made again either: its page says its Kubernetes object is gone.
+* **Components** installed under **Settings → Components**. At start the panel
+  looks for each one it has down as installed, and lists the ones it does not
+  find as not installed.
+* **Two settings that describe the old server**: **Cluster public IP**, which
+  every sslip.io address and every DNS record the panel keeps points at, and
+  **How servers talk to each other**. Both come from the backup, not from the
+  new server.
+* **The other servers.** They were members of the old cluster, and are listed
+  as not responding.
+
+**Getting the rest back**, in this order:
+
+1. Under **Settings → Domains and HTTPS**, set **Cluster public IP** to the new
+   server's address if it changed. Records at a connected DNS provider follow
+   within minutes; a record anywhere else is yours to change. Before adding
+   another server, make **How servers talk to each other** the pod network the
+   installer printed on this one.
+2. Under **Settings → Components**, install again what the apps used: HTTPS
+   certificates for any domain with a certificate, scale to zero, and
+   PostgreSQL before a PostgreSQL database is touched in step 5. The registry is
+   also installed by the first build.
+3. Build each app the panel built, afresh. **Deploy now** builds the branch as
+   it is now; `skifity deploy --app <id> --commit <sha> --force` builds exactly
+   the version that ran, and without `--force` a commit already built is taken
+   for the image that is gone. A deploy applies all of the app's objects, so
+   there is nothing to put back first. An app that runs an image from a
+   registry elsewhere only needs **Put it back**. One sent from a folder needs
+   `skifity up` from that folder again, then `skifity deploy --force`, because
+   the same code sent again is taken for the same image.
+4. Restore each volume from its newest backup, on the app's **Storage** tab: the
+   deploy made the volume again, empty.
+5. Make each managed database again and load its newest backup. Its backups are
+   in the bucket under `skifity/database/<its id>/`, the id being what follows
+   `/databases/` in the address of its page. Delete it, create one with the same
+   name, engine and version, and link the apps to it again. Then download the
+   backup, open it if it is sealed, and [import it](databases.md#importing-a-dump):
+
+   ```sh
+   SKIFITY_BACKUP_PASSPHRASE='…' skifity backup-open ./20261108-031700-bak-9f2c-orders.gz
+   skifity db import orders ./20261108-031700-bak-9f2c-orders.gz --wait
+   ```
+
+   `backup-open` opens the file where it is, on any machine with the `skifity`
+   binary. A backup taken before there was a passphrase needs no opening.
+6. Remove the old servers under **Servers**, and add new ones.
+
+There is no single action that does all of this. Each app is built or put back
+on its own, which keeps a new server from being asked to build every app at
+once.
+
+If the cluster survived — three control plane servers, and the panel's server
+was one of them — the apps' objects are still in it and there is nothing to put
+back. What was on the lost server's own disk is gone all the same: the
+registry's images, if it ran there, and any volume or database kept there, which
+[a server that is not responding](#a-server-says-not-responding) covers.
 
 ## Full monitoring
 

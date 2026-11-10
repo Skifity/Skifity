@@ -604,6 +604,14 @@ back — a copy from `backup-db`, or one the panel uploaded to the backup bucket
 and without `--yes` only checks it and says what it would do. See
 [Backups](backups.md#putting-it-back).
 
+A backup sealed with the backup passphrase, of a database or a volume, opens on
+any machine with the binary, in place — for loading a database's backup with
+`skifity db import` once the database it was taken from is gone:
+
+```sh
+SKIFITY_BACKUP_PASSPHRASE='…' skifity backup-open ./20261108-031700-bak-9f2c-orders.gz
+```
+
 The master key has its own way back. The recovery key the panel showed at setup
 is read from standard input, so it stays out of the process list and the shell's
 history:

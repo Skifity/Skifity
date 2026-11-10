@@ -57,11 +57,11 @@ func (c *Cluster) installComponent(ctx context.Context, name string) error {
 	case "registry":
 		return c.installRegistry(ctx)
 	case "cloudnative-pg":
-		return c.installFromURL(ctx, name, kube.DatabaseOperatorNamespace, "cnpg-controller-manager")
+		return c.installFromURL(ctx, name, kube.DatabaseOperatorNamespace, cnpgOperatorDeployment)
 	case "keda":
 		return c.installKEDA(ctx)
 	case "longhorn":
-		return c.installFromURL(ctx, name, "longhorn-system", "longhorn-driver-deployer")
+		return c.installFromURL(ctx, name, "longhorn-system", longhornDeployerDeployment)
 	case "cloudflare-tunnel":
 		return c.installCloudflareTunnel(ctx)
 	case UpgradeComponent:
@@ -413,7 +413,7 @@ const registryImage = "registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826
 // installKEDA installs KEDA and its HTTP add-on, which together provide
 // scale-to-zero.
 func (c *Cluster) installKEDA(ctx context.Context) error {
-	if err := c.installFromURL(ctx, "keda", "keda", "keda-operator"); err != nil {
+	if err := c.installFromURL(ctx, "keda", "keda", kedaOperatorDeployment); err != nil {
 		return err
 	}
 	url, _, err := c.settingOr(ctx, "components.keda_http_url", defaultKEDAHTTPURL)

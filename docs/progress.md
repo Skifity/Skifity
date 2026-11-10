@@ -7298,3 +7298,39 @@ cluster. k3s is measured on the Cluster workflow's runner: 748–780 MiB just
 after a fresh install, which adds about 1 GB to the machine in all, and
 922–1,040 MiB with every component this checks installed, on a machine with
 16 GB.
+
+## What a restored panel brings back onto a new cluster
+
+`docs/troubleshooting.md` restored the panel's database and stopped. It now says
+what comes back by itself, what does not, and how to get the rest back, read
+against the restore path: `skifity admin restore-db`, what the panel does at
+start, the drift check and the deployer.
+
+Reading it found one thing that could not be got back from the panel at all.
+Components are recorded as installed in the database, and the Install button,
+`EnsureComponent` and the first PostgreSQL database all go by that record; a
+database restored onto a new cluster listed PostgreSQL, scale to zero and the
+rest as installed on a cluster that had none of them, and a PostgreSQL database
+whose objects were gone could not even be deleted without its operator's kinds.
+At start, the panel now looks for the workload each component's install waits
+for (`SettleComponents`, in `internal/cluster/settle.go`), and records a
+component whose workload is not there as not installed, so it is offered again.
+Only "not found" counts; any other answer changes nothing.
+
+A "re-apply everything" action was considered and not built. The drift check
+already finds every app whose objects are gone and says so once, and putting an
+app back is not enough for one the panel built: its image was in the registry on
+the lost disk, so it needs a build, and building every app at once is the last
+thing a new server should be asked to do. A managed database whose objects are
+gone is made again by hand and its backup imported, with `skifity backup-open`
+for a sealed one; making it again from its record, so that its own backups
+restore into it, is left for later.
+
+**Tested.** The check against a fake clientset: missing components are offered
+again, present and not-installed ones are left be, a second start changes
+nothing, a cluster that answers with an error changes nothing, and every
+component the panel installs has a workload to look for.
+
+**Not executed.** A restore into a different cluster from start to finish,
+which `docs/checklist.md` already lists as owed by somebody with servers of
+their own.

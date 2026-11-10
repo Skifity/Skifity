@@ -311,6 +311,11 @@ was taken with at `/etc/skifity/master.key` before starting the panel, or pass
 the one you have with `--master-key`. A panel started with the wrong key comes
 up with every secret unreadable.
 
+Put back on a new server with a new cluster, the panel finds none of its apps,
+volumes or databases there. [What comes back onto a new
+cluster](troubleshooting.md#what-comes-back-onto-a-new-cluster) says which come
+back by themselves, and how to bring back the rest.
+
 ## The cluster's own state
 
 Everything Kubernetes knows — which apps exist, their configuration, the

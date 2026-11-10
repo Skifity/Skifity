@@ -102,6 +102,12 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 			if clusterVersion, err := kubeClient.Version(ctx); err == nil {
 				log.Info("connected to the cluster", "kubernetes_version", clusterVersion)
 			}
+			// A database restored onto a new server has components down as
+			// installed that this cluster never had; they are offered again
+			// rather than taken on the record's word. Each is logged.
+			if _, err := clusterAdapter.SettleComponents(ctx); err != nil {
+				log.Warn("could not check the components against the cluster", "error", err)
+			}
 			// What the installer set up for certificates, recorded where the
 			// panel shows and changes it, and the issuer made for a
 			// cert-manager that has none. Not being able to is no reason not
