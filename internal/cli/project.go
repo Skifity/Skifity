@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 	"skifity/internal/version"
 )
@@ -225,8 +226,8 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 		// registered to make that true. Said here, or nobody finds out until
 		// a push does nothing.
 		fmt.Fprintln(out, "Deploy on push is on, but no webhook was registered: this app has no Git connection to register one with.")
-		fmt.Fprintf(out, "  Connect your Git account in the panel under Settings, Git, then choose it in the app's settings: %s/apps/%s?tab=settings\n",
-			strings.TrimSuffix(cfg.PanelURL, "/"), created.App.ID)
+		fmt.Fprintf(out, "  Connect your Git account in the panel under Settings, Git, then choose it in the app's settings: %s%s\n",
+			strings.TrimSuffix(cfg.PanelURL, "/"), panelpath.App(created.App.ID, panelpath.AppSettings))
 	case created.Webhook.URL != "":
 		if created.Webhook.Registered {
 			fmt.Fprintln(out, "Deploy on push is set up: a push to this repository deploys it.")
