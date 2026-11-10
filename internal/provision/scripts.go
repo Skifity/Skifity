@@ -468,8 +468,10 @@ func installScript(version, token, serverURL, args string, isServer bool) string
 	if version != "" {
 		fmt.Fprintf(&env, "INSTALL_K3S_VERSION=%s ", shellsafe.Quote(version))
 	} else {
-		// Without a version the installer follows the stable channel, which is
-		// what we want by default: it moves forward without a Skifity release.
+		// Without a version the installer follows the stable channel. The
+		// provisioner always has one to give — the setting, the cluster's, or
+		// the one this release was tested with — so this is only what a caller
+		// with none gets.
 		env.WriteString(`INSTALL_K3S_CHANNEL="stable" `)
 	}
 	if token != "" {

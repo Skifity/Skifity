@@ -67,6 +67,17 @@ git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
 
+The same file pins the k3s a fresh install gets, `K3S_VERSION`, and it is the
+one place that says which k3s a release was tested with. The Cluster and Two
+servers workflows install with this file, so the version there is the one they
+passed on before the tag; the panel reads the same line (`installer/embed.go`)
+for a server it installs as the first of a new cluster, and shows it as the
+default of **Settings → Cluster → Kubernetes version**. To move to a newer k3s,
+change that line on its own commit and let those runs pass before setting
+`RELEASED_VERSION`; the newest k3s is the `stable` entry of
+`https://update.k3s.io/v1-release/channels`. The release workflow refuses a value
+that is not a k3s release, and names the version in the release notes.
+
 The workflow refuses a tag whose installer disagrees with it — a step reads
 `RELEASED_VERSION` out of `installer/install.sh` and fails the release when it is
 not the tag being built. Getting that wrong would publish an installer that

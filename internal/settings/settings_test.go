@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"skifity/installer"
 	"skifity/internal/pluginstore"
 )
 
@@ -134,6 +135,7 @@ func TestEverySwitchSaysWhatUnsetMeans(t *testing.T) {
 		KeyScanEnabled: "true", KeyGeoEnabled: "true", KeySMTPTLS: "true",
 		KeyBuilderDefault: "railpack", KeyFlannelBackend: FlannelWireGuard,
 		KeyScanSchedule: DefaultScanSchedule, KeyPluginStoreURL: pluginstore.DefaultIndexURL,
+		KeyK3sVersion: installer.K3sVersion,
 	} {
 		def, _ := Lookup(key)
 		if def.Default != want {

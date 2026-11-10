@@ -70,6 +70,22 @@ jobs:
           fi
           echo "installer/install.sh installs ${declared}"
 
+      # The k3s a fresh install of this release gets: K3S_VERSION in the
+      # installer, which Cluster and Two servers installed and passed on
+      # before tag.yml tagged the commit. A release that cannot say which k3s
+      # it was tested with is not published; the release notes name it.
+      - name: The k3s this release was tested with
+        run: |
+          set -eu
+          k3s=$(SKIFITY_INSTALLER_LIB=1 sh -c '. ./installer/install.sh; printf "%s" "$K3S_VERSION"')
+          if ! printf '%s' "$k3s" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+[+]k3s[0-9]+$'; then
+            echo "installer/install.sh says K3S_VERSION=\"${k3s}\", which is not a k3s release such as v1.37.2+k3s1." >&2
+            echo "Set it to the k3s the Cluster workflow passed on. See docs/releasing.md." >&2
+            exit 1
+          fi
+          echo "K3S_VERSION=${k3s}" >> "$GITHUB_ENV"
+          echo "A fresh install of ${GITHUB_REF_NAME} gets k3s ${k3s}"
+
       - uses: goreleaser/goreleaser-action@v7
         id: goreleaser
         with:

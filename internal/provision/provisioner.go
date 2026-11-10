@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/installer"
 	"skifity/internal/api"
 	"skifity/internal/cloud"
 	"skifity/internal/cluster"
@@ -885,7 +886,6 @@ func (p *Provisioner) rememberToken(ctx context.Context, token string) error {
 	return p.db.SetSetting(ctx, clusterTokenKey, sealed, true, "system")
 }
 
-// k3sVersion reads the pinned version, or empty for the stable channel.
 // flannelBackend returns the pod network every node in this cluster uses.
 //
 // It is one setting for the whole cluster rather than a per-server choice,
@@ -915,7 +915,7 @@ func (p *Provisioner) flannelBackend(ctx context.Context) string {
 func (p *Provisioner) joinVersion(ctx context.Context) (string, error) {
 	if p.clusterVersion == nil {
 		// No cluster to ask, which is a panel run outside the cluster it
-		// manages. The setting, or the stable channel, as before.
+		// manages. The setting, or the version this release was tested with.
 		return p.k3sVersion(ctx), nil
 	}
 	running, err := p.clusterVersion(ctx)
@@ -936,10 +936,14 @@ func (p *Provisioner) joinVersion(ctx context.Context) (string, error) {
 	return running, nil
 }
 
+// k3sVersion is the version the first server of a new cluster is installed
+// with: the one somebody set, or else the one this release was tested with,
+// which install.sh pins for the same reason. Following the stable channel
+// instead installed a Kubernetes no release of Skifity had run on.
 func (p *Provisioner) k3sVersion(ctx context.Context) string {
 	value, _, err := p.db.GetSetting(ctx, settings.KeyK3sVersion)
-	if err != nil {
-		return ""
+	if err != nil || value == "" {
+		return installer.K3sVersion
 	}
 	return value
 }

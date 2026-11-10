@@ -7290,6 +7290,37 @@ moves a real panel to a domain with a certificate from Pebble and back; the two
 Playwright tests, one of which reaches the panel as `panel.localhost`; and the
 two new checks in `test/smoke/installer.sh`. None of them was run here.
 
+## Fresh installs get the k3s a release was tested with
+
+A fresh install followed k3s's `stable` channel, in `installer/install.sh` and in
+the panel's own first-server script, so a Skifity release installed whatever
+Kubernetes k3s had published that day, including one no release had run on.
+Joining already matched the running cluster (`joinVersion`), and still does.
+
+`K3S_VERSION` in `installer/install.sh` is now the one place a release records
+its k3s, `v1.37.2+k3s1` to start with: the version the last green Cluster run on
+`main` (42745023544) installed. The installer passes it as `INSTALL_K3S_VERSION`;
+`--channel NAME` is the opt-in back to a channel, and passes the channel alone.
+The panel reads the same line through `installer/embed.go` for a server it
+installs as the first of a new cluster when **Kubernetes version** is empty,
+and shows it as that setting's default. The Cluster and Two servers workflows
+install with this file, so tag.yml tags nothing that did not pass on that
+version; the release workflow refuses a release whose installer has no k3s
+release there, and the release notes name it. `docs/releasing.md` says how to
+move it.
+
+**Tested.** `installer`: Go and `sh` read the same value, and it is a k3s
+release. `provision`: the first server is installed at the pinned version with
+the setting empty, at the setting otherwise, and never with a channel; a
+second server still joins at the cluster's version. `settings`: the default is
+the installer's. `test/smoke/installer.sh`: a fresh install passes the version
+and no channel, `--channel stable` passes the channel and no version and says
+so, and a channel with a `;` in it is refused.
+
+**Not executed.** A real install at the pinned version: the next Cluster and Two
+servers runs are the first, and the release workflow's new step runs on the next
+tag.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,

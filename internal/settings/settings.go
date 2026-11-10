@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"skifity/installer"
 	"skifity/internal/cron"
 	"skifity/internal/pluginstore"
 )
@@ -54,7 +55,7 @@ type Definition struct {
 	// Default is what the panel does while the setting is unset, written as
 	// the value that would say the same thing: "true" for a switch that is on
 	// until somebody turns it off. Empty when unset means "nothing", or
-	// something no value can say, such as following k3s's stable channel.
+	// something no value can say.
 	//
 	// It is not written anywhere. The code that reads the setting decides
 	// what unset means, and this has to agree with it — the panel drew
@@ -311,10 +312,13 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
-		Help: "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported.",
+		Help: "The k3s version the first server of a new cluster is installed with. Leave empty for the version this release of Skifity was tested with. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported.",
 		// A k3s release, which is a Kubernetes version with a k3s suffix.
 		Placeholder: "v1.34.1+k3s1",
 		Validate:    validateK3sVersion,
+		// What the installer pins, read from it: the field shows it while
+		// empty, and it moves with every release that moves the installer.
+		Default: installer.K3sVersion,
 	},
 	{
 		Key: KeyPreviewTTLDays, Label: "Remove preview environments after", Group: GroupCluster,

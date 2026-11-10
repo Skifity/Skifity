@@ -153,6 +153,11 @@ release:
     Each installer installs the release it is attached to, with the Kubernetes
     objects that release's image was built with.
 
+    A fresh install runs k3s {{ envOrDefault "K3S_VERSION" "at the version installer/install.sh pins" }},
+    the version this release was tested with. `--channel stable` follows k3s's
+    stable channel instead. A server added later joins at the version its
+    cluster runs.
+
     Already running Skifity? Run the same command again. It copies the
     panel's database first, keeps your domain and certificates, and prints the
     commands that go back if this release does not come up.

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"skifity/installer"
 	"skifity/internal/api"
 	"skifity/internal/crypto"
 	"skifity/internal/errdoc"
@@ -685,6 +686,53 @@ func TestASecondServerJoinsAtTheClustersVersion(t *testing.T) {
 	}
 	if strings.Contains(install, "v1.35.0") || strings.Contains(install, "INSTALL_K3S_CHANNEL") {
 		t.Fatalf("the server joined at a version the cluster is not running:\n%s", install)
+	}
+}
+
+// The first server of a new cluster gets the k3s this release was tested with,
+// which is what install.sh pins too, unless somebody set another. It used to
+// follow the stable channel, which moves the day k3s publishes a release no
+// version of Skifity has run on.
+func TestTheFirstServerGetsTheK3sThisReleaseWasTestedWith(t *testing.T) {
+	for _, tc := range []struct{ name, setting, want string }{
+		{"nothing set", "", installer.K3sVersion},
+		{"a version set", "v1.35.0+k3s1", "v1.35.0+k3s1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, db, _, teamID := testHarness(t)
+			if tc.setting != "" {
+				if err := db.SetSetting(t.Context(), settings.KeyK3sVersion, tc.setting, false, "test"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sshServer := healthyServer(t)
+			host, port := sshServer.Addr()
+			op, err := p.AddServer(t.Context(), api.AddServerRequest{
+				TeamID: teamID, Name: "node-1", Host: host, SSHPort: port, SSHUser: "root", Password: "hunter2",
+			})
+			if err != nil {
+				t.Fatalf("AddServer: %v", err)
+			}
+			if finished := waitForOperation(t, db, op.ID); finished.Status != store.OpSucceeded {
+				t.Fatalf("adding failed: %s %s", finished.ErrorCode, finished.ErrorMsg)
+			}
+
+			var install string
+			for _, command := range sshServer.Commands() {
+				if strings.Contains(command, "get.k3s.io") {
+					install = command
+				}
+			}
+			if !strings.Contains(install, "--cluster-init") {
+				t.Fatalf("this was meant to be the first server of a new cluster:\n%s", install)
+			}
+			if !strings.Contains(install, "INSTALL_K3S_VERSION='"+tc.want+"'") {
+				t.Fatalf("the first server was not installed at %s:\n%s", tc.want, install)
+			}
+			if strings.Contains(install, "INSTALL_K3S_CHANNEL") {
+				t.Fatalf("the first server followed a channel rather than a version:\n%s", install)
+			}
+		})
 	}
 }
 

@@ -446,7 +446,7 @@ esac
 
 for bad in "--domain not_a_domain" "--domain localhost" "--email nobody" "--email a&b@example.test" \
   "--public-ip 300.1.2.3" "--public-ip example.test" "--pod-network calico" "--version v1;rm" \
-  "--image registry.example.test/a|b" "--staging=1"; do
+  "--image registry.example.test/a|b" "--staging=1" "--channel stable;id"; do
   # Word splitting into an option and its value is the point.
   # shellcheck disable=SC2086
   out=$( (parse_args $bad) 2>&1) && status=0 || status=$?
@@ -1172,7 +1172,8 @@ if [ -n "${STUB_K3S_DOWNLOAD_FAILS:-}" ]; then
   fi
 fi
 printf '%s\n' "$INSTALL_K3S_EXEC" >"$STUB_DIR/k3s-exec"
-printf '%s\n' "$INSTALL_K3S_CHANNEL" >"$STUB_DIR/k3s-channel"
+printf '%s\n' "${INSTALL_K3S_VERSION:-}" >"$STUB_DIR/k3s-version"
+printf '%s\n' "${INSTALL_K3S_CHANNEL:-}" >"$STUB_DIR/k3s-channel"
 mkdir -p "$STUB_ROOT/etc/systemd/system" "$STUB_ROOT/var/lib/rancher/k3s/server" "$STUB_ROOT/etc/rancher/k3s"
 for arg in $INSTALL_K3S_EXEC; do printf "    '%s' \\\\\n" "$arg"; done >"$STUB_ROOT/etc/systemd/system/k3s.service"
 printf 'K10fake::server:not-a-real-token\n' >"$STUB_ROOT/var/lib/rancher/k3s/server/token"
@@ -1256,6 +1257,23 @@ case "$status:$(cat "$FAKE/stub/k3s-attempts" 2>/dev/null):$out" in
 *) t_fail "a k3s download that keeps failing should stop after three attempts ($status, $(cat "$FAKE/stub/k3s-attempts" 2>/dev/null) attempts)" ;;
 esac
 
+# --channel is the way back to following k3s's own channel, asked for rather
+# than the default. One variable or the other: k3s's installer takes a version
+# over a channel, so passing both would ignore what was asked.
+FAKE="$WORKDIR/root-channel"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --channel stable 2>&1) && status=0 || status=$?
+case "$status:$(cat "$FAKE/stub/k3s-channel" 2>/dev/null):$(cat "$FAKE/stub/k3s-version" 2>/dev/null)" in
+0:stable:) t_pass "--channel stable follows k3s's stable channel instead of the tested version" ;;
+*) t_fail "--channel stable should pass the channel and no version ($status, channel '$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)', version '$(cat "$FAKE/stub/k3s-version" 2>/dev/null)'):
+$out" ;;
+esac
+case "$out" in
+*"newest release on its stable channel, rather than the version this release of Skifity was tested with"*) t_pass "and says it is not the version this release was tested with" ;;
+*) t_fail "a channel install should say it is not the tested version, got:
+$out" ;;
+esac
+
 # A fresh server behind NAT, no domain: the common case.
 FAKE="$WORKDIR/root-http"
 fake_root "$FAKE"
@@ -1281,6 +1299,15 @@ if grep -q -- "--flannel-backend=wireguard-native" "$FAKE/stub/k3s-exec" 2>/dev/
   t_pass "k3s is installed with embedded etcd and an encrypted pod network"
 else
   t_fail "k3s was not installed with the expected flags: $(cat "$FAKE/stub/k3s-exec" 2>/dev/null)"
+fi
+# The k3s this release was tested with, not whatever k3s's stable channel says
+# that day: the channel moves without a Skifity release.
+if printf '%s' "$K3S_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+$' &&
+  [ "$(cat "$FAKE/stub/k3s-version" 2>/dev/null)" = "$K3S_VERSION" ] &&
+  [ -z "$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)" ]; then
+  t_pass "k3s is installed at $K3S_VERSION, the version this release was tested with"
+else
+  t_fail "k3s should be installed at K3S_VERSION ($K3S_VERSION), got version '$(cat "$FAKE/stub/k3s-version" 2>/dev/null)' and channel '$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)'"
 fi
 if [ -e "$FAKE/stub/k3s-read-stdin" ]; then
   t_fail "k3s's installer was handed the installer's stdin"

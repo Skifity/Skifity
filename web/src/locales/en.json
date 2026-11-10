@@ -1999,7 +1999,7 @@
       },
       "cluster_k3s_version": {
         "label": "Kubernetes version",
-        "help": "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported."
+        "help": "The k3s version the first server of a new cluster is installed with. Leave empty for the version this release of Skifity was tested with. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported."
       },
       "cluster_preview_ttl_days": {
         "label": "Remove preview environments after",

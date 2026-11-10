@@ -1970,7 +1970,7 @@
       },
       "cluster_k3s_version": {
         "label": "Versi Kubernetes",
-        "help": "Versi k3s yang dipasang di server pertama sebuah cluster baru. Kosongkan untuk mengikuti kanal stable. Server yang ditambahkan kemudian bergabung dengan versi yang sedang dijalankan cluster, apa pun isi pengaturan ini, karena server yang lebih baru dari cluster-nya tidak didukung."
+        "help": "Versi k3s yang dipasang di server pertama sebuah cluster baru. Kosongkan untuk memakai versi yang sudah diuji dengan rilis Skifity ini. Server yang ditambahkan kemudian bergabung dengan versi yang sedang dijalankan cluster, apa pun isi pengaturan ini, karena server yang lebih baru dari cluster-nya tidak didukung."
       },
       "cluster_preview_ttl_days": {
         "label": "Hapus environment pratinjau setelah",

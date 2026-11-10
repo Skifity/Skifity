@@ -37,7 +37,8 @@
 #   --image REFERENCE    SKIFITY_IMAGE         a full image reference, overriding --version
 #   --pod-network NAME   SKIFITY_POD_NETWORK   wireguard-native or vxlan; default: wireguard-native
 #                                              when the kernel has the module, vxlan otherwise
-#   --channel NAME       SKIFITY_CHANNEL       the k3s channel (default: stable)
+#   --channel NAME       SKIFITY_CHANNEL       follow a k3s release channel, such as stable, instead
+#                                              of K3S_VERSION below, the k3s this release was tested with
 #   --skip-k3s           SKIFITY_SKIP_K3S=1    k3s is already installed and configured
 #   --skip-firewall      SKIFITY_SKIP_FIREWALL=1  leave the host firewall alone
 #   --no-snapshot        SKIFITY_NO_SNAPSHOT=1    do not copy the panel's database before an upgrade
@@ -69,6 +70,16 @@ PROJECT_REPO="${SKIFITY_REPO:-Skifity/Skifity}"
 # anything on this machine changes rather than after k3s is installed.
 RELEASED_VERSION="v0.1.1"
 
+# The k3s release a fresh install gets: the one this release was tested with.
+# The Cluster and Two servers workflows install with this file, so this is the
+# version they passed on, and tag.yml tags no commit they have not passed. A
+# release that moves to a newer k3s changes this line and nothing else: the
+# panel reads it too (installer/embed.go), for a server it installs as the
+# first of a new cluster. Following k3s's stable channel instead moved every
+# fresh install to a Kubernetes no Skifity release had run on, the day k3s
+# published it. --channel still does that, for whoever asks.
+K3S_VERSION="v1.37.2+k3s1"
+
 # derive_release works out what is installed and where its objects come from.
 # It runs when this file is read and again after the options are parsed,
 # because --version and --image change all of it.
@@ -94,7 +105,8 @@ CONFIG_DIR="/etc/skifity"
 DATA_DIR="/var/lib/skifity"
 LOG_FILE="/var/log/skifity-install.log"
 MANIFEST_DIR="/var/lib/skifity/manifests"
-K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
+# A k3s release channel to follow instead of K3S_VERSION; empty unless asked.
+K3S_CHANNEL="${SKIFITY_CHANNEL:-}"
 # The pod network. Decided in pick_pod_network below, unless it is set here.
 POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
@@ -701,7 +713,8 @@ Options:
   --image REFERENCE    a full image reference, overriding --version
   --pod-network NAME   wireguard-native or vxlan (default: wireguard-native when
                        the kernel has the module)
-  --channel NAME       the k3s release channel (default: stable)
+  --channel NAME       follow a k3s release channel, such as stable, instead of
+                       k3s ${K3S_VERSION}, the version this release was tested with
   --skip-k3s           use the k3s already installed here as it is
   --skip-firewall      leave the host firewall alone
   --no-snapshot        do not copy the panel's database before an upgrade; without
@@ -860,7 +873,7 @@ validate_settings() {
 		printf '%s' "$SKIFITY_CHANNEL" | grep -Eq '^[A-Za-z0-9._+-]+$' ||
 			usage_error "\"$SKIFITY_CHANNEL\" is not a k3s channel, such as stable or latest."
 	fi
-	K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
+	K3S_CHANNEL="${SKIFITY_CHANNEL:-}"
 	POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 }
 
@@ -1652,6 +1665,15 @@ install_k3s() {
 
 	write_kubelet_config
 	write_etcd_config
+	# One variable or the other, never both: k3s's installer takes a version
+	# over a channel, so passing both would quietly ignore --channel.
+	if [ -n "$K3S_CHANNEL" ] || [ -z "$K3S_VERSION" ]; then
+		k3s_wanted="INSTALL_K3S_CHANNEL=${K3S_CHANNEL:-stable}"
+		note "k3s: the newest release on its ${K3S_CHANNEL:-stable} channel, rather than the version this release of Skifity was tested with"
+	else
+		k3s_wanted="INSTALL_K3S_VERSION=${K3S_VERSION}"
+		note "k3s ${K3S_VERSION}, the version this release of Skifity was tested with"
+	fi
 	note "This downloads and starts k3s, which takes a minute or two."
 	download https://get.k3s.io "$TMP_DIR/k3s-install.sh" 120 || fail \
 		"Could not download the k3s installer from get.k3s.io." \
@@ -1668,7 +1690,7 @@ install_k3s() {
 	# from the beginning each time and is safe to run again.
 	k3s_attempt=1
 	until with_progress "Installing Kubernetes (k3s)" k3s_install_detail \
-		env INSTALL_K3S_CHANNEL="$K3S_CHANNEL" \
+		env "$k3s_wanted" \
 		INSTALL_K3S_EXEC="server --cluster-init --flannel-backend=${POD_NETWORK} --write-kubeconfig-mode=0600 --secrets-encryption" \
 		sh "$TMP_DIR/k3s-install.sh"; do
 		case "$LAST_OUTPUT" in
@@ -1681,7 +1703,7 @@ install_k3s() {
 
 To see the error on its own, run k3s's installer by hand:
 
-  curl -sfL https://get.k3s.io | sh -"
+  curl -sfL https://get.k3s.io | ${k3s_wanted} sh -"
 		k3s_attempt=$((k3s_attempt + 1))
 		note "Downloading k3s failed; trying again (attempt ${k3s_attempt} of 3)."
 		sleep "$K3S_RETRY_WAIT"

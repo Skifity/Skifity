@@ -137,7 +137,7 @@ that does the same, for provisioning tools that prefer those.
 | `--version TAG` | `SKIFITY_VERSION` | The release to install; defaults to the installer's own, and `latest` asks GitHub for the newest |
 | `--image REFERENCE` | `SKIFITY_IMAGE` | A full image reference, for an image you built yourself |
 | `--pod-network NAME` | `SKIFITY_POD_NETWORK` | `wireguard-native` or `vxlan`; chosen from the kernel by default |
-| `--channel NAME` | `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
+| `--channel NAME` | `SKIFITY_CHANNEL` | Follow a k3s release channel, such as `stable`, instead of the k3s version the release was tested with |
 | `--skip-k3s` | `SKIFITY_SKIP_K3S=1` | Use the k3s already installed here as it is |
 | `--skip-firewall` | `SKIFITY_SKIP_FIREWALL=1` | Leave the host firewall alone |
 | `--no-snapshot` | `SKIFITY_NO_SNAPSHOT=1` | Do not copy the panel's database before an upgrade |
@@ -147,6 +147,11 @@ that does the same, for provisioning tools that prefer those.
 `--help` lists them without needing root. Every value is checked before
 anything changes, so a typo is one line now rather than a broken certificate
 later.
+
+Kubernetes is k3s at the version the release was tested with, which its release
+notes name: a release is tagged only once a fresh install of exactly that
+version has passed the cluster runs. `--channel stable` takes k3s's newest
+instead.
 
 **Unattended**, from cloud-init, Terraform or a CI job, pass `--yes`. Without a
 terminal and without `--yes`, the one question the installer may ask — whether
