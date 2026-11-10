@@ -525,9 +525,11 @@ test("a page opened with dot segments in its address sends nothing elsewhere", a
   const asked: string[] = []
   page.on("request", (request) => asked.push(new URL(request.url()).pathname))
 
-  await page.goto(`/apps/${encodeURIComponent("../../teams/elsewhere")}`)
-  await expect(page.getByText("The request was not sent").first()).toBeVisible()
+  // One ".." from /api/apps/ is /api/teams/elsewhere: a route of the API.
+  await page.goto(`/apps/${encodeURIComponent("../teams/elsewhere")}`)
+  await page.waitForLoadState("networkidle")
   expect(asked.filter((path) => path.startsWith("/api/teams/elsewhere"))).toEqual([])
+  await expect(page.getByText("The request was not sent").first()).toBeVisible()
 })
 
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
