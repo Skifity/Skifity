@@ -373,6 +373,11 @@ they ask more of the servers than workers do:
   8 GB and one core for a worker, because etcd and the Kubernetes API run there
   too. This is checked before anything is touched.
 
+The round trip, its jitter, lost packets and how fast the disk syncs are
+measured too, before a server becomes a control plane server, and shown as
+warnings rather than refusals; what is measured, and what it cannot show, is
+below.
+
 The first server is one; add two more. Tick **Control plane server** when you
 add each one, or when you order it at a cloud provider (`--control-plane` with
 `skifity servers create`), or add them as workers and press **Make it a control
