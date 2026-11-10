@@ -500,7 +500,7 @@ test("New app with one place to put it is already pointed there", async ({ page 
   await expect(create).toBeDisabled()
   await page.getByLabel("Repository", { exact: true }).fill("https://github.com/example/site")
   await expect(create).toBeEnabled()
-  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Production")
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Production")
   expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
 })
 
@@ -1579,14 +1579,14 @@ test("New app asks which project and environment when there is a choice", async 
   await page.getByRole("combobox", { name: "Create it in" }).click()
   await page.getByRole("option", { name: "Second project · Production" }).click()
   await expect(page.getByText("In Second project · Production")).toBeVisible()
-  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Second project")
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Second project")
   expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
 
   // No cluster here to build on, so it is made without a deploy.
   await page.getByRole("checkbox", { name: "Deploy now" }).uncheck()
   await page.getByRole("button", { name: /^create$/i }).click()
   await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
-  await expect(page.locator('nav[aria-label="breadcrumb"]')).toContainText("Second project")
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Second project")
 
   await page.goto(`/projects/${first.id}`)
   await page.getByRole("link", { name: "New app", exact: true }).first().click()
