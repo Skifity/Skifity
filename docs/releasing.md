@@ -125,6 +125,26 @@ a branch would eventually apply a Deployment to an image that had never seen
 it. The release notes give both that link and the one for the release itself,
 `releases/download/<tag>/install.sh`.
 
+The attached installer names the panel's image by digest, not only by tag. A tag
+can be moved by anybody who can push to the registry, and an installer that
+pulled `v0.1.0` would then install whatever `v0.1.0` had become. The digest is
+only known once the image is pushed, so `RELEASED_IMAGE` is empty in the
+repository and the release workflow fills it in afterwards:
+`scripts/pin-installer-image.sh` writes `<image>:<tag>@sha256:…` into a copy,
+reads the copy back to check that it installs exactly that, and the workflow
+replaces `install.sh` and its line in `checksums.txt` on the release before the
+provenance is signed. The installer uses the digest only for its own release
+from its own repository; `--version` naming another release, `--image`, and
+`SKIFITY_REPO` pull what they name. To see what a release installs:
+
+```sh
+curl -fsSL https://github.com/<repo>/releases/download/<tag>/install.sh | grep '^RELEASED_IMAGE='
+```
+
+For the few seconds between GoReleaser publishing the release and that step
+replacing the file, the attached installer pulls by tag, as every installer did
+before. The panel's own **Upgrade** button still moves to a tag.
+
 Until the first release is published the link is a 404, which is why the tag
 is not optional.
 

@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -489,9 +490,13 @@ func (c *Cluster) UpgradePanel(ctx context.Context, target string) (string, erro
 	}
 
 	current := deployment.Spec.Template.Spec.Containers[0].Image
-	repository := current
-	if idx := lastIndexByte(current, ':'); idx > 0 {
-		repository = current[:idx]
+	// An installer pins its release's image by digest, name:tag@sha256:…, and
+	// the last colon of that is inside the digest. The target is a tag, so the
+	// digest goes: read as the repository it gave name:tag@sha256:<target>,
+	// which is not an image at all.
+	repository, _, _ := strings.Cut(current, "@")
+	if idx := lastIndexByte(repository, ':'); idx > 0 {
+		repository = repository[:idx]
 	}
 	deployment.Spec.Template.Spec.Containers[0].Image = repository + ":" + target
 

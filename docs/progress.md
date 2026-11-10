@@ -7321,6 +7321,34 @@ so, and a channel with a `;` in it is refused.
 servers runs are the first, and the release workflow's new step runs on the next
 tag.
 
+## The installer names its release's image by digest
+
+The installer pulled `ghcr.io/<repo>:<tag>`, and a tag can be moved by anybody
+who can push to the registry, so what a given installer installed could change
+after it was published. `RELEASED_IMAGE` in `installer/install.sh` is empty in
+the repository; once GoReleaser has pushed the image, the release workflow reads
+its digest (`docker buildx imagetools inspect`), writes
+`<image>:<tag>@sha256:…` into a copy with `scripts/pin-installer-image.sh`, and
+replaces `install.sh` and its line in `checksums.txt` on the release before the
+provenance is signed. The installer uses it only when it would otherwise have
+pulled exactly that tag from that repository. The panel's **Upgrade** read the
+last colon of such an image as the tag's and would have pointed the panel at
+`<image>:<tag>@sha256:<new tag>`; it now drops the digest first. A copy of the
+database taken before an upgrade is named for the tag, digest or not.
+
+**Tested.** `test/smoke/installer.sh`: the repository's installer names no
+digest; a pinned copy installs the image by tag and digest, also with
+`--version` naming its own release, and not with another `--version`, an
+`--image` or another `SKIFITY_REPO`; pinning refuses a reference without a tag
+or a digest, one of another repository and an installer pinned already, and
+leaves no file behind; a whole install with the pinned copy applies the panel
+with the digest. `cluster`: upgrading from a pinned image, a digest-only one, a
+tag and a registry with a port gives `<image>:<target>`.
+
+**Not executed.** The release workflow's new step: it runs on the next tag, and
+reading a digest needs the pushed image. No install has yet pulled the panel by
+digest on a real k3s.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,

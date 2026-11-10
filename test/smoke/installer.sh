@@ -205,6 +205,80 @@ else
   t_fail "install.sh no longer runs preflight before installing k3s"
 fi
 
+# --- the release's image, by digest ------------------------------------------
+
+# A tag can be moved by anybody who can push to the registry; a digest cannot.
+# The release workflow writes the digest of the image it pushed into the copy of
+# the installer it attaches (scripts/pin-installer-image.sh), and that copy
+# installs those bytes whatever the tag says later. In the repository the line
+# is empty, so an install from a clone pulls by tag as it always has.
+FAKE_DIGEST="sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+PINNED_REF="ghcr.io/$(printf '%s' "$PROJECT_REPO" | tr '[:upper:]' '[:lower:]'):${RELEASED_VERSION}@${FAKE_DIGEST}"
+if [ -z "$RELEASED_IMAGE" ] && [ "$(grep -c '^RELEASED_IMAGE=""$' "$ROOT/installer/install.sh")" = 1 ]; then
+  t_pass "the repository's installer names no digest, and has the one line a release fills in"
+else
+  t_fail "installer/install.sh should have exactly one empty RELEASED_IMAGE line, got: $(grep '^RELEASED_IMAGE=' "$ROOT/installer/install.sh")"
+fi
+pinned="$WORKDIR/pinned-install.sh"
+if sh "$ROOT/scripts/pin-installer-image.sh" "$PINNED_REF" "$ROOT/installer/install.sh" "$pinned" >/dev/null 2>"$WORKDIR/pin.err" &&
+  sh -n "$pinned"; then
+  t_pass "the installer is pinned to a release's image"
+else
+  t_fail "pinning the installer failed: $(cat "$WORKDIR/pin.err")"
+fi
+# pinned_image [VAR=value...] prints the image the pinned installer installs,
+# with what a person might set in its environment.
+pinned_image() {
+  # The script is in single quotes so the inner shell expands it.
+  # shellcheck disable=SC2016
+  env -i PATH="$PATH" "$@" sh -c 'SKIFITY_INSTALLER_LIB=1 . "$1" && printf "%s" "$IMAGE"' pinned "$pinned" 2>&1
+}
+got=$(pinned_image)
+if [ "$got" = "$PINNED_REF" ]; then
+  t_pass "a pinned installer installs its release's image by tag and digest"
+else
+  t_fail "the pinned installer should install $PINNED_REF, got: $got"
+fi
+got=$(pinned_image SKIFITY_VERSION="$RELEASED_VERSION")
+[ "$got" = "$PINNED_REF" ] && t_pass "and so does --version naming that same release" ||
+  t_fail "--version $RELEASED_VERSION should keep the digest, got: $got"
+got=$(pinned_image SKIFITY_VERSION=v9.9.9)
+case "$got" in
+*":v9.9.9") t_pass "another --version is pulled by its tag: this installer knows no digest for it" ;;
+*) t_fail "--version v9.9.9 should be the tag alone, got: $got" ;;
+esac
+got=$(pinned_image SKIFITY_IMAGE=registry.example.test/skifity:1.2.3)
+[ "$got" = "registry.example.test/skifity:1.2.3" ] && t_pass "an --image is installed as it was given" ||
+  t_fail "--image should win over the pinned image, got: $got"
+got=$(pinned_image SKIFITY_REPO=acme/skifity)
+[ "$got" = "ghcr.io/acme/skifity:${RELEASED_VERSION}" ] && t_pass "another repository's image is not given this one's digest" ||
+  t_fail "SKIFITY_REPO=acme/skifity should be ghcr.io/acme/skifity:${RELEASED_VERSION}, got: $got"
+
+# The pinning refuses rather than guesses, and leaves nothing behind when it does.
+for bad in "ghcr.io/skifity/skifity:${RELEASED_VERSION}" "ghcr.io/skifity/skifity@${FAKE_DIGEST}" \
+  "ghcr.io/someone-else/skifity:${RELEASED_VERSION}@${FAKE_DIGEST}" "ghcr.io/skifity/skifity:v1|x@${FAKE_DIGEST}"; do
+  rm -f "$WORKDIR/refused.sh"
+  if sh "$ROOT/scripts/pin-installer-image.sh" "$bad" "$ROOT/installer/install.sh" "$WORKDIR/refused.sh" >/dev/null 2>&1 ||
+    [ -e "$WORKDIR/refused.sh" ] || [ -e "$WORKDIR/refused.sh.pinning" ]; then
+    t_fail "pinning to $bad should be refused, with no file left behind"
+  else
+    t_pass "pinning refused: $bad"
+  fi
+done
+if sh "$ROOT/scripts/pin-installer-image.sh" "$PINNED_REF" "$pinned" "$WORKDIR/twice.sh" >/dev/null 2>&1; then
+  t_fail "an installer that is pinned already should not be pinned again"
+else
+  t_pass "an installer that is pinned already is not pinned again"
+fi
+
+# A copy taken before an upgrade is named for the tag, digest or not.
+for pair in "ghcr.io/skifity/skifity:v1.2.3@${FAKE_DIGEST}|v1.2.3" "registry.example.test/skifity@sha256:abc123|abc123" \
+  "registry.example.test:5000/skifity:0.0.0-test|0.0.0-test"; do
+  got=$(image_label "${pair%%|*}")
+  [ "$got" = "${pair##*|}" ] && t_pass "a copy before upgrading to ${pair%%|*} is named ${pair##*|}" ||
+    t_fail "image_label ${pair%%|*} should be ${pair##*|}, got: $got"
+done
+
 # --- the manifests render ---------------------------------------------------
 
 SOURCE_DIR="$ROOT"
@@ -1273,6 +1347,23 @@ case "$out" in
 *) t_fail "a channel install should say it is not the tested version, got:
 $out" ;;
 esac
+
+# The installer a release attaches, pinned: the Deployment it applies names the
+# image by digest, which is what the cluster then pulls.
+PINNED_SRC="$WORKDIR/pinned-src"
+mkdir -p "$PINNED_SRC/installer"
+cp "$pinned" "$PINNED_SRC/installer/install.sh"
+cp "$ROOT/installer/uninstall.sh" "$PINNED_SRC/installer/"
+cp -R "$ROOT/deploy" "$PINNED_SRC/deploy"
+FAKE="$WORKDIR/root-pinned"
+fake_root "$FAKE"
+out=$(ROOT="$PINNED_SRC"; run_install "$FAKE" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "image: ${PINNED_REF}\$" "$FAKE/stub/applied-panel.yaml" 2>/dev/null; then
+  t_pass "a pinned installer applies the panel with its release's image, by digest"
+else
+  t_fail "the pinned install should apply image: $PINNED_REF ($status): $(grep 'image:' "$FAKE/stub/applied-panel.yaml" 2>/dev/null)
+$out"
+fi
 
 # A fresh server behind NAT, no domain: the common case.
 FAKE="$WORKDIR/root-http"

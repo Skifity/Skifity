@@ -80,6 +80,14 @@ RELEASED_VERSION="v0.1.1"
 # published it. --channel still does that, for whoever asks.
 K3S_VERSION="v1.37.2+k3s1"
 
+# The image RELEASED_VERSION was published as, by tag and digest. Empty here,
+# in the repository: the digest exists only once the image is pushed, so the
+# release workflow writes this line into the copy of this file it attaches to
+# the release (scripts/pin-installer-image.sh). A tag is a name anybody who can
+# push to the registry can move; a digest is the bytes. Pinned, an installer
+# installs the image its release built, whatever the tag says later.
+RELEASED_IMAGE=""
+
 # derive_release works out what is installed and where its objects come from.
 # It runs when this file is read and again after the options are parsed,
 # because --version and --image change all of it.
@@ -90,6 +98,12 @@ derive_release() {
 	# capitals, so it is lowered here rather than assumed.
 	IMAGE_REPO="ghcr.io/$(printf '%s' "$PROJECT_REPO" | tr '[:upper:]' '[:lower:]')"
 	IMAGE="${SKIFITY_IMAGE:-${IMAGE_REPO}:${VERSION}}"
+	# This installer's own release, from where it was published: by digest.
+	# Another --version, an --image or another SKIFITY_REPO names an image
+	# this file knows no digest for, and is pulled by the name it was given.
+	if [ -z "${SKIFITY_IMAGE:-}" ] && [ -n "$RELEASED_IMAGE" ] && [ "$IMAGE" = "${RELEASED_IMAGE%@*}" ]; then
+		IMAGE=$RELEASED_IMAGE
+	fi
 
 	# The manifests come from the release being installed, not from a branch. A
 	# branch moves; an install that pulled v1's image and main's objects would
@@ -2313,9 +2327,7 @@ snapshot_before_upgrade() {
 		return 0
 	fi
 
-	# What the copy is named for: the tag the new image carries, cleaned of
-	# anything a file name would not want.
-	label=$(printf '%s' "${IMAGE##*[:/@]}" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40)
+	label=$(image_label "$IMAGE")
 	target="${database}.before-upgrade-$(date -u +%Y%m%d-%H%M%S)-to-${label}"
 
 	# Every release up to 0.1.1 failed to put the CLI on the server, so a
@@ -2348,6 +2360,19 @@ Check that there is room on the disk and that ${CLI_PATH} runs:
   ${CLI_PATH} admin backup-db /root/panel-backup.db
 
 If you accept having nothing to go back to, run the installer again with --no-snapshot."
+}
+
+# image_label is what a copy taken before an upgrade is named for: the tag the
+# new image carries, or its digest when it has no tag, cleaned of anything a
+# file name would not want. An image pinned by digest still has its tag, and
+# the tag is what somebody looking for the copy remembers.
+image_label() {
+	tagged=${1%%@*}
+	case "${tagged##*/}" in
+	*:*) label=${tagged##*:} ;;
+	*) label=${1##*[:/@]} ;;
+	esac
+	printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40
 }
 
 # prune_snapshots keeps the three newest copies taken before an upgrade, the

@@ -151,7 +151,9 @@ release:
     ```
 
     Each installer installs the release it is attached to, with the Kubernetes
-    objects that release's image was built with.
+    objects that release's image was built with. The one attached here names
+    that image by its digest, so it installs the image this release built even
+    if a tag is moved later.
 
     A fresh install runs k3s {{ envOrDefault "K3S_VERSION" "at the version installer/install.sh pins" }},
     the version this release was tested with. `--channel stable` follows k3s's
