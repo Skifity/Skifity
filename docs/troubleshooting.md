@@ -878,6 +878,93 @@ A service that refuses some lines — Elasticsearch over a field's type, Loki
 over a line it thinks too old — keeps the rest; its own page lists what it
 refused. Lines from before the drain was added are not sent at all.
 
+## Small requests work and large ones hang
+
+Between servers, the pod network wraps every packet in another one —
+WireGuard by default, VXLAN on a cluster installed with `--pod-network vxlan` —
+and the wrapping takes room. flannel, which runs the pod network, makes the
+pods' packets that much smaller than the server's network card says it can
+carry: 1420 bytes with WireGuard and 1450 with VXLAN, on the usual 1500. That
+is right when the whole way between your servers carries packets as large as
+the card says. When something on the way carries less — a VPN or a tunnel
+between the servers, PPPoE, a provider's private network with a lower limit
+than its machines are told — a full-size packet is dropped on the way, often
+without a word back, while the small ones still get through. Nothing in the
+cluster reports it.
+
+What it looks like:
+
+* A connection opens, then stops as soon as something large has to cross: a
+  page whose first bytes arrive and the rest never does, an HTTPS handshake
+  that hangs after its first message, a query that answers when the result is
+  small and hangs when it is large, an upload or a download that stalls at the
+  same point every time.
+* Only between servers. The same request works when everything it touches is
+  on one server, and an app with one instance answers on the address of the
+  server it runs on and hangs on the others.
+* A build stalls pushing its image, or an instance waits to pull one, on a
+  server other than the registry's.
+* `ping` between the servers works, because it is small.
+
+Check it from the pod network itself, on a control plane server:
+
+```sh
+cat /run/flannel/subnet.env          # FLANNEL_MTU is what the pods were given, e.g. 1420
+kubectl -n kube-system get pods -o wide -l app.kubernetes.io/name=traefik
+                                     # Traefik runs on every server: take the IP of one on another server
+ping -c 3 10.42.1.7                  # small: answers
+ping -c 3 -M do -s 1392 10.42.1.7    # full size: FLANNEL_MTU minus 28 bytes of headers
+```
+
+If the small one answers and the full-size one does not, the way between the
+servers carries less than flannel thinks. Find out how much, between the two
+servers' own addresses (`kubectl get nodes -o wide`, INTERNAL-IP):
+
+```sh
+ping -c 3 -M do -s 1472 203.0.113.11   # 1472 + 28 = 1500 bytes
+```
+
+If it says `message too long` or `Frag needed`, or does not answer, lower `-s`
+until it does. The largest that answers, plus 28, is what the way between them
+carries: the path MTU.
+
+**Telling flannel.** k3s writes flannel's settings each time it starts; give it
+a copy of its own with the path MTU in it, on every server, with the same
+number:
+
+```sh
+sudo cp /var/lib/rancher/k3s/agent/etc/flannel/net-conf.json /etc/rancher/k3s/flannel-net-conf.json
+sudo nano /etc/rancher/k3s/flannel-net-conf.json
+echo 'flannel-conf: /etc/rancher/k3s/flannel-net-conf.json' | sudo tee /etc/rancher/k3s/config.yaml.d/30-flannel-mtu.yaml
+```
+
+In the file, add the path MTU to `"Backend"`, leaving the rest as it is. With
+WireGuard it then reads:
+
+```json
+"Backend": {
+  "Type": "wireguard",
+  "PersistentKeepaliveInterval": 25,
+  "MTU": 1400
+}
+```
+
+It is the path's number, not the pods': flannel takes its own room off it, as
+it does from the card's. Then reboot the servers one at a time, waiting for
+each to be ready under **Servers** before the next. A restart of k3s alone is
+not enough: every pod keeps the size it started with, the panel's and
+Traefik's included, and a reboot starts them all again. Afterwards
+`/run/flannel/subnet.env` shows the smaller `FLANNEL_MTU`, and the full-size
+`ping` above answers with `-s` set to the new `FLANNEL_MTU` minus 28.
+
+A server added later joins with k3s's own settings. Put the same two files on
+it once it has joined, and reboot it.
+
+If it is the server's own network card that is wrong — it says 1500 on a
+network that carries less, which some providers' private networks do — set the
+right MTU on the card instead (netplan's `mtu:` on Ubuntu) and reboot: flannel
+follows the card, with nothing of its own to change.
+
 ## Everything is fine but I want to look underneath
 
 Every app's **Advanced** tab shows the exact Kubernetes objects the panel
