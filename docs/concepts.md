@@ -1501,7 +1501,9 @@ writing an instance count of its own. It would otherwise put the app back to its
 minimum every time you changed a variable.
 
 Instances are spread across servers where possible, so losing a server does not
-take an app down.
+take an app down. An app with a volume is the exception: the default storage
+keeps a volume on the server that made it, so the app waits for that server to
+come back rather than starting on another.
 
 An app, or any of its processes, can also be given GPUs: a card each for every
 instance, on servers that have one. [GPUs](gpus.md) has how a server is set up

@@ -24,7 +24,9 @@ You give it a server. It gives you URLs.
 Skifity turns the servers you rent into a platform for your own apps. Push a Git
 repository and it builds it, deploys it, gives it a URL — with a certificate as
 soon as it has a domain of yours — and keeps it running. Add more servers and they become one pool: apps spread across
-them, and an app whose server dies comes back on another.
+them, and an app whose server dies comes back on another — unless it keeps data
+on a volume, which the default storage holds on that server's own disk, so the
+app waits for that server ([why](docs/faq.md#why-kubernetes-underneath)).
 
 The panel talks about **Apps**, **Instances**, **Servers**, **Domains** and
 **Databases**. Kubernetes runs underneath and stays out of sight, one click away
@@ -241,7 +243,10 @@ while the installer is running.
 
 **Several servers are one pool.** An app that wants three instances gets them
 wherever there is room, and an app whose server dies is restarted on another
-without anyone being woken up. Three control plane servers survive losing one.
+without anyone being woken up. An app with a volume is the exception: the
+default storage keeps a volume on the server that made it, so that app waits
+for its server to come back, and its data is only as safe as that disk and its
+backups. Three control plane servers survive losing one.
 
 **Adding a server is an IP address and a password.** Skifity connects, checks
 the machine, installs a key of its own, configures the firewall, checks that it
