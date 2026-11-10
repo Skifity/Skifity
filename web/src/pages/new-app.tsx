@@ -116,7 +116,14 @@ export function NewAppPage() {
   // page is not started again and nothing typed is lost.
   const [params, setParams] = useSearchParams()
   const destinations = useEnvironmentTargets(envId || undefined)
-  const target = params.get("environment") || envId || pickedOrOnly("", destinations.targets)
+  // Only an environment the list offers is used: the address is anybody's to
+  // write, and what it names goes into the path of a request this page sends
+  // with the person's session. A link with "../teams/..." in it would
+  // otherwise point Create at another route of the API.
+  const asked = params.get("environment") || envId
+  const target = targetOf(asked, destinations.targets)
+    ? asked
+    : pickedOrOnly("", destinations.targets)
   const destination = targetOf(target, destinations.targets)
   const choose = (environmentId: string) =>
     setParams(
@@ -330,35 +337,38 @@ export function NewAppPage() {
   }
   const create = useMutation({
     mutationFn: async () => {
-      const result = await api.post<Created>(`/api/environments/${target}/apps`, {
-        name: appName,
-        source_type: sourceType,
-        repo_url: sourceType === "git" ? repoURL.trim() : "",
-        git_source_id: sourceType === "git" ? gitSourceID : "",
-        branch: branch.trim(),
-        root_dir: rootDir.trim(),
-        image: sourceType === "image" ? image.trim() : "",
-        builder,
-        dockerfile_path: dockerfilePath.trim(),
-        port: Number(port) || 0,
-        health_path: healthPath.trim(),
-        build_command: buildCommand.trim(),
-        static_dir: staticDir.trim(),
-        start_command: startCommand.trim(),
-        release_command: releaseCommand.trim(),
-        // app.json's postdeploy script, which Heroku runs in each review app.
-        preview_seed: showsNeeds ? (found?.preview_seed ?? "") : "",
-        // An app from a folder has no code until the folder is sent, which
-        // happens below, once it exists.
-        deploy: sourceType === "upload" ? false : deployNow,
-        // Only while the box that shows them is on the screen.
-        variables: showsNeeds ? pasted : {},
-        // Created and linked before the first deploy, so its first start
-        // finds the connection string there.
-        databases,
-        // The Procfile's worker and clock lines, on the same build.
-        processes,
-      })
+      const result = await api.post<Created>(
+        `/api/environments/${encodeURIComponent(target)}/apps`,
+        {
+          name: appName,
+          source_type: sourceType,
+          repo_url: sourceType === "git" ? repoURL.trim() : "",
+          git_source_id: sourceType === "git" ? gitSourceID : "",
+          branch: branch.trim(),
+          root_dir: rootDir.trim(),
+          image: sourceType === "image" ? image.trim() : "",
+          builder,
+          dockerfile_path: dockerfilePath.trim(),
+          port: Number(port) || 0,
+          health_path: healthPath.trim(),
+          build_command: buildCommand.trim(),
+          static_dir: staticDir.trim(),
+          start_command: startCommand.trim(),
+          release_command: releaseCommand.trim(),
+          // app.json's postdeploy script, which Heroku runs in each review app.
+          preview_seed: showsNeeds ? (found?.preview_seed ?? "") : "",
+          // An app from a folder has no code until the folder is sent, which
+          // happens below, once it exists.
+          deploy: sourceType === "upload" ? false : deployNow,
+          // Only while the box that shows them is on the screen.
+          variables: showsNeeds ? pasted : {},
+          // Created and linked before the first deploy, so its first start
+          // finds the connection string there.
+          databases,
+          // The Procfile's worker and clock lines, on the same build.
+          processes,
+        },
+      )
       if (sourceType !== "upload" || !folder) return result
 
       // The app exists now, so a failure from here on is not a failure to
@@ -406,7 +416,7 @@ export function NewAppPage() {
   // Services of a Compose file, created by the panel's own reading of it: the
   // whole file as one stack, or the one service picked. See handleCreateStack.
   const postStack = (services: ComposeService[], name?: string) =>
-    api.post<StackResult>(`/api/environments/${target}/stack`, {
+    api.post<StackResult>(`/api/environments/${encodeURIComponent(target)}/stack`, {
       repo_url: repoURL.trim(),
       git_source_id: gitSourceID,
       branch: branch.trim(),

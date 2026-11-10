@@ -504,6 +504,18 @@ test("New app with one place to put it is already pointed there", async ({ page 
   expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
 })
 
+// The environment in the address goes into the path of the request Create
+// sends, with the person's session. One the list does not offer is treated as
+// none: "../teams/..." used to become the path itself, and point Create at
+// another route of the API.
+test("New app takes no environment from the address that the team does not have", async ({
+  page,
+}) => {
+  await signIn(page)
+  await page.goto(`/apps/new?environment=${encodeURIComponent("../teams/x/tokens?")}`)
+  await expect(page.getByRole("combobox", { name: "Create it in" })).toContainText(" · Production")
+})
+
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
   await signIn(page)
 
