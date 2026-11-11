@@ -311,8 +311,16 @@ func TestADNSProvidersCredentialsAreReplacedWhereItIs(t *testing.T) {
 	memory.Accept(rotated, "example.com")
 	acme := h.newTenant("acme")
 	id := connectDNS(t, h, acme)
+	// The record belongs to a domain, as every record the panel keeps does.
+	// One with no domain is an orphan, and the sync the connection started in
+	// the background releases it: on a slow runner it was gone before the
+	// narrow credentials were tried, and they were taken.
+	domain := store.Domain{AppID: h.app(acme, "shop").ID, Hostname: "shop.example.com", Path: "/", TLS: true, Status: "pending"}
+	if err := h.db.CreateDomain(t.Context(), &domain); err != nil {
+		t.Fatal(err)
+	}
 	if err := h.db.SaveDNSRecord(t.Context(), &store.DNSRecord{
-		TeamID: acme.team.ID, ProviderID: id, ZoneID: "zone-example.com", ZoneName: "example.com",
+		TeamID: acme.team.ID, ProviderID: id, DomainID: domain.ID, ZoneID: "zone-example.com", ZoneName: "example.com",
 		Hostname: "shop.example.com", Type: "A", Content: "203.0.113.10", RemoteID: "mem1", Keep: true,
 	}); err != nil {
 		t.Fatal(err)
