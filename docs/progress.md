@@ -7394,3 +7394,50 @@ component the panel installs has a workload to look for.
 **Not executed.** A restore into a different cluster from start to finish,
 which `docs/checklist.md` already lists as owed by somebody with servers of
 their own.
+
+## The real-cluster runs of this branch, and what they found
+
+`Cluster` and `Two servers` run only on `main`, so both were dispatched on this
+branch before it went to review.
+
+**Seen working.**
+- Run 42915077208: `Real cluster` and `Upgrade from the last release` passed.
+- Runs 42915081308 and 42926792297: `Two servers` passed in full. That covers
+  the template installs with their databases, the panel's own metrics and the
+  rest of phase 5. A one-off `/api/metrics` failure in run 42921993612 did not
+  come back.
+
+**WordPress across a slow link: found, partly fixed, not yet passing.**
+- `Two servers apart` puts the servers 40 ms and 0.3% loss apart. There,
+  WordPress from the catalogue landed on the second server and its MariaDB on
+  the first, and the deploy failed every time.
+- Two causes were found and fixed:
+  - Templates could not ask for more than the default three-second probe and
+    two-minute start. They now can (`health_check`, `health_start_seconds`,
+    `health_timeout_seconds`), and every template whose health path asks its
+    database, or whose first start takes minutes, does.
+  - Step 0 of WordPress's install page asks api.wordpress.org for translations
+    on every request until WordPress is installed. It is checked at
+    `?step=1` now.
+- With both fixes the probe still waited past its ten seconds once the
+  database had started, after answering 500 at once while it had not. So the
+  page hangs reaching MariaDB across the link, and why is not established. The
+  network policies allow the two pods in one namespace to talk, and other
+  traffic across that link passes. Nothing in the report shows what the
+  WordPress container itself saw.
+- The check is in phase 5, which the `apart` job on `main` does not run, so
+  this does not turn `main` red. It is also not solved: an app with its
+  database on another server, across a link like that, is **Written** for
+  WordPress, not **Works**.
+
+**A server that fails, with every phase run: the soft spread loses.**
+- The dispatch runs every phase in every job; `main` gives this job phases
+  `1 4`. With all phases the first server had 1370m CPU and 1944Mi requested,
+  against 630m and 1116Mi on `main`'s run.
+- A restart then put both of an app's instances on the empty second server, so
+  when that server was switched off the app had none.
+- The spread is `ScheduleAnyway`, so the scheduler's resource balance can
+  override it. That is older than this branch.
+- Making it hard needs care: `DoNotSchedule` with `nodeTaintsPolicy: Honor`, so
+  a server that is gone does not count. It needs its own cluster runs, so it is
+  not made here.
