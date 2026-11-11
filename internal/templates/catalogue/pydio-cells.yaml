@@ -7,6 +7,7 @@ website: https://docs.pydio.com/
 services:
 - name: cells
   image: pydio/cells:4.4
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -26,3 +27,4 @@ databases:
   link_to:
   - cells
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

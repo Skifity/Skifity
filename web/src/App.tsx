@@ -25,7 +25,7 @@ import { useTheme } from "@/lib/theme"
 import { AccountPage } from "@/pages/account"
 import { ActivityPage } from "@/pages/activity"
 import { AddServerPage } from "@/pages/add-server"
-import { AppDetailPage } from "@/pages/app-detail"
+import { AppDetailPage, isAppTab } from "@/pages/app-detail"
 import { DashboardPage } from "@/pages/dashboard"
 import { DatabaseDetailPage } from "@/pages/database-detail"
 import { DatabasesPage } from "@/pages/databases"
@@ -161,6 +161,12 @@ export function App() {
               </KeyedBy>
             }
           />
+          {/*
+            "New app" from the overview or the palette, which do not know
+            where it should go: the form asks. Ranked above apps/:appId by
+            React Router, as a fixed segment always is.
+          */}
+          <Route path="apps/new" element={<NewAppPage />} />
           <Route
             path="apps/:appId"
             element={
@@ -169,6 +175,7 @@ export function App() {
               </KeyedBy>
             }
           />
+          <Route path="apps/:appId/:tab" element={<AppTabRedirect />} />
           <Route path="databases" element={<DatabasesPage />} />
           <Route
             path="databases/:databaseId"
@@ -227,6 +234,19 @@ export function App() {
 function KeyedBy({ param, children }: { param: string; children: ReactNode }) {
   const params = useParams()
   return <Fragment key={params[param]}>{children}</Fragment>
+}
+
+/**
+ * An app's tab written as a path, /apps/{id}/deployments, which is how
+ * notifications, commit statuses and pull request comments linked to one
+ * until they were corrected — and those already sent cannot be. They open the
+ * tab they name; anything else under an app opens the app rather than "Page
+ * not found".
+ */
+function AppTabRedirect() {
+  const { appId = "", tab } = useParams()
+  const page = `/apps/${encodeURIComponent(appId)}`
+  return <Navigate to={isAppTab(tab) && tab !== "overview" ? `${page}?tab=${tab}` : page} replace />
 }
 
 /**

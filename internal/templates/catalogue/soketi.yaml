@@ -6,9 +6,11 @@ website: https://docs.soketi.app
 services:
 - name: soketi
   image: quay.io/soketi/soketi:1.6-16-debian
+  needs_root: true
   port: 6001
   public: true
   mem_request_mb: 128
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+notes: The image starts as root, so the environment needs the baseline pod security level.

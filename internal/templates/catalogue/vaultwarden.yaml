@@ -6,6 +6,7 @@ website: https://github.com/dani-garcia/vaultwarden
 services:
 - name: vaultwarden
   image: vaultwarden/server:1.37.3
+  needs_root: true
   port: 80
   health_path: /alive
   variables:
@@ -26,4 +27,5 @@ inputs:
   help: Needed to reach the admin page at /admin.
   secret: true
   generate: true
-notes: Sign-ups are turned off. Use the admin page to invite the first user, then keep them off.
+notes: Sign-ups are turned off. Use the admin page to invite the first user, then keep them off. The image
+  starts as root, so the environment needs the baseline pod security level.

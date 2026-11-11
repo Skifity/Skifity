@@ -6,6 +6,7 @@ website: https://owncloud.com/docs-guides/
 services:
 - name: owncloud
   image: owncloud/server:11.0.0
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -25,3 +26,4 @@ databases:
   link_to:
   - owncloud
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

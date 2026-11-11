@@ -2,7 +2,9 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about Cloudron that changed are corrected in place, and "Since 2026-09-30"
+> says what changed, with its sources.
 
 Cloudron is a self-hosted platform for running *packaged* open-source web apps
 on one server you own, sold by Cloudron UG (Germany) to individuals, families,
@@ -26,10 +28,14 @@ sites, VPN-only app access); "All plans include: app updates, per-app backups,
 firewall, email solution and Single Sign-On". A cancelled subscription keeps
 running but stops receiving platform and app updates. Maturity: App Store
 packages date back to July 2015; 9.0.0 shipped 2025-10-02, 10.0.0 on 2026-08-12
-(Ubuntu 26.04), 10.1.0 on 2026-09-28. Adoption: the site says "Thousands of
-organizations use Cloudron" and publishes no install count; the App Store has
-**196** approved packages; the `platform/box` repository on git.cloudron.io has
-33 stars; `cloudron/base` has 648,488 Docker Hub pulls (all as of 2026-09-30).
+(Ubuntu 26.04), and 10.1.0 was tagged on 2026-09-28 but rolled out in stages
+from about 2026-10-10 and announced as released on 2026-10-26 (blog) and
+2026-11-04 (forum); 10.1.6 (2026-10-24) is the latest release on 2026-11-08.
+Adoption: the site says "Thousands of organizations use Cloudron" and publishes
+no install count; the App Store has **196** approved packages; the
+`platform/box` repository on git.cloudron.io has 33 stars; `cloudron/base` has
+648,488 Docker Hub pulls (all as of 2026-09-30; the figures of 2026-11-08 are
+under "Since 2026-09-30").
 
 ## Feature inventory
 
@@ -162,7 +168,9 @@ organizations use Cloudron" and publishes no install count; the App Store has
   completion is recorded with user and date.
 * 10.1.0 (2026-09-28) hardening: only hashes of API and login tokens stored,
   admins can no longer set another user's password, invite and reset links
-  expire after 24 h, impersonation removed.
+  expire after 24 h, impersonation removed. 10.1.4 (2026-10-09) partly undid
+  the last: "bring back impersonate password and remove the managed user app
+  password for the moment".
 
 ### Preview environments and branches
 
@@ -298,15 +306,18 @@ packaging requirement for everything else.
 
 ## Security record
 
-* **NVD**: one CVE, **CVE-2021-40868** — reflected XSS through the login page's
-  `returnTo` parameter in Cloudron 6.2, CVSS 6.1, published 2021-09-21.
+* **NVD**: one CVE on 2026-09-30, **CVE-2021-40868** — reflected XSS through
+  the login page's `returnTo` parameter in Cloudron 6.2, CVSS 6.1, published
+  2021-09-21. A second, CVE-2026-79363, was published on 2026-10-09 (see
+  "Since 2026-09-30").
 * **Fixed without a CVE (from the platform changelog)**: 10.0.0 (2026-08-12)
   "db: fix sql injection when some REST APIs are passed arbitrary fields",
   "ui: sanitize HTML and markdown inputs", "applinks: do not allow server
   internal IPs to be added" (an SSRF-shaped fix), "security: fix 2fa
   enforcement with the external ldap connector"; 9.1.0 "security: remove cors";
-  10.1.0 token hashing and removal of impersonation and admin-set passwords. I
-  found no advisory text or CVE for the SQL injection.
+  10.1.0 token hashing and removal of impersonation (partly back in 10.1.4)
+  and admin-set passwords. I found no advisory text or CVE for the SQL
+  injection.
 * **App-level response**: the forum shows Cloudron tracking upstream CVEs in
   packaged apps (n8n CVE-2025-68613 on 2025-12-23: the store version was
   already unaffected; n8n 2.9.3 on 2026-02-25: package out the same day;
@@ -518,7 +529,8 @@ cluster:* yes.
   providers block emails from VPS and home network IPs". Wire apps to a relay
   instead.
 * **Admins who can sign in as anyone.** Cloudron let admins "log in to any app"
-  and impersonate users; 10.1.0 removed impersonation. Skifity's secrets are
+  and impersonate users; 10.1.0 removed impersonation and 10.1.4 brought an
+  "impersonate password" back. Skifity's secrets are
   write-only on every surface; keep that stance for identities too.
 * **Credentials that change on every restart.** Cloudron's addon variables can
   change at restart, which only works because every package reads them at
@@ -531,6 +543,182 @@ cluster:* yes.
   sslip.io first run (ADR-0015) is the better on-ramp.
 * **Single server as the only shape.** The forum has asked for years; the
   architecture cannot answer. Skifity's reason to exist is the other answer.
+
+## Since 2026-09-30
+
+Read on 2026-11-08. Release dates are from the tags of `platform/box` on
+git.cloudron.io and what each release changed from its `CHANGES` file; the
+rest is from the blog, the forum's announcements and support threads, the App
+Store API, NVD and Docker Hub.
+
+### Releases
+
+* **10.1.1 to 10.1.6 (2026-10-01 to 2026-10-24).** 10.1 was an upgrade of the
+  software underneath more than a feature release ("There are no real features
+  in this release", forum, 2026-10-10): the app base image moved to Ubuntu
+  26.04 and every App Store package was rebuilt on it, PostgreSQL went to 18,
+  MongoDB to 8.3 and Dovecot to 2.4, migrated automatically. Within the series:
+  * The setup page and the post-installation page get a **Let's Encrypt
+    certificate for the server's IP address** (10.1.1), so a fresh install no
+    longer starts on a self-signed warning; Let's Encrypt no longer needs an
+    email address.
+  * Apps can exchange a user's access token for a short-lived JWT for another
+    app, the mail server or the dashboard (RFC 8693 token exchange, 10.1.1), and
+    the mailbox owner's OIDC access token was accepted as the mail password. The
+    implicit flow was limited to the app's confidential client (10.1.4) and made
+    opt-in per manifest (10.1.6).
+  * **SQLite databases are backed up with `VACUUM INTO`** instead of an SQL text
+    dump, because the text dump lost header settings and "restores could come
+    back wrong" (10.1.6; blog, 2026-10-26). 24 App Store packages declare their
+    SQLite files in the manifest (`localstorage.sqlite.paths`).
+  * PostgreSQL dumps quote identifiers (10.1.4), after the upgrade incident
+    below; Node.js 24.22.1 for the eMudhra compromise (10.1.6); LDAP users and
+    groups get a badge (10.1.1).
+  * 10.1.4 (2026-10-09) brought back an impersonate password (corrected above).
+* **10.2.0 is not released** on 2026-11-08. Its `CHANGES` entry and the commits
+  on `master` so far: a VPN allowlist, and VPN protection that works with
+  proxyAuth and app proxies; the firewall blocklist swapped atomically; a
+  changelog button on update events in the event log; a 100 MB default upload
+  limit that a manifest can lift (`streamRequestBody`), uploads buffered off the
+  root disk and capped per client IP; the Ubuntu security-update status in the
+  dashboard; and token exchange enforced, so a plain OIDC token is no longer a
+  mailbox password. The plan for 10.2 (forum, 2026-09-17, resumed 2026-11-04)
+  adds VPN protection for paths and ports, split-domain mail routing,
+  distribution lists, an "external user" who reaches only the apps they are
+  given even where an app allows all users, an Anubis bot-protection
+  integration, and moving the platform's own state from MySQL to SQLite.
+  Commits of 2026-11-01 to 2026-11-03 also mention a "workspace edition" and a
+  "hub" app given scoped dashboard tokens; neither has been announced.
+
+### Cloudron's own apps
+
+Cloudron now writes some of the apps it ships, on an in-house UI framework and
+an auth and backend framework shared between them. Calendar and Contacts were
+announced on the forum on 2026-06-23 and written up on the blog on 2026-11-05
+and 2026-11-04 (Calendar has CalDAV sync, sharing with users and groups, and
+public calendars); Booking Pages (blog, 2026-11-06) is a cal.com alternative
+inside Calendar, with team pages and approval; Chat, first published on
+2026-10-09 and announced on 2026-10-30, is "a mattermost replacement for an
+org", built because the third-party chat apps fell short on "SSO integration
+(mattermost) or better search (matrix)". Chat has no end-to-end encryption "as
+a concious decision": the server is trusted. Cloudron's own apps are all
+Node.js ("all our apps are node.js based", staff, 2026-10-21), which kept them
+out of the PHP incident below.
+
+### The PHP and eMudhra week
+
+On 2026-10-21 Cloudron opened a forum thread for a PHP remote code execution
+and the compromise of eMudhra's certificate authority. Staff recommended shutting
+PHP sites down and stopped their own Matomo, FreeScout, Mautic and HumHub. By the
+evening of 22 October "Around 175 packages have been updated"; by the morning of
+23 October "All PHP apps are updated". The CA store on the host came from
+Ubuntu's automatic security updates, and the platform's own Node.js fix shipped
+in 10.1.6 on 24 October. The 10.1 blog post (2026-10-26) also names GitLab's
+CVE-2026-110264 as handled that week. It was the "security fixes within 24h"
+promise tested on most of a catalogue at once, and it held to within about two
+days.
+
+### An upgrade that took a server down
+
+On 2026-10-08 a user reported that an automatic update from 10.0.5 to 10.1.3
+left 24 of their 30 apps down for over five hours, and a restart did not bring
+them back. The PostgreSQL 18 migration dumped every addon database, removed the
+old data directory, started PostgreSQL 18 and imported the dumps; Taiga's dump
+has a function argument named `json`, which PostgreSQL 18 rejects, the importer
+hung on the error, and every app on the addon stayed down. Staff fixed it the
+same day (quoted identifiers, a Taiga patch applied at restore time, apps in
+error skipped rather than blocking the platform, no hang), checked over 70
+packages for the same conflict, and shipped 10.1.4 the next day. The user's list
+of what should not have happened — "Don't remove the old data dir before the
+import has succeeded", "One app's database must not be able to block the
+platform" — is this file's case against one shared database server. On
+2026-10-26 another user found that turning on "Require VPN" for an app-proxy
+entry deleted that app's nginx configuration before failing; it is fixed for the
+next release.
+
+### Numbers on 2026-11-08
+
+* 198 App Store packages (196), Chat the only one first published after
+  2026-09-30. 196 of the 198 published a new version after 1 October, between
+  the base image rebuild and the PHP fixes.
+* Every package still declares `healthCheckPath`; 135 declare a checklist (134
+  on 2026-09-30); OIDC is used by 104 (97), LDAP by 21 (26), sendmail by 117
+  (116), proxyAuth by 10 (9). Packages are still moving from LDAP to OIDC.
+* `platform/box` has 34 stars (33); `cloudron/base` has 657,670 Docker Hub pulls
+  (648,488).
+* Pricing is unchanged: Free (two apps), Pro €15 a month billed yearly or €30
+  billed monthly, Max €25 or €50.
+
+### Security
+
+* NVD lists a second Cloudron CVE, **CVE-2026-79363** (published 2026-10-09,
+  CVSS 3.1 5.9): a stored XSS through the branding footer, which an
+  administrator sets and which ran on the public login and OpenID page and in
+  the event log. The researcher tested 9.1.7 and 9.2; Cloudron confirmed 10.0.0
+  (DOMPurify) as the fix, which is the "ui: sanitize HTML and markdown inputs"
+  line under "Security record".
+* 10.1.1's token exchange accepted the mailbox owner's OIDC access token as the
+  mail password, so an app holding a user's access token could sign in to that
+  user's mailbox. The forum's 10.1 announcement (2026-11-04) says the change
+  "uncovered a security issue" reported by a user, to be fixed in 10.2; the fix
+  is on `master` (2026-11-03) and unreleased on 2026-11-08. No advisory text was
+  found.
+* Hacker News had no Cloudron story in the period and one passing mention
+  (hn.algolia.com, 2026-11-08).
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* Already there, against this period: one database instance per database, so
+  one app's failed import cannot keep another app's database down
+  (`internal/dbsvc`); API tokens stored as hashes (`api_tokens.token_hash`);
+  members limited to some projects (Phase 86), which is what Cloudron's planned
+  "external user" is; a server's automatic security updates checked when it is
+  added (`internal/provision/hardening.go`); passkeys
+  (`internal/auth/passkey.go`).
+* Of this file's gaps, closed since: template updates offered with a backup
+  first and stopped when a backup fails (Phase 102,
+  `internal/api/template_updates.go`); encrypted backups with a verify action
+  (Phase 104); the panel backed up to the bucket on a schedule (Phase 84); a
+  team's own template catalogue read from a URL (`internal/templates/remote`); a
+  viewer role (Phase 85); SSO groups mapped to teams (Phase 92). The catalogue
+  holds 375 template files, 39 of which declare a `health_path`.
+* Still open: an identity wall in front of an app (the firewall has basic auth,
+  `docs/firewall.md` "A password instead"), Skifity as an OIDC provider for the
+  apps it hosts, SMTP wiring (13 template files mention SMTP and there is no
+  input kind for it), post-install checklists, a `runs_as_root` template field,
+  and a window for applying template updates.
+* New gaps:
+  * **HTTPS from the first minute.** Without `--domain`, the first-run page is
+    served on the sslip.io address over plain HTTP (ADR-0015,
+    `docs/quick-start.md`), so the setup token, the first password and the
+    recovery key cross the network in the clear. ADR-0015's reason is the Let's
+    Encrypt rate limit that every install on sslip.io would share; a
+    certificate for the server's own IP address is not under that limit, and
+    Cloudron 10.1.1 uses exactly that. Size M; it takes a real server with a
+    public address to prove.
+  * **Consistent copies of SQLite files on a disk.** A volume backup is a tar
+    taken while the app runs, and the docs warn that an embedded database "may
+    be caught half-written" (`docs/backups.md` "Volumes"); 24 of 375 template
+    files mention SQLite. Cloudron's packages name their SQLite files and are
+    backed up with `VACUUM INTO`. A template field naming the files, and a
+    `VACUUM INTO` step in the backup Job before the tar, would close it. Size M;
+    the Job needs a cluster.
+  * **Security fixes for catalogue apps without a panel release.** Template
+    updates reach a panel only with the panel's own upgrade (`docs/templates.md`
+    "Updates"), and nothing checks a registry for a newer tag. In the PHP week
+    Cloudron moved about 175 packages in two days; a Skifity install would have
+    had its image scanning flag the apps (`internal/vulnscan`) and no update to
+    offer until a release. A signed feed of the built-in catalogue that a panel
+    opts into, verified the way the plugin store's index already is
+    (`internal/pluginstore`), would keep "never phones home" the default. Size M.
+  * **Moving a database to a newer major version.** The version is chosen when a
+    database is created (`CheckVersion` in `internal/api/data_handlers.go`) and
+    there is no upgrade; the way today is a backup, a new database and an import
+    (`POST /api/databases/{id}/import`) by hand. A guided move that keeps the
+    old database until the new one has imported and the app has been relinked is
+    what the Taiga incident argues for. Size M; it needs a cluster.
 
 ## Sources
 
@@ -559,3 +747,16 @@ All read 2026-09-30.
 * https://easypanel.io/alternatives/cloudron — competitor's comparison, verified by that vendor 2026-09-29
 * https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=cloudron — CVE-2021-40868
 * https://github.com/serenichron/mcp-cloudron — third-party MCP server
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://git.cloudron.io/platform/box/-/raw/master/CHANGES — 10.1.1 to 10.1.6 and the unreleased 10.2.0
+* https://git.cloudron.io/api/v4/projects/platform%2Fbox/repository/tags, /repository/commits?ref_name=master and /projects/platform%2Fbox — release dates, commits to 2026-11-03, 34 stars
+* https://blog.cloudron.io/cloudron-10-1/ (2026-10-26), /contacts/ (2026-11-04), /calendar/ (2026-11-05), /booking-pages/ (2026-11-06)
+* https://forum.cloudron.io/topic/16244 (10.1 released, 2026-11-04), /topic/16099 (what's coming in 10.1), /topic/15974 (what's coming in 10.2), /topic/16215 (Chat, 2026-10-30), /topic/16170 (PHP and eMudhra, from 2026-10-21), /topic/16088 (PostgreSQL 18 migration outage, 2026-10-08), /topic/16197 (VPN on app proxies, 2026-10-26); the forum's announcements category and title search through its API
+* https://api.cloudron.io/api/v1/apps — 198 packages; addon, checklist, health path, SQLite and update-date counts computed locally
+* https://www.cloudron.io/pricing.html — unchanged
+* https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=cloudron — CVE-2026-79363
+* https://www.faydin.blog/en/cves/CVE-2026-79363/ — affected and fixed versions
+* https://hub.docker.com/v2/repositories/cloudron/base/ — 657,670 pulls
+* https://hn.algolia.com/api/v1/search_by_date, query "cloudron" after 2026-09-30 — item 49926490

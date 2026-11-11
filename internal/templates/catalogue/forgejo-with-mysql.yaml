@@ -7,6 +7,7 @@ website: https://forgejo.org/docs
 services:
 - name: forgejo
   image: codeberg.org/forgejo/forgejo:15.0.9
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -16,12 +17,10 @@ services:
   variables:
     USER_UID: '1000'
     USER_GID: '1000'
+    FORGEJO__database__DB_TYPE: mysql
   volumes:
   - name: forgejo-data
     mount_path: /data
-    size_gb: 5
-  - name: forgejo-timezone
-    mount_path: /etc/timezone
     size_gb: 5
 databases:
 - name: forgejo-with-mysql-db
@@ -30,3 +29,9 @@ databases:
   link_to:
   - forgejo
   var_name: DATABASE_URL
+  vars:
+    host: FORGEJO__database__HOST
+    name: FORGEJO__database__NAME
+    user: FORGEJO__database__USER
+    password: FORGEJO__database__PASSWD
+notes: The image starts as root, so the environment needs the baseline pod security level.

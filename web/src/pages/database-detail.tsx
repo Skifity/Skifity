@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useRef, useState } from "react"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -19,6 +19,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { useConfirm } from "@/components/confirm-dialog"
+import { BackupStorageMissing, useBackupStorage } from "@/components/backup-storage"
 import { BackupVerification } from "@/components/backup-verification"
 import {
   DatabaseHistory,
@@ -35,7 +36,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -69,12 +76,24 @@ import type {
   Database,
   DatabaseCredentials,
   DatabaseLink,
+  LinkPiece,
+  LinkPieces,
 } from "@/lib/types"
+
+/** The tabs of a database's page, by the value ?tab= opens each with. */
+const DATABASE_TABS = ["connection", "apps", "backups", "manage", "history", "advanced"]
 
 export function DatabaseDetailPage() {
   const { t } = useTranslation()
   const { databaseId = "" } = useParams()
   const { team } = useSession()
+  // The tab is in the address, so a failed backup's notification and the
+  // overview's line about it open the backups rather than the connection
+  // details. A link to one backup, ?backup=, is on that tab.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get("tab") ?? (params.get("backup") ? "backups" : "")
+  const tab = DATABASE_TABS.includes(asked) ? asked : "connection"
+  const openTab = (next: string) => setParams(next === "connection" ? {} : { tab: next })
   // What the API asks of each action: deleting, restoring, reading the
   // credentials and changing the backup schedule are an administrator's;
   // linking and backing up are a member's. A button that can only end in a
@@ -159,7 +178,7 @@ export function DatabaseDetailPage() {
         }
       />
 
-      <Tabs defaultValue="connection">
+      <Tabs value={tab} onValueChange={openTab}>
         <TabsList>
           <TabsTrigger value="connection">{t("databases.connectionDetails")}</TabsTrigger>
           <TabsTrigger value="apps">{t("databases.linkedApps")}</TabsTrigger>
@@ -414,7 +433,22 @@ function LinkedApps({
   // What an app reads when the name is left empty is the engine's, not
   // always DATABASE_URL: MYSQL_URL, MONGODB_URI, REDIS_URL...
   const engines = useDatabaseEngines()
-  const defaultVariable = engines.data?.find((item) => item.name === database.engine)?.variable
+  const kind = engines.data?.find((item) => item.name === database.engine)
+  const defaultVariable = kind?.variable
+  // The connection in pieces as well, for software with no setting for a
+  // URL. A name left as it was is the engine's suggestion; one emptied is a
+  // piece not delivered.
+  const [withPieces, setWithPieces] = useState(false)
+  const [pieceNames, setPieceNames] = useState<LinkPieces>({})
+  const offeredPieces = kind?.pieces ?? []
+  const pieceName = (piece: LinkPiece, suggested: string) => pieceNames[piece] ?? suggested
+  const pieces = withPieces
+    ? Object.fromEntries(
+        offeredPieces
+          .map(({ piece, variable }) => [piece, pieceName(piece, variable).trim()] as const)
+          .filter(([, name]) => name !== ""),
+      )
+    : undefined
 
   const apps = useQuery({
     queryKey: ["apps", database.environment_id],
@@ -426,11 +460,14 @@ function LinkedApps({
       api.post(`/api/databases/${database.id}/link`, {
         app_id: appId,
         var_name: varName.trim(),
+        pieces,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["database", database.id] })
       setAppId("")
       setVarName("")
+      setWithPieces(false)
+      setPieceNames({})
     },
   })
 
@@ -473,7 +510,16 @@ function LinkedApps({
                         {byId.get(entry.app_id)?.name ?? entry.app_id}
                       </Link>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{entry.var_name}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {entry.var_name}
+                      {entry.pieces && Object.keys(entry.pieces).length > 0 && (
+                        <p className="mt-0.5 font-sans text-muted-foreground">
+                          {t("databases.pieces.listed", {
+                            names: Object.values(entry.pieces).filter(Boolean).join(", "),
+                          })}
+                        </p>
+                      )}
+                    </TableCell>
                     {canChange && (
                       <TableCell>
                         <Button
@@ -549,6 +595,38 @@ function LinkedApps({
                   />
                 </Field>
               </div>
+              {offeredPieces.length > 0 && (
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldLabel htmlFor="link-pieces">{t("databases.pieces.title")}</FieldLabel>
+                    <FieldDescription>{t("databases.pieces.help")}</FieldDescription>
+                  </FieldContent>
+                  <Switch id="link-pieces" checked={withPieces} onCheckedChange={setWithPieces} />
+                </Field>
+              )}
+              {withPieces && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {offeredPieces.map(({ piece, variable }) => (
+                    <Field key={piece}>
+                      <FieldLabel htmlFor={`link-piece-${piece}`}>
+                        {t(`databases.pieces.${piece}`)}
+                      </FieldLabel>
+                      <Input
+                        id={`link-piece-${piece}`}
+                        value={pieceName(piece, variable)}
+                        onChange={(event) =>
+                          setPieceNames((current) => ({ ...current, [piece]: event.target.value }))
+                        }
+                        placeholder={t("databases.pieces.notDelivered")}
+                        className="font-mono"
+                      />
+                    </Field>
+                  ))}
+                  <FieldDescription className="sm:col-span-2">
+                    {t("databases.pieces.fieldsHelp")}
+                  </FieldDescription>
+                </div>
+              )}
               {link.error != null && <ErrorDisplay error={link.error} compact />}
               <div className="flex justify-end">
                 <Button type="submit" disabled={!appId || link.isPending}>
@@ -626,8 +704,20 @@ function DatabaseBackups({
   const confirmRestore = useConfirm()
   const databaseId = database.id
   const names = useLinkedAppNames(database, links)
+  const { team } = useSession()
+  // The backup a link named — a notification about it, the overview — picked
+  // out of the list, and scrolled to once.
+  const [params] = useSearchParams()
+  const picked = params.get("backup")
+  const shown = useRef<string | null>(null)
+  const bringIntoView = (id: string) => (node: HTMLTableRowElement | null) => {
+    if (!node || shown.current === id) return
+    shown.current = id
+    node.scrollIntoView({ block: "center" })
+  }
   // A member limited to projects has no live stream to hear of a new backup.
-  const scoped = Boolean(useSession().team?.scoped)
+  const scoped = Boolean(team?.scoped)
+  const backupStorage = useBackupStorage()
 
   const backups = useQuery({
     queryKey: ["backups", databaseId],
@@ -672,6 +762,16 @@ function DatabaseBackups({
     },
   })
 
+  // For a team whose databases were made before there was storage: every one
+  // with no schedule at all gets the daily one a new database gets.
+  const applyDefaults = useMutation({
+    mutationFn: () => api.post<List<unknown>>(`/api/teams/${team?.id}/backup-policies/defaults`),
+    onSuccess: (done) => {
+      toast.success(t("databases.backupDefaultsApplied", { count: done.total }))
+      void queryClient.invalidateQueries({ queryKey: ["backup-policy"] })
+    },
+  })
+
   const backupNow = useMutation({
     mutationFn: () => api.post(`/api/databases/${databaseId}/backups`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["backups", databaseId] }),
@@ -701,8 +801,33 @@ function DatabaseBackups({
     </Button>
   )
 
+  // No row at all, rather than one that is off: made before there was
+  // storage, or with "back up daily" switched off.
+  const noSchedule = current != null && !current.id
+
   return (
     <div className="space-y-6">
+      {backupStorage.data?.configured === false && <BackupStorageMissing />}
+      {backupStorage.data?.configured && noSchedule && isAdmin && !team?.scoped && (
+        <Alert variant="info">
+          <DatabaseBackupIcon />
+          <AlertTitle>{t("databases.noScheduleTitle")}</AlertTitle>
+          <AlertDescription>
+            <p>{t("databases.noScheduleHelp")}</p>
+            {applyDefaults.error != null && <ErrorDisplay error={applyDefaults.error} compact />}
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2"
+              disabled={applyDefaults.isPending}
+              onClick={() => applyDefaults.mutate()}
+            >
+              {applyDefaults.isPending && <Spinner />}
+              {t("databases.backupDefaults")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("databases.backupSchedule")}</CardTitle>
@@ -790,7 +915,11 @@ function DatabaseBackups({
               </TableHeader>
               <TableBody>
                 {items.map((backup) => (
-                  <TableRow key={backup.id}>
+                  <TableRow
+                    key={backup.id}
+                    ref={backup.id === picked ? bringIntoView(backup.id) : undefined}
+                    data-state={backup.id === picked ? "selected" : undefined}
+                  >
                     <TableCell>
                       <div className="text-sm">{formatDateTime(backup.created_at)}</div>
                       <div className="text-xs text-muted-foreground">
@@ -812,7 +941,9 @@ function DatabaseBackups({
                       )}
                       {backup.status === "skipped" ? (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {t("databases.backupSkipped")}
+                          {backup.error_code === "database.busy"
+                            ? t("databases.backupSkippedBusy")
+                            : t("databases.backupSkipped")}
                         </p>
                       ) : (
                         backup.error_message && (

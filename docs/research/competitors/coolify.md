@@ -2,7 +2,9 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about Coolify that changed are corrected in place, and "Since 2026-09-30"
+> says what changed, with its sources.
 
 Coolify (`coollabsio/coolify`, coolify.io, plus the hosted control plane Coolify Cloud) is the
 open-source, self-hostable PaaS most often put next to Skifity: "an alternative to Vercel,
@@ -10,24 +12,26 @@ Heroku & Netlify" for solo developers, agencies and small teams who want to push
 Compose file and get containers, databases and one-click services on their own Linux servers.
 **Architecture:** a Laravel (PHP) control plane with a Livewire/Alpine UI (an Inertia/React
 "next-generation infrastructure experience" shipped as an early preview in v4.3.0), running as
-four base containers — `coolify` (dashboard, REST API, Laravel Horizon queue workers, scheduler),
-`coolify-db` (**PostgreSQL**, all configuration and state), `coolify-redis` (queues and cache) and
-`coolify-realtime` (Soketi websockets plus the browser-terminal websocket). Secrets are encrypted
-with an `APP_KEY` kept in `/data/coolify/source/.env`. There is **no orchestrator**: the control
-plane SSHes into each connected server and runs Docker / Docker Compose there, with a per-server
-Traefik (default, v3.7 since v4.3.0) or Caddy proxy and a `coolify-sentinel` agent (Rust) for
-health and metrics; Docker Swarm support is deprecated and will be removed in v5. **Licence:**
-Apache-2.0. **Pricing:** self-hosted is free with every feature; Cloud is $5/month for up to two
-connected servers plus $3/month per extra server, 20% off annually, one subscription per team.
-**Maturity:** v4.0.0 went stable on 27 April 2026 after roughly two years of `4.0.0-beta.4xx`
-builds; the current release is v4.3.23 (18 September 2026) and v4.4-rc.1 (19 August 2026) is in
-release-candidate. **Adoption** (all read 2026-09-30): 62,412 GitHub stars, 5,572 forks, 554 open
-issues and 197 open pull requests (GitHub); a homepage counter of **511,959 "self-hosted
-instances"** (`undead.coolify.io/instances`, counting method unpublished — treat as installs ever
-seen, not live instances); **3,765 Cloud users, MRR 21,200 and a 21,000-member Discord**
+three base containers since v4.4.0 (6 October 2026) — `coolify` (dashboard, REST API, Laravel
+Horizon queue workers, scheduler, and the realtime and browser-terminal websockets on Laravel
+Reverb), `coolify-db` (**PostgreSQL**, all configuration and state) and `coolify-redis` (queues
+and cache). Before v4.4.0 a fourth, `coolify-realtime` (Soketi), carried the websockets. Secrets
+are encrypted with an `APP_KEY` kept in `/data/coolify/source/.env`. There is **no orchestrator**:
+the control plane SSHes into each connected server and runs Docker / Docker Compose there, with a
+per-server Traefik (default, v3.7 since v4.3.0) or Caddy proxy and a `coolify-sentinel` agent
+(Rust) for health and metrics; Docker Swarm support is deprecated and will be removed in v5.
+**Licence:** Apache-2.0. **Pricing:** self-hosted is free with every feature; Cloud is $5/month for
+up to two connected servers plus $3/month per extra server, 20% off annually, one subscription per
+team. **Maturity:** v4.0.0 went stable on 27 April 2026 after roughly two years of `4.0.0-beta.4xx`
+builds; v4.4.0 went stable on 6 October 2026, and the current release is v4.6.0 (2 November 2026).
+On 2026-09-30 it was v4.3.23 (18 September), with v4.4-rc.1 (19 August) in release-candidate.
+**Adoption** (all read 2026-09-30): 62,412 GitHub stars, 5,572 forks, 554 open issues and 197 open
+pull requests (GitHub); a homepage counter of **511,959 "self-hosted instances"**
+(`undead.coolify.io/instances`, counting method unpublished — treat as installs ever seen, not live
+instances); **3,765 Cloud users, MRR 21,200 and a 21,000-member Discord**
 (`cdn.coollabs.io/business.json`, the file the homepage reads); Censys counted **52,890 publicly
 reachable Coolify dashboards** on 8 January 2026 (The Hacker News). The company is coolLabs
-Solutions Kft.; founder Andras Bacsai.
+Solutions Kft.; founder Andras Bacsai. The figures of 2026-11-08 are under "Since 2026-09-30".
 
 ## Feature inventory
 
@@ -46,8 +50,12 @@ Dates are from the GitHub releases and tags pages (read 2026-09-30).
 | v4.3.1 – 4.3.23 | 12 Aug – 18 Sep | 23 patch releases in 37 days: project icons, parallel-gzip backups, **alerts for missed database backups** (4.3.18), **Sentinel made mandatory** on regular servers (4.3.19), **host-path volumes removed from UI and API** as a security fix (4.3.22), per-domain internal ports, preview DNS checks, preview runtime-logs API |
 | v4.4-rc.1 (pre-release) | 19 Aug | **First-class generic OpenID Connect** (discovery, JWKS, PKCE, identity linking), team-scoped integration tokens, Alpine host support |
 
-The release process (`RELEASE.md`, read 2026-09-30) is `feature/* → next → RC → main`, with
-hotfixes cut from `main`. There is no documented LTS or security-only branch.
+The release process (`RELEASE.md`, read 2026-09-30) was `feature/* → next → RC → main`, with
+hotfixes cut from `main`, and there was no documented LTS or security-only branch. On
+21 October 2026 security releases were cut for every v4 minor line, and v4.6.0 (2 November)
+replaced the process: releases from `main`, `next`, release branches and maintenance branches
+such as `v4.x` and `v4.4.x`, with preview and nightly channels. It still names no support
+window.
 
 ### Deploy sources and builds
 
@@ -55,20 +63,25 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
   GitLab App or deploy key (self-hosted GitLab private repos since v4.3.0); Bitbucket; Gitea;
   any Git host over HTTPS/SSH; an existing Docker image; a Dockerfile pasted without Git; a Docker
   Compose file from Git (an *Application*) or pasted ("Docker Compose Empty", a *Service*).
-- **Build packs:** Nixpacks (default), Railpack (Beta, needs Docker Buildx), Static (nginx),
+- **Build packs:** Nixpacks (default; marked deprecated in favour of Railpack in v4.5.0,
+  23 October 2026), Railpack (Beta, needs Docker Buildx), Static (nginx),
   Dockerfile, Docker Compose. Builds run on the deployment server unless a **build server** is
   added (a build server cannot run workloads; with several, one is picked at random) and the image
   is pushed to a registry.
 - **Build vs runtime:** each variable has independent *Build Variable* and *Runtime Variable*
   flags; Docker build secrets with BuildKit; `SOURCE_COMMIT` excluded from builds so cache survives.
   The docs now say "Use Restart when only runtime values changed", which reuses the image — the
-  user picks the button. Issue #5748 "Restart button causes a rebuild" (Dockerfile apps) is open.
+  user picks the button. Issue #5748 "Restart button causes a rebuild" (Dockerfile apps) was open
+  on 2026-09-30. Since v4.5.1 (27 October 2026) a Compose build is skipped when the images match
+  the build inputs, "so runtime-only changes no longer rebuild".
 - **Rollback:** redeploys an older image still on the server, *with the current runtime
   configuration*; availability depends on image retention; no settings restore.
 - **Rolling updates:** for single-container build packs, start-new/health-check/stop-old. Not for
   Docker Compose, previews, published host ports, custom container names or fixed IPs. No request
   draining: issue #8627 (Feb 2026) reports 18–31 s of 502/503s because both containers carry the
-  same proxy labels; discussion #4692 asks for draining.
+  same proxy labels; discussion #4692 asks for draining. v4.5.1 (27 October 2026) added proxy
+  retries and a drain time for #8627; v4.5.2 (28 October) removed the retry labels again because
+  they caused 503s on the first rolling update after a save.
 - Pre/post-deployment commands, custom Docker run options, GPU flags, restart-loop limits,
   stop grace period, deploy webhooks for CI, deploy-by-tag (tags are team-scoped labels).
 
@@ -86,10 +99,11 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
 
 ### Databases and services
 
-- **Standalone databases (8 engines):** PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Dragonfly,
-  KeyDB, ClickHouse. Generated credentials, persistent volumes, health checks, resource limits,
-  **SSL/TLS with a Coolify CA**, optional **public access through a TCP proxy** (configurable
-  timeout), clone and move between environments. No replication or failover is documented.
+- **Standalone databases (8 engines, and SQLite as a ninth, experimental, since v4.4.0):**
+  PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Dragonfly, KeyDB, ClickHouse. Generated credentials,
+  persistent volumes, health checks, resource limits, **SSL/TLS with a Coolify CA**, optional
+  **public access through a TCP proxy** (configurable timeout), clone and move between
+  environments. No replication or failover is documented.
 - **Services** are Compose stacks from the one-click catalogue or pasted by the user. "Magic"
   variables generate values once and share them across containers: `SERVICE_URL_<ID>`,
   `SERVICE_FQDN_<ID>` (with a port suffix for routing), `SERVICE_USER_*`, `SERVICE_PASSWORD_*`
@@ -114,9 +128,10 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
 - **Volume and directory backups** (v4.3.0): scheduled `.tar.gz`, optional "stop containers while
   archiving", streamed to S3 (v4.3.18). **"Coolify does not restore storage archives from this
   page"** — download and restore by hand.
-- **Instance (control-plane) backup:** daily by default, optional S3 copy. The `APP_KEY` is not in
-  it and must be saved separately. Restore is a documented terminal procedure; discussion #1684
-  "Restore from Instance Backup" (62 votes) is open.
+- **Instance (control-plane) backup:** daily by default, optional S3 copy, and since v4.5.0 a
+  database backup before every update. The `APP_KEY` is not in it and must be saved separately.
+  Restore is a documented terminal procedure (still so on 2026-11-08); discussion #1684 "Restore
+  from Instance Backup" (62 votes) was open on 2026-09-30.
 - No export/import of an application: the migration guide says "Coolify does not provide a
   single export and import operation for an application".
 
@@ -140,11 +155,14 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
   root-disk usage every 60 s; metrics sampling every 10 s with **7-day local retention** under
   `/data/coolify/sentinel`; charts from 5 minutes to 30 days. Metrics cover the server, a
   **non-Compose application** or a **standalone database** — not Compose apps or one-click
-  services, and not build or Swarm servers.
+  services, and not build or Swarm servers. v4.5.0 added a fleet Metrics page with server and
+  container tables and disk, network and load charts, and v4.4.0 proxy traffic analytics per
+  application and per service.
 - Container logs in the UI and API (`lines=all` since v4.3.20); deployment logs with level
   filtering and download; preview runtime logs over the API (v4.3.23).
-- **Log drains** to Axiom, New Relic or a custom Fluent Bit config, opted in per resource;
-  deployment logs are not forwarded.
+- **Log drains** to Axiom, New Relic, Amazon CloudWatch (since v4.5.0) or a custom Fluent Bit
+  config, opted in per resource; deployment logs are not forwarded. v4.5.1 removed the Highlight
+  drain.
 - The docs are explicit that **threshold alerts on CPU/memory, external uptime checks and log
   alerting "require an external system"**. Server disk-usage threshold, unreachable-server and
   container-restart notifications exist.
@@ -153,14 +171,20 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
 
 - Email and password, TOTP 2FA with recovery codes, rate limits per real client IP (v4.3.12).
 - OAuth sign-in: GitHub, GitLab, Google, Azure/Entra, Bitbucket, Discord, Infomaniak. SSO with
-  **named** providers Authentik, Clerk and Zitadel (v4.3.0). "Generic OpenID Connect
-  configuration is not available" in v4.x stable; it is in v4.4-rc.1. Accounts are matched by
-  email and **no provider groups map to teams or roles**.
+  **named** providers Authentik, Clerk and Zitadel (v4.3.0), and **generic OpenID Connect** since
+  stable v4.4.0 (6 October 2026). Since v4.4.0 an OAuth account is linked to the provider
+  identity, not only the email, and an existing account is linked only when the provider
+  verified the address. **No provider groups map to teams or roles** (not re-checked on
+  2026-11-08). Passkeys arrived in v4.5.0 and team-required 2FA in v4.5.1.
 - **Roles:** Owner, Admin, Member per team; **Member is read-only since v4.3.0**. Instance
   administration means being Owner or Admin of the default ("root") team. Terminals are limited to
-  Owners and Admins.
+  Owners and Admins. Since v4.6.0 (2 November 2026) a member can be limited to selected projects,
+  environments or resources, at the levels read, read sensitive, deploy, write, delete and root,
+  with presets (viewer, developer, operator, full access).
 - **API tokens:** per user and team, permissions `read`, `read:sensitive`, `write`, `deploy`,
-  `root`; expiry of 7 days to 1 year or never; hourly expiry notifications. The API is **off by
+  `root`, and since v4.6.0 `delete`, which every delete now needs; expiry of 7 days to 1 year or
+  never; hourly expiry notifications. Since v4.6.0 a token can be limited to projects,
+  environments or resources, edited, paused and rolled. The API is **off by
   default on self-hosted** and can be limited to an IP allowlist.
 - Credentials encrypted at rest with `APP_KEY`; webhook signature or token checks; audit log of
   API mutations and webhook events (v4.1.0); a **web terminal** into servers and containers;
@@ -183,12 +207,13 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
 ### Templates and catalogue
 
 - `templates/service-templates.json` on `main` held **359 entries** on 2026-09-30 (last template
-  updated 2026-09-28); the site still says "280+". Each template is a Compose file with comment
+  updated 2026-09-28); the site still says "280+". On 2026-11-08 it held **354**, while
+  `templates/compose` held 388 files. Each template is a Compose file with comment
   metadata; eligibility requires **≥1,000 GitHub stars** and a matching docs PR.
 - The contribution guide says "Do not use latest or other floating tags", yet decoding the 359
   Compose files (744 `image:` lines) finds **163 templates (45%) with an explicit `:latest`
   image** and **194 (54%) with at least one `:latest` or untagged image** (this analysis,
-  2026-09-30).
+  2026-09-30). The same count on 2026-11-08 gives 148 (42%) and 179 (51%) of 354.
 - 189 templates are multi-container and 168 bundle their own database container. The top
   categories are productivity (72), media (27), ai (25), devtools (25) and cms (22).
 - The most-voted open template requests are Sentry (207), MailCow (110), Kafka (69), Airflow (47),
@@ -208,11 +233,13 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
   toggle; `read` tools plus `deploy` tools (deploy, cancel, start, stop, restart); entry points
   `coolify_help`, `get_infrastructure_overview`, `search_resources`, `list_unhealthy_resources`.
   "MCP responses never return environment values or file contents." Setup guides exist for
-  Claude Code and Cursor.
+  Claude Code and Cursor. v4.5.0 (23 October 2026) added tools that create and change resources,
+  and v4.6.0 `manage_dns`, `manage_integration_tokens`, `manage_secret_manager` and
+  `manage_cloudflare_tunnel`.
 - **IaC:** no official Terraform provider; community ones exist (`SierraJC/terraform-provider-
   coolify` 61 stars, `coolify-terraform/terraform-provider-coolify` 26 stars).
 - Cloud server provisioning from the dashboard: Hetzner (firewalls, private networks, backups,
-  cloud-init), DigitalOcean, Vultr.
+  cloud-init), DigitalOcean, Vultr, and Hostinger since v4.5.0.
 
 ### Notifications
 
@@ -293,16 +320,22 @@ hotfixes cut from `main`. There is no documented LTS or security-only branch.
 - **Restore is the weak half of backup.** There is no restore UI for instance backups (#1684) or
   volume archives (docs), and Redis-family and ClickHouse databases have no restore at all.
   "Restore options aren't available in the GUI or documentation" (HN, tharos47, Apr 2025).
-- **Restart still rebuilds sometimes** (#5748 open; #3560 "Restart container without triggering
-  a new build", 31 votes).
-- **Metrics are thin.** CPU and memory only, none for Compose apps or services, and no alerting on
-  them (docs). "Display Current Server Utilization for Deployed Containers" is the third
-  most-voted request (#2039, 139).
-- **Coarse permissions.** Granular roles (#2378), team member permissions (#3232), shared servers
-  across teams (#3235) and forced 2FA (#1892) are all open.
+- **Restart still rebuilds sometimes** (#5748 open on 2026-09-30; #3560 "Restart container without
+  triggering a new build", 31 votes).
+- **Metrics were thin.** CPU and memory only, none for Compose apps or services, and no alerting
+  on them (docs, 2026-09-30); v4.5.0 added disk, network and load charts and a fleet page.
+  "Display Current Server Utilization for Deployed Containers" was the third most-voted request
+  (#2039, 139).
+- **Coarse permissions, until recently.** Granular roles (#2378), team member permissions (#3232),
+  shared servers across teams (#3235) and forced 2FA (#1892) were open on 2026-09-30. v4.5.1
+  added team-required 2FA and v4.6.0 grants per project, environment or resource; the release
+  notes say nothing about sharing a server between teams.
 - **No support window.** Breaking changes landed inside a minor (v4.3.0: Member became read-only,
   the API became POST-only, router names changed). bex.co (Aug 2026): "Coolify does not document a
-  separate security-only maintenance branch or an LTS window."
+  separate security-only maintenance branch or an LTS window." Maintenance branches and
+  security releases for older lines arrived in October 2026, still without a stated window, and
+  breaking changes still land in minors (v4.5.0 refuses Compose `replicas` above one; v4.6.0
+  makes deletes need a new token ability).
 
 ## Security record
 
@@ -410,18 +443,21 @@ through in beta.471–473.
 ## Against Skifity
 
 "Written" means code and unit tests exist but it has never run on a cluster (ADR-0010). Line
-numbers are from the working tree read on 2026-09-30.
+numbers are from the working tree read on 2026-09-30. The Coolify column and the verdicts it
+decides were brought up to 2026-11-08. The Skifity column is still as read on 2026-09-30,
+except the SSO account-binding row, and "Since 2026-09-30" lists the rows it no longer
+describes.
 
 | Capability | Coolify | Skifity (evidence) | Verdict |
 |---|---|---|---|
 | **Deploy sources and builds** | | | |
-| Git providers | GitHub, GitLab, Bitbucket, Gitea, any Git | GitHub, GitLab, Gitea webhooks and statuses; no Bitbucket (`internal/gitsrc/webhook.go`, `report.go`) | behind (small) |
+| Git providers | GitHub, GitLab, Bitbucket, Gitea (an App since v4.5.0), any Git | GitHub, GitLab, Gitea webhooks and statuses; no Bitbucket (`internal/gitsrc/webhook.go`, `report.go`) | behind (small) |
 | Deploy without a repository | Image, pasted Dockerfile, pasted Compose | Image, or a folder sent with `skifity up` (`internal/cli/up.go`, `internal/upload`) | parity |
-| Build packs | Nixpacks default, Railpack beta, Static, Dockerfile, Compose | Railpack default, Nixpacks, Dockerfile, static dir (`internal/builder/detect.go`); Written | parity on paper |
+| Build packs | Nixpacks default but deprecated (v4.5.0), Railpack beta, Static, Dockerfile, Compose | Railpack default, Nixpacks, Dockerfile, static dir (`internal/builder/detect.go`); Written | parity on paper |
 | **Docker Compose** | Whole stack from Git or pasted, magic variables, previews | Read only: offers each service as a separate app; the `compose` source is refused (`internal/api/apps_handlers.go` "A Compose file is several services…"; ADR-0008) | **behind** |
-| Config change without rebuild | Runtime-only change reuses image if the user picks Restart; #5748 open | Build fingerprint decides and says before save (ADR-0007, `internal/deploy`); Written | ahead (narrower than claimed) |
+| Config change without rebuild | Runtime-only change reuses image if the user picks Restart; Compose builds skipped when the build inputs match (v4.5.1) | Build fingerprint decides and says before save (ADR-0007, `internal/deploy`); Written | ahead (narrower than claimed) |
 | Rollback | Old image with *current* settings | Old image *and* its settings; refuses a garbage-collected image (`internal/deploy/deployer.go` `Rollback`); Written | ahead |
-| Zero-downtime deploys | Rolling update for single-container apps only; 502s reported (#8627) | `maxUnavailable: 0` plus 5 s `preStop` (`internal/kube/manifests.go`); Written | ahead on paper |
+| Zero-downtime deploys | Rolling update for single-container apps only; 502s reported (#8627), a retry fix in v4.5.1 withdrawn in v4.5.2 | `maxUnavailable: 0` plus 5 s `preStop` (`internal/kube/manifests.go`); Written | ahead on paper |
 | Dedicated build machines | Build servers | Builds are in-cluster Jobs with no node pinning (`internal/builder/job.go`) | behind (small) |
 | **Domains, TLS and routing** | | | |
 | Automatic HTTPS | HTTP-01, DNS-01, wildcard certs, custom certs | cert-manager HTTP-01 installed on first domain (`internal/cluster/components.go`); no DNS-01, wildcard or custom cert | behind |
@@ -430,7 +466,7 @@ numbers are from the working tree read on 2026-09-30.
 | Edge firewall | None built in | IP/country/ASN rules at the edge (`internal/edgerules`, `internal/guard`); never through a live Traefik | ahead on paper |
 | DNS help | DNS validation, automatic Cloudflare records | Record shown as type/name/value with "Check again" (progress Phases 57–58); no provider automation | behind |
 | **Databases and services** | | | |
-| Engines | 8 (PG, MySQL, MariaDB, Mongo, Redis, Dragonfly, KeyDB, ClickHouse) | 3: PostgreSQL 17, Redis 7, "mysql" as MariaDB 11.4 (`internal/dbsvc/manifests.go`) | behind |
+| Engines | 9 (PG, MySQL, MariaDB, Mongo, Redis, Dragonfly, KeyDB, ClickHouse; SQLite experimental since v4.4.0) | 3: PostgreSQL 17, Redis 7, "mysql" as MariaDB 11.4 (`internal/dbsvc/manifests.go`) | behind |
 | Database high availability | None documented | CloudNativePG with an odd number of instances (`internal/dbsvc/manifests.go`); Written | ahead on paper |
 | Reaching a DB from a laptop | Public TCP proxy with SSL | Private only; no port-forward or tunnel command | behind (by design) |
 | Arbitrary multi-container stacks | Compose services | Only through templates (38 multi-service) | behind |
@@ -438,43 +474,43 @@ numbers are from the working tree read on 2026-09-30.
 | DB backups to S3 with retention | Yes, plus S3-failure warnings | Yes, presigned URLs (`internal/backup`); Written | parity |
 | DB restore | PG/MySQL/MariaDB/Mongo from file, upload or S3 | From the backup list (`internal/api/api.go` `/restore/{backupID}`, `internal/backup/jobs.go` `restoreScript`); Written | parity |
 | Volume backup **and restore** | Backup only; restore by hand | Both, scaling the app to zero and back (`/volumes/{volumeID}/restore/{backupID}`, `docs/backups.md`); Written | **ahead** |
-| Control-plane backup | Daily schedule, S3 copy | Manual `skifity admin backup-db` only (`internal/cli/admin.go`) | **behind** |
-| Missed-backup alert | Yes (v4.3.18) | None; backups fire from the panel's minute tick (`internal/serverapp/serverapp.go` `runScheduler`) | behind |
+| Control-plane backup | Daily schedule, S3 copy, a backup before each update (v4.5.0); restore from the terminal | Manual `skifity admin backup-db` only (`internal/cli/admin.go`) | **behind** |
+| Missed-backup alert | Yes (v4.3.18), for volume backups too (v4.4.1) | None; backups fire from the panel's minute tick (`internal/serverapp/serverapp.go` `runScheduler`) | behind |
 | **Scaling and HA** | | | |
 | More than one instance | None in v4 (deferred to v5) | Instances, HPA on CPU/memory, KEDA scale-to-zero (`internal/kube/apply.go`, `scaletozero.go`); Written | **ahead** on paper |
 | Several servers | Standalone hosts plus your load balancer; not for stateful or Compose apps | One k3s pool with rescheduling; front door still yours (`docs/adding-servers.md`); Written | ahead on paper |
 | Scaling readiness | A prose checklist in docs | `ScalingReadiness` names the variable that breaks (`internal/deploy/scaling.go`) | ahead |
 | **Observability** | | | |
 | Logs | Live, API, download, level filter | Live over SSE, plus the previous container's log (`llms.txt`); Written | parity |
-| Metrics history | CPU/mem charts, 5 min – 30 days | Point-in-time from metrics-server (`internal/kube/client.go`); no chart library in `web/package.json` | **behind** |
+| Metrics history | CPU/mem charts, 5 min – 30 days; disk, network, load and a fleet page (v4.5.0); proxy traffic analytics (v4.4.0) | Point-in-time from metrics-server (`internal/kube/client.go`); no chart library in `web/package.json` | **behind** |
 | Resource alerts | Disk-usage threshold, unreachable, container restarts | `app.unhealthy`, `server.lost` (`internal/notify/notify.go`); no disk alert | behind |
-| Log forwarding | Axiom, New Relic, Fluent Bit | None | absent in Skifity |
+| Log forwarding | Axiom, New Relic, CloudWatch (v4.5.0), Fluent Bit | None | absent in Skifity |
 | Panel self-monitoring | "Nightwatch monitoring support" (beta.470 notes) | Prometheus `/api/metrics` behind auth (`internal/api/api.go`, `docs/configuration.md`) | different |
 | **Security, auth, roles, SSO, audit** | | | |
-| SSO | Named OIDC providers; generic OIDC only in 4.4-rc.1 | Generic OIDC with PKCE, nonce, single-use state, domain allowlist (`internal/auth/oidc.go`); Works | ahead until 4.4 ships |
-| SSO account binding | Email match caused CVE-2026-86117 (fixed) | Also matches by email, no subject stored, absent `email_verified` accepted (`internal/api/sso_handlers.go` `GetUserByEmail`; `oidc.go`) | **same weakness** |
-| Roles | Owner/Admin/**read-only** Member | Owner/Admin/Member; Member can create and deploy (`internal/store/models.go`; `apps_handlers.go` create requires `RoleMember`) | behind (no viewer) |
-| API tokens | 5 permissions, expiry, API IP allowlist | `resource:action` scopes, TTL, team-bound (`internal/auth/scopes.go`, `service.go`); no IP allowlist | parity |
+| SSO | Named OIDC providers, and generic OIDC since v4.4.0 (6 Oct 2026) | Generic OIDC with PKCE, nonce, single-use state, domain allowlist (`internal/auth/oidc.go`); Works | parity since v4.4.0 |
+| SSO account binding | Email match caused CVE-2026-86117; linked to the provider identity since v4.4.0 | By issuer and subject since Phase 77 (`UserByIdentity` in `internal/api/sso_handlers.go`, migration 0018); an address links an account only when the provider verified it | parity (both fixed) |
+| Roles | Owner/Admin/**read-only** Member; grants per project, environment or resource at six levels (v4.6.0) | Owner/Admin/Member; Member can create and deploy (`internal/store/models.go`; `apps_handlers.go` create requires `RoleMember`) | behind (no viewer) |
+| API tokens | 6 permissions (`delete` since v4.6.0), expiry, pause and roll, scope to projects, environments or resources (v4.6.0), API IP allowlist | `resource:action` scopes, TTL, team-bound (`internal/auth/scopes.go`, `service.go`); no IP allowlist | behind (no pause, roll or project scope) |
 | Secrets | Encrypted; readable with `read:sensitive` and in the UI | Write-only on every surface, sealed to their context (`internal/crypto`, `llms.txt`) | ahead |
 | Audit log | API mutations and webhooks | Team audit log (`/teams/{team}/audit` in `internal/api/api.go`) | parity |
 | Webhook verification | Null-secret HMAC bypass, timing leak (CVEs above) | Empty secret refused, `hmac.Equal` (`internal/gitsrc/webhook.go` `VerifyGitHubSignature` etc.) | ahead |
 | Shell-injection surface | 36 injection CVEs, regex allowlist | One quoting place tested against a real `sh` (`internal/shellsafe`); workloads are API objects, not shell | ahead architecturally, undemonstrated |
 | Tenant isolation | 10 cross-team CVEs | Route walk: 91 team-scoped routes must 404 across teams (checklist #11); namespaces with default-deny (`internal/kube/namespace.go`) | ahead (panel Works, network Written) |
 | Proxy header trust | `TrustProxies='*'` (CVE-2026-34198) | Trusted-proxy count, default 0 (`internal/api/middleware.go`) | ahead |
-| Terminal | Web terminal (two 9.9 CVEs) | None, by decision; one-off `run` instead (`docs/roadmap.md`) | deliberate difference |
+| Terminal | Web terminal (two 9.9 CVEs), an attach console and a container file browser (v4.5.0) | None, by decision; one-off `run` instead (`docs/roadmap.md`) | deliberate difference |
 | **Preview environments** | | | |
 | PR previews | URL template, PR comment, preview-only variables, fork gate | Per-PR namespace, commit status and PR comment (`internal/deploy/gitreport.go`), fork previews get no secrets (`webhook_handlers.go` `copyPreviewVariables`), TTL reclaim (`internal/watch/watch.go`); no preview-only variables | parity (different strengths) |
 | Per-preview database | No | No; the copy inherits the parent's `DATABASE_URL`, which points at the parent environment's database across a default-deny namespace (`internal/dbsvc/manager.go` `Link`) | absent in both |
 | **Templates** | | | |
-| Catalogue | 359 entries, 45% with an explicit `:latest` | 282, every image a checked version (`internal/templates/catalogue`, README) | behind on count, ahead on pinning |
+| Catalogue | 354 entries on 2026-11-08 (359 on 2026-09-30), 42% with an explicit `:latest` | 282, every image a checked version (`internal/templates/catalogue`, README) | behind on count, ahead on pinning |
 | **CLI, API, IaC, integrations** | | | |
 | API breadth | 275 documented endpoints | ~150 routes (`internal/api/api.go`) | behind |
 | CLI breadth | ~270 commands incl. backups, services, servers | 17 commands (`internal/cli/commands.go`), `--json` everywhere | behind |
-| MCP | Remote Streamable HTTP; read + deploy tools | stdio only (`internal/mcpserver/server.go` `StdioTransport`); 15 tools incl. create, set variable, run, scale | parity (deeper tools vs remote transport) |
+| MCP | Remote Streamable HTTP; read and deploy tools, and since v4.5.0 tools that create and change resources | stdio only (`internal/mcpserver/server.go` `StdioTransport`); 15 tools incl. create, set variable, run, scale | parity (deeper tools vs remote transport) |
 | Error format | Generic 5xx messages | cause/impact/fix everywhere (`internal/errdoc`) | ahead |
 | Commit statuses | Not documented (PR comments only); #1671 "Update commit status on deployment" (48 votes) open | GitHub and GitLab statuses (`internal/gitsrc/report.go`) | ahead |
 | IaC / export | Community Terraform; no export | `skifity.toml`; team export with Kubernetes objects (`/teams/{team}/export`); Works | ahead (export) |
-| Cloud provisioning | Hetzner, DigitalOcean, Vultr | None | absent in Skifity |
+| Cloud provisioning | Hetzner, DigitalOcean, Vultr, Hostinger (v4.5.0) | None | absent in Skifity |
 | **Notifications** | | | |
 | Channels | Email, Discord, Telegram, Slack, Mattermost, Pushover, webhook | Telegram, Discord, webhook, email plus plugin providers (`internal/notify/notify.go`, `internal/plugins`) | behind |
 | Events | ~16 | 7 (`internal/notify/notify.go`) | behind |
@@ -482,7 +518,7 @@ numbers are from the working tree read on 2026-09-30.
 | Adding a server | SSH key, validate, install Docker | Password once, own key installed, k3s joined in seven checked steps (`internal/provision`); Written | parity |
 | Traffic between servers | Unencrypted; Tailscale asked for (#4975) | WireGuard flannel by default (`internal/settings/settings.go` `FlannelWireGuard`); Written | ahead |
 | Tunnels | Cloudflare Tunnel guides | Cloudflare tunnel component (`internal/cluster/tunnel.go`); never reached Cloudflare | parity |
-| Host upkeep | OS patching page, Docker cleanup | Registry GC only (roadmap 11.1); no OS or k3s update view | behind |
+| Host upkeep | OS patching with automatic security updates per server (v4.5.0), Docker cleanup | Registry GC only (roadmap 11.1); no OS or k3s update view | behind |
 | **Team and collaboration** | | | |
 | Clone and move resources | Across projects/environments | None | behind |
 | Shared variables | Team, project, environment, server | Project level (`internal/deploy/deployer.go` `runtimeVariables`) | behind (small) |
@@ -490,7 +526,7 @@ numbers are from the working tree read on 2026-09-30.
 | Install and release | Released, one-liner, seven distro families | Installer written, **no tag** (`llms.txt`, `docs/checklist.md`) | behind |
 | Footprint | Official minimum 2 CPU / 2 GB; ~0.75–1.2 GB overhead | Panel 35 MiB idle (`docs/performance.md`); k3s's own minimum is 2 cores / 2 GB (docs.k3s.io); whole stack unmeasured | unproven |
 | Languages | English (Turkish PR closed) | en, id, hi, ru, zh-CN with a build gate (`web/src/locales`); Works | ahead |
-| Maturity | Stable, ~512k installs counted | Nothing has run on a cluster (ADR-0010) | behind |
+| Maturity | Stable, ~530k installs counted (2026-11-08) | Nothing has run on a cluster (ADR-0010) | behind |
 
 ### Claims in this repository that no longer hold
 
@@ -498,11 +534,14 @@ numbers are from the working tree read on 2026-09-30.
   **Coolify has shipped one since v4.1.0 (18 May 2026)**, remote over Streamable HTTP with
   per-team toggles, plus a Go CLI that publishes `llms.txt`. What is still Skifity's is depth —
   create, set variables, run, scale, readiness — and errors written as cause, impact and fix.
+  Since v4.5.0 (23 October 2026) Coolify's MCP creates and changes resources too, so depth is no
+  longer Skifity's alone.
 - The same file says SSO is something "Coolify does not" have. Coolify has had named OIDC
-  providers since v4.3.0 and generic OIDC in v4.4-rc.1.
+  providers since v4.3.0 and generic OIDC since stable v4.4.0 (6 October 2026).
 - "A config change does not rebuild — the top Coolify complaint" is now narrower. Coolify's docs
   send runtime-only changes to Restart, which reuses the image. The gap is that the user has to
-  pick the right button and that #5748 is open.
+  pick the right button and that #5748 was open; since v4.5.1 Coolify skips a Compose build when
+  only runtime values changed.
 - "Coolify has no volume backups" (common in early-2026 comparisons) stopped being true on
   12 Aug 2026. Volume **restore** is still missing.
 - The catalogue is **359**, not 342. "More than half ship `latest`" holds only when untagged
@@ -652,9 +691,187 @@ numbers are from the working tree read on 2026-09-30.
 - **Half-built second orchestrators.** Swarm was "experimental … never fully implemented" and is
   being removed after two years. Skifity's one-cluster rule in the roadmap avoids the same trap.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's web pages and API could not be reached from where this was written,
+so release notes were read through the ungh.cc mirror of GitHub's releases API, release dates from
+the tags themselves, `CHANGELOG.md` and `RELEASE.md` from raw.githubusercontent.com, and CVEs from
+NVD and CIRCL. Issue and discussion states were not re-read: where a release names an issue, this
+says so, not that the issue is closed.
+
+### Releases
+
+Coolify shipped v4.4.0, v4.5.0 and v4.6.0 in four weeks, with eleven patch and security releases
+between them.
+
+| Release | Date (2026) | What changed that matters for a comparison |
+|---|---|---|
+| **v4.4.0** | 6 Oct | **Traffic analytics** for Traefik and Caddy, read from the proxies' access logs by a Rust Sentinel and kept as rollups only: requests, bandwidth, unique visitors, p95 latency, status codes, countries, paths, hosts, referrers, devices and browsers, off by default. **SQLite** as an experimental database. **Secret managers** (Doppler, Infisical, HashiCorp Vault), resolved at deploy and never stored. A searchable **team audit log** with each field's old and new value, pruned after 90 days. **Generic OIDC** sign-in, and OAuth accounts linked to the provider identity rather than the email. Cloudflare DNS records from the Domains page. Server roles (deployments, builds or both) and **GitHub Actions self-hosted runners** on build servers (beta). Docker registry logins, a server images page and a Traefik `acme.json` page. Account deletion, a previews API, Alpine hosts, named volumes for new mounts. Realtime moved from the Soketi container into `coolify` on Laravel Reverb. A long list of quoting, validation, team-scoping and secret-redaction fixes |
+| v4.4.1 – v4.4.6 | 7 – 9 Oct | Volume-backup notifications and missed-volume-backup alerts; scheduled backups that never started recorded as failed; settings search in the command palette; per-server choice of storing full, anonymised or no client IPs in analytics; IPv6 fixes; a 5 GB free-space check before upgrades, added in v4.4.4 and removed in v4.4.5 because it blocked updates; v4.4.6 pinned the PHP base image after self-hosted instances failed to start (#12141) |
+| **v4.4.7**, v4.3.24, v4.2.1, v4.1.3, v4.0.1 | 21 Oct | One security release for every v4 minor line: PHP 8.4.27 for **PHP2Shell** (CVE-2026-109618 and CVE-2026-109619, two PHP remote-code-execution bugs), Sentinel 1.1.2 for CVE-2026-111943 (Go's `crypto/x509`), cloudflared 2026.10.3 for the eMudhra certificate compromise, and Node.js 24.22.1 in v4.4.7. A `patch.sh` moves an instance to its line's fix release; betas, RCs and nightlies cannot use it |
+| **v4.5.0** | 23 Oct | Gitea App sources; **server patching** (beta) with automatic security updates per server; a fleet Metrics page and disk, network and load charts; a Canvas view; a **file browser** into application, service and database containers; **passkeys**; maintenance mode and custom proxy error pages; permanent redirects; a Traefik certificate resolver per server; Hostinger servers; a Coolify database backup before every update; server transfer to another Coolify instance (beta); MCP tools that create and change resources; Smart scan; rollback to registry images; an interactive console (`docker attach`); a CloudWatch log drain; `app-key:reencrypt` after an `APP_KEY` rotation; plaintext secrets encrypted at rest; Nixpacks marked deprecated in favour of Railpack. Breaking: Compose files with `scale` or `replicas` above one are refused, and more API calls need the `deploy` ability |
+| v4.5.1 | 27 Oct | **Team-required 2FA**; the first root account can register only in the ten minutes after Coolify starts; Compose builds skipped when the images match the build inputs, "so runtime-only changes no longer rebuild"; proxy retries and a drain time against the 502s of #8627; `# coolify:` flag directives for variables; the Highlight log drain removed |
+| v4.5.2 – v4.5.3 | 28 Oct | v4.5.1's retry labels removed again because they caused 503s on the first rolling update after a save; previews created before the upgrade broke on redeploy and were fixed; application commands and configuration hidden from members and from tokens without `read:sensitive` |
+| **v4.6.0** | 2 Nov | **Members and API tokens limited to selected projects, environments or resources**, at the levels read, read sensitive, deploy, write, delete and root, with presets (viewer, developer, operator, full access); every delete needs the new `delete` ability (breaking); tokens can be edited, paused and rolled; **update channels** (stable, preview, nightly, or a pull request's image) and twice-daily nightlies; DNS records, integration tokens, secret managers and Cloudflare tunnels through the API and MCP; HTTPS credentials for custom Git hosts; a console on a container's main process; SBOM attestations on the image; image layers in zstd, so Docker 24 is required; Windows with Docker Desktop no longer supported; CI actions pinned to commit SHAs with a lockfile |
+
+`CHANGELOG.md` on `main` (read 2026-11-08) lists what is merged and not yet released: SSH host-key
+pinning on first connection with a notification when a key changes (`SSH_HOST_KEY_CHECKING`),
+Ed25519 keys and a "Rotate key" that replaces a key on every server; **container image
+vulnerability scanning** with Syft and Grype on the server and an optional deploy gate; deployments
+and previews reported to **GitHub Deployments**; **SFTP, FTPS and WebDAV** as backup storage, with
+restores; older queued webhook deployments cancelled when a newer push arrives, on by default;
+Forgejo and Codeberg through the Gitea App; Valkey as the default for new Redis databases; and
+failure notifications sent on the first failure, then at most once a day, then once on recovery,
+with a scheduled task switched off after ten failures over 24 hours. The CDN's nightly channel was
+at `4.7.0-alpha.0.20261106.1` on 2026-11-08.
+
+### The release process
+
+v4.6.0 replaced `RELEASE.md`. Releases now come from `main`, `next`, release branches such as
+`release/v4.6` and maintenance branches such as `v4.x` and `v4.4.x`, with preview and nightly
+channels, and `CHANGELOG.md` is written by hand instead of by git-cliff. With the backports of
+21 October, Coolify has a security-fix path for older minor lines for the first time. `RELEASE.md`
+still names no support window: which lines get a backport is shown only in an example ("4.2 gets no
+backports").
+
+### Numbers on 2026-11-08
+
+- 65,766 stars and 5,940 forks (repository metadata through the ungh.cc mirror), against 62,412 and
+  5,572 on 2026-09-30.
+- 529,579 instances on the homepage counter (511,959).
+- 4,050 Cloud users and MRR 23,000 in `business.json` (3,765 and 21,200); the Discord is still
+  21,000.
+- `templates/service-templates.json` on `main` holds 354 entries, five fewer than on 2026-09-30,
+  while `templates/compose` holds 388 files. Coolify's own comparison page counted 363 on
+  2026-10-19 and a reviewer counted 383 on 2026-11-04, so the number depends on which list is
+  counted. Of the 354, 148 (42%) name an explicit `:latest` image and 179 (51%) at least one
+  `:latest` or untagged image, against 45% and 54%.
+- Pricing is unchanged: self-hosted free, Cloud $5 a month for two servers and $3 for each more.
+
+### Security
+
+NVD and CIRCL list one Coolify CVE published since 2026-09-30, which makes 76. CVE-2026-121587
+(2026-11-03, CVSS 4.0 6.9, through VulnCheck): before 4.1.1 the manual GitHub, GitLab, Bitbucket and
+Gitea webhooks matched a repository name of `%` as a SQL `LIKE` wildcard before checking the
+signature, so anybody could list every team's application names. As with the July wave, it was
+fixed months before it was published.
+
+The larger event was PHP2Shell. Coolify's knowledge base published an urgent advisory on
+21 October: every unpatched v4 instance was affected, self-hosters who could not update were told
+to `docker stop coolify`, and Cloudflare's WAF rules were called a stopgap. The dashboard is a PHP
+process, so the exposure was the dashboard itself.
+
+The release notes also list hardening with no CVE attached: in v4.4.0, Compose files validated
+against injection on load, save and deploy, git refs and variable names validated before use, proxy
+configuration validated before save, NAT64 addresses blocked in the outbound URL guard, and secrets
+kept out of the logs of failed commands; in v4.5.1, holes in server-transfer import and a bypass of
+the PostgreSQL restore scan; in v4.6.0, the Reverb HTTP API no longer reachable under `/apps`.
+GitHub's advisory list could not be re-read.
+
+### Users
+
+Recent Hacker News comments are few. One user "quickly ran into broken behaviors with Coolify (e.g.
+marketplace search filters straight up do nothing)" and moved to Komodo (2026-10-20). Another
+advised "Take coolify admin off the web, put it on a private address only accessible via
+tailscale" (2026-10-22). A third moved to Dokploy because they "prefer the interface" (2026-10-16).
+Komodo was named twice as the alternative. A comparison by a Dokploy user (milanjovanovic.tech,
+2026-11-04) counts 16 critical and 25 high Coolify advisories published on GitHub in 2026.
+
+### What this changes in the comparison
+
+Corrected in place above: the base containers, the current release, the release process, Nixpacks,
+the database engines, the instance backup, metrics, log drains, generic OIDC and identity-linked
+OAuth, roles, API tokens, the catalogue, the MCP server and cloud providers.
+
+Points that were Skifity's alone and are now shared:
+
+- **A config change that does not rebuild.** Since v4.5.1 Coolify skips a Compose build when the
+  build inputs match. Skifity's build fingerprint (ADR-0007) still decides for every kind of app and
+  says so before the save, but this is no longer one-sided.
+- **Scoped access.** Coolify's v4.6.0 grants go further than Skifity's: scope by environment or by a
+  single resource, and a different level for each scope. Skifity limits a member to projects, with
+  one role for the whole team (`Membership.Scoped` and `Projects` in `internal/store/models.go`,
+  migration 0021).
+- **Secret managers, passkeys, team-required 2FA, image scanning, host-key pinning, a backup before
+  an upgrade, an MCP server that changes things.** Coolify now has each of these, released or merged,
+  as Skifity does since phases 87 to 112.
+
+Points where Skifity is still alone or ahead: more than one instance of an app, autoscaling and scale
+to zero (Coolify v4.5.0 refuses Compose `replicas` above one, and replicas are still promised for
+v5); the edge firewall; volume-archive restore from the panel, which Coolify's volume-backup page
+still says it does not do (read 2026-11-08); and previews that get databases of their own, seeded
+if asked (Phases 76 and 107).
+
+### Rows of the table above that no longer describe Skifity
+
+Checked in the code on 2026-11-08:
+
+- **Docker Compose:** a Compose file deploys as one stack (`POST …/environments/{id}/stack`,
+  `internal/api/stack_handlers.go`, Phase 101).
+- **Control-plane backup:** scheduled panel backups (`/panel/backups` in `internal/api/api.go`,
+  Phase 84), restored with `skifity admin restore-db`, a terminal step like Coolify's.
+- **Missed-backup alert:** `backup.missed` (`internal/notify/notify.go`).
+- **Engines:** nine, MongoDB, Valkey, Dragonfly, ClickHouse and Memcached among them
+  (`internal/dbsvc/engine/engine.go`).
+- **Reaching a DB from a laptop:** `skifity db connect` (`internal/cli/dbconnect.go`, Phase 105).
+- **Metrics history and resource alerts:** usage charts per app and per server, with `app.alert` and
+  `server.alert` (Phases 95 and 99).
+- **Log forwarding:** eight drain kinds through Vector (`internal/logdrain`).
+- **Roles:** a viewer role (Phase 85) and members limited to projects (Phase 86).
+- **API tokens:** an API network allowlist exists (`tokenNetworkAllowed` in
+  `internal/api/middleware.go`).
+- **MCP:** served by the panel at `/api/mcp` (Phase 87), with read-only annotations
+  (`internal/mcpserver/server.go`).
+- **Git providers:** Bitbucket Cloud (Phase 112).
+- **DNS help and certificates:** records kept at Cloudflare, Hetzner, DigitalOcean and Route 53
+  (`internal/dnsprov`), and a team's own certificates (`internal/tlscert`); DNS-01 is still absent.
+- **Cloud provisioning:** Hetzner Cloud and DigitalOcean (`internal/provision/cloud.go`).
+- **Notifications:** ten kinds, Slack, Mattermost, Microsoft Teams, Gotify, ntfy and Pushover among
+  them (`internal/notify/notify.go`).
+- **Catalogue:** 374 templates (`internal/templates/catalogue`).
+- **Install, release and maturity:** v0.1.0 was published on 2026-10-06 and v0.1.1 on 2026-10-21,
+  and the `Cluster` workflow installs the panel on a real k3s on every push to `main`
+  (`docs/progress.md`, "A real cluster, at last").
+
+### New gaps for Skifity
+
+Each checked against Skifity's code on 2026-11-08.
+
+1. **Access levels per environment and per app.** *What:* a membership that can deploy to staging
+   and only read production, or reach one app of a project. *Evidence:* Coolify v4.6.0. Skifity has
+   one role per team, narrowed only by project (`Membership` in `internal/store/models.go`,
+   `authorizeEnvironment` in `internal/api`). *Size:* M. *Without a cluster:* yes; the route walk of
+   Phase 86 extends to it.
+2. **API tokens that can be paused, rolled and limited to projects.** *Evidence:* Coolify v4.6.0.
+   Skifity's tokens are created, listed and revoked (`/me/tokens` in `internal/api/api.go`), and
+   `APIToken` (`internal/store/models.go`) holds scopes and an expiry, with no project list, so a CI
+   token for one client's project reaches the team. *Size:* S. *Without a cluster:* yes.
+3. **Traffic broken down by path, country and referrer.** *Evidence:* Coolify's traffic analytics
+   (v4.4.0, city level in v4.5.0). `internal/traffic` reads Traefik's per-service counters, so
+   Skifity knows requests by status and the median and p95 latency, and nothing per path, country or
+   referrer. The guard already sits in front of an app with a country database (`internal/geoip`);
+   counting there, as rollups, would keep no visitor's address. *Size:* M. *Without a cluster:* the
+   aggregation, yes; the numbers need one.
+4. **Install OS security updates from the panel.** *Evidence:* Coolify v4.5.0's server patching
+   with automatic security updates. Skifity's hardening report (`internal/provision/hardening.go`)
+   reads whether automatic updates are on and whether a reboot is pending, and tells the person what
+   to run; the only change it makes itself is turning SSH passwords off. *Size:* S–M. *Without a
+   cluster:* the scripts against stand-ins, yes; a real distribution needs a VM.
+5. **Report deployments to GitHub Deployments.** *Evidence:* merged in Coolify, unreleased.
+   `internal/gitsrc/report.go` sets commit statuses and one pull-request comment, not the
+   Deployments API that GitHub shows as "deployed to production" with a link. *Size:* S. *Without a
+   cluster:* yes, against an `httptest` GitHub.
+6. **Delete an account.** *Evidence:* Coolify v4.4.0. `store.DeleteUser` exists
+   (`internal/store/users.go`) and nothing calls it, so neither a person nor an administrator can
+   remove an account from the panel. *Size:* S. *Without a cluster:* yes.
+
+Not worth copying: SQLite as a managed engine (one file on one server, which Skifity's volumes
+already give an app) and the container file browser, which carries the risks of the terminal that
+`docs/roadmap.md` declines.
+
 ## Sources
 
-All read on 2026-09-30.
+All read on 2026-09-30, except the list at the end.
 
 - https://github.com/coollabsio/coolify (repository metadata through the GitHub search API: stars, forks, open issues, licence)
 - https://github.com/coollabsio/coolify/releases, `?page=2`, `?page=3`, `?page=4`
@@ -715,3 +932,24 @@ All read on 2026-09-30.
 - https://getdeploying.com/guides/coolify-vs-dokploy
 - https://news.ycombinator.com/item?id=43589149
 - Web search result summaries for Contabo, LumaDock and Northflank Coolify-vs-Dokploy comparisons (2026), cited only for the "catalogue" and "LLM-optimized docs" points
+
+Read on 2026-11-08, for "Since 2026-09-30":
+
+- https://ungh.cc/repos/coollabsio/coolify/releases (a mirror of GitHub's releases API: the notes of v4.3.24 to v4.6.0, and v4.0.1, v4.1.3 and v4.2.1) and https://ungh.cc/repos/coollabsio/coolify (stars, forks)
+- `git ls-remote --tags https://github.com/coollabsio/coolify`, and the tags fetched for their dates
+- https://raw.githubusercontent.com/coollabsio/coolify/main/CHANGELOG.md, `/RELEASE.md`, `/release.json` and `/docker-compose.prod.yml`
+- `templates/service-templates.json` and `templates/compose/` on `main` and `next` (counted and analysed locally)
+- https://cdn.coollabs.io/coolify/versions.json, https://cdn.coollabs.io/business.json and https://undead.coolify.io/instances
+- https://coolify.io/pricing and https://coolify.io/changelog
+- https://coolify.io/docs/llms.txt (1,702 lines)
+- https://coolify.io/docs/knowledge-base/php-security-advisory-2026 (last updated 2026-10-21)
+- https://coolify.io/docs/core/team/roles-and-permissions, /core/infrastructure/scaling/overview, /core/backup-and-recovery/instance-backup, /core/backup-and-recovery/instance-restore, /core/infrastructure/servers/server-transfer, /core/observability/monitoring/traffic-analytics, /core/persistent-storage/storage-mounts/backups
+- https://coolify.io/docs/applications/deployments/rolling-updates
+- https://coolify.io/compare/coolify-vs-dokploy-vs-caprover-vs-dokku-vs-kamal (last verified by Coolify 2026-10-19)
+- https://services.nvd.nist.gov/rest/json/cves/2.0 with `keywordSearch=coolify`, published 2026-09-30 to 2026-11-08, and the records of CVE-2026-121587, CVE-2026-111943 and CVE-2026-109618
+- https://vulnerability.circl.lu/api/vulnerability/search/coollabsio/coolify (76 CVE records)
+- https://www.vulncheck.com/advisories/coolify-before-4.1.1-application-name-enumeration-via-manual-webhook-endpoints (named in the NVD record; not opened)
+- https://github.com/coollabsio/coolify/issues/12255 (from search results)
+- https://hn.algolia.com/api/v1/search_by_date?query=coolify (comments since 2026-09-30), among them https://news.ycombinator.com/item?id=50168105, /item?id=50189869 and /item?id=50119559
+- https://milanjovanovic.tech/blog/dokploy-vs-coolify (published 2026-11-04; the author runs Dokploy)
+- Skifity files named under "Since 2026-09-30", read in this repository on 2026-11-08

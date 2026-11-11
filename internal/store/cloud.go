@@ -123,6 +123,22 @@ func (db *DB) TouchCloudProviderChecked(ctx context.Context, id string, at time.
 	return nil
 }
 
+// ReplaceCloudProviderToken gives a connection a new token, sealed under the
+// same connection, with its hint and when the provider last accepted it. The
+// servers created with it keep it: it is still the connection their machines
+// are deleted through.
+func (db *DB) ReplaceCloudProviderToken(ctx context.Context, teamID, id, sealed, hint string, checkedAt time.Time) error {
+	res, err := db.Exec(ctx, `UPDATE cloud_providers SET token_enc = ?, token_hint = ?, checked_at = ?, updated_at = ?
+		WHERE team_id = ? AND id = ?`, sealed, hint, FormatTime(checkedAt), Now(), teamID, id)
+	if err != nil {
+		return fmt.Errorf("replace the cloud connection's token: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeleteCloudProvider removes one of a team's connections. One that servers
 // were created with is refused by the schema; the API asks first, to say so
 // properly.

@@ -6,6 +6,7 @@ website: https://libredb.org
 services:
 - name: libredb-studio
   image: ghcr.io/libredb/libredb-studio:0.17.0
+  needs_root: true
   port: 3000
   public: true
   variables:

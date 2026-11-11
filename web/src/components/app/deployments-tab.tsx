@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
+import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useSearchParams } from "react-router-dom"
 import {
   ArrowUpRightIcon,
   CircleDotIcon,
@@ -14,7 +16,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "cn"
 
-import { recordedTitle } from "@/components/app/recorded-title"
+import { DeployFailure } from "@/components/app/deploy-failure"
 import { DeployAnywayButton } from "@/components/app/security-tab"
 import { useStickToBottom } from "@/components/app/stick-to-bottom"
 import { EmptyState } from "@/components/empty-state"
@@ -48,21 +50,38 @@ import { useSession } from "@/hooks/use-session"
 import { ApiError, api, type List } from "@/lib/api"
 import { formatDuration, formatRelative, shortCommit } from "@/lib/format"
 import { queryClient } from "@/lib/query"
-import type { App, Deployment, LogLine } from "@/lib/types"
+import type { App, Deployment, Environment, LogLine } from "@/lib/types"
 
-const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
+export const TERMINAL = new Set(["succeeded", "failed", "cancelled", "superseded"])
 
-export function DeploymentsTab({ app }: { app: App }) {
-  const { t } = useTranslation()
+/**
+ * Which version is actually serving: the newest deployment that succeeded.
+ *
+ * A rollback is a new deployment carrying an old image, so the newest
+ * succeeded one is always the live one — but after a rollback the row people
+ * assume is live (the highest number) is a superseded build, and a newer one
+ * may still be building or may have failed. Every place that names the live
+ * version derives it here, during render, from the list itself: there is no
+ * second source to fall out of step with.
+ */
+export function liveDeployment(items: Deployment[]): Deployment | undefined {
+  return items.find((deployment) => deployment.status === "succeeded")
+}
+
+/** Where a deployment is opened: its row on the Deployments tab, log and all. */
+export function deploymentLink(deploymentId: string) {
+  return { search: `?tab=deployments&deployment=${encodeURIComponent(deploymentId)}` }
+}
+
+/**
+ * An app's deployments, newest first, as every view of them reads them: one
+ * query, so the Overview and the Deployments tab share what was fetched.
+ */
+export function useDeployments(appId: string) {
   const { team } = useSession()
-  // null means "nothing chosen yet", which is not the same as "chosen nothing":
-  // a running deployment opens itself until the user closes it.
-  const [opened, setOpened] = useState<string | null>(null)
-  const [touched, setTouched] = useState(false)
-
-  const deployments = useQuery({
-    queryKey: ["deployments", app.id],
-    queryFn: () => api.get<List<Deployment>>(`/api/apps/${app.id}/deployments`),
+  return useQuery({
+    queryKey: ["deployments", appId],
+    queryFn: () => api.get<List<Deployment>>(`/api/apps/${appId}/deployments`),
     // A member limited to some projects is refused the team's event stream,
     // so a deployment of theirs that is under way is polled until it ends:
     // otherwise a row they were not watching the log of said "building" for
@@ -72,18 +91,39 @@ export function DeploymentsTab({ app }: { app: App }) {
         ? 5_000
         : false,
   })
+}
+
+export function DeploymentsTab({ app }: { app: App }) {
+  const { t } = useTranslation()
+  // A deployment named in the address — by the form that started it, or by
+  // a link from the Overview — is the one opened first.
+  const [params] = useSearchParams()
+  const asked = params.get("deployment")
+  // null means "nothing chosen yet", which is not the same as "chosen nothing":
+  // a running deployment opens itself until the user closes it.
+  const [opened, setOpened] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
+  // The card a link opened is brought into view once, not again whenever the
+  // list is asked for again and somebody has scrolled away from it.
+  const shown = useRef<string | null>(null)
+  const bringIntoView = (id: string) => (node: HTMLDivElement | null) => {
+    if (!node || shown.current === id) return
+    shown.current = id
+    node.scrollIntoView({ block: "start" })
+  }
+
+  const deployments = useDeployments(app.id)
 
   const items = deployments.data?.items ?? []
   const running = items.find((deployment) => !TERMINAL.has(deployment.status))
-  // Which version is actually serving. A rollback is a new deployment carrying
-  // an old image, so the newest succeeded one is always the live one — but
-  // nothing on this list said so, and after a rollback the row people assume
-  // is live (the highest number) is a superseded build. Derived during render
-  // from the list itself: there is no second source to fall out of step with.
-  const live = items.find((deployment) => deployment.status === "succeeded")?.id
+  const live = liveDeployment(items)?.id
 
-  // A running deployment opens itself: that is what the user came to look at.
-  const selected = touched ? opened : (running?.id ?? null)
+  // What the address named opens first, then a running deployment: each is
+  // what the person came to look at, until they open something else. A link
+  // to one that is not among those listed — an old one, a mistyped one —
+  // opens what would have opened without it, and says nothing.
+  const linkedHere = items.some((deployment) => deployment.id === asked) ? asked : null
+  const selected = touched ? opened : (linkedHere ?? running?.id ?? null)
   const setSelected = (id: string | null) => {
     setTouched(true)
     setOpened(id)
@@ -102,6 +142,26 @@ export function DeploymentsTab({ app }: { app: App }) {
   })
   const promoteTargets = targets.data?.items ?? []
   const [promoting, setPromoting] = useState<Deployment | null>(null)
+  // The project's other environments, for when none has this app: Promote
+  // was simply not there, and nothing said that it goes to the app of the
+  // same name, so the way to make one was never found. Keyed as the app page
+  // and the project page key them, so they come from the cache.
+  const environment = useQuery({
+    queryKey: ["environment", app.environment_id],
+    queryFn: () => api.get<Environment>(`/api/environments/${app.environment_id}`),
+  })
+  const projectId = environment.data?.project_id
+  const environments = useQuery({
+    queryKey: ["environments", projectId],
+    queryFn: () => api.get<List<Environment>>(`/api/projects/${projectId}/environments`),
+    enabled: Boolean(projectId),
+  })
+  const elsewhere =
+    targets.isSuccess && promoteTargets.length === 0
+      ? (environments.data?.items ?? []).filter(
+          (other) => other.id !== app.environment_id && other.kind === "standard",
+        )
+      : []
 
   const cancel = useMutation({
     mutationFn: (deploymentID: string) =>
@@ -147,7 +207,13 @@ export function DeploymentsTab({ app }: { app: App }) {
       {items.map((deployment) => {
         const open = selected === deployment.id
         return (
-          <Card key={deployment.id} className={cn(open && "border-primary/40")}>
+          <Card
+            key={deployment.id}
+            ref={
+              !touched && deployment.id === linkedHere ? bringIntoView(deployment.id) : undefined
+            }
+            className={cn("scroll-mt-20", open && "border-primary/40")}
+          >
             <CardContent className="py-4">
               <Collapsible
                 open={open}
@@ -208,6 +274,12 @@ export function DeploymentsTab({ app }: { app: App }) {
                         {t("deploy.promote")}
                       </Button>
                     )}
+                  {deployment.id === live && elsewhere.length > 0 && (
+                    <Button variant="outline" size="sm" disabled>
+                      <ArrowUpRightIcon className="size-3.5" />
+                      {t("deploy.promote")}
+                    </Button>
+                  )}
 
                   {TERMINAL.has(deployment.status) ? (
                     // Not on the version that is already serving: rolling back to
@@ -250,22 +322,13 @@ export function DeploymentsTab({ app }: { app: App }) {
                   )}
                 </div>
 
+                {deployment.id === live && elsewhere.length > 0 && projectId && (
+                  <PromoteNowhere app={app} projectId={projectId} environments={elsewhere} />
+                )}
+
                 {deployment.error_message && (
                   <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                    {/* The headline in the reader's language, from the error's
-                      code; the particulars below are the server's, which
-                      carry the names and numbers a translation cannot. */}
-                    {deployment.error_code && (
-                      <p className="font-medium">
-                        {recordedTitle(t, deployment.error_code, deployment.error_message)}
-                      </p>
-                    )}
-                    <p className={deployment.error_code ? "mt-1" : "font-medium"}>
-                      {deployment.error_message}
-                    </p>
-                    {deployment.error_hint && (
-                      <p className="mt-1 text-muted-foreground">{deployment.error_hint}</p>
-                    )}
+                    <DeployFailure deployment={deployment} />
                     {/* Only the newest: an older one stopped the same way was
                       followed by something else, and deploying it now would
                       go back past that. */}
@@ -395,6 +458,44 @@ function RollbackDialog({
   )
 }
 
+/**
+ * Why Promote cannot be pressed: a version goes to the app of the same name in
+ * another environment, and none of the project's others has one. The two ways
+ * to make one are offered: create it there, or clone this environment.
+ */
+function PromoteNowhere({
+  app,
+  projectId,
+  environments,
+}: {
+  app: App
+  projectId: string
+  environments: Environment[]
+}) {
+  const { t } = useTranslation()
+  const first = environments[0]
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span>
+        {t("deploy.promoteNowhere", {
+          app: app.slug,
+          environments: environments.map((environment) => environment.name).join(", "),
+        })}
+      </span>
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+        <Link to={`/environments/${first.id}/apps/new`}>
+          {t("deploy.promoteCreateThere", { app: app.slug, environment: first.name })}
+        </Link>
+      </Button>
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+        <Link to={`/projects/${projectId}?clone=${app.environment_id}`}>
+          {t("deploy.promoteClone")}
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
 type PromoteTarget = {
   app_id: string
   app_name: string
@@ -518,7 +619,7 @@ function PromoteDialog({
  * did not match any of them: its trigger was the English sentence
  * "rollback to #3", which no language but English ever showed.
  */
-function triggerLabel(t: TFunction, deployment: Deployment): string {
+export function triggerLabel(t: TFunction, deployment: Deployment): string {
   if (deployment.trigger === "rollback" && deployment.rollback_of) {
     return t("deploy.triggerRollbackTo", { number: deployment.rollback_of })
   }
@@ -532,6 +633,7 @@ function triggerLabel(t: TFunction, deployment: Deployment): string {
     "rollback",
     "promote",
     "refresh",
+    "variables",
   ]
   if (known.includes(deployment.trigger)) return t(`deploy.trigger.${deployment.trigger}`)
   return deployment.trigger
@@ -712,7 +814,14 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
     () => (log.data ? [...log.data.lines.map((entry) => entry.line), ...log.data.unnumbered] : []),
     [log.data],
   )
-  const stick = useStickToBottom(lines)
+  // A failed build opens at the first line that says what went wrong, not at
+  // its end: the end is the panel's own summary, which is in the box above,
+  // and the compiler's error is often hundreds of lines further up.
+  const failedAt = useMemo(
+    () => (deployment.status === "failed" ? firstErrorLine(lines) : -1),
+    [deployment.status, lines],
+  )
+  const stick = useStickToBottom(lines, failedAt < 0)
 
   if (!log.data?.read) {
     return log.error ? <ErrorDisplay error={log.error} compact /> : <Skeleton className="h-40" />
@@ -735,11 +844,55 @@ function BuildLog({ appId, deployment }: { appId: string; deployment: Deployment
       {log.error != null && <ErrorDisplay error={log.error} compact />}
       <ScrollArea className="h-80 rounded-md border bg-muted/30" {...stick}>
         <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-          {lines.join("\n")}
+          {failedAt < 0 ? (
+            lines.join("\n")
+          ) : (
+            <>
+              {failedAt > 0 && lines.slice(0, failedAt).join("\n") + "\n"}
+              <mark
+                ref={showLine}
+                data-testid="first-error-line"
+                className="rounded-sm bg-destructive/15 text-foreground"
+              >
+                {lines[failedAt]}
+              </mark>
+              {failedAt < lines.length - 1 && "\n" + lines.slice(failedAt + 1).join("\n")}
+            </>
+          )}
         </pre>
       </ScrollArea>
     </div>
   )
+}
+
+/**
+ * A line that says something went wrong, as builders, compilers and package
+ * managers write one: "error:", "Error:", "ERROR:", "[ERROR]", "error[E0425]:",
+ * "error TS2304:", "npm ERR!", a Python traceback, a step's non-zero exit.
+ * A word in passing — an error-handler.js being copied, "0 errors" — is not.
+ */
+const ERROR_LINE =
+  /\b(error|fatal|panic)(\[[^\]]*\])?(:|!|\])|\berror (TS|CS)\d+|\bERR!|^Traceback \(most recent call last\)|\bexit code: [1-9]/i
+
+/** Where the first line that says something went wrong is, or -1. */
+function firstErrorLine(lines: string[]): number {
+  return lines.findIndex((line) => ERROR_LINE.test(line))
+}
+
+/**
+ * Scrolls the log, and only the log, to the line picked out in it: a third of
+ * the way down, so what led up to it is in view too. A function of its own
+ * rather than one written where it is used, so React calls it when the line
+ * appears and not again on every render, which would pull the log back while
+ * somebody scrolled it.
+ */
+function showLine(node: HTMLElement | null) {
+  const viewport = node?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  if (!node || !viewport) return
+  viewport.scrollTop +=
+    node.getBoundingClientRect().top -
+    viewport.getBoundingClientRect().top -
+    viewport.clientHeight / 3
 }
 
 export function DeployButton({ appId, force }: { appId: string; force?: boolean }) {

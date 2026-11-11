@@ -30,6 +30,24 @@ type Memory struct {
 	Fail error
 	// Asked counts the requests, by method name.
 	Asked map[string]int
+	// also are credentials it accepts besides Token, each with the zone
+	// names it sees; none is every zone.
+	also map[string][]string
+}
+
+// Accept makes it accept another credential, as a second token at the same
+// account is, seeing only the zones named, or every zone when none is.
+func (m *Memory) Accept(token string, zones ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.also == nil {
+		m.also = map[string][]string{}
+	}
+	names := make([]string, len(zones))
+	for i, zone := range zones {
+		names[i] = Canonical(zone)
+	}
+	m.also[token] = names
 }
 
 // NewMemory makes one with the given zones, each its name as its id.
@@ -125,10 +143,34 @@ func (s *memorySession) check(method string) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
-	if s.creds.Token != s.Token && s.creds.SecretAccessKey != s.Token {
+	if s.creds.Token != s.Token && s.creds.SecretAccessKey != s.Token && !s.alsoAccepted() {
 		return &APIError{Provider: s.Named, Status: 403, Message: "Authentication error"}
 	}
 	return nil
+}
+
+// alsoAccepted reports whether the session's credential is one Accept added.
+func (s *memorySession) alsoAccepted() bool {
+	_, token := s.also[s.creds.Token]
+	_, secret := s.also[s.creds.SecretAccessKey]
+	return token || secret
+}
+
+// sees reports whether the session's credential sees a zone.
+func (s *memorySession) sees(zone Zone) bool {
+	names, ok := s.also[s.creds.Token]
+	if !ok {
+		names, ok = s.also[s.creds.SecretAccessKey]
+	}
+	if !ok || len(names) == 0 {
+		return true
+	}
+	for _, name := range names {
+		if name == zone.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *memorySession) Zones(context.Context) ([]Zone, error) {
@@ -137,7 +179,13 @@ func (s *memorySession) Zones(context.Context) ([]Zone, error) {
 	if err := s.check("Zones"); err != nil {
 		return nil, err
 	}
-	return append([]Zone(nil), s.zones...), nil
+	out := []Zone{}
+	for _, zone := range s.zones {
+		if s.sees(zone) {
+			out = append(out, zone)
+		}
+	}
+	return out, nil
 }
 
 func (s *memorySession) Records(_ context.Context, zone Zone, name string) ([]Record, error) {

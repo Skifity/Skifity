@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
 	"skifity/internal/kube"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -41,6 +43,17 @@ type createTeamRequest struct {
 
 func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFrom(r.Context())
+	// Before anything else: whoever makes a team owns it, and an owner
+	// deploys onto the servers every team shares.
+	allowed, err := s.mayCreateTeams(r.Context(), user)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if !allowed {
+		writeError(w, r, errdoc.TeamCreationRestricted())
+		return
+	}
 	if token, ok := apiTokenFrom(r.Context()); ok && token.TeamID != "" {
 		writeError(w, r, errdoc.Forbidden("creating a team with a token made for one team"))
 		return
@@ -67,6 +80,24 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	team.Role = store.RoleOwner
 	s.audit(r, team.ID, "team.created", "team", team.ID, team.Name)
 	writeJSON(w, http.StatusCreated, team)
+}
+
+// mayCreateTeams is whether an account may make a team of its own.
+//
+// Anybody signed in could, and the owner of a team deploys onto the servers
+// every team shares — nothing pins a team's apps to machines of its own. So a
+// viewer of one team, or an account single sign-on made by itself, could run
+// containers on the cluster with a request of their own writing. A panel
+// administrator always may; everybody else only where the setting says so.
+func (s *Server) mayCreateTeams(ctx context.Context, user store.User) (bool, error) {
+	if user.IsAdmin {
+		return true, nil
+	}
+	value, _, err := s.db.GetSetting(ctx, settings.KeyTeamCreation)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(value) == settings.TeamCreationEveryone, nil
 }
 
 func (s *Server) handleGetTeam(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +368,136 @@ func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, teamID, "team.member_removed", "user", userID, "")
 	writeOK(w)
+}
+
+// handleLeaveTeam takes the caller out of a team.
+//
+// Any role may, a member limited to some projects included: removing somebody
+// is an admin's, and without this a member or a viewer who no longer wanted to
+// be in a team had to ask one to do it for them. The team's last owner may
+// not, for the same reason they cannot be removed — a team nobody can
+// administer. Their tokens made for this team stop working with the
+// membership, because every request through one asks for it.
+func (s *Server) handleLeaveTeam(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	user, membership, err := s.authorizeTeamMember(r, teamID, store.RoleViewer)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if membership.Role == store.RoleOwner {
+		owners, err := s.db.CountOwners(r.Context(), teamID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if owners <= 1 {
+			writeError(w, r, errdoc.LastOwner())
+			return
+		}
+	}
+	if err := s.db.RemoveMember(r.Context(), teamID, user.ID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.audit(r, teamID, "team.member_left", "user", user.ID, user.Email)
+	writeOK(w)
+}
+
+// handleDeleteTeam removes a team and everything it runs.
+//
+// The owner's alone. It is refused while the team has a server, which is a
+// machine in the cluster that every team's apps run on, and while anything in
+// it is being deployed, because a deployment carries on after its namespace is
+// gone and puts it back. Otherwise every environment's namespace is removed
+// first, as deleting a project does, so a failure leaves the records of
+// whatever still runs rather than workloads nothing in the panel knows about.
+func (s *Server) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleOwner); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	team, err := s.db.GetTeam(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.refuseWhileTeamHasServers(r, teamID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	projects, err := s.db.ListProjects(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var envs []store.Environment
+	for _, project := range projects {
+		inProject, err := s.db.ListEnvironments(r.Context(), project.ID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		envs = append(envs, inProject...)
+	}
+	// Every environment is asked first, so a refusal deletes nothing.
+	for _, env := range envs {
+		if err := s.refuseWhileDeploying(r, env); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	for _, env := range envs {
+		if err := s.removeNamespace(r, env); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+	drains, err := s.db.ListLogDrains(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.db.DeleteTeam(r.Context(), teamID); err != nil {
+		if errors.Is(err, store.ErrTeamHasServers) {
+			// A server added since they were last counted, named if it is
+			// still there when asked again.
+			if refusal := s.refuseWhileTeamHasServers(r, teamID); refusal != nil {
+				err = refusal
+			}
+		}
+		writeError(w, r, err)
+		return
+	}
+	// Recorded under the team's id, which keeps it with the rest of the
+	// team's history in the panel's database; there is no team left to show
+	// it in.
+	s.audit(r, teamID, "team.deleted", "team", teamID, team.Name)
+	s.hub.Publish(events.TeamTopic(teamID), "team.deleted", map[string]string{"id": teamID})
+	// The collector ships every team's logs from one configuration, and this
+	// team's drains, credentials included, were in it.
+	if len(drains) > 0 {
+		s.refreshLogCollector(r)
+	}
+	writeOK(w)
+}
+
+// refuseWhileTeamHasServers names the team's servers, if it has any.
+func (s *Server) refuseWhileTeamHasServers(r *http.Request, teamID string) error {
+	servers, err := s.db.ListServers(r.Context(), teamID)
+	if err != nil {
+		return err
+	}
+	if len(servers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(servers))
+	for _, server := range servers {
+		names = append(names, server.Name)
+	}
+	return errdoc.TeamHasServers(names)
 }
 
 func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
@@ -643,28 +804,37 @@ func (s *Server) handleUpdateEnvironment(w http.ResponseWriter, r *http.Request)
 			"That is not a confinement level. It is \"restricted\" or \"baseline\"."))
 		return
 	}
-	if err := s.db.SetEnvironmentPodSecurity(r.Context(), env.ID, req.PodSecurity); err != nil {
+	if err := s.setPodSecurity(r, &env, project, req.PodSecurity); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	env.PodSecurity = req.PodSecurity
-	s.audit(r, project.TeamID, "environment.pod_security_changed", "environment", env.ID,
-		env.Name+" → "+req.PodSecurity)
+	writeJSON(w, http.StatusOK, env)
+}
+
+// setPodSecurity changes how strictly an environment confines its pods: the
+// saved level, the activity log, and the label on its namespace. The caller
+// has checked the caller is an admin of it. A template install that needs
+// root images, asked for by an admin, changes it the same way.
+func (s *Server) setPodSecurity(r *http.Request, env *store.Environment, project store.Project, level string) error {
+	if err := s.db.SetEnvironmentPodSecurity(r.Context(), env.ID, level); err != nil {
+		return err
+	}
+	env.PodSecurity = level
+	s.audit(r, project.TeamID, "environment.pod_security_changed", "environment", env.ID, env.Name+" → "+level)
 
 	// The label on the live namespace is what Kubernetes actually enforces, so
 	// a saved row that never reached the cluster is the setting doing nothing.
 	if s.cluster != nil {
-		if err := s.cluster.EnsureNamespace(r.Context(), env, project.TeamID, project.ID); err != nil {
-			writeError(w, r, errdoc.New("environment.level_not_applied",
+		if err := s.cluster.EnsureNamespace(r.Context(), *env, project.TeamID, project.ID); err != nil {
+			return errdoc.New("environment.level_not_applied",
 				"The level was saved, but the namespace was not changed").
 				WithCause("%s", err).
 				WithImpact("Kubernetes is still enforcing the previous level, so a deploy will behave as it did before.").
 				WithFix("Fix what the cause says and save the level again.").
-				WithStatus(http.StatusBadGateway))
-			return
+				WithStatus(http.StatusBadGateway)
 		}
 	}
-	writeJSON(w, http.StatusOK, env)
+	return nil
 }
 
 // handleEnvironmentQuota reports how much of an environment's ceiling is used.

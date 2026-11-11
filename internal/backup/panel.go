@@ -18,6 +18,7 @@ import (
 	"skifity/internal/cron"
 	"skifity/internal/errdoc"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/sealed"
 	"skifity/internal/settings"
 	"skifity/internal/store"
@@ -79,11 +80,19 @@ func (m *Manager) BackupPanel(ctx context.Context, kind string) (store.Backup, e
 	if err != nil {
 		m.log.Error("the panel could not back itself up", "error", err)
 		_ = m.db.FinishBackup(ctx, record.ID, "failed", "", 0, err.Error())
+		// A failure the catalogue knows says its own fix; anything else is
+		// most often the storage, which is checked where it is set.
+		fix := "Check the backup storage under Settings, General, and back the panel up from there to see it work."
+		var problem *errdoc.Problem
+		if errors.As(err, &problem) && problem.Fix != "" {
+			fix = problem.Fix
+		}
 		m.notifyAdmins(ctx, notify.Message{
 			Title: "This panel could not back itself up",
 			Body:  err.Error() + "\n\nThe copy in the bucket is older than it should be.",
+			Fix:   fix,
 			Level: "error",
-			Path:  "/settings",
+			Path:  panelpath.Settings(panelpath.SettingsPanel),
 		})
 		record.Status, record.ErrorMessage = "failed", err.Error()
 		return record, err

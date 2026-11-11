@@ -6,6 +6,7 @@ website: https://github.com/thedevs-network/kutt
 services:
 - name: kutt
   image: kutt/kutt:v3.2.6
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128

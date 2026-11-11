@@ -7,6 +7,7 @@ website: https://piwigo.org
 services:
 - name: piwigo
   image: linuxserver/piwigo:16.4.0
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128

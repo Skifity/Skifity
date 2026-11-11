@@ -217,9 +217,13 @@ exists is how the list fills up with promises.
   "provider": "chat",
   "action": "send",
   "config": {"webhook_url": "https://example.test/hook"},
-  "data": {"title": "web is unhealthy", "body": "...", "level": "error", "url": "https://..."}
+  "data": {"title": "web is unhealthy", "body": "...", "fix": "...", "level": "error", "url": "https://..."}
 }
 ```
+
+`fix` is what to do about it, for you to show apart from the body; it is left
+out when there is nothing to do. `fields` may carry more, such as the app and
+the commit.
 
 `X-Skifity-Provider` carries `kind/id` and `X-Skifity-Action` the action, so
 you can route without parsing the body. Check `X-Skifity-Signature` the same way
@@ -446,5 +450,7 @@ signature at all — the panel just says so.
 > **There is no store at `plugins.skifity.com` yet.** The panel can read one,
 > verify one and install from one; nothing is published at that address. Until
 > something is, a plugin is installed by pasting a manifest or giving its
-> address, and the Store tab will say it could not reach anything. See the
+> address. While the store address is the default, the Store tab is marked
+> *Not published yet*, says so, and the panel does not try the address; a store
+> of your own, set under Settings, then Plugins, is read as usual. See the
 > Status section of the README.

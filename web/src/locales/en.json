@@ -264,7 +264,17 @@
     "recoveryKeyFileTitle": "{{product}} recovery key",
     "recoveryKeyFileBody": "Anyone holding this key can decrypt every secret this panel stores. Keep it somewhere safe and offline. Without it, a restored backup is unreadable.",
     "recoveryKeyMissingTitle": "Your account is ready, but the recovery key could not be shown",
-    "recoveryKeyMissing": "The panel could not read its recovery key just now. Once you are in, open Account to show it and save it; the panel reminds you until you do."
+    "recoveryKeyMissing": "The panel could not read its recovery key just now. Once you are in, open Account to show it and save it; the panel reminds you until you do.",
+    "useRecoveryCode": "Use a recovery code instead",
+    "useAuthenticator": "Use the authenticator app instead",
+    "recoveryCode": "Recovery code",
+    "recoveryCodePrompt": "Enter one of the recovery codes you saved when you turned on two-factor authentication. Each one works once.",
+    "recoveryCodeUsed_one": "Signed in with a recovery code. {{count}} code is left.",
+    "recoveryCodeUsed_other": "Signed in with a recovery code. {{count}} codes are left.",
+    "recoveryCodeUsedHelp": "That code cannot be used again. Get a new set under Account before they run out.",
+    "recoveryCodesUsedUp": "That was your last recovery code",
+    "recoveryCodesUsedUpHelp": "Get a new set under Account now, and keep it somewhere other than your phone. Without one, losing the phone again means asking whoever runs the server to reset two-factor.",
+    "openAccount": "Open Account"
   },
   "dashboard": {
     "title": "Overview",
@@ -288,7 +298,9 @@
     "welcomeBack": "Welcome back, {{name}}.",
     "readyOfTotal": "{{ready}} of {{total}}",
     "noCluster": "The panel is not connected to a cluster.",
-    "noClusterHelp": "Nothing can be deployed until it is. A panel the installer set up runs inside the cluster it made; this one was started on its own, which is how {{product}} is developed and tested."
+    "noClusterHelp": "Nothing can be deployed until it is. A panel the installer set up runs inside the cluster it made; this one was started on its own, which is how {{product}} is developed and tested.",
+    "yourApps": "Your apps",
+    "yourAppsHelp": "The ones deployed most recently come first."
   },
   "activity": {
     "subtitle": "What changed in this team, newest first.",
@@ -459,7 +471,23 @@
       "cloud_provider.added": "Cloud provider connected",
       "cloud_provider.removed": "Cloud provider removed",
       "server.create_started": "Creating a server at a cloud provider",
-      "server.delete_started": "Removing a server and deleting its machine"
+      "server.delete_started": "Removing a server and deleting its machine",
+      "panel.domain_set": "Panel domain set",
+      "panel.domain_cancelled": "Panel domain move cancelled",
+      "panel.domain_removed": "Panel domain taken off",
+      "git_source.updated": "Git account changed",
+      "cloud_provider.token_replaced": "Cloud provider's token replaced",
+      "dns_provider.credentials_replaced": "DNS provider's credentials replaced",
+      "auth.recovery_code_used": "Signed in with a recovery code",
+      "account.two_factor_reset": "Two-factor reset by an administrator",
+      "account.password_reset": "Password reset from the server",
+      "account.disabled": "Account disabled",
+      "account.enabled": "Account enabled",
+      "account.deleted": "Account deleted",
+      "account.admin_granted": "Made a panel administrator",
+      "account.admin_revoked": "No longer a panel administrator",
+      "team.member_left": "Left the team",
+      "team.deleted": "Team deleted"
     },
     "notAllowedTitle": "The activity log is for the team's owners and admins",
     "notAllowed": "Ask an owner or an admin of {{team}} if you need to know what changed."
@@ -513,6 +541,11 @@
     "title": "Apps",
     "newApp": "New app",
     "newAppSubtitle": "Deploy from a Git repository or a folder on your computer, or run a container image you already have.",
+    "newAppIn": "In {{project}} · {{environment}}",
+    "createIn": "Create it in",
+    "createInHelp": "Choose the project and environment this app goes into: production and staging are not the same place.",
+    "chooseEnvironment": "Choose a project and environment",
+    "noEnvironment": "There is no project to create it in yet. Create one first.",
     "startFromTemplate": "Start from a template",
     "appName": "App name",
     "source": "Source",
@@ -623,7 +656,13 @@
       "updating": "{{ready}} of {{desired}} instances are ready.",
       "starting": "The instances are starting.",
       "crashing": "The app starts and then exits. The last log lines usually say why.",
-      "noCluster": "The panel is not connected to a cluster, so it cannot see this app's instances."
+      "noCluster": "The panel is not connected to a cluster, so it cannot see this app's instances.",
+      "crashingKind": {
+        "out_of_memory": "The app keeps stopping: it runs out of memory.",
+        "not_runnable": "The app keeps stopping: its start command cannot be run (exit code {{code}}).",
+        "exited_cleanly": "The app keeps stopping: its process finishes by itself, and a web process has to keep running.",
+        "exited": "The app keeps stopping, with exit code {{code}}. The last log lines usually say why."
+      }
     },
     "mountPath": "Mount path",
     "sizeGB": "Size (GB)",
@@ -851,7 +890,67 @@
       "restart": "restart is not needed: instances are restarted automatically.",
       "no_port": "No port is published or exposed, and its image's is not known: nothing can reach it by name. If another service connects to it, give it an expose line with the port it listens on.",
       "skipped": "The service {{name}} could not be read and was skipped."
-    }
+    },
+    "gitConnection": "Git connection",
+    "gitConnectionHelp": "What the app's builds clone the repository with, and what registers its webhook. A public repository builds without one; deploying on push needs one.",
+    "pushNoConnection": "No webhook is registered for this app",
+    "pushNoConnectionHelp": "Deploy on push is on, but the app has no Git connection, so nothing asked the repository to tell the panel about a push. Choose a connection above and save, or connect your Git account first.",
+    "pushNotRegistered": "The webhook was not registered",
+    "pushNotRegisteredHelp": "The Git host turned the panel down the last time it asked. Once the connection's token may manage webhooks, ask again.",
+    "registerWebhookAgain": "Register the webhook again",
+    "savedNextDeploy": "Saved. These take effect at the next deploy: {{settings}}.",
+    "pendingTitle": "Changes waiting for a deploy",
+    "pendingBody": "{{names}} changed since the running version was built. They go into the image, so they take effect when a deploy builds with them.",
+    "pendingVariable": "the build-time variable {{key}}",
+    "liveVersion": "Live version",
+    "liveNone": "Nothing is live yet",
+    "wentLive": "Went live {{when}}",
+    "wentLiveBy": "Went live {{when}}, by {{who}}",
+    "viewBuildLog": "View build log",
+    "deploymentUnderway": {
+      "queued": "Deployment #{{number}} is waiting to start",
+      "building": "Deployment #{{number}} is building",
+      "deploying": "Deployment #{{number}} is starting its new version"
+    },
+    "deploymentUnderwayFirst": "The app goes live when it finishes. The build log shows how far it has got.",
+    "deploymentUnderwayLive": "#{{number}} keeps serving until the new version is ready.",
+    "deploymentFailed": "Deployment #{{number}} failed",
+    "deploymentFailedLive": "#{{number}} is still live, so the app runs the version it ran before.",
+    "noInstancesUntil": "The first instance starts when deployment #{{number}} is ready.",
+    "noInstancesFailed": "Deployment #{{number}} failed, so nothing was started. Once its cause is fixed, {{action}} at the top of this page tries again.",
+    "instanceVersion": "Version",
+    "nowLive": "{{name}} is live",
+    "nowLiveNumber": "Deployment #{{number}} is serving.",
+    "openApp": "Open",
+    "logsInstance": "Instance",
+    "logsInstanceAll": "All instances",
+    "logsRange": {
+      "label": "Time range",
+      "all": "Any time",
+      "15m": "Last 15 minutes",
+      "1h": "Last hour",
+      "6h": "Last 6 hours",
+      "24h": "Last 24 hours"
+    },
+    "logsTailLabel": "How many lines",
+    "logsTail_one": "{{lines}} line",
+    "logsTail_other": "{{lines}} lines",
+    "logsZone": "Show times in",
+    "logsZoneLocal": "Local time",
+    "logsDownload": "Download",
+    "logsOmitted": "Reading the first {{shown}} of {{total}} instances. Choose one above to read another.",
+    "logsFieldsShow": "Show its fields",
+    "logsFieldsHide": "Hide its fields",
+    "instanceExit": {
+      "outOfMemory": "out of memory",
+      "exitCode": "exited with code {{code}}",
+      "completed": "exited by itself",
+      "cannotStart": "could not start (code {{code}})",
+      "other": "{{reason}} (code {{code}})"
+    },
+    "lastExit": "Ended {{when}}: {{reason}}",
+    "logsPreviousEnded": "{{instance}} ended {{when}}: {{reason}}",
+    "logsErrorsOnly": "Errors only"
   },
   "deploy": {
     "title": "Deployments",
@@ -891,7 +990,8 @@
       "rollback": "A rollback",
       "promote": "Promoted from another environment",
       "tag": "A pushed tag",
-      "refresh": "A value in a secret manager changed"
+      "refresh": "A value in a secret manager changed",
+      "variables": "A build-time variable changed"
     },
     "rollbackTitle": "Roll back to #{{number}}",
     "rollbackFrom": "Running now",
@@ -928,7 +1028,32 @@
     "deployAnyway": "Deploy anyway",
     "deployAnywayConfirm": "This deploys the image although it has critical vulnerabilities that have a fix. It is recorded in the activity log, with your name.",
     "acceptedVulnerabilities": "Vulnerabilities accepted",
-    "started": "Deployment #{{number}} started."
+    "started": "Deployment #{{number}} started.",
+    "promoteNowhere": "No app called {{app}} in {{environments}}, so there is nowhere to promote to: a version goes to the app of the same name in another environment.",
+    "promoteCreateThere": "Create {{app}} in {{environment}}",
+    "promoteClone": "Clone this environment",
+    "failure": {
+      "crashed": {
+        "out_of_memory": "The new version ran out of memory as it started, and was stopped.",
+        "not_runnable": "The new version's start command could not be run: it ended with exit code {{code}}.",
+        "exited_cleanly": "The new version's process finished by itself, with exit code 0, and a web process has to keep running.",
+        "exited": "The new version stopped as it started, with exit code {{code}}."
+      },
+      "fix": {
+        "out_of_memory": "Give it more memory under Scaling, then deploy again.",
+        "not_runnable": "Check the start command under Settings: it names a program the image does not have, or one that cannot be run.",
+        "exited_cleanly": "Under Settings, make the start command run the server in the foreground rather than start it and return.",
+        "exited": "Its last lines, under Details, say why. Most often it is a variable it needs and does not have."
+      },
+      "open": {
+        "scaling": "Open Scaling",
+        "settings": "Open Settings",
+        "variables": "Open Variables",
+        "logs": "Open Logs"
+      },
+      "diagnosis": "diagnosis",
+      "lastLines": "The last lines it printed before it stopped:"
+    }
   },
   "variables": {
     "title": "Variables",
@@ -981,7 +1106,20 @@
     "bulkSaved_one": "{{count}} variable saved",
     "bulkSaved_other": "{{count}} variables saved",
     "bulkNothing": "There are no KEY=value lines here, so there is nothing to save.",
-    "deleteKey": "Delete {{key}}"
+    "deleteKey": "Delete {{key}}",
+    "rebuildStarted": "Saved. The build reads it, so the version the app runs is being rebuilt with it: deployment #{{number}}.",
+    "rebuildLocked": "Saved. The build reads it, and deploys are locked, so it takes effect at the first deploy after they are unlocked.",
+    "rebuildFirstDeploy": "Saved. The build reads it, and the app's first deploy builds with it.",
+    "rebuildNextDeploy": "Saved. The build reads it, and a rebuild could not be started, so it takes effect at the next deploy.",
+    "editKey": "Edit {{key}}",
+    "textSecret": "{{key}} is a secret and is left as it is",
+    "textReference": "{{key}} is read from {{reference}} and is left as it is",
+    "textMultiline": "{{key}} has more than one line and is left as it is; edit it from its row",
+    "bulkEditKeeps": "Only the lines you add or change are saved. Removing a line does not delete its variable: the delete button on its row does that.",
+    "nothingChanged": "Nothing changed, so nothing was saved.",
+    "keptPlaceholder": "Left as it is unless you type a new value",
+    "keptHelp": "A secret's value is never shown again. Type a new one to replace it, or leave this empty to keep it.",
+    "keptNeedsValue": "Type the value again to change this: a secret's value is never shown, so it cannot be carried over."
   },
   "domains": {
     "title": "Domains",
@@ -1475,7 +1613,24 @@
     "stopAddingTitle": "Stop adding {{name}}?",
     "stopAddingConfirm": "The step that is running is stopped and the server is marked as failed. Nothing already done on the machine is undone: Retry carries on from where it stopped, and Remove takes the server out.",
     "stopAddingCloud": "A machine already ordered at the provider keeps running, and is billed, until you remove the server and its machine.",
-    "alertsSaved": "The alert thresholds are saved."
+    "alertsSaved": "The alert thresholds are saved.",
+    "entry": {
+      "title": "Traffic",
+      "serving": "Takes traffic on ports 80 and 443",
+      "notServing": "Not taking traffic",
+      "none": "Not a way in: the load balancer does not run here",
+      "alertTitle_one": "{{count}} server is up and not taking traffic",
+      "alertTitle_other": "{{count}} servers are up and not taking traffic",
+      "alertTitleThis": "This server is up and not taking traffic",
+      "alertHelp": "Visitors whose DNS sends them to its address wait for an answer that does not come: DNS cannot tell a server that is up from one that serves. The panel does not change DNS records for this. Take the address out of the name until the server is fixed, or use DNS with health checks.",
+      "docs": "What is checked, and what is not",
+      "reason": {
+        "node_not_ready": "The server is not ready.",
+        "balancer_not_ready": "The load balancer on this server is not ready, so nothing on it answers on ports 80 and 443.",
+        "no_ingress": "No Traefik in the cluster is ready, so no server takes traffic.",
+        "no_ingress_here": "No Traefik on this server is ready, and Traefik answers only the visitors who reach the server it runs on."
+      }
+    }
   },
   "databases": {
     "title": "Databases",
@@ -1506,7 +1661,7 @@
     "backupsOn": "Take a backup automatically",
     "backupScheduleFieldHelp": "When the backup runs. Times are UTC.",
     "retentionHelp": "Older backups are deleted when a new one succeeds.",
-    "backupScheduleHelp": "Backups are written to the storage you configured in Settings.",
+    "backupScheduleHelp": "Backups are written to the panel's backup storage.",
     "retention": "Keep the last",
     "restore": "Restore",
     "restoreWarning": "This replaces everything currently in the database with the contents of this backup. It cannot be undone.",
@@ -1565,6 +1720,7 @@
     "nativeConnectionStringHint": "For clients that speak ClickHouse's own protocol, such as clickhouse-client and clickhouse-go. The connection string above is HTTP, which most client libraries take.",
     "noCredentials": "Memcached has no user and no password. Only the apps in this environment can reach it.",
     "backupSkipped": "Skipped: the database was stopped, so there was nothing new to back up.",
+    "backupSkippedBusy": "Skipped: something else was being done to the database — it was being created, restored, imported into or given a new password — so this backup was left for the next one.",
     "backupKind": {
       "before_import": "Before an import",
       "before_update": "Before an update"
@@ -1655,6 +1811,26 @@
       "startingAgain": "Starting again on the disk it kept.",
       "degraded": "{{ready}} of {{wanted}} instances are ready.",
       "degradedLastOne": "{{ready}} of {{wanted}} instances are ready. The database is answering, but a failure of the one that is left is an outage."
+    },
+    "backupDaily": "Back up daily",
+    "backupDailyHelp": "Every day between 02:00 and 05:00 UTC, keeping the last 7. Change it on its Backups tab.",
+    "backupDailyNoStorage": "Not until this panel has backup storage.",
+    "noScheduleTitle": "This database has no backup schedule",
+    "noScheduleHelp": "It was made before there was backup storage, or with daily backups switched off. Turn the schedule on below, or give every database of the team that has none the daily one a new database gets.",
+    "backupDefaults": "Back up every database daily",
+    "backupDefaultsApplied_one": "{{count}} database is now backed up every day.",
+    "backupDefaultsApplied_other": "{{count}} databases are now backed up every day.",
+    "pieces": {
+      "title": "Also as separate variables",
+      "help": "For software that reads a host, a port, a user and a password instead of a URL. They stay current when the password changes.",
+      "fieldsHelp": "Empty a name to leave that piece out. Only the password is a secret.",
+      "notDelivered": "Not delivered",
+      "listed": "Also {{names}}",
+      "host": "Host",
+      "port": "Port",
+      "name": "Database name",
+      "user": "User",
+      "password": "Password"
     }
   },
   "templates": {
@@ -1738,7 +1914,14 @@
     "withoutGPUHelp": "No server offers one yet, so they run without. Give each one a GPU under its settings once a server does.",
     "noEnvironment": "There is no project to install into yet. Create one first.",
     "stackApps": "Apps it installs",
-    "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name."
+    "stackAppsHelp": "{{names}}. Each keeps the name the template gives it, because the others reach it by that name.",
+    "plannedDatabases_one": "Its database is created as {{names}}.",
+    "plannedDatabases_other": "Its databases are created as {{names}}.",
+    "needsRootTitle": "This image starts as root",
+    "needsRoot_one": "{{names}} starts as root and drops to its own user, and {{environment}} is held to the strictest level, which refuses that. Installed as it is, it would never start.",
+    "needsRoot_other": "{{names}} start as root and drop to their own users, and {{environment}} is held to the strictest level, which refuses that. Installed as they are, they would never start.",
+    "acceptRoot": "Accept root images in {{environment}}, and install",
+    "needsRootMember": "Only an owner or an admin can let an environment accept root images. Ask one of them to, or choose an environment that already does."
   },
   "settings": {
     "title": "Settings",
@@ -1833,7 +2016,7 @@
       },
       "cluster_k3s_version": {
         "label": "Kubernetes version",
-        "help": "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported."
+        "help": "The k3s version the first server of a new cluster is installed with. Leave empty for the version this release of Skifity was tested with. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported."
       },
       "cluster_preview_ttl_days": {
         "label": "Remove preview environments after",
@@ -2015,6 +2198,22 @@
         "label": "Builds at once",
         "help": "How many builds run at the same time. More wait their turn, in the order they came, and say so in their log. Each build can use up to 3 GiB of memory, taken from what the apps have."
       },
+      "cluster_etcd_round_trip_ms": {
+        "label": "Warn when control plane servers are further apart than",
+        "help": "Milliseconds. Before a server becomes a control plane server, added as one or promoted, the panel times 20 connections from it to each control plane server already there, and warns when the average round trip is longer than this. etcd, which keeps the cluster's state, waits for a majority of them on every change, so they belong in one location. A warning never stops anything; 0 turns it off."
+      },
+      "cluster_etcd_jitter_ms": {
+        "label": "Warn when their round trip varies by more than",
+        "help": "Milliseconds: the standard deviation of those same round trips. A link that is usually quick and sometimes slow makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats makes it hold elections instead of answering. 0 turns the warning off."
+      },
+      "cluster_etcd_loss_percent": {
+        "label": "Warn when more of their connections are lost than",
+        "help": "Per cent of those connections that took a second or more, which is what a lost packet costs a new connection. 0 turns the warning off."
+      },
+      "cluster_etcd_disk_sync_ms": {
+        "label": "Warn when a control plane server's disk syncs slower than",
+        "help": "Milliseconds for one small write to be made durable: the average of 200, timed with dd on the server before it becomes a control plane server. etcd waits for this on every change, and its own guidance is under 10 ms for nearly all of them, so an average near that is already slow. 0 turns the warning off."
+      },
       "signin_api_allowed_networks": {
         "label": "API tokens only from",
         "help": "Addresses or networks, one per line, such as 203.0.113.7 or 10.0.0.0/8. When set, an API token — the CLI's, a CI job's, an assistant's — is refused from anywhere else, even though it is valid. Signing in to the panel in a browser is not affected. Empty lets tokens in from anywhere."
@@ -2042,6 +2241,18 @@
       "git_ca_bundle": {
         "label": "Certificate authorities for Git hosts",
         "help": "Only for a Git host whose certificate no public authority signed: the certificate, in PEM, of the authority that did. Builds trust it beside the public ones when they clone, and so does the panel when it reads a repository."
+      },
+      "signin_team_creation": {
+        "label": "Who may create teams",
+        "help": "Panel administrators can always create a team. Everyone lets any account do it — one single sign-on created, or a viewer in another team — and become the owner of a team that deploys onto this panel's servers.",
+        "options": {
+          "admins": "Panel administrators",
+          "everyone": "Everyone who can sign in"
+        }
+      },
+      "storage_default_backups": {
+        "label": "Back up new databases",
+        "help": "On by default. A database created while the bucket above is set up is backed up every day, at a minute between 02:00 and 05:00 UTC of its own, keeping the last 7. Its Backups tab changes that or turns it off, and whoever creates one can say no. Previews and engines the panel does not back up never get one."
       }
     },
     "removeMemberConfirm": "{{name}} loses access to this team and everything in it.",
@@ -2116,12 +2327,6 @@
         "cause": "Nobody on this panel uses {{0}}.",
         "impact": "Nothing was changed.",
         "fix": "Run `{{0}} admin list-users` to see the accounts that do exist."
-      },
-      "app_crash_loop": {
-        "title": "This app keeps restarting",
-        "cause": "{{0}} has restarted {{1}} times in a row. Kubernetes is backing off between restarts.",
-        "impact": "The app is not serving traffic reliably.",
-        "fix": "Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three."
       },
       "app_not_started": {
         "title": "No instance of this app has started yet",
@@ -2221,9 +2426,9 @@
       },
       "backup_storage_not_configured": {
         "title": "No backup storage is configured",
-        "cause": "This team has no S3-compatible storage set up yet.",
+        "cause": "No S3-compatible storage is set up for this panel yet.",
         "impact": "Backups cannot run, so nothing is being kept safe.",
-        "fix": "Open Settings, then Storage, and add an S3-compatible bucket. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
+        "fix": "A panel administrator sets it up under Settings → General → Backup storage. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself."
       },
       "backup_storage_read_only": {
         "title": "The backup storage cannot be written to",
@@ -2728,6 +2933,42 @@
         "cause": "This kernel does not have the WireGuard module, and this cluster encrypts traffic between servers with WireGuard.",
         "impact": "The server was not added. Nothing was changed on it.",
         "fix": "Install it on this server: apt-get install -y wireguard-tools (then reboot if the module still does not load). If the kernel cannot have it at all, switch the whole cluster to vxlan in Settings -> Cluster -> Pod network, which turns that encryption off for every server."
+      },
+      "preflight_etcd_round_trip": {
+        "title": "This server may make a slow control plane server",
+        "cause": "The round trip from this server to {{0}} averaged {{1}} ms, more than the {{2}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. A control plane server on a slow link slows every change to the cluster.",
+        "fix": "etcd, which keeps the cluster's state, waits for a majority of the control plane servers on every change, so every change waits on this link, and one slow enough to delay k3s's half-second heartbeats makes them hold elections instead of answering. Keep the control plane servers in one location, and add servers elsewhere as workers. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_jitter": {
+        "title": "This server may make a slow control plane server",
+        "cause": "The round trip from this server to {{0}} varied by {{1}} ms, more than the {{2}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. Changes to the cluster wait for this link's slow moments, not its average.",
+        "fix": "A link that is usually quick and sometimes slow makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats makes the control plane servers hold elections instead of answering. Keep them in one location, without a VPN or a busy link between them. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_loss": {
+        "title": "This server may make a slow control plane server",
+        "cause": "{{0}}% of the connections from this server to {{1}} lost a packet, more than the {{2}}% this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. Every lost packet holds up etcd's heartbeats and changes until it is sent again.",
+        "fix": "etcd sends its heartbeats and every change over this link, and each lost packet holds them up until it is sent again. Find where the loss is, with mtr for instance, before making this a control plane server, or keep it a worker. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_disk_sync": {
+        "title": "This server may make a slow control plane server",
+        "cause": "A small write to this server's disk took {{0}} ms on average to be made durable, more than the {{1}} ms this panel warns at.",
+        "impact": "Nothing was stopped; this is a warning. A slow disk slows every change to the cluster and can cost it its leader.",
+        "fix": "etcd makes every change durable before it answers, so a slow disk slows the whole cluster and can cost it its leader. Use a server with a local SSD or NVMe disk rather than network storage or a busy shared one. The threshold is under Settings, then Cluster."
+      },
+      "preflight_etcd_round_trip_unmeasured": {
+        "title": "Part of this control plane check could not be run",
+        "cause": "The round trip from this server to {{0}} could not be measured.",
+        "impact": "Nothing was stopped; this is a warning. Whether this server is close enough to the others for etcd is not known.",
+        "fix": "Nothing was stopped. The panel times TCP connections to port 6443 with bash and timeout, so a server without them, or one that cannot reach that port, cannot be timed. Measure the latency between the two yourself before relying on this control plane server."
+      },
+      "preflight_etcd_disk_sync_unmeasured": {
+        "title": "Part of this control plane check could not be run",
+        "cause": "How long this server's disk takes to make a write durable could not be measured.",
+        "impact": "Nothing was stopped; this is a warning. Whether this disk is fast enough for etcd is not known.",
+        "fix": "Nothing was stopped. The panel times 200 small synced writes with dd under /var/lib, which needs write access there and GNU dd and date. Measure the disk yourself, with fio as etcd's own guidance does, before relying on this control plane server."
       },
       "release_failed": {
         "title": "The release command failed",
@@ -3267,7 +3508,7 @@
         "title": "There is nowhere to back up to first",
         "cause": "{{0}} has disks or databases, and an update backs them up before it starts, but backups are not configured.",
         "impact": "Nothing was changed.",
-        "fix": "Set up backup storage under Settings, or update without a backup if you have one of your own."
+        "fix": "Have a panel administrator set up backup storage under Settings → General → Backup storage, or update without a backup if you have one of your own."
       },
       "promote_built_differently": {
         "title": "This app would build that version differently",
@@ -3285,13 +3526,13 @@
         "title": "This backup is sealed, and there is no passphrase to open it",
         "cause": "The backup was encrypted with the backup passphrase, and none is set now.",
         "impact": "Nothing was restored or changed.",
-        "fix": "Enter the passphrase it was sealed with under Settings, then Storage, and restore again."
+        "fix": "Enter the passphrase it was sealed with under Settings → General → Backup storage, and restore again."
       },
       "backup_wrong_passphrase": {
         "title": "The backup passphrase does not open this backup",
         "cause": "This backup was sealed with a different passphrase than the one set now.",
         "impact": "Nothing was restored or changed.",
-        "fix": "Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back."
+        "fix": "Set the passphrase it was sealed with under Settings → General → Backup storage, restore, and set the current one back."
       },
       "backup_damaged": {
         "title": "This backup is damaged",
@@ -3385,7 +3626,7 @@
       },
       "database_variable_taken": {
         "title": "That variable already connects another database",
-        "cause": "This app's {{0}} is the connection string of another database linked to it.",
+        "cause": "This app's {{0}} already carries the connection of another database linked to it.",
         "impact": "Nothing was changed.",
         "fix": "Link this database under another name, or unlink the other one first."
       },
@@ -3777,7 +4018,7 @@
         "title": "Passkeys need the panel on HTTPS at a domain",
         "cause": "A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.",
         "impact": "Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.",
-        "fix": "Put a domain on the panel and set Settings → General → Panel URL to its https:// address."
+        "fix": "Put the panel on a domain of its own under Settings → General → Panel address, which turns HTTPS on for it."
       },
       "auth_passkey_refused": {
         "title": "That passkey was not accepted",
@@ -4125,7 +4366,7 @@
         "title": "Servers were created with this connection",
         "cause": "{{0}} server(s) in the panel were created with this connection, and deleting one of their machines needs it.",
         "impact": "The connection was not removed.",
-        "fix": "Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection."
+        "fix": "Remove those servers first, deleting their machines or keeping them. To use a new token, replace this connection's token instead: that is allowed while its servers are there."
       },
       "cloud_name_taken": {
         "title": "There is already a server with that name",
@@ -4276,6 +4517,204 @@
         "cause": "The last thing done to {{0}} was not adding it, and Retry runs the steps that add a server.",
         "impact": "Nothing was changed. Retrying would have joined the server to the cluster again.",
         "fix": "If removing it failed, remove it again: the steps that already finished are safe to repeat. If promoting it failed, read the step that failed on the server's page, then remove the server and add it again as a control plane server."
+      },
+      "app_instance_not_started": {
+        "title": "That instance has not started yet",
+        "cause": "{{0}} has not started: {{1}}",
+        "impact": "There is nothing in its log until it starts. The app's other instances are not affected.",
+        "fix": "Read another instance's log, or all of them, in the meantime. If this one does not start, the reason above says what it is waiting for."
+      },
+      "panel_domain_dns_mismatch": {
+        "title": "That domain does not point at this server yet",
+        "cause": "DNS for {{0}} answers {{1}}, and this server is {{2}}.",
+        "impact": "Nothing was changed. The panel still answers at its current address.",
+        "fix": "Create an A record for {{0}} pointing at {{1}}, wait a few minutes, and move the panel again. If the name reaches this server another way the panel cannot see, such as a load balancer, move it anyway."
+      },
+      "panel_domain_certificate_pending": {
+        "title": "The certificate for the panel's domain has not arrived",
+        "cause": "cert-manager was not issued a certificate for {{0}} within five minutes. What it said last: {{1}}",
+        "impact": "The panel still answers at its old address, and was not restarted. cert-manager keeps asking for the certificate.",
+        "fix": "Check that {{0}} points at this server, and that ports 80 and 443 are open to the internet, then press Try again. `kubectl -n skifity-system describe certificate skifity-panel-tls` shows what the certificate authority answered."
+      },
+      "panel_domain_taken": {
+        "title": "An app already answers on that domain",
+        "cause": "{{0}} is a domain of one of the apps on this panel.",
+        "impact": "Nothing was changed. The panel and the app would answer on one hostname, and which one a visitor reached would be decided by the ingress, sign-in cookies included.",
+        "fix": "Choose another name for the panel, or take {{0}} off the app first."
+      },
+      "panel_domain_busy": {
+        "title": "The panel is already being moved",
+        "cause": "A move to {{0}} has not finished yet.",
+        "impact": "Nothing was changed.",
+        "fix": "Wait for it to finish or stop. Settings → General → Panel address says where it stands."
+      },
+      "panel_domain_unsupported": {
+        "title": "This panel cannot move itself to a domain",
+        "cause": "{{0}}",
+        "impact": "Nothing was changed.",
+        "fix": "This works on a panel installed with install.sh, which runs inside the cluster it manages. Anywhere else, give the panel its domain where it runs and set SKIFITY_PUBLIC_URL to the new address."
+      },
+      "panel_domain_move_failed": {
+        "title": "The panel could not be moved to its domain",
+        "cause": "Moving the panel to {{0}} stopped: {{1}}",
+        "impact": "The panel still answers at its old address, and was not restarted.",
+        "fix": "Fix what the cause says, then press Try again. What was done already is not done twice."
+      },
+      "panel_domain_interrupted": {
+        "title": "Moving the panel was interrupted",
+        "cause": "The panel restarted before the certificate for {{0}} was ready.",
+        "impact": "The panel still answers at its old address.",
+        "fix": "Press Try again. What was done already is not done twice."
+      },
+      "panel_domain_not_restarted": {
+        "title": "The panel did not restart at its domain",
+        "cause": "It was told to restart at https://{{0}}, and started at {{1}}.",
+        "impact": "The certificate is issued and the domain reaches the panel, but its own links and sign-in cookies still use the address it started at.",
+        "fix": "Press Try again. If it happens again, run the installer again with --domain {{0}}, which does the same from the server."
+      },
+      "panel_domain_no_free_address": {
+        "title": "There is no address to go back to",
+        "cause": "The panel has no sslip.io address on record, and the cluster's public IP is not an IP address it can make one from.",
+        "impact": "Nothing was changed. The panel still answers at its domain.",
+        "fix": "Set Settings → Domains and HTTPS → Cluster public IP to the server's public IP address, then try again."
+      },
+      "panel_domain_moved": {
+        "title": "This panel has moved",
+        "cause": "It answers at {{0}} now.",
+        "impact": "This address still takes webhooks and API tokens, but not a browser's session.",
+        "fix": "Open {{0}} and sign in there."
+      },
+      "account_last_admin": {
+        "title": "This is the panel's last administrator",
+        "cause": "No other enabled account administers the panel, and without one nobody can change its settings, upgrade it or read its recovery key.",
+        "impact": "Nothing was changed.",
+        "fix": "Make somebody else a panel administrator first, under Settings → Accounts or with `{{0}} admin make-admin` on the server."
+      },
+      "account_self": {
+        "title": "That is your own account",
+        "cause": "Settings → Accounts changes other people's accounts. Disabling, deleting or demoting your own there would lock you out with nobody to undo it.",
+        "impact": "Nothing was changed.",
+        "fix": "Change how you sign in under Account. To stop being an administrator, make somebody else one and ask them to do it."
+      },
+      "account_last_owner": {
+        "title": "This account is the only owner of a team",
+        "cause": "Deleting it would leave {{0}} with nobody who can administer it.",
+        "impact": "The account was not deleted.",
+        "fix": "Make somebody else an owner of each team under Settings → Members, or delete the team, then delete the account. Disabling it instead keeps everything as it is."
+      },
+      "account_owns_plugins": {
+        "title": "This account installed plugins",
+        "cause": "{{0}} run with an API token of this account's, which would be deleted with it and stop them without a word.",
+        "impact": "The account was not deleted.",
+        "fix": "Remove those plugins under Plugins, and install them again from another administrator's account if they are still wanted. Then delete the account."
+      },
+      "team_creation_restricted": {
+        "title": "Only a panel administrator can create a team",
+        "cause": "This panel lets only its administrators create teams, and you are not one.",
+        "impact": "No team was created.",
+        "fix": "Ask a panel administrator to create the team and add you to it, or to let everyone create teams under Settings, Sign-in."
+      },
+      "team_has_servers": {
+        "title": "This team still has servers",
+        "cause": "These servers belong to the team and are still in the cluster: {{0}}.",
+        "impact": "Nothing was deleted.",
+        "fix": "Remove each of them under Servers first, then delete the team again."
+      },
+      "deploy_crashed": {
+        "title": "The new version stopped as it started",
+        "cause": "The new version of {{0}} stopped as it started. Stops so far: {{1}}. The last ended with exit code {{2}} ({{3}}).",
+        "impact": "The new version was not rolled out. If an earlier version worked, the app is put back on it.",
+        "fix": "The lines it printed before it stopped are in the deployment log, and usually say why. OOMKilled is a version that needs more memory, set under Scaling. Exit code 126 or 127 is a start command that cannot be run, set under Settings. Exit code 0 is a process that finished, and a web process has to keep running. Anything else is in those lines: most often a variable that is missing."
+      },
+      "git_connection_wrong_host": {
+        "title": "That Git connection is for another host",
+        "cause": "{{0}} is a connection to another host than the one {{1}} is on.",
+        "impact": "Nothing was changed. A build would not send that connection's token to this repository's host, and its webhook could not be registered there.",
+        "fix": "Choose a connection to the host the repository is on, or connect one under Settings, then Git."
+      },
+      "cloud_token_other_project": {
+        "title": "That token is for another project",
+        "cause": "{{0}} accepts the token, and it cannot see any of the machines the panel created with {{1}}.",
+        "impact": "The token was not replaced. The connection keeps the one it has.",
+        "fix": "Create the token in the project or account those servers are in, and replace the token with that one. If their machines were deleted in the provider's console, remove those servers in the panel first."
+      },
+      "dns_zones_unseen": {
+        "title": "These credentials cannot see every zone the panel keeps records in",
+        "cause": "{{0}} accepted them, and they do not see {{1}}, where the panel keeps records through {{2}}.",
+        "impact": "Nothing was saved. The connection keeps its credentials, and its records are left as they are.",
+        "fix": "Give the credentials those zones too, or use credentials of the account the zones are in, and replace them again."
+      },
+      "backup_storage_endpoint_invalid": {
+        "title": "The backup storage's endpoint is not an address",
+        "cause": "The endpoint {{0}} could not be read: {{1}}",
+        "impact": "Backups cannot run, so nothing is being kept safe.",
+        "fix": "A panel administrator corrects the S3 endpoint under Settings → General → Backup storage: an address such as https://s3.eu-central-1.amazonaws.com."
+      },
+      "database_pieces_clash": {
+        "title": "Two parts of the connection would share one variable",
+        "cause": "{{0}} is named for more than one of the connection string, host, port, name, user and password.",
+        "impact": "Nothing was changed.",
+        "fix": "Give each its own variable, or leave out the ones the app does not read."
+      },
+      "database_piece_not_offered": {
+        "title": "That part of the connection cannot be given on its own",
+        "cause": "{{0}} has no {{1}} a link can give an app as a variable of its own.",
+        "impact": "Nothing was changed.",
+        "fix": "Leave it out. The app can read everything the database has from the connection string."
+      },
+      "template_input_required": {
+        "title": "The template needs a value nobody gave",
+        "cause": "{{0}} is needed to install {{1}}.",
+        "impact": "Nothing was created.",
+        "fix": "Fill it in and install again."
+      },
+      "template_install_rolled_back": {
+        "title": "The template could not be installed, and nothing of it was kept",
+        "cause": "Installing {{0}} stopped at this: {{1}}",
+        "impact": "What the install had made was removed again, and nothing was deployed: {{0}}.",
+        "fix": "Fix what the cause says, then install again."
+      },
+      "template_install_left_over": {
+        "title": "The template could not be installed, and part of it is still there",
+        "cause": "Installing {{0}} stopped at this: {{1}}",
+        "impact": "Nothing was deployed, and what the install had made was removed, except {{0}}, which could not be.",
+        "fix": "Delete what is left from the environment's page, fix what the cause says, then install again."
+      },
+      "template_needs_root_images": {
+        "title": "This template's image starts as root, and this environment refuses that",
+        "cause": "The image of {{0}} starts as root, and {{1}} is held to the strictest level, which refuses an image that does.",
+        "impact": "Nothing was created.",
+        "fix": "An owner or admin can install it and choose Accepts root images for {{0}}, which still refuses a privileged container and anything of the server's. Or install it into an environment that already accepts root images."
+      },
+      "blueprint_secrets_missing": {
+        "title": "A secret skifity.yaml requires is not set",
+        "cause": "The file lists these under secrets, and the environment does not have them: {{0}}.",
+        "impact": "No app was started or changed without them. An app the file makes waits for them before its first deploy.",
+        "fix": "Set each one with `skifity env set --secret KEY=... --app APP` and apply again, or mark it optional: true in the file if the app runs without it."
+      },
+      "cli_delete_unconfirmed": {
+        "title": "Deleting an app has to be confirmed",
+        "cause": "There is nobody here to type {{0}}'s name, and --yes was not given.",
+        "impact": "Nothing was deleted.",
+        "fix": "Run it again with --yes, once you are sure: the app's disks go with it, and nothing brings them back."
+      },
+      "cli_app_not_found": {
+        "title": "There is no app by that name here",
+        "cause": "The environment has no app called {{0}}. It has: {{1}}.",
+        "impact": "The command did not run.",
+        "fix": "Give one of those names, or --env for another environment."
+      },
+      "cli_promote_no_target": {
+        "title": "There is no app to promote to there",
+        "cause": "A version is promoted to the app of the same name in another environment of the project, and {{0}} has none. This app's versions can go to {{1}}.",
+        "impact": "Nothing was promoted.",
+        "fix": "Create the app in {{0}} with the same name, or clone this environment in the panel, then promote again."
+      },
+      "request_refused": {
+        "title": "The request was not sent",
+        "cause": "The address the page built, {{0}}, would have reached another part of the panel than the one it was meant for.",
+        "impact": "Nothing was sent. The page was probably opened from a link with something odd in its address.",
+        "fix": "Open the page from the panel's own navigation rather than the link."
       }
     }
   },
@@ -4307,7 +4746,7 @@
     "pushDeploysManualHelp": "Skifity could not add the webhook itself, so add this URL to the repository's webhook settings, with the secret shown under Settings, Git, Webhook.",
     "webhookSecret": "Webhook secret",
     "webhookSecretHelp": "Paste this as the webhook's secret. It belongs to this connection alone, so it can be given to a repository without giving away the token.",
-    "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token. Connect the account again to give it a secret of its own.",
+    "webhookSecretIsToken": "This connection was made before each had a secret of its own, so its webhooks are signed with its token — the one it had then, if it has been replaced since — which is not shown. Connect the account again to give it a secret of its own.",
     "showWebhook": "Webhook",
     "chooseRepository": "Choose from {{source}}",
     "searchRepositories": "Search repositories",
@@ -4335,7 +4774,15 @@
       "webhookStepFill": "Give it a title, and paste the address above as its URL and the secret above as its Secret.",
       "webhookStepTriggers": "Under Triggers, choose from a full list: Repository Push, and Pull Request Created, Updated, Merged and Declined.",
       "webhookStepSave": "Save. Bitbucket signs every delivery with the secret, and Skifity refuses any delivery that is not signed."
-    }
+    },
+    "pushDeploysNoConnection": "Pushes will not deploy this app yet",
+    "pushDeploysNoConnectionHelp": "No webhook was registered for it, because it has no Git connection to register one with. Connect your Git account under Settings, Git, then choose the connection in the app's settings.",
+    "connectAccount": "Connect a Git account",
+    "pushDeploysWhatToCheck": "What to check",
+    "replaceToken": "Replace token",
+    "replaceTokenTitle": "Replace the token of {{name}}",
+    "replaceTokenHelp": "The connection stays as it is: the webhooks on its repositories, their secret and the apps it serves. The new token is used from the next build, list and status on.",
+    "tokenReplaced": "{{name}} has its new token."
   },
   "notifications": {
     "title": "Notifications",
@@ -4433,6 +4880,8 @@
     "onlyProjects": "Only {{projects}}",
     "noProjectsLeft": "Its projects were deleted: only server events reach it",
     "kindFixed": "A channel's kind cannot be changed. Add another channel instead.",
+    "untested": "Not tested end to end",
+    "untestedHelp": "Skifity's tests check what is sent to {{service}} against a local stand-in, never against {{service}} itself. Once the channel is added, use Send a test and make sure the message arrives.",
     "noEventsChosen": "None chosen: the channel is sent every event except successful backups.",
     "limitToProjects": "Only some projects",
     "limitToProjectsHelp": "Events about an app, a database or a backup are sent only from the projects you choose. Events about servers and the panel itself go to every channel, because they affect every project.",
@@ -4595,6 +5044,9 @@
     "storeUnsignedHelp": "No signing key is set, so the panel cannot tell whether this list is the one the store published. Set one under Settings, then Plugins. Either way, what a plugin may do is shown before you install it.",
     "storeEmpty": "The store has nothing in it",
     "storeEmptyHelp": "The catalogue was read and lists no plugins.",
+    "storeNotPublished": "Not published yet",
+    "storeNotPublishedTitle": "The Skifity plugin store is not published yet",
+    "storeNotPublishedHelp": "Nothing is published at {{url}} yet, so there is nothing to browse here and the panel does not try the address. Install a plugin from its manifest's address or by pasting the manifest, or point Settings, then Plugins, at a store of your own.",
     "paid": "Paid",
     "buy": "Buy",
     "alreadyInstalled": "Installed",
@@ -4717,7 +5169,13 @@
     "verify": "Verify",
     "verifying": "Verifying…",
     "verified": "Opened and read through {{when}}",
-    "verifyFailed": "Did not read through: {{reason}}"
+    "verifyFailed": "Did not read through: {{reason}}",
+    "storage": {
+      "missingTitle": "No backups are being taken",
+      "missing": "This panel has no backup storage yet, so nothing on it is backed up.",
+      "askAdmin": "Ask a panel administrator to set it up under Settings → General → Backup storage.",
+      "openSettings": "Set it up under Settings → General → Backup storage."
+    }
   },
   "processes": {
     "title": "Processes",
@@ -5195,7 +5653,11 @@
     "removeConfirm": "The panel stops creating and removing records through {{name}}.",
     "removeConsequence": "Records the panel created through it stay at the provider, and are yours from then on: {{number}}.",
     "recordsKept": "Records kept: {{number}}",
-    "zonesListed": "as of {{when}}"
+    "zonesListed": "as of {{when}}",
+    "replace": "Replace credentials",
+    "replaceTitle": "Replace the credentials of {{name}}",
+    "replaceHelp": "The connection keeps its name and the records the panel created through it. The new credentials are checked before they are saved, and have to see every zone those records are in.",
+    "replaced": "{{name}} has its new credentials: {{zones}}"
   },
   "logDrains": {
     "help": "Ship everything your apps print to a service outside the cluster, where it is kept, searched and alerted on. A collector on every server sends each line to the drains of the team it belongs to.",
@@ -5364,6 +5826,169 @@
     "removeConfirm": "The token is deleted from the panel. Revoke it in the provider's console too.",
     "tokenHint": "token …{{hint}}",
     "serverCount": "Servers created with it: {{servers}}",
-    "checked": "checked {{when}}"
+    "checked": "checked {{when}}",
+    "replaceToken": "Replace token",
+    "replaceTokenTitle": "Replace the token of {{name}}",
+    "replaceTokenHelp": "The connection keeps its servers. The new token is checked before it is saved: it has to work, be able to write and, when servers were created with this connection, see their machines.",
+    "tokenReplaced": "{{name}} has its new token, and it can create servers."
+  },
+  "panelDomain": {
+    "title": "Panel address",
+    "help": "Where people open this panel. On a domain of its own it is served over HTTPS, with a certificate from Let's Encrypt.",
+    "answersAt": "Answers at",
+    "https": "HTTPS",
+    "plainHttp": "Plain HTTP",
+    "plainHelp": "Over plain HTTP, passwords cross the network unencrypted and passkeys are not available. Put the panel on a domain of its own to turn on HTTPS.",
+    "certificateReady": "The certificate is valid until {{date}}, and is renewed by itself.",
+    "certificateIssuing": "The certificate is being issued.",
+    "previous": "It still answers at {{hosts}}, for the webhooks registered there. A browser that opens it is sent here.",
+    "domain": "Domain",
+    "anotherDomain": "Move to another domain",
+    "domainHelp": "A domain of your own, such as panel.example.com. Create its DNS record first: the certificate is issued once the record points here.",
+    "move": "Move the panel",
+    "moveAnyway": "Move anyway",
+    "moveTitle": "Move the panel to {{domain}}?",
+    "moveConfirm": "A certificate is asked for first, and the panel keeps answering here until it is issued. Then it restarts at https://{{domain}}, and everybody signs in again there. This address keeps taking webhooks.",
+    "moving": "Moving the panel to {{domain}}",
+    "movingHelp": "Asking for a certificate. The panel keeps answering here until it arrives, usually within a minute or two, then restarts at https://{{domain}}.",
+    "restarting": "Restarting at {{domain}}",
+    "restartingHelp": "The certificate is issued, and the panel is restarting at https://{{domain}}. This page opens there by itself; sign in again when it does.",
+    "open": "Open {{url}}",
+    "failed": "The move to {{domain}} stopped",
+    "tryAgain": "Try again",
+    "cancel": "Cancel the move",
+    "cancelTitle": "Cancel the move to {{domain}}?",
+    "cancelConfirm": "The panel's route goes back to {{host}} alone. Nothing restarts.",
+    "goBack": "Go back to {{url}}",
+    "goBackTitle": "Take the panel's domain off?",
+    "goBackConfirm": "The panel restarts at {{url}}, over plain HTTP.",
+    "goBackConsequence": "Everybody is signed out, passkeys stop working, and webhooks registered at {{domain}} stop arriving.",
+    "goingBack": "The panel is restarting at {{url}}. Open it there in a minute and sign in again.",
+    "installer": "The installer does the same from the server: run it again with --domain and the name.",
+    "dnsHere": "The record points at this server, so Let's Encrypt can issue the certificate.",
+    "dnsPartly": "{{addresses}} is not this server, and Let's Encrypt may be sent there and refuse the certificate. Remove that record, or change it to {{expected}}.",
+    "dnsElsewhere": "Change the record to {{expected}}, then check again.",
+    "dnsUnknown": "This panel does not know its own public address, so it cannot tell whether that is here. Set it under Settings, Domains and HTTPS, Cluster public IP.",
+    "dnsProxied": "The name answers with Cloudflare's addresses. Point the record at {{expected}} and set it to DNS only, the grey cloud, until the panel opens over HTTPS: Let's Encrypt may not reach it through the proxy.",
+    "httpAlertTitle": "This panel is served over plain HTTP",
+    "httpAlert": "Passwords cross the network unencrypted, and passkeys are not available.",
+    "httpAlertAction": "Set up HTTPS"
+  },
+  "accounts": {
+    "tab": "Accounts",
+    "title": "Accounts",
+    "description": "Everybody who can sign in to this panel, whatever team they are in. Disabling an account signs it out everywhere at once and can be undone; deleting one cannot. Your own account is changed under Account.",
+    "serverHint": "When nobody can sign in to do it, {{command}} on the panel's server does the same.",
+    "account": "Account",
+    "signsInWith": "Signs in with",
+    "teams": "Teams",
+    "lastSignIn": "Last sign-in",
+    "you": "You",
+    "administrator": "Panel administrator",
+    "disabledBadge": "Disabled",
+    "onlyOwnerOf": "The only owner of {{teams}}",
+    "installedPlugins": "Installed {{plugins}}",
+    "password": "Password",
+    "twoFactor": "Two-factor",
+    "passkeys_one": "{{count}} passkey",
+    "passkeys_other": "{{count}} passkeys",
+    "sso": "Single sign-on",
+    "noWayIn": "None",
+    "noTeams": "In no team",
+    "never": "Never",
+    "actions": "Actions for {{name}}",
+    "makeAdmin": "Make panel administrator",
+    "revokeAdmin": "Remove panel administrator",
+    "enable": "Enable",
+    "disable": "Disable",
+    "resetTwoFactor": "Reset two-factor",
+    "disableTitle": "Disable {{name}}?",
+    "disableDescription": "They are signed out everywhere at once, and their password, passkeys, single sign-on and API tokens stop working. Nothing they made is removed, and enabling the account gives it all back.",
+    "disablePlugins": "Plugins this account installed run with its API token, and stop while it is disabled: {{plugins}}.",
+    "makeAdminTitle": "Make {{name}} a panel administrator?",
+    "makeAdminDescription": "They can then change every panel-wide setting, install plugins, upgrade the panel and its cluster, read the recovery key, and change every account here, yours included. The panel asks for your password first.",
+    "revokeAdminTitle": "Stop {{name}} being a panel administrator?",
+    "revokeAdminDescription": "They keep their teams and everything in them, and lose the panel-wide settings, components, upgrades, plugins and the recovery key.",
+    "resetTwoFactorTitle": "Reset two-factor for {{name}}?",
+    "resetTwoFactorDescription": "For a lost phone with the recovery codes gone too, so make sure it is them asking. Their authenticator and recovery codes stop working and they are signed out everywhere; their password alone then signs them in, and they can turn two-factor on again under Account. The panel asks for your password first.",
+    "resetTwoFactorStrongTeams": "{{teams}} require a second factor, a passkey or single sign-on, and refuse this account signed in with a password alone until two-factor is on again.",
+    "deleteDescription": "The account can no longer sign in, and nothing brings it back. Its address can be invited again, as a new account.",
+    "deleteGoes": "Deleted with it: {{what}}. The activity log keeps what it did.",
+    "deleteGoesNothing": "It is in no team and has no API tokens or passkeys. The activity log keeps what it did.",
+    "goesTeams_one": "its membership of {{teams}}",
+    "goesTeams_other": "its memberships of {{teams}}",
+    "goesTokens_one": "{{count}} API token",
+    "goesTokens_other": "{{count}} API tokens",
+    "goesPasskeys_one": "{{count}} passkey",
+    "goesPasskeys_other": "{{count}} passkeys",
+    "goesSSO": "its link to single sign-on",
+    "disabledDone": "{{name}} is disabled and was signed out everywhere.",
+    "enabledDone": "{{name}} can sign in again.",
+    "adminGrantedDone": "{{name}} is a panel administrator.",
+    "adminRevokedDone": "{{name}} is no longer a panel administrator.",
+    "twoFactorResetDone": "Two-factor is off for {{name}}, who was signed out everywhere.",
+    "deletedDone": "{{name}} was deleted."
+  },
+  "teams": {
+    "new": "New team",
+    "newHelp": "You will be its owner. A team has its own projects, servers, connections and people, and nobody in another team sees any of it.",
+    "name": "Team name",
+    "nameHelp": "What everybody in the team sees. Its owners and admins can change it later.",
+    "create": "Create team",
+    "created": "{{name}} is ready.",
+    "renameHelp": "What everybody in the team sees in the panel. Apps, their addresses and their data do not change with it.",
+    "renamed": "The team is now called {{name}}.",
+    "leave": "Leave",
+    "leaveNamed": "Leave {{name}}",
+    "leaveTitle": "Leave {{name}}?",
+    "leaveConfirm": "You lose access to everything in it at once, and your API tokens made for it stop working. Somebody who manages the team can add you again.",
+    "left": "You left {{name}}.",
+    "noneTitle": "You are not in any team",
+    "noneCreate": "Create one to start deploying, or ask somebody who manages a team to add you.",
+    "noneAsk": "Ask somebody who manages a team to add you. Until then there is nothing here to show.",
+    "delete": "Delete this team",
+    "deleteHelp": "Removes every project, environment, app and database in the team from the cluster, and the team with them. Only an owner can, and not while the team has a server or anything in it is being deployed.",
+    "deleteButton": "Delete team",
+    "deleteConfirm": "Every project, environment, app and database in this team is removed from the cluster, and everybody in it loses access.",
+    "deleteKeeps": "Backups already in your storage bucket, and DNS records the team's DNS providers created, are not removed.",
+    "deletedToast": "{{name}} was deleted."
+  },
+  "attention": {
+    "title": "Needs attention",
+    "nothing": "Nothing needs attention",
+    "bellCount_one": "{{count}} thing needs attention",
+    "bellCount_other": "{{count}} things need attention",
+    "openOverview": "Open the overview",
+    "showAll": "Show all {{total}}",
+    "showFewer": "Show fewer",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning"
+    },
+    "deploy_failed": "Deployment #{{number}} of {{app}} failed",
+    "app_unhealthy": "{{app}} has no instance running",
+    "app_alert": "{{app}} is over its alert threshold for {{alerts}}",
+    "app_vulnerable_one": "{{app}} runs an image with {{count}} critical vulnerability",
+    "app_vulnerable_other": "{{app}} runs an image with {{count}} critical vulnerabilities",
+    "app_drifted": "{{app}} was changed outside the panel",
+    "domain_cert_failed": "{{hostname}} has no certificate: issuing one failed",
+    "database_failed": "The database {{database}} failed",
+    "database_unhealthy": "The database {{database}} is not healthy",
+    "backup_failed": "The last backup of {{target}} failed",
+    "backup_missed": "{{target}} was not backed up when it was due",
+    "server_not_ready": "The server {{server}} is not ready",
+    "server_failed": "Adding the server {{server}} failed",
+    "server_alert": "The server {{server}} is over its alert threshold for {{alerts}}",
+    "certificate_expiring_one": "The certificate {{certificate}} runs out in {{count}} day",
+    "certificate_expiring_other": "The certificate {{certificate}} runs out in {{count}} days",
+    "certificate_expired": "The certificate {{certificate}} has run out",
+    "no_channel": "Nobody is told when something breaks: the team has no notification channel",
+    "panel_backup_failed": "The panel's last backup of itself failed"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} is live: deployment #{{number}} succeeded",
+    "failed": "Deployment #{{number}} of {{app}} failed",
+    "open": "Open",
+    "anApp": "An app"
   }
 }

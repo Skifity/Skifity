@@ -7,6 +7,7 @@ website: https://github.com/linuxserver/docker-calibre-web
 services:
 - name: calibre-web
   image: linuxserver/calibre-web:0.6.27
+  needs_root: true
   port: 8083
   public: true
   mem_request_mb: 128
@@ -23,3 +24,4 @@ services:
   - name: calibre-library
     mount_path: /books
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -22,7 +22,7 @@ truth about a panel nothing has been attached to yet, not a placeholder.
 
 | | |
 |---|---|
-| ![The overview: projects, apps, cluster health and recent activity](images/overview.png) | **Overview.** What is running, what changed, and what needs attention. |
+| ![The overview: what needs attention, the team's apps, its projects and servers, cluster health and recent activity](images/overview.png) | **Overview.** What needs attention first, each line a link to where it is fixed; then the apps deployed most recently, the projects and servers, and what changed. |
 | ![The same overview in dark mode](images/overview-dark.png) | **Dark**, which is what most people will see it in. |
 | ![The overview in Russian](images/overview-russian.png) | **Russian.** Five languages, and a missing string fails the build rather than falling back to English. |
 | ![The overview in Indonesian](images/overview-indonesian.png) | **Indonesian.** |
@@ -39,7 +39,7 @@ truth about a panel nothing has been attached to yet, not a placeholder.
 
 | | |
 |---|---|
-| ![An app's overview: its status, domains and recent deployments](images/app-overview.png) | **Overview.** |
+| ![An app's overview: its status, the version that is live, and its instances](images/app-overview.png) | **Overview.** Which deployment is live, who deployed it and when, and which version each instance runs. A build under way, or one that failed, is said at the top. |
 | ![The deployments list with commits and outcomes](images/app-deployments.png) | **Deployments**, each with the commit it came from and a one-click rollback. |
 | ![Live logs](images/app-logs.png) | **Logs**, streamed. |
 | ![Environment variables, with secret values hidden](images/app-variables.png) | **Variables.** A secret is encrypted and never shown again — and changing one does not rebuild the image. |

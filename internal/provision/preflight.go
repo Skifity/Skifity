@@ -2,6 +2,7 @@
 package provision
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -473,6 +474,202 @@ func ParsePreflight(output string) Preflight {
 		}
 	}
 	return p
+}
+
+// EtcdThresholds are what a server about to run etcd is warned about, from
+// Settings, then Cluster. Zero turns that warning off.
+type EtcdThresholds struct {
+	RoundTripMs int
+	JitterMs    int
+	LossPercent int
+	DiskSyncMs  int
+}
+
+// DefaultEtcdThresholds are the thresholds while nobody has set them.
+func DefaultEtcdThresholds() EtcdThresholds {
+	return EtcdThresholds{
+		RoundTripMs: settings.DefaultEtcdRoundTripMs,
+		JitterMs:    settings.DefaultEtcdJitterMs,
+		LossPercent: settings.DefaultEtcdLossPercent,
+		DiskSyncMs:  settings.DefaultEtcdDiskSyncMs,
+	}
+}
+
+func (t EtcdThresholds) roundTrips() bool {
+	return t.RoundTripMs > 0 || t.JitterMs > 0 || t.LossPercent > 0
+}
+
+// EtcdFitness is what EtcdFitnessScript measured.
+type EtcdFitness struct {
+	Peers []PeerConnects
+	// DiskWrites synced writes took DiskMicros together. Both are zero when
+	// the disk could not be timed.
+	DiskWrites int
+	DiskMicros int64
+}
+
+// PeerConnects are the timed TCP connects to one control plane server.
+type PeerConnects struct {
+	Address string
+	// Micros holds each connect that completed, in microseconds.
+	Micros []int64
+	// Failed counts the ones that could not be made at all.
+	Failed int
+}
+
+// lostConnectMicros is how long a connect takes once a packet of it was lost:
+// Linux sends a SYN again after a second.
+const lostConnectMicros = 1_000_000
+
+// ParseEtcdFitness reads EtcdFitnessScript's output. Every peer the script was
+// given is in the result, in the same order, whether or not anything came back
+// for it.
+func ParseEtcdFitness(output string, peers []string) EtcdFitness {
+	fitness := EtcdFitness{Peers: make([]PeerConnects, len(peers))}
+	index := make(map[string]int, len(peers))
+	for i, peer := range peers {
+		fitness.Peers[i].Address = peer
+		if _, seen := index[peer]; !seen {
+			index[peer] = i
+		}
+	}
+	for _, line := range strings.Split(output, "\n") {
+		fields := map[string]string{}
+		for _, field := range strings.Fields(line) {
+			if key, value, ok := strings.Cut(field, "="); ok {
+				fields[key] = value
+			}
+		}
+		if peer, ok := fields["etcd_peer"]; ok {
+			i, known := index[peer]
+			if !known {
+				continue
+			}
+			if micros, err := strconv.ParseInt(fields["connect_us"], 10, 64); err == nil && micros >= 0 {
+				fitness.Peers[i].Micros = append(fitness.Peers[i].Micros, micros)
+			} else if fields["connect_failed"] == "yes" {
+				fitness.Peers[i].Failed++
+			}
+			continue
+		}
+		writes := atoi(fields["disk_writes"])
+		micros, err := strconv.ParseInt(fields["disk_us"], 10, 64)
+		if writes > 0 && err == nil && micros > 0 {
+			fitness.DiskWrites, fitness.DiskMicros = writes, micros
+		}
+	}
+	return fitness
+}
+
+// EvaluateEtcd says what the measurements show that is worse than the
+// thresholds.
+//
+// Nothing here is fatal, whatever the numbers. A slow link or a slow disk
+// makes a slow control plane rather than a broken one, a measurement of a few
+// seconds can catch a bad moment, and the person adding the server may know
+// something twenty connections do not. What is checked is what etcd is
+// sensitive to: it waits for a majority of its members, and for its own disk,
+// on every change.
+func EvaluateEtcd(f EtcdFitness, limits EtcdThresholds) []Problem {
+	var problems []Problem
+	for _, peer := range f.Peers {
+		if !limits.roundTrips() {
+			break
+		}
+		var answered []float64
+		lost := 0
+		for _, micros := range peer.Micros {
+			if micros >= lostConnectMicros {
+				lost++
+				continue
+			}
+			answered = append(answered, float64(micros)/1000)
+		}
+		if len(answered)+lost == 0 {
+			detail, args := errdoc.Sprintf("The round trip from this server to %s could not be measured.", peer.Address)
+			problems = append(problems, Problem{
+				Code:   "etcd_round_trip_unmeasured",
+				Check:  "etcd",
+				Detail: detail,
+				Fix:    "Nothing was stopped. The panel times TCP connections to port 6443 with bash and timeout, so a server without them, or one that cannot reach that port, cannot be timed. Measure the latency between the two yourself before relying on this control plane server.",
+				Args:   ProblemArgs{Detail: args},
+			})
+			continue
+		}
+
+		mean, deviation := meanAndDeviation(answered)
+		if limits.RoundTripMs > 0 && len(answered) > 0 && mean > float64(limits.RoundTripMs) {
+			detail, args := errdoc.Sprintf("The round trip from this server to %s averaged %.1f ms, more than the %d ms this panel warns at.",
+				peer.Address, mean, limits.RoundTripMs)
+			problems = append(problems, Problem{
+				Code:   "etcd_round_trip",
+				Check:  "etcd",
+				Detail: detail,
+				Fix:    "etcd, which keeps the cluster's state, waits for a majority of the control plane servers on every change, so every change waits on this link, and one slow enough to delay k3s's half-second heartbeats makes them hold elections instead of answering. Keep the control plane servers in one location, and add servers elsewhere as workers. The threshold is under Settings, then Cluster.",
+				Args:   ProblemArgs{Detail: args},
+			})
+		}
+		if limits.JitterMs > 0 && len(answered) > 1 && deviation > float64(limits.JitterMs) {
+			detail, args := errdoc.Sprintf("The round trip from this server to %s varied by %.1f ms, more than the %d ms this panel warns at.",
+				peer.Address, deviation, limits.JitterMs)
+			problems = append(problems, Problem{
+				Code:   "etcd_jitter",
+				Check:  "etcd",
+				Detail: detail,
+				Fix:    "A link that is usually quick and sometimes slow makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats makes the control plane servers hold elections instead of answering. Keep them in one location, without a VPN or a busy link between them. The threshold is under Settings, then Cluster.",
+				Args:   ProblemArgs{Detail: args},
+			})
+		}
+		loss := float64(lost) * 100 / float64(len(answered)+lost)
+		if limits.LossPercent > 0 && loss > float64(limits.LossPercent) {
+			detail, args := errdoc.Sprintf("%.0f%% of the connections from this server to %s lost a packet, more than the %d%% this panel warns at.",
+				loss, peer.Address, limits.LossPercent)
+			problems = append(problems, Problem{
+				Code:   "etcd_loss",
+				Check:  "etcd",
+				Detail: detail,
+				Fix:    "etcd sends its heartbeats and every change over this link, and each lost packet holds them up until it is sent again. Find where the loss is, with mtr for instance, before making this a control plane server, or keep it a worker. The threshold is under Settings, then Cluster.",
+				Args:   ProblemArgs{Detail: args},
+			})
+		}
+	}
+
+	if limits.DiskSyncMs > 0 {
+		if f.DiskWrites == 0 {
+			problems = append(problems, Problem{
+				Code:   "etcd_disk_sync_unmeasured",
+				Check:  "etcd",
+				Detail: "How long this server's disk takes to make a write durable could not be measured.",
+				Fix:    "Nothing was stopped. The panel times 200 small synced writes with dd under /var/lib, which needs write access there and GNU dd and date. Measure the disk yourself, with fio as etcd's own guidance does, before relying on this control plane server.",
+			})
+		} else if average := float64(f.DiskMicros) / float64(f.DiskWrites) / 1000; average > float64(limits.DiskSyncMs) {
+			detail, args := errdoc.Sprintf("A small write to this server's disk took %.1f ms on average to be made durable, more than the %d ms this panel warns at.",
+				average, limits.DiskSyncMs)
+			problems = append(problems, Problem{
+				Code:   "etcd_disk_sync",
+				Check:  "etcd",
+				Detail: detail,
+				Fix:    "etcd makes every change durable before it answers, so a slow disk slows the whole cluster and can cost it its leader. Use a server with a local SSD or NVMe disk rather than network storage or a busy shared one. The threshold is under Settings, then Cluster.",
+				Args:   ProblemArgs{Detail: args},
+			})
+		}
+	}
+	return problems
+}
+
+// meanAndDeviation returns the average and the standard deviation.
+func meanAndDeviation(values []float64) (mean, deviation float64) {
+	if len(values) == 0 {
+		return 0, 0
+	}
+	for _, v := range values {
+		mean += v
+	}
+	mean /= float64(len(values))
+	for _, v := range values {
+		deviation += (v - mean) * (v - mean)
+	}
+	return mean, math.Sqrt(deviation / float64(len(values)))
 }
 
 func atoi(s string) int {

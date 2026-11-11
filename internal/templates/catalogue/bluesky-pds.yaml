@@ -6,6 +6,7 @@ website: https://github.com/bluesky-social/pds
 services:
 - name: pds
   image: ghcr.io/bluesky-social/pds:0.4.182
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -16,3 +17,4 @@ services:
   - name: pds-data
     mount_path: /pds
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

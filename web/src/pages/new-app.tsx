@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -18,6 +18,13 @@ import { cn } from "cn"
 
 import { AppNeeds, usableVariableName } from "@/components/app-needs"
 import { DetectedProcesses } from "@/components/app/processes"
+import { sayWebhook as sayWebhookStatus } from "@/components/app/push-deploys"
+import {
+  EnvironmentPicker,
+  pickedOrOnly,
+  targetOf,
+  useEnvironmentTargets,
+} from "@/components/environment-picker"
 import { ErrorDisplay, toProblem } from "@/components/error-display"
 import {
   FolderPicker,
@@ -53,7 +60,6 @@ import type {
   ComposeService,
   Deployment,
   Detection,
-  Environment,
   GitListing,
   GitRepository,
   GitSource,
@@ -69,7 +75,23 @@ type SourceType = "git" | "image" | "upload"
 const NO_GIT_SOURCE = "__none__"
 
 /** What POST /stack answers with, for a whole file or one service of it. */
-type StackResult = { apps: App[]; notes: StackNote[]; webhook?: WebhookStatus }
+type StackResult = {
+  apps: App[]
+  notes: StackNote[]
+  webhook?: WebhookStatus
+  /** The first deployments it started, when it was asked to deploy. */
+  deployments?: Deployment[]
+}
+
+/**
+ * Where a new app's page opens: on its first deployment's build, when one was
+ * started. Its Overview said nothing was running and to press Deploy now while
+ * that build ran a tab away, and nothing said when it went live.
+ */
+function appPage(appId: string, deployment?: Deployment) {
+  if (!deployment) return `/apps/${appId}`
+  return `/apps/${appId}?tab=deployments&deployment=${encodeURIComponent(deployment.id)}`
+}
 
 /**
  * Creating an app asks for as little as possible.
@@ -80,8 +102,41 @@ type StackResult = { apps: App[]; notes: StackNote[]; webhook?: WebhookStatus }
  */
 export function NewAppPage() {
   const { t } = useTranslation()
+  // The environment the page was opened from, on a project's page; none from
+  // the overview or the palette, which do not know where an app should go.
   const { envId = "" } = useParams()
   const navigate = useNavigate()
+
+  // Where the app goes. "New app" on the overview used to make it in the
+  // first project's first environment, whichever that was — production, say —
+  // and nothing on the form said so. Now it is chosen here, and said.
+  //
+  // In the address rather than in state: the breadcrumb reads it, and a
+  // reload keeps it. Changing it replaces the query, not the route, so the
+  // page is not started again and nothing typed is lost.
+  const [params, setParams] = useSearchParams()
+  const destinations = useEnvironmentTargets(envId || undefined)
+  // Only an environment the list offers is used: the address is anybody's to
+  // write, and what it names goes into the path of a request this page sends
+  // with the person's session. A link with "../teams/..." in it would
+  // otherwise point Create at another route of the API.
+  const asked = params.get("environment") || envId
+  const target = targetOf(asked, destinations.targets)
+    ? asked
+    : pickedOrOnly("", destinations.targets)
+  const destination = targetOf(target, destinations.targets)
+  const choose = (environmentId: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.set("environment", environmentId)
+        return next
+      },
+      { replace: true },
+    )
+  // Cancel goes back where the form was opened: that environment's project,
+  // or the overview.
+  const origin = targetOf(envId, destinations.targets)
 
   const [sourceType, setSourceType] = useState<SourceType>("git")
   const [name, setName] = useState("")
@@ -118,13 +173,6 @@ export function NewAppPage() {
   // A public repository needs no account. This picker only appears once one is
   // connected, so the common case stays a single field.
   const { team, meta } = useSession()
-  // Where Cancel goes: the project this environment is in. Going back in the
-  // browser's history left the panel when the form was opened in a new tab.
-  const environment = useQuery({
-    queryKey: ["environment", envId],
-    queryFn: () => api.get<Environment>(`/api/environments/${envId}`),
-    enabled: Boolean(envId),
-  })
   const gitSources = useQuery({
     queryKey: ["git-sources", team?.id],
     queryFn: () => api.get<List<GitSource>>(`/api/teams/${team!.id}/git-sources`),
@@ -279,17 +327,7 @@ export function NewAppPage() {
   // Whether pushes will deploy is worth knowing now rather than the first
   // time somebody pushes and nothing happens. Said for a stack too, which
   // registers the same webhook.
-  function sayWebhook(webhook?: WebhookStatus) {
-    if (!webhook?.url) return
-    if (webhook.registered) {
-      toast.success(t("git.pushDeploysOn"), { description: t("git.pushDeploysOnHelp") })
-    } else {
-      toast.warning(t("git.pushDeploysManual"), {
-        description: `${t("git.pushDeploysManualHelp")} ${webhook.url}`,
-        duration: 15000,
-      })
-    }
-  }
+  const sayWebhook = (webhook?: WebhookStatus) => sayWebhookStatus(t, navigate, webhook)
 
   type Created = {
     app: App
@@ -299,35 +337,38 @@ export function NewAppPage() {
   }
   const create = useMutation({
     mutationFn: async () => {
-      const result = await api.post<Created>(`/api/environments/${envId}/apps`, {
-        name: appName,
-        source_type: sourceType,
-        repo_url: sourceType === "git" ? repoURL.trim() : "",
-        git_source_id: sourceType === "git" ? gitSourceID : "",
-        branch: branch.trim(),
-        root_dir: rootDir.trim(),
-        image: sourceType === "image" ? image.trim() : "",
-        builder,
-        dockerfile_path: dockerfilePath.trim(),
-        port: Number(port) || 0,
-        health_path: healthPath.trim(),
-        build_command: buildCommand.trim(),
-        static_dir: staticDir.trim(),
-        start_command: startCommand.trim(),
-        release_command: releaseCommand.trim(),
-        // app.json's postdeploy script, which Heroku runs in each review app.
-        preview_seed: showsNeeds ? (found?.preview_seed ?? "") : "",
-        // An app from a folder has no code until the folder is sent, which
-        // happens below, once it exists.
-        deploy: sourceType === "upload" ? false : deployNow,
-        // Only while the box that shows them is on the screen.
-        variables: showsNeeds ? pasted : {},
-        // Created and linked before the first deploy, so its first start
-        // finds the connection string there.
-        databases,
-        // The Procfile's worker and clock lines, on the same build.
-        processes,
-      })
+      const result = await api.post<Created>(
+        `/api/environments/${encodeURIComponent(target)}/apps`,
+        {
+          name: appName,
+          source_type: sourceType,
+          repo_url: sourceType === "git" ? repoURL.trim() : "",
+          git_source_id: sourceType === "git" ? gitSourceID : "",
+          branch: branch.trim(),
+          root_dir: rootDir.trim(),
+          image: sourceType === "image" ? image.trim() : "",
+          builder,
+          dockerfile_path: dockerfilePath.trim(),
+          port: Number(port) || 0,
+          health_path: healthPath.trim(),
+          build_command: buildCommand.trim(),
+          static_dir: staticDir.trim(),
+          start_command: startCommand.trim(),
+          release_command: releaseCommand.trim(),
+          // app.json's postdeploy script, which Heroku runs in each review app.
+          preview_seed: showsNeeds ? (found?.preview_seed ?? "") : "",
+          // An app from a folder has no code until the folder is sent, which
+          // happens below, once it exists.
+          deploy: sourceType === "upload" ? false : deployNow,
+          // Only while the box that shows them is on the screen.
+          variables: showsNeeds ? pasted : {},
+          // Created and linked before the first deploy, so its first start
+          // finds the connection string there.
+          databases,
+          // The Procfile's worker and clock lines, on the same build.
+          processes,
+        },
+      )
       if (sourceType !== "upload" || !folder) return result
 
       // The app exists now, so a failure from here on is not a failure to
@@ -352,7 +393,7 @@ export function NewAppPage() {
       return result
     },
     onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ["apps", envId] })
+      void queryClient.invalidateQueries({ queryKey: ["apps", target] })
       // A database that could not be made does not undo the app, so it has to
       // be said here — the app page will not know it was ever asked for.
       for (const database of result.databases ?? []) {
@@ -368,14 +409,14 @@ export function NewAppPage() {
         }
       }
       sayWebhook(result.webhook)
-      navigate(`/apps/${result.app.id}`)
+      navigate(appPage(result.app.id, result.deployment))
     },
   })
 
   // Services of a Compose file, created by the panel's own reading of it: the
   // whole file as one stack, or the one service picked. See handleCreateStack.
   const postStack = (services: ComposeService[], name?: string) =>
-    api.post<StackResult>(`/api/environments/${envId}/stack`, {
+    api.post<StackResult>(`/api/environments/${encodeURIComponent(target)}/stack`, {
       repo_url: repoURL.trim(),
       git_source_id: gitSourceID,
       branch: branch.trim(),
@@ -387,7 +428,7 @@ export function NewAppPage() {
       name,
     })
   function afterStack(result: StackResult) {
-    void queryClient.invalidateQueries({ queryKey: ["apps", envId] })
+    void queryClient.invalidateQueries({ queryKey: ["apps", target] })
     if (result.apps.length > 1) {
       toast.success(t("apps.stackCreated", { count: result.apps.length }))
     }
@@ -403,7 +444,14 @@ export function NewAppPage() {
     }
     sayWebhook(result.webhook)
     const first = result.apps.find((app) => !app.internal) ?? result.apps[0]
-    if (first) navigate(`/apps/${first.id}`)
+    if (first) {
+      navigate(
+        appPage(
+          first.id,
+          result.deployments?.find((started) => started.app_id === first.id),
+        ),
+      )
+    }
   }
   const stack = useMutation({
     mutationFn: () => postStack(found?.compose ?? []),
@@ -439,7 +487,15 @@ export function NewAppPage() {
           button now, and the sentence says what this page actually does. */}
       <PageHeader
         title={t("apps.newApp")}
-        description={t("apps.newAppSubtitle")}
+        // Where it goes, under the title, where a phone shows no breadcrumb.
+        description={
+          destination
+            ? t("apps.newAppIn", {
+                project: destination.project.name,
+                environment: destination.environment.name,
+              })
+            : t("apps.newAppSubtitle")
+        }
         actions={
           <Button variant="outline" asChild>
             <Link to="/templates">
@@ -459,6 +515,23 @@ export function NewAppPage() {
           else create.mutate()
         }}
       >
+        <Field>
+          <FieldLabel htmlFor="new-app-environment">{t("apps.createIn")}</FieldLabel>
+          <EnvironmentPicker
+            id="new-app-environment"
+            value={target}
+            onChange={choose}
+            targets={destinations.targets}
+            loading={destinations.loading}
+            error={destinations.error}
+            empty={t("apps.noEnvironment")}
+            placeholder={t("apps.chooseEnvironment")}
+          />
+          {!target && destinations.targets.length > 1 && (
+            <FieldDescription>{t("apps.createInHelp")}</FieldDescription>
+          )}
+        </Field>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t("apps.source")}</CardTitle>
@@ -639,7 +712,8 @@ export function NewAppPage() {
                     services={composeServices}
                     warnings={detected?.compose_warnings}
                     chosen={chosenService?.name ?? ""}
-                    busy={busy}
+                    // Nothing is made before there is somewhere to make it.
+                    busy={busy || !target}
                     creatingStack={stack.isPending}
                     stackError={stack.error}
                     onCreateStack={() => stack.mutate()}
@@ -843,19 +917,13 @@ export function NewAppPage() {
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" asChild>
-            <Link
-              to={
-                environment.data?.project_id
-                  ? `/projects/${environment.data.project_id}`
-                  : "/projects"
-              }
-            >
+            <Link to={origin ? `/projects/${origin.project.id}` : envId ? "/projects" : "/"}>
               {t("common.cancel")}
             </Link>
           </Button>
           {/* The words say what pressing it does: "Deploying..." while
               nothing was going to deploy was the button telling a lie. */}
-          <Button type="submit" disabled={!ready || busy}>
+          <Button type="submit" disabled={!ready || busy || !target}>
             {submitting && <Spinner />}
             {submitting
               ? deployNow
@@ -926,7 +994,8 @@ function ComposeServices({
   warnings?: string[]
   chosen: string
   onChoose: (service: ComposeService) => void
-  /** Something is being created already, by this or by the form's own button. */
+  /** Nothing can be created now: something is being created already, by this
+      or by the form's own button, or nowhere has been chosen to create it. */
   busy: boolean
   creatingStack: boolean
   stackError: unknown

@@ -6,26 +6,17 @@ website: https://docs.onedev.io/
 services:
 - name: onedev
   image: 1dev/server:16.6
+  needs_root: true
   port: 6610
   public: true
   mem_request_mb: 128
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
-  variables:
-    hibernate_dialect: io.onedev.server.persistence.PostgreSQLDialect
-    hibernate_connection_driver_class: org.postgresql.Driver
   volumes:
-  - name: onedev-docker-sock
-    mount_path: /var/run/docker.sock
-    size_gb: 5
   - name: onedev-data
     mount_path: /opt/onedev
     size_gb: 5
-databases:
-- name: onedev-db
-  engine: postgres
-  storage_gb: 5
-  link_to:
-  - onedev
-  var_name: DATABASE_URL
+notes: OneDev keeps everything, its own database included, on its disk at /opt/onedev, so a restart keeps
+  it. Builds run on agents you add in OneDev, not on this server's Docker. The image starts as root, so
+  the environment needs the baseline pod security level.

@@ -3,7 +3,9 @@
 Skifity runs nine kinds of database for your apps, in the same environment as
 the apps that use them. Each is created from a project's page or the
 **Databases** page, connected to an app with one click, and — for six of the
-nine — [backed up](backups.md) on a schedule.
+nine — [backed up](backups.md) on a schedule: every day from the moment it is
+made, once the panel has backup storage, unless you switch **Back up daily**
+off as you create it.
 
 ## The engines
 
@@ -105,9 +107,39 @@ A few of these deserve a word:
   which route only to apps with a domain. An app in another environment, or anything
   on the internet, cannot reach it.
 
-A template can also ask for the connection in pieces — host, port, name, user
-and password — for software that has no setting for a URL; see
-[templates](templates.md).
+### In pieces
+
+Some software asks for a host, a port, a user and a password, and has no
+setting for a URL — Snipe-IT, Matomo, a good part of what is written in PHP. A
+link can give it those too: **Also as separate variables** when you link an
+app, `pieces` in `POST /api/databases/{id}/link`, the long form in
+[`skifity.yaml`](cli.md#describing-an-environment-in-a-file), or `pieces` in
+the assistant's `link_database`. A template that needs them asks for them
+itself; see [templates](templates.md).
+
+| Engine | Pieces | Names suggested |
+|---|---|---|
+| PostgreSQL | host, port, name, user, password | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` |
+| MySQL, MariaDB | host, port, name, user, password | `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` |
+| MongoDB | host, port, name, user, password | `MONGO_HOST`, `MONGO_PORT`, `MONGO_DATABASE`, `MONGO_USERNAME`, `MONGO_PASSWORD` |
+| Redis, Valkey, Dragonfly | host, port, password | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
+| ClickHouse | host, port, name, user, password | `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` |
+| Memcached | host, port | `MEMCACHED_HOST`, `MEMCACHED_PORT` |
+
+The Redis family has no name or user here: its connection string signs in as
+`default`, and a separate user would only be one more thing to get wrong.
+
+The pieces are the link's, like its URL. The password is a secret and the
+rest are plain variables; a password change gives every one of them its new
+value along with the URL; unlinking takes them all away. A name another
+database's link already uses is refused, as is one name for two pieces.
+
+Before this, a template's pieces were written once, as variables of their own,
+and a password change gave the app a new connection string and left its
+password piece holding the old one. A panel that starts on this version gives
+each such link its pieces, once, where the app still has every variable its
+template declared — and rewrites a password piece that is out of date, rolling
+that app out with the right one.
 
 ## From your computer
 
@@ -189,7 +221,8 @@ none, which is the default) and how big its disk is. Give only what changes.
 **Change password**, on the Manage tab, `skifity db password orders` or
 `POST /api/databases/{id}/password`, gives a database a new password — a
 generated one, or one you choose of 16 to 128 letters, digits, dots, dashes,
-underscores or tildes — and every linked app the new connection string. It is
+underscores or tildes — and every linked app the new connection string, and
+the new password in its [pieces](#in-pieces) where its link delivers them. It is
 an administrator's, like reading the password, and it is in the activity log.
 
 It runs in an order that leaves a working password whatever stops it:
@@ -201,7 +234,7 @@ It runs in an order that leaves a working password whatever stops it:
    (their default user can have two passwords), so nothing connected notices.
 3. The database's Secret and the panel's copy are changed. If either fails, the
    job runs the other way and the old password is back.
-4. Every linked app is rolled out with the new connection string.
+4. Every linked app is rolled out with the new connection string and pieces.
 5. Only then is the old password taken away, where there were two — and not at
    all if an app could not be rolled out.
 

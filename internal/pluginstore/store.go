@@ -49,6 +49,14 @@ import (
 // DefaultIndexURL is where the Skifity store publishes its catalogue.
 const DefaultIndexURL = "https://plugins.skifity.com/index.json"
 
+// DefaultPublished says whether anything is published at DefaultIndexURL.
+// Nothing is yet, and the name does not resolve: a panel that tried it
+// reported a store it could not reach, with a fix about the cluster's network,
+// which was never the problem. While this is false the panel says the store is
+// not published and does not dial the address. The release that publishes the
+// store flips it.
+const DefaultPublished = false
+
 // SignatureSuffix is appended to the index URL to find its signature.
 const SignatureSuffix = ".sig"
 

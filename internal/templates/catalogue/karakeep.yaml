@@ -6,6 +6,7 @@ website: https://karakeep.app
 services:
 - name: karakeep
   image: ghcr.io/karakeep-app/karakeep:0.33.2
+  needs_root: true
   port: 3000
   public: true
   health_path: /api/health

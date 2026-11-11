@@ -17,8 +17,11 @@ full-stack JavaScript teams first (it maintains Next.js), and since 2025 it sell
 itself as an "AI cloud" for agents as much as for websites. **Architecture:** a
 closed, proprietary control plane in front of a global CDN (the edge network), with
 compute on "Fluid compute" functions — request-scoped, scale to zero — and, since
-30 June 2026, OCI container images run *as* those request-scoped functions, not as
-long-running services. State lives in Vercel's own stores (Blob, Global Config —
+30 June 2026, OCI container images run *as* those request-scoped functions. Since
+15 October 2026 (public beta) containers can also run as **Daemons**: background
+workers that pull their work from a queue or a database, kept at a chosen number
+of instances per region and restarted when they exit; they serve no HTTP. State
+lives in Vercel's own stores (Blob, Global Config —
 renamed from Edge Config in July 2026, Queues, Workflow) and in Marketplace
 partners (Neon, Supabase, Upstash, Prisma) since Vercel Postgres and KV were moved
 to the Marketplace. **Licence:** the service is proprietary; the CLI
@@ -45,13 +48,17 @@ releases more than once a day.
   between (`github.autoJobCancellation`).
 * CLI deploys (`vercel`, `vercel --prod`), the REST API (`POST /files` then
   `POST /deployments`), and **Vercel Drop** (drag a folder or `.zip` onto
-  vercel.com/drop, framework detected, account required; guide dated 2026-06-11).
+  vercel.com/drop, framework detected; guide dated 2026-06-11). Drop needed an
+  account until 2026-10-19; since then a static site deploys without one and
+  expires after an hour unless it is claimed, and since 2026-10-22 `vercel
+  deploy` does the same from the CLI, on a separate `tmp.now` domain.
 * Framework detection with presets for Next.js, SvelteKit, Nuxt, TanStack, Astro,
   Remix, Vite, CRA and many more; the Build Output API lets any framework target
   Vercel's primitives. Since 2026-06-30 a `Dockerfile`/`Containerfile` can be
   deployed as an HTTP server on Fluid compute (request-scoped, scales down after 5
   minutes idle in production and 30 seconds in preview, no persistent disk, no
-  Compose).
+  Compose). Since 2026-10-27 a plain root `Dockerfile` is used when no framework
+  is detected; the container runtime is still a beta.
 * Build machines: Hobby 2 vCPU / 8 GB / 32 GB disk; Pro 4 vCPU up to 30 vCPU / 60 GB
   ("Standard", "Enhanced", "Turbo", "Elastic"), billed per build minute from $0.007
   (Basic) to $0.105 (Turbo). `#VERCEL_BUILD_MACHINE=TURBO` in a commit message picks
@@ -111,8 +118,14 @@ releases more than once a day.
   Container Registry (VCR, $0.10/GB-month, launched summer 2026).
 * No volume or database backup product of its own: backups are the Marketplace
   provider's (Neon point-in-time restore etc.). Deployments themselves are retained
-  so any production deployment can be rolled back to ("Deployment Storage keeps your
-  deployments rollback-ready").
+  so a production deployment can be rolled back to ("Deployment Storage keeps your
+  deployments rollback-ready") — for 30 days by default on Pro since October 2026:
+  new Pro teams default to 30-day retention (2026-10-09), existing Pro teams'
+  deployments older than 30 days are deleted from 2026-10-23 unless they opt out,
+  Deployment Storage is billed at $0.10 per GB-month, and "deleted deployments
+  cannot be restored or used for rollback".
+* **Vercel Drives** (GA 2026-10-15): persistent storage that mounts in a Sandbox
+  only, forkable, 1 TiB by default (1 GiB on Hobby) and up to 16 TiB.
 
 ### Scaling and high availability
 
@@ -129,8 +142,11 @@ releases more than once a day.
 ### Observability (logs, metrics, alerts, uptime)
 
 * Runtime logs: **1 hour** on Hobby, **1 day** on Pro, 30 days with Observability
-  Plus ($1.20 per 1M events). Tracing (1M span units on Hobby, $0.50/1M after),
-  session tracing, request metrics, the Firewall's live traffic view.
+  Plus ($1.20 per 1M events). Tracing (1M span units on Hobby, $0.50/1M after;
+  generally available since 2026-11-06, with traces kept 3 days on Hobby and 14 on
+  Pro and Enterprise), session tracing, request metrics, the Firewall's live
+  traffic view. Custom monitors since 2026-10-26: a metric or a ratio of two, a
+  fixed threshold or anomaly detection, with Observability Plus.
 * **Drains** (Pro and Enterprise, **$0.50/GB** measured as uncompressed JSON):
   logs (runtime, build, static), OpenTelemetry traces, Speed Insights, Web Analytics
   and Connect events to any HTTP endpoint or native integrations; audit-log drains
@@ -203,9 +219,10 @@ releases more than once a day.
   deployment instantly — no rebuild, and **environment variables are not changed**
   (the old deployment keeps the values it was built with, which Vercel warns "may
   become stale"). Cron jobs revert with it. Hobby can roll back one deployment; Pro
-  and Enterprise to any deployment that was ever aliased to production. After a
-  rollback, auto-assignment is **turned off** so the next push does not silently
-  undo it; "Undo Rollback" re-enables it.
+  and Enterprise to any deployment that was ever aliased to production and is still
+  retained, which on Pro now means the last 30 days by default (see Storage and
+  backups). After a rollback, auto-assignment is **turned off** so the next push
+  does not silently undo it; "Undo Rollback" re-enables it.
 
 ### Templates and catalogue
 
@@ -223,8 +240,10 @@ releases more than once a day.
   checks, OIDC federation, webhooks, Vercel Connect (managed third-party API
   connectors).
 * **Vercel MCP** (public beta): a **remote** server at `https://mcp.vercel.com`,
-  Streamable HTTP with MCP OAuth, only for reviewed clients (Claude Code, Claude.ai,
-  ChatGPT, Codex, Cursor, VS Code, Devin, Gemini CLI and others); searches docs,
+  Streamable HTTP with MCP OAuth, until 2026-11-02 only for reviewed clients
+  (Claude Code, Claude.ai, ChatGPT, Codex, Cursor, VS Code, Devin, Gemini CLI and
+  others); since then any client that publishes a Client ID Metadata Document may
+  ask to connect, and the consent screen names the host serving it; searches docs,
   manages projects and deployments, reads logs, queries Web Analytics, manages
   rolling releases and drains; changelog entries say it **can now deploy code** and
   **supports purchases**. A "Vercel plugin" for coding agents
@@ -267,8 +286,9 @@ releases more than once a day.
   Claimable deployments for agent-built apps; the MCP server above; docs pages carry
   "For AI agents" link maps and a `.graph.md` per page.
 * Weak spots in the same experience: Hobby forbids commercial use, cron on Hobby
-  runs at most daily with ±59 minutes of jitter, and runtime logs vanish after an
-  hour on Hobby.
+  runs at most daily with ±59 minutes of jitter (Cron Jobs; their successor,
+  Vercel Schedules, entered public beta on 2026-11-05 with 5,000 runs a month
+  included on Hobby), and runtime logs vanish after an hour on Hobby.
 
 ## What users love
 
@@ -378,9 +398,14 @@ Skifity statuses follow `docs/checklist.md`: almost everything cluster-facing is
 **Written, never run** (ADR-0010). A "parity" verdict below means the feature exists
 in code with unit tests; it does not mean it has been seen working.
 
+The Skifity column below, and the gaps after it, are Skifity on 2026-09-30. Since
+then it has been released (v0.1.0 on 2026-10-06, v0.1.1 on 2026-10-21), the
+`Cluster` workflow installs it on a real k3s on every push to `main`, and most of
+those gaps are closed; "Since 2026-09-30" says which.
+
 | Capability | Vercel | Skifity (evidence) | Verdict |
 |---|---|---|---|
-| **Deploy sources and builds** | Git (GitHub/GitLab/Bitbucket), CLI, API, Drop (.zip), Dockerfile as request-scoped function | Git (GitHub, GitLab, Gitea, generic) via signed webhooks `internal/api/webhook_handlers.go`; image; folder upload (`skifity up`, browser folder picker) `internal/cli/up.go`, `internal/upload`; Railpack/Nixpacks/Dockerfile/static builds `internal/builder/job.go`. Written, never run | Parity (Skifity runs long-lived containers; Vercel does not) |
+| **Deploy sources and builds** | Git (GitHub/GitLab/Bitbucket), CLI, API, Drop (.zip), Dockerfile as request-scoped function | Git (GitHub, GitLab, Gitea, generic) via signed webhooks `internal/api/webhook_handlers.go`; image; folder upload (`skifity up`, browser folder picker) `internal/cli/up.go`, `internal/upload`; Railpack/Nixpacks/Dockerfile/static builds `internal/builder/job.go`. Written, never run | Parity (Skifity runs long-lived containers that serve traffic; Vercel's long-running Daemons, a beta since 2026-10-15, serve none) |
 | Framework detection | Presets for ~all JS frameworks, Build Output API | Node (Next, Nuxt, Nest, Remix, SvelteKit, Astro, Vite, Angular…), Python, Go, PHP, Ruby, Rust, Java `internal/builder/detect.go`; plus what the app *needs* (databases, SQLite on disk) `internal/builder/needs.go` | Parity; Skifity ahead on detecting needs |
 | Build cache | 1 GB, 1 month, per branch; redeploy without cache; remote cache | BuildKit registry cache at `<image>:buildcache` `internal/builder/job.go`; **no way to bypass it** | Behind (no cache bypass) |
 | Build logs | Live, kept with deployment, OOM/disk report | Live over SSE, scrubbed of secrets `internal/deploy/build.go`, last 20 builds per app `internal/deploy/deployer.go` | Parity |
@@ -399,7 +424,7 @@ in code with unit tests; it does not mean it has been seen working.
 | Firewall / WAF | Custom rules, IP/geo/ASN/JA4, challenge, rate limit, OWASP, bot and AI-bot rulesets, DDoS | Ordered allow/block rules over address, country, ASN, host, path, method, UA, header `internal/edgerules`, enforced by a forwardAuth guard `internal/guard`; no rate limit, no challenge, no managed rules; never run through Traefik | Behind |
 | **Preview environments** | Per push and per PR, commit + branch URLs, PR comment, statuses, protection, per-environment variables | Per PR (opened/synchronize/reopened), own namespace, copy of the app, fork gets no secrets, removed on close or after 7 idle days `internal/api/webhook_handlers.go`, `internal/watch/watch.go`; commit status + one edited PR comment on GitHub/GitLab/Gitea `internal/deploy/gitreport.go` (added in `bb30e03`). A preview inherits the app's basicAuth password if it has one (`internal/api/webhook_handlers.go`, `internal/kube/password.go`, `7865bc8`). No branch deploys, no per-commit URLs, no preview-specific values, **no preview database** (see gaps), no protection by default and no sign-in with a panel account | Behind |
 | Environments | Production, Preview, Development, custom (1 on Pro) | Any number of environments per project, each a namespace `internal/api/api.go` (`/projects/{id}/environments`); variables per app, shared variables per project across *all* environments (`SharedVariable`, `internal/store/models.go`) | Ahead on count, behind on per-environment values |
-| Cron | Hobby daily ±59 min; Pro per minute; 100 per project; HTTP GET to a path | Scheduled commands in the app's image, per minute, `internal/cron`, `app.Post("/jobs")`; Kubernetes CronJob `internal/kube/runjob.go` | **Skifity ahead** (a real command, no plan limit). Written |
+| Cron | Hobby daily ±59 min; Pro per minute; 100 per project; HTTP GET to a path. Since 2026-11-05 Schedules (beta): a private function, a path or a queue topic, also created at runtime | Scheduled commands in the app's image, per minute, `internal/cron`, `app.Post("/jobs")`; Kubernetes CronJob `internal/kube/runjob.go` | **Skifity ahead** (a real command, no plan limit). Written |
 | **Templates and catalogue** | Framework starters and AI apps | 283 one-click self-hosted services `internal/templates/catalogue` | Different category; Skifity ahead for self-hostable services |
 | **CLI, API, IaC** | CLI, REST, SDK, Terraform, Marketplace | CLI with `--json` everywhere `internal/cli/commands.go`, REST API, export to `kubectl apply` `internal/api/export_handlers.go`; no Terraform provider | Behind on IaC |
 | MCP / agents | Remote MCP with OAuth that deploys; claimable deploys; v0; Agent | MCP over **stdio only** `internal/mcpserver/server.go` (15 tools, nothing destructive), `deploy_folder`, errors with cause/impact/fix `internal/errdoc/catalogue.go`, `llms.txt` | Behind on remote MCP; parity on agent deploys |
@@ -633,6 +658,271 @@ already has; the evidence for Skifity's side is in the table above.
 * **Daily-only cron and hour-level jitter on the free tier**: an artefact of
   metering, irrelevant on your own server.
 
+## Since 2026-09-30
+
+Read on 2026-11-08: Vercel's changelog feed (155 entries dated 2026-09-30 to
+2026-11-07; about half announce models on AI Gateway and were not read further),
+its security bulletins, the pricing page, the npm registry for `vercel`, the OSV
+database for `next`, shields.io for GitHub counts, and Hacker News through the
+Algolia API. GitHub's API refused this session for repositories other than
+Skifity's, so stars and issues came from shields.io, which rounds.
+
+### Backends, at Ship 2026
+
+- **2026-10-15, Vercel Ship.** Python became generally available: FastAPI,
+  Flask and Django on CPython with uv, which Vercel says 150,000 teams already
+  run. Container support in Functions counted 5,000 teams and 150,000 container
+  deployments since its beta. **Daemons** entered public beta: containers run
+  continuously as workers that pull work (queue consumers, Celery, BullMQ,
+  Temporal workers, self-hosted CI runners), at an instance count per region,
+  restarted when they exit or crash. They gained HTTP liveness checks and
+  service bindings on 2026-10-30; their CPU and memory metrics need
+  Observability Plus.
+- **Drives** became generally available the same day (corrected in place
+  above), for Sandbox only. **Bring Your Own Cloud on AWS** became generally
+  available for Enterprise: Node.js and Python functions run in the customer's
+  AWS account, while Vercel keeps deployments, routing and static assets.
+- **Smaller changes.** WebSockets in Functions became generally available
+  (2026-10-20; 15 million connections a day). A plain `Dockerfile` deploys when
+  no framework is detected (2026-10-27). `vercel.toml` joined `vercel.json` and
+  `vercel.ts` (2026-11-02). Node.js 26 became the default (2026-10-29).
+  Monorepo projects that are skipped no longer count against deployment limits
+  (2026-10-21).
+- **Vercel CI** (beta, 2026-10-28) runs only the Turborepo tasks a push affects,
+  each on its own machine, and reports a GitHub check; since 2026-11-03 it runs
+  on private GitHub repositories with no Vercel project.
+- **Vercel Schedules** (blog 2026-11-04, public beta 2026-11-05) is the
+  successor to Cron Jobs: one-time and recurring schedules, created in
+  `vercel.json` or at runtime through the SDK, CLI or API, aimed at a private
+  function, an HTTP path or a queue topic, run on demand, testable in previews.
+  $5 per million runs and $10 per million creations on Pro; 500 creations and
+  5,000 runs a month on Hobby.
+
+### Pricing, retention and terms
+
+- **Rollback history now has a price and a horizon.** Deployment Storage and
+  Functions Storage are billed at $0.10 per GB-month for existing Pro teams;
+  new Pro teams keep 30 days of deployments by default (2026-10-09); older
+  deployments of existing Pro teams are deleted from 2026-10-23 unless they opt
+  out; deleted deployments are removed for good sooner (2026-10-16). Corrected
+  in place under "Storage and backups" and "Instant Rollback".
+- **Data Cache becomes Runtime Cache** (2026-10-30). Reads and writes that were
+  not billed are charged from $0.40 per million read units and $4.00 per million
+  write units, varying by region. Hobby teams move on 2026-11-29 with a million
+  reads and 200,000 writes a month free; Pro teams are told their date.
+- **Spend Management in the CLI** (2026-10-23): `vercel budgets`. The changelog
+  repeats that "setting a budget does not stop usage on its own"; `--pause`
+  pauses production deployments of every project at 100%.
+- **Terms of Service** for Hobby and Pro, effective 2026-10-19: plan credits
+  expire at the end of the term and purchased credits after a year; a company
+  can manage accounts on its email domain, with notice; UK and EU consumers may
+  cancel for free after a change that harms their use.
+- The pricing page on 2026-11-08 still shows Hobby at $0 and Pro at $20 a month
+  with $20 of usage credit and free viewer seats.
+
+### Observability, firewall and security products
+
+- **Custom monitors** (2026-10-26, corrected in place above); Vercel Agent can
+  check an alert before it pages (2026-10-28). **Tracing** became generally
+  available (2026-11-06).
+- **AI traffic** in Observability (2026-10-28), and the AI Bots managed
+  ruleset now treats crawlers (indexing and training) and assistants (fetching
+  for a user) separately, on every plan (2026-10-29). IP geolocation became
+  city-level for nearly all requests (2026-10-29), which puts some visitors in
+  a different country, most often those on VPNs, hosting providers and leased
+  ranges.
+- **A Security Dashboard**, described in "Vercel for Enterprise" (2026-10-15),
+  "flags risks across your team and apps, including missing MFA, unprotected
+  preview deployments, long-lived credentials, and framework vulnerabilities",
+  each linked to the setting that fixes it.
+- **Security Review** (public beta 2026-11-03, Pro and Enterprise): Vercel
+  Agent reads the diff of every push to a connected GitHub repository against
+  the previous deployment, reports findings in the dashboard, a GitHub check and
+  pull request comments, takes team policies written in plain language, and can
+  open a fix. Billed at Agent rates; free until 2026-11-10.
+- **Builds refuse blocked npm packages** (2026-11-02): a list of package
+  versions blocked for malware or vulnerabilities is checked against the
+  lockfile, including one restored from the build cache, and against downloads
+  during installation; a hit fails the deployment and invalidates the cache.
+- **Leaked tokens are revoked** (2026-11-04): Truffle Security reports Vercel
+  tokens found in public GitHub, GitLab, Docker images, npm, PyPI, Hugging Face,
+  Android apps and Firefox add-ons, and a scanner reads each monthly Common Crawl.
+- **"Death to long-lived static credentials"** (2026-10-22): Marketplace vendors
+  that do not accept Vercel's OIDC tokens get a "Not secure" label by 2026-11-30
+  and are delisted in January 2027.
+
+### Agents and the MCP
+
+- The MCP server accepts any client with a Client ID Metadata Document
+  (2026-11-02, corrected in place above), shows deployments as an interactive
+  card in ChatGPT, its first MCP App (2026-11-02), and has a `submit_feedback`
+  tool (2026-10-23). The Vercel plugin reached OpenCode (2026-10-28) and Google
+  Antigravity (2026-10-29).
+- The CLI gained `vercel doctor`, which checks the install, the login, the team,
+  the project link and `vercel.json`, never prompts, and prints the command that
+  fixes each problem (2026-11-03); `--delete-project-after` for projects that
+  delete themselves after an hour to 30 days (2026-11-06); deploys with no account
+  (2026-10-22); and domain purchases an agent can prepare but only a person can
+  confirm (2026-10-09).
+- At Ship, Vercel said agents can use "over 200 CLI commands", and that
+  agent-triggered deployments grew 28 times in a year.
+
+### Security record
+
+No breach of Vercel was disclosed in the period. Its bulletins were about
+software its customers run, and in each one Vercel patched what it manages and
+put WAF rules in front of everything else:
+
+- **Node.js CVE-2026-111497** (bulletin 2026-10-21): an out-of-bounds write in
+  the bundled Brotli decoder, with memory disclosure and command execution shown
+  on 22.x, 24.x and 26.x. WAF rules went out the same day, outbound Brotli was
+  turned off for unpatched runtimes, and every new deployment used a patched
+  Node.js from 2026-10-28. Node.js 20 is past end of life and gets no fix.
+- **php2shell, CVE-2026-109618 and CVE-2026-109619** (2026-10-21): two critical
+  remote code executions in PHP 5.4 and later; WAF rules were in place before
+  disclosure.
+- **eMudhra** (bulletin 2026-10-27): the private keys of eight intermediate CAs
+  could be recovered (found 2026-10-17). Vercel stopped trusting the roots in its
+  builds, functions and sandboxes; Node.js 22.23.4, 24.22.1 and 26.12.1 and
+  certifi 2026.10.19 drop them.
+- **CVE-2026-98432** (bulletin 2026-11-01): remote code execution in the Linux
+  kernel through crafted IPv4 TCP packets, shown by Anthropic against a
+  Multipath TCP listener on 2026-10-27. Vercel patched hosts and guest kernels
+  across builds, functions, sandboxes, daemons, CI and its control plane.
+- **Name.com** (2026-10-31): a domain takeover campaign at the registrar
+  touched nine domains that originated on Vercel, since restored.
+- **Better Auth** (2026-11-03): twelve advisories, one critical; WAF rules.
+- **The Sandbox challenge** (results 2026-10-14): 1,285 reports, 57 valid,
+  $242,000 paid. A Linux kernel networking zero-day leaked host memory from
+  inside a microVM, shown against production sandboxes, and gave code execution
+  on the host, shown on the researcher's own Firecracker machines. A
+  cross-tenant snapshot swap worked because the host trusted a storage location
+  reported by the guest; it was fixed within a week. An intern found recycled
+  disk blocks readable across sandboxes.
+- **Next.js**, per OSV, since 2026-09-30: critical remote code executions in
+  `next/og` (GHSA-vcvr-r3jv-pc5j, 2026-09-30, 16.2.0 to before 16.3.6), in Image
+  Optimization with SVG files (GHSA-2464-fhr4-w9xw, 2026-10-22, every version
+  from 10.0.0 before 15.5.28, and 16.x before 16.4.1) and in `use cache`
+  functions returning typed arrays (GHSA-673q-mjm6-r5xr, 2026-10-22, 16.x before
+  16.4.1); a high SSRF in Image Optimization (CVE-2026-94483, 2026-10-07); a
+  high denial of service through Server Actions (CVE-2026-94482, 2026-10-22);
+  and cache poisoning "in self-hosted applications" (CVE-2026-94543, moderate,
+  2026-10-07).
+
+### Numbers on 2026-11-08
+
+- The `vercel` CLI reached 65.12.1 on 2026-11-06: 33 stable releases since
+  2026-09-30, and 280 in 2026.
+- shields.io: `vercel/next.js` about 143,000 stars, `vercel/vercel` about
+  17,000. Its open-issue counts leave out pull requests, so they cannot be
+  compared with the API's on 2026-09-30.
+- Hacker News: no story about Vercel itself above 100 points in the period.
+  One comment (2026-10-13) describes acquaintances whose Vercel bill "goes
+  through the roof" after a launch on Hacker News drew bot traffic, "even with
+  bot protection from CF".
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **The pattern of this period's bulletins is the case for a self-hosted panel
+  being told, not the case against it.** For Node.js, PHP, the CA roots and the
+  kernel, Vercel's customers were patched by Vercel. On Skifity the language
+  runtime is inside each app's image and the kernel belongs to the operator.
+  Skifity warns about the framework versions in its table (Phase 97), scans
+  images nightly (`internal/vulnscan`, `app.vulnerable`), and its hardening
+  report says when updates are off or a reboot is pending
+  (`internal/provision/hardening.go`).
+- **Long-lived workers are no longer Skifity's alone.** Daemons are Vercel's
+  answer to processes from one build (Phase 106), corrected in the table's
+  first row. Vercel still has no disk for them and no databases with a disk;
+  Drives mount only in a Sandbox.
+- **Rollback now has a horizon on both sides.** Skifity keeps ten images per
+  app (`registry.KeptPerApp`) and refuses a rollback to one it has collected;
+  Vercel Pro now keeps 30 days by default and bills the storage.
+- **MCP.** Vercel's OAuth with Client ID Metadata Documents lets any assistant
+  connect after consent. Skifity's `/api/mcp` takes a pasted bearer token only
+  (`internal/api/mcp_handlers.go`); OAuth is gap 1 of `openship.md`, still open.
+
+This file's gaps, against the code:
+
+1. A preview's own database: **closed** (Phase 76), seeded if asked (Phase 107).
+2. Preview values for variables: **closed** (Phase 93).
+3. Previews protected by default, signing in with the panel's accounts:
+   **open**. A preview still only inherits the app's password
+   (`internal/kube/password.go`), and the guard holds no session.
+4. Promote, and hold production: **mostly closed** — promotion (Phase 103),
+   locked deploys and a rollback plan (Phase 94).
+5. Skip apps a push did not touch: **closed** (watch paths, Phase 96).
+6. Framework advisories: **closed** (Phase 97), but the table has fallen behind;
+   see new gap 1.
+7. Request metrics and logs that outlive the pod: **closed** (`internal/traffic`,
+   `internal/logdrain`).
+8. A remote MCP endpoint: **closed** (Phase 87), without OAuth.
+9. Redeploy without the build cache: **open**. `skifity deploy --force` rebuilds,
+   but every build imports the BuildKit cache (`--import-cache`,
+   `internal/builder/job.go`); see new gap 2.
+10. A rate-limit action in the firewall: **closed** ("Limit the rate",
+    `internal/guard/limiter.go`, `docs/firewall.md`).
+11. One wildcard certificate: **open**; DNS-01 is still absent, though records
+    can now be kept at four DNS providers (`internal/dnsprov`).
+12. Branch deploys: **partly**; a preview of a branch can be started by hand
+    (Phase 112), not on every push.
+13. App-scoped deploy tokens: **open**. `APIToken` (`internal/store/models.go`)
+    has scopes, an expiry and a network allowlist, and no app.
+14. Log drains: **closed** (`internal/logdrain`).
+15. Canary releases: **open**.
+
+Rows of the table above that no longer describe Skifity: Monorepo (watch
+paths); Promotion without rebuild (Phase 103); Observability (requests, errors
+and response times per app, usage history, log drains); Alerts (`app.alert`,
+`server.alert`, server-error thresholds, `backup.missed`,
+`certificate.expiring`); Firewall (a rate-limit action); Preview environments
+(their own databases, preview values, whole-environment previews, a preview by
+hand); CLI, API, IaC (`skifity.yaml` with plan and apply, Phase 108); MCP (served
+by the panel); Notifications (ten kinds); Team (a viewer role, Phase 85); DX (two
+releases, and a real cluster on every push).
+
+New gaps:
+
+1. **Keep the advisory table current.** *What:* add this period's critical
+   Next.js advisories to `knownAdvisories`, let `ID` hold a GHSA where there is no
+   CVE yet, and make reading the advisory databases a step of every release in
+   `docs/releasing.md`, so the table never ships older than the release.
+   *Evidence:* `internal/builder/advisories.go` lists CVE-2025-29927 and
+   CVE-2025-55182 only. It misses GHSA-2xp9-vwfh-vxw4 (2026-09-08) and the three
+   critical remote code executions since 2026-09-30 above; GHSA-2464-fhr4-w9xw
+   alone affects every Next.js from 10.0.0 before 15.5.28 and 16.x before
+   16.4.1, so nearly every Next.js app deployed today would warn.
+   (GHSA-p293-qw3h-jr36 is Windows-hosted servers only and does not apply.)
+   *Size:* S. *Without a cluster:* yes.
+2. **Rebuild without the cache, and every app at once.** *What:* a "Rebuild
+   from scratch" on the app and `skifity deploy --no-cache`, which leave out
+   `--import-cache`; and a team action that rebuilds, without the cache, every
+   app whose detected runtime is named (Node.js, PHP), for the day a runtime is
+   patched. *Evidence:* Vercel moved every new deployment to a patched Node.js
+   within a week of CVE-2026-111497, and its builds now refuse a blocked
+   package even when the lockfile came from the cache. On Skifity the runtime
+   is a layer of each app's image, and a forced rebuild can take that layer from
+   the BuildKit cache. *Size:* S–M. *Without a cluster:* the Job rendering and
+   the selection, yes; a build, no.
+3. **One page of what is weak, per team.** *What:* members without a second
+   factor where the team does not require one, tokens with no expiry or unused
+   for months, apps with a fixable critical vulnerability or a framework
+   advisory, previews open to anyone, servers whose hardening report warns —
+   each linked to the place that fixes it. *Evidence:* Vercel's Security
+   Dashboard. Skifity has every piece separately — team-required two factors
+   (Phase 91), token expiry (`APIToken`), the image scan per app
+   (`web/src/components/app/security-tab.tsx`), advisories in the build log,
+   the hardening report per server — and Settings → Security holds only the
+   recovery key and key rotation. *Size:* M. *Without a cluster:* yes.
+4. **A ready-made rule for AI crawlers.** *What:* a firewall condition "known
+   AI crawler", from a list compiled into each release (no lookup, so nothing
+   phones home), kept apart from assistants fetching a page for a person.
+   *Evidence:* Vercel's AI Bots ruleset (2026-10-29). Skifity's rules can match
+   the `User-Agent` header (`docs/firewall.md`), so each team writes and
+   maintains its own list. *Size:* S. *Without a cluster:* the rule engine, yes.
+
 ## Sources
 
 All read 2026-09-30.
@@ -691,3 +981,36 @@ All read 2026-09-30.
 * https://github.com/vercel/vercel (licence) and the GitHub search API (stars, open issues)
 * https://registry.npmjs.org/vercel (release cadence)
 * https://letsencrypt.org/docs/rate-limits/
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://vercel.com/atom (the changelog and blog feed; entries dated 2026-09-30 to 2026-11-07, read from their content). Among them:
+  * https://vercel.com/blog/vercel-ship-2026-recap, https://vercel.com/blog/backends-on-vercel-python-containers-and-daemons and https://vercel.com/changelog/vercel-daemons-is-now-in-public-beta (2026-10-15)
+  * https://vercel.com/changelog/vercel-drives-is-now-generally-available and https://vercel.com/changelog/bring-your-own-cloud-on-aws-is-now-generally-available (2026-10-15)
+  * https://vercel.com/blog/vercel-for-enterprise (2026-10-15, the Security Dashboard)
+  * https://vercel.com/changelog/new-pro-teams-now-default-to-30-day-deployment-retention and https://vercel.com/changelog/deployment-storage-pricing-expands-to-existing-teams (2026-10-09)
+  * https://vercel.com/changelog/deleted-deployments-are-permanently-removed-sooner (2026-10-16)
+  * https://vercel.com/changelog/deploy-with-vercel-drop-without-an-account (2026-10-19) and https://vercel.com/changelog/deploy-without-an-account-using-vercel-cli (2026-10-22)
+  * https://vercel.com/changelog/updates-to-hobby-and-pro-terms-of-service (2026-10-19)
+  * https://vercel.com/changelog/websocket-support-is-now-generally-available (2026-10-20)
+  * https://vercel.com/changelog/skipped-monorepo-deployments-no-longer-count-against-limits (2026-10-21)
+  * https://vercel.com/blog/death-to-long-lived-static-credentials (2026-10-22)
+  * https://vercel.com/changelog/vercel-cli-adds-spend-management and https://vercel.com/changelog/send-feedback-from-vercel-mcp (2026-10-23)
+  * https://vercel.com/changelog/create-custom-monitors-in-vercel-observability (2026-10-26)
+  * https://vercel.com/changelog/deploy-a-container-from-a-plain-dockerfile (2026-10-27)
+  * https://vercel.com/blog/introducing-vercel-ci, https://vercel.com/changelog/ai-traffic-insights-now-available-in-vercel-observability, https://vercel.com/changelog/vercel-agent-can-now-validate-alerts-before-paging-you and https://vercel.com/changelog/vercel-plugin-now-available-in-opencode (2026-10-28)
+  * https://vercel.com/changelog/block-ai-crawlers-and-assistants-independently-with-managed-rules, https://vercel.com/changelog/improved-ip-geolocation-data, https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel and https://vercel.com/changelog/vercel-plugin-is-now-available-in-antigravity (2026-10-29)
+  * https://vercel.com/changelog/data-cache-is-moving-to-runtime-cache, https://vercel.com/changelog/add-liveness-checks-to-your-daemons and https://vercel.com/changelog/vercel-daemons-can-now-call-services-with-bindings (2026-10-30)
+  * https://vercel.com/changelog/vercel-mcp-now-supports-client-id-metadata-documents, https://vercel.com/changelog/monitor-vercel-deployments-in-chatgpt, https://vercel.com/changelog/projects-can-now-be-configured-with-vercel-toml and https://vercel.com/changelog/blocking-malicious-npm-packages-before-and-during-installation (2026-11-02)
+  * https://vercel.com/blog/vercel-security-review, https://vercel.com/changelog/vercel-security-review-public-beta, https://vercel.com/changelog/vercel-cli-now-diagnoses-setup-problems-with-vercel-doctor and https://vercel.com/changelog/vercel-ci-no-longer-requires-a-linked-vercel-project (2026-11-02 and 2026-11-03)
+  * https://vercel.com/blog/introducing-vercel-schedules, https://vercel.com/changelog/vercel-schedules-is-now-in-public-beta and https://vercel.com/changelog/vercel-token-scanning-expands-to-more-public-sources (2026-11-04 and 2026-11-05)
+  * https://vercel.com/changelog/vercel-tracing-is-now-generally-available and https://vercel.com/changelog/vercel-cli-can-now-set-new-projects-to-expire (2026-11-06)
+  * https://vercel.com/changelog/agents-can-now-buy-domains-with-the-vercel-cli (2026-10-09)
+  * https://vercel.com/blog/findings-from-the-1-million-dollar-vercel-sandbox-challenge (2026-10-14)
+* https://vercel.com/kb/bulletin and its bulletins: node-js-security-advisory (2026-10-21), php2shell-security-bulletin (2026-10-21), emudhra-security-advisory-compromised-intermediate-ca-keys (2026-10-27), name-com-domain-takeover-notice (2026-10-31), linux-kernel-security-advisory-cve-2026-98432 (2026-11-01), better-auth-november-2026-security-release (2026-11-03)
+* https://vercel.com/pricing
+* https://api.osv.dev/v1/query (package `next`, npm: advisories published since 2026-09-01, with affected ranges)
+* https://registry.npmjs.org/vercel (release dates)
+* https://img.shields.io/github/stars/vercel/next.js.json and https://img.shields.io/github/stars/vercel/vercel.json
+* https://hn.algolia.com/api/v1/search (stories and comments mentioning Vercel since 2026-09-30); https://news.ycombinator.com/item?id=50078478 (bot traffic and a Vercel bill, 2026-10-13)
+* Skifity, for "For Skifity": `internal/builder/advisories.go`, `internal/builder/job.go`, `internal/deploy/deployer.go`, `internal/registry/registry.go`, `internal/api/mcp_handlers.go`, `internal/api/webhook_handlers.go`, `internal/kube/password.go`, `internal/guard`, `internal/store/models.go`, `internal/vulnscan`, `internal/provision/hardening.go`, `internal/dnsprov`, `internal/traffic`, `internal/logdrain`, `internal/cli/commands.go`, `web/src/components/app/security-tab.tsx`, `web/src/pages/settings.tsx`, `docs/firewall.md`, `docs/releasing.md`, `docs/progress.md`, `docs/research/competitors/openship.md`

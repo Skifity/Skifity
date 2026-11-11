@@ -9,6 +9,7 @@ import (
 
 	"skifity/internal/api"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 )
 
@@ -173,8 +174,9 @@ func (w *Watcher) checkServerAlerts(ctx context.Context, server store.Server, no
 				Title:  serverAlertTitle(server.Name, a.name),
 				Body:   a.detail,
 				Level:  "warning",
-				Path:   "/servers/" + server.ID,
+				Path:   panelpath.Server(server.ID),
 				Fields: map[string]string{"Server": server.Name},
+				Fix:    serverAlertFix(a.name),
 			})
 		}
 	}
@@ -184,7 +186,7 @@ func (w *Watcher) checkServerAlerts(ctx context.Context, server store.Server, no
 				Title:  server.Name + " is back under its " + alertNoun(was) + " threshold",
 				Body:   "Nothing to do; this is the end of the earlier warning.",
 				Level:  "success",
-				Path:   "/servers/" + server.ID,
+				Path:   panelpath.Server(server.ID),
 				Fields: map[string]string{"Server": server.Name},
 			})
 		}
@@ -197,6 +199,19 @@ func (w *Watcher) checkServerAlerts(ctx context.Context, server store.Server, no
 			w.log.Warn("could not record a server's alerts", "server", server.ID, "error", err)
 		}
 		w.publish(server.TeamID, "server", map[string]any{"id": server.ID, "alerts": names})
+	}
+}
+
+// serverAlertFix is what to do about a server's threshold going off.
+func serverAlertFix(name string) string {
+	switch name {
+	case "disk":
+		return "Free space on it before it reaches 90% (df -h and du on the server say where it went), " +
+			"give it a bigger disk, or move some of its apps to another server."
+	case "memory":
+		return "Give the busiest apps on it less under Scaling, move some to another server, or add one."
+	default:
+		return "Lower the CPU the busiest apps on it may use under Scaling, or add a server to share the load."
 	}
 }
 

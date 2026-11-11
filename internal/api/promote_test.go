@@ -1,11 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"skifity/internal/cli"
 	"skifity/internal/store"
 )
 
@@ -150,5 +153,38 @@ func TestAPromotionRefusedLeavesTheImageAsItWas(t *testing.T) {
 	}
 	if after, _ := h.db.GetApp(t.Context(), target.ID); after.Image != "valkey/valkey:8" {
 		t.Fatalf("after a refused promotion the app is set to run %s", after.Image)
+	}
+}
+
+// `skifity promote --to production`, from staging's folder: the version
+// staging runs is deployed to production's app of the same name, through the
+// same route the panel's button uses, and nothing is built.
+func TestTheCLIPromotesToAnEnvironmentByName(t *testing.T) {
+	h := newHarness(t)
+	deployer := &capturingDeployer{fakeDeployer: fakeDeployer{log: &recorder{}}}
+	h.api.deployer = deployer
+	acme := h.newTenant("acme")
+	production := store.App{EnvironmentID: acme.env.ID, Name: "web", Slug: "web", SourceType: "git",
+		RepoURL: "https://github.com/acme/shop", Replicas: 1}
+	if err := h.db.CreateApp(t.Context(), &production); err != nil {
+		t.Fatal(err)
+	}
+	staging, version := stagingOf(t, h, acme, "web")
+	t.Setenv("SKIFITY_CONFIG", filepath.Join(t.TempDir(), "none.json"))
+	t.Setenv("SKIFITY_URL", h.server.URL)
+	t.Setenv("SKIFITY_TOKEN", acme.token)
+
+	var out, errs bytes.Buffer
+	if code := cli.Run(t.Context(), []string{"promote", "--app", staging.ID, "--to", "production", "--follow=false"}, &out, &errs); code != 0 {
+		t.Fatalf("promote exited %d:\n%s%s", code, out.String(), errs.String())
+	}
+	if len(deployer.requests) != 1 {
+		t.Fatalf("%d deploys were asked for", len(deployer.requests))
+	}
+	if req := deployer.requests[0]; req.AppID != production.ID || req.Trigger != "promote" || req.Image != version.Image {
+		t.Errorf("the deploy asked for was %+v", req)
+	}
+	if !strings.Contains(out.String(), "nothing is rebuilt") {
+		t.Errorf("promote said: %s", out.String())
 	}
 }

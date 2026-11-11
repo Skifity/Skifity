@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -24,6 +24,7 @@ import { CloneEnvironmentDialog } from "@/components/environment-clone"
 import { EnvironmentConfinement } from "@/components/environment-confinement"
 import { EnvironmentPreviews } from "@/components/environment-previews"
 import { EnvironmentQuota } from "@/components/environment-quota"
+import { BackupStorageWhere, useBackupStorage } from "@/components/backup-storage"
 import { useDeleteConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader, Section } from "@/components/page"
@@ -47,7 +48,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   Item,
   ItemActions,
@@ -68,6 +69,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDatabaseEngines } from "@/hooks/use-database-engines"
 import { useEvents } from "@/hooks/use-events"
@@ -95,6 +97,10 @@ export function ProjectDetailPage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const [newEnvironment, setNewEnvironment] = useState(false)
   const [cloning, setCloning] = useState(false)
+  // ?clone=<environment> opens the copy of that environment: where an app's
+  // Promote, with nowhere to promote to, sends somebody to make somewhere.
+  const [params, setParams] = useSearchParams()
+  const cloneFrom = params.get("clone")
   const [editing, setEditing] = useState(false)
   // The API's own lines: a member may change a project's name, only an
   // admin may delete one of its environments.
@@ -139,11 +145,14 @@ export function ProjectDetailPage() {
   // repair it, and that effect would render the broken state first.
   const environmentId = items.some((environment) => environment.id === chosen)
     ? chosen!
-    : (items[0]?.id ?? "")
+    : items.some((environment) => environment.id === cloneFrom)
+      ? cloneFrom!
+      : (items[0]?.id ?? "")
   const setEnvironmentId = setChosen
   // Derived from the same list rather than fetched again: the row is already
   // here, and a second query would be a second source of truth for it.
   const chosenEnvironment = items.find((environment) => environment.id === environmentId)
+  const cloneAsked = cloneFrom === environmentId && chosenEnvironment?.kind === "standard"
 
   const remove = useMutation({
     mutationFn: () => api.delete(`/api/projects/${projectId}`),
@@ -343,8 +352,20 @@ export function ProjectDetailPage() {
       />
       <CloneEnvironmentDialog
         environment={chosenEnvironment}
-        open={cloning}
-        onOpenChange={setCloning}
+        open={cloning || cloneAsked}
+        onOpenChange={(open) => {
+          setCloning(open)
+          if (!open && cloneFrom !== null) {
+            setParams(
+              (previous) => {
+                const next = new URLSearchParams(previous)
+                next.delete("clone")
+                return next
+              },
+              { replace: true },
+            )
+          }
+        }}
         onCloned={(environment) => setEnvironmentId(environment.id)}
       />
       {/* Mounted only while open, so it starts from the project as it is now
@@ -836,11 +857,20 @@ export function NewDatabaseDialog({
   // copied in when the engine changes.
   const [version, setVersion] = useState<string | null>(null)
   const [storage, setStorage] = useState("10")
+  const backupStorage = useBackupStorage()
+  // null is "what the panel does by default": nothing is sent, and the
+  // panel's own setting decides.
+  const [backup, setBackup] = useState<boolean | null>(null)
 
   const chosen = engines.data?.find((item) => item.name === engine)
   const versionValue = version ?? chosen?.default_version ?? ""
   // A cache keeps nothing on a disk, so it is asked for none.
   const keepsData = chosen?.storage ?? true
+  // A daily backup needs somewhere to put it and an engine the panel backs
+  // up. The engine's reason is the alert below; the storage's is said here.
+  const noStorage = backupStorage.data?.configured === false
+  const canBackUp = (chosen?.backups ?? true) && !noStorage
+  const backupValue = canBackUp && (backup ?? backupStorage.data?.default_backups ?? true)
 
   const create = useMutation({
     mutationFn: () =>
@@ -849,6 +879,7 @@ export function NewDatabaseDialog({
         engine,
         version: versionValue || undefined,
         storage_gb: keepsData ? Number(storage) || 10 : undefined,
+        backup: canBackUp && backup !== null ? backup : undefined,
       }),
     onSuccess: (database) => {
       void queryClient.invalidateQueries({ queryKey: ["databases", environmentId] })
@@ -954,6 +985,30 @@ export function NewDatabaseDialog({
                 onChange={(event) => setStorage(event.target.value)}
               />
               <FieldDescription>{t("databases.storageHelp")}</FieldDescription>
+            </Field>
+          )}
+          {/* Only once it is known whether there is storage: a switch that
+              starts off and turns itself on reads as a decision being made. */}
+          {(chosen?.backups ?? true) && backupStorage.data && (
+            <Field orientation="horizontal" data-disabled={!canBackUp || undefined}>
+              <FieldContent>
+                <FieldLabel htmlFor="database-backup">{t("databases.backupDaily")}</FieldLabel>
+                <FieldDescription>
+                  {noStorage ? (
+                    <>
+                      {t("databases.backupDailyNoStorage")} <BackupStorageWhere />
+                    </>
+                  ) : (
+                    t("databases.backupDailyHelp")
+                  )}
+                </FieldDescription>
+              </FieldContent>
+              <Switch
+                id="database-backup"
+                checked={backupValue}
+                onCheckedChange={setBackup}
+                disabled={!canBackUp}
+              />
             </Field>
           )}
           {create.error && <ErrorDisplay error={create.error} compact />}

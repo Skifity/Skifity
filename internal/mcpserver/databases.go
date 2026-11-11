@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -45,6 +46,10 @@ import (
 // `skifity db import` already reads it. Stopping, starting and resizing are
 // here: each is put back with its opposite, except a disk that has grown,
 // which the tool says.
+//
+// DELETE /api/apps/{id} is left out for the restore's reason: an app's disks
+// go with it and nothing brings them back. apps.go says more, and
+// TestNoToolDeletesAnApp holds it.
 
 type databaseSummary struct {
 	ID        string `json:"id"`
@@ -76,24 +81,56 @@ type createDatabaseInput struct {
 	Version       string `json:"version,omitempty" jsonschema:"one of the versions offered, such as 16 for postgres or 8.4 for mysql; left out means the current stable one"`
 	StorageGB     int    `json:"storage_gb,omitempty" jsonschema:"the disk, in GB: at least 5, which is also what it gets when left out. memcached has none"`
 	Instances     int    `json:"instances,omitempty" jsonschema:"PostgreSQL only: an odd number, 3 to survive losing a server. Every other engine runs one"`
+	Backup        *bool  `json:"backup,omitempty" jsonschema:"whether it is backed up every day. Left out, it is, when the panel has backup storage and its administrator has not turned that default off. Pass false only when the person does not want it"`
 }
 
 type createDatabaseOutput struct {
 	Database databaseSummary `json:"database"`
+	Backup   createdBackup   `json:"backup"`
 	Note     string          `json:"note"`
 }
 
+// createdBackup is what creating a database did about its backups.
+type createdBackup struct {
+	Enabled  bool   `json:"enabled"`
+	Reason   string `json:"reason,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+}
+
+// backupReasons say, for the person, why a new database is not backed up.
+// The keys are the panel's: see internal/api/backup_defaults.go.
+var backupReasons = map[string]string{
+	"declined":    "It is not backed up, as asked; list_backups and run_backup still work for it.",
+	"not_offered": "Its engine is not backed up by the panel; the panel's backups page says why.",
+	"preview":     "It is in a preview environment, which is thrown away with its pull request, so it is not backed up.",
+	"turned_off":  "It is not backed up: the panel's administrator turned off backing up new databases. Pass backup true to ask for it.",
+	"no_storage":  "It is not backed up: the panel has no backup storage yet. A panel administrator sets it up under Settings → General → Backup storage.",
+	"failed":      "Its backup schedule could not be saved; the panel's log says why. Tell the person, who can set one on its Backups tab.",
+}
+
 type linkDatabaseInput struct {
-	DatabaseID string `json:"database_id" jsonschema:"the database, as returned by list_databases"`
-	AppID      string `json:"app_id" jsonschema:"the app that will use it, in the same environment"`
-	Variable   string `json:"variable,omitempty" jsonschema:"the variable the app reads the connection string from; left out means the engine's own: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse, MEMCACHED_URL for memcached"`
+	DatabaseID string      `json:"database_id" jsonschema:"the database, as returned by list_databases"`
+	AppID      string      `json:"app_id" jsonschema:"the app that will use it, in the same environment"`
+	Variable   string      `json:"variable,omitempty" jsonschema:"the variable the app reads the connection string from; left out means the engine's own: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse, MEMCACHED_URL for memcached"`
+	Pieces     *linkPieces `json:"pieces,omitempty" jsonschema:"only for software that reads a host, port, database name, user and password instead of a URL: the variable each piece arrives as. Give only the ones the app reads. Left out, a link being changed keeps the pieces it has"`
+}
+
+// linkPieces names the variables a database's connection arrives in, piece
+// by piece. The password is a secret like the URL; nobody is shown it.
+type linkPieces struct {
+	Host     string `json:"host,omitempty" jsonschema:"the variable the host arrives as, such as DB_HOST"`
+	Port     string `json:"port,omitempty" jsonschema:"the variable the port arrives as, such as DB_PORT"`
+	Name     string `json:"name,omitempty" jsonschema:"the variable the database's name arrives as, such as DB_DATABASE; not for redis, valkey, dragonfly or memcached"`
+	User     string `json:"user,omitempty" jsonschema:"the variable the user arrives as, such as DB_USERNAME; not for redis, valkey, dragonfly or memcached"`
+	Password string `json:"password,omitempty" jsonschema:"the variable the password arrives as, such as DB_PASSWORD; not for memcached"`
 }
 
 type linkDatabaseOutput struct {
-	DatabaseID string `json:"database_id"`
-	AppID      string `json:"app_id"`
-	Variable   string `json:"variable"`
-	Note       string `json:"note"`
+	DatabaseID string   `json:"database_id"`
+	AppID      string   `json:"app_id"`
+	Variable   string   `json:"variable"`
+	Pieces     []string `json:"pieces,omitempty"`
+	Note       string   `json:"note"`
 }
 
 type databaseIDInput struct {
@@ -198,7 +235,9 @@ func (s *Server) registerDatabases() {
 		Annotations: changes("Link a database to an app", true, true),
 		Description: "Give an app a database's connection string, password included, as a secret variable, and roll the app out so it has it. " +
 			"Neither you nor anybody else is shown the value; the app reads it at startup. Both have to be in the same environment. " +
-			"It replaces a variable of the same name the app already had. Linking before the database is running is fine; the app may fail to connect until it is.",
+			"It replaces a variable of the same name the app already had. Linking before the database is running is fine; the app may fail to connect until it is. " +
+			"For software that reads a host, port, database name, user and password instead of a URL, pieces names the variables those arrive as too; " +
+			"they stay current when the password changes. Do not set those as variables yourself: they would keep an old password.",
 	}, s.linkDatabase)
 
 	addTool(s, &mcp.Tool{
@@ -288,14 +327,26 @@ func (s *Server) createDatabase(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if in.Instances > 0 {
 		body["instances"] = in.Instances
 	}
-	var database store.Database
-	if err := s.client.Do(ctx, "POST", "/api/environments/"+url.PathEscape(in.EnvironmentID)+"/databases", body, &database); err != nil {
+	if in.Backup != nil {
+		body["backup"] = *in.Backup
+	}
+	var created struct {
+		store.Database
+		Backup createdBackup `json:"backup"`
+	}
+	if err := s.client.Do(ctx, "POST", "/api/environments/"+url.PathEscape(in.EnvironmentID)+"/databases", body, &created); err != nil {
 		return errorResult(err), createDatabaseOutput{}, nil
+	}
+	database := created.Database
+	backup := "It is backed up every day at " + created.Backup.Schedule + " (cron, UTC)."
+	if !created.Backup.Enabled {
+		backup = backupReasons[created.Backup.Reason]
 	}
 	out := createDatabaseOutput{
 		Database: summariseDatabase(database),
+		Backup:   created.Backup,
 		Note: "It is being created, which takes a minute or two. Give it to an app with link_database now, " +
-			"and call get_database_status to see when it is running.",
+			"and call get_database_status to see when it is running. " + backup,
 	}
 	return textResult(fmt.Sprintf("Creating the %s database %s (%s). %s", database.Engine, database.Name, database.ID, out.Note)), out, nil
 }
@@ -305,21 +356,27 @@ func (s *Server) linkDatabase(ctx context.Context, _ *mcp.CallToolRequest, in li
 	if in.Variable != "" {
 		body["var_name"] = in.Variable
 	}
+	if in.Pieces != nil {
+		body["pieces"] = store.LinkPieces{Host: in.Pieces.Host, Port: in.Pieces.Port, Name: in.Pieces.Name,
+			User: in.Pieces.User, Password: in.Pieces.Password}
+	}
 	if err := s.client.Do(ctx, "POST", databasePath(in.DatabaseID, "/link"), body, nil); err != nil {
 		return errorResult(err), linkDatabaseOutput{}, nil
 	}
 
 	// The panel answers only that it worked. Which name the variable got,
 	// when none was asked for, is the engine's default, and the panel's own
-	// record says it rather than a copy of that rule here.
+	// record says it rather than a copy of that rule here; so are the pieces
+	// a link being changed kept.
 	variable := in.Variable
+	var pieces []string
 	var detail struct {
 		Links []store.DatabaseLink `json:"links"`
 	}
 	if err := s.client.Do(ctx, "GET", databasePath(in.DatabaseID, ""), nil, &detail); err == nil {
 		for _, link := range detail.Links {
 			if link.AppID == in.AppID {
-				variable = link.VarName
+				variable, pieces = link.VarName, link.Pieces.Names()
 			}
 		}
 	}
@@ -328,11 +385,16 @@ func (s *Server) linkDatabase(ctx context.Context, _ *mcp.CallToolRequest, in li
 	}
 
 	out := linkDatabaseOutput{
-		DatabaseID: in.DatabaseID, AppID: in.AppID, Variable: variable,
+		DatabaseID: in.DatabaseID, AppID: in.AppID, Variable: variable, Pieces: pieces,
 		Note: "The app is being rolled out with the connection string as a secret variable. " +
 			"Its value is never shown, including by list_variables. If the app reads a different name, link again with that variable.",
 	}
-	return textResult(fmt.Sprintf("Linked: the app reads the database from %s. %s", variable, out.Note)), out, nil
+	text := fmt.Sprintf("Linked: the app reads the database from %s.", variable)
+	if len(pieces) > 0 {
+		text += fmt.Sprintf(" Its pieces arrive as %s, the password a secret, kept current when the password changes.",
+			strings.Join(pieces, ", "))
+	}
+	return textResult(text + " " + out.Note), out, nil
 }
 
 func (s *Server) getDatabaseStatus(ctx context.Context, _ *mcp.CallToolRequest, in databaseIDInput) (*mcp.CallToolResult, databaseStatusOutput, error) {

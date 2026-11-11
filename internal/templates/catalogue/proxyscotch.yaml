@@ -6,9 +6,11 @@ website: https://github.com/hoppscotch/proxyscotch
 services:
 - name: proxyscotch
   image: hoppscotch/proxyscotch:v0.1.4
+  needs_root: true
   port: 9159
   public: true
   mem_request_mb: 128
   mem_limit_mb: 1024
   cpu_request_m: 50
   cpu_limit_m: 1000
+notes: The image starts as root, so the environment needs the baseline pod security level.

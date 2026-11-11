@@ -63,6 +63,12 @@ databases:
   - n8n-worker
   - task-runners
   var_name: DATABASE_URL
+  vars:
+    host: DB_POSTGRESDB_HOST
+    port: DB_POSTGRESDB_PORT
+    name: DB_POSTGRESDB_DATABASE
+    user: DB_POSTGRESDB_USER
+    password: DB_POSTGRESDB_PASSWORD
 notes: In the original this stack shares /home/node/.n8n between n8n and n8n-worker. Skifity gives each
   app storage of its own, so those are separate directories here. If the apps need to see the same files,
   point them at object storage — MinIO is in this catalogue — rather than a path. This template installs

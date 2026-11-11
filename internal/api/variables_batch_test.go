@@ -122,8 +122,10 @@ func TestABatchWithOneBadLineChangesNothing(t *testing.T) {
 	}
 }
 
-// Build-time values change the image, so they wait for the next deploy
-// rather than rolling out the old one.
+// Build-time values change the image, so they are not rolled out over the
+// old one. An app that has never run has nothing to rebuild: its first deploy
+// builds with them, and the answer says so rather than promising a rebuild.
+// rebuild_test.go has the app that is running.
 func TestABatchOfBuildValuesAsksForARebuild(t *testing.T) {
 	h, deployer := withCountingDeployer(t)
 	acme := h.newTenant("acme")
@@ -133,10 +135,11 @@ func TestABatchOfBuildValuesAsksForARebuild(t *testing.T) {
 		"set": []map[string]any{{"key": "NEXT_PUBLIC_API", "value": "https://api.example", "build_time": true}},
 	})
 	var answer struct {
-		RequiresRebuild bool `json:"requires_rebuild"`
+		RequiresRebuild bool   `json:"requires_rebuild"`
+		NotRebuilt      string `json:"not_rebuilt"`
 	}
 	_ = json.Unmarshal([]byte(body), &answer)
-	if status != http.StatusOK || !answer.RequiresRebuild || deployer.syncs.Load() != 0 {
+	if status != http.StatusOK || answer.RequiresRebuild || answer.NotRebuilt != "not_deployed" || deployer.syncs.Load() != 0 {
 		t.Fatalf("answered %d %s after %d rollouts", status, body, deployer.syncs.Load())
 	}
 }

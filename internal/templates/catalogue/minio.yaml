@@ -9,6 +9,7 @@ services:
   # quay.io/minio/minio asks for credentials. pgsty/minio is the maintained
   # community build of the same source that Dokploy's template uses too.
   image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+  needs_root: true
   port: 9001
   # The image's own command is a bare `minio`, which prints its help and
   # exits: the server, its data and where the console listens are asked for.
@@ -32,4 +33,4 @@ inputs:
   label: Root password
   secret: true
   generate: true
-notes: The console is the address this app gets; the S3 API listens on port 9000 inside the environment. Create a bucket, then point Settings, then Storage at this MinIO to back up your databases. The image starts as root, so the environment needs the baseline pod security level.
+notes: The console is the address this app gets; the S3 API listens on port 9000 inside the environment. Create a bucket, then point Settings → General → Backup storage at this MinIO to back up your databases. The image starts as root, so the environment needs the baseline pod security level.

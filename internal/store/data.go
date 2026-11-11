@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -188,7 +189,10 @@ func (db *DB) ListDatabasesChangingPassword(ctx context.Context) ([]Database, er
 		WHERE credentials_next_enc != '' ORDER BY created_at`)
 }
 
-// DeleteDatabase removes a database record.
+// DeleteDatabase removes a database record. Its backup schedule goes with it,
+// by a trigger (migration 0064) that also runs when an environment, a project
+// or a team takes the database by cascade. Its backups stay: they are still in
+// the bucket, and still the team's to copy into a new database.
 func (db *DB) DeleteDatabase(ctx context.Context, id string) error {
 	res, err := db.Exec(ctx, `DELETE FROM databases WHERE id = ?`, id)
 	if err != nil {
@@ -213,6 +217,24 @@ func (db *DB) LinkDatabase(ctx context.Context, databaseID, appID, varName strin
 	return nil
 }
 
+// SetLinkPieces records the variables a link delivers its database's
+// connection in, piece by piece. A zero LinkPieces is none.
+func (db *DB) SetLinkPieces(ctx context.Context, databaseID, appID string, pieces LinkPieces) error {
+	encoded, err := json.Marshal(pieces)
+	if err != nil {
+		return err
+	}
+	res, err := db.Exec(ctx, `UPDATE database_links SET pieces = ? WHERE database_id = ? AND app_id = ?`,
+		string(encoded), databaseID, appID)
+	if err != nil {
+		return fmt.Errorf("record the link's pieces: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // UnlinkDatabase removes the injection.
 func (db *DB) UnlinkDatabase(ctx context.Context, databaseID, appID string) error {
 	res, err := db.Exec(ctx, `DELETE FROM database_links WHERE database_id = ? AND app_id = ?`, databaseID, appID)
@@ -227,12 +249,12 @@ func (db *DB) UnlinkDatabase(ctx context.Context, databaseID, appID string) erro
 
 // ListLinksForApp returns the databases linked into one app.
 func (db *DB) ListLinksForApp(ctx context.Context, appID string) ([]DatabaseLink, error) {
-	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, created_at FROM database_links WHERE app_id = ?`, appID)
+	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, pieces, created_at FROM database_links WHERE app_id = ?`, appID)
 }
 
 // ListLinksForDatabase returns the apps a database is linked into.
 func (db *DB) ListLinksForDatabase(ctx context.Context, databaseID string) ([]DatabaseLink, error) {
-	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, created_at FROM database_links WHERE database_id = ?`, databaseID)
+	return db.queryLinks(ctx, `SELECT database_id, app_id, var_name, pieces, created_at FROM database_links WHERE database_id = ?`, databaseID)
 }
 
 func (db *DB) queryLinks(ctx context.Context, query string, args ...any) ([]DatabaseLink, error) {
@@ -244,9 +266,12 @@ func (db *DB) queryLinks(ctx context.Context, query string, args ...any) ([]Data
 	out := []DatabaseLink{}
 	for rows.Next() {
 		var l DatabaseLink
-		var created string
-		if err := rows.Scan(&l.DatabaseID, &l.AppID, &l.VarName, &created); err != nil {
+		var pieces, created string
+		if err := rows.Scan(&l.DatabaseID, &l.AppID, &l.VarName, &pieces, &created); err != nil {
 			return nil, fmt.Errorf("scan database link: %w", err)
+		}
+		if err := json.Unmarshal([]byte(pieces), &l.Pieces); err != nil {
+			return nil, fmt.Errorf("read the pieces of a database link: %w", err)
 		}
 		l.CreatedAt, _ = ParseTime(created)
 		out = append(out, l)
@@ -296,10 +321,39 @@ func (db *DB) GetBackupPolicy(ctx context.Context, targetType, targetID string) 
 	return p, nil
 }
 
+// DeleteBackupPolicy removes a target's schedule. Deleting a database or a
+// volume does this by itself; this is for a schedule found running for
+// something already gone.
+func (db *DB) DeleteBackupPolicy(ctx context.Context, targetType, targetID string) error {
+	if _, err := db.Exec(ctx, `DELETE FROM backup_policies WHERE target_type = ? AND target_id = ?`,
+		targetType, targetID); err != nil {
+		return fmt.Errorf("delete backup policy: %w", err)
+	}
+	return nil
+}
+
+// ListDatabasesWithoutBackupPolicy returns a team's databases that have no
+// schedule at all — not one that is off, which somebody chose — outside its
+// previews, which are thrown away with their pull request.
+func (db *DB) ListDatabasesWithoutBackupPolicy(ctx context.Context, teamID string) ([]Database, error) {
+	return db.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases
+		WHERE environment_id IN (SELECT e.id FROM environments e JOIN projects p ON p.id = e.project_id
+			WHERE p.team_id = ? AND e.kind != ?)
+		AND NOT EXISTS (SELECT 1 FROM backup_policies b
+			WHERE b.target_type = 'database' AND b.target_id = databases.id)
+		ORDER BY created_at`, teamID, string(EnvPreview))
+}
+
 // ListEnabledBackupPolicies feeds the scheduler.
+//
+// Only schedules whose database or volume still exists. Since 0064 a schedule
+// is deleted with its target, cascades included; the condition stays so that
+// a schedule left behind some other way is never run for nothing.
 func (db *DB) ListEnabledBackupPolicies(ctx context.Context) ([]BackupPolicy, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, target_type, target_id, schedule, retention, destination,
-		enabled, created_at, updated_at FROM backup_policies WHERE enabled = 1`)
+		enabled, created_at, updated_at FROM backup_policies WHERE enabled = 1
+		AND (target_type != 'database' OR target_id IN (SELECT id FROM databases))
+		AND (target_type != 'volume' OR target_id IN (SELECT id FROM volumes))`)
 	if err != nil {
 		return nil, fmt.Errorf("list backup policies: %w", err)
 	}
@@ -326,10 +380,11 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 	}
 	now := Now()
 	_, err := db.Exec(ctx, `INSERT INTO backups
-		(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+		 encrypted, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		b.ID, b.TargetType, b.TargetID, defaultStr(b.Status, "running"), defaultStr(b.Kind, "scheduled"),
-		b.Location, b.SizeBytes, b.ErrorMessage, b.Encrypted, now)
+		b.Location, b.SizeBytes, b.ErrorMessage, b.ErrorCode, b.Encrypted, now)
 	if err != nil {
 		return fmt.Errorf("create backup: %w", err)
 	}
@@ -337,10 +392,35 @@ func (db *DB) CreateBackup(ctx context.Context, b *Backup) error {
 	return nil
 }
 
+// RecordFailedBackup writes down a backup that could not start: no storage,
+// a passphrase that cannot be read, a database that is not running. Without
+// it a scheduled one that never started left nothing at all — no row on the
+// Backups tab, and on the next start a night the panel thought it had slept
+// through.
+func (db *DB) RecordFailedBackup(ctx context.Context, b *Backup) error {
+	if b.ID == "" {
+		b.ID = NewID("bak")
+	}
+	now := Now()
+	if _, err := db.Exec(ctx, `INSERT INTO backups
+		(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+		 encrypted, created_at, finished_at)
+		VALUES (?,?,?,'failed',?,'',0,?,?,0,?,?)`,
+		b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, b.ErrorCode,
+		now, now); err != nil {
+		return fmt.Errorf("record a backup that could not start: %w", err)
+	}
+	b.Status = "failed"
+	b.CreatedAt, _ = ParseTime(now)
+	b.FinishedAt = b.CreatedAt
+	return nil
+}
+
 // RecordSkippedBackup notes that a scheduled backup did not run, and why:
-// the database was stopped, so there was nothing to copy. Only the newest
-// skip is kept for a target, because a database stopped for a month would
-// otherwise fill its list with thirty rows saying the same thing.
+// the database was stopped, so there was nothing to copy, or something else
+// was being done to it. Only the newest skip is kept for a target, because a
+// database stopped for a month would otherwise fill its list with thirty rows
+// saying the same thing.
 func (db *DB) RecordSkippedBackup(ctx context.Context, b *Backup) error {
 	if b.ID == "" {
 		b.ID = NewID("bak")
@@ -352,10 +432,11 @@ func (db *DB) RecordSkippedBackup(ctx context.Context, b *Backup) error {
 			return fmt.Errorf("forget the earlier skipped backup: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO backups
-			(id, target_type, target_id, status, kind, location, size_bytes, error_message, encrypted,
-			 created_at, finished_at)
-			VALUES (?,?,?,'skipped',?,'',0,?,0,?,?)`,
-			b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, now, now); err != nil {
+			(id, target_type, target_id, status, kind, location, size_bytes, error_message, error_code,
+			 encrypted, created_at, finished_at)
+			VALUES (?,?,?,'skipped',?,'',0,?,?,0,?,?)`,
+			b.ID, b.TargetType, b.TargetID, defaultStr(b.Kind, "scheduled"), b.ErrorMessage, b.ErrorCode,
+			now, now); err != nil {
 			return fmt.Errorf("record a skipped backup: %w", err)
 		}
 		return nil
@@ -382,14 +463,15 @@ func (db *DB) FinishBackup(ctx context.Context, id, status, location string, siz
 // backupColumns is what every query reading backups selects, in the order
 // scanBackup reads it.
 const backupColumns = `id, target_type, target_id, status, kind, location, size_bytes,
-		error_message, created_at, finished_at, encrypted, verified_at, verify_error`
+		error_message, error_code, created_at, finished_at, encrypted, verified_at, verify_error`
 
 func scanBackup(row interface{ Scan(...any) error }) (Backup, error) {
 	var b Backup
 	var created string
 	var finished, verified sql.NullString
 	if err := row.Scan(&b.ID, &b.TargetType, &b.TargetID, &b.Status, &b.Kind, &b.Location,
-		&b.SizeBytes, &b.ErrorMessage, &created, &finished, &b.Encrypted, &verified, &b.VerifyError); err != nil {
+		&b.SizeBytes, &b.ErrorMessage, &b.ErrorCode, &created, &finished, &b.Encrypted, &verified,
+		&b.VerifyError); err != nil {
 		return b, err
 	}
 	b.CreatedAt, _ = ParseTime(created)

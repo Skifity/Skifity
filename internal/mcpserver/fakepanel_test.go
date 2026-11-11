@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -78,6 +79,16 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"engine_version": "17", "status": "running", "instances": 1, "storage_gb": 5,
 	}
 	deployment := map[string]any{"id": "dep_2", "app_id": "app_1", "number": 2, "status": "queued"}
+	// A version that crashed as it started, with what it printed.
+	crashed := map[string]any{
+		"id": "dep_1", "app_id": "app_1", "number": 1, "status": "failed", "error_code": "deploy.crashed",
+		"error_message": "The new version stopped as it started: The new version of web stopped as it started.",
+		"problem": map[string]any{
+			"code": "deploy.crashed", "title": "The new version stopped as it started", "severity": "error",
+			"retryable": false, "at": "2026-09-30T09:00:00Z",
+			"context": map[string]any{"kind": "exited", "exit_code": "1", "log_tail": "Error: DATABASE_URL is not set"},
+		},
+	}
 	backup := map[string]any{
 		"id": "bak_1", "target_type": "database", "target_id": "db_1", "status": "succeeded",
 		"kind": "manual", "location": "skifity/databases/db_1/bak_1.sql.gz", "size_bytes": 2048,
@@ -127,6 +138,10 @@ func newFakePanel(t *testing.T) *fakePanel {
 		return map[string]any{"items": values, "total": len(values)}
 	}
 
+	// A new database, and what was done about its backups.
+	createdDatabase := maps.Clone(database)
+	createdDatabase["backup"] = map[string]any{"enabled": true, "schedule": "17 3 * * *", "retention": 7}
+
 	// The built-in catalogue, and the same as the team sees it: its own
 	// catalogue's WordPress first, under the same id as the built-in one.
 	builtIn := []any{
@@ -137,7 +152,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 		},
 		map[string]any{
 			"id": "wordpress", "name": "WordPress", "category": "cms", "description": "The blogging platform.",
-			"services": []any{map[string]any{"name": "wordpress"}},
+			"services": []any{map[string]any{"name": "wordpress", "needs_root": true}},
 		},
 		map[string]any{
 			"id": "plausible", "name": "Plausible Analytics", "category": "analytics", "beta": true,
@@ -169,20 +184,56 @@ func newFakePanel(t *testing.T) *fakePanel {
 			"reachable": true, "ready_nodes": 1, "total_memory_mb": 4096, "used_memory_mb": 1024,
 			"nodes": []any{map[string]any{"name": "s1", "ready": true, "roles": []string{"control-plane"}}},
 		},
+		"GET /api/teams/{team}/attention": items(
+			map[string]any{
+				"kind": "deploy_failed", "severity": "error", "code": "deploy_failed",
+				"params": map[string]any{"app": "web", "number": 2}, "message": "Deployment #2 of web failed.",
+				"target_type": "app", "target_id": "app_1", "target_label": "web",
+				"project_name": "acme", "environment_name": "production", "since": "2026-09-30T03:00:00Z",
+				"path": "/apps/app_1?tab=deployments&deployment=dep_2",
+			},
+			map[string]any{
+				"kind": "no_channel", "severity": "warning", "code": "no_channel", "params": map[string]any{},
+				"message":     "Nobody is told when something breaks: the team has no notification channel.",
+				"target_type": "team", "target_id": "team_1", "target_label": "", "path": "/settings?tab=notifications",
+			},
+		),
 
 		"GET /api/environments/{env}/apps":       items(app),
 		"POST /api/environments/{env}/apps":      map[string]any{"app": app, "webhook": map[string]any{"registered": false}},
 		"GET /api/environments/{env}/databases":  items(database),
-		"POST /api/environments/{env}/databases": database,
+		"POST /api/environments/{env}/databases": createdDatabase,
 
-		"GET /api/apps/{app}/status":                 map[string]any{"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"}},
-		"POST /api/apps/{app}/deploy":                deployment,
-		"GET /api/apps/{app}/deployments":            items(deployment),
+		"GET /api/apps/{app}/status": map[string]any{
+			"phase": "running", "desired_replicas": 1, "ready_replicas": 1, "urls": []string{"https://web.example.test"},
+			"pending_changes": []any{
+				map[string]any{"setting": "build_command", "from": "npm run build", "to": "npm run build:prod"},
+				map[string]any{"setting": "variable", "key": "NEXT_PUBLIC_API"},
+			},
+		},
+		"POST /api/apps/{app}/deploy": deployment,
+		"GET /api/apps/{app}/deployments": items(deployment, crashed,
+			map[string]any{"id": "dep_0", "app_id": "app_1", "number": 0, "status": "succeeded"}),
 		"POST /api/apps/{app}/rollback/{deployment}": deployment,
-		"GET /api/apps/{app}/logs":                   map[string]any{"lines": []string{"listening on 8080"}},
-		"POST /api/apps/{app}/run":                   map[string]any{"run": "run_1"},
-		"GET /api/apps/{app}/runs/{run}/logs":        map[string]any{"lines": []string{"migrated"}},
-		"PUT /api/apps/{app}/scaling":                map[string]any{"scaling": map[string]any{"replicas": 2}},
+		"GET /api/apps/{app}/rollback/{deployment}/plan": map[string]any{
+			"target": map[string]any{"number": 1, "commit_sha": "abc1234"}, "current": map[string]any{"number": 2},
+			"changes":      []any{map[string]any{"field": "port", "from": "3000", "to": "8080"}},
+			"can_rollback": true, "unchanged": []string{"variables", "domains", "volumes"},
+		},
+		"POST /api/apps/{app}/deployments/{deployment}/cancel": ok,
+		"POST /api/apps/{app}/restart":                         ok,
+		"GET /api/apps/{app}/promote": items(map[string]any{
+			"app_id": "app_9", "app_name": "web", "environment_id": "env_2", "environment_name": "Production",
+		}),
+		"POST /api/apps/{app}/promote": map[string]any{"id": "dep_9", "app_id": "app_9", "number": 4, "status": "queued", "trigger": "promote"},
+		"PATCH /api/apps/{app}": map[string]any{
+			"id": "app_1", "name": "web", "port": 3000, "build_command": "npm run build",
+			"rolled_out": []string{"port"}, "next_deploy": []string{"build_command"},
+		},
+		"GET /api/apps/{app}/logs":            map[string]any{"lines": []string{"listening on 8080"}},
+		"POST /api/apps/{app}/run":            map[string]any{"run": "run_1"},
+		"GET /api/apps/{app}/runs/{run}/logs": map[string]any{"lines": []string{"migrated"}},
+		"PUT /api/apps/{app}/scaling":         map[string]any{"scaling": map[string]any{"replicas": 2}},
 		"PUT /api/apps/{app}/gpu": map[string]any{
 			"gpu": map[string]any{"count": 1, "vendor": "nvidia", "product": "", "workloads": []any{}},
 			"cluster": map[string]any{"known": true, "vendors": []any{
@@ -200,7 +251,8 @@ func newFakePanel(t *testing.T) *fakePanel {
 				"connection_id": "sm_1", "connection": "company-vault", "kind": "vault", "path": "shop", "key": "stripe_key",
 			}},
 		),
-		"PUT /api/apps/{app}/variables":          map[string]any{"variable": map[string]any{"key": "GREETING"}, "requires_rebuild": false},
+		"PUT /api/apps/{app}/variables": map[string]any{"variable": map[string]any{"key": "GREETING"}, "requires_rebuild": true,
+			"deployment": map[string]any{"id": "dep_3", "number": 3, "status": "queued", "trigger": "variables"}},
 		"POST /api/apps/{app}/variables/batch":   map[string]any{"set": []any{map[string]any{"key": "GREETING", "is_secret": false}}, "unset": []string{"OLD"}, "requires_rebuild": false},
 		"DELETE /api/apps/{app}/variables/{key}": ok,
 		"POST /api/apps/{app}/variables/refresh": map[string]any{
@@ -252,7 +304,7 @@ func newFakePanel(t *testing.T) *fakePanel {
 		"GET /api/apps/{app}/volumes":                         items(map[string]any{"id": "vol_1", "app_id": "app_1", "name": "data", "mount_path": "/data", "size_gb": 1}),
 		"GET /api/apps/{app}/volumes/{volume}/backups":        items(),
 		"POST /api/apps/{app}/volumes/{volume}/backups":       backup,
-		"GET /api/databases/{db}":                             map[string]any{"database": database, "links": []any{map[string]any{"database_id": "db_1", "app_id": "app_1", "var_name": "DATABASE_URL"}}},
+		"GET /api/databases/{db}":                             map[string]any{"database": database, "links": []any{map[string]any{"database_id": "db_1", "app_id": "app_1", "var_name": "DATABASE_URL", "pieces": map[string]any{"host": "DB_HOST", "password": "DB_PASSWORD"}}}},
 		"POST /api/databases/{db}/link":                       ok,
 		"POST /api/databases/{db}/stop":                       database,
 		"POST /api/databases/{db}/start":                      database,

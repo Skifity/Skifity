@@ -15,7 +15,8 @@ Redis-compatible **Key Value** — described together in a **Blueprint**
 (`render.yaml`) and copied per pull request into **preview environments**. It is
 for small teams through mid-size companies; since 2026 it also sells to AI and
 agent workloads (Workflows for durable execution in public beta since
-2026-04-07, Sandboxes in early access). **Architecture:** Render "operates its own
+2026-04-07; Sandboxes, in early access on 2026-09-30, in public beta since
+2026-11-04). **Architecture:** Render "operates its own
 Kubernetes clusters on AWS instead of using EKS", with a Kubernetes control plane
 that "runs independently of the clusters that customer workloads run in" (Render
 blog on the 2025-10-20 AWS outage); regions Oregon, Ohio, Virginia, Frankfurt and
@@ -28,11 +29,13 @@ workspace 2026-08-01):** Hobby $0, Pro $25/month flat with unlimited seats, Scal
 $499/month, Enterprise custom — each *plus compute*: a web service from $7 (0.5
 CPU, 512 MB) through $25 (1 CPU, 2 GB) and $85 (2 CPU, 4 GB) to $1,500 (12 CPU,
 96 GB); Postgres from $6 (256 MB) to $11,000/month plus $0.30/GB storage; Key Value
-$10–$1,100; disks $0.25/GB-month; bandwidth 5 GB / 25 GB / 1 TB included, then
+$10–$750 (plans of 1 GB and more 20–45% cheaper since 2026-10-01; $10–$1,100
+before); disks $0.25/GB-month; bandwidth 5 GB / 25 GB / 1 TB included, then
 $0.15/GB. **Maturity and adoption:** founded 2018 by Anurag Goel; an $80M Series C
 in January 2025 and a $100M extension at a $1.5B valuation on 2026-02-17, $258M
 raised in total, "4.5 million+ developers" and "250,000+ new developers joining
-monthly" (Render blog, 2026-02-17). The CLI released v2.28.0 on 2026-09-10.
+monthly" (Render blog, 2026-02-17). The CLI released v2.28.0 on 2026-09-10 and
+v2.36.0 on 2026-11-06.
 
 ## Feature inventory
 
@@ -136,7 +139,8 @@ monthly" (Render blog, 2026-02-17). The CLI released v2.28.0 on 2026-09-10.
   environments is blocked.
 - **Managed OIDC workload identity** (Pro+): services get short-lived identity
   tokens to authenticate to AWS (GA 2026-07-15), Anthropic and OpenAI
-  (2026-07-24) "without storing long-lived API keys".
+  (2026-07-24) "without storing long-lived API keys", and to GCP (listed in the
+  docs on 2026-11-08; no changelog entry dates it).
 - SOC 2 Type II and ISO 27001 reports on Pro; HIPAA workspaces on Scale at a 20%
   compute premium.
 
@@ -176,8 +180,8 @@ monthly" (Render blog, 2026-02-17). The CLI released v2.28.0 on 2026-09-10.
   edits that conflict are overwritten. `render blueprints validate` and an API
   endpoint check a file (2026-01-28).
 - **REST API**; an official **Terraform provider**; Python and TypeScript **SDKs**
-  (v1.2.0, 2026-09-23).
-- **CLI** (v2.28.0): create services (2026-04-16), manage Postgres and Key Value,
+  (v1.2.0 on 2026-09-23; v1.8.0 on 2026-11-06).
+- **CLI** (v2.28.0 on 2026-09-30; v2.36.0 on 2026-11-06): create services (2026-04-16), manage Postgres and Key Value,
   logs, deploys, SSH. Usage telemetry **on by default** since 2.26.0 (2026-09-01),
   disabled with `RENDER_CLI_DISABLE_ANALYTICS` or `DO_NOT_TRACK`.
 - **MCP server** (GA 2025-08-21, hosted, OAuth for Claude Code, Codex and Cursor
@@ -339,7 +343,7 @@ last is possible on k3s but needs a publicly reachable issuer).
 | Roles | 2 on Pro, 5 on Scale | Owner, admin, member (`internal/store/models.go:5-20`); scoped API tokens | Behind on granularity |
 | Protected environments | Admin-only destructive actions and secret viewing | None per environment; secrets are write-only for everyone (`internal/crypto`) | Behind on protection, ahead on secrets |
 | Environment network isolation | Opt-in block | Default-deny NetworkPolicy per environment (`internal/kube/namespace.go:127-217`). Written | Skifity ahead (default) |
-| Workload identity (OIDC) | AWS, Anthropic, OpenAI | None | Absent in Skifity |
+| Workload identity (OIDC) | AWS, Anthropic, OpenAI, GCP | None | Absent in Skifity |
 | Audit log | Workspace/org, API export | Team audit log, 365 days by default (`internal/api/api.go:213,519`, `internal/store/retention.go:42`) | Parity |
 | Preview environments | Whole Blueprint, fresh datastores, seed hook, plan overrides, expiry, title flags | One app per PR, resealed variables, no secrets for forks, an empty database of its own per linked one since `1ae3276` (none for forks), 7-day reaper, commit status and one PR comment (`internal/api/webhook_handlers.go:183-445`, `internal/watch/watch.go:136-190`, `internal/deploy/gitreport.go`); no other apps, no seed, no overrides, no title flags. Written | Behind (narrowing) |
 | Environments | Unlimited, move services | Create and delete; no move, clone or compare (`internal/api/teams_handlers.go:429-468`) | Behind |
@@ -555,6 +559,229 @@ users to run their own forwarder. Skifity keeps nothing beyond the container.
   database from a disk snapshot; Skifity's split — logical dumps for databases,
   tar for volumes, both off-site — is the right one.
 
+## Since 2026-09-30
+
+Read on 2026-11-08: Render's changelog (entries to 2026-11-04), its blog and
+blog feed, the pricing page, the status page's incident feed, the docs pages
+named below, and the git histories of `render-oss/cli`, `render-mcp-server`,
+`sdk` and `terraform-provider-render`, cloned without file contents (tags,
+commit messages, `CHANGELOG.md` and the README read). GitHub's API refused this
+session for repositories other than Skifity's, so stars and open issues were
+not read again; Trustpilot answered 403, so its score was not read again; the
+web search had no credits left. NVD and Hacker News were read through their
+APIs.
+
+### Product
+
+- **Sandboxes, public beta (2026-11-04).** One Firecracker microVM per sandbox,
+  "typically ready for its first command in under one second", that runs
+  indefinitely and suspends after 15 idle minutes by default, keeping a runtime
+  snapshot (memory and processes) or a filesystem snapshot. Each has its own
+  outbound policy: everything, a list of domains, or nothing. "Credential
+  brokering" keeps API keys outside the sandbox and adds them to requests as they
+  leave for an allowed domain, so "a prompt injection attack can't result in
+  leaked keys"; it and scoped API keys are in early access. Billed per active CPU
+  hour ($0.12) plus memory ($0.038 an hour per 2 GB) and $0.08/GB-month of
+  snapshot storage, with 40 GB of disk each; Oregon only; 100 concurrent
+  sandboxes on Hobby and 1,000 on Pro and Scale. Driven from the SDKs and the
+  CLI, whose sandbox commands left early access in v2.32.0 (2026-10-27). Shared
+  Filesystems for sandboxes and workflow tasks are in early access.
+- **Blueprint plan and approve, public alpha.** CLI v2.35.0 (2026-11-02) added
+  `render ea blueprints create`, `plan`, `approve` and `update` "to create
+  Blueprints, preview and apply infrastructure changes". The MCP server
+  registered `create_blueprint`, `get_blueprint`, `plan_blueprint`,
+  `approve_blueprint` and `update_blueprint` on 2026-11-04, a day after a
+  commit that checks each Blueprint belongs to the caller's workspace. A
+  Blueprint's first sync must be approved; `autoSync` decides whether later
+  pushes apply on their own; `existingResources: adopt` brings matching
+  resources under the Blueprint instead of creating copies with a suffix. The
+  IaC docs still say a sync overwrites conflicting dashboard edits.
+- **Scoped API keys, private beta (2026-10-27).** A key is limited to one
+  workspace and to read or read-and-write per resource type (services,
+  environment variables and secret files, deploys, workflows, sandboxes), and
+  "can never exceed the permissions you already have". Organisations can make
+  keys that only read audit logs.
+- **Build reuse, private beta (2026-09-21; not recorded on 2026-09-30).** A
+  "Build Source" builds a repository once into an immutable artifact that several
+  services, or one service in staging and production, deploy without rebuilding;
+  for linked services, build-time and runtime variables are kept apart.
+- **Stacked pull requests (announced 2026-11-04, from 2026-11-18).** Each
+  pull request in a GitHub stack gets its own service preview or preview
+  environment under the existing automatic or manual mode; until then only the
+  bottom of a stack does.
+- **Managed OIDC** lists GCP beside AWS, Anthropic and OpenAI (docs, read
+  2026-11-08; corrected above). "How we built Render OIDC" (2026-11-06): an
+  issuer URL per workspace at `oidc.render.com`, so a provider that skips the
+  subject check still trusts only that workspace; tokens that expire after 60
+  minutes; and a daemon outside each container that writes them into a
+  read-only, memory-backed mount.
+- **Key Value** plans of 1 GB and more cost 20–45% less from 2026-10-01, with
+  new 3 GB ($60) and 50 GB ($750) plans (corrected above).
+- **CLI** v2.29.0 to v2.36.0 (2026-10-12 to 2026-11-06). Beside sandboxes and
+  Blueprints: `render logs --tail` reconnects when the connection drops or stops
+  answering (2.29.0); `render ssh` works non-interactively and returns the remote
+  exit code (2.30.0); and 2.34.0 (2026-10-29) "strips terminal escape and
+  control sequences from log messages, so log content can no longer move the
+  cursor, erase lines, or write to the clipboard". Telemetry is still on by
+  default.
+- **MCP server.** No tagged release since v0.3.0 (2026-01-14); the hosted server
+  is deployed from `main`. Beside the Blueprint tools: request bodies capped for
+  CVE-2026-108859 (2026-10-23), Go 1.27.3 for CVE-2026-111943 (2026-10-22), and
+  `query_render_postgres` cut off at 5 MB of results because "the mcp service
+  gets OOM killed every couple of days, even at 8 GB" (2026-10-22).
+- Smaller: Bun canary builds (2026-10-16); Node.js 24.22.1 and Bun 1.4.4 as the
+  defaults for new services (2026-10-22). The Terraform provider's last tag is
+  still v1.9.1 (2026-07-22).
+- Unchanged on 2026-11-08: the workspace plans and their prices, the bandwidth
+  allowances and overage, and the web service and Postgres compute prices.
+
+### Incidents
+
+Seven on the status page from 2026-10-01 to 2026-11-08, one of them major.
+
+- **2026-10-14, builds and deploys in every region**, in two periods totalling
+  about 2 hours 20 minutes. The postmortem (2026-10-22): a schema migration in a
+  planned upgrade of Render's internal job scheduler "locked a large table and
+  drove database CPU utilization to 100%". The clone meant for a fast rollback
+  could not be made because of a cloud provider error; "the migration continued
+  to run on the database after the client performing the upgrade was stopped",
+  for about 1.5 hours; and adding database capacity failed for the same reason.
+  Running services were not affected; free-tier deploys were paused. Render plans
+  blue-green deploys for that system.
+- The others: degraded dashboard and Oregon builds (2026-10-03, 48 minutes);
+  the dashboard not updating live and Workflows SDK calls timing out, upstream
+  (2026-10-15, 1.6 hours); GitLab deploys failing intermittently (2026-10-20,
+  3.7 hours); degraded network performance, upstream (2026-10-23, 1.5 hours);
+  platform emails, deploy-failure notifications and password resets among them,
+  not sent (2026-10-24, 30 minutes); and a configuration change to a subset of
+  Postgres instances that broke connections through self-managed PgBouncer until
+  it used scram-sha-256 (2026-11-05, 3.7 hours).
+
+### What users said
+
+- Hacker News was quiet about Render: the Sandboxes post drew 3 points
+  (2026-11-05). In the thread on Railway's security disclosure (2026-10-22), one
+  user asked "Move to render?" and another wrote "I moved to Render 3 or 4
+  months ago during Railway's big GCP outage and have been very pleased."
+
+### Security
+
+- No CVE names Render (NVD keyword searches "render.com" and "render-oss",
+  2026-09-30 to 2026-11-08: none), and no incident on the status page concerned
+  security.
+- The two CVEs Render patched were in what it depends on: CVE-2026-108859, POST
+  bodies read whole by `mcp-go` up to 1.2.1 (published 2026-10-11), and
+  CVE-2026-111943, Go's denylist of the intermediate certificates distrusted after
+  the eMudhra private key compromise (2026-10-21).
+- Render published nothing on Railway's incident of 2026-10-21 or Northflank's of
+  2026-10-30. Its OIDC and Sandboxes posts of the following week argue for
+  keeping keys out of a workload's environment altogether.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **Neither CVE reaches Skifity.** Its MCP endpoint uses the official Go SDK
+  (`github.com/modelcontextprotocol/go-sdk` v1.8.0, `go.mod`), whose streamable
+  HTTP handler caps a request body at 4 MiB unless told otherwise, and the
+  endpoint wants an API token first (`internal/api/mcp_handlers.go`). The binary
+  is built with Go 1.26.10, released on 2026-10-19 with the same crypto/x509
+  fixes as 1.27.3.
+- **Stacked pull requests are previewed already.** The pull-request path never
+  compares a pull request's base branch with the app's
+  (`internal/api/webhook_handlers.go`), so each pull request in a stack gets a
+  preview of its own head.
+- **Render's outage was an upgrade of its own control plane.** Skifity's panel
+  copies its database before an upgrade and refuses to open one a newer version
+  migrated (Phase 90), and apps keep running without the panel. How long a slow
+  migration would keep the panel down was never measured.
+
+This file's gaps, against the code:
+
+- P1, full-stack previews: **mostly closed.** A preview can copy the whole
+  environment and run a seed once (Phase 107), each variable can have a preview
+  value or none (Phase 93), and a preview can be started by hand (Phase 112).
+  Still open: smaller resources for previews, and `[skip preview]` in a pull
+  request's title. Nothing reads the title for it; `NoPreview` is set only for
+  Bitbucket forks (`internal/gitsrc`).
+- P1, a project file: **closed for the CLI** (`skifity.yaml`, `skifity plan` and
+  `apply`, Phase 108, `internal/blueprint`). It never deletes, and an app or
+  database already there under the file's name is changed rather than copied,
+  which is what Render's new `adopt` does. Still open: syncing on push from the
+  panel, and planning or applying from the MCP server (new gap 2).
+- P1, service types: **closed** (internal apps, Phase 101; processes, Phase 106).
+- P1, PostgreSQL point-in-time recovery and a pooler: **open.** Nothing in
+  `internal/dbsvc` renders a CloudNativePG `Pooler` or WAL archiving.
+- P1, failure notifications: **half.** A server's disk above 85% (`server.alert`,
+  Phase 99) and an overdue backup (`backup.missed`) are sent. A failed scheduled
+  or one-off command is not, and how full an app's disk or a database's volume
+  is goes unread: `internal/kube/nodedisk.go` reads nodes only.
+- P2, protected environments: **open.** A viewer role (Phase 85) and members
+  limited to projects (Phase 86) exist, but no environment raises the role an
+  action needs.
+- P2, maintenance mode: **closed** (Phase 98).
+- P2, database engine maintenance: **half.** Every engine version is pinned to a
+  release in one catalogue (`internal/dbsvc/engine`); nothing says a running
+  database is behind it or moves one onto a newer release.
+- P2, log streams: **closed** (log drains through Vector, `internal/logdrain`).
+
+Rows of the table above that no longer describe Skifity:
+
+- **Monorepo filters:** watch paths per app (Phase 96).
+- **Maintenance mode:** answered by the guard (Phase 98).
+- **Service types:** internal apps and processes (Phases 101 and 106).
+- **Cron jobs:** run now (Phase 112); still no failure notification.
+- **Postgres and Redis-compatible:** nine engines, Valkey and Dragonfly among
+  them; stop, resize, change the password, import a dump (Phase 112).
+- **Engine patching:** images pinned per version (`internal/dbsvc/engine`).
+- **Disk-full warning:** servers' disks (Phase 99); not volumes.
+- **Logs:** log drains (`internal/logdrain`).
+- **Metrics:** usage history and alerts (Phases 95 and 99); requests, errors and
+  response times per app (`internal/traffic`).
+- **Roles:** owner, admin, member and viewer, members limited to projects
+  (Phases 85 and 86).
+- **Preview environments:** the whole environment, seeded (Phase 107).
+- **Environments:** cloned (Phase 112).
+- **IaC:** `skifity.yaml` with plan and apply (Phase 108).
+- **Templates:** 374 (`internal/templates/catalogue`).
+- **CLI:** about forty commands (`internal/cli/commands.go`).
+- **MCP:** also served by the panel at `/api/mcp` (Phase 87), with more than
+  forty tools, scaling, rollback and backups among them (`internal/mcpserver`).
+
+New gaps:
+
+1. **Keep terminal control sequences out of what the CLI prints.** *What:*
+   before printing a log line, a build line or a one-off command's output,
+   replace control characters other than tab, and escape sequences, with a
+   visible form; leave `--json` exact. *Evidence:* Render CLI 2.34.0
+   (2026-10-29). `skifity logs`, the build log `skifity deploy` and `up` follow,
+   and `skifity run` write each line as it arrives (`fmt.Fprintln(out, line)` in
+   `cmdLogs` and the deploy and run streams, `internal/cli/commands.go`), so an
+   app, a build script or the code in a pull request can move the cursor,
+   rewrite lines already shown, retitle the window or write to the clipboard
+   (OSC 52) of whoever runs the command. *Size:* S. *Without a cluster:* yes.
+2. **Plan and apply `skifity.yaml` from an assistant.** *What:* MCP tools that
+   take the file's text and return the plan's steps, and apply a plan only if
+   the environment has not changed since it was made, so an assistant shows
+   what it will do before it does it. *Evidence:* Render's MCP Blueprint tools
+   (2026-11-04). Skifity's MCP server has no tool for the project file
+   (`internal/mcpserver`), while `blueprint.Plan` already needs no network and no
+   store and `skifity apply` already sends every change through the API.
+   *Size:* S–M. *Without a cluster:* yes.
+3. **Rebuild without the cache.** *What:* a deploy option that skips importing
+   the app's registry cache and writes a fresh one, for when a cached layer holds
+   an old runtime, an old CA bundle or a broken dependency. *Evidence:* Render's
+   "Clear build cache & deploy" (docs, read 2026-11-08); Heroku asking PHP users
+   to rebuild for CVE-2026-109618 (2026-10-29). Every Skifity build imports the
+   cache (`--import-cache`, `internal/builder/job.go`) and nothing in the API, the
+   CLI or the interface turns it off. *Size:* S. *Without a cluster:* the job's
+   flags yes; the build needs one.
+
+Worth not copying, from this period: a Blueprint approved once and then applied
+on every push without anybody reading the plan (`autoSync` defaults to true);
+telemetry still on by default; and microVM sandboxes for agents, which are a
+product of their own.
+
 ## Sources
 
 All read 2026-09-30 unless marked.
@@ -590,3 +817,30 @@ All read 2026-09-30 unless marked.
 - https://github.com/render-examples/preview-environment (via search results)
 - GitHub API via repository search, `org:render-oss` (stars and open issues for cli, render-mcp-server, terraform-provider-render, skills, sdk)
 - Skifity: the files cited in the table, at commit `1ae3276`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://render.com/changelog (entries 2026-09-03 to 2026-11-04, among them 2026-10-01 Key Value plans, 2026-10-16 Bun canary, 2026-10-22 default versions, 2026-11-04 stacked pull requests)
+- https://render.com/blog and https://render.com/blog/feed.rss (posts to 2026-11-06)
+- https://render.com/blog/introducing-render-sandboxes (2026-11-04)
+- https://render.com/blog/scoped-api-keys-private-beta (2026-10-27)
+- https://render.com/blog/how-we-built-render-oidc (2026-11-06)
+- https://render.com/blog/lower-prices-for-key-value-services (2026-10-01)
+- https://render.com/blog/build-reuse-private-beta (2026-09-21)
+- https://render.com/pricing
+- https://render.com/docs/infrastructure-as-code
+- https://render.com/docs/preview-environments (stacked pull requests from 2026-11-18)
+- https://render.com/docs/oidc (providers, GCP among them)
+- https://render.com/docs/scoped-api-keys
+- https://render.com/docs/sandboxes
+- https://render.com/docs/deploys ("Clear build cache & deploy")
+- https://status.render.com/api/v2/incidents.json (incidents 2026-09-27 to 2026-11-05, and the postmortem of 2026-10-14, posted 2026-10-22)
+- https://github.com/render-oss/cli (git history and `CHANGELOG.md`, v2.29.0 2026-10-12 to v2.36.0 2026-11-06)
+- https://github.com/render-oss/render-mcp-server (git history and README; commits of 2026-10-22, 2026-10-23, 2026-11-03 and 2026-11-04)
+- https://github.com/render-oss/sdk (tags python/ and typescript/ v1.3.0 2026-10-18 to v1.8.0 2026-11-06)
+- https://github.com/render-oss/terraform-provider-render (tags; last v1.9.1, 2026-07-22)
+- https://services.nvd.nist.gov/rest/json/cves/2.0 (keywords "render.com" and "render-oss", none; CVE-2026-108859 and CVE-2026-111943)
+- https://go.dev/doc/devel/release (go1.26.10 and go1.27.3, 2026-10-19)
+- https://hn.algolia.com/api/v1/search (stories and comments since 2026-09-30; https://news.ycombinator.com/item?id=50376001 and comments 50192156 and 50191107 in the Railway disclosure thread)
+- https://www.trustpilot.com/review/render.com (answered 403; not read again)
+- Skifity, for "For Skifity": `go.mod`, `internal/api/mcp_handlers.go`, `internal/api/webhook_handlers.go`, `internal/gitsrc/webhook.go`, `internal/blueprint/plan.go`, `internal/mcpserver`, `internal/cli/commands.go`, `internal/cli/client.go`, `internal/builder/job.go`, `internal/kube/nodedisk.go`, `internal/notify/notify.go`, `internal/dbsvc/engine/engine.go`, `internal/api/api.go`, `internal/store/models.go`, `docs/progress.md`

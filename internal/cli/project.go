@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"skifity/internal/errdoc"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 	"skifity/internal/version"
 )
@@ -202,8 +203,9 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 		} `json:"deployment"`
 		Webhook *struct {
 			Registered bool   `json:"registered"`
-			URL        string `json:"url"`
-			Reason     string `json:"reason"`
+			URL        string `json:"url,omitempty"`
+			Reason     string `json:"reason,omitempty"`
+			ReasonCode string `json:"reason_code,omitempty"`
 		} `json:"webhook"`
 	}
 	if err := client.Do(ctx, "POST", "/api/environments/"+environment+"/apps", body, &created); err != nil {
@@ -216,7 +218,17 @@ func cmdInit(ctx context.Context, args []string, out io.Writer) error {
 
 	// To out, not straight to the process's standard output, and not at all
 	// with --json, where the webhook is part of the one document printed.
-	if created.Webhook != nil && created.Webhook.URL != "" && !*asJSON {
+	switch {
+	case created.Webhook == nil || *asJSON:
+	case created.Webhook.ReasonCode == "no_connection":
+		// The quick start's own path: a public repository with no connection
+		// to the Git host deploys on push by default, and nothing was
+		// registered to make that true. Said here, or nobody finds out until
+		// a push does nothing.
+		fmt.Fprintln(out, "Deploy on push is on, but no webhook was registered: this app has no Git connection to register one with.")
+		fmt.Fprintf(out, "  Connect your Git account in the panel under Settings, Git, then choose it in the app's settings: %s%s\n",
+			strings.TrimSuffix(cfg.PanelURL, "/"), panelpath.App(created.App.ID, panelpath.AppSettings))
+	case created.Webhook.URL != "":
 		if created.Webhook.Registered {
 			fmt.Fprintln(out, "Deploy on push is set up: a push to this repository deploys it.")
 		} else {

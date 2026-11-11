@@ -52,6 +52,11 @@ In more than one team, it asks which one to use, or takes `--team` with the
 team's name, slug or id; with nobody to ask it stores none, and each command
 says which to name.
 
+Teams themselves are made, renamed, left and deleted in the panel, from the team
+menu and **Settings → Members**; there is no command for them, and no tool for
+an assistant. A token is made for one team and cannot make another. See
+[Several teams](configuration.md#several-teams).
+
 The token is stored in your user configuration directory, never in a project, so
 it cannot be committed by accident.
 
@@ -168,11 +173,22 @@ Without the file, a command works out the app from the team: its one project,
 that project's production environment, and the one app in it. When any of those
 is not one, it says so and asks for `--app` or `--env` rather than guessing.
 
+`init` also says whether pushes will deploy the app. A repository on a host the
+team has connected gets a webhook by itself. One read without a connection — a
+public repository, the quickest start — has deploy on push on and no webhook,
+and `init` says so, with the app's settings address, where a Git connection is
+chosen once the account is connected under **Settings → Git**. With `--json`,
+the one document printed carries it as `webhook.reason_code: "no_connection"`.
+See [I pushed and nothing happened](troubleshooting.md#i-pushed-and-nothing-happened).
+
 ## Everything else
 
 ```sh
-skifity status                    # running? how many instances? what URL?
-skifity logs --follow             # live output
+skifity status                    # running? which version is live? what URL?
+skifity status --all              # what needs attention across the team; exits 1 if anything is broken
+skifity logs --follow             # live output, from every instance
+skifity logs --instance x7k2p     # one instance, by the name printed beside its lines
+skifity logs --since 1h --timestamps  # the last hour, with the time of each line
 skifity events --warnings         # what Kubernetes said went wrong, explained
 skifity events --db orders        # the same for a database
 skifity drift                     # what somebody changed with kubectl, and who
@@ -194,7 +210,13 @@ skifity processes set worker -- bundle exec sidekiq  # a worker beside the app, 
 skifity logs --process worker     # and its output
 skifity plan                      # what skifity.yaml would change; see below
 skifity apply                     # and change it
-skifity rollback                  # back to the previous version
+skifity rollback                  # back to the previous version; says what it puts back, then asks
+skifity rollback --yes            # the same without the question, for a script
+skifity restart                   # replace the instances one at a time; nothing is rebuilt
+skifity apps set --port 3000      # change a setting; see below
+skifity apps rm web               # delete an app and its disks; asks for its name
+skifity deploy --cancel           # stop the deploy under way; --cancel 12 stops number 12
+skifity promote --to production   # run the version this app runs in production, unbuilt
 skifity lock "incident 42"        # no deploys or rollbacks until...
 skifity unlock                    # ...this
 skifity upgrade                   # ask which release of the panel is the newest; changes nothing
@@ -213,6 +235,7 @@ skifity servers create web-3 --provider digitalocean --location fra1 --type s-2v
 skifity cloud providers add --token-file hcloud.token  # connect a Hetzner Cloud project; `-` reads stdin
 skifity cloud providers add --kind digitalocean --token-file do.token  # or a DigitalOcean account
 skifity cloud providers           # the team's cloud connections; test NAME, remove NAME
+skifity cloud providers update eu --token-file new.token  # a new token, while its servers stay; `-` reads stdin
 skifity certs                     # the team's own TLS certificates, and what uses each
 skifity certs add wildcard --cert fullchain.pem --key privkey.pem  # upload one, or a new version
 skifity certs remove wildcard     # its hostnames go back to Let's Encrypt
@@ -220,10 +243,15 @@ skifity domains                   # the app's domains, and where each one's DNS 
 skifity domains add shop.example.com  # its record is created when the team connected the zone
 skifity domains add shop.example.com --manage-dns=false  # make the record yourself
 skifity domains remove shop.example.com  # and the record the panel created with it
+skifity domains panel             # where the panel itself answers, and a move under way
+skifity domains panel panel.example.com --check  # what its DNS says; nothing is changed
+skifity domains panel panel.example.com  # move the panel there, with HTTPS, and follow it
+skifity domains panel --remove    # cancel a move that stopped, or go back to sslip.io
 skifity dns providers             # the team's DNS providers and their zones
 skifity dns providers add --kind cloudflare --credentials token.txt  # or --credentials - from standard input
 skifity dns providers add --kind route53 --credentials ~/.aws/credentials
 skifity dns providers test Cloudflare  # sign in again and list its zones
+skifity dns providers update Cloudflare --credentials new-token.txt  # new credentials; its records stay kept
 skifity dns providers remove Cloudflare  # the records it made stay at the provider
 skifity drains                    # where the team's logs are shipped, and the collector
 skifity drains add Axiom --kind axiom --set dataset=apps  # asks for the token; a test line is sent first
@@ -233,7 +261,7 @@ skifity drains remove Axiom       # nothing more is sent to it
 skifity git                       # the team's Git connections
 skifity git repos acme-github     # what one can read; --search narrows it
 skifity git branches acme-github acme/shop  # one repository's branches
-skifity templates                 # what the team can install; --search narrows it
+skifity templates                 # what the team can install; --search narrows it, ROOT marks an image that starts as root
 skifity templates catalogues      # the team's own template catalogues; add, refresh, remove
 skifity db                        # the managed databases
 skifity db connect orders         # reach one from this computer; see below
@@ -245,6 +273,13 @@ Any command takes `--app <id>` to act on something other than the current
 directory's app, and `--json` for output a script can rely on. The human format
 is not stable; the JSON is.
 
+`status --all`, or `attention`, is the overview's list of
+[what needs attention](concepts.md#what-needs-attention) across the team, each
+with the panel page to deal with it on. Its exit status is the answer to "is
+anything broken?": 1 when anything on it is an error — a deploy or a backup
+that failed, an app with no instance running — and 0 for warnings alone or
+nothing, so a cron job can run it and mail on failure.
+
 `export` is the one worth knowing about before you need it. It writes
 `skifity-export.json` — every project, app, domain, database, variable and
 schedule — plus `manifests/<namespace>/<app>.yaml` per app: the Deployment,
@@ -252,6 +287,44 @@ Service, Ingress, autoscaler, disruption budget, volume claims and scheduled
 commands as plain Kubernetes objects. `kubectl apply -f` them on any cluster and
 the apps run there without this panel. Secret values are not included, and the
 README it writes says where they already are.
+
+### Changing an app's settings
+
+`skifity apps set` changes what the settings tab changes, one flag per setting,
+and sends only the flags given:
+
+```sh
+skifity apps set --port 3000 --start "node server.js" --health /healthz
+skifity apps set --build "npm run build" --output-dir dist --root apps/web
+skifity apps set --memory-limit 1024 --cpu-request 250
+skifity apps set --internal              # only the environment's other apps reach it
+```
+
+The others are `--name`, `--branch`, `--builder`, `--dockerfile`, `--image`,
+`--release`, `--health-check http|tcp|none`, `--health-start`,
+`--health-timeout`, `--cpu-limit`, `--memory-request` and `--run-as-user`;
+`skifity apps set --help` lists them. It says when each change takes effect:
+what the running app reads — the port, the commands, the health check, the
+resources — is rolled out there and then, without a rebuild, and what goes into
+the image — the branch, the folder, the builder, the build command — waits for
+the next `skifity deploy`, which builds with it. So does the release command,
+which only runs in a deploy. An app that has never been deployed gets
+everything at its first.
+
+`skifity promote --to production`, run where the staging app is, deploys the
+version it runs — or `--deployment 12` — to the app of the same name in
+production, without building it again. When production would build that image
+differently, because its build-time variables differ, it stops and says why;
+`--force` says it again and promotes anyway. An environment with no app of the
+same name is said too, with the ones the app can go to.
+
+`skifity rollback` reads the rollback's plan first and prints it: the version
+running now, the one it goes back to, and each setting it puts back, from what
+to what. On a terminal it then asks; `--yes` skips the question, and a script
+with no terminal is not asked. `skifity apps rm` deletes an app with its disks,
+so it asks for the app's name to be typed, and with no terminal it does nothing
+without `--yes`. Ctrl-C while a deploy is followed stops the following, not the
+deploy, and prints how to stop that: `skifity deploy --cancel`.
 
 ## Reaching a database
 
@@ -347,7 +420,8 @@ databases:
 apps:
   web:
     repo: https://github.com/acme/shop
-    git: acme-github        # private: the team's Git connection to read it through
+    git: acme-github        # the team's Git connection: reads a private repository,
+                            # and registers the webhook; given to an existing app too
     branch: main
     root: apps/web
     start: npm start
@@ -361,7 +435,13 @@ apps:
     resources: {cpu: 100, memory: 256}   # reserved: millicores, MB
     variables:
       LOG_LEVEL: info
-    secrets: [STRIPE_KEY]   # named here, set in the panel
+      # The long form says the build reads it, as a front end's public
+      # settings need; left out, a variable keeps what it is.
+      NEXT_PUBLIC_API_URL: {value: https://api.example.com, build: true}
+    secrets:                # values not in the file; each one is required
+      STRIPE_KEY: {from: company-vault:shop#stripe_key}  # read from a secret manager
+      SESSION_SECRET: {}    # set in the panel or with `skifity env set --secret`
+      SENTRY_DSN: {optional: true}  # the app runs without it
     processes:
       worker: npm run worker
       clock: {command: npm run clock, instances: 1}
@@ -376,6 +456,13 @@ apps:
     image: valkey/valkey:8
     port: 6379
     internal: true
+
+  blog:
+    image: example/blog:4.2.0
+    databases:
+      # The long form also gives the connection in pieces, for software that
+      # has no setting for a URL. See databases.md#in-pieces.
+      main: {url: BLOG_DATABASE_URL, host: DB_HOST, port: DB_PORT, name: DB_NAME, user: DB_USER, password: DB_PASSWORD}
 
   auth:
     image: quay.io/keycloak/keycloak:26.0
@@ -392,9 +479,11 @@ Reading /home/you/shop/skifity.yaml.
 
   ~ web: scaling — 2 → 3
   ~ web: variable LOG_LEVEL — "info" → "debug"
-  · web: secret STRIPE_KEY — is not set; set it with `skifity env set --secret STRIPE_KEY=...`
+  · web: secret SENTRY_DSN — is not set; set it with `skifity env set --secret SENTRY_DSN=...`
+  ! web: secret SESSION_SECRET — is required and not set; set it with `skifity env set --secret SESSION_SECRET=... --app app_06gaqcxybny593h2s52m`, or mark it optional
 
 0 to add, 2 to change. `skifity apply` makes these changes.
+web: SESSION_SECRET is required and not set: apply changes nothing until it is.
 ```
 
 What it does, and does not:
@@ -407,8 +496,18 @@ What it does, and does not:
   from a file is a smaller act than removing a database from a cluster, and the
   two are not one step.
 * **Variables in it are not secrets**, because the file is in a repository.
-  `secrets:` names the ones that are; their values are set in the panel or with
-  `skifity env set --secret`, and the plan says which are missing.
+  `secrets:` names the ones that are, as a list or as a map. A secret with
+  `from` is read from one of the team's secret managers, written as
+  `env set --from` takes it, and the file sets it: by reference, so its value
+  is in neither the file nor the panel. The others are set in the panel or with
+  `skifity env set --secret`.
+* **A secret the file lists is required.** While an app that is already in the
+  environment lacks one, `apply` changes nothing at all and stops with
+  `blueprint.secrets_missing`, naming each secret and its app: any change to
+  the app would roll it out without it. An app the file makes is made with
+  everything else and not deployed; set the secret, and the next `apply` gives
+  it its first deploy. `optional: true` marks one the app runs without: the
+  plan says it is not set, and nothing waits for it.
 * **A database's engine, version and size are not changed from it** — each of
   those is a migration of somebody's data. The plan says when the file and the
   database disagree.
@@ -432,8 +531,12 @@ What it does, and does not:
   `0 9 * * 1-5` matches the one the panel keeps, a domain is compared lowercase
   and without `https://`, and a root without its leading slash. A plan straight
   after an apply is empty.
-* **A variable the build reads stays one.** The file gives its value; whether it
-  is read at build time is set in the panel and kept.
+* **Which variables the build reads is said or kept.** `build: true` in a
+  variable's or a secret's long form makes it one the build reads, and
+  `build: false` one read when the app runs. Left out, a variable the
+  environment has keeps what it is, whatever the panel says, and a new one is
+  read when the app runs. A new value of one the build reads builds the app
+  again; any other change to a variable only rolls it out.
 
 The file is read from the current directory or the nearest one above it;
 `--file` names another, and `--env` an environment other than the one this
@@ -455,13 +558,39 @@ need root.
 ```sh
 sudo skifity admin list-users
 sudo skifity admin reset-password you@example.com
+sudo skifity admin reset-2fa you@example.com
 ```
 
 Resetting a password signs out every device that was signed in as that account.
 Two-factor authentication stays on, so you will still need your authenticator
-app. Passkeys stay too, and the command says how many the account has; add
-`--remove-passkeys` to remove them as well, when the reason for the reset is
-that somebody else got in. See [Passkeys](configuration.md#passkeys).
+app or a recovery code. Passkeys stay too, and the command says how many the
+account has; add `--remove-passkeys` to remove them as well, when the reason for
+the reset is that somebody else got in. See [Passkeys](configuration.md#passkeys).
+
+`reset-2fa` is for a lost phone with the recovery codes gone too. It turns the
+account's two-factor authentication off, deletes its recovery codes and signs
+out every device, so the password signs in on its own; the account turns
+two-factor on again under Account. It names any team that requires a second
+factor, which refuses the account until then. See
+[I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator).
+
+When the panel's only administrator has gone, or somebody who left can still
+sign in, the accounts themselves can be changed from the server too:
+
+```sh
+sudo skifity admin make-admin someone@example.com
+sudo skifity admin disable leaver@example.com
+sudo skifity admin enable leaver@example.com
+sudo skifity admin revoke-admin leaver@example.com
+```
+
+`disable` signs the account out everywhere and stops its password, passkeys,
+single sign-on and API tokens until `enable`. The last enabled administrator is
+kept: make somebody else one before disabling or demoting them. The panel does
+the same under [Settings → Accounts](configuration.md#accounts).
+
+Each of these writes what it did to the activity log of every team the account
+is in, as `skifity admin`.
 
 Two more work on the database itself:
 
@@ -474,6 +603,14 @@ sudo skifity admin restore-db ./20260930-031700-bak-9f2c-panel.db.gz
 back — a copy from `backup-db`, or one the panel uploaded to the backup bucket —
 and without `--yes` only checks it and says what it would do. See
 [Backups](backups.md#putting-it-back).
+
+A backup sealed with the backup passphrase, of a database or a volume, opens on
+any machine with the binary, in place — for loading a database's backup with
+`skifity db import` once the database it was taken from is gone:
+
+```sh
+SKIFITY_BACKUP_PASSPHRASE='…' skifity backup-open ./20261108-031700-bak-9f2c-orders.gz
+```
 
 The master key has its own way back. The recovery key the panel showed at setup
 is read from standard input, so it stays out of the process list and the shell's
@@ -532,9 +669,14 @@ command does whatever it does — so an assistant's client can ask before those
 and not before `list_apps`.
 
 An assistant can take an app the whole way: install it from a template or
-create it, give it a database, set its variables and files, put it on a domain
-or open a port, back it up and lock its deploys. Three things it cannot do, on
-purpose. It is never shown a database's password: `link_database` gives the app
+create it, give it a database, set its variables and files, fix its port, start
+command, health check or memory with `update_app_settings`, restart it, cancel
+a deploy, promote a version to another environment with `promote_app`, put it
+on a domain or open a port, back it up and lock its deploys.
+`rollback_app` says which settings it puts back, and with `dry_run` says only
+that. Deleting an app is not a tool: its disks go with it for good, so the
+person does it in the panel or with `skifity apps rm`. Three more things it
+cannot do, on purpose. It is never shown a database's password: `link_database` gives the app
 its connection string as a secret variable, and a password that has been in an
 assistant's context is in its provider's logs for good. It cannot restore a
 backup: a restore replaces everything with an older copy and cannot be undone,
@@ -544,6 +686,10 @@ remove the team's own TLS certificates: uploading one means handing over its
 private key, for the same reason as the password, so it is done in the panel or
 with `skifity certs`. `list_domains` still says which certificate each domain is
 served with.
+
+Asked whether anything is wrong, an assistant starts with `get_attention`: the
+same list the overview leads with, errors first, each with a link to the page
+it is dealt with on.
 
 The tools are listed in [llms.txt](../llms.txt). They are named for what someone
 would ask for — `get_app_logs`, `check_scaling_readiness`, `rollback_app` — and

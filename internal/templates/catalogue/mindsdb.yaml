@@ -6,6 +6,7 @@ website: https://docs.mindsdb.com/what-is-mindsdb
 services:
 - name: mindsdb
   image: mindsdb/mindsdb:v26.1.0
+  needs_root: true
   port: 47334
   public: true
   mem_request_mb: 128
@@ -27,3 +28,4 @@ databases:
   link_to:
   - mindsdb
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

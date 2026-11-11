@@ -18,13 +18,15 @@ You give it a server. It gives you URLs.
 </div>
 
 <p align="center">
-  <img src="docs/images/overview-dark.png" alt="The overview in dark mode: projects, apps, cluster health and recent activity" width="880">
+  <img src="docs/images/overview-dark.png" alt="The overview in dark mode: what needs attention, the team's apps, cluster health and recent activity" width="880">
 </p>
 
 Skifity turns the servers you rent into a platform for your own apps. Push a Git
 repository and it builds it, deploys it, gives it a URL — with a certificate as
 soon as it has a domain of yours — and keeps it running. Add more servers and they become one pool: apps spread across
-them, and an app whose server dies comes back on another.
+them, and an app whose server dies comes back on another — unless it keeps data
+on a volume, which the default storage holds on that server's own disk, so the
+app waits for that server ([why](docs/faq.md#why-kubernetes-underneath)).
 
 The panel talks about **Apps**, **Instances**, **Servers**, **Domains** and
 **Databases**. Kubernetes runs underneath and stays out of sight, one click away
@@ -70,8 +72,9 @@ That is the whole installation. The installer:
 
 Run in a terminal without `--domain`, it offers to take one. Without a domain
 the panel answers at a free `sslip.io` address over plain HTTP, on purpose
-([ADR-0015](docs/decisions.md)); add a domain in Settings later and HTTPS is
-turned on for it automatically. Behind NAT — AWS, Google Cloud, Oracle, a home
+([ADR-0015](docs/decisions.md)); put it on a domain of your own later under
+Settings → General → Panel address, or run the installer again with `--domain`,
+and it moves to HTTPS at that name. Behind NAT — AWS, Google Cloud, Oracle, a home
 router — it finds the address the internet reaches the server on.
 
 **It never goes quiet.** Most of an install is a download — Kubernetes, then
@@ -136,7 +139,7 @@ that does the same, for provisioning tools that prefer those.
 | `--version TAG` | `SKIFITY_VERSION` | The release to install; defaults to the installer's own, and `latest` asks GitHub for the newest |
 | `--image REFERENCE` | `SKIFITY_IMAGE` | A full image reference, for an image you built yourself |
 | `--pod-network NAME` | `SKIFITY_POD_NETWORK` | `wireguard-native` or `vxlan`; chosen from the kernel by default |
-| `--channel NAME` | `SKIFITY_CHANNEL` | The k3s channel; default `stable` |
+| `--channel NAME` | `SKIFITY_CHANNEL` | Follow a k3s release channel, such as `stable`, instead of the k3s version the release was tested with |
 | `--skip-k3s` | `SKIFITY_SKIP_K3S=1` | Use the k3s already installed here as it is |
 | `--skip-firewall` | `SKIFITY_SKIP_FIREWALL=1` | Leave the host firewall alone |
 | `--no-snapshot` | `SKIFITY_NO_SNAPSHOT=1` | Do not copy the panel's database before an upgrade |
@@ -146,6 +149,11 @@ that does the same, for provisioning tools that prefer those.
 `--help` lists them without needing root. Every value is checked before
 anything changes, so a typo is one line now rather than a broken certificate
 later.
+
+Kubernetes is k3s at the version the release was tested with, which its release
+notes name: a release is tagged only once a fresh install of exactly that
+version has passed the cluster runs. `--channel stable` takes k3s's newest
+instead.
 
 **Unattended**, from cloud-init, Terraform or a CI job, pass `--yes`. Without a
 terminal and without `--yes`, the one question the installer may ask — whether
@@ -226,8 +234,9 @@ while the installer is running.
 > across a link that delays and drops packets, with one of them switched off
 > without warning, and as an upgrade from the last release. It has not met
 > Let's Encrypt itself, a bucket that is not a stand-in, two servers in
-> different places, or anybody attacking it on purpose. Try it on a spare VPS
-> before you move production onto it, and
+> different places, Telegram, Discord, Slack, Microsoft Teams or Pushover, or
+> anybody attacking it on purpose. Try it on a spare VPS before you move
+> production onto it, and
 > [open an issue](https://github.com/Skifity/Skifity/issues) with whatever you
 > find. More in [Status](#status).
 
@@ -235,14 +244,19 @@ while the installer is running.
 
 **Several servers are one pool.** An app that wants three instances gets them
 wherever there is room, and an app whose server dies is restarted on another
-without anyone being woken up. Three control plane servers survive losing one.
+without anyone being woken up. An app with a volume is the exception: the
+default storage keeps a volume on the server that made it, so that app waits
+for its server to come back, and its data is only as safe as that disk and its
+backups. A fresh install has one control plane server, and the cluster does not
+survive losing it; three do survive losing one, on servers in one place with
+fast disks ([Control plane servers](docs/adding-servers.md#control-plane-servers)).
 
 **Adding a server is an IP address and a password.** Skifity connects, checks
-the machine, installs a key of its own, configures the firewall, verifies the
-network in both directions, installs k3s and joins the cluster — seven steps,
-each shown as it happens. The password is used exactly once and never stored;
-a test scans every column of the database for it. Or let it order the server
-for you at Hetzner Cloud or DigitalOcean.
+the machine, installs a key of its own, configures the firewall, checks that it
+can reach the cluster's API server, installs k3s and joins the cluster — seven
+steps, each shown as it happens. The password is used exactly once and never
+stored; a test scans every column of the database for it. Or let it order the
+server for you at Hetzner Cloud or DigitalOcean.
 
 **Changing a setting does not rebuild your app.** What goes into the image is
 kept apart from what the container reads at start-up, so changing a variable is
@@ -408,7 +422,7 @@ Every picture is captured by a test against the real binary, not drawn.
 <tr>
 <td><img src="docs/images/templates.png" alt="The template catalogue, grouped by category"><br><b>Templates.</b> 374 applications, every one on a version checked to exist.</td>
 <td><img src="docs/images/plugins.png" alt="The plugins page: installed plugins, the store, or one from an address"><br><b>Plugins</b>, each in a container of its own with only the permissions it declared.</td>
-<td><img src="docs/images/plugins-store.png" alt="An error explaining that the plugin store could not be reached, with what it means and how to fix it"><br><b>Errors explain themselves.</b> Here, the plugin store, which is not published yet.</td>
+<td><img src="docs/images/plugins-store.png" alt="The Store tab, marked not published yet, saying how to install a plugin without it"><br><b>Said plainly.</b> The plugin store is not published yet, and the tab says so.</td>
 </tr>
 <tr>
 <td><img src="docs/images/activity.png" alt="The activity log"><br><b>Activity.</b> Who did what, and when.</td>
@@ -520,6 +534,7 @@ For people working on Skifity rather than running it:
 
 | | |
 |---|---|
+| [Where it stands](docs/status.md) | One page: the releases, what runs on every push, and what has never run |
 | [Architecture](docs/architecture.md) | How it fits together |
 | [Decisions](docs/decisions.md) | Why it is like this |
 | [Progress](docs/progress.md) | Where the work stands, including what has never run |
@@ -567,13 +582,15 @@ restart that put both of an app's instances on one server, builds that could
 not clone from a Git host on one's own network, a removed server taking its
 ingress away mid-request, single sign-on refused on a fresh install, an app
 made from a clone URL that no push ever deployed — and each is fixed.
-[`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
+[Where it stands](docs/status.md) is the one-page summary, including what has
+never been run; [`docs/checklist.md`](docs/checklist.md) says which of the eighteen things a
 platform is judged on that proves, and [`docs/progress.md`](docs/progress.md)
 what each run found. Try it on a spare VPS first.
 
-**The plugin store is not published.** `plugins.skifity.com` does not resolve,
-so the Store tab says it could not reach anything. A plugin is installed by
-giving its address or pasting its manifest.
+**The plugin store is not published.** Nothing is at `plugins.skifity.com`,
+so the Store tab is marked *Not published yet* and says so, without trying the
+address. A plugin is installed by giving its address or pasting its manifest,
+or from a store of your own.
 
 ## Licence
 

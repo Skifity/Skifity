@@ -6,6 +6,7 @@ website: https://coolify.io/docs/services/openclaw
 services:
 - name: openclaw
   image: coollabsio/openclaw:2026.2.6
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -24,6 +25,7 @@ services:
     size_gb: 5
 - name: browser
   image: coollabsio/openclaw-browser:0.3.0
+  needs_root: true
   port: 9223
   public: false
   mem_request_mb: 128
@@ -40,4 +42,4 @@ services:
     mount_path: /config
     size_gb: 5
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. Their images start as root, so the environment needs the baseline pod security level.

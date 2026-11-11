@@ -3,27 +3,40 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+
+	"skifity/internal/errdoc"
 )
 
 const deploymentColumns = `id, app_id, number, status, trigger, rollback_of, commit_sha, commit_message,
 	commit_author, image, build_fingerprint, runtime_spec, error_code, error_message, error_hint, created_by,
-	accepted_vulnerabilities, created_at, started_at, finished_at`
+	accepted_vulnerabilities, created_at, started_at, finished_at, error_problem, build_spec_enc`
 
 func scanDeployment(row interface{ Scan(...any) error }) (Deployment, error) {
 	var d Deployment
 	var created string
 	var started, finished sql.NullString
+	var problem string
 	err := row.Scan(&d.ID, &d.AppID, &d.Number, &d.Status, &d.Trigger, &d.RollbackOf, &d.CommitSHA,
 		&d.CommitMessage, &d.CommitAuthor, &d.Image, &d.BuildFingerprint, &d.RuntimeSpec, &d.ErrorCode,
-		&d.ErrorMessage, &d.ErrorHint, &d.CreatedBy, &d.AcceptedVulnerabilities, &created, &started, &finished)
+		&d.ErrorMessage, &d.ErrorHint, &d.CreatedBy, &d.AcceptedVulnerabilities, &created, &started, &finished,
+		&problem, &d.BuildSpec)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return d, ErrNotFound
 		}
 		return d, fmt.Errorf("scan deployment: %w", err)
+	}
+	if problem != "" {
+		// One that does not decode is left out rather than failing the row:
+		// error_message still says what happened.
+		var decoded errdoc.Problem
+		if json.Unmarshal([]byte(problem), &decoded) == nil {
+			d.Problem = &decoded
+		}
 	}
 	d.CreatedAt, _ = ParseTime(created)
 	d.StartedAt = scanTime(started)
@@ -54,11 +67,11 @@ func (db *DB) CreateDeployment(ctx context.Context, d *Deployment) error {
 		d.Number = int(next.Int64) + 1
 		_, err := tx.ExecContext(ctx, `INSERT INTO deployments
 			(id, app_id, number, status, trigger, rollback_of, commit_sha, commit_message, commit_author,
-			 image, build_fingerprint, runtime_spec, created_by, accepted_vulnerabilities, created_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			 image, build_fingerprint, runtime_spec, created_by, accepted_vulnerabilities, created_at, build_spec_enc)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			d.ID, d.AppID, d.Number, d.Status, defaultStr(d.Trigger, "manual"), d.RollbackOf, d.CommitSHA,
 			d.CommitMessage, d.CommitAuthor, d.Image, d.BuildFingerprint, d.RuntimeSpec, d.CreatedBy,
-			d.AcceptedVulnerabilities, now)
+			d.AcceptedVulnerabilities, now, d.BuildSpec)
 		if err != nil {
 			return fmt.Errorf("insert deployment: %w", err)
 		}
@@ -157,6 +170,23 @@ func (db *DB) UpdateDeploymentStatus(ctx context.Context, id string, status Depl
 		status, errCode, errMsg, hint, started, finished, id)
 	if err != nil {
 		return fmt.Errorf("update deployment status: %w", err)
+	}
+	return nil
+}
+
+// SetDeploymentProblem keeps the whole problem a failed deployment was failed
+// with, beside the code and message UpdateDeploymentStatus wrote.
+//
+// Only onto the failure it belongs to: a deployment that was cancelled or
+// superseded in the meantime carries another code, and is left alone.
+func (db *DB) SetDeploymentProblem(ctx context.Context, id string, problem *errdoc.Problem) error {
+	encoded, err := json.Marshal(problem)
+	if err != nil {
+		return fmt.Errorf("encode the deployment's problem: %w", err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE deployments SET error_problem = ? WHERE id = ? AND error_code = ?`,
+		string(encoded), id, problem.Code); err != nil {
+		return fmt.Errorf("record the deployment's problem: %w", err)
 	}
 	return nil
 }

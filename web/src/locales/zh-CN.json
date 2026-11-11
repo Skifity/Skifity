@@ -255,7 +255,16 @@
     "recoveryKeyFileTitle": "{{product}} 恢复密钥",
     "recoveryKeyFileBody": "持有这把密钥的任何人都能解密本面板保存的所有机密。请离线保存在安全的地方。没有它，恢复出来的备份将无法读取。",
     "recoveryKeyMissingTitle": "账户已就绪，但恢复密钥没能显示出来",
-    "recoveryKeyMissing": "面板此刻读不到它的恢复密钥。登录后打开“账户”即可显示并保存它；在你保存之前，面板会一直提醒你。"
+    "recoveryKeyMissing": "面板此刻读不到它的恢复密钥。登录后打开“账户”即可显示并保存它；在你保存之前，面板会一直提醒你。",
+    "useRecoveryCode": "改用恢复码",
+    "useAuthenticator": "改用验证器应用",
+    "recoveryCode": "恢复码",
+    "recoveryCodePrompt": "请输入开启双重验证时保存的任一恢复码。每个恢复码只能使用一次。",
+    "recoveryCodeUsed_other": "已用恢复码登录，还剩 {{count}} 个。",
+    "recoveryCodeUsedHelp": "该恢复码已失效。请在用完之前到“账户”中获取一组新的恢复码。",
+    "recoveryCodesUsedUp": "这是你的最后一个恢复码",
+    "recoveryCodesUsedUpHelp": "请立即到“账户”中获取一组新的恢复码，并存放在手机以外的地方。没有恢复码时，再次丢失手机就只能请服务器管理员重置双重验证。",
+    "openAccount": "打开账户"
   },
   "dashboard": {
     "title": "总览",
@@ -279,7 +288,9 @@
     "welcomeBack": "欢迎回来，{{name}}。",
     "readyOfTotal": "{{ready}} / {{total}}",
     "noCluster": "面板未连接到集群。",
-    "noClusterHelp": "在连接之前无法部署任何内容。通过安装程序部署的面板运行在它所创建的集群中；这个面板是单独启动的，这是开发和测试 {{product}} 的方式。"
+    "noClusterHelp": "在连接之前无法部署任何内容。通过安装程序部署的面板运行在它所创建的集群中；这个面板是单独启动的，这是开发和测试 {{product}} 的方式。",
+    "yourApps": "你的应用",
+    "yourAppsHelp": "最近部署的排在最前面。"
   },
   "activity": {
     "subtitle": "这个团队里发生的变化，最新的在前。",
@@ -450,7 +461,23 @@
       "cloud_provider.added": "已连接云服务商",
       "cloud_provider.removed": "已移除云服务商",
       "server.create_started": "正在云服务商处创建服务器",
-      "server.delete_started": "正在移除服务器并删除其机器"
+      "server.delete_started": "正在移除服务器并删除其机器",
+      "panel.domain_set": "已设置面板域名",
+      "panel.domain_cancelled": "已取消面板域名迁移",
+      "panel.domain_removed": "已移除面板域名",
+      "git_source.updated": "已更改 Git 账户",
+      "cloud_provider.token_replaced": "已替换云服务商的令牌",
+      "dns_provider.credentials_replaced": "已替换 DNS 服务商的凭据",
+      "auth.recovery_code_used": "使用恢复码登录",
+      "account.two_factor_reset": "管理员重置了双重验证",
+      "account.password_reset": "从服务器重置了密码",
+      "account.disabled": "账户已停用",
+      "account.enabled": "账户已启用",
+      "account.deleted": "账户已删除",
+      "account.admin_granted": "被设为面板管理员",
+      "account.admin_revoked": "不再是面板管理员",
+      "team.member_left": "已退出团队",
+      "team.deleted": "已删除团队"
     },
     "notAllowedTitle": "活动日志仅供团队所有者和管理员查看",
     "notAllowed": "如需了解有哪些变化，请询问 {{team}} 的所有者或管理员。"
@@ -504,6 +531,11 @@
     "title": "应用",
     "newApp": "新建应用",
     "newAppSubtitle": "从 Git 仓库或你电脑上的文件夹部署，或运行你已有的容器镜像。",
+    "newAppIn": "位于 {{project}} · {{environment}}",
+    "createIn": "创建到",
+    "createInHelp": "选择这个应用所在的项目和环境：生产环境和预发布环境不是同一个地方。",
+    "chooseEnvironment": "选择项目和环境",
+    "noEnvironment": "还没有可以创建到的项目。请先创建一个。",
     "startFromTemplate": "从模板开始",
     "appName": "应用名称",
     "source": "来源",
@@ -613,7 +645,13 @@
       "updating": "{{desired}} 个实例中已有 {{ready}} 个就绪。",
       "starting": "实例正在启动。",
       "crashing": "应用启动后随即退出。日志的最后几行通常会说明原因。",
-      "noCluster": "面板未连接到集群，因此无法查看此应用的实例。"
+      "noCluster": "面板未连接到集群，因此无法查看此应用的实例。",
+      "crashingKind": {
+        "out_of_memory": "应用不断停止：内存不足。",
+        "not_runnable": "应用不断停止：它的启动命令无法运行（退出码 {{code}}）。",
+        "exited_cleanly": "应用不断停止：它的进程会自行结束，而 Web 进程必须持续运行。",
+        "exited": "应用不断停止，退出码为 {{code}}。日志的最后几行通常会说明原因。"
+      }
     },
     "mountPath": "挂载路径",
     "sizeGB": "大小（GB）",
@@ -839,7 +877,66 @@
       "restart": "无需 restart：实例会自动重启。",
       "no_port": "没有发布或暴露任何端口，镜像的端口也未知：任何服务都无法通过名字访问它。如果有其他服务要连接它，请为它添加一行 expose，写明它监听的端口。",
       "skipped": "无法读取服务 {{name}}，已跳过。"
-    }
+    },
+    "gitConnection": "Git 连接",
+    "gitConnectionHelp": "应用的构建用它克隆仓库，也用它注册 Webhook。公开仓库不需要它也能构建；推送即部署需要它。",
+    "pushNoConnection": "这个应用没有注册 Webhook",
+    "pushNoConnectionHelp": "推送时自动部署已开启，但应用没有 Git 连接，所以没有人让仓库在推送时通知面板。请在上方选择一个连接并保存，或先连接你的 Git 账号。",
+    "pushNotRegistered": "Webhook 没有注册成功",
+    "pushNotRegisteredHelp": "上次请求时 Git 托管方拒绝了面板。等连接的令牌有权管理 Webhook 后，再请求一次。",
+    "registerWebhookAgain": "重新注册 Webhook",
+    "savedNextDeploy": "已保存。以下设置在下次部署时生效：{{settings}}。",
+    "pendingTitle": "等待部署的更改",
+    "pendingBody": "自运行中的版本构建以来，{{names}} 已更改。这些内容会进入镜像，因此要等一次部署用它们重新构建后才会生效。",
+    "pendingVariable": "构建时变量 {{key}}",
+    "liveVersion": "当前版本",
+    "liveNone": "还没有上线的版本",
+    "wentLive": "{{when}}上线",
+    "wentLiveBy": "{{when}}由 {{who}} 上线",
+    "viewBuildLog": "查看构建日志",
+    "deploymentUnderway": {
+      "queued": "部署 #{{number}} 正在等待开始",
+      "building": "部署 #{{number}} 正在构建",
+      "deploying": "部署 #{{number}} 正在启动新版本"
+    },
+    "deploymentUnderwayFirst": "完成后应用即上线。构建日志会显示进行到哪一步。",
+    "deploymentUnderwayLive": "在新版本就绪之前，#{{number}} 会继续提供服务。",
+    "deploymentFailed": "部署 #{{number}} 失败",
+    "deploymentFailedLive": "#{{number}} 仍在运行，应用继续使用之前的版本。",
+    "noInstancesUntil": "部署 #{{number}} 就绪后，第一个实例就会启动。",
+    "noInstancesFailed": "部署 #{{number}} 失败，因此没有启动任何实例。修复原因后，页面顶部的“{{action}}”会重新尝试。",
+    "instanceVersion": "版本",
+    "nowLive": "{{name}} 已上线",
+    "nowLiveNumber": "部署 #{{number}} 正在提供服务。",
+    "openApp": "打开",
+    "logsInstance": "实例",
+    "logsInstanceAll": "全部实例",
+    "logsRange": {
+      "label": "时间范围",
+      "all": "全部时间",
+      "15m": "最近 15 分钟",
+      "1h": "最近 1 小时",
+      "6h": "最近 6 小时",
+      "24h": "最近 24 小时"
+    },
+    "logsTailLabel": "显示行数",
+    "logsTail_other": "{{lines}} 行",
+    "logsZone": "时间显示为",
+    "logsZoneLocal": "本地时间",
+    "logsDownload": "下载",
+    "logsOmitted": "共 {{total}} 个实例，正在读取前 {{shown}} 个。要读取其他实例，请在上方选择。",
+    "logsFieldsShow": "展开字段",
+    "logsFieldsHide": "收起字段",
+    "instanceExit": {
+      "outOfMemory": "内存不足",
+      "exitCode": "以代码 {{code}} 退出",
+      "completed": "自行退出",
+      "cannotStart": "无法启动（代码 {{code}}）",
+      "other": "{{reason}}（代码 {{code}}）"
+    },
+    "lastExit": "{{when}}停止：{{reason}}",
+    "logsPreviousEnded": "{{instance}} {{when}}停止：{{reason}}",
+    "logsErrorsOnly": "仅显示错误"
   },
   "deploy": {
     "title": "部署记录",
@@ -879,7 +976,8 @@
       "rollback": "一次回滚",
       "promote": "从另一个环境提升",
       "tag": "推送了一个标签",
-      "refresh": "密钥管理器中的值发生了变化"
+      "refresh": "密钥管理器中的值发生了变化",
+      "variables": "构建时变量已更改"
     },
     "rollbackTitle": "回滚到 #{{number}}",
     "rollbackFrom": "当前运行",
@@ -916,7 +1014,32 @@
     "deployAnyway": "仍然部署",
     "deployAnywayConfirm": "即使镜像中有已提供修复的严重漏洞，也会部署它。此操作会连同你的名字记录在活动日志中。",
     "acceptedVulnerabilities": "已接受漏洞",
-    "started": "部署 #{{number}} 已开始。"
+    "started": "部署 #{{number}} 已开始。",
+    "promoteNowhere": "{{environments}} 中没有名为 {{app}} 的应用，因此无处可推广：版本会推广到另一个环境中同名的应用。",
+    "promoteCreateThere": "在 {{environment}} 中创建 {{app}}",
+    "promoteClone": "克隆此环境",
+    "failure": {
+      "crashed": {
+        "out_of_memory": "新版本在启动时内存不足，已被停止。",
+        "not_runnable": "新版本的启动命令无法运行：它以退出码 {{code}} 结束。",
+        "exited_cleanly": "新版本的进程自行结束了，退出码为 0，而 Web 进程必须持续运行。",
+        "exited": "新版本在启动时停止了，退出码为 {{code}}。"
+      },
+      "fix": {
+        "out_of_memory": "在“扩缩容”中给它更多内存，然后重新部署。",
+        "not_runnable": "在“设置”中检查启动命令：它指向的程序不在镜像中，或者无法运行。",
+        "exited_cleanly": "在“设置”中让启动命令在前台运行服务器，而不是启动后立即返回。",
+        "exited": "“详细信息”中它的最后几行说明了原因。最常见的是缺少它需要的变量。"
+      },
+      "open": {
+        "scaling": "打开扩缩容",
+        "settings": "打开设置",
+        "variables": "打开变量",
+        "logs": "打开日志"
+      },
+      "diagnosis": "诊断信息",
+      "lastLines": "它停止前输出的最后几行："
+    }
   },
   "variables": {
     "title": "变量",
@@ -968,7 +1091,20 @@
     "allowedPathsHint": "{{name}} 只读取以下路径或其下的内容：{{paths}}。",
     "bulkSaved_other": "已保存 {{count}} 个变量",
     "bulkNothing": "这里没有 KEY=value 格式的行，因此没有可保存的内容。",
-    "deleteKey": "删除 {{key}}"
+    "deleteKey": "删除 {{key}}",
+    "rebuildStarted": "已保存。构建会读取该值，因此正在用它重新构建应用当前运行的版本：部署 #{{number}}。",
+    "rebuildLocked": "已保存。构建会读取该值，而部署已被锁定，因此它会在解锁后的第一次部署时生效。",
+    "rebuildFirstDeploy": "已保存。构建会读取该值，应用的第一次部署会用它构建。",
+    "rebuildNextDeploy": "已保存。构建会读取该值，但无法开始重新构建，因此它会在下次部署时生效。",
+    "editKey": "编辑 {{key}}",
+    "textSecret": "{{key}} 是机密，保持不变",
+    "textReference": "{{key}} 从 {{reference}} 读取，保持不变",
+    "textMultiline": "{{key}} 有多行内容，保持不变；请在它所在的行中编辑",
+    "bulkEditKeeps": "只会保存你新增或修改的行。删除某一行不会删除对应的变量：请使用该行的删除按钮。",
+    "nothingChanged": "没有任何变化，因此没有保存。",
+    "keptPlaceholder": "不输入新值则保持不变",
+    "keptHelp": "机密的值不会再次显示。输入新值以替换它，或留空以保留原值。",
+    "keptNeedsValue": "要修改这一项，请重新输入值：机密的值从不显示，因此无法沿用。"
   },
   "domains": {
     "title": "域名",
@@ -1460,7 +1596,23 @@
     "stopAddingTitle": "停止添加 {{name}}？",
     "stopAddingConfirm": "正在运行的步骤会被停止，服务器会被标记为失败。机器上已经完成的操作不会被撤销：重试会从停下的地方继续，移除则会把服务器移出。",
     "stopAddingCloud": "已经在服务商处订购的机器会继续运行并计费，直到你连同机器一起移除这台服务器。",
-    "alertsSaved": "警告阈值已保存。"
+    "alertsSaved": "警告阈值已保存。",
+    "entry": {
+      "title": "流量",
+      "serving": "在 80 和 443 端口接收流量",
+      "notServing": "未接收流量",
+      "none": "不是入口：负载均衡器不在此运行",
+      "alertTitle_other": "{{count}} 台服务器在运行，但未接收流量",
+      "alertTitleThis": "这台服务器在运行，但未接收流量",
+      "alertHelp": "被 DNS 指向它地址的访问者会一直等待一个不会到来的响应：DNS 分不清在运行的服务器和正在提供服务的服务器。面板不会为此修改 DNS 记录。在服务器修好之前，把它的地址从该域名中移除，或使用带健康检查的 DNS。",
+      "docs": "检查了什么，没检查什么",
+      "reason": {
+        "node_not_ready": "服务器未就绪。",
+        "balancer_not_ready": "这台服务器上的负载均衡器未就绪，因此它的 80 和 443 端口上没有任何响应。",
+        "no_ingress": "集群中没有就绪的 Traefik，因此没有服务器接收流量。",
+        "no_ingress_here": "这台服务器上没有就绪的 Traefik，而 Traefik 只响应到达它所在服务器的访问者。"
+      }
+    }
   },
   "databases": {
     "title": "数据库",
@@ -1491,7 +1643,7 @@
     "backupsOn": "自动备份",
     "backupScheduleFieldHelp": "备份运行的时间，使用 UTC。",
     "retentionHelp": "新备份成功后会删除更早的备份。",
-    "backupScheduleHelp": "备份会写入你在设置中配置的存储。",
+    "backupScheduleHelp": "备份会写入面板的备份存储。",
     "retention": "保留最近",
     "restore": "恢复",
     "restoreWarning": "这会用该备份的内容替换数据库中现有的全部数据，且无法撤销。",
@@ -1550,6 +1702,7 @@
     "nativeConnectionStringHint": "适用于使用 ClickHouse 原生协议的客户端，例如 clickhouse-client 和 clickhouse-go。上面的连接字符串使用 HTTP，大多数客户端库都接受它。",
     "noCredentials": "Memcached 没有用户也没有密码。只有此环境中的应用能访问它。",
     "backupSkipped": "已跳过：数据库处于停止状态，没有新内容需要备份。",
+    "backupSkippedBusy": "已跳过：数据库当时正在进行其他操作（创建、恢复、导入或更换密码），因此本次备份留待下一次。",
     "backupKind": {
       "before_import": "导入之前",
       "before_update": "更新之前"
@@ -1640,6 +1793,25 @@
       "startingAgain": "正在保留的磁盘上重新启动。",
       "degraded": "{{wanted}} 个实例中有 {{ready}} 个已就绪。",
       "degradedLastOne": "{{wanted}} 个实例中有 {{ready}} 个已就绪。数据库仍在响应，但剩下的这个实例一旦故障，服务就会中断。"
+    },
+    "backupDaily": "每天备份",
+    "backupDailyHelp": "每天 UTC 02:00 到 05:00 之间，保留最近 7 份。可以在它的「备份」标签页修改。",
+    "backupDailyNoStorage": "要等这个面板有了备份存储才行。",
+    "noScheduleTitle": "这个数据库没有备份计划",
+    "noScheduleHelp": "它是在有备份存储之前创建的，或者创建时关闭了每日备份。可以在下面开启计划，或者给团队里每个没有计划的数据库加上新数据库会得到的每日备份。",
+    "backupDefaults": "每天备份每个数据库",
+    "backupDefaultsApplied_other": "现在有 {{count}} 个数据库每天备份。",
+    "pieces": {
+      "title": "同时作为单独的变量",
+      "help": "给读取主机、端口、用户名和密码而不是 URL 的软件使用。修改密码时它们也会一起更新。",
+      "fieldsHelp": "清空某个名称就不提供该部分。只有密码是机密。",
+      "notDelivered": "不提供",
+      "listed": "另有 {{names}}",
+      "host": "主机",
+      "port": "端口",
+      "name": "数据库名",
+      "user": "用户名",
+      "password": "密码"
     }
   },
   "templates": {
@@ -1716,7 +1888,12 @@
     "withoutGPUHelp": "目前还没有服务器提供 GPU，因此它们在没有 GPU 的情况下运行。等有服务器提供后，请在各自的设置中为它们分配 GPU。",
     "noEnvironment": "还没有可以安装到的项目。请先创建一个。",
     "stackApps": "将安装的应用",
-    "stackAppsHelp": "{{names}}。每个应用都沿用模板给出的名称，因为其他应用通过这个名称访问它。"
+    "stackAppsHelp": "{{names}}。每个应用都沿用模板给出的名称，因为其他应用通过这个名称访问它。",
+    "plannedDatabases_other": "它的数据库将创建为 {{names}}。",
+    "needsRootTitle": "这个镜像以 root 启动",
+    "needsRoot_other": "{{names}} 以 root 启动，再切换到自己的用户，而 {{environment}} 处于最严格的级别，不允许这样做。按现在的样子安装，它永远不会启动。",
+    "acceptRoot": "让 {{environment}} 接受 root 镜像，然后安装",
+    "needsRootMember": "只有所有者或管理员才能让环境接受 root 镜像。请他们中的一位来做，或者选择一个已经接受 root 镜像的环境。"
   },
   "settings": {
     "title": "设置",
@@ -1809,7 +1986,7 @@
       },
       "cluster_k3s_version": {
         "label": "Kubernetes 版本",
-        "help": "新集群第一台服务器安装的 k3s 版本。留空则跟随 stable 通道。之后添加的服务器会以集群正在运行的版本加入，无论此处如何设置，因为不支持比所在集群更新的服务器。"
+        "help": "新集群第一台服务器安装的 k3s 版本。留空则使用本次 Skifity 发布经过测试的版本。之后添加的服务器会以集群正在运行的版本加入，无论此处如何设置，因为不支持比所在集群更新的服务器。"
       },
       "cluster_preview_ttl_days": {
         "label": "多久后移除预览环境",
@@ -1991,6 +2168,22 @@
         "label": "同时构建数",
         "help": "同时运行多少个构建。其余的按到达顺序排队等待，并在日志中说明。每个构建最多可使用 3 GiB 内存，占用应用的资源。"
       },
+      "cluster_etcd_round_trip_ms": {
+        "label": "控制平面服务器之间的往返时间超过多少时提醒",
+        "help": "毫秒。在一台服务器成为控制平面服务器之前（无论是以该身份添加还是被提升），面板会从它向每台已有的控制平面服务器建立 20 次连接并计时，平均往返时间超过此值时发出提醒。保存集群状态的 etcd 每次变更都要等待其中多数成员的响应，所以它们应该放在同一个地点。提醒从不阻止任何操作；填 0 即关闭。"
+      },
+      "cluster_etcd_jitter_ms": {
+        "label": "往返时间波动超过多少时提醒",
+        "help": "毫秒：即上述往返时间的标准差。一条通常很快、偶尔很慢的链路会让部分变更等待的时间远超平均值所显示的，而长到足以耽误 etcd 心跳的波动，会让它忙于选举而不是响应请求。填 0 即关闭此提醒。"
+      },
+      "cluster_etcd_loss_percent": {
+        "label": "连接丢失比例超过多少时提醒",
+        "help": "上述连接中耗时一秒或更久的百分比——对新连接来说，丢一个包的代价就是这么多。填 0 即关闭此提醒。"
+      },
+      "cluster_etcd_disk_sync_ms": {
+        "label": "控制平面服务器的磁盘同步慢于多少时提醒",
+        "help": "一次小写入真正落盘所需的毫秒数：在服务器成为控制平面服务器之前，用 dd 在它上面测得的 200 次写入的平均值。etcd 每次变更都要等它完成，而 etcd 自己的建议是几乎所有写入都低于 10 ms，所以平均值接近这个数就已经算慢了。填 0 即关闭此提醒。"
+      },
       "signin_api_allowed_networks": {
         "label": "API 令牌仅限来自",
         "help": "地址或网络，每行一个，例如 203.0.113.7 或 10.0.0.0/8。设置后，来自其他任何地方的 API 令牌（CLI、CI 任务、助手使用的）都会被拒绝，即使令牌有效。通过浏览器登录面板不受影响。留空则接受来自任何地方的令牌。"
@@ -2018,6 +2211,18 @@
       "git_ca_bundle": {
         "label": "Git 主机的证书颁发机构",
         "help": "仅用于证书不是由公共颁发机构签发的 Git 主机：签发该证书的颁发机构的 PEM 证书。构建在克隆时会在公共颁发机构之外同时信任它，面板读取仓库时也是如此。"
+      },
+      "signin_team_creation": {
+        "label": "谁可以创建团队",
+        "help": "面板管理员始终可以创建团队。选择“所有能登录的人”后，任何账户都可以创建——包括单点登录自动创建的账户，或其他团队里的查看者——并成为一个部署到本面板服务器上的团队的所有者。",
+        "options": {
+          "admins": "面板管理员",
+          "everyone": "所有能登录的人"
+        }
+      },
+      "storage_default_backups": {
+        "label": "备份新数据库",
+        "help": "默认开启。在上面的存储桶已配置时创建的数据库每天备份一次，时间是 UTC 02:00 到 05:00 之间它自己的一分钟，保留最近 7 份。它的「备份」标签页可以修改或关闭，创建者也可以不要。预览环境和面板不备份的引擎永远不会有。"
       }
     },
     "removeMemberConfirm": "{{name}} 将失去对这个团队及其中一切的访问权限。",
@@ -2092,12 +2297,6 @@
         "cause": "这个面板上没有人使用 {{0}}。",
         "impact": "没有改动任何东西。",
         "fix": "运行 `{{0}} admin list-users` 查看现有账户。"
-      },
-      "app_crash_loop": {
-        "title": "这个应用一直在重启",
-        "cause": "{{0}} 已经连续重启 {{1}} 次。Kubernetes 正在拉长每次重启之间的间隔。",
-        "impact": "应用无法稳定处理流量。",
-        "fix": "看下面最后几行日志：原因几乎总在里面。最常见的三种是：缺少环境变量、连不上数据库、应用其实没有监听那个端口。"
       },
       "app_not_started": {
         "title": "此应用还没有任何实例启动",
@@ -2197,9 +2396,9 @@
       },
       "backup_storage_not_configured": {
         "title": "还没有配置备份存储",
-        "cause": "这个团队还没有设置 S3 兼容的存储。",
+        "cause": "这个面板还没有设置 S3 兼容的存储。",
         "impact": "备份无法运行，也就没有任何东西在被保存。",
-        "fix": "打开「设置」→「存储」，添加一个 S3 兼容的存储桶。任何服务商都行：AWS S3、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
+        "fix": "由面板管理员在「设置」→「通用」→「备份存储」中设置。任何服务商都行：AWS S3、Backblaze B2、Cloudflare R2、Wasabi，或你自己运行的 MinIO。"
       },
       "backup_storage_read_only": {
         "title": "备份存储无法写入",
@@ -2704,6 +2903,42 @@
         "cause": "这个内核没有 WireGuard 模块，而这个集群用 WireGuard 加密服务器之间的流量。",
         "impact": "服务器没有被添加。上面没有任何改动。",
         "fix": "在这台服务器上安装：apt-get install -y wireguard-tools（若模块仍加载不了就重启）。如果内核根本装不了，就在「设置 -> 集群 -> Pod 网络」里把整个集群切到 vxlan，这会让所有服务器都关掉那层加密。"
+      },
+      "preflight_etcd_round_trip": {
+        "title": "这台服务器可能会成为一台较慢的控制平面服务器",
+        "cause": "从这台服务器到 {{0}} 的平均往返时间为 {{1}} ms，超过了本面板发出提醒的 {{2}} ms。",
+        "impact": "没有阻止任何操作，这只是提醒。处在慢速链路上的控制平面服务器会拖慢集群的每一次变更。",
+        "fix": "保存集群状态的 etcd 每次变更都要等待多数控制平面服务器，所以每一次变更都要等这条链路；慢到会耽误 k3s 半秒一次心跳的链路，还会让它们忙于选举而不是响应请求。请把控制平面服务器放在同一个地点，其他地方的服务器以工作节点身份加入。阈值在「设置」→「集群」里。"
+      },
+      "preflight_etcd_jitter": {
+        "title": "这台服务器可能会成为一台较慢的控制平面服务器",
+        "cause": "从这台服务器到 {{0}} 的往返时间波动了 {{1}} ms，超过了本面板发出提醒的 {{2}} ms。",
+        "impact": "没有阻止任何操作，这只是提醒。集群的变更要等的是这条链路慢下来的时候，而不是它的平均水平。",
+        "fix": "一条通常很快、偶尔很慢的链路会让部分变更等待的时间远超平均值所显示的，而长到足以耽误 etcd 心跳的波动，会让控制平面服务器忙于选举而不是响应请求。请把它们放在同一个地点，中间不要隔着 VPN 或繁忙的链路。阈值在「设置」→「集群」里。"
+      },
+      "preflight_etcd_loss": {
+        "title": "这台服务器可能会成为一台较慢的控制平面服务器",
+        "cause": "从这台服务器到 {{1}} 的连接中有 {{0}}% 丢了包，超过了本面板发出提醒的 {{2}}%。",
+        "impact": "没有阻止任何操作，这只是提醒。每丢一个包，etcd 的心跳和变更都要等到它被重发才能继续。",
+        "fix": "etcd 的心跳和每一次变更都经由这条链路发送，每丢一个包，它们都要等到这个包被重发。在把它设为控制平面服务器之前，先找出丢包发生在哪里（比如用 mtr），或者让它继续当工作节点。阈值在「设置」→「集群」里。"
+      },
+      "preflight_etcd_disk_sync": {
+        "title": "这台服务器可能会成为一台较慢的控制平面服务器",
+        "cause": "在这台服务器的磁盘上，一次小写入平均要 {{0}} ms 才能真正落盘，超过了本面板发出提醒的 {{1}} ms。",
+        "impact": "没有阻止任何操作，这只是提醒。慢速磁盘会拖慢集群的每一次变更，还可能让它失去领导者。",
+        "fix": "etcd 在响应之前会把每一次变更写入磁盘，所以慢速磁盘会拖慢整个集群，还可能让它失去领导者。请使用带本地 SSD 或 NVMe 磁盘的服务器，而不是网络存储或繁忙的共享磁盘。阈值在「设置」→「集群」里。"
+      },
+      "preflight_etcd_round_trip_unmeasured": {
+        "title": "这项控制平面检查有一部分无法执行",
+        "cause": "无法测量从这台服务器到 {{0}} 的往返时间。",
+        "impact": "没有阻止任何操作，这只是提醒。尚不清楚这台服务器与其他服务器的距离对 etcd 来说是否足够近。",
+        "fix": "没有阻止任何操作。面板用 bash 和 timeout 对 6443 端口的 TCP 连接计时，所以缺少这两者、或者连不上该端口的服务器无法被测量。在依赖这台控制平面服务器之前，请自己测一下两者之间的延迟。"
+      },
+      "preflight_etcd_disk_sync_unmeasured": {
+        "title": "这项控制平面检查有一部分无法执行",
+        "cause": "无法测量这台服务器的磁盘让一次写入真正落盘需要多久。",
+        "impact": "没有阻止任何操作，这只是提醒。尚不清楚这块磁盘对 etcd 来说是否够快。",
+        "fix": "没有阻止任何操作。面板在 /var/lib 下用 dd 对 200 次带同步的小写入计时，这需要那里的写权限以及 GNU 的 dd 和 date。在依赖这台控制平面服务器之前，请自己测一下磁盘，按 etcd 官方建议用 fio。"
       },
       "release_failed": {
         "title": "发布命令失败了",
@@ -3243,7 +3478,7 @@
         "title": "没有地方可以先行备份",
         "cause": "{{0}} 有磁盘或数据库，更新开始前会先备份它们，但尚未配置备份。",
         "impact": "没有做任何更改。",
-        "fix": "请在 Settings 中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
+        "fix": "请面板管理员在「设置」→「通用」→「备份存储」中配置备份存储，或者如果您有自己的备份，可以不备份直接更新。"
       },
       "promote_built_differently": {
         "title": "此应用会以不同方式构建该版本",
@@ -3261,13 +3496,13 @@
         "title": "此备份已加密，但没有可用于打开它的口令",
         "cause": "该备份使用备份口令加密，而当前未设置口令。",
         "impact": "没有恢复或更改任何内容。",
-        "fix": "请在 Settings 的 Storage 中输入加密时使用的口令，然后重新恢复。"
+        "fix": "请在「设置」→「通用」→「备份存储」中输入加密时使用的口令，然后重新恢复。"
       },
       "backup_wrong_passphrase": {
         "title": "备份口令无法打开此备份",
         "cause": "此备份使用的口令与当前设置的不同。",
         "impact": "没有恢复或更改任何内容。",
-        "fix": "请在 Settings 的 Storage 中设置加密时使用的口令，完成恢复后再改回当前口令。"
+        "fix": "请在「设置」→「通用」→「备份存储」中设置加密时使用的口令，完成恢复后再改回当前口令。"
       },
       "backup_damaged": {
         "title": "此备份已损坏",
@@ -3361,7 +3596,7 @@
       },
       "database_variable_taken": {
         "title": "该变量已连接另一个数据库",
-        "cause": "此应用的 {{0}} 是与其关联的另一个数据库的连接字符串。",
+        "cause": "此应用的 {{0}} 已经承载着与其关联的另一个数据库的连接。",
         "impact": "未做任何更改。",
         "fix": "请用其他名称关联此数据库，或先取消关联另一个数据库。"
       },
@@ -3753,7 +3988,7 @@
         "title": "通行密钥要求面板通过 HTTPS 以域名访问",
         "cause": "浏览器只会向通过 HTTPS 以域名打开、或在 localhost 上打开的页面提供通行密钥。此面板的地址（面板 URL 设置或 SKIFITY_PUBLIC_URL）不属于这两种。",
         "impact": "任何人都无法添加通行密钥或用它登录。密码、双重验证和单点登录照常可用。",
-        "fix": "为面板配置域名，并将 设置 → 通用 → 面板 URL 设为它的 https:// 地址。"
+        "fix": "在“设置”→“通用”→“面板地址”中为面板配置自己的域名，这会为它开启 HTTPS。"
       },
       "auth_passkey_refused": {
         "title": "该通行密钥未被接受",
@@ -4101,7 +4336,7 @@
         "title": "已经有服务器是用这个连接创建的",
         "cause": "面板中有 {{0}} 台服务器是用这个连接创建的，删除它们的机器时需要它。",
         "impact": "连接没有被移除。",
-        "fix": "先移除这些服务器，删除或保留它们的机器都可以。要换新令牌，就再添加一个连接。"
+        "fix": "先移除这些服务器，删除或保留它们的机器都可以。要换新令牌，请改为替换此连接的令牌：在服务器还在时也可以这样做。"
       },
       "cloud_name_taken": {
         "title": "已经有同名的服务器",
@@ -4252,6 +4487,204 @@
         "cause": "对 {{0}} 做的最后一件事不是添加它，而重试执行的是添加服务器的步骤。",
         "impact": "没有做任何改动。重试会让这台服务器重新加入集群。",
         "fix": "如果移除失败，再移除一次：已完成的步骤可以安全地重复。如果升级失败，先在服务器页面查看失败的步骤，然后移除这台服务器，再把它作为控制平面服务器重新添加。"
+      },
+      "app_instance_not_started": {
+        "title": "该实例尚未启动",
+        "cause": "{{0}} 尚未启动：{{1}}",
+        "impact": "在它启动之前，日志中没有任何内容。应用的其他实例不受影响。",
+        "fix": "在此期间，可以先读取其他实例或全部实例的日志。如果它一直没有启动，上面的原因说明了它在等待什么。"
+      },
+      "panel_domain_dns_mismatch": {
+        "title": "该域名还没有指向这台服务器",
+        "cause": "{{0}} 的 DNS 返回 {{1}}，而这台服务器是 {{2}}。",
+        "impact": "没有改动任何东西。面板仍在当前地址应答。",
+        "fix": "为 {{0}} 创建一条指向 {{1}} 的 A 记录，等几分钟后再迁移面板。如果这个名称经由面板看不到的途径到达这台服务器，比如负载均衡器，就仍然迁移。"
+      },
+      "panel_domain_certificate_pending": {
+        "title": "面板域名的证书还没有到",
+        "cause": "cert-manager 在五分钟内没有拿到 {{0}} 的证书。它最后说的是：{{1}}",
+        "impact": "面板仍在旧地址应答，没有重启。cert-manager 会继续申请证书。",
+        "fix": "确认 {{0}} 指向这台服务器，并且 80 和 443 端口对互联网开放，然后点“重试”。`kubectl -n skifity-system describe certificate skifity-panel-tls` 可以看到证书颁发机构的答复。"
+      },
+      "panel_domain_taken": {
+        "title": "已有应用在该域名上应答",
+        "cause": "{{0}} 是这个面板上某个应用的域名。",
+        "impact": "没有改动任何东西。面板和应用会共用一个主机名，访客到达哪一个将由 ingress 决定，登录 cookie 也一样。",
+        "fix": "为面板换一个名称，或者先把 {{0}} 从应用上移除。"
+      },
+      "panel_domain_busy": {
+        "title": "面板已在迁移中",
+        "cause": "迁移到 {{0}} 尚未完成。",
+        "impact": "没有改动任何东西。",
+        "fix": "等它完成或停止。“设置”→“通用”→“面板地址”会显示进度。"
+      },
+      "panel_domain_unsupported": {
+        "title": "这个面板无法自行迁移到域名",
+        "cause": "{{0}}",
+        "impact": "没有改动任何东西。",
+        "fix": "这适用于用 install.sh 安装、运行在它所管理的集群内的面板。在其他环境中，请在面板运行的地方为它配置域名，并把 SKIFITY_PUBLIC_URL 设为新地址。"
+      },
+      "panel_domain_move_failed": {
+        "title": "面板无法迁移到它的域名",
+        "cause": "把面板迁移到 {{0}} 已停止：{{1}}",
+        "impact": "面板仍在旧地址应答，没有重启。",
+        "fix": "按原因所说修复后点“重试”。已经完成的步骤不会重复。"
+      },
+      "panel_domain_interrupted": {
+        "title": "面板迁移被中断",
+        "cause": "在 {{0}} 的证书就绪之前面板重启了。",
+        "impact": "面板仍在旧地址应答。",
+        "fix": "点“重试”。已经完成的步骤不会重复。"
+      },
+      "panel_domain_not_restarted": {
+        "title": "面板没有在它的域名上重启",
+        "cause": "它被要求在 https://{{0}} 重启，却在 {{1}} 启动了。",
+        "impact": "证书已签发，域名也能到达面板，但面板自己的链接和登录 cookie 仍使用它启动时的地址。",
+        "fix": "点“重试”。如果再次发生，就带上 --domain {{0}} 重新运行安装程序，它在服务器上做同样的事。"
+      },
+      "panel_domain_no_free_address": {
+        "title": "没有可以回去的地址",
+        "cause": "面板没有记录 sslip.io 地址，集群公网 IP 也不是能据此生成该地址的 IP 地址。",
+        "impact": "没有改动任何东西。面板仍在它的域名上应答。",
+        "fix": "在“设置”→“域名与 HTTPS”→“集群公网 IP”中填写服务器的公网 IP 地址，然后重试。"
+      },
+      "panel_domain_moved": {
+        "title": "这个面板已经迁移",
+        "cause": "它现在在 {{0}} 应答。",
+        "impact": "这个地址仍接收 webhook 和 API 令牌，但不再接受浏览器会话。",
+        "fix": "打开 {{0}} 并在那里登录。"
+      },
+      "account_last_admin": {
+        "title": "这是面板的最后一位管理员",
+        "cause": "没有其他已启用的账户在管理面板；没有管理员，就没人能修改设置、升级面板或读取恢复密钥。",
+        "impact": "没有改动任何东西。",
+        "fix": "请先在“设置 → 账户”中，或在服务器上用 `{{0}} admin make-admin`，把其他人设为面板管理员。"
+      },
+      "account_self": {
+        "title": "这是你自己的账户",
+        "cause": "“设置 → 账户”用来修改其他人的账户。在那里停用、删除或取消自己的管理员身份，会把你锁在外面，而且没人能撤销。",
+        "impact": "没有改动任何东西。",
+        "fix": "请在“账户”页面修改你的登录方式。若想不再担任管理员，请先把别人设为管理员，再请对方操作。"
+      },
+      "account_last_owner": {
+        "title": "此账户是某个团队的唯一所有者",
+        "cause": "删除它会让 {{0}} 没有任何人能管理。",
+        "impact": "账户没有被删除。",
+        "fix": "请在“设置 → 成员”中为每个团队另设所有者，或删除该团队，然后再删除账户。改为停用账户则一切保持原样。"
+      },
+      "account_owns_plugins": {
+        "title": "此账户安装了插件",
+        "cause": "{{0}} 使用此账户的 API 令牌运行，令牌会随账户一起删除，插件会悄无声息地停止。",
+        "impact": "账户没有被删除。",
+        "fix": "请在“插件”中移除这些插件，如仍需要，再从另一位管理员的账户重新安装。然后再删除账户。"
+      },
+      "team_creation_restricted": {
+        "title": "只有面板管理员可以创建团队",
+        "cause": "本面板只允许管理员创建团队，而你不是管理员。",
+        "impact": "没有创建任何团队。",
+        "fix": "请面板管理员创建这个团队并把你加进去，或者在「设置」→「登录」里允许所有人创建团队。"
+      },
+      "team_has_servers": {
+        "title": "这个团队还有服务器",
+        "cause": "这些服务器属于这个团队，并且仍在集群中：{{0}}。",
+        "impact": "没有删除任何东西。",
+        "fix": "先在「服务器」里逐一移除它们，然后再删除团队。"
+      },
+      "deploy_crashed": {
+        "title": "新版本在启动时停止了",
+        "cause": "{{0}} 的新版本在启动时停止了。目前已停止 {{1}} 次。最后一次以退出码 {{2}}（{{3}}）结束。",
+        "impact": "新版本没有上线。如果之前有可用的版本，应用会回到那个版本。",
+        "fix": "它停止前输出的内容在部署日志中，通常会说明原因。OOMKilled 表示该版本需要更多内存，在“扩缩容”中设置。退出码 126 或 127 表示启动命令无法运行，在“设置”中设置。退出码 0 表示进程结束了，而 Web 进程必须持续运行。其他情况的原因都在那些日志行里：最常见的是缺少变量。"
+      },
+      "git_connection_wrong_host": {
+        "title": "这个 Git 连接属于另一个主机",
+        "cause": "{{0}} 连接的主机不是 {{1}} 所在的主机。",
+        "impact": "没有做任何更改。构建不会把该连接的令牌发送到这个仓库的主机，它的 Webhook 也无法在那里注册。",
+        "fix": "请选择仓库所在主机的连接，或在“设置”的 Git 中连接一个。"
+      },
+      "cloud_token_other_project": {
+        "title": "该令牌属于另一个项目",
+        "cause": "{{0}} 接受该令牌，但它看不到面板用 {{1}} 创建的任何机器。",
+        "impact": "令牌未被替换。连接保留现有的令牌。",
+        "fix": "在这些服务器所在的项目或账户中创建令牌，然后用它替换令牌。如果它们的机器已在服务商控制台中删除，请先在面板中移除这些服务器。"
+      },
+      "dns_zones_unseen": {
+        "title": "这些凭据看不到面板保存记录的所有区域",
+        "cause": "{{0}} 接受了凭据，但它们看不到 {{1}}，面板通过 {{2}} 在其中保存记录。",
+        "impact": "未保存任何内容。连接保留原有凭据，其记录保持不变。",
+        "fix": "也给凭据授予这些区域，或使用这些区域所在账户的凭据，然后再次替换。"
+      },
+      "backup_storage_endpoint_invalid": {
+        "title": "备份存储的端点不是一个地址",
+        "cause": "无法读取端点 {{0}}：{{1}}",
+        "impact": "备份无法运行，也就没有任何东西在被保存。",
+        "fix": "由面板管理员在「设置」→「通用」→「备份存储」中改正 S3 端点：例如 https://s3.eu-central-1.amazonaws.com 这样的地址。"
+      },
+      "database_pieces_clash": {
+        "title": "连接的两个部分会共用一个变量",
+        "cause": "{{0}} 被用于连接字符串、主机、端口、数据库名、用户名和密码中的多于一项。",
+        "impact": "未做任何更改。",
+        "fix": "给每一项单独的变量，或者去掉应用不读取的那些。"
+      },
+      "database_piece_not_offered": {
+        "title": "连接的这一部分不能单独提供",
+        "cause": "{{0}} 没有可以由关联作为单独变量提供给应用的 {{1}}。",
+        "impact": "未做任何更改。",
+        "fix": "去掉它。应用可以从连接字符串中读取数据库的全部信息。"
+      },
+      "template_input_required": {
+        "title": "模板需要一个没人填写的值",
+        "cause": "安装 {{1}} 需要 {{0}}。",
+        "impact": "没有创建任何东西。",
+        "fix": "填上它，然后再安装一次。"
+      },
+      "template_install_rolled_back": {
+        "title": "模板没能安装，它的任何部分都没有保留",
+        "cause": "安装 {{0}} 停在了这里：{{1}}",
+        "impact": "这次安装已经创建的东西又被删除了，也没有部署任何东西：{{0}}。",
+        "fix": "按「原因」里说的修好，然后再安装一次。"
+      },
+      "template_install_left_over": {
+        "title": "模板没能安装，其中一部分还留着",
+        "cause": "安装 {{0}} 停在了这里：{{1}}",
+        "impact": "没有部署任何东西，这次安装已经创建的东西也删除了，只有 {{0}} 没能删除。",
+        "fix": "在环境页面上删除剩下的东西，按「原因」里说的修好，然后再安装一次。"
+      },
+      "template_needs_root_images": {
+        "title": "这个模板的镜像以 root 启动，而这个环境拒绝这样做",
+        "cause": "{{0}} 的镜像以 root 启动，而 {{1}} 处于最严格的级别，会拒绝这样的镜像。",
+        "impact": "没有创建任何东西。",
+        "fix": "所有者或管理员可以在安装时为 {{0}} 选择「接受 root 镜像」，这样仍会拒绝特权容器和服务器上的任何东西。或者把它装到已经接受 root 镜像的环境里。"
+      },
+      "blueprint_secrets_missing": {
+        "title": "skifity.yaml 要求的密钥未设置",
+        "cause": "文件在 secrets 下列出了这些，而环境中没有：{{0}}。",
+        "impact": "没有应用在缺少它们的情况下启动或被修改。文件新建的应用会等它们设置好后再进行首次部署。",
+        "fix": "用 `skifity env set --secret KEY=... --app APP` 逐个设置后再次应用；如果应用不需要它也能运行，就在文件中标记 optional: true。"
+      },
+      "cli_delete_unconfirmed": {
+        "title": "删除应用需要确认",
+        "cause": "这里没有人可以输入 {{0}} 的名称，也没有给出 --yes。",
+        "impact": "没有删除任何内容。",
+        "fix": "确认无误后加上 --yes 再运行一次：应用的磁盘会随之删除，且无法恢复。"
+      },
+      "cli_app_not_found": {
+        "title": "这里没有该名称的应用",
+        "cause": "该环境中没有名为 {{0}} 的应用。现有：{{1}}。",
+        "impact": "命令未执行。",
+        "fix": "请给出其中一个名称，或用 --env 指定其他环境。"
+      },
+      "cli_promote_no_target": {
+        "title": "那里没有可推广到的应用",
+        "cause": "版本会推广到项目另一个环境中同名的应用，而 {{0}} 中没有。此应用的版本可以推广到：{{1}}。",
+        "impact": "没有推广任何内容。",
+        "fix": "在 {{0}} 中创建同名应用，或在面板中克隆此环境，然后再次推广。"
+      },
+      "request_refused": {
+        "title": "请求未发送",
+        "cause": "页面构建的地址 {{0}} 会访问到面板中并非预期的其他部分。",
+        "impact": "没有发送任何内容。该页面可能是通过地址异常的链接打开的。",
+        "fix": "请通过面板自身的导航打开该页面，而不是使用该链接。"
       }
     }
   },
@@ -4283,7 +4716,7 @@
     "pushDeploysManualHelp": "Skifity 无法自行添加 Webhook，请将此 URL 添加到仓库的 Webhook 设置中，并使用“设置 → Git → Webhook”中显示的密钥。",
     "webhookSecret": "Webhook 密钥",
     "webhookSecretHelp": "将此粘贴为 Webhook 的密钥。它只属于这个连接，因此可以交给仓库而不泄露令牌。",
-    "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名。重新连接该账号即可为其生成独立密钥。",
+    "webhookSecretIsToken": "此连接创建于每个连接拥有独立密钥之前，因此它的 Webhook 使用令牌签名——如果令牌后来被替换，则是当时的那个令牌——该令牌不会显示。重新连接该账号即可为其生成独立密钥。",
     "showWebhook": "Webhook",
     "chooseRepository": "从 {{source}} 中选择",
     "searchRepositories": "搜索仓库",
@@ -4311,7 +4744,15 @@
       "webhookStepFill": "填写标题，将上面的地址粘贴为 URL，将上面的密钥粘贴为 Secret。",
       "webhookStepTriggers": "在 Triggers 下选择 Choose from a full list：Repository Push，以及 Pull Request Created、Updated、Merged 和 Declined。",
       "webhookStepSave": "保存。Bitbucket 会用密钥为每次投递签名，Skifity 会拒绝任何未签名的投递。"
-    }
+    },
+    "pushDeploysNoConnection": "推送暂时不会部署这个应用",
+    "pushDeploysNoConnectionHelp": "没有为它注册 Webhook，因为它没有可用于注册的 Git 连接。请在“设置”的 Git 中连接你的 Git 账号，然后在应用的设置中选择该连接。",
+    "connectAccount": "连接 Git 账号",
+    "pushDeploysWhatToCheck": "检查什么",
+    "replaceToken": "替换令牌",
+    "replaceTokenTitle": "替换 {{name}} 的令牌",
+    "replaceTokenHelp": "连接保持不变：其仓库上的 Webhook、Webhook 的密钥，以及它服务的应用。新令牌从下一次构建、列表和状态起使用。",
+    "tokenReplaced": "{{name}} 已使用新令牌。"
   },
   "notifications": {
     "title": "通知",
@@ -4409,6 +4850,8 @@
     "onlyProjects": "仅 {{projects}}",
     "noProjectsLeft": "它的项目已被删除：只会收到服务器事件",
     "kindFixed": "渠道的类型无法更改。请改为添加另一个渠道。",
+    "untested": "未经端到端测试",
+    "untestedHelp": "Skifity 的测试只在本地替身上检查发往 {{service}} 的内容，从未在 {{service}} 本身上验证过。添加渠道后，请使用“发送测试”并确认消息已送达。",
     "noEventsChosen": "未选择任何事件：该渠道会收到除备份成功外的所有事件。",
     "limitToProjects": "仅限部分项目",
     "limitToProjectsHelp": "关于应用、数据库或备份的事件只会从你选择的项目发送。关于服务器和面板本身的事件会发送到每个渠道，因为它们影响所有项目。",
@@ -4570,6 +5013,9 @@
     "storeUnsignedHelp": "未设置签名密钥，因此面板无法判断这份列表是否是商店发布的那一份。请在设置、插件中填写。无论如何，插件能做什么都会在安装前展示。",
     "storeEmpty": "商店里没有内容",
     "storeEmptyHelp": "目录已读取，其中没有插件。",
+    "storeNotPublished": "尚未发布",
+    "storeNotPublishedTitle": "Skifity 插件商店尚未发布",
+    "storeNotPublishedHelp": "{{url}} 上还没有发布任何内容，因此这里没有可浏览的插件，面板也不会访问该地址。请通过插件清单的地址或直接粘贴清单来安装插件，或在设置、插件中指向您自己的商店。",
     "paid": "付费",
     "buy": "购买",
     "alreadyInstalled": "已安装",
@@ -4690,7 +5136,13 @@
     "verify": "验证",
     "verifying": "正在验证…",
     "verified": "已于 {{when}} 打开并完整读取",
-    "verifyFailed": "无法完整读取：{{reason}}"
+    "verifyFailed": "无法完整读取：{{reason}}",
+    "storage": {
+      "missingTitle": "没有在进行任何备份",
+      "missing": "这个面板还没有备份存储，所以上面的任何东西都没有备份。",
+      "askAdmin": "请面板管理员在「设置」→「通用」→「备份存储」中设置。",
+      "openSettings": "在「设置」→「通用」→「备份存储」中设置。"
+    }
   },
   "processes": {
     "title": "进程",
@@ -5164,7 +5616,11 @@
     "removeConfirm": "面板将不再通过 {{name}} 创建和删除记录。",
     "removeConsequence": "面板通过它创建的记录会留在服务商处，此后归你管理：{{number}} 条。",
     "recordsKept": "由面板维护的记录：{{number}}",
-    "zonesListed": "截至 {{when}}"
+    "zonesListed": "截至 {{when}}",
+    "replace": "替换凭据",
+    "replaceTitle": "替换 {{name}} 的凭据",
+    "replaceHelp": "连接保留其名称以及面板通过它创建的记录。新凭据在保存前会被检查，并且必须能看到这些记录所在的每个区域。",
+    "replaced": "{{name}} 已使用新凭据：{{zones}}"
   },
   "logDrains": {
     "help": "把应用输出的所有内容发送到集群外的服务，在那里保存、搜索并设置告警。每台服务器上的采集器会把每一行发送到其所属团队的投递目标。",
@@ -5333,6 +5789,162 @@
     "removeConfirm": "令牌会从面板中删除。也请在服务商的控制台里吊销它。",
     "tokenHint": "令牌 …{{hint}}",
     "serverCount": "用它创建的服务器：{{servers}}",
-    "checked": "{{when}} 检查过"
+    "checked": "{{when}} 检查过",
+    "replaceToken": "替换令牌",
+    "replaceTokenTitle": "替换 {{name}} 的令牌",
+    "replaceTokenHelp": "连接保留其服务器。新令牌在保存前会被检查：它必须有效、可写，并且如果有服务器是用此连接创建的，它必须能看到这些服务器的机器。",
+    "tokenReplaced": "{{name}} 已使用新令牌，并且可以创建服务器。"
+  },
+  "panelDomain": {
+    "title": "面板地址",
+    "help": "大家打开这个面板的地址。用上自己的域名后，面板通过 HTTPS 提供服务，证书来自 Let's Encrypt。",
+    "answersAt": "访问地址",
+    "https": "HTTPS",
+    "plainHttp": "普通 HTTP",
+    "plainHelp": "在普通 HTTP 下，密码以明文在网络上传输，通行密钥也无法使用。为面板配置自己的域名即可开启 HTTPS。",
+    "certificateReady": "证书有效期至 {{date}}，会自动续期。",
+    "certificateIssuing": "证书正在签发。",
+    "previous": "它仍在 {{hosts}} 上应答，供在那里注册的 webhook 使用。用浏览器打开它会被转到这里。",
+    "domain": "域名",
+    "anotherDomain": "迁移到另一个域名",
+    "domainHelp": "你自己的域名，例如 panel.example.com。请先创建它的 DNS 记录：记录指向这里后才会签发证书。",
+    "move": "迁移面板",
+    "moveAnyway": "仍然迁移",
+    "moveTitle": "把面板迁移到 {{domain}}？",
+    "moveConfirm": "会先申请证书，证书签发之前面板继续在这里应答。之后面板在 https://{{domain}} 重启，所有人都需要在那里重新登录。这个地址会继续接收 webhook。",
+    "moving": "正在把面板迁移到 {{domain}}",
+    "movingHelp": "正在申请证书。证书到来之前面板继续在这里应答，通常一两分钟，然后在 https://{{domain}} 重启。",
+    "restarting": "正在 {{domain}} 重启",
+    "restartingHelp": "证书已签发，面板正在 https://{{domain}} 重启。此页面会自动在那里打开；打开后请重新登录。",
+    "open": "打开 {{url}}",
+    "failed": "迁移到 {{domain}} 已停止",
+    "tryAgain": "重试",
+    "cancel": "取消迁移",
+    "cancelTitle": "取消迁移到 {{domain}}？",
+    "cancelConfirm": "面板的路由恢复为只指向 {{host}}。不会重启任何东西。",
+    "goBack": "回到 {{url}}",
+    "goBackTitle": "移除面板的域名？",
+    "goBackConfirm": "面板会在 {{url}} 以普通 HTTP 重启。",
+    "goBackConsequence": "所有人都会被登出，通行密钥不再可用，在 {{domain}} 注册的 webhook 也将无法送达。",
+    "goingBack": "面板正在 {{url}} 重启。一分钟后在那里打开并重新登录。",
+    "installer": "安装程序在服务器上也能做同样的事：带上 --domain 和域名重新运行它。",
+    "dnsHere": "记录已指向这台服务器，Let's Encrypt 可以签发证书。",
+    "dnsPartly": "{{addresses}} 不是这台服务器，Let's Encrypt 可能被引到那里并拒绝签发证书。删除那条记录，或者改为 {{expected}}。",
+    "dnsElsewhere": "把记录改为 {{expected}}，然后再检查一次。",
+    "dnsUnknown": "这个面板不知道自己的公网地址，所以无法判断它是否指向这里。请在“设置”“域名与 HTTPS”“集群公网 IP”中设置。",
+    "dnsProxied": "这个名称返回的是 Cloudflare 的地址。把记录指向 {{expected}}，并在面板能通过 HTTPS 打开之前设为“仅 DNS”（灰色云朵）：Let's Encrypt 可能无法通过代理访问到它。",
+    "httpAlertTitle": "这个面板正通过普通 HTTP 提供服务",
+    "httpAlert": "密码以明文在网络上传输，通行密钥也无法使用。",
+    "httpAlertAction": "设置 HTTPS"
+  },
+  "accounts": {
+    "tab": "账户",
+    "title": "账户",
+    "description": "所有能登录此面板的人，无论属于哪个团队。停用账户会立即让它在所有设备上退出登录，并且可以撤销；删除账户则无法撤销。你自己的账户请在“账户”页面中修改。",
+    "serverHint": "当没有人能登录来做这件事时，在面板服务器上运行 {{command}} 也能做到。",
+    "account": "账户",
+    "signsInWith": "登录方式",
+    "teams": "团队",
+    "lastSignIn": "上次登录",
+    "you": "你",
+    "administrator": "面板管理员",
+    "disabledBadge": "已停用",
+    "onlyOwnerOf": "{{teams}} 的唯一所有者",
+    "installedPlugins": "安装了 {{plugins}}",
+    "password": "密码",
+    "twoFactor": "双重验证",
+    "passkeys_other": "{{count}} 个通行密钥",
+    "sso": "单点登录",
+    "noWayIn": "无",
+    "noTeams": "不在任何团队中",
+    "never": "从未",
+    "actions": "{{name}} 的操作",
+    "makeAdmin": "设为面板管理员",
+    "revokeAdmin": "取消面板管理员",
+    "enable": "启用",
+    "disable": "停用",
+    "resetTwoFactor": "重置双重验证",
+    "disableTitle": "停用 {{name}}？",
+    "disableDescription": "此账户会立即在所有设备上退出登录，其密码、通行密钥、单点登录和 API 令牌都会失效。它创建的内容都不会被删除，重新启用账户即可恢复一切。",
+    "disablePlugins": "此账户安装的插件使用它的 API 令牌运行，在账户停用期间会停止：{{plugins}}。",
+    "makeAdminTitle": "将 {{name}} 设为面板管理员？",
+    "makeAdminDescription": "对方将能修改面板的所有设置、安装插件、升级面板及其集群、读取恢复密钥，并修改这里的所有账户，包括你的。面板会先要求你输入密码。",
+    "revokeAdminTitle": "取消 {{name}} 的面板管理员身份？",
+    "revokeAdminDescription": "对方保留所在团队及其中的一切，但失去面板设置、组件、升级、插件和恢复密钥的访问权限。",
+    "resetTwoFactorTitle": "重置 {{name}} 的双重验证？",
+    "resetTwoFactorDescription": "这是为手机丢失且恢复码也不在的情况准备的，所以请确认确实是本人在请求。对方的验证器和恢复码将失效，并在所有设备上退出登录；之后仅凭密码即可登录，并可在“账户”中重新开启双重验证。面板会先要求你输入密码。",
+    "resetTwoFactorStrongTeams": "{{teams}} 要求第二重验证、通行密钥或单点登录，在重新开启双重验证之前，会拒绝此账户仅用密码登录。",
+    "deleteDescription": "此账户将无法再登录，也无法恢复。它的邮箱地址可以作为新账户重新邀请。",
+    "deleteGoes": "将一并删除：{{what}}。活动日志会保留它做过的操作。",
+    "deleteGoesNothing": "它不在任何团队中，也没有 API 令牌或通行密钥。活动日志会保留它做过的操作。",
+    "goesTeams_other": "它在 {{teams}} 中的成员身份",
+    "goesTokens_other": "{{count}} 个 API 令牌",
+    "goesPasskeys_other": "{{count}} 个通行密钥",
+    "goesSSO": "它与单点登录的关联",
+    "disabledDone": "{{name}} 已停用，并已在所有设备上退出登录。",
+    "enabledDone": "{{name}} 可以再次登录了。",
+    "adminGrantedDone": "{{name}} 现在是面板管理员。",
+    "adminRevokedDone": "{{name}} 不再是面板管理员。",
+    "twoFactorResetDone": "已关闭 {{name}} 的双重验证，对方已在所有设备上退出登录。",
+    "deletedDone": "已删除 {{name}}。"
+  },
+  "teams": {
+    "new": "新建团队",
+    "newHelp": "你将成为它的所有者。每个团队有自己的项目、服务器、连接和成员，其他团队的人看不到其中任何内容。",
+    "name": "团队名称",
+    "nameHelp": "团队里每个人看到的名称。团队的所有者和管理员之后可以修改。",
+    "create": "创建团队",
+    "created": "{{name}} 已就绪。",
+    "renameHelp": "团队里每个人在面板中看到的名称。应用、它们的地址和数据都不会因此改变。",
+    "renamed": "团队现在叫 {{name}}。",
+    "leave": "退出",
+    "leaveNamed": "退出 {{name}}",
+    "leaveTitle": "退出 {{name}}？",
+    "leaveConfirm": "你会立刻失去对其中所有内容的访问权限，为它创建的 API 令牌也会失效。管理这个团队的人可以再次把你加进来。",
+    "left": "你已退出 {{name}}。",
+    "noneTitle": "你不在任何团队里",
+    "noneCreate": "创建一个团队开始部署，或者请管理某个团队的人把你加进去。",
+    "noneAsk": "请管理某个团队的人把你加进去。在那之前，这里没有可显示的内容。",
+    "delete": "删除这个团队",
+    "deleteHelp": "从集群中移除团队里的所有项目、环境、应用和数据库，团队本身也随之删除。只有所有者可以操作，并且团队还有服务器或有内容正在部署时不能删除。",
+    "deleteButton": "删除团队",
+    "deleteConfirm": "这个团队的所有项目、环境、应用和数据库都会从集群中移除，其中的每个人都会失去访问权限。",
+    "deleteKeeps": "已经在你的存储桶里的备份，以及团队的 DNS 提供商创建的 DNS 记录，都不会被删除。",
+    "deletedToast": "{{name}} 已删除。"
+  },
+  "attention": {
+    "title": "需要处理",
+    "nothing": "没有需要处理的事项",
+    "bellCount_other": "{{count}} 项需要处理",
+    "openOverview": "打开总览",
+    "showAll": "显示全部 {{total}} 项",
+    "showFewer": "收起",
+    "severity": {
+      "error": "错误",
+      "warning": "警告"
+    },
+    "deploy_failed": "{{app}} 的第 {{number}} 次部署失败",
+    "app_unhealthy": "{{app}} 没有实例在运行",
+    "app_alert": "{{app}} 的{{alerts}}超过了告警阈值",
+    "app_vulnerable_other": "{{app}} 运行的镜像有 {{count}} 个严重漏洞",
+    "app_drifted": "{{app}} 在面板之外被修改过",
+    "domain_cert_failed": "{{hostname}} 没有证书：签发失败",
+    "database_failed": "数据库 {{database}} 失败",
+    "database_unhealthy": "数据库 {{database}} 状态异常",
+    "backup_failed": "{{target}} 的上一次备份失败",
+    "backup_missed": "{{target}} 没有按计划备份",
+    "server_not_ready": "服务器 {{server}} 未就绪",
+    "server_failed": "添加服务器 {{server}} 失败",
+    "server_alert": "服务器 {{server}} 的{{alerts}}超过了告警阈值",
+    "certificate_expiring_other": "证书 {{certificate}} 将在 {{count}} 天后过期",
+    "certificate_expired": "证书 {{certificate}} 已过期",
+    "no_channel": "出了问题没有人会收到通知：还没有任何通知渠道",
+    "panel_backup_failed": "面板对自身的上一次备份失败"
+  },
+  "deployToast": {
+    "succeeded": "{{app}} 已上线：第 {{number}} 次部署成功",
+    "failed": "{{app}} 的第 {{number}} 次部署失败",
+    "open": "打开",
+    "anApp": "一个应用"
   }
 }

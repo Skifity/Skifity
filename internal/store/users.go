@@ -93,15 +93,23 @@ func (db *DB) CountUsers(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// UpdateUser writes the mutable fields of a user.
+// UpdateUser writes the mutable fields of a user — all but whether it is a
+// panel administrator and whether it is disabled.
+//
+// Those two are written only by SetUserAdmin and SetUserDisabled. Every caller
+// of this one writes back a row it read at the start of its request — the
+// account changing its own name, password or second factor — and a password
+// check in between is long enough for an administrator to disable or demote
+// the account. Writing them here put that back as it was, and skipped the rule
+// that keeps the last administrator.
 func (db *DB) UpdateUser(ctx context.Context, u *User) error {
 	now := Now()
 	res, err := db.Exec(ctx, `UPDATE users SET
 		email = ?, name = ?, password_hash = ?, totp_secret_enc = ?, totp_enabled = ?,
-		is_admin = ?, disabled = ?, locale = ?, theme = ?, recovery_saved = ?, updated_at = ?
+		locale = ?, theme = ?, recovery_saved = ?, updated_at = ?
 		WHERE id = ?`,
-		u.Email, u.Name, u.PasswordHash, u.TOTPSecretEnc, u.TOTPEnabled, u.IsAdmin,
-		u.Disabled, u.Locale, u.Theme, u.RecoverySaved, now, u.ID)
+		u.Email, u.Name, u.PasswordHash, u.TOTPSecretEnc, u.TOTPEnabled,
+		u.Locale, u.Theme, u.RecoverySaved, now, u.ID)
 	if err != nil {
 		return fmt.Errorf("update user: %w", err)
 	}
@@ -127,7 +135,7 @@ func (db *DB) ForgetSavedRecoveryKeys(ctx context.Context) error {
 
 // UpdatePasswordHash writes only the password hash.
 //
-// Separate from UpdateUser, which writes eleven columns from whatever the
+// Separate from UpdateUser, which writes nine columns from whatever the
 // caller last read. Upgrading a hash happens in the middle of an ordinary
 // sign-in, minutes after the row was read, so a full-row write there would put
 // back the name, locale, theme — and whether the account is disabled — as they
@@ -143,6 +151,103 @@ func (db *DB) UpdatePasswordHash(ctx context.Context, id, hash string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ErrLastAdmin is taking away the panel's last enabled administrator, which
+// would leave nobody who can change its settings, upgrade it or read its
+// master key.
+var ErrLastAdmin = errors.New("this is the panel's last enabled administrator")
+
+// keepsAnAdmin is the condition every change that can take an administrator
+// away is made under: the row is not an enabled administrator, or another
+// enabled one remains. It is part of the statement that makes the change, so
+// two administrators demoting each other at the same moment cannot both win —
+// a count read first and checked afterwards would let them.
+const keepsAnAdmin = `(users.is_admin = 0 OR users.disabled = 1 OR EXISTS (SELECT 1 FROM users AS other
+	WHERE other.id != users.id AND other.is_admin = 1 AND other.disabled = 0))`
+
+// SetUserAdmin makes an account a panel administrator, or stops it being one.
+// Taking away the last enabled administrator is ErrLastAdmin.
+//
+// The only place the column is written, and the only one written here:
+// whoever is being changed may be signed in and changing their own name at the
+// same moment.
+func (db *DB) SetUserAdmin(ctx context.Context, id string, admin bool) error {
+	query := `UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?`
+	if !admin {
+		query += ` AND ` + keepsAnAdmin
+	}
+	res, err := db.Exec(ctx, query, admin, Now(), id)
+	if err != nil {
+		return fmt.Errorf("change panel administrator: %w", err)
+	}
+	return db.changedOrWhyNot(ctx, res, id)
+}
+
+// SetUserDisabled turns an account off, or on again. Disabling the last
+// enabled administrator is ErrLastAdmin.
+//
+// The only place the column is written, for the reason UpdatePasswordHash
+// gives: a request that read the row before the account was disabled must not
+// be able to write it back as it was.
+func (db *DB) SetUserDisabled(ctx context.Context, id string, disabled bool) error {
+	query := `UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?`
+	if disabled {
+		query += ` AND ` + keepsAnAdmin
+	}
+	res, err := db.Exec(ctx, query, disabled, Now(), id)
+	if err != nil {
+		return fmt.Errorf("change whether the account is disabled: %w", err)
+	}
+	return db.changedOrWhyNot(ctx, res, id)
+}
+
+// changedOrWhyNot turns an update that matched no row into the reason: no
+// such account, or the last administrator kept.
+func (db *DB) changedOrWhyNot(ctx context.Context, res sql.Result, id string) error {
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	if _, err := db.GetUser(ctx, id); err != nil {
+		return err
+	}
+	return ErrLastAdmin
+}
+
+// CountEnabledAdmins reports how many accounts can administer the panel now.
+func (db *DB) CountEnabledAdmins(ctx context.Context) (int, error) {
+	var n int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE is_admin = 1 AND disabled = 0`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count panel administrators: %w", err)
+	}
+	return n, nil
+}
+
+// ResetSecondFactor turns an account's two-factor authentication off from the
+// outside: the secret, whether it is on, the last code spent and every
+// recovery code go together, in one transaction.
+//
+// It is for somebody who has lost both the phone and the codes, which the
+// account's own page cannot help with — turning two-factor off there needs a
+// code. Only the two-factor columns are written, for the reason
+// UpdatePasswordHash gives. The counter goes back to zero so that the codes of
+// a new secret, set up later, are not measured against the old one's.
+func (db *DB) ResetSecondFactor(ctx context.Context, userID string) error {
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET totp_secret_enc = '', totp_enabled = 0,
+			totp_last_counter = 0, updated_at = ? WHERE id = ?`, Now(), userID)
+		if err != nil {
+			return fmt.Errorf("reset two-factor: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNotFound
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM recovery_codes WHERE user_id = ?`, userID); err != nil {
+			return fmt.Errorf("delete recovery codes: %w", err)
+		}
+		return nil
+	})
 }
 
 // TouchUserLogin records a successful sign-in.

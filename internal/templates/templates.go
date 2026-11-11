@@ -200,11 +200,34 @@ type Service struct {
 	// prom/prometheus's nobody — so it runs at the strict confinement
 	// level, where the kubelet refuses a user it cannot see is not root.
 	RunAsUser int `json:"run_as_user,omitempty"`
+	// NeedsRoot is an image that starts as root and drops to its own user,
+	// as the official WordPress, Matomo and every linuxserver.io image do.
+	// The strictest level refuses one, and it is the default, so the install
+	// says so before anything is made rather than leaving an app that never
+	// starts: the environment has to accept root images first.
+	//
+	// Said here rather than only in the notes, which were the one place 56
+	// templates said it, read by nobody until after the install.
+	NeedsRoot bool `json:"needs_root,omitempty"`
 	// GPU is a card the service uses when the cluster has one: Ollama,
 	// ComfyUI. Only ever a preference. On a cluster with none it is
 	// installed without, and runs on the CPU the way these do, so no
 	// template needs a GPU to be installed.
 	GPU *ServiceGPU `json:"gpu,omitempty"`
+
+	// How the service's instances are checked, and how long they have, as
+	// an app's health settings say; each left out is what any app gets.
+	// The software is what knows: GitLab reconfigures for minutes before it
+	// listens, and the default two minutes restart it in a loop; WordPress's
+	// health path asks its database, and on a server apart from that
+	// database one check took longer than the default three seconds.
+	//
+	// HealthCheck is http, tcp or none, and follows health_path when left
+	// out. Runtime settings, like the rest of an app's health check: they
+	// reach the probes and never the build (ADR-0007).
+	HealthCheck          string `json:"health_check,omitempty"`
+	HealthStartSeconds   int    `json:"health_start_seconds,omitempty"`
+	HealthTimeoutSeconds int    `json:"health_timeout_seconds,omitempty"`
 }
 
 // ServiceGPU is the cards a template's service uses when there are some.

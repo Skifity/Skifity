@@ -2904,6 +2904,59 @@ else
 fi
 [ -z "$HOMER_ID" ] || api DELETE "/api/apps/$HOMER_ID" >/dev/null 2>&1 || true
 
+# WordPress: an image that starts as root, and a database it reads in pieces
+# — WORDPRESS_DB_HOST and the three beside it — which it was handed as a URL
+# it never reads until the catalogue was checked against what images read. It
+# goes into an environment of its own, so the one everything else runs in
+# stays at the strictest level. Installed without accepting root images it is
+# refused with nothing made; accepted, the level changes on the way, and the
+# installer only answers once WordPress has reached its database.
+WP_ENV=$(api POST "/api/projects/$PROJECT_ID/environments" '{"name":"wordpress"}' | pick id 2>/dev/null || echo "")
+if [ -z "$WP_ENV" ]; then
+	no "an environment for WordPress could not be created"
+else
+	CODE=$(api_code POST /api/templates/wordpress/install "{\"environment_id\":\"$WP_ENV\"}")
+	[ "$CODE" = "409" ] \
+		&& ok "WordPress into an environment at the strictest level is refused before anything is made" \
+		|| no "WordPress into an environment at the strictest level answered $CODE, not 409"
+	WP=$(api_any POST /api/templates/wordpress/install "{\"environment_id\":\"$WP_ENV\",\"allow_root\":true}")
+	WP_ID=$(printf '%s' "$WP" | pick apps.0.id 2>/dev/null || echo "")
+	if [ -z "$WP_ID" ]; then
+		no "the WordPress template could not be installed: $(printf '%s' "$WP" | head -c 300)"
+	elif ! wait_deployed "$WP_ID"; then
+		no "WordPress, installed with its database, did not deploy"
+	else
+		WP_HOST=$(api GET "/api/apps/$WP_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+		CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WP_HOST" "http://127.0.0.1/wp-admin/install.php?step=1")
+		[ "$CODE" = "200" ] \
+			&& ok "WordPress, installed from the catalogue with its database, answers its installer" \
+			|| no "WordPress's installer answered $CODE; it cannot reach its database, or did not start"
+	fi
+	api DELETE "/api/environments/$WP_ENV" >/dev/null 2>&1 || true
+fi
+
+# Whether WordPress needs root at all. Its image supports running as an
+# arbitrary user, and the strictest level would take www-data's uid. A finding
+# rather than a promise, so it never fails the run: if this answers, the
+# WordPress templates can say run_as_user: 33 instead of needs_root, and run
+# without anybody lowering an environment.
+WWW_ID=$(api POST "/api/environments/$ENV_ID/apps" \
+	'{"name":"wordpress-as-www-data","source_type":"image","image":"wordpress:6.9.4-apache","port":80}' \
+	| pick app.id 2>/dev/null || echo "")
+if [ -z "$WWW_ID" ]; then
+	skip "WordPress as www-data at the strictest level" "the app could not be created"
+elif ! api PATCH "/api/apps/$WWW_ID" '{"run_as_user":33}' >/dev/null 2>&1 \
+	|| ! api POST "/api/apps/$WWW_ID/deploy" >/dev/null 2>&1 || ! wait_deployed "$WWW_ID"; then
+	skip "WordPress as www-data at the strictest level" "it did not start, so its templates keep needs_root"
+else
+	WWW_HOST=$(api GET "/api/apps/$WWW_ID/domains" | pick items.0.hostname 2>/dev/null || echo "")
+	CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Host: $WWW_HOST" "http://127.0.0.1/readme.html")
+	[ "$CODE" = "200" ] \
+		&& ok "WordPress runs as www-data at the strictest level; its templates could say run_as_user: 33 instead of needs_root" \
+		|| skip "WordPress as www-data at the strictest level" "it started, and its files answered $CODE"
+fi
+[ -z "$WWW_ID" ] || api DELETE "/api/apps/$WWW_ID" >/dev/null 2>&1 || true
+
 step "Promoting a version to another environment"
 
 # The version phase 1 built, run in a second environment of the same project
@@ -3336,6 +3389,108 @@ elif [ -n "$SECOND_ID" ]; then
 			ok "an app with nothing on that server's disk answered all $ASKED requests while the server was taken away"
 		else
 			no "$(printf '%s\n' "$MISSED" | wc -l | tr -d ' ') of $ASKED requests failed while the second server was taken away: $(printf '%s' "$MISSED" | tr '\n' ' ')"
+		fi
+	fi
+fi
+
+# --- the panel on a domain of its own ---------------------------------------
+
+# Last, because it restarts the panel at another address, and everything above
+# talks to it at the one it was installed with. It goes back at the end.
+if wants 5; then
+	step "The panel moved to a domain of its own, from Settings"
+	if [ -z "$VERIFY_ACME_DIRECTORY" ] || [ -z "$VERIFY_ACME_ADDRESS" ] || [ -z "$VERIFY_ACME_ROOT" ]; then
+		skip "moving the panel to a domain" "no ACME server; set VERIFY_ACME_DIRECTORY, VERIFY_ACME_CA, VERIFY_ACME_ADDRESS and VERIFY_ACME_ROOT to check it"
+	else
+		# The issuer is pointed at the ACME server the way a person points it
+		# at one of their own, in case phase 1 did not run.
+		ACME_SETTINGS=$(python3 -c '
+import json, sys
+print(json.dumps({"values": {"domains.acme_server": sys.argv[1], "domains.acme_ca_bundle": open(sys.argv[2]).read()}}))
+' "$VERIFY_ACME_DIRECTORY" "$VERIFY_ACME_CA")
+		api PUT /api/settings "$ACME_SETTINGS" >/dev/null || no "the ACME settings were refused"
+		OLD_URL=$(panel_public_url)
+		OLD_HOST=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$OLD_URL")
+		# A name that resolves to this machine for the ACME server, and is not
+		# an sslip.io one, which the panel refuses for itself (ADR-0015). Its
+		# DNS answers with this machine's address on the ACME server's network,
+		# not the cluster's public one, which is the "reaches the server some
+		# other way" the panel is told about with ignore_dns.
+		PANEL_DOMAIN="panel.$(printf '%s' "$VERIFY_ACME_ADDRESS" | tr . -).nip.io"
+		MOVED=$(api_any POST /api/panel/domain "{\"domain\":\"$PANEL_DOMAIN\",\"ignore_dns\":true}" || true)
+		case "$(printf '%s' "$MOVED" | pick state 2>/dev/null || echo "")" in
+		moving) ok "moving the panel to $PANEL_DOMAIN started" ;;
+		*) no "moving the panel to $PANEL_DOMAIN was refused: $(printf '%s' "$MOVED" | head -c 300)" ;;
+		esac
+		NEW_URL=""
+		for _ in $(seq 1 90); do
+			NEW_URL=$(kubectl -n "$PANEL_NS" get deploy skifity-panel \
+				-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SKIFITY_PUBLIC_URL")].value}' 2>/dev/null || true)
+			[ "$NEW_URL" = "https://$PANEL_DOMAIN" ] && break
+			sleep 5
+		done
+		if [ "$NEW_URL" != "https://$PANEL_DOMAIN" ]; then
+			no "the panel was not restarted at https://$PANEL_DOMAIN in seven minutes; what it says is below"
+			{
+				api_any GET /api/panel/domain
+				kubectl -n "$PANEL_NS" describe certificate,certificaterequest,order,challenge 2>&1 | tail -60
+			} >>"$REPORT" 2>&1
+		else
+			ok "the panel's certificate was issued, and the panel was restarted at its domain"
+			kubectl -n "$PANEL_NS" rollout status deploy/skifity-panel --timeout=300s >>"$REPORT" 2>&1 \
+				|| no "the panel did not come back after it was moved"
+			stop_forward
+			start_forward
+			ROOT_PEM=$(mktemp)
+			curl -fsS --cacert "$VERIFY_ACME_CA" "$VERIFY_ACME_ROOT" -o "$ROOT_PEM" 2>>"$REPORT" || true
+			CODE=""
+			for _ in $(seq 1 12); do
+				CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --cacert "$ROOT_PEM" \
+					--resolve "$PANEL_DOMAIN:443:127.0.0.1" "https://$PANEL_DOMAIN/api/health" 2>>"$REPORT" || true)
+				[ "$CODE" = "200" ] && break
+				sleep 5
+			done
+			[ "$CODE" = "200" ] \
+				&& ok "the panel answers at https://$PANEL_DOMAIN, trusted from the ACME server's own root" \
+				|| no "https://$PANEL_DOMAIN answered '$CODE' when checked against the ACME server's root"
+			rm -f "$ROOT_PEM"
+			STATE=$(api GET /api/panel/domain 2>/dev/null | pick state 2>/dev/null || echo "")
+			[ "$STATE" = "live" ] \
+				&& ok "the panel that started at the domain finished the move" \
+				|| no "after the restart the move is '${STATE:-unknown}', not live"
+			if [ -n "$OLD_HOST" ]; then
+				# A Git host's webhook to the address it was given: not sent on,
+				# because a provider does not follow a redirect on a POST. The
+				# source does not exist, so the panel itself answers 404.
+				CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST -H "Host: $OLD_HOST" \
+					-H 'Content-Type: application/json' -d '{}' "http://127.0.0.1/api/webhooks/git/gsrc_00000000000000000000" || true)
+				case "$CODE" in
+				308 | 410 | 000 | 5??) no "a webhook to the old address $OLD_HOST answered $CODE; it has to reach the panel" ;;
+				*) ok "a webhook to the old address $OLD_HOST still reaches the panel ($CODE)" ;;
+				esac
+				REDIRECT=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 -H "Host: $OLD_HOST" \
+					"http://127.0.0.1/settings?tab=panel" || true)
+				case "$REDIRECT" in
+				"308 https://$PANEL_DOMAIN/settings?tab=panel") ok "a browser at the old address is sent to the domain, page and all" ;;
+				*) no "a browser at the old address got '$REDIRECT', not a 308 to https://$PANEL_DOMAIN/settings?tab=panel" ;;
+				esac
+			fi
+
+			# And back, which is a move too.
+			api DELETE /api/panel/domain >/dev/null 2>&1 || no "taking the panel's domain off was refused"
+			for _ in $(seq 1 60); do
+				NEW_URL=$(kubectl -n "$PANEL_NS" get deploy skifity-panel \
+					-o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SKIFITY_PUBLIC_URL")].value}' 2>/dev/null || true)
+				case "$NEW_URL" in http://*) break ;; esac
+				sleep 5
+			done
+			kubectl -n "$PANEL_NS" rollout status deploy/skifity-panel --timeout=300s >>"$REPORT" 2>&1 || true
+			stop_forward
+			start_forward
+			case "$NEW_URL" in
+			http://*.sslip.io) ok "taking the domain off put the panel back on $NEW_URL" ;;
+			*) no "after taking the domain off the panel is at '${NEW_URL:-nothing}'" ;;
+			esac
 		fi
 	fi
 fi

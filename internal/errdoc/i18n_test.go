@@ -138,8 +138,9 @@ func TestOneCodeSaysOneThing(t *testing.T) {
 // panel never answered, all in web/src/lib/api.ts and
 // web/src/components/error-display.tsx: a response that was not the panel's
 // JSON — a 502 while it restarts — a request the browser could not send at
-// all, and anything else thrown in the browser. No Go raises them.
-var raisedByTheInterface = map[string]bool{"network": true, "network_unreachable": true, "unexpected": true}
+// all, one it refused to send because its path would reach another route, and
+// anything else thrown in the browser. No Go raises them.
+var raisedByTheInterface = map[string]bool{"network": true, "network_unreachable": true, "request_refused": true, "unexpected": true}
 
 // reachable reports whether a locale key belongs to one of the codes found.
 // The mapping is one-way — a code may contain an underscore of its own — so

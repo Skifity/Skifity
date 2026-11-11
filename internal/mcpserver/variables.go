@@ -54,7 +54,7 @@ func (s *Server) registerVariables() {
 		Annotations: changes("Set several variables", true, true),
 		Description: "Set and remove several of an app's environment variables at once: all of them or none, and one rollout for the lot rather than one per variable. " +
 			"Use it for more than one change, such as the settings from an .env.example; set_variable is for one. " +
-			"Runtime variables roll out without rebuilding; the answer says when a build-time one means the next deploy rebuilds.",
+			"Runtime variables roll out without rebuilding; a build-time one rebuilds the version the app runs, and the answer says which happened.",
 	}, s.setVariables)
 
 	addTool(s, &mcp.Tool{
@@ -68,7 +68,7 @@ func (s *Server) registerVariables() {
 	addTool(s, &mcp.Tool{
 		Name:        "delete_variable",
 		Annotations: changes("Remove a variable", true, true),
-		Description: "Remove one of an app's environment variables and roll the app out without it. A secret's value is gone for good, so ask the person before removing one. " +
+		Description: "Remove one of an app's environment variables and roll the app out without it, or rebuild it without one the build reads. A secret's value is gone for good, so ask the person before removing one. " +
 			"A variable a linked database provides comes from link_database: removing it leaves the app without its connection string.",
 	}, s.deleteVariable)
 }
@@ -104,9 +104,9 @@ func (s *Server) setVariables(ctx context.Context, _ *mcp.CallToolRequest, in se
 	}
 
 	var response struct {
-		Set             []store.Variable `json:"set"`
-		Unset           []string         `json:"unset"`
-		RequiresRebuild bool             `json:"requires_rebuild"`
+		Set   []store.Variable `json:"set"`
+		Unset []string         `json:"unset"`
+		variableEffect
 	}
 	if err := s.client.Do(ctx, "POST", appPath(in.AppID, "/variables/batch"), body, &response); err != nil {
 		return errorResult(err), setVariablesOutput{}, nil
@@ -117,7 +117,7 @@ func (s *Server) setVariables(ctx context.Context, _ *mcp.CallToolRequest, in se
 	out := setVariablesOutput{
 		Set: make([]setVariableSummary, 0, len(response.Set)), Unset: response.Unset,
 		RequiresRebuild: response.RequiresRebuild,
-		Note:            "Rolled out to the running instances without rebuilding.",
+		Note:            response.note(),
 	}
 	if out.Unset == nil {
 		out.Unset = []string{}
@@ -126,9 +126,6 @@ func (s *Server) setVariables(ctx context.Context, _ *mcp.CallToolRequest, in se
 	for _, variable := range response.Set {
 		out.Set = append(out.Set, setVariableSummary{Key: variable.Key, IsSecret: variable.IsSecret})
 		keys = append(keys, variable.Key)
-	}
-	if response.RequiresRebuild {
-		out.Note = "At least one of these is used during the build, so the next deploy will rebuild the image."
 	}
 	return textResult(fmt.Sprintf("Set %d and removed %d: %s. %s",
 		len(out.Set), len(out.Unset), strings.Join(append(keys, out.Unset...), ", "), out.Note)), out, nil
@@ -191,8 +188,33 @@ func (s *Server) refreshVariables(ctx context.Context, _ *mcp.CallToolRequest, i
 }
 
 func (s *Server) deleteVariable(ctx context.Context, _ *mcp.CallToolRequest, in deleteVariableInput) (*mcp.CallToolResult, doneOutput, error) {
-	if err := s.client.Do(ctx, "DELETE", appPath(in.AppID, "/variables/"+url.PathEscape(in.Key)), nil, nil); err != nil {
+	var response variableEffect
+	if err := s.client.Do(ctx, "DELETE", appPath(in.AppID, "/variables/"+url.PathEscape(in.Key)), nil, &response); err != nil {
 		return errorResult(err), doneOutput{}, nil
 	}
-	return done(in.Key + " removed. The app is being rolled out without it.")
+	return done(in.Key + " removed. " + response.note())
+}
+
+// variableEffect is what changing variables did to the app, as the panel
+// answers it: a rebuild of the version it runs, or why there was none.
+type variableEffect struct {
+	RequiresRebuild bool              `json:"requires_rebuild"`
+	Deployment      *store.Deployment `json:"deployment,omitempty"`
+	NotRebuilt      string            `json:"not_rebuilt,omitempty"`
+}
+
+// note says what happened, in words an assistant can pass on and act on.
+func (e variableEffect) note() string {
+	switch {
+	case e.RequiresRebuild && e.Deployment != nil:
+		return fmt.Sprintf("The build reads it, so the version the app runs is being rebuilt with it: deployment #%d. "+
+			"Call get_app_status or get_deployment_history for the outcome.", e.Deployment.Number)
+	case e.NotRebuilt == "locked":
+		return "The build reads it, and the app's deploys are locked, so nothing was rebuilt: it takes effect at the first deploy after they are unlocked. Do not unlock them to get it through."
+	case e.NotRebuilt == "not_deployed":
+		return "The build reads it. The app has not been deployed yet; its first deploy builds with it."
+	case e.NotRebuilt != "":
+		return "The build reads it, and a rebuild could not be started, so it takes effect at the next deploy_app."
+	}
+	return "Rolled out to the running instances without rebuilding."
 }

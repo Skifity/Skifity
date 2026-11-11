@@ -31,7 +31,8 @@ dying.** Releases came every month or two through 2023 (v1.11.0,
 stewardship passed from SUSE to **Krumware**, a platform-engineering
 consultancy and "Diamond SUSE Partner", beginning January 2025; v1.12.0
 shipped 2025-08-26, and **12 tagged releases followed in the twelve months to
-2026-09-30**, the latest **v1.14.2 on 2026-09-03**, with 696 commits in the
+2026-09-30**, the latest **v1.14.2 on 2026-09-03** (v1.14.3 followed on
+2026-10-16), with 696 commits in the
 same year — 66% of the human ones by David Johnson, 30% by Pranay Sanghvi (git
 history). Krumware publishes a support matrix (1.14.x: full support to
 2027-03-31, end of life 2027-12-31). Adoption is small: **611 stars, 64 forks,
@@ -89,12 +90,16 @@ footprint per its own requirements: **2–4 vCPU and 8 GB of RAM**.
 - **Configurations** — named sets of key/values — and service bindings reach
   the app **as files under `/configurations/<name>/`**, not as environment
   variables; the request to expose them as variables has been open since
-  July 2022 (#1647).
+  July 2022 (#1647, still open on 2026-11-08). The configurations page has said
+  since 1.14.0 that they are "also exposed as application environment
+  variables", but the app chart still mounts them only as files; see "Since
+  2026-09-30".
 - `epinio service port-forward` opens a tunnel to a service from the laptop.
 
 ### Storage and backups
 
-- A stateful app chart (`application-stateful`, a StatefulSet) and PVCs;
+- A stateful app chart (`application-stateful`, a StatefulSet; shipped with
+  Epinio by default since 1.14.3) and PVCs;
   `epinio app delete --delete-pvc` since 1.14.2 (data kept by default).
 - A default StorageClass is required and **ReadWriteMany is preferred**.
 - **No backups** of services or volumes. The storage page covers sizing the
@@ -121,8 +126,9 @@ footprint per its own requirements: **2–4 vCPU and 8 GB of RAM**.
 
 - TLS between components; Basic auth or **OIDC through Dex**, with connectors
   (GitHub, LDAP, Entra ID, Rancher SSO, AWS IAM are documented) configured by
-  editing the `dex-config` Secret, and a **`rolesMapping` from external groups
-  to Epinio roles**.
+  editing the `dex-config` Secret — since 1.14.3 through chart values
+  (`dex.connectors`, `dex.rolesMapping`, `dex.extraConfig`) instead — and a
+  **`rolesMapping` from external groups to Epinio roles**.
 - **Roles**: `admin` and `user` by default, plus `view_only`,
   `application_developer`, `application_manager`, `system_manager` since
   1.13.10; custom roles assemble fine-grained actions (`app_scale`,
@@ -149,7 +155,8 @@ footprint per its own requirements: **2–4 vCPU and 8 GB of RAM**.
 
 - No one-click app catalogue. **App charts** — operator-supplied Helm chart
   templates an app can choose (standard, stateful, Gateway API, and an
-  `standard-elevated` one for the MCP server) — and the five `-dev` services.
+  `standard-elevated` one for the MCP server), from a URL, a Helm repository or,
+  since 1.14.3, an OCI registry — and the five `-dev` services.
 - Example apps in the docs.
 
 ### CLI, API, IaC, integrations
@@ -163,9 +170,12 @@ footprint per its own requirements: **2–4 vCPU and 8 GB of RAM**.
   **core tools act only through the Epinio REST API as the calling user**; an
   opt-in **elevated tier** reaches into Kubernetes to *adopt* an existing
   kubectl-managed Deployment into Epinio's view (`adopt_app`, `reconcile_app`,
-  `release_app`). When a request carries no `Authorization` header the server
-  "falls back to the credentials it was configured with (default `admin` /
-  `password`)" (MCP reference). A downloadable **agent skill** maps the tools
+  `release_app`). Until 1.14.3, when a request carried no `Authorization`
+  header the server "falls back to the credentials it was configured with
+  (default `admin` / `password`)" (MCP reference as read on 2026-09-30). Since
+  1.14.3 (2026-10-15) every request must carry the caller's own credentials,
+  one without gets `401`, and an OAuth client can sign in through Dex with
+  PKCE; see "Since 2026-09-30". A downloadable **agent skill** maps the tools
   to CLI commands where MCP cannot run.
 - **Rancher Dashboard extension** with one-click install (1.13.10); an older
   Docker Desktop extension.
@@ -246,12 +256,13 @@ footprint per its own requirements: **2–4 vCPU and 8 GB of RAM**.
   repository's advisories page (none published; private reporting enabled).
 - What stands out instead is **defaults**: `admin`/`password` and
   `epinio`/`password` API users, Dex users with the same password, a registry
-  password of `changeme`, a private CA as the default TLS issuer, and an MCP
-  server that — when a request has no `Authorization` header — acts with the
-  credentials it was configured with, which the install guide fills with
-  `admin`/`password`, on a route like `https://epinio-mcp.<ip>.sslip.io`. None
-  of these is a vulnerability in the code; each is a finding waiting for the
-  install that skipped the paragraph that says to change it.
+  password of `changeme`, a private CA as the default TLS issuer, and, until
+  1.14.3 (2026-10-15), an MCP server that — when a request had no
+  `Authorization` header — acted with the credentials it was configured with,
+  which the install guide filled with `admin`/`password`, on a route like
+  `https://epinio-mcp.<ip>.sslip.io`. The other defaults were unchanged on
+  2026-11-08. None of these is a vulnerability in the code; each is a finding
+  waiting for the install that skipped the paragraph that says to change it.
 - Pushing with GitJob requires storing the user's settings file, password
   included, as a Secret (docs).
 - The absence of advisories should be read as low exposure (611 stars, mostly
@@ -290,8 +301,12 @@ version, blog notes a person can read — is the model Skifity needs before its
 first tag, because Epinio's own upgrade notes show what a platform that owns
 components faces every few months (kubed, MinIO, CRDs). And its MCP design —
 API-only as the calling user, with anything that touches Kubernetes directly
-behind an explicit opt-in — is the same instinct as Skifity's, spoiled only by
-a credential fallback Skifity must never have.
+behind an explicit opt-in — is the same instinct as Skifity's, spoiled, until
+1.14.3 removed it, by a credential fallback Skifity must never have.
+
+The Skifity column below is Skifity on 2026-09-30. Since then it has been
+released and run on a real cluster, and several of its gaps here are closed;
+"Since 2026-09-30" says which.
 
 | Capability | Epinio | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -396,8 +411,9 @@ needs a cluster.
 ## Things to deliberately not copy
 
 - **Default passwords.** `admin`/`password`, `changeme`, and an MCP server that
-  uses them when a request brings no credentials. Skifity's one-time setup
-  token and "no request without a token" are the right defaults.
+  used them, until 1.14.3, when a request brought no credentials. Skifity's
+  one-time setup token and "no request without a token" are the right
+  defaults.
 - **Administration through `kubectl`.** Users as Secrets and roles as
   ConfigMaps are elegant for GitOps and hostile to the person running a small
   install. Keep them in the panel; export them if anyone wants YAML.
@@ -420,6 +436,129 @@ needs a cluster.
 - **Release notes that are a list of merge commits.** The GitHub release pages
   for 1.14.0 and 1.14.1 say "Development updates"; the real notes are on a
   blog. One place, readable, per release.
+
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and web pages refused this sandbox, so
+epinio/epinio, epinio/docs, epinio/helm-charts and epinio/mcp were cloned
+instead, counts and issue states came from shields.io, and the issue tracker
+and the GitHub release pages were not read.
+
+### Releases
+
+- **v1.14.3**, tagged 2026-10-16 (the blog post and the MCP server's v1.14.3
+  are dated 2026-10-15). App charts can come from an OCI registry as well as a
+  URL or a Helm repository, each chart in its own OCI repository, and
+  `epinio app chart push` pushes a packaged chart to Epinio's own registry. The
+  stateful app chart ships by default. Dex connectors, `rolesMapping` and other
+  Dex settings are chart values (`dex.connectors`, `dex.rolesMapping`,
+  `dex.extraConfig`), with steps for anyone who had edited the `dex-config`
+  Secret by hand. Fixes: service settings applied the wrong way round on an
+  update, `ingress.tls.enabled` (for TLS terminated outside the cluster) not
+  applied, the Rancher extension blocked from calling Git providers, Docker Hub
+  and Harbor registries not recognised for want of CA certificates, and the
+  registry volume's file ownership (`fsGroup`). The UI caches resources.
+- A new operator page says that by default Epinio's built-in registry and
+  SeaweedFS "keep their data where a routine cluster event can delete it", and
+  moves both to PersistentVolumeClaims; the move copies nothing, so images must
+  be restaged and sources pushed again.
+- **The MCP server signs every caller in.** The MCP reference now says "There
+  is no anonymous mode or shared server-credential fallback". A request without
+  credentials gets `401` and a `WWW-Authenticate` challenge that points to
+  `/.well-known/oauth-protected-resource`; an OAuth client can then discover
+  Dex and sign in with the authorization code flow and PKCE; and every tool
+  call uses an Epinio client built from the caller's own bearer token or Basic
+  credentials, checked against `/me` (epinio/mcp `7e5a056`, 2026-09-28, and
+  `881a97e`, 2026-10-14). Dex has no dynamic client registration, so each MCP
+  client is registered as a static client in the chart's values
+  (`dex.extraStaticClients`, `dex.apiTrustedPeers`). The server is still
+  marked beta.
+- The upgrading page still ends at 1.14.1; neither 1.14.2 nor 1.14.3 has an
+  entry (2026-11-08).
+- Not released (2026-11-08). The `1.14.4` branch holds a split of build and
+  deploy, merged 2026-10-28 (#3141): `epinio app build` builds an image without
+  deploying it, the built image is kept apart from the deployed one, and apps
+  created or built but never deployed are listed on their own. Unmerged
+  branches add Git tags and releases as sources (2026-11-03), a time to live
+  for staging logs (2026-10-29) and a filter for `app logs`. The branch with
+  GitHub webhooks has not moved since 2026-03-30, so push-to-deploy (#1269) is
+  still a request.
+- 38 commits reached `main` after 2026-09-30, and 66 non-merge commits landed
+  across all branches: 39 by Pranay Sanghvi, 16 by David Johnson and 11 by
+  Dependabot. Still two people.
+
+### Support and adoption
+
+- Krumware's support matrix (2026-11-08) still lists 1.15.x as generally
+  available in Q3 2026 and 1.16.x in Q4 2026. No 1.15 tag exists; the next
+  branch is 1.14.4. 1.13.x left full support on 2026-09-30. The page calls a
+  "Supported Release" one "available only for paying customers with active
+  subscriptions"; the public releases are community releases.
+- 621 stars, 65 forks, 30 open issues and 11 open pull requests (shields.io,
+  2026-11-08), against 611 stars, 64 forks and 39 issues and pull requests
+  together on 2026-09-30. Hacker News has no story or comment naming Epinio
+  since 2026-09-30 (Algolia API).
+- The old requests this file quotes are all still open: #1647, #1269, #593,
+  #1820, #1681 and #2105 (shields.io, 2026-11-08).
+
+### What the docs say about configurations, and what the code does
+
+Since 1.14.0 the configurations page has said "Environment variables from bound
+configurations are also exposed as application environment variables." The code
+does not bear that out. The standard app chart (helm-charts `0e37d4a`,
+2026-10-28) mounts each bound configuration as files under `/configurations/`
+and sets only the user's variables and `PORT`, and Epinio's deploy path passes
+the app's own environment only (`api/v1/deploy/deploy.go` in its `internal`
+directory). What changed, in 1.13.3, is that `app show -o json` lists a
+configuration's values beside the app's own variables, under `name/key` keys
+that are not valid variable names (`ConfigurationEnvironment` in Epinio's
+`application/env.go`). The inventory above stands, and #1647 is still open.
+
+### Security
+
+- No CVE and no advisory: NVD keyword "epinio" returns nothing, nor does OSV for
+  `github.com/epinio/epinio` (2026-11-08). The repository has no `SECURITY.md`.
+  The GitHub advisory page could not be read from here.
+- 1.14.3 removed the MCP credential fallback this file's security record led
+  with. An install still on 1.14.2 or older keeps it.
+- The chart's other defaults are unchanged (helm-charts `0e37d4a`): API users
+  `admin` and `epinio` with the password `password`, the Dex users
+  `admin@epinio.io` and `epinio@epinio.io` (which `dex.staticPasswords: []` now
+  removes), the registry password `changeme`, and `epinio-ca` as the TLS issuer.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- Skifity has been released since: v0.1.0 on 2026-10-06 and v0.1.1 on
+  2026-10-21, and the `Cluster` workflow installs every push to `main` on a
+  real k3s (`docs/progress.md`).
+- Of this file's gaps, 1 to 4 are closed: upgrading the components and k3s
+  (Phase 109), a `SECURITY.md` with supported versions (Phase 90), teams and
+  roles that follow the provider's groups (Phase 92, `GroupsClaim` in
+  `internal/auth/oidc.go`), and `skifity db connect` (Phase 105,
+  `internal/cli/dbconnect.go`). Gap 5, installing onto an existing cluster, is
+  still "Not yet" (`docs/faq.md`). The remote MCP endpoint the table says
+  Skifity lacked is `/api/mcp` (Phase 87).
+- Already there, against this period's Epinio work: the in-cluster registry
+  keeps its images on a PersistentVolumeClaim (`internal/cluster/registry.go`);
+  a pushed tag can deploy (`DeployOnTag` in `internal/gitsrc/trigger.go`); and
+  `/api/mcp` takes only an API token and refuses a browser session (`handleMCP`
+  in `internal/api/mcp_handlers.go`), so it never had a fallback to remove.
+- Not a gap worth taking: building without deploying. A Skifity build that
+  fails leaves the running version alone, and promote (Phase 103) already
+  deploys one build in several environments.
+- **Gap, now in two products — let an assistant sign in with OAuth.** Epinio
+  1.14.3 makes its MCP server an OAuth protected resource that a client finds
+  from the `401` and signs in to with PKCE. Openship does the same, and
+  `openship.md` (gap 1) has the plan and the size. Skifity's `/api/mcp` takes a
+  pasted bearer token and nothing else (`handleMCP`), and nothing in
+  `internal/` serves a `.well-known` OAuth document or handles an
+  authorization code. Size M; no cluster needed.
+- Krumware's matrix is a lesson about support pages: one that names the quarter
+  of a release that has not shipped is wrong as soon as the quarter ends.
+  Skifity's `SECURITY.md` promises fixes to the latest release only until 1.0,
+  which is a promise it can keep.
 
 ## Sources
 
@@ -461,3 +600,15 @@ All read 2026-09-30.
 - NVD API keyword search "epinio" (0), OSV API query for `github.com/epinio/epinio` (0), https://app.opencve.io (0)
 - https://github.com/bitnami/charts/issues/35164 (Bitnami catalogue change)
 - Skifity, for the comparison: `internal/cluster/components.go`, `internal/provision/scripts.go`, `internal/auth/oidc.go`, `internal/api/sso_handlers.go`, `internal/api/api.go`, `internal/kube/client.go`, `internal/cli`, `internal/mcpserver/server.go`, `docs/faq.md`, `docs/performance.md`, `docs/releasing.md`, `docs/checklist.md`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- Git history of epinio/epinio, cloned (main at c93aa63e, 2026-11-02, and the branches `1.14.4`, `development`, `feat/EPINIO-568-git-tags-releases`, `feat/EPINIO-765-staging-log-ttl`, `feat/CI-CD-Webhook`): tags v1.14.3-rc1 (2026-10-14) and v1.14.3 (2026-10-16), commits and authors since 2026-09-30, merge #3141 (2026-10-28), and under Epinio's `internal` directory `application/env.go`, `api/v1/deploy/deploy.go` and `helm/helm.go`
+- https://github.com/epinio/docs, cloned (fabe797e16, 2026-10-16): `blog/2026-10-15-epinio-1-14-3.md`, `versions.json`, and under its `docs` directory `reference/mcp.md`, `getting-started/install-mcp.md`, `getting-started/system-requirements.md`, `reference/security/authentication_oidc.md`, `reference/concepts/configurations.md`, `reference/concepts/appcharts.md`, `reference/upgrading.md` and `how-to/operator/cluster-config/persistent_storage.md`
+- https://github.com/epinio/helm-charts, cloned (0e37d4a, 2026-10-28): `chart/epinio/values.yaml`, `chart/epinio/templates/dex.yaml`, `chart/application/templates/deployment.yaml`, commits since 2026-09-03
+- https://github.com/epinio/mcp, cloned: tag v1.14.3 (2026-10-15), commits 7e5a056 (2026-09-28), 881a97e and 70e5fd8 (2026-10-14)
+- https://www.krum.io/products/epinio/support (support matrix)
+- https://img.shields.io/ JSON badges for epinio/epinio: stars, forks, open issues, open pull requests, and the state of #1647, #1269, #593, #1820, #1681 and #2105
+- NVD API keyword search "epinio" (0); OSV API query for `github.com/epinio/epinio` (0)
+- https://hn.algolia.com/api/v1/search_by_date?query=epinio, filtered to after 2026-09-30 (nothing)
+- Skifity, for "For Skifity": `internal/api/mcp_handlers.go`, `internal/cluster/registry.go`, `internal/gitsrc/trigger.go`, `internal/auth/oidc.go`, `internal/cli/dbconnect.go`, `SECURITY.md`, `docs/faq.md`, `docs/progress.md`, `docs/research/competitors/openship.md`

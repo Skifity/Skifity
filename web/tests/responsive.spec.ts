@@ -386,7 +386,7 @@ test("no breadcrumb points at a page that does not exist", async ({ page, reques
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
 
     const hrefs = await page
-      .locator('nav[aria-label="breadcrumb"] a')
+      .locator('nav[data-slot="breadcrumb"] a')
       .evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""))
 
     for (const href of hrefs) {

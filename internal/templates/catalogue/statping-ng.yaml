@@ -6,6 +6,7 @@ website: https://statping-ng.github.io
 services:
 - name: statping-ng
   image: adamboutcher/statping-ng:v0.90.78
+  needs_root: true
   port: 8080
   public: true
   health_path: /health

@@ -1,13 +1,21 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { CloudIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
+import { CloudIcon, KeyRoundIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -149,6 +157,81 @@ export function CloudProviderForm({
   )
 }
 
+/**
+ * Giving a connection a new token where it is: one that expired, was revoked
+ * or is being rotated. It is allowed while servers created with it are in the
+ * panel, which removing it is not, and the provider is asked first: whether
+ * the token works and may write, and, when there are servers, whether it can
+ * see their machines, so a token for another project is refused here.
+ */
+function ReplaceCloudTokenDialog({
+  provider,
+  onClose,
+}: {
+  provider: CloudProvider
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  const [token, setToken] = useState("")
+  const kind = provider.kind as CloudProviderKind
+
+  const replace = useMutation({
+    mutationFn: () =>
+      api.patch<CloudProvider>(`/api/teams/${team?.id}/cloud-providers/${provider.id}`, {
+        token: token.trim(),
+      }),
+    onSuccess: (replaced) => {
+      void queryClient.invalidateQueries({ queryKey: ["cloud-providers", team?.id] })
+      toast.success(t("cloud.tokenReplaced", { name: replaced.name }))
+      onClose()
+    },
+  })
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            replace.mutate()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("cloud.replaceTokenTitle", { name: provider.name })}</DialogTitle>
+            <DialogDescription>{t("cloud.replaceTokenHelp")}</DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="cloud-replace-token">{t("cloud.token")}</FieldLabel>
+            <Input
+              id="cloud-replace-token"
+              type="password"
+              value={token}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setToken(event.target.value)}
+            />
+            {cloudProviderTitles[kind] && (
+              <FieldDescription>{t(`cloud.tokenHelp.${kind}`)}</FieldDescription>
+            )}
+          </Field>
+          {replace.error != null && <ErrorDisplay error={replace.error} compact />}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={replace.isPending || !token.trim()}>
+              {replace.isPending && <Spinner />}
+              {t("cloud.replaceToken")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /** The team's cloud connections, under Settings. */
 export function CloudProvidersCard() {
   const { t } = useTranslation()
@@ -156,6 +239,7 @@ export function CloudProvidersCard() {
   const confirm = useConfirm()
   const providers = useCloudProviders()
   const [adding, setAdding] = useState(false)
+  const [replacing, setReplacing] = useState<CloudProvider | null>(null)
   const canEdit = team?.role === "admin" || team?.role === "owner"
   const path = `/api/teams/${team?.id}/cloud-providers`
 
@@ -228,6 +312,10 @@ export function CloudProvidersCard() {
                         <RefreshCwIcon className="size-4" />
                         {t("cloud.test")}
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setReplacing(provider)}>
+                        <KeyRoundIcon className="size-4" />
+                        {t("cloud.replaceToken")}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -256,6 +344,13 @@ export function CloudProvidersCard() {
 
         {adding && (
           <CloudProviderForm onSaved={() => setAdding(false)} onCancel={() => setAdding(false)} />
+        )}
+        {replacing && (
+          <ReplaceCloudTokenDialog
+            key={replacing.id}
+            provider={replacing}
+            onClose={() => setReplacing(null)}
+          />
         )}
         {test.error != null && <ErrorDisplay error={test.error} compact />}
         {remove.error != null && <ErrorDisplay error={remove.error} compact />}

@@ -30,6 +30,8 @@ type recordingBackups struct {
 	// imported is the body an import was handed, read to its end.
 	imported     string
 	importFormat string
+	// storage is what Storage answers: none, unless a test sets it up.
+	storage BackupStorage
 }
 
 func (r *recordingBackups) Run(context.Context, string, string, string) (store.Backup, error) {
@@ -46,6 +48,8 @@ func (r *recordingBackups) RestoreVolume(_ context.Context, backupID string, ove
 }
 
 func (r *recordingBackups) Verify(context.Context) error { return nil }
+
+func (r *recordingBackups) Storage(context.Context) (BackupStorage, error) { return r.storage, nil }
 
 func (r *recordingBackups) VerifyBackup(_ context.Context, backupID string) error {
 	r.verified = backupID

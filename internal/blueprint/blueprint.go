@@ -21,6 +21,7 @@ package blueprint
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -35,6 +36,8 @@ import (
 	"skifity/internal/errdoc"
 	"skifity/internal/gitsrc"
 	"skifity/internal/kube"
+	"skifity/internal/secretmgr"
+	"skifity/internal/store"
 )
 
 // FileName is where the CLI looks for a blueprint.
@@ -78,15 +81,17 @@ type App struct {
 
 	// Variables are plain values: this file is in a repository, so anything
 	// in it is not a secret. Secrets names the ones that are, whose values
-	// are set in the panel or with `skifity env set --secret`.
-	Variables map[string]string `json:"variables,omitempty"`
-	Secrets   []string          `json:"secrets,omitempty"`
+	// are set in the panel or with `skifity env set --secret`, or read from
+	// a secret manager.
+	Variables Variables `json:"variables,omitempty"`
+	Secrets   Secrets   `json:"secrets,omitempty"`
 
 	Processes map[string]Process  `json:"processes,omitempty"`
 	Domains   []string            `json:"domains,omitempty"`
 	Schedules map[string]Schedule `json:"schedules,omitempty"`
-	// Databases links a database by name to the variable it is read from.
-	Databases map[string]string `json:"databases,omitempty"`
+	// Databases links a database by name to the variable it is read from,
+	// and in the long form to the variables its pieces are; see Link.
+	Databases map[string]Link `json:"databases,omitempty"`
 
 	DeployOnPush *bool `json:"deploy_on_push,omitempty"`
 	// DeployTrigger is branch, every push to the branch, or tag, only a pushed
@@ -140,6 +145,207 @@ func (h *Health) UnmarshalJSON(data []byte) error {
 	}
 	*h = Health(long)
 	return nil
+}
+
+// Link is how an app reads a database. `main: DATABASE_URL` is the variable
+// its connection string arrives as, which is all the file took before the
+// rest could be chosen, and still means what it meant. The long form names
+// the variables its pieces arrive as too, for software that has no setting
+// for a URL; a piece left out is not delivered:
+//
+//	databases:
+//	  main: {url: DATABASE_URL, host: DB_HOST, port: DB_PORT, password: DB_PASSWORD}
+//
+// Pieces the file does not name are left as the link has them, as anything
+// else the file leaves out is.
+type Link struct {
+	URL      string `json:"url,omitempty"`
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// UnmarshalJSON takes the variable on its own as well as the long form.
+func (l *Link) UnmarshalJSON(data []byte) error {
+	var variable string
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		*l = Link{}
+		return nil
+	}
+	if err := json.Unmarshal(data, &variable); err == nil {
+		*l = Link{URL: variable}
+		return nil
+	}
+	type plain Link
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var long plain
+	if err := decoder.Decode(&long); err != nil {
+		return err
+	}
+	*l = Link(long)
+	return nil
+}
+
+// MarshalJSON writes the short form when there are no pieces, which is how
+// a file somebody wrote by hand says it.
+func (l Link) MarshalJSON() ([]byte, error) {
+	if l.Pieces() == (store.LinkPieces{}) {
+		return json.Marshal(l.URL)
+	}
+	type plain Link
+	return json.Marshal(plain(l))
+}
+
+// Pieces are the pieces the file names.
+func (l Link) Pieces() store.LinkPieces {
+	return store.LinkPieces{Host: l.Host, Port: l.Port, Name: l.Name, User: l.User, Password: l.Password}
+}
+
+// Variables are an app's plain values, by name.
+type Variables map[string]Variable
+
+// Variable is a plain value, and whether the build reads it.
+//
+// `LOG_LEVEL: info` is the value, read when the app runs. The long form says
+// when it is read as well, which a front end's public settings need:
+//
+//	NEXT_PUBLIC_API_URL: {value: https://api.example.com, build: true}
+//
+// With build left out, a variable the environment has keeps what it is, and a
+// new one is read when the app runs.
+type Variable struct {
+	Value string `json:"value"`
+	Build *bool  `json:"build,omitempty"`
+}
+
+// UnmarshalJSON reads each variable in either form, and names the one that
+// is in neither: the decoder alone would say a number is not a string and not
+// which line.
+func (v *Variables) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return errors.New("variables are names and their values")
+	}
+	out := make(Variables, len(raw))
+	for _, key := range sortedKeys(raw) {
+		var variable Variable
+		if err := variable.UnmarshalJSON(raw[key]); err != nil {
+			return fmt.Errorf("variable %s: %w", key, err)
+		}
+		out[key] = variable
+	}
+	*v = out
+	return nil
+}
+
+// UnmarshalJSON takes the value on its own as well as the long form.
+func (v *Variable) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err == nil {
+		*v = Variable{Value: value}
+		return nil
+	}
+	if trimmed := bytes.TrimSpace(data); len(trimmed) == 0 || trimmed[0] != '{' {
+		// YAML reads 3000, true and yes as a number or a yes-or-no, and a
+		// variable is text: said here rather than turned back into text,
+		// which would make yes "true".
+		return errors.New("the value is a number or a yes-or-no to YAML, and a variable is text; put it in quotes")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var long struct {
+		Value *string `json:"value"`
+		Build *bool   `json:"build"`
+	}
+	if err := decoder.Decode(&long); err != nil {
+		return err
+	}
+	if long.Value == nil {
+		return errors.New("the long form is {value: ..., build: true}, and this has no value")
+	}
+	*v = Variable{Value: *long.Value, Build: long.Build}
+	return nil
+}
+
+// MarshalJSON writes the short form whenever it says everything.
+func (v Variable) MarshalJSON() ([]byte, error) {
+	if v.Build == nil {
+		return json.Marshal(v.Value)
+	}
+	type plain Variable
+	return json.Marshal(plain(v))
+}
+
+// Secrets are the variables an app needs whose values are not in the file,
+// by name: a list of names, or a map that says more about each.
+//
+//	secrets: [STRIPE_KEY, SESSION_SECRET]
+//
+//	secrets:
+//	  STRIPE_KEY: {from: company-vault:shop#stripe_key}
+//	  SENTRY_DSN: {optional: true}
+//	  SESSION_SECRET: {}
+type Secrets map[string]Secret
+
+// Secret is one of them.
+type Secret struct {
+	// From is the secret manager its value is read from, written as `env set
+	// --from` takes it: connection:path or connection:path#key. The file then
+	// sets it, by reference, and its value is stored nowhere.
+	From string `json:"from,omitempty"`
+	// Build is whether the build reads it; left out, as for a variable.
+	Build *bool `json:"build,omitempty"`
+	// Optional is a secret the app runs without. Without it a secret the file
+	// lists is required: apply refuses to change an app that lacks one, and a
+	// new app's first deploy waits for it.
+	Optional bool `json:"optional,omitempty"`
+}
+
+// UnmarshalJSON takes the list of names as well as the map.
+func (s *Secrets) UnmarshalJSON(data []byte) error {
+	var names []string
+	if err := json.Unmarshal(data, &names); err == nil {
+		out := make(Secrets, len(names))
+		for _, name := range names {
+			out[name] = Secret{}
+		}
+		*s = out
+		return nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return errors.New("secrets are a list of names, or names with {from, build, optional}")
+	}
+	out := make(Secrets, len(raw))
+	for _, key := range sortedKeys(raw) {
+		var secret Secret
+		// `SESSION_SECRET:` with nothing after it is a name on its own.
+		if string(bytes.TrimSpace(raw[key])) != "null" {
+			decoder := json.NewDecoder(bytes.NewReader(raw[key]))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&secret); err != nil {
+				return fmt.Errorf("secret %s: %w", key, err)
+			}
+		}
+		out[key] = secret
+	}
+	*s = out
+	return nil
+}
+
+// MarshalJSON writes the list of names when that says everything.
+func (s Secrets) MarshalJSON() ([]byte, error) {
+	names := make([]string, 0, len(s))
+	for _, name := range sortedKeys(s) {
+		if s[name] != (Secret{}) {
+			return json.Marshal(map[string]Secret(s))
+		}
+		names = append(names, name)
+	}
+	return json.Marshal(names)
 }
 
 // Autoscale is instances decided by load.
@@ -289,13 +495,21 @@ func Parse(data []byte) (File, error) {
 			if !validVariable.MatchString(key) {
 				say("%s: %q is not a variable name", where, key)
 			}
-			if contains(app.Secrets, key) {
+			if _, secret := app.Secrets[key]; secret {
 				say("%s: %s is listed as a secret and given a value here, where it is not one", where, key)
 			}
 		}
-		for _, key := range app.Secrets {
+		for key, secret := range app.Secrets {
 			if !validVariable.MatchString(key) {
 				say("%s: %q is not a variable name", where, key)
+			}
+			if from := strings.TrimSpace(secret.From); from != "" {
+				if _, _, _, err := secretmgr.ParseReference(from); err != nil {
+					say("%s: secret %s: %s", where, key, err.Error())
+				}
+				if secret.Optional {
+					say("%s: secret %s is read from a secret manager, which the file sets; optional is for one set by hand", where, key)
+				}
 			}
 		}
 		for _, process := range sortedKeys(app.Processes) {
@@ -314,9 +528,20 @@ func Parse(data []byte) (File, error) {
 				say("%s: schedule %s: %q is not five cron fields, such as \"0 3 * * *\"", where, schedule, s.Schedule)
 			}
 		}
-		for database, variable := range app.Databases {
-			if variable != "" && !validVariable.MatchString(variable) {
-				say("%s: database %s is linked as %q, which is not a variable name", where, database, variable)
+		for _, database := range sortedKeys(app.Databases) {
+			link := app.Databases[database]
+			if link.URL != "" && !validVariable.MatchString(link.URL) {
+				say("%s: database %s is linked as %q, which is not a variable name", where, database, link.URL)
+			}
+			named := map[string]bool{link.URL: link.URL != ""}
+			for _, pair := range link.Pieces().Pairs() {
+				if !validVariable.MatchString(pair.Variable) {
+					say("%s: database %s gives its %s as %q, which is not a variable name", where, database, pair.Piece, pair.Variable)
+				}
+				if named[pair.Variable] {
+					say("%s: database %s gives two things as %s", where, database, pair.Variable)
+				}
+				named[pair.Variable] = true
 			}
 		}
 	}
@@ -353,6 +578,10 @@ func normalize(file *File) {
 		app.Watch = watch
 		for i, hostname := range app.Domains {
 			app.Domains[i] = kube.CleanHostname(hostname)
+		}
+		for key, secret := range app.Secrets {
+			secret.From = strings.TrimSpace(secret.From)
+			app.Secrets[key] = secret
 		}
 		for key, process := range app.Processes {
 			process.Command = strings.TrimSpace(process.Command)

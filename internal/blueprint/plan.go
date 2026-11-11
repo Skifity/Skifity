@@ -9,6 +9,7 @@ import (
 
 	"skifity/internal/dbsvc/engine"
 	"skifity/internal/errdoc"
+	"skifity/internal/secretmgr"
 	"skifity/internal/store"
 )
 
@@ -31,6 +32,8 @@ type AppState struct {
 	Jobs      []store.AppJob
 	// Links are its databases: variable name to database id.
 	Links map[string]string
+	// Pieces are what each of its links delivers in pieces, by database id.
+	Pieces map[string]store.LinkPieces
 	// Deployed is whether it has ever been deployed. An app made by an apply
 	// that stopped before its first deploy is still owed one.
 	Deployed bool
@@ -74,7 +77,9 @@ func owed(have AppState) string {
 
 // Step is one line of a plan, and what applying it sends.
 type Step struct {
-	// Op is "create", "change" or "note". A note is said and not applied.
+	// Op is "create", "change", "note" or "missing". A note is said and not
+	// applied. Missing is a secret the file requires and the environment
+	// does not have, which is not applied either: it is set by a person.
 	Op   string `json:"op"`
 	Kind string `json:"kind"`
 	// App is the app a step belongs to, when it belongs to one.
@@ -82,7 +87,11 @@ type Step struct {
 	Name string `json:"name"`
 	// Detail says what changes, in words: "3000 → 8080".
 	Detail string `json:"detail,omitempty"`
-	Call   *Call  `json:"-"`
+	// Blocks is a missing secret of an app that is already here, which
+	// apply refuses over before it changes anything: every change to an app
+	// rolls it out, and it would start without the secret.
+	Blocks bool  `json:"blocks,omitempty"`
+	Call   *Call `json:"-"`
 }
 
 // Call is an API request. Paths and string values may name something the
@@ -164,25 +173,36 @@ func Plan(file File, state State) ([]Step, error) {
 		want := file.Apps[name]
 		have, exists := existingApp[name]
 		ref := "{app:" + name + "}"
+		gitSource, err := gitSourceID(name, want, state.GitSources)
+		if err != nil {
+			return nil, err
+		}
 		if exists {
 			ref = have.App.ID
 		} else {
-			gitSource, err := gitSourceID(name, want, state.GitSources)
-			if err != nil {
-				return nil, err
-			}
 			create, err := createApp(name, want, state.EnvironmentID, gitSource)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, create)
 		}
-		changes, redeploy := appSteps(name, ref, want, have, exists)
+		changes, redeploy := appSteps(name, ref, want, have, exists, gitSource)
 		if redeploy == "" && exists {
 			redeploy = owed(have)
 		}
 		steps = append(steps, changes...)
+		var waits []string
+		for _, step := range changes {
+			if step.Op == "missing" {
+				waits = append(waits, step.Name)
+			}
+		}
 		switch {
+		case !exists && len(waits) > 0:
+			// Made, and not started without what it requires: the next
+			// apply, once the secrets are set, deploys it.
+			deploys = append(deploys, Step{Op: "note", Kind: "deploy", App: name, Name: name,
+				Detail: "its first deploy waits for " + strings.Join(waits, ", ") + ", which the file requires"})
 		case !exists || (!have.Deployed && have.App.SourceType != "upload"):
 			// A new app's first deploy, or the one an apply that stopped
 			// part-way never got to. A folder sent with `skifity up` is
@@ -201,16 +221,25 @@ func Plan(file File, state State) ([]Step, error) {
 				return nil, errdoc.BlueprintInvalid(fmt.Sprintf(
 					"app %s links the database %s, which is neither in the file nor in the environment", name, database))
 			}
-			variable := want.Databases[database]
+			link := want.Databases[database]
+			variable := link.URL
 			if variable == "" {
 				variable = DefaultVariable(engine)
 			}
-			if exists && have.Links[variable] == id {
+			// Pieces the file does not name are left as the link has them.
+			pieces := link.Pieces()
+			named := pieces != store.LinkPieces{}
+			if exists && have.Links[variable] == id && (!named || have.Pieces[id] == pieces) {
 				continue
 			}
-			steps = append(steps, Step{Op: "create", Kind: "link", App: name, Name: database, Detail: "as " + variable,
-				Call: &Call{Method: "POST", Path: "/api/databases/" + id + "/link",
-					Body: map[string]any{"app_id": ref, "var_name": variable}}})
+			body := map[string]any{"app_id": ref, "var_name": variable}
+			detail := "as " + variable
+			if named {
+				body["pieces"] = pieces
+				detail += ", and " + strings.Join(pieces.Names(), ", ")
+			}
+			steps = append(steps, Step{Op: "create", Kind: "link", App: name, Name: database, Detail: detail,
+				Call: &Call{Method: "POST", Path: "/api/databases/" + id + "/link", Body: body}})
 		}
 	}
 
@@ -298,8 +327,9 @@ func createApp(name string, want App, envID, gitSource string) (Step, error) {
 
 // appSteps are the changes to one app, new or not: its settings, scaling,
 // variables, processes, domains and schedules. redeploy says why the app has
-// to be deployed again for them to take effect, when one does.
-func appSteps(name, ref string, want App, have AppState, exists bool) (steps []Step, redeploy string) {
+// to be deployed again for them to take effect, when one does. gitSource is
+// the id of the connection the file names, or "" when it names none.
+func appSteps(name, ref string, want App, have AppState, exists bool, gitSource string) (steps []Step, redeploy string) {
 	current := have.App
 
 	// Settings, sent together. A new app got most of them when it was made.
@@ -350,6 +380,14 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 			patch["internal"] = *want.Internal
 			changed = append(changed, fmt.Sprintf("internal %t → %t", current.Internal, *want.Internal))
 		}
+		// The file's `git:` on an app that has another connection, or none:
+		// an app made from a public repository is given one this way, and
+		// its webhook with it. A connection is not part of the image, so it
+		// is a change and never a redeploy.
+		if gitSource != "" && gitSource != current.GitSourceID && current.SourceType == "git" {
+			patch["git_source_id"] = gitSource
+			changed = append(changed, fmt.Sprintf("git connection → %q", want.Git))
+		}
 	}
 	field("preview seed", "preview_seed", want.PreviewSeed, current.PreviewSeed)
 	if want.DeployOnPush != nil && (!exists || *want.DeployOnPush != current.AutoDeploy) {
@@ -387,44 +425,10 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 		steps = append(steps, *s)
 	}
 
-	// Variables, in one batch: one rollout for the lot.
-	existing := map[string]store.Variable{}
-	for _, variable := range have.Variables {
-		existing[variable.Key] = variable
-	}
-	var set []map[string]any
-	for _, key := range sortedKeys(want.Variables) {
-		value := want.Variables[key]
-		variable, ok := existing[key]
-		switch {
-		case !ok:
-			steps = append(steps, Step{Op: "create", Kind: "variable", App: name, Name: key})
-		case variable.IsSecret:
-			steps = append(steps, Step{Op: "change", Kind: "variable", App: name, Name: key,
-				Detail: "is a secret here; the file's value replaces it, and it will not be one"})
-		case variable.Value != value:
-			steps = append(steps, Step{Op: "change", Kind: "variable", App: name, Name: key,
-				Detail: fmt.Sprintf("%q → %q", variable.Value, value)})
-			// The build reads it, so the running image has the old value in it.
-			if variable.BuildTime && current.SourceType != "image" && redeploy == "" {
-				redeploy = "to build with the new value of " + key
-			}
-		default:
-			continue
-		}
-		// A variable the build reads stays one: the file says its value, not
-		// when it is read, and sending false would move it out of the build.
-		set = append(set, map[string]any{"key": key, "value": value, "is_secret": false, "build_time": variable.BuildTime})
-	}
-	if len(set) > 0 {
-		steps[len(steps)-1].Call = &Call{Method: "POST", Path: "/api/apps/" + ref + "/variables/batch",
-			Body: map[string]any{"set": set, "unset": []string{}}}
-	}
-	for _, key := range want.Secrets {
-		if _, ok := existing[key]; !ok {
-			steps = append(steps, Step{Op: "note", Kind: "secret", App: name, Name: key,
-				Detail: "is not set; set it with `skifity env set --secret " + key + "=...`"})
-		}
+	variables, rebuild := variableSteps(name, ref, want, have, exists)
+	steps = append(steps, variables...)
+	if redeploy == "" && rebuild != "" && current.SourceType != "image" {
+		redeploy = rebuild
 	}
 
 	processes := map[string]store.AppProcess{}
@@ -496,6 +500,143 @@ func appSteps(name, ref string, want App, have AppState, exists bool) (steps []S
 	return steps, redeploy
 }
 
+// variableSteps are the changes to an app's variables and to the secrets the
+// file reads from a secret manager, sent in one batch — one rollout for the
+// lot — and then what the file says of the secrets it names and does not set.
+// rebuild says why the app has to be built again, when a value the build
+// reads changed.
+func variableSteps(name, ref string, want App, have AppState, exists bool) (steps []Step, rebuild string) {
+	existing := map[string]store.Variable{}
+	for _, variable := range have.Variables {
+		existing[variable.Key] = variable
+	}
+	built := func(key string) {
+		if exists && rebuild == "" {
+			rebuild = "to build with the new value of " + key
+		}
+	}
+	var set []map[string]any
+	for _, key := range sortedKeys(want.Variables) {
+		wanted := want.Variables[key]
+		variable, ok := existing[key]
+		// Whether the build reads it: what the file says, or else what it is,
+		// which for a new one is no.
+		buildTime := variable.BuildTime
+		if wanted.Build != nil {
+			buildTime = *wanted.Build
+		}
+		step := Step{Op: "change", Kind: "variable", App: name, Name: key}
+		switch {
+		case !ok:
+			step.Op = "create"
+			if buildTime {
+				step.Detail = "read by the build"
+			}
+		case variable.Reference != nil:
+			step.Detail = "is read from " + variable.Reference.String() + " here; the file's value replaces it, and it will not be a secret"
+		case variable.IsSecret:
+			step.Detail = "is a secret here; the file's value replaces it, and it will not be one"
+		default:
+			var changed []string
+			if variable.Value != wanted.Value {
+				changed = append(changed, fmt.Sprintf("%q → %q", variable.Value, wanted.Value))
+			}
+			if buildTime != variable.BuildTime {
+				changed = append(changed, fmt.Sprintf("build %t → %t", variable.BuildTime, buildTime))
+			}
+			if len(changed) == 0 {
+				continue
+			}
+			step.Detail = strings.Join(changed, ", ")
+		}
+		// The build reads it, so the running image has the old value in it,
+		// or none. A value read when the app runs is only rolled out.
+		if buildTime && (!ok || variable.Value != wanted.Value || !variable.BuildTime || variable.IsSecret) {
+			built(key)
+		}
+		// build_time only when the file says it: left out, the panel keeps
+		// what the variable is, and sending false moved a variable the build
+		// reads out of the build.
+		item := map[string]any{"key": key, "value": wanted.Value, "is_secret": false}
+		if wanted.Build != nil {
+			item["build_time"] = *wanted.Build
+		}
+		set = append(set, item)
+		steps = append(steps, step)
+	}
+
+	var said []Step
+	for _, key := range sortedKeys(want.Secrets) {
+		secret := want.Secrets[key]
+		variable, ok := existing[key]
+		buildTime := variable.BuildTime
+		if secret.Build != nil {
+			buildTime = *secret.Build
+		}
+		if secret.From != "" {
+			connection, path, inside, err := secretmgr.ParseReference(secret.From)
+			if err != nil {
+				// Parse refused it already; a file that skipped Parse says so.
+				said = append(said, Step{Op: "note", Kind: "secret", App: name, Name: key, Detail: err.Error()})
+				continue
+			}
+			reference := variable.Reference
+			same := ok && reference != nil && reference.Connection == connection && reference.Path == path && reference.Key == inside
+			if same && buildTime == variable.BuildTime {
+				continue
+			}
+			step := Step{Op: "create", Kind: "secret", App: name, Name: key, Detail: "read from " + secret.From}
+			switch {
+			case ok && reference != nil && !same:
+				step.Op, step.Detail = "change", "read from "+reference.String()+" → "+secret.From
+			case ok && reference == nil:
+				step.Op, step.Detail = "change", "has a value here; it will be read from "+secret.From+" instead"
+			case ok:
+				step.Op, step.Detail = "change", fmt.Sprintf("build %t → %t", variable.BuildTime, buildTime)
+			}
+			if buildTime && (!same || !variable.BuildTime) {
+				built(key)
+			}
+			// Where it is read from, and never a value: the panel reads it
+			// once to check the path, and stores nothing of it.
+			item := map[string]any{"key": key, "from": map[string]any{"connection": connection, "path": path, "key": inside}}
+			if secret.Build != nil {
+				item["build_time"] = *secret.Build
+			}
+			set = append(set, item)
+			steps = append(steps, step)
+			continue
+		}
+
+		how := "`skifity env set --secret " + key + "=...`"
+		if buildTime {
+			how = "`skifity env set --secret --build " + key + "=...`"
+		}
+		switch {
+		case ok && secret.Build != nil && *secret.Build != variable.BuildTime:
+			// Whether the build reads a secret is sent with its value, which
+			// the file does not have and the panel does not give back.
+			said = append(said, Step{Op: "note", Kind: "secret", App: name, Name: key,
+				Detail: fmt.Sprintf("has build %t here and %t in the file; set it again with %s to change that", variable.BuildTime, buildTime, how)})
+		case ok:
+		case secret.Optional:
+			said = append(said, Step{Op: "note", Kind: "secret", App: name, Name: key,
+				Detail: "is not set; set it with " + how})
+		case exists:
+			said = append(said, Step{Op: "missing", Kind: "secret", App: name, Name: key, Blocks: true,
+				Detail: "is required and not set; set it with " + strings.TrimSuffix(how, "`") + " --app " + have.App.ID + "`, or mark it optional"})
+		default:
+			said = append(said, Step{Op: "missing", Kind: "secret", App: name, Name: key,
+				Detail: "is required, and is set once the app is made, with " + how + "; its first deploy waits for it"})
+		}
+	}
+	if len(set) > 0 {
+		steps[len(steps)-1].Call = &Call{Method: "POST", Path: "/api/apps/" + ref + "/variables/batch",
+			Body: map[string]any{"set": set, "unset": []string{}}}
+	}
+	return append(steps, said...), rebuild
+}
+
 // sourceNotes are where an app comes from, when the file says otherwise:
 // said, and not changed, because where an app is built from is changed on its
 // page, where the panel can say what else that changes.
@@ -553,6 +694,22 @@ func scaling(want App, current store.App, exists bool) *Step {
 				"max_replicas": a.Max, "cpu_target": a.CPU, "memory_target": a.Memory}}}
 	}
 	return nil
+}
+
+// Missing are the secrets a plan found required and not set, and blocking
+// those of them on an app that is already here, over which apply refuses
+// before it changes anything.
+func Missing(steps []Step) (missing, blocking []Step) {
+	for _, step := range steps {
+		if step.Op != "missing" {
+			continue
+		}
+		missing = append(missing, step)
+		if step.Blocks {
+			blocking = append(blocking, step)
+		}
+	}
+	return missing, blocking
 }
 
 // Counts is how many steps of each op a plan has.

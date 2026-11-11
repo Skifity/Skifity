@@ -84,9 +84,9 @@ func (s *Server) handleAddCloudProvider(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, errdoc.BadRequest("The panel can create servers at Hetzner Cloud (hetzner) and DigitalOcean (digitalocean)."))
 		return
 	}
-	token := strings.TrimSpace(req.Token)
-	if token == "" || len(token) > 512 || strings.IndexFunc(token, unicode.IsSpace) >= 0 {
-		writeError(w, r, errdoc.BadRequest("Paste the project's API token, on its own, with no spaces in it."))
+	token, err := cloudToken(req.Token)
+	if err != nil {
+		writeError(w, r, err)
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -131,6 +131,123 @@ func (s *Server) handleAddCloudProvider(w http.ResponseWriter, r *http.Request) 
 	}
 	s.audit(r, teamID, "cloud_provider.added", "cloud_provider", connection.ID, req.Kind+" "+name)
 	writeJSON(w, http.StatusCreated, viewCloudProvider(store.CloudProviderRow{CloudProvider: connection}))
+}
+
+// cloudToken is a token as pasted, or why it cannot be one.
+func cloudToken(raw string) (string, error) {
+	token := strings.TrimSpace(raw)
+	if token == "" || len(token) > 512 || strings.IndexFunc(token, unicode.IsSpace) >= 0 {
+		return "", errdoc.BadRequest("Paste the project's API token, on its own, with no spaces in it.")
+	}
+	return token, nil
+}
+
+type replaceCloudTokenRequest struct {
+	Token string `json:"token"`
+}
+
+// machinesChecked bounds how many of a connection's machines a new token is
+// asked about. One it can see is enough; a few cover machines deleted in the
+// console since.
+const machinesChecked = 5
+
+// handleReplaceCloudProviderToken gives a connection a new token: one that
+// expired, was revoked or is being rotated.
+//
+// Removing the connection and adding another was the only way, and it is
+// refused while servers created with it are in the panel, because deleting
+// their machines goes through it. So a revoked token was a connection that
+// could neither be used nor let go. Here it is replaced where it is, checked
+// as a new one is, and, when servers were created with it, checked against
+// their machines: a token for another project passes every other check and
+// cannot see them, and saving it would leave them deletable only in the
+// provider's console. Nothing changes unless every check passes.
+func (s *Server) handleReplaceCloudProviderToken(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	row, err := s.cloudProvider(r, teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var req replaceCloudTokenRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	token, err := cloudToken(req.Token)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	provider, err := s.openCloud(row.Kind, token)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), cloudCheckTimeout)
+	defer cancel()
+	if err := provider.Check(ctx); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.tokenSeesItsMachines(ctx, row, provider); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	checked := time.Now().UTC()
+	sealed, err := s.keyring.Seal([]byte(token), store.CloudProviderContext(row.ID))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	hint := token[max(0, len(token)-4):]
+	if err := s.db.ReplaceCloudProviderToken(r.Context(), teamID, row.ID, sealed, hint, checked); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	row.TokenHint, row.CheckedAt = hint, checked
+	s.audit(r, teamID, "cloud_provider.token_replaced", "cloud_provider", row.ID, row.Kind+" "+row.Name)
+	writeJSON(w, http.StatusOK, viewCloudProvider(row))
+}
+
+// tokenSeesItsMachines asks the provider, with a connection's new token, for
+// the machines the panel created with the connection, and refuses the token
+// when it can see none of them. A connection with no machines ordered yet
+// has nothing to check.
+func (s *Server) tokenSeesItsMachines(ctx context.Context, row store.CloudProviderRow, provider cloud.Provider) error {
+	if row.Servers == 0 {
+		return nil
+	}
+	created, err := s.db.ListCloudServers(ctx)
+	if err != nil {
+		return err
+	}
+	asked := 0
+	for _, server := range created {
+		if server.ProviderID != row.ID || server.MachineID == "" {
+			continue
+		}
+		if asked == machinesChecked {
+			break
+		}
+		asked++
+		_, err := provider.Machine(ctx, server.MachineID)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, cloud.ErrNotFound) {
+			return err
+		}
+	}
+	if asked == 0 {
+		return nil
+	}
+	return errdoc.CloudTokenOtherProject(cloud.Title(row.Kind), row.Name)
 }
 
 func (s *Server) handleDeleteCloudProvider(w http.ResponseWriter, r *http.Request) {

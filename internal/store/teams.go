@@ -107,6 +107,41 @@ func (db *DB) UpdateTeam(ctx context.Context, t *Team) error {
 	return nil
 }
 
+// ErrTeamHasServers is a team that still has a server when it is deleted.
+var ErrTeamHasServers = errors.New("the team still has servers")
+
+// DeleteTeam removes a team and everything recorded under it: its projects,
+// and with them their environments, apps and databases, and then the team row,
+// whose memberships, tokens, invitations, servers' rows and connections go
+// with it.
+//
+// It refuses a team that still has a server, in the same transaction as the
+// delete, so a server added while the caller was checking is not taken with
+// it: a server's row is the only record of a machine that is still in the
+// cluster, running every team's apps.
+func (db *DB) DeleteTeam(ctx context.Context, id string) error {
+	return db.Tx(ctx, func(tx *sql.Tx) error {
+		var servers int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM servers WHERE team_id = ?`, id).Scan(&servers); err != nil {
+			return fmt.Errorf("count the team's servers: %w", err)
+		}
+		if servers > 0 {
+			return ErrTeamHasServers
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE team_id = ?`, id); err != nil {
+			return fmt.Errorf("delete the team's projects: %w", err)
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM teams WHERE id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("delete team: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
 // --- memberships ---
 
 // AddMember grants a user a role in a team, or changes the role they already have.

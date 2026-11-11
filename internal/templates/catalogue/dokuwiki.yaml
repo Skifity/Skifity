@@ -7,6 +7,7 @@ website: https://www.dokuwiki.org/
 services:
 - name: dokuwiki
   image: linuxserver/dokuwiki:version-2026-07-14c
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -21,3 +22,4 @@ services:
   - name: dokuwiki-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

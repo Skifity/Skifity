@@ -657,9 +657,11 @@ func TestUpgradingAHashTouchesNothingElse(t *testing.T) {
 	changed := stale
 	changed.Locale = "id"
 	changed.Name = "Renamed"
-	changed.Disabled = true
 	if err := db.UpdateUser(ctx, &changed); err != nil {
 		t.Fatalf("change the user: %v", err)
+	}
+	if err := db.SetUserDisabled(ctx, user.ID, true); err != nil {
+		t.Fatalf("disable the user: %v", err)
 	}
 
 	// What the sign-in does with its stale copy in hand.

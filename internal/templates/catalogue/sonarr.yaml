@@ -9,6 +9,7 @@ website: https://hub.docker.com/r/linuxserver/sonarr
 services:
 - name: sonarr
   image: linuxserver/sonarr:4.0.20
+  needs_root: true
   port: 8989
   public: true
   mem_request_mb: 128
@@ -22,3 +23,4 @@ services:
   - name: sonarr-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

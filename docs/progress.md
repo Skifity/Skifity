@@ -1,7 +1,8 @@
 # Progress
 
 Read this file, `CLAUDE.md` and `docs/decisions.md` first if you are picking this
-project up cold.
+project up cold. For where it stands in one page, read
+[Where Skifity stands](status.md); this file is the log behind it.
 
 ## Sandbox constraints (important)
 
@@ -5337,6 +5338,36 @@ made; and `skifity plan` and `apply` run by the CLI against the real API —
 everything made, applied twice being applied once, a changed file changing only
 that, and a viewer's apply refused with nothing made.
 
+### Later: the build, secret managers, and secrets a file requires
+
+A variable new to the environment was sent with `build_time` false, so a
+`NEXT_PUBLIC_` or `VITE_` value written in the file missed the build, and the
+documentation said the build was set in the panel. A variable now takes
+`{value: ..., build: true}` as well as its value, and `build_time` is sent
+only when the file says it: left out, the panel keeps what the variable is.
+A new value of one the build reads plans a deploy, as before; a runtime one
+is rolled out by the batch and nothing more (ADR-0007).
+
+`secrets:` is still a list of names, and also a map: `{from:
+connection:path#key}` plans the reference in the same batch as the variables,
+with no value, and `build` and `optional` say the rest. **This changes what an
+existing file does:** a secret a file lists is now required. An apply that used
+to note a missing one and go on now refuses before it changes anything, with
+`blueprint.secrets_missing` naming each secret, its app and the command that
+sets it, while an app that is already here lacks one. An app the file makes is
+made, and its first deploy waits until the secret is set; the next apply gives
+it. `optional: true` keeps the old note.
+
+Tested in `internal/blueprint` (both forms of a variable and of the secrets, a
+typo in either, `build_time` sent only when said, which changes build and which
+only roll out, a reference sent without a value, a missing secret blocking an
+app that is here and holding a new one's deploy) and in `internal/api`, through
+the CLI against the real API: an apply that lacks a required secret changes
+nothing and exits with the code, an optional one is applied and said, a new
+app is made and deployed once its secret is set, and a variable the build
+reads and a secret read from a Vault stand-in reach the panel as the file says,
+with nothing of the secret's value stored.
+
 ## Phase 109 — upgrading the components, and k3s
 
 Gap 12, the last. The installer put k3s on every server and nothing moved it;
@@ -7224,6 +7255,101 @@ in again; and the header still sits inside the sidebar component's `<main>`.
 stream, the Playwright suite (19 tests) and both smoke tests pass locally on
 the last commit; the screenshots in `docs/images` were taken again from it.
 
+## The panel on a domain of its own, from Settings
+
+Five texts — the installer's closing screen, the README, ADR-0015, the
+troubleshooting page and the configuration page — said that adding a domain in
+Settings turns HTTPS on for the panel. Nothing did: Settings had only the Panel
+URL, which feeds links, and every default install stayed on plain HTTP. Now it
+does, under Settings → General → **Panel address**, with
+`skifity domains panel` beside it and an alert on the administrator's overview
+while the panel is on plain HTTP.
+
+**How.** cert-manager and its issuer if they are missing; the panel's own
+Ingress, `skifity-panel`, rendered by `PanelRoute` in `internal/manifests` from
+`deploy/ingress-tls.yaml`, which `deploy/embed.go` now embeds, with the domain
+first, so the installer's next run reads it back and keeps it; a wait for the
+certificate, during which nothing about the panel changes; then the Panel URL
+setting and a strategic merge patch of `SKIFITY_PUBLIC_URL` alone, which
+restarts the panel. The panel that starts finishes the move
+(`SettlePanelDomain`). The address it left stays on the route: webhooks and API
+tokens are served there, a browser is sent on with a 308, and a browser's API
+request gets `panel.domain_moved`, which the panel's client follows.
+
+**Tested.** The cluster half against a fake clientset: the route keeps the
+sslip.io rule, nothing of the Deployment changes before the certificate is
+Ready, then only that one variable does, and a certificate that never comes
+stops the move with `panel.domain_certificate_pending` and the Deployment
+untouched. The API: administrator only, the names refused, the move recorded,
+audited and one at a time, cancelling, going back, the next start finishing it,
+and the old address serving a webhook and an API token while redirecting a
+browser. The CLI against a fake panel, through the restart. The installer's
+JSONPath against the route the panel writes.
+
+**Not executed.** The `Cluster` workflow step in `test/cluster/verify.sh` that
+moves a real panel to a domain with a certificate from Pebble and back; the two
+Playwright tests, one of which reaches the panel as `panel.localhost`; and the
+two new checks in `test/smoke/installer.sh`. None of them was run here.
+
+## Fresh installs get the k3s a release was tested with
+
+A fresh install followed k3s's `stable` channel, in `installer/install.sh` and in
+the panel's own first-server script, so a Skifity release installed whatever
+Kubernetes k3s had published that day, including one no release had run on.
+Joining already matched the running cluster (`joinVersion`), and still does.
+
+`K3S_VERSION` in `installer/install.sh` is now the one place a release records
+its k3s, `v1.37.2+k3s1` to start with: the version the last green Cluster run on
+`main` (42745023544) installed. The installer passes it as `INSTALL_K3S_VERSION`;
+`--channel NAME` is the opt-in back to a channel, and passes the channel alone.
+The panel reads the same line through `installer/embed.go` for a server it
+installs as the first of a new cluster when **Kubernetes version** is empty,
+and shows it as that setting's default. The Cluster and Two servers workflows
+install with this file, so tag.yml tags nothing that did not pass on that
+version; the release workflow refuses a release whose installer has no k3s
+release there, and the release notes name it. `docs/releasing.md` says how to
+move it.
+
+**Tested.** `installer`: Go and `sh` read the same value, and it is a k3s
+release. `provision`: the first server is installed at the pinned version with
+the setting empty, at the setting otherwise, and never with a channel; a
+second server still joins at the cluster's version. `settings`: the default is
+the installer's. `test/smoke/installer.sh`: a fresh install passes the version
+and no channel, `--channel stable` passes the channel and no version and says
+so, and a channel with a `;` in it is refused.
+
+**Not executed.** A real install at the pinned version: the next Cluster and Two
+servers runs are the first, and the release workflow's new step runs on the next
+tag.
+
+## The installer names its release's image by digest
+
+The installer pulled `ghcr.io/<repo>:<tag>`, and a tag can be moved by anybody
+who can push to the registry, so what a given installer installed could change
+after it was published. `RELEASED_IMAGE` in `installer/install.sh` is empty in
+the repository; once GoReleaser has pushed the image, the release workflow reads
+its digest (`docker buildx imagetools inspect`), writes
+`<image>:<tag>@sha256:…` into a copy with `scripts/pin-installer-image.sh`, and
+replaces `install.sh` and its line in `checksums.txt` on the release before the
+provenance is signed. The installer uses it only when it would otherwise have
+pulled exactly that tag from that repository. The panel's **Upgrade** read the
+last colon of such an image as the tag's and would have pointed the panel at
+`<image>:<tag>@sha256:<new tag>`; it now drops the digest first. A copy of the
+database taken before an upgrade is named for the tag, digest or not.
+
+**Tested.** `test/smoke/installer.sh`: the repository's installer names no
+digest; a pinned copy installs the image by tag and digest, also with
+`--version` naming its own release, and not with another `--version`, an
+`--image` or another `SKIFITY_REPO`; pinning refuses a reference without a tag
+or a digest, one of another repository and an installer pinned already, and
+leaves no file behind; a whole install with the pinned copy applies the panel
+with the digest. `cluster`: upgrading from a pinned image, a digest-only one, a
+tag and a registry with a port gives `<image>:<target>`.
+
+**Not executed.** The release workflow's new step: it runs on the next tag, and
+reading a digest needs the pushed image. No install has yet pulled the panel by
+digest on a real k3s.
+
 ## Idle resource usage
 
 `docs/performance.md`. The panel is measured: 35 MiB resident idle on a laptop,
@@ -7232,3 +7358,86 @@ cluster. k3s is measured on the Cluster workflow's runner: 748–780 MiB just
 after a fresh install, which adds about 1 GB to the machine in all, and
 922–1,040 MiB with every component this checks installed, on a machine with
 16 GB.
+
+## What a restored panel brings back onto a new cluster
+
+`docs/troubleshooting.md` restored the panel's database and stopped. It now says
+what comes back by itself, what does not, and how to get the rest back, read
+against the restore path: `skifity admin restore-db`, what the panel does at
+start, the drift check and the deployer.
+
+Reading it found one thing that could not be got back from the panel at all.
+Components are recorded as installed in the database, and the Install button,
+`EnsureComponent` and the first PostgreSQL database all go by that record; a
+database restored onto a new cluster listed PostgreSQL, scale to zero and the
+rest as installed on a cluster that had none of them, and a PostgreSQL database
+whose objects were gone could not even be deleted without its operator's kinds.
+At start, the panel now looks for the workload each component's install waits
+for (`SettleComponents`, in `internal/cluster/settle.go`), and records a
+component whose workload is not there as not installed, so it is offered again.
+Only "not found" counts; any other answer changes nothing.
+
+A "re-apply everything" action was considered and not built. The drift check
+already finds every app whose objects are gone and says so once, and putting an
+app back is not enough for one the panel built: its image was in the registry on
+the lost disk, so it needs a build, and building every app at once is the last
+thing a new server should be asked to do. A managed database whose objects are
+gone is made again by hand and its backup imported, with `skifity backup-open`
+for a sealed one; making it again from its record, so that its own backups
+restore into it, is left for later.
+
+**Tested.** The check against a fake clientset: missing components are offered
+again, present and not-installed ones are left be, a second start changes
+nothing, a cluster that answers with an error changes nothing, and every
+component the panel installs has a workload to look for.
+
+**Not executed.** A restore into a different cluster from start to finish,
+which `docs/checklist.md` already lists as owed by somebody with servers of
+their own.
+
+## The real-cluster runs of this branch, and what they found
+
+`Cluster` and `Two servers` run only on `main`, so both were dispatched on this
+branch before it went to review.
+
+**Seen working.**
+- Run 42915077208: `Real cluster` and `Upgrade from the last release` passed.
+- Runs 42915081308 and 42926792297: `Two servers` passed in full. That covers
+  the template installs with their databases, the panel's own metrics and the
+  rest of phase 5. A one-off `/api/metrics` failure in run 42921993612 did not
+  come back.
+
+**WordPress across a slow link: found, partly fixed, not yet passing.**
+- `Two servers apart` puts the servers 40 ms and 0.3% loss apart. There,
+  WordPress from the catalogue landed on the second server and its MariaDB on
+  the first, and the deploy failed every time.
+- Two causes were found and fixed:
+  - Templates could not ask for more than the default three-second probe and
+    two-minute start. They now can (`health_check`, `health_start_seconds`,
+    `health_timeout_seconds`), and every template whose health path asks its
+    database, or whose first start takes minutes, does.
+  - Step 0 of WordPress's install page asks api.wordpress.org for translations
+    on every request until WordPress is installed. It is checked at
+    `?step=1` now.
+- With both fixes the probe still waited past its ten seconds once the
+  database had started, after answering 500 at once while it had not. So the
+  page hangs reaching MariaDB across the link, and why is not established. The
+  network policies allow the two pods in one namespace to talk, and other
+  traffic across that link passes. Nothing in the report shows what the
+  WordPress container itself saw.
+- The check is in phase 5, which the `apart` job on `main` does not run, so
+  this does not turn `main` red. It is also not solved: an app with its
+  database on another server, across a link like that, is **Written** for
+  WordPress, not **Works**.
+
+**A server that fails, with every phase run: the soft spread loses.**
+- The dispatch runs every phase in every job; `main` gives this job phases
+  `1 4`. With all phases the first server had 1370m CPU and 1944Mi requested,
+  against 630m and 1116Mi on `main`'s run.
+- A restart then put both of an app's instances on the empty second server, so
+  when that server was switched off the app had none.
+- The spread is `ScheduleAnyway`, so the scheduler's resource balance can
+  override it. That is older than this branch.
+- Making it hard needs care: `DoNotSchedule` with `nodeTaintsPolicy: Honor`, so
+  a server that is gone does not count. It needs its own cluster runs, so it is
+  not made here.

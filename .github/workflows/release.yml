@@ -70,6 +70,22 @@ jobs:
           fi
           echo "installer/install.sh installs ${declared}"
 
+      # The k3s a fresh install of this release gets: K3S_VERSION in the
+      # installer, which Cluster and Two servers installed and passed on
+      # before tag.yml tagged the commit. A release that cannot say which k3s
+      # it was tested with is not published; the release notes name it.
+      - name: The k3s this release was tested with
+        run: |
+          set -eu
+          k3s=$(SKIFITY_INSTALLER_LIB=1 sh -c '. ./installer/install.sh; printf "%s" "$K3S_VERSION"')
+          if ! printf '%s' "$k3s" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+[+]k3s[0-9]+$'; then
+            echo "installer/install.sh says K3S_VERSION=\"${k3s}\", which is not a k3s release such as v1.37.2+k3s1." >&2
+            echo "Set it to the k3s the Cluster workflow passed on. See docs/releasing.md." >&2
+            exit 1
+          fi
+          echo "K3S_VERSION=${k3s}" >> "$GITHUB_ENV"
+          echo "A fresh install of ${GITHUB_REF_NAME} gets k3s ${k3s}"
+
       - uses: goreleaser/goreleaser-action@v7
         id: goreleaser
         with:
@@ -78,8 +94,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The installer people download names the panel's image by digest as
+      # well as by tag: a tag can be moved by anybody who can push to the
+      # registry, a digest cannot. The digest exists only now, after the push,
+      # so the attached copy is pinned here, its line in checksums.txt is
+      # replaced, and both go up over what GoReleaser attached; the provenance
+      # below signs the pinned one. For the seconds before this finishes, the
+      # attached installer pulls by tag, as every installer did before it.
+      - name: Pin the attached installer to the image's digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: |
+          set -euo pipefail
+          ref="${IMAGE_REPO}:${GITHUB_REF_NAME}"
+          digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)
+          mkdir -p dist/pinned
+          sh scripts/pin-installer-image.sh "${ref}@${digest}" installer/install.sh dist/pinned/install.sh
+          checksums=$(printf '%s' "$ARTIFACTS" | jq -r '.[] | select(.type == "Checksum") | .path')
+          sum=$(sha256sum dist/pinned/install.sh | cut -d' ' -f1)
+          awk -v sum="$sum" '$2 == "install.sh" { print sum "  install.sh"; n++; next } { print } END { exit n != 1 }' \
+            "$checksums" > dist/pinned/checksums.txt
+          cp dist/pinned/checksums.txt "$checksums"
+          gh release upload "$GITHUB_REF_NAME" dist/pinned/install.sh "$checksums" --clobber
+          echo "The attached installer installs ${ref}@${digest}"
+
       # What the provenance below vouches for: every file in checksums.txt,
-      # which is every binary the release published.
+      # which is every binary the release published, and the installers.
       - name: The digests to sign
         id: hashes
         env:

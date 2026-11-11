@@ -7,6 +7,7 @@ website: https://docs.overseerr.dev/getting-started/installation#docker
 services:
 - name: overseerr
   image: sctx/overseerr:1.35.0
+  needs_root: true
   port: 5055
   public: true
   mem_request_mb: 128
@@ -20,3 +21,4 @@ services:
   - name: overseerr-config
     mount_path: /app/config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

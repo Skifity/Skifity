@@ -7,7 +7,9 @@ website: https://www.xwiki.org
 services:
 - name: xwiki
   image: xwiki:18.7.0-postgres-tomcat
+  needs_root: true
   port: 8080
+  health_start_seconds: 600
   public: true
   mem_request_mb: 1024
   mem_limit_mb: 3072

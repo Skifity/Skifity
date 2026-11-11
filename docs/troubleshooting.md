@@ -144,8 +144,33 @@ server cannot see: allow TCP 80 and 443 there.
 
 **A certificate warning.** With no domain of your own, the panel is served over
 plain HTTP at an `sslip.io` address, on purpose: Let's Encrypt rate limits are
-per domain, and every Skifity install in the world shares sslip.io's. Add a
-domain in Settings and HTTPS is turned on for it automatically.
+per domain, and every Skifity install in the world shares sslip.io's. Point a
+domain at the server and put the panel on it under Settings → General → Panel
+address, or run the installer again with `--domain`.
+
+## The panel is still waiting for its certificate
+
+Moving the panel to a domain of its own waits five minutes for Let's Encrypt's
+certificate, and stops with what cert-manager said last when it does not come.
+The panel is left where it was, and cert-manager keeps asking. It is nearly
+always one of three things:
+
+* **The record does not point at the server yet**, or an old `AAAA` record sits
+  beside the new `A` record. **Check DNS** on the Panel address card says which,
+  and so does `dig +short panel.example.com` from your own computer.
+* **Ports 80 and 443 are closed** in the provider's firewall. Let's Encrypt
+  proves the domain by fetching a file from it over port 80.
+* **Cloudflare's proxy is on** for the record. Set it to DNS only, the grey
+  cloud, until the panel opens over HTTPS.
+
+What the certificate authority answered is on the server:
+
+```sh
+kubectl -n skifity-system describe certificate skifity-panel-tls
+kubectl -n skifity-system describe challenge
+```
+
+Once it is fixed, press **Try again**: what was done already is not done twice.
 
 ## I have lost the setup token
 
@@ -169,7 +194,9 @@ kubectl -n skifity-system logs -l app.kubernetes.io/component=panel | grep setup
 when the panel has a mail server (Settings → Email) and a Panel URL to link to.
 The link works once, for half an hour; only the newest one works; and using it
 signs out everything that was signed in with the old password. It does not
-skip two-factor: an account that has it still needs its code afterwards.
+skip two-factor: an account that has it still needs its code afterwards — see
+[I have lost my authenticator](#i-have-lost-my-authenticator) if that is gone
+too.
 
 The page answers the same whether or not the address has an account, so it
 cannot be used to find out who does.
@@ -184,6 +211,31 @@ server instead:
 sudo skifity admin reset-password you@example.com
 ```
 
+## I have lost my authenticator
+
+**Use a recovery code.** After the password, the sign-in page asks for the
+six-digit code; **Use a recovery code instead** below the boxes takes one of
+the eight codes shown when two-factor was turned on. Type it as it is on the
+paper — with or without the dashes, in capitals or not. Each code works once, and
+the panel says how many are left as you sign in. Then go to **Account →
+Two-factor authentication**: get a new set of codes, or turn two-factor off
+and on again with the new phone.
+
+**No codes either.** Whoever runs the server can turn two-factor off for the
+account:
+
+```sh
+sudo skifity admin reset-2fa you@example.com
+```
+
+It forgets the account's two-factor secret and its recovery codes, signs out
+every device that was signed in as it, and writes an entry to the activity log
+of every team the account is in. The password then signs in on its own, and the
+account can turn two-factor on again under Account. A team that requires a
+second factor refuses the account until it does, and the command names those
+teams. A panel administrator can do the same for somebody else from the panel,
+under **Settings → Accounts → Reset two-factor**.
+
 ## A deployment failed
 
 The deployment's own page has the build log and the reason. The common ones:
@@ -194,9 +246,13 @@ Skifity does. Add a server, or raise the build memory limit in Settings.
 **No Dockerfile and nothing detected.** Skifity could not tell what the project
 is. Add a Dockerfile, or set the builder explicitly in the app's settings.
 
-**The app starts and immediately stops.** Almost always the port. Your app must
-listen on the port in the `PORT` variable, which Skifity sets. Listening on a
-hardcoded 3000 when Skifity asked for 8080 produces exactly this.
+**The new version stopped as it started.** The deployment fails within a
+minute and says how it stopped; see
+[The new version crashed on start](#the-new-version-crashed-on-start).
+
+**The app starts and never becomes ready.** Almost always the port. Your app
+must listen on the port in the `PORT` variable, which Skifity sets. Listening on
+a hardcoded 3000 when Skifity asked for 8080 produces exactly this.
 
 **Health checks never pass.** The health check path returns something other
 than 200, or the app takes longer to start than the check allows. Both are in
@@ -219,6 +275,66 @@ by an authority of your own. Add its certificate, in PEM, under
 `/bin/sh: no such file or directory`.** Each runs its command through a shell,
 and the image has none: one built on `scratch` or a distroless base. See
 [Processes](concepts.md#processes).
+
+## The new version crashed on start
+
+A new version whose instances stop as soon as they start is not waited on. The
+deployment fails as *The new version stopped as it started* once an instance
+has stopped twice, or once for running out of memory, which waiting does not
+change. Its log says how it stopped and holds the last lines it printed before
+it did; on the **Deployments** tab they are under **Details**, beside a button
+to the setting that usually fixes it and **Copy diagnosis**, which copies the
+lot for an assistant. A secret variable's value in those lines is replaced by
+`[redacted]`.
+
+| How it stopped | What it usually is | Where it is fixed |
+| --- | --- | --- |
+| Out of memory (`OOMKilled`) | The version needs more memory than its limit allows. | **Scaling**, the memory limit. |
+| Exit code 127 or 126 | The start command is not in the image (127) or cannot be run (126): a typo, a program the image does not have, a script without its executable bit. | **Settings**, the start command. |
+| Exit code 0 | The process finished. A web process has to keep running, so a command that starts a server in the background and returns, or a script that does its work and exits, ends here. Run the server in the foreground. | **Settings**, the start command. |
+| Any other code | The app stopped itself, and its last lines say why: most often a variable it needs and does not have, or a database it connects to at start that it cannot reach. | **Variables**, or the lines themselves. |
+
+An instance that the health check stopped is not one of these: it is slow, or
+answering somewhere else, and its log says nothing went wrong. That one is
+given its whole **Time to start**, and if it never answers the deployment fails
+as *The new version did not start*, naming the instance and what it was waiting
+for: the health check's own answer, such as a 404 from the health path, or a
+server with no room for it.
+
+**What happens to the app.** One that updates by rolling kept its previous
+version serving throughout. Once the deployment fails, that version's
+configuration is applied again, so the new version's instance that kept
+restarting beside it is removed; the log says so. An app with a volume had its
+old version stopped first, so it is rolled back to the last version that
+worked, as for any deployment that fails while rolling out.
+
+An assistant connected over MCP gets the same lines from
+`get_deployment_history`, as `last_lines` on the deployment that crashed.
+
+## I pushed and nothing happened
+
+Start at the app's **Deployments** tab: a push that reached the panel and was
+skipped is not there, and one that built and failed is.
+
+**The app has no Git connection.** An app made from a public repository without
+a connection has deploy on push on and no webhook, so the Git host never tells
+the panel about a push. Its **Settings** say so under **Deploy on push**.
+Connect your account under **Settings → Git**, choose the connection in the
+app's **Git connection**, and save: the webhook is registered then. See
+[Deploying when you push](concepts.md#deploying-when-you-push).
+
+**The token cannot manage webhooks.** The panel said so when the app was made
+or the connection chosen, with the address to add by hand. Give the token the
+webhook scope, or add the hook yourself with the address and the secret from
+**Settings → Git → Webhook**; then **Register the webhook again** on the app's
+**Settings** checks. At the Git host, the hook's recent deliveries say what the
+panel answered: a 401 is a secret that does not match, and a 202 names each app
+and why it was skipped — another branch, deploy on push off, deploys locked, a
+`[skip ci]`, a path the app does not watch.
+
+**The push landed while the panel was restarting.** The Git host tried once and
+was refused. Press **Redeliver** on that delivery at the host, or **Deploy** on
+the app.
 
 ## Bitbucket refuses the token or a webhook
 
@@ -577,7 +693,8 @@ answering cannot be emptied first, so it is not waited on: its instances start
 on the other servers as soon as it is removed. An app or database that kept
 its data on that server's own disk cannot start anywhere else, and the removal
 says which: restore those from a backup. Cross-node storage (Longhorn, under
-Settings) is what lets a volume outlive the server it was on.
+Settings) is what lets a volume outlive the server it was on, at about 700 MB
+of memory on every server ([What it costs](performance.md)).
 
 ## Restoring after losing the panel's server
 
@@ -598,17 +715,108 @@ The panel's database and master key live on the first control plane server, in
 2. Install Skifity on the new server.
 3. Stop the panel: `kubectl -n skifity-system scale deploy/skifity-panel --replicas=0`
 4. Put `/root/panel-backup.db` in place as `/var/lib/skifity/panel.db`, and copy
-   `/etc/skifity/master.key` across.
+   `/etc/skifity/master.key` across. Code sent from a folder is kept beside the
+   database, in `/var/lib/skifity/uploads`: copy that too.
 5. Start it again: `kubectl -n skifity-system scale deploy/skifity-panel --replicas=1`
 
 If the old server is gone rather than being moved, the copy is the newest one
 in the backup bucket under `skifity/panel/`. Install Skifity on the new server,
-put the master key in place, and follow [Putting it back](backups.md#putting-it-back):
-`skifity admin restore-db` checks the copy before it replaces anything.
+with the same `--domain` if the panel had one, put the master key in place, and
+follow [Putting it back](backups.md#putting-it-back): `skifity admin restore-db`
+checks the copy before it replaces anything.
 
 Without the master key the database is unreadable, which is the point of the
 recovery key you were asked to download. [Configuration](configuration.md) has
 the full list of what to back up.
+
+### What comes back onto a new cluster
+
+When the old server is gone, the cluster that was on it usually went with it,
+and the panel starts on a new, empty one with everything it had recorded. What
+that brings back depends on where each thing lived: in the panel's database, or
+on the old server's disk. This is read from the code; a restore into a
+different cluster has not yet been run from start to finish by the people who
+wrote it.
+
+**Comes back by itself.** Accounts, teams, projects, environments, apps and
+their settings, variables, domains, schedules, notification channels, backup
+storage and history: they are the database, and their secrets open with the
+master key the backup was taken with. The collector that ships logs to drains
+is applied again within five minutes, and the image registry the first time
+anything is built.
+
+**Does not come back by itself:**
+
+* **The apps.** Within a few minutes the panel compares each deployed app with
+  the new cluster, finds its objects gone, marks it **Changed outside
+  Skifity** and sends `app.drifted` once. An app set to **Put back
+  automatically** is applied again by itself; every other one waits, since that
+  is off by default ([why](#changed-outside-skifity)).
+* **The images the panel built.** They were in the registry inside the cluster,
+  on the old server's disk, and that is not backed up. An app the panel built
+  that is only put back stops at an image that cannot be pulled, and so does a
+  rollback to any earlier version. Images pushed to an **External registry**,
+  under Settings, are still there.
+* **Code sent from a folder**, which was in `/var/lib/skifity/uploads` and is
+  not in the backup.
+* **What was on volumes and in managed databases.** With the storage k3s ships,
+  it was on the old server's disk. A managed database's own objects are not
+  made again either: its page says its Kubernetes object is gone.
+* **Components** installed under **Settings → Components**. At start the panel
+  looks for each one it has down as installed, and lists the ones it does not
+  find as not installed.
+* **Two settings that describe the old server**: **Cluster public IP**, which
+  every sslip.io address and every DNS record the panel keeps points at, and
+  **How servers talk to each other**. Both come from the backup, not from the
+  new server.
+* **The other servers.** They were members of the old cluster, and are listed
+  as not responding.
+
+**Getting the rest back**, in this order:
+
+1. Under **Settings → Domains and HTTPS**, set **Cluster public IP** to the new
+   server's address if it changed. Records at a connected DNS provider follow
+   within minutes; a record anywhere else is yours to change. Before adding
+   another server, make **How servers talk to each other** the pod network the
+   installer printed on this one.
+2. Under **Settings → Components**, install again what the apps used: HTTPS
+   certificates for any domain with a certificate, scale to zero, and
+   PostgreSQL before a PostgreSQL database is touched in step 5. The registry is
+   also installed by the first build.
+3. Build each app the panel built, afresh. **Deploy now** builds the branch as
+   it is now; `skifity deploy --app <id> --commit <sha> --force` builds exactly
+   the version that ran, and without `--force` a commit already built is taken
+   for the image that is gone. A deploy applies all of the app's objects, so
+   there is nothing to put back first. An app that runs an image from a
+   registry elsewhere only needs **Put it back**. One sent from a folder needs
+   `skifity up` from that folder again, then `skifity deploy --force`, because
+   the same code sent again is taken for the same image.
+4. Restore each volume from its newest backup, on the app's **Storage** tab: the
+   deploy made the volume again, empty.
+5. Make each managed database again and load its newest backup. Its backups are
+   in the bucket under `skifity/database/<its id>/`, the id being what follows
+   `/databases/` in the address of its page. Delete it, create one with the same
+   name, engine and version, and link the apps to it again. Then download the
+   backup, open it if it is sealed, and [import it](databases.md#importing-a-dump):
+
+   ```sh
+   SKIFITY_BACKUP_PASSPHRASE='…' skifity backup-open ./20261108-031700-bak-9f2c-orders.gz
+   skifity db import orders ./20261108-031700-bak-9f2c-orders.gz --wait
+   ```
+
+   `backup-open` opens the file where it is, on any machine with the `skifity`
+   binary. A backup taken before there was a passphrase needs no opening.
+6. Remove the old servers under **Servers**, and add new ones.
+
+There is no single action that does all of this. Each app is built or put back
+on its own, which keeps a new server from being asked to build every app at
+once.
+
+If the cluster survived — three control plane servers, and the panel's server
+was one of them — the apps' objects are still in it and there is nothing to put
+back. What was on the lost server's own disk is gone all the same: the
+registry's images, if it ran there, and any volume or database kept there, which
+[a server that is not responding](#a-server-says-not-responding) covers.
 
 ## Full monitoring
 
@@ -670,6 +878,93 @@ kubectl -n skifity-logs logs daemonset/skifity-log-collector | grep -i error
 A service that refuses some lines — Elasticsearch over a field's type, Loki
 over a line it thinks too old — keeps the rest; its own page lists what it
 refused. Lines from before the drain was added are not sent at all.
+
+## Small requests work and large ones hang
+
+Between servers, the pod network wraps every packet in another one —
+WireGuard by default, VXLAN on a cluster installed with `--pod-network vxlan` —
+and the wrapping takes room. flannel, which runs the pod network, makes the
+pods' packets that much smaller than the server's network card says it can
+carry: 1420 bytes with WireGuard and 1450 with VXLAN, on the usual 1500. That
+is right when the whole way between your servers carries packets as large as
+the card says. When something on the way carries less — a VPN or a tunnel
+between the servers, PPPoE, a provider's private network with a lower limit
+than its machines are told — a full-size packet is dropped on the way, often
+without a word back, while the small ones still get through. Nothing in the
+cluster reports it.
+
+What it looks like:
+
+* A connection opens, then stops as soon as something large has to cross: a
+  page whose first bytes arrive and the rest never does, an HTTPS handshake
+  that hangs after its first message, a query that answers when the result is
+  small and hangs when it is large, an upload or a download that stalls at the
+  same point every time.
+* Only between servers. The same request works when everything it touches is
+  on one server, and an app with one instance answers on the address of the
+  server it runs on and hangs on the others.
+* A build stalls pushing its image, or an instance waits to pull one, on a
+  server other than the registry's.
+* `ping` between the servers works, because it is small.
+
+Check it from the pod network itself, on a control plane server:
+
+```sh
+cat /run/flannel/subnet.env          # FLANNEL_MTU is what the pods were given, e.g. 1420
+kubectl -n kube-system get pods -o wide -l app.kubernetes.io/name=traefik
+                                     # Traefik runs on every server: take the IP of one on another server
+ping -c 3 10.42.1.7                  # small: answers
+ping -c 3 -M do -s 1392 10.42.1.7    # full size: FLANNEL_MTU minus 28 bytes of headers
+```
+
+If the small one answers and the full-size one does not, the way between the
+servers carries less than flannel thinks. Find out how much, between the two
+servers' own addresses (`kubectl get nodes -o wide`, INTERNAL-IP):
+
+```sh
+ping -c 3 -M do -s 1472 203.0.113.11   # 1472 + 28 = 1500 bytes
+```
+
+If it says `message too long` or `Frag needed`, or does not answer, lower `-s`
+until it does. The largest that answers, plus 28, is what the way between them
+carries: the path MTU.
+
+**Telling flannel.** k3s writes flannel's settings each time it starts; give it
+a copy of its own with the path MTU in it, on every server, with the same
+number:
+
+```sh
+sudo cp /var/lib/rancher/k3s/agent/etc/flannel/net-conf.json /etc/rancher/k3s/flannel-net-conf.json
+sudo nano /etc/rancher/k3s/flannel-net-conf.json
+echo 'flannel-conf: /etc/rancher/k3s/flannel-net-conf.json' | sudo tee /etc/rancher/k3s/config.yaml.d/30-flannel-mtu.yaml
+```
+
+In the file, add the path MTU to `"Backend"`, leaving the rest as it is. With
+WireGuard it then reads:
+
+```json
+"Backend": {
+  "Type": "wireguard",
+  "PersistentKeepaliveInterval": 25,
+  "MTU": 1400
+}
+```
+
+It is the path's number, not the pods': flannel takes its own room off it, as
+it does from the card's. Then reboot the servers one at a time, waiting for
+each to be ready under **Servers** before the next. A restart of k3s alone is
+not enough: every pod keeps the size it started with, the panel's and
+Traefik's included, and a reboot starts them all again. Afterwards
+`/run/flannel/subnet.env` shows the smaller `FLANNEL_MTU`, and the full-size
+`ping` above answers with `-s` set to the new `FLANNEL_MTU` minus 28.
+
+A server added later joins with k3s's own settings. Put the same two files on
+it once it has joined, and reboot it.
+
+If it is the server's own network card that is wrong — it says 1500 on a
+network that carries less, which some providers' private networks do — set the
+right MTU on the card instead (netplan's `mtu:` on Ubuntu) and reboot: flannel
+follows the card, with nothing of its own to change.
 
 ## Everything is fine but I want to look underneath
 

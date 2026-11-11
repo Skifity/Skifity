@@ -6,7 +6,9 @@ website: https://freescout.net
 services:
 - name: freescout
   image: nfrastack/freescout:2.2.14
+  needs_root: true
   port: 80
+  health_start_seconds: 600
   public: true
   mem_request_mb: 256
   mem_limit_mb: 1024

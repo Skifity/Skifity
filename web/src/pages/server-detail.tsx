@@ -16,6 +16,7 @@ import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
 import { Page, PageHeader } from "@/components/page"
 import { OperationProgress, sayServerStatus } from "@/components/operation-progress"
+import { NotTakingTrafficAlert, notTakingTraffic, sayEntry } from "@/components/server-entry"
 import { ServerGPUCard } from "@/components/server-gpus"
 import { ServerHardening } from "@/components/server-hardening"
 import { ServerUsageCard } from "@/components/server-usage-card"
@@ -144,6 +145,8 @@ export function ServerDetailPage() {
   if (server.isLoading || !server.data) return <Skeleton className="h-96" />
 
   const current = server.data
+  // Whether it takes traffic, from the same live reading as its usage.
+  const entry = metrics.data ? sayEntry(t, metrics.data) : null
   // Only a server the panel created at a provider has a machine it may delete.
   const cloud = current.cloud
   const cloudTitle = cloud ? cloudProviderTitle(cloud.provider_kind) : ""
@@ -273,6 +276,10 @@ export function ServerDetailPage() {
         <p className="-mt-3 text-sm text-muted-foreground">{sayServerStatus(t, current)}</p>
       )}
 
+      {notTakingTraffic(current, metrics.data) && (
+        <NotTakingTrafficAlert reason={metrics.data?.entry_reason} />
+      )}
+
       {retry.error != null && <ErrorDisplay error={retry.error} />}
       {promote.error != null && <ErrorDisplay error={promote.error} />}
       {rename.error != null && <ErrorDisplay error={rename.error} />}
@@ -379,6 +386,7 @@ export function ServerDetailPage() {
             )}
             <Fact label={t("apps.instances")} value={String(metrics.data.pod_count)} />
             <Fact label={t("servers.kubeletVersion")} value={metrics.data.kubelet_version} mono />
+            {entry && <Fact label={t("servers.entry.title")} value={entry} />}
           </CardContent>
         </Card>
       )}

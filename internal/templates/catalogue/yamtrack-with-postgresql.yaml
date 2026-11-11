@@ -7,6 +7,7 @@ website: https://github.com/FuzzyGrim/Yamtrack/wiki
 services:
 - name: yamtrack
   image: ghcr.io/fuzzygrim/yamtrack:0.26
+  needs_root: true
   port: 8000
   public: true
   mem_request_mb: 128
@@ -20,3 +21,10 @@ databases:
   link_to:
   - yamtrack
   var_name: DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_NAME
+    user: DB_USER
+    password: DB_PASSWORD
+notes: The image starts as root, so the environment needs the baseline pod security level.

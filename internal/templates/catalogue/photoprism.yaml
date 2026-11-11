@@ -7,6 +7,7 @@ website: https://www.photoprism.app
 services:
 - name: photoprism
   image: photoprism/photoprism:260919
+  needs_root: true
   port: 2342
   public: true
   mem_request_mb: 1024

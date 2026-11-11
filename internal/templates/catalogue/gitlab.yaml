@@ -6,7 +6,9 @@ website: https://docs.gitlab.com/ee/install/docker.html
 services:
 - name: gitlab
   image: gitlab/gitlab-ce:19.1.8-ce.0
+  needs_root: true
   port: 80
+  health_start_seconds: 900
   public: true
   mem_request_mb: 2048
   mem_limit_mb: 4096
@@ -22,3 +24,4 @@ services:
   - name: gitlab-logs
     mount_path: /var/log/gitlab
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

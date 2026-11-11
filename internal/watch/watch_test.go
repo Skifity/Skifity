@@ -317,6 +317,18 @@ func (f *fakeNotifier) eventsOf(event string) int {
 	return n
 }
 
+// message is the one notification sent for an event.
+func (f *fakeNotifier) message(t *testing.T, event string) notify.Message {
+	t.Helper()
+	for _, m := range f.sent {
+		if m.event == event {
+			return m.msg
+		}
+	}
+	t.Fatalf("no %s notification was sent", event)
+	return notify.Message{}
+}
+
 func testWatcher(t *testing.T, db *fakeStore, c *fakeCluster) (*Watcher, *fakeNotifier) {
 	t.Helper()
 	notifier := &fakeNotifier{}
@@ -343,6 +355,10 @@ func TestServerLostIsReportedOnce(t *testing.T) {
 	}
 	if got := notifier.eventsOf(notify.EventServerLost); got != 1 {
 		t.Fatalf("sent %d server.lost notifications, want 1", got)
+	}
+	// Somebody woken by this needs to know what to look at.
+	if msg := notifier.message(t, notify.EventServerLost); msg.Path != "/servers/srv_1" || msg.Fix == "" {
+		t.Errorf("server.lost links to %q and says %q to do", msg.Path, msg.Fix)
 	}
 
 	w.Once(t.Context())
@@ -494,7 +510,8 @@ func TestCertificateFailureIsReported(t *testing.T) {
 			"shop": {Phase: "running", DesiredReplicas: 1, ReadyReplicas: 1},
 		},
 		certs: map[string]cluster.CertificateState{
-			"shop-tls": {Found: true, Ready: false, Reason: "the DNS record does not point at this cluster"},
+			"shop-tls": {Found: true, Ready: false, Reason: "acme: authorization error for shop.example.com: " +
+				"400 urn:ietf:params:acme:error:dns: DNS problem: NXDOMAIN looking up A for shop.example.com"},
 		},
 	}
 
@@ -503,6 +520,16 @@ func TestCertificateFailureIsReported(t *testing.T) {
 
 	if got := notifier.eventsOf(notify.EventCertificate); got != 1 {
 		t.Fatalf("sent %d certificate notifications, want 1", got)
+	}
+	msg := notifier.message(t, notify.EventCertificate)
+	// The Domains tab, by the query the app's page reads: /apps/app_1/domains
+	// is a path no route serves, and it was this link.
+	if msg.Path != "/apps/app_1?tab=domains" {
+		t.Errorf("certificate.failed links to %q", msg.Path)
+	}
+	// cert-manager's words, and the panel's about what to do: here, DNS.
+	if !strings.Contains(msg.Body, "NXDOMAIN") || !strings.Contains(msg.Fix, "DNS record") {
+		t.Errorf("certificate.failed says %q, and %q to do", msg.Body, msg.Fix)
 	}
 }
 

@@ -40,13 +40,20 @@ skifity up                        Deploy this folder, no repository needed
 skifity init                      Write a skifity.toml in this directory
 skifity deploy                    Deploy this directory's app
 skifity status                    Is it running, and on what
-skifity logs --follow             Live logs
+skifity status --all              What needs attention across the team; exits 1 if anything is broken
+skifity logs --follow             Live logs, every instance's, merged
+skifity logs --instance x7k2p --since 1h --timestamps  One instance, the last hour, with times
 skifity env set KEY=value         Set a variable (several at once roll out once)
 skifity env import .env           Set every line of a .env file, rolled out once
 skifity env list                  List variables
 skifity scale --instances 3       Change how many copies run
 skifity gpus --count 1            Give each instance an NVIDIA GPU (--vendor amd|intel, --on web,worker)
-skifity rollback                  Go back to the previous version
+skifity rollback                  Go back to the previous version, after saying which settings it puts back (--yes skips the question)
+skifity restart                   Replace the app's instances one at a time; nothing is rebuilt
+skifity apps set --port 3000      Change a setting: --start, --health, --build, --root, --memory-limit and more; says what rolled out and what waits for a deploy
+skifity apps rm <name>            Delete an app and its disks; asks for its name, or --yes in a script
+skifity deploy --cancel [<n>]     Stop the deploy under way, or deployment number n
+skifity promote --to production   Run this app's version in another environment, unbuilt; --force when it would build differently
 skifity lock "reason"             Stop every deploy and rollback of the app
 skifity unlock                    Allow them again
 skifity upgrade                   Ask which release of the panel is the newest; --latest upgrades to it, --to v0.2.0 names one (an administrator's; copies the database first)
@@ -68,11 +75,12 @@ skifity db import <name> <file|->  Load a dump; a backup is taken first
 skifity apps                      List apps
 skifity servers                   List servers
 skifity servers create <name> --provider hetzner --location fsn1 --type cx22  Create a server at Hetzner Cloud or DigitalOcean (--provider digitalocean) and join it (a panel administrator's; it costs money)
-skifity cloud providers add --kind hetzner --token-file <file>  Connect a Hetzner Cloud project, or --kind digitalocean; `cloud providers`, `test <name>`, `remove <name>`
+skifity cloud providers add --kind hetzner --token-file <file>  Connect a Hetzner Cloud project, or --kind digitalocean; `cloud providers`, `test <name>`, `update <name> --token-file <file>` for a new token, `remove <name>`
 skifity certs add <name> --cert fullchain.pem --key privkey.pem  The team's own TLS certificate; `certs`, `certs remove <name>`
 skifity git repos <connection>    What a Git connection can read; `git branches <connection> owner/name`
 skifity domains add <hostname>    Put the app on a domain; --manage-dns creates its record at the team's DNS provider
-skifity dns providers add --kind cloudflare --credentials token.txt  Connect a DNS provider; credentials from a file or -, never an argument
+skifity domains panel <hostname>  Put the panel itself on a domain, with HTTPS (an administrator's; --check asks DNS first, --remove goes back)
+skifity dns providers add --kind cloudflare --credentials token.txt  Connect a DNS provider; credentials from a file or -, never an argument; `update <name> --credentials <file>` replaces them
 skifity open                      Print the app's URLs
 skifity whoami                    Who am I signed in as
 skifity api spec                  The HTTP API, described in OpenAPI 3.1
@@ -118,15 +126,15 @@ Tools, in the order they are usually needed:
 |---|---|
 | `list_projects` | Projects and the environments inside them. Where an app goes. |
 | `deploy_folder` | Deploys a folder on this computer, no repository needed. Creates the app and its databases the first time, and leaves out `.env` and `node_modules`. |
-| `create_app` | Creates an app from a repository or an image, and optionally deploys it. |
-| `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, and the catalogue it is in. |
-| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together. Takes the catalogue_id of a team template. Relays the template's notes. |
+| `create_app` | Creates an app from a repository or an image, and optionally deploys it. For a repository, `deploys_on_push` says whether a push will deploy it; with no Git connection it will not, and the note says what to do. |
+| `list_templates` | Searches the one-click catalogue by words or category, the team's own catalogues included: what each template creates, the inputs it takes, the catalogue it is in, and needs_root for an image that starts as root. |
+| `install_template` | Installs one into an environment: its apps, databases and volumes, wired together, all or nothing. Takes the catalogue_id of a team template, dry_run to see what it would create and what would stop it, and allow_root — only once the person agreed — to let the environment accept an image that starts as root. Relays the template's notes. |
 | `list_apps` | Lists apps with their ids. Call this first: everything else takes an app id. |
-| `get_app_status` | Whether an app is running, how many instances are ready, its URLs. |
+| `get_app_status` | Whether an app is running, how many instances are ready, its URLs, and which deployment is live (`live_deployment`) and which each instance runs. An instance that has restarted says how its previous container ended (`last_exit`): `OOMKilled`, or the exit code. |
 | `deploy_app` | Starts a deployment. Returns immediately; builds take minutes. |
-| `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed. |
+| `get_deployment_history` | Recent deployments, with the reason and the fix for any that failed, and `last_lines` for a version that crashed as it started (`deploy.crashed`). |
 | `get_events` | What Kubernetes said about an app's or a database's instances, newest first: a pod that could not be placed, a failed health check, an instance killed for its memory. The common warnings come with what they mean. Where the answer is when the logs are empty. |
-| `get_app_logs` | Recent log lines. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, and `process` for a worker's. |
+| `get_app_logs` | Recent log lines from every instance, merged in the order they were written and marked with the instance that wrote each. Pass `previous: true` for the container before the last restart, which is where a crash-looping app said why, `process` for a worker's, `instance` for one instance's and `since` (`15m`, `1h`, `2d`) for a time range. |
 | `run_command` | Runs a command once, in the app's image with the app's variables. This is where a migration runs. |
 | `list_variables` | An app's variables. Secret values are never returned; one read from a secret manager says where from, as `connection:path#key`. |
 | `set_variable` | Sets one, or with `from` reads it from one of the team's secret managers (Vault, Infisical, Doppler, AWS Secrets Manager) instead of storing it. Says whether it causes a rebuild. |
@@ -136,8 +144,8 @@ Tools, in the order they are usually needed:
 | `list_files` | The files an app reads at a path, and one file's content. A secret file's content is never returned. |
 | `set_file` | Saves a config file at a path, or replaces it. Rolled out, never rebuilt. |
 | `list_databases` | The managed databases in an environment. |
-| `create_database` | Creates a database: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached. |
-| `link_database` | Gives an app a database's connection string as a secret variable. |
+| `create_database` | Creates a database: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Dragonfly, ClickHouse or Memcached. Backed up daily when the panel has storage, unless `backup` is false; it says which. |
+| `link_database` | Gives an app a database's connection string as a secret variable, and with `pieces` its host, port, name, user and password as variables of their own, kept current when the password changes. |
 | `get_database_status` | Whether a database is running, and which apps use it. Never the password. |
 | `list_backups` | A database's or an app's volumes' backups, newest first. |
 | `run_backup` | Backs one up now. Counts against the retention, so the oldest may go. |
@@ -156,12 +164,20 @@ Tools, in the order they are usually needed:
 | `set_gpus` | Gives each instance of an app GPUs, or takes them away, and says what the cluster offers. |
 | `set_process` | Runs a worker or other process beside an app, on its image, or changes one. |
 | `check_scaling_readiness` | What would break if this app ran more than one instance. |
-| `rollback_app` | Restores a previous version's image and settings. |
+| `update_app_settings` | Changes an app's settings: port, start command, health check, folder, build command, memory and the rest. Says which rolled out at once and which wait for the next deploy. |
+| `restart_app` | Replaces an app's instances one at a time. Nothing is rebuilt or changed. |
+| `promote_app` | Runs the version an app runs — staging's, say — in the same app in another environment, such as production, without building it. Says when that environment has no such app, and when it would build the image differently; `force` only when the person agrees. |
+| `cancel_deployment` | Stops a deployment that is building or rolling out; the running version keeps running. |
+| `rollback_app` | Restores a previous version's image and settings, and lists each setting it puts back. `dry_run: true` only lists them. |
 | `lock_deploys` | Stops every deploy and rollback of an app, with a reason, until it is unlocked. |
 | `unlock_deploys` | Lifts that. |
 | `get_vulnerabilities` | Known vulnerabilities in the image an app runs, from the panel's newest Trivy scan: counts per severity, and the most severe with the version that fixes each. Read-only. |
-| `get_cluster_status` | Servers, readiness, spare capacity. |
+| `get_cluster_status` | Servers, readiness, which take traffic, spare capacity. |
+| `get_attention` | What needs attention across the team, errors first: failed deploys, apps with no instance running, alerts going off, failed or missed backups, failed databases, domains without a certificate, vulnerable or drifted apps, servers that stopped answering. Each with the panel page to deal with it on. Read-only. |
 | `list_log_drains` | Where the team's apps' logs are shipped — Loki, Elasticsearch, Datadog, Axiom, Better Stack, New Relic, syslog or HTTPS — and whether the collector is running. Read-only: adding one takes a credential, so it is done in the panel or with `skifity drains add`. |
+
+Deleting an app is not a tool either: its disks go with it for good, so a
+person does it in the panel or with `skifity apps rm`.
 
 Three things are deliberately not tools. A database's password: an app gets its
 connection string from `link_database`, and a password that has been in an
@@ -195,25 +211,33 @@ GET    /api/teams/{team}/servers              servers
 POST   /api/teams/{team}/servers              add one (returns an operation)
 POST   /api/teams/{team}/servers/cloud        create one at a cloud provider and join it (returns an operation)
 GET    /api/teams/{team}/cloud-providers      the team's cloud connections; never a token
+PATCH  /api/teams/{team}/cloud-providers/{provider}  a new token (token); with servers, it has to see their machines
 GET    /api/teams/{team}/cluster              cluster summary
 GET    /api/projects/{project}/environments   environments
 GET    /api/environments/{env}/apps           apps
 POST   /api/environments/{env}/apps           create one
 GET    /api/apps/{app}                        an app
 GET    /api/apps/{app}/status                 live state and instances
+PATCH  /api/apps/{app}                        change settings; answers rolled_out and next_deploy, the settings that wait for a deploy
+POST   /api/apps/{app}/restart                replace the instances one at a time
+GET    /api/apps/{app}/promote                where this app's versions can be promoted to: the same app in other environments
+POST   /api/apps/{app}/promote                run another environment's version here (deployment_id, force)
 POST   /api/teams/{team}/detect-upload        what a folder (.tar.gz) is and needs, before any app exists
+PATCH  /api/teams/{team}/git-sources/{source}  a new token or name; its id, webhooks, secret and apps stay
 GET    /api/teams/{team}/git-sources/{source}/repositories?q=  what a Git connection can read
 GET    /api/teams/{team}/git-sources/{source}/branches?repo=owner/name  one repository's branches
 PUT    /api/apps/{app}/source                 send an app's code as a .tar.gz, for an app with no repository
 POST   /api/apps/{app}/deploy                 deploy
 GET    /api/apps/{app}/deployments            deployment history
+POST   /api/apps/{app}/deployments/{deployment}/cancel  stop one under way
 POST   /api/apps/{app}/rollback/{deployment}  roll back
 GET    /api/apps/{app}/rollback/{deployment}/plan  what a rollback would change, and what it leaves
 PUT    /api/apps/{app}/lock                   lock deploys and rollbacks (reason)
 DELETE /api/apps/{app}/lock                   unlock them
 GET    /api/apps/{app}/vulnerabilities        known vulnerabilities in the image it runs, from the newest scan
 POST   /api/apps/{app}/vulnerabilities/scan   scan that image now
-GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events
+GET    /api/apps/{app}/logs?follow=true       logs, as server-sent events: an entry event per line, {instance, at, line}
+GET    /api/apps/{app}/logs?instance=&since=1h  one instance's, the last hour; every instance's when instance is left out
 GET    /api/apps/{app}/logs?previous=true     the log of the container before the last restart
 POST   /api/apps/{app}/run                    run a command once in the app's image
 GET    /api/apps/{app}/runs/{run}/logs        that command's output
@@ -245,6 +269,10 @@ POST   /api/apps/{app}/drift/repair           put it back, as the panel applies 
 GET    /api/apps/{app}/firewall               the rules in front of this app
 PUT    /api/apps/{app}/firewall               replace them
 GET    /api/environments/{env}/databases      databases
+POST   /api/environments/{env}/databases      create one (name, engine, version, storage_gb, backup); backed up daily by default when there is storage
+GET    /api/backup-storage                    whether backups have somewhere to go; never where
+POST   /api/databases/{db}/link               give an app its connection string (app_id, var_name, pieces: {host, port, name, user, password})
+POST   /api/teams/{team}/backup-policies/defaults  the daily schedule for every database of the team that has none
 GET    /api/database-engines                  the engines, their versions, and which are backed up
 GET    /api/databases/{db}/backups            backups
 POST   /api/databases/{db}/tunnel             an upgraded connection to the database itself (`skifity db connect`)
@@ -257,12 +285,13 @@ GET    /api/events?topics=team:{team}         everything happening, as events
 GET    /api/teams/{team}/templates            the templates the team can install: its own catalogues', then the built-in ones
 GET    /api/teams/{team}/template-catalogues  the team's own template catalogues, and why any of their templates is refused
 POST   /api/teams/{team}/template-catalogues  add one (name, url, auth_header_name, auth_header_value); downloaded and read first
-POST   /api/templates/{template}/install      install one (environment_id, catalogue_id for a team template, values)
+POST   /api/templates/{template}/install      install one (environment_id, catalogue_id for a team template, values), all or nothing; dry_run answers the plan and its problems; allow_root (admin) accepts root images
 GET    /api/teams/{team}/registries           private registries the team pulls from
 PUT    /api/teams/{team}/registries           save one; the registry is asked first
 GET    /api/teams/{team}/certificates         the team's own TLS certificates, and which domains use each; never a key
 GET    /api/teams/{team}/dns-providers        the DNS providers the team connected, with their zones; never a credential
 POST   /api/teams/{team}/dns-providers        connect one (kind, name, token or access_key_id and secret_access_key); its zones are listed first
+PATCH  /api/teams/{team}/dns-providers/{provider}  new credentials; they have to see every zone it keeps records in
 GET    /api/teams/{team}/dns-providers/{provider}/zones  its zones, asked now
 POST   /api/teams/{team}/certificates         upload one (name, certificate, private_key); a name that exists is replaced
 DELETE /api/teams/{team}/certificates/{certificate}  remove one; its hostnames go back to Let's Encrypt
@@ -305,7 +334,13 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
 - **Changing a variable does not rebuild the app.** Skifity separates what goes
   into the image from what the container reads at runtime. A runtime change is a
   rollout in seconds. Only a variable marked "needed while building" causes a
-  rebuild, and the panel says so before you save.
+  rebuild — of the version the app runs, started when it is saved — and the
+  panel says so before you save.
+- **Some settings wait for a deploy.** The branch, root directory, builder,
+  Dockerfile, build command, output folder and an image app's image go into the
+  image, so saving one changes nothing until the next deploy builds with it.
+  Saving says so (`next_deploy`), and `get_app_status` lists what is waiting
+  (`pending_changes` in the API) until a deploy has it.
 - **Rolling back restores settings, not just the image.** The deployment record
   holds both.
 - **Secrets are write-only.** Once stored, a secret's value is never returned by
@@ -317,7 +352,10 @@ a person. Act on it rather than guessing, and quote `code` when asking for help.
   databases, variables, processes, domains and schedules; `skifity plan` says
   what would change and `skifity apply` does it through this same API. Nothing
   is ever deleted by it: what the environment has and the file does not is
-  reported and left alone. Secrets are named in it, never written in it.
+  reported and left alone. Secrets are named in it, never written in it, or
+  read from a secret manager by reference; a secret it names is required, and
+  an app that lacks one is not changed or first deployed until it is set. A
+  variable's long form, `{value: ..., build: true}`, says the build reads it.
 - **A certificate of your own replaces Let's Encrypt's by name.** Upload one
   for the team and every HTTPS domain it covers (exactly, or one label under a
   wildcard) is served with it; the domain says which, and until when. The key is
@@ -359,8 +397,9 @@ One release exactly is `releases/download/<tag>/install.sh`, or `--version
 
 Ubuntu 24.04 or Debian 12, 1 GB of memory, 8 GB of disk, root over SSH. The
 installer prints a URL and a one-time setup token. With no domain the panel is
-reached at an `sslip.io` address over HTTP; add a domain in Settings and HTTPS
-is turned on for it automatically.
+reached at an `sslip.io` address over HTTP; put it on a domain under Settings →
+General → Panel address, with `skifity domains panel panel.example.com`, or by
+running the installer again with `--domain`, and it moves to HTTPS at that name.
 
 Options go after `sh -s --`: `--domain panel.example.com` for HTTPS from the
 start, `--email`, `--public-ip`, `--version`, and `--yes` for a run nobody is
@@ -385,5 +424,6 @@ to, through POST /api/upgrade/check.
 ## Source
 
 <https://github.com/Skifity/Skifity>. `CLAUDE.md` in the repository is the
-working guide, `docs/decisions.md` records why things are the way they are, and
-`docs/architecture.md` has the diagrams.
+working guide, `docs/decisions.md` records why things are the way they are,
+`docs/architecture.md` has the diagrams, and `docs/status.md` says where the
+project stands, including what has never been run.

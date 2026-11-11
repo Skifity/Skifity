@@ -6,6 +6,7 @@ website: https://www.grampsweb.org/install_setup/setup/
 services:
 - name: grampsweb
   image: ghcr.io/gramps-project/grampsweb:25.9.0
+  needs_root: true
   port: 5000
   public: true
   mem_request_mb: 128
@@ -21,6 +22,7 @@ services:
     size_gb: 5
 - name: grampsweb-celery
   image: ghcr.io/gramps-project/grampsweb:25.9.0
+  needs_root: true
   port: 0
   public: false
   mem_request_mb: 128
@@ -46,3 +48,4 @@ notes: In the original this stack shares /app/indexdir, /app/users between gramp
   Skifity gives each app storage of its own, so those are separate directories here. If the apps need
   to see the same files, point them at object storage — MinIO is in this catalogue — rather than a path.
   This template installs 2 apps. They reach each other by name inside the environment, so keep them together.
+  Their images start as root, so the environment needs the baseline pod security level.

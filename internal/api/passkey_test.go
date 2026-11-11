@@ -504,8 +504,7 @@ func TestADisabledAccountCannotSignInWithAPasskey(t *testing.T) {
 	phone := newSoftAuthenticator(t)
 	h.mustAddPasskey(t, h.signIn(t, "ana@example.test", passkeyPassword), phone, "phone")
 
-	user.Disabled = true
-	if err := h.db.UpdateUser(t.Context(), &user); err != nil {
+	if err := h.db.SetUserDisabled(t.Context(), user.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	status, body, signedIn := h.passkeySignIn(t, phone, ceremony{})

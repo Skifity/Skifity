@@ -7,6 +7,7 @@ website: https://docs.paperless-ngx.com/configuration/
 services:
 - name: paperless
   image: paperlessngx/paperless-ngx:3.1
+  needs_root: true
   port: 8000
   public: true
   mem_request_mb: 128
@@ -27,3 +28,4 @@ databases:
   link_to:
   - paperless
   var_name: PAPERLESS_REDIS
+notes: The image starts as root, so the environment needs the baseline pod security level.

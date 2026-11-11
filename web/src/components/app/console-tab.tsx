@@ -123,7 +123,10 @@ export function ConsoleTab({ app }: { app: App }) {
   const followed = useQuery({
     queryKey: ["run", app.id, runName, "followed"],
     queryFn: runName
-      ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${runName}/logs?follow=true`)
+      ? () =>
+          api.get<RunOutput>(
+            `/api/apps/${app.id}/runs/${encodeURIComponent(runName)}/logs?follow=true`,
+          )
       : skipToken,
     staleTime: Infinity,
     retry: false,
@@ -138,7 +141,7 @@ export function ConsoleTab({ app }: { app: App }) {
     queryKey: ["run", app.id, runName, "so-far"],
     queryFn:
       runName && (following || cut)
-        ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${runName}/logs`)
+        ? () => api.get<RunOutput>(`/api/apps/${app.id}/runs/${encodeURIComponent(runName)}/logs`)
         : skipToken,
     refetchInterval: (query) => (query.state.data?.finished ? false : 5_000),
     retry: false,

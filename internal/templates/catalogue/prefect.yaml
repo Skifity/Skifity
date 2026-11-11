@@ -7,6 +7,7 @@ website: https://www.prefect.io
 services:
 - name: prefect
   image: prefecthq/prefect:3.8.7-python3.12
+  needs_root: true
   port: 4200
   public: true
   health_path: /api/health

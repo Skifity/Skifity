@@ -533,6 +533,9 @@ var sealedSources = []sealedSource{
 	{table: "secret_connections", valueCol: "credentials_enc", ctxPrefix: "secret_manager"},
 	{table: "app_reference_digests", valueCol: "digest_enc", keyCol: "app_id", keyCol2: "key",
 		ctxPrefix: "reference_digest"},
+	// Sealed to the app, "build_spec:<app id>": a rollback copies its
+	// version's spec onto the deployment it makes.
+	{table: "deployments", valueCol: "build_spec_enc", ctxPrefix: "build_spec"},
 }
 
 // ListSealedSecrets returns every sealed value in the database with the context

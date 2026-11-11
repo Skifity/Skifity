@@ -7,6 +7,7 @@ website: https://docs.logto.io/docs/tutorials/get-started/#logto-oss-self-hosted
 services:
 - name: logto
   image: svhd/logto:1.43
+  needs_root: true
   port: 3001
   public: true
   mem_request_mb: 128
@@ -22,3 +23,4 @@ databases:
   link_to:
   - logto
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

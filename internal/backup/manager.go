@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"skifity/internal/api"
 	"skifity/internal/cluster"
 	"skifity/internal/crypto"
 	"skifity/internal/dbsvc"
@@ -20,8 +22,10 @@ import (
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/plugins"
 	"skifity/internal/runsafe"
+	"skifity/internal/settings"
 	"skifity/internal/store"
 )
 
@@ -37,6 +41,14 @@ type Manager struct {
 	// Plugins hear when a backup finishes, either way. A zero value sends
 	// nothing, so leaving it unset is a working configuration.
 	Plugins plugins.Dispatcher
+
+	// Status reads a database's state from the cluster, as dbsvc.Manager's
+	// Status does. A scheduled backup asks it when the state the panel
+	// stored would refuse the backup, because that is refreshed only when
+	// somebody opens the database. A function rather than the manager
+	// itself, which knows nothing of backups and need not; nil decides on
+	// the stored state.
+	Status func(ctx context.Context, databaseID string) (status, detail string, err error)
 
 	// verifyTurn lets one verification run at a time, and verifying is the
 	// backups asked to be verified and not finished. Opening a sealed backup
@@ -70,6 +82,32 @@ func (m *Manager) Verify(ctx context.Context) error {
 	return storage.Verify(ctx)
 }
 
+// Storage says whether backup storage is set up, without reaching it.
+//
+// Set up is what LoadStorage accepts: every field it needs is filled in and
+// the endpoint is an address. A bucket that turns out to be wrong is not
+// found here — that needs the network — and is reported by the first backup
+// that runs, the way a scheduled failure always has been.
+func (m *Manager) Storage(ctx context.Context) (api.BackupStorage, error) {
+	var out api.BackupStorage
+	_, err := LoadStorage(ctx, m.db, m.keyring)
+	var problem *errdoc.Problem
+	switch {
+	case err == nil:
+		out.Configured = true
+	case errors.As(err, &problem) && (problem.Code == errdoc.StorageNotConfigured().Code ||
+		problem.Code == errdoc.StorageEndpointInvalid("", "").Code):
+	default:
+		return api.BackupStorage{}, err
+	}
+	passphrase, _, err := m.db.GetSetting(ctx, settings.KeyBackupPassphrase)
+	if err != nil {
+		return api.BackupStorage{}, err
+	}
+	out.Sealed = passphrase != ""
+	return out, nil
+}
+
 // Run takes a backup now.
 func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (store.Backup, error) {
 	switch targetType {
@@ -90,12 +128,16 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	if !offersBackups(record.Engine) {
 		return store.Backup{}, errdoc.BackupNotOffered(record.Name, engineTitle(record.Engine))
 	}
+	if kind == "scheduled" {
+		record = m.freshStatus(ctx, record)
+	}
 	// A database somebody stopped has nothing new to copy, and its schedule
 	// coming round is not a failure to tell anybody about at three in the
 	// morning. It is written down as skipped, with the reason, so the list
 	// of backups says why there is none for tonight.
 	if record.Status == dbsvc.StatusStopped && kind == "scheduled" {
 		skipped := store.Backup{TargetType: targetType, TargetID: targetID, Kind: kind,
+			ErrorCode:    SkippedStopped,
 			ErrorMessage: "The database was stopped, so there was nothing new to back up."}
 		if err := m.db.RecordSkippedBackup(ctx, &skipped); err != nil {
 			return store.Backup{}, err
@@ -109,7 +151,7 @@ func (m *Manager) Run(ctx context.Context, targetType, targetID, kind string) (s
 	if m.cluster == nil {
 		return store.Backup{}, errdoc.ClusterUnreachable(nil)
 	}
-	if record.Status != "running" {
+	if !answering(record.Status) {
 		return store.Backup{}, errdoc.New("backup.database_not_running", "This database is not running").
 			WithCause("%s is %s, so there is nothing to back up.", record.Name, record.Status).
 			WithImpact("No backup was taken.").
@@ -229,6 +271,48 @@ func (m *Manager) run(ctx context.Context, storage *Storage, backup store.Backup
 	m.log.Info("backup finished", "backup", backup.ID, "database", record.Name, "bytes", size)
 
 	m.applyRetention(ctx, storage, "database", record.ID)
+}
+
+// The codes a skipped backup carries, which the panel translates.
+const (
+	// SkippedStopped is a database somebody stopped: nothing new to copy.
+	SkippedStopped = "database.stopped"
+	// SkippedBusy is a database something else was being done to.
+	SkippedBusy = "database.busy"
+)
+
+// answering is a state a database can be backed up in. Degraded is one: a
+// cluster that has lost a replica still answers every query from its primary,
+// and refusing its backup left it with none just when one was most worth
+// having.
+func answering(status string) bool {
+	return status == "running" || status == "degraded"
+}
+
+// freshStatus reads a database's state from the cluster when the one stored
+// would refuse its scheduled backup, and keeps what it read.
+//
+// The stored state is refreshed when somebody opens the database, and not
+// otherwise. A database last seen starting or failed, and running happily
+// since, had every nightly backup refused on the strength of a page nobody
+// had opened. A stopped one is left as it is: Stop and Start say so
+// themselves. "unknown" is a cluster that did not answer, which says nothing
+// about the database, so the stored state stands.
+func (m *Manager) freshStatus(ctx context.Context, record store.Database) store.Database {
+	if m.Status == nil || answering(record.Status) || record.Status == dbsvc.StatusStopped {
+		return record
+	}
+	status, detail, err := m.Status(ctx, record.ID)
+	if err != nil || status == "" || status == "unknown" {
+		return record
+	}
+	if status != record.Status || detail != record.StatusDetail {
+		if err := m.db.SetDatabaseStatus(ctx, record.ID, status, detail); err != nil {
+			m.log.Warn("could not keep a database's state", "database", record.ID, "error", err)
+		}
+		record.Status, record.StatusDetail = status, detail
+	}
+	return record
 }
 
 // offersBackups reports whether the panel backs up databases of an engine.
@@ -595,11 +679,121 @@ func (m *Manager) RunScheduledAt(ctx context.Context, minutes []time.Time) {
 		if !due {
 			continue
 		}
-		if _, err := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled"); err != nil {
-			m.log.Error("a scheduled backup could not start",
-				"target", policy.TargetID, "error", err)
+		taken, err := m.runScheduled(ctx, policy)
+		if err != nil && taken.ID != "" {
+			m.finished(ctx, taken, m.targetName(ctx, policy), err)
 		}
 	}
+}
+
+// errTargetGone is a schedule whose database or volume no longer exists.
+var errTargetGone = errors.New("the target of this backup schedule no longer exists")
+
+// runScheduled starts a schedule's backup, and writes down one that could not
+// start rather than only logging it.
+//
+// It used to log a line and nothing else when Run refused — no storage, a
+// passphrase that would not read, a database not running — so a backup that
+// never happened left no row on the Backups tab, told no channel, and on the
+// next start looked like a night the panel had slept through. Now it is a
+// failed backup with the reason, and the error comes back with it for the
+// caller to tell whoever it tells. A database something else is being done to
+// is skipped, with the reason, and a schedule whose target is gone is
+// deleted, telling nobody: there is nothing left to back up.
+func (m *Manager) runScheduled(ctx context.Context, policy store.BackupPolicy) (store.Backup, error) {
+	if policy.TargetType == "database" {
+		skipped, err := m.skipIfBusy(ctx, policy.TargetID)
+		if err != nil {
+			return m.couldNotStart(ctx, policy, err)
+		}
+		if skipped.ID != "" {
+			return skipped, nil
+		}
+	}
+	taken, err := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled")
+	if err == nil {
+		return taken, nil
+	}
+	if m.targetGone(ctx, policy) {
+		if err := m.db.DeleteBackupPolicy(ctx, policy.TargetType, policy.TargetID); err != nil {
+			m.log.Warn("could not delete the schedule of something that is gone",
+				"target", policy.TargetID, "error", err)
+		} else {
+			m.log.Info("deleted the backup schedule of something that is gone",
+				"target_type", policy.TargetType, "target", policy.TargetID)
+		}
+		return store.Backup{}, errTargetGone
+	}
+	return m.couldNotStart(ctx, policy, err)
+}
+
+// couldNotStart writes down a scheduled backup that did not start, and why.
+func (m *Manager) couldNotStart(ctx context.Context, policy store.BackupPolicy, err error) (store.Backup, error) {
+	problem := errdoc.From(err)
+	failed := store.Backup{TargetType: policy.TargetType, TargetID: policy.TargetID, Kind: "scheduled",
+		ErrorCode: problem.Code, ErrorMessage: problem.Error()}
+	if recordErr := m.db.RecordFailedBackup(ctx, &failed); recordErr != nil {
+		m.log.Error("a scheduled backup could not start, and that could not be written down",
+			"target", policy.TargetID, "error", err, "record_error", recordErr)
+		return store.Backup{}, problem
+	}
+	m.log.Warn("a scheduled backup could not start", "target", policy.TargetID, "backup", failed.ID,
+		"code", problem.Code)
+	if policy.TargetType == "database" {
+		m.publish(ctx, policy.TargetID)
+	}
+	return failed, problem
+}
+
+// skipIfBusy writes down a skipped backup when the database is being created,
+// or restored, imported into or given a new password: a dump taken in the
+// middle of a restore is half of two databases, and a later restore of it
+// would be the second accident. The API refuses a backup by hand then too
+// (refuseBusyDatabase). Here and not in Run, because an import takes its
+// before-import backup through Run from inside its own operation.
+func (m *Manager) skipIfBusy(ctx context.Context, databaseID string) (store.Backup, error) {
+	busy, err := m.databaseBusy(ctx, databaseID)
+	if err != nil || !busy {
+		return store.Backup{}, err
+	}
+	skipped := store.Backup{TargetType: "database", TargetID: databaseID, Kind: "scheduled",
+		ErrorCode: SkippedBusy,
+		ErrorMessage: "Something else was being done to the database — it was being created, restored, " +
+			"imported into or given a new password — so this backup was left for the next one."}
+	if err := m.db.RecordSkippedBackup(ctx, &skipped); err != nil {
+		return store.Backup{}, err
+	}
+	m.log.Info("skipped the scheduled backup of a database something else is being done to",
+		"database", databaseID)
+	m.publish(ctx, databaseID)
+	return skipped, nil
+}
+
+// databaseBusy is refuseBusyDatabase's question: is the database being
+// created, or is an operation running on it?
+func (m *Manager) databaseBusy(ctx context.Context, databaseID string) (bool, error) {
+	record, err := m.db.GetDatabase(ctx, databaseID)
+	if err != nil {
+		return false, nil //nolint:nilerr // Run reads it again, and says what is wrong or finds it gone
+	}
+	if record.Status == "creating" {
+		return true, nil
+	}
+	return m.db.OperationRunningFor(ctx, "database", databaseID)
+}
+
+// targetGone reports whether a schedule's database or volume has been deleted.
+func (m *Manager) targetGone(ctx context.Context, policy store.BackupPolicy) bool {
+	var err error
+	switch policy.TargetType {
+	case "database":
+		_, err = m.db.GetDatabase(ctx, policy.TargetID)
+	case "volume":
+		_, err = m.db.GetVolume(ctx, policy.TargetID)
+	default:
+		return false
+	}
+	return errors.Is(err, store.ErrNotFound)
 }
 
 // finished says a backup finished, whichever way it went: to the team's
@@ -612,6 +806,13 @@ func (m *Manager) RunScheduledAt(ctx context.Context, minutes []time.Time) {
 // sites written out, so a fifth kind of backup cannot quietly be added
 // without either.
 func (m *Manager) finished(ctx context.Context, backup store.Backup, name string, failure error) {
+	m.finish(ctx, backup, name, failure, true)
+}
+
+// finish is finished, with the channels left out when toChannels is false:
+// a missed backup that could not be taken late is told to them once, as
+// backup.missed, and to plugins as the failed backup it is.
+func (m *Manager) finish(ctx context.Context, backup store.Backup, name string, failure error, toChannels bool) {
 	teamID, projectID, err := m.ownerOfBackup(ctx, backup)
 	if err != nil || teamID == "" {
 		m.log.Warn("could not work out whose backup this was", "backup", backup.ID, "error", err)
@@ -627,17 +828,17 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 		problem := errdoc.From(failure)
 		data["error"] = problem.Error()
 		m.Plugins.Notify(ctx, plugins.EventBackupFailed, teamID, data)
-		if m.notifier != nil {
+		if m.notifier != nil && toChannels {
 			fields["Reason"] = problem.Code
 			m.notifier.Notify(ctx, teamID, notify.EventBackupFailed, notify.Message{
-				Title: "Backing up " + name + " failed", Body: problem.Error() + "\n\n" + problem.Fix,
+				Title: "Backing up " + name + " failed", Body: problem.Error(), Fix: problem.Fix,
 				Level: "error", Path: path, Fields: fields, ProjectID: projectID,
 			})
 		}
 		return
 	}
 	m.Plugins.Notify(ctx, plugins.EventBackupCompleted, teamID, data)
-	if m.notifier != nil {
+	if m.notifier != nil && toChannels {
 		m.notifier.Notify(ctx, teamID, notify.EventBackupSucceeded, notify.Message{
 			Title: name + " was backed up", Body: "The backup finished and is in storage.",
 			Level: "success", Path: path, Fields: fields, ProjectID: projectID,
@@ -645,15 +846,20 @@ func (m *Manager) finished(ctx context.Context, backup store.Backup, name string
 	}
 }
 
-// backupPath is the page a backup's notification links to: the database, or
-// the app whose volume it copied.
+// backupPath is the page a backup's notification links to: the database's
+// backups with this one picked out, or the storage of the app whose volume it
+// copied. A backup with no record yet — one that never started — is the
+// database's list.
 func (m *Manager) backupPath(ctx context.Context, backup store.Backup) string {
 	switch backup.TargetType {
 	case "database":
-		return "/databases/" + backup.TargetID
+		if backup.ID == "" {
+			return panelpath.Database(backup.TargetID, panelpath.DatabaseBackups)
+		}
+		return panelpath.DatabaseBackup(backup.TargetID, backup.ID)
 	case "volume":
 		if volume, err := m.db.GetVolume(ctx, backup.TargetID); err == nil {
-			return "/apps/" + volume.AppID
+			return panelpath.App(volume.AppID, panelpath.AppStorage)
 		}
 	}
 	return ""

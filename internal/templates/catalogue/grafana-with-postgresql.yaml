@@ -25,3 +25,8 @@ databases:
   link_to:
   - grafana
   var_name: DATABASE_URL
+  vars:
+    host: GF_DATABASE_HOST
+    name: GF_DATABASE_NAME
+    user: GF_DATABASE_USER
+    password: GF_DATABASE_PASSWORD

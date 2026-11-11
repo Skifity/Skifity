@@ -6,6 +6,7 @@ website: https://rxresu.me/
 services:
 - name: reactive-resume
   image: amruthpillai/reactive-resume:v4.3.7
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -21,6 +22,7 @@ services:
     STORAGE_USE_SSL: 'false'
 - name: minio
   image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
+  needs_root: true
   port: 9000
   public: false
   mem_request_mb: 128
@@ -52,4 +54,5 @@ databases:
   - reactive-resume
   var_name: DATABASE_URL
 notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The reactive-resume and minio images start as root, so the environment needs the baseline
+  pod security level.

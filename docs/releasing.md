@@ -67,6 +67,17 @@ git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
 
+The same file pins the k3s a fresh install gets, `K3S_VERSION`, and it is the
+one place that says which k3s a release was tested with. The Cluster and Two
+servers workflows install with this file, so the version there is the one they
+passed on before the tag; the panel reads the same line (`installer/embed.go`)
+for a server it installs as the first of a new cluster, and shows it as the
+default of **Settings → Cluster → Kubernetes version**. To move to a newer k3s,
+change that line on its own commit and let those runs pass before setting
+`RELEASED_VERSION`; the newest k3s is the `stable` entry of
+`https://update.k3s.io/v1-release/channels`. The release workflow refuses a value
+that is not a k3s release, and names the version in the release notes.
+
 The workflow refuses a tag whose installer disagrees with it — a step reads
 `RELEASED_VERSION` out of `installer/install.sh` and fails the release when it is
 not the tag being built. Getting that wrong would publish an installer that
@@ -113,6 +124,26 @@ the ones that version's image was built with. An installer that read them from
 a branch would eventually apply a Deployment to an image that had never seen
 it. The release notes give both that link and the one for the release itself,
 `releases/download/<tag>/install.sh`.
+
+The attached installer names the panel's image by digest, not only by tag. A tag
+can be moved by anybody who can push to the registry, and an installer that
+pulled `v0.1.0` would then install whatever `v0.1.0` had become. The digest is
+only known once the image is pushed, so `RELEASED_IMAGE` is empty in the
+repository and the release workflow fills it in afterwards:
+`scripts/pin-installer-image.sh` writes `<image>:<tag>@sha256:…` into a copy,
+reads the copy back to check that it installs exactly that, and the workflow
+replaces `install.sh` and its line in `checksums.txt` on the release before the
+provenance is signed. The installer uses the digest only for its own release
+from its own repository; `--version` naming another release, `--image`, and
+`SKIFITY_REPO` pull what they name. To see what a release installs:
+
+```sh
+curl -fsSL https://github.com/<repo>/releases/download/<tag>/install.sh | grep '^RELEASED_IMAGE='
+```
+
+For the few seconds between GoReleaser publishing the release and that step
+replacing the file, the attached installer pulls by tag, as every installer did
+before. The panel's own **Upgrade** button still moves to a tag.
 
 Until the first release is published the link is a 404, which is why the tag
 is not optional.

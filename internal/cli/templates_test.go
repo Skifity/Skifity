@@ -120,3 +120,63 @@ func TestTemplateCataloguesAreManagedByName(t *testing.T) {
 		t.Errorf("searching for the catalogue printed:\n%s", out.String())
 	}
 }
+
+// A template whose image starts as root is marked in the list and says so in
+// --json, because an environment at the strictest level — the default —
+// refuses it, and finding out after the install is finding out too late.
+func TestATemplateThatNeedsRootIsMarked(t *testing.T) {
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/me":
+			_, _ = io.WriteString(w, `{"teams":[{"id":"team_1","name":"acme"}]}`)
+		case "GET /api/teams/team_1/templates":
+			_, _ = io.WriteString(w, `{"items":[
+				{"id":"wordpress","name":"WordPress","category":"cms","services":[{"name":"wordpress","needs_root":true}]},
+				{"id":"homer","name":"Homer","category":"productivity","services":[{"name":"homer"}]}]}`)
+		default:
+			http.Error(w, `{"error":{"code":"resource.not_found","title":"no"}}`, http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(panel.Close)
+	t.Setenv("SKIFITY_CONFIG", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("SKIFITY_URL", panel.URL)
+	t.Setenv("SKIFITY_TOKEN", "skf_not_a_real_token")
+	t.Setenv("SKIFITY_TEAM", "")
+
+	var out bytes.Buffer
+	if err := cmdTemplates(t.Context(), nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		switch fields[0] {
+		case "wordpress":
+			if fields[len(fields)-1] != "yes" {
+				t.Errorf("WordPress is not marked as starting as root: %q", line)
+			}
+		case "homer":
+			if fields[len(fields)-1] == "yes" {
+				t.Errorf("Homer is marked as starting as root: %q", line)
+			}
+		}
+	}
+	if !strings.Contains(out.String(), "strictest level refuses") {
+		t.Errorf("the list does not say what the mark means:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := cmdTemplates(t.Context(), []string{"--json"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &listed); err != nil || len(listed) != 2 {
+		t.Fatalf("--json printed %s (%v)", out.String(), err)
+	}
+	if listed[0]["needs_root"] != true || listed[1]["needs_root"] != nil || listed[0]["services"] != nil {
+		t.Errorf("--json printed %v", listed)
+	}
+}

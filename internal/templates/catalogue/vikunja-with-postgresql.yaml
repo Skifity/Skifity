@@ -26,3 +26,8 @@ databases:
   link_to:
   - vikunja
   var_name: DATABASE_URL
+  vars:
+    host: VIKUNJA_DATABASE_HOST
+    name: VIKUNJA_DATABASE_DATABASE
+    user: VIKUNJA_DATABASE_USER
+    password: VIKUNJA_DATABASE_PASSWORD

@@ -130,6 +130,8 @@ type databaseResult struct {
 	// Problem is Error as a catalogued problem, so the panel can say it in
 	// the reader's language rather than in the server's English.
 	Problem *errdoc.Problem `json:"problem,omitempty"`
+	// Backup is what was done about its backups, once it exists.
+	Backup *databaseBackup `json:"backup,omitempty"`
 }
 
 // maxInitialDatabases bounds one request. An app that needs more than a
@@ -206,13 +208,15 @@ func (s *Server) createInitialDatabases(r *http.Request, env store.Environment, 
 			continue
 		}
 		result.DatabaseID, result.Name = record.ID, record.Name
+		backup := s.applyDefaultBackupPolicy(r.Context(), env, record, nil)
+		result.Backup = &backup
 		s.audit(r, teamID, "database.created", "database", record.ID, record.Name)
 		s.plugins.Notify(r.Context(), plugins.EventDatabaseCreated, teamID, map[string]any{
 			"database_id": record.ID, "database": record.Name,
 			"engine": record.Engine, "environment_id": record.EnvironmentID,
 		})
 
-		if err := s.databases.Link(r.Context(), record.ID, app.ID, want.Variable); err != nil {
+		if err := s.databases.Link(r.Context(), record.ID, app.ID, want.Variable, nil); err != nil {
 			result.Error, result.Problem = problemText(err), errdoc.From(err)
 			results = append(results, result)
 			continue
@@ -496,7 +500,19 @@ type webhookStatus struct {
 	URL string `json:"url,omitempty"`
 	// Reason says why it could not be registered, in words to act on.
 	Reason string `json:"reason,omitempty"`
+	// ReasonCode is hookNoConnection for the one reason the panel, the CLI
+	// and an assistant each say in their own words and act on: there is no
+	// connection to register with. Every other reason is the Git host's own
+	// answer, which has no code to give.
+	ReasonCode string `json:"reason_code,omitempty"`
 }
+
+// hookNoConnection is a Git app that deploys on push with no Git connection,
+// so no webhook was registered for it. Not "pushes can never deploy it": a
+// hook that another of the team's connections has on the same repository is
+// matched by repository and deploys it. But nothing was set up here, and on a
+// team with no connection at all nothing can deliver.
+const hookNoConnection = "no_connection"
 
 // ensureWebhookFor asks the Git host to deliver this repository's pushes here.
 //
@@ -509,8 +525,17 @@ type webhookStatus struct {
 // Never fatal. A read-only token is the right token for somebody who deploys
 // by hand, so a refusal comes back as "here is the URL, add it yourself".
 func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus {
-	if app.SourceType != "git" || app.GitSourceID == "" || !app.AutoDeploy {
+	if app.SourceType != "git" || !app.AutoDeploy {
 		return webhookStatus{}
+	}
+	// Said rather than answered with nothing: an app made from a public
+	// repository, the quick start, deploys on push by default, and the
+	// switch saying so was on with nothing ever registered to make it true.
+	if app.GitSourceID == "" {
+		return webhookStatus{
+			ReasonCode: hookNoConnection,
+			Reason:     "no webhook was registered for this app, because it has no Git connection to register one with",
+		}
 	}
 	source, err := s.db.GetGitSource(r.Context(), app.GitSourceID)
 	if err != nil {
@@ -523,7 +548,11 @@ func (s *Server) ensureWebhookFor(r *http.Request, app store.App) webhookStatus 
 	}
 
 	token, email := s.gitCredentials(r, source)
-	result := gitsrc.EnsureWebhook(r.Context(), gitsrc.HookRequest{
+	register := s.registerHook
+	if register == nil {
+		register = gitsrc.EnsureWebhook
+	}
+	result := register(r.Context(), gitsrc.HookRequest{
 		RepoURL:   app.RepoURL,
 		Kind:      source.Kind,
 		BaseURL:   source.BaseURL,
@@ -694,6 +723,11 @@ type updateAppRequest struct {
 	HealthCheck          *string `json:"health_check,omitempty"`
 	HealthStartSeconds   *int    `json:"health_start_seconds,omitempty"`
 	HealthTimeoutSeconds *int    `json:"health_timeout_seconds,omitempty"`
+	// GitSourceID is the Git connection the app builds and registers its
+	// webhook with; "" detaches it. An app made without one, or left without
+	// one when its connection was removed, could only be given one by being
+	// made again.
+	GitSourceID *string `json:"git_source_id,omitempty"`
 	// PreviewSeed runs once in each new preview of the app.
 	PreviewSeed   *string `json:"preview_seed,omitempty"`
 	WatchPaths    *string `json:"watch_paths,omitempty"`
@@ -722,7 +756,23 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	deployedTags := app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag
+	before := app
+	// What decides whether the repository is asked for a webhook after the
+	// save. Compared rather than read from the request: the settings form
+	// sends auto_deploy and deploy_trigger with every save, and asking the
+	// Git host on each one would be a request per keystroke's worth of
+	// saves for nothing.
+	sourceWas, autoDeployWas, triggerWas := app.GitSourceID, app.AutoDeploy, app.DeployTrigger
+	// Checked only when it changes: the settings form sends the connection
+	// with every save, and an app made before the host was checked must
+	// still be able to save its port.
+	if req.GitSourceID != nil && strings.TrimSpace(*req.GitSourceID) != app.GitSourceID {
+		if err := s.checkNewGitSource(r, app, strings.TrimSpace(*req.GitSourceID)); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		app.GitSourceID = strings.TrimSpace(*req.GitSourceID)
+	}
 
 	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
 		app.Name = strings.TrimSpace(*req.Name)
@@ -824,25 +874,76 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
 	// Runtime changes are applied by a rollout, never a rebuild: this is the
 	// promise in ADR-0007, and the fix for the most common complaint about
 	// comparable products.
+	rolledOut := false
 	if s.deployer != nil {
 		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
 			s.log.Warn("could not apply app changes to the cluster", "app", app.ID, "error", err)
+		} else {
+			rolledOut = s.appRunning(r.Context(), app.ID)
 		}
 	}
 
-	// GitLab delivers a tag only to a hook that asked for tags, and the
-	// hook this app's repository has may be older than tags were asked for.
-	// The same call that made it adds them, whenever the app starts deploying
-	// tags; it never fails the save.
-	if app.AutoDeploy && app.DeployTrigger == gitsrc.DeployOnTag && !deployedTags {
-		if hook := s.ensureWebhookFor(r, app); hook.Reason != "" {
-			s.log.Warn("the repository may not deliver tags", "app", app.ID, "reason", hook.Reason)
+	// The repository is asked to deliver here whenever deploy on push starts
+	// meaning something new: a connection given or changed, the switch
+	// turned on, or the trigger changed. The last is also how GitLab's hook
+	// is given tags — it delivers a tag only to a hook that asked for them,
+	// and one made before an app could deploy on a tag did not. It never
+	// fails the save, and what it found goes back with the app.
+	answer := appUpdate{App: app}
+	if app.SourceType == "git" && app.AutoDeploy &&
+		(app.GitSourceID != sourceWas || !autoDeployWas || app.DeployTrigger != triggerWas) {
+		hook := s.ensureWebhookFor(r, app)
+		if hook.Reason != "" {
+			s.log.Warn("no webhook was registered after a settings change", "app", app.ID, "reason", hook.Reason)
 		}
+		answer.Webhook = &hook
 	}
 
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "app.updated", "app", app.ID, app.Name)
-	writeJSON(w, http.StatusOK, app)
+	answer.RolledOut, answer.NextDeploy = settingsTakingEffect(before, app, rolledOut)
+	writeJSON(w, http.StatusOK, answer)
+}
+
+// checkNewGitSource refuses a connection an app cannot be given: another
+// team's, which answers as missing, and one for a host other than the
+// repository's.
+//
+// The second is refused rather than stored because nothing would say so
+// later: the build declines to send a token to a host the connection is not
+// for, so the clone of a private repository fails as though it had none, and
+// the webhook is registered nowhere.
+func (s *Server) checkNewGitSource(r *http.Request, app store.App, sourceID string) error {
+	if sourceID == "" {
+		return nil
+	}
+	if app.SourceType != "git" {
+		return errdoc.BadRequest("Only an app built from a repository has a Git connection.")
+	}
+	if err := s.checkGitSource(r, sourceID, app.EnvironmentID); err != nil {
+		return err
+	}
+	source, err := s.db.GetGitSource(r.Context(), sourceID)
+	if err != nil {
+		return err
+	}
+	if !gitsrc.SameHost(app.RepoURL, source.BaseURL) {
+		return errdoc.GitConnectionWrongHost(source.Name, app.RepoURL)
+	}
+	return nil
+}
+
+// handleRegisterWebhook asks the repository again to deliver its pushes here:
+// after a token was given the scope it lacked, or a hook was deleted at the
+// Git host. Anybody who can change the app can ask, as saving its settings
+// would.
+func (s *Server) handleRegisterWebhook(w http.ResponseWriter, r *http.Request) {
+	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.ensureWebhookFor(r, app))
 }
 
 func applyResourceChanges(app *store.App, req updateAppRequest) error {
@@ -918,17 +1019,20 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	// What is waiting for a deploy is the panel's to know, cluster or not.
+	pending := s.pendingChanges(r.Context(), app.ID)
 	if s.cluster == nil {
 		writeJSON(w, http.StatusOK, AppRuntimeStatus{
-			Phase: "unknown", Detail: NoClusterDetail, DetailKey: "noCluster",
+			Phase: "unknown", Detail: NoClusterDetail, DetailKey: "noCluster", PendingChanges: pending,
 		})
 		return
 	}
 	status, err := s.cluster.AppStatus(r.Context(), env.Namespace, app.Slug)
 	if err != nil {
-		writeJSON(w, http.StatusOK, AppRuntimeStatus{Phase: "unknown", Detail: err.Error()})
+		writeJSON(w, http.StatusOK, AppRuntimeStatus{Phase: "unknown", Detail: err.Error(), PendingChanges: pending})
 		return
 	}
+	status.PendingChanges = pending
 	// An app that is asleep is not an app that is down. The cluster only knows
 	// that the last instance is gone, so it says "stopped"; the panel knows the
 	// user asked for exactly that and that the next request brings the app
@@ -937,6 +1041,7 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		status.Phase = "sleeping"
 		status.Detail = "This app is asleep because nobody is using it. The next request starts it again."
 	}
+	s.numberInstances(r.Context(), app.ID, status.Instances)
 	// An internal app has no public address, only the name its environment
 	// reaches it by.
 	if app.Internal {
@@ -957,6 +1062,35 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, status)
+}
+
+// numberInstances says which deployment each instance runs, by the number
+// the panel shows.
+//
+// Each pod carries the id of the deployment it was started for, which is the
+// one thing that tells two versions apart: a variable-only redeploy, and
+// every app run from an image, start the same image under a new deployment,
+// and a rollback starts an old image under a new one. An id that is not one
+// of this app's deployments is left unnumbered rather than believed.
+func (s *Server) numberInstances(ctx context.Context, appID string, instances []InstanceInfo) {
+	numbers := map[string]int{}
+	for i := range instances {
+		id := instances[i].DeploymentID
+		if id == "" {
+			continue
+		}
+		number, known := numbers[id]
+		if !known {
+			if deployment, err := s.db.GetDeployment(ctx, id); err == nil && deployment.AppID == appID {
+				number = deployment.Number
+			}
+			numbers[id] = number
+		}
+		if number == 0 {
+			instances[i].DeploymentID = ""
+		}
+		instances[i].Deployment = number
+	}
 }
 
 func (s *Server) handleRestartApp(w http.ResponseWriter, r *http.Request) {
@@ -1104,7 +1238,7 @@ func secretness(asked *bool, wasSecret bool, key, value string) bool {
 }
 
 func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1162,14 +1296,11 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A build-time variable changes the build fingerprint, so it does rebuild.
-	// A runtime variable only rolls out. Either way the user is told which.
-	rebuilt := variable.BuildTime
-	if s.deployer != nil && !rebuilt {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable change", "app", app.ID, "error", err)
-		}
-	}
+	// A build-time variable changes the build fingerprint, so the version the
+	// app runs is built again with it. A runtime variable only rolls out.
+	// Either way the user is told which.
+	rebuild := variable.BuildTime && buildReads(app)
+	effect := s.applyVariableChanges(r, app, user.ID, !rebuild, rebuild)
 
 	// The value is never audited, only the key; for a reference, also where
 	// it is read from, which is not secret.
@@ -1179,7 +1310,10 @@ func (s *Server) handleSetVariable(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, teamID, "variable.set", "app", app.ID, key)
 	}
 	variable.Value = ""
-	writeJSON(w, http.StatusOK, map[string]any{"variable": variable, "requires_rebuild": rebuilt})
+	writeJSON(w, http.StatusOK, struct {
+		Variable store.Variable `json:"variable"`
+		variableEffect
+	}{variable, effect})
 }
 
 type changeVariablesRequest struct {
@@ -1197,7 +1331,7 @@ const maxVariableChanges = 500
 // app thirty times, and the first twenty-nine of those ran with half a
 // configuration.
 func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -1232,17 +1366,16 @@ func (s *Server) handleChangeVariables(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	if s.deployer != nil && batch.rollout {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable changes", "app", app.ID, "error", err)
-		}
-	}
+	rebuild := batch.rebuild && buildReads(app)
+	effect := s.applyVariableChanges(r, app, user.ID, batch.rollout || batch.rebuild && !rebuild, rebuild)
 
 	// Keys only, as for one variable: a value is never audited.
 	s.audit(r, teamID, "variables.changed", "app", app.ID, batch.label())
-	writeJSON(w, http.StatusOK, map[string]any{
-		"set": batch.answer(), "unset": req.Unset, "requires_rebuild": batch.rebuild,
-	})
+	writeJSON(w, http.StatusOK, struct {
+		Set   []store.Variable `json:"set"`
+		Unset []string         `json:"unset"`
+		variableEffect
+	}{batch.answer(), req.Unset, effect})
 }
 
 // handleChangeSharedVariables is handleChangeVariables for a project's shared
@@ -1375,6 +1508,10 @@ func (s *Server) prepareVariableChanges(ctx context.Context, teamID, projectID s
 		}
 		seen[key] = true
 		batch.keys = append(batch.keys, "-"+key)
+		// The build read it, so the image has it until it is built again.
+		if wasBuildTime[key] {
+			batch.rebuild = true
+		}
 	}
 	return batch, nil
 }
@@ -1435,24 +1572,36 @@ func (s *Server) handleSetVariablePreview(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDeleteVariable(w http.ResponseWriter, r *http.Request) {
-	app, _, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
+	app, user, err := s.authorizeApp(r, chi.URLParam(r, "appID"), store.RoleMember)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	key := chi.URLParam(r, "key")
+	existing, err := s.db.ListVariables(r.Context(), app.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	wasBuildTime := false
+	for _, row := range existing {
+		if row.Key == key {
+			wasBuildTime = row.BuildTime
+		}
+	}
 	if err := s.db.DeleteVariable(r.Context(), app.ID, key); err != nil {
 		writeError(w, r, err)
 		return
 	}
-	if s.deployer != nil {
-		if err := s.deployer.Sync(r.Context(), app.ID); err != nil {
-			s.log.Warn("could not apply variable removal", "app", app.ID, "error", err)
-		}
-	}
+	// It leaves the running instances at once, as it always did; one the
+	// build read is in the image as well, until it is built again.
+	effect := s.applyVariableChanges(r, app, user.ID, true, wasBuildTime && buildReads(app))
 	teamID, _ := s.db.TeamIDForApp(r.Context(), app.ID)
 	s.audit(r, teamID, "variable.deleted", "app", app.ID, key)
-	writeOK(w)
+	writeJSON(w, http.StatusOK, struct {
+		OK bool `json:"ok"`
+		variableEffect
+	}{true, effect})
 }
 
 func (s *Server) handleListSharedVariables(w http.ResponseWriter, r *http.Request) {
@@ -1774,11 +1923,16 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 //
 // Both sources are consulted because the panel learns its address in two ways:
 // the installer passes it in the environment, and an operator can set it in
-// Settings afterwards.
+// Settings afterwards. And a panel moved to a domain of its own from Settings
+// answers on the domain while it is being moved there, and on every address
+// it left for the webhooks registered at them, so those are its too.
 func (s *Server) isPanelHostname(ctx context.Context, hostname string) bool {
 	candidates := []string{s.cfg.PublicURL}
 	if configured, _, err := s.db.GetSetting(ctx, settings.KeyPanelURL); err == nil {
 		candidates = append(candidates, configured)
+	}
+	if moved, err := s.db.GetPanelDomain(ctx); err == nil {
+		candidates = append(append(candidates, moved.Domain), moved.Previous...)
 	}
 	for _, candidate := range candidates {
 		if host := hostOf(candidate); host != "" && host == hostname {
@@ -1932,7 +2086,7 @@ func (s *Server) handleCreateVolumeBackup(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backup, err := s.backups.Run(r.Context(), "volume", volume.ID, "manual")
@@ -1957,7 +2111,7 @@ func (s *Server) handleRestoreVolumeBackup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backupID := chi.URLParam(r, "backupID")

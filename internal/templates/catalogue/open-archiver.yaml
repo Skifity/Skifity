@@ -6,6 +6,7 @@ website: https://docs.openarchiver.com/
 services:
 - name: open-archiver
   image: logiclabshq/open-archiver:v0.6.0
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -20,6 +21,7 @@ services:
     size_gb: 5
 - name: meilisearch
   image: getmeili/meilisearch:v1.15
+  needs_root: true
   port: 7700
   public: false
   mem_request_mb: 128
@@ -38,4 +40,4 @@ databases:
   - open-archiver
   var_name: DATABASE_URL
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. Their images start as root, so the environment needs the baseline pod security level.

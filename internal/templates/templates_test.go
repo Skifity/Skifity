@@ -3,9 +3,12 @@ package templates
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"skifity/internal/kube"
 )
 
 // The catalogue is data, and data goes wrong quietly.
@@ -116,6 +119,147 @@ func TestSearchAndLookupFindWhatIsThere(t *testing.T) {
 // CheckWiring for the rest of what it reads.
 func TestNoTemplatePointsAtAContainerThatIsNotThere(t *testing.T) {
 	report(t, CheckWiring)
+}
+
+// TestKnownImagesGetTheVariablesTheyRead: a database handed over as a URL
+// to an image that reads its connection piece by piece is created and never
+// used. WordPress, Ghost, n8n, and every Gitea, Forgejo and Nextcloud with a
+// database did that until this ran over the catalogue.
+func TestKnownImagesGetTheVariablesTheyRead(t *testing.T) {
+	report(t, CheckKnownImages)
+}
+
+// TestTheReadmeAccountsForEveryURLOnlyTemplate: 120 templates handed their
+// database over as a URL alone, and only some of their images read one. The
+// README lists which have been looked up and which have not, and a list in
+// prose is the first thing to go stale, so this holds it to the directory.
+func TestTheReadmeAccountsForEveryURLOnlyTemplate(t *testing.T) {
+	body, err := os.ReadFile("catalogue/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := func(marker string) map[string]bool {
+		_, rest, ok := strings.Cut(string(body), "<!-- "+marker+" -->")
+		section, _, closed := strings.Cut(rest, "<!-- /"+marker+" -->")
+		if !ok || !closed {
+			t.Fatalf("the README has no %s list", marker)
+		}
+		out := map[string]bool{}
+		for _, match := range regexp.MustCompile("`([a-z0-9-]+)`").FindAllStringSubmatch(section, -1) {
+			out[match[1]] = true
+		}
+		return out
+	}
+	audited, unaudited := listed("url-only:audited"), listed("url-only:unaudited")
+	for _, tpl := range All() {
+		urlOnly, lookedUp := URLOnly(tpl)
+		switch {
+		case lookedUp && !audited[tpl.ID]:
+			t.Errorf("%s hands over a URL its image is known to read; list it as looked up in the README", tpl.ID)
+		case urlOnly && !lookedUp && !unaudited[tpl.ID]:
+			t.Errorf("%s hands over only a URL, and nobody has looked up whether its image reads one; "+
+				"list it in the README, or give its database the vars its image reads", tpl.ID)
+		case !urlOnly && (audited[tpl.ID] || unaudited[tpl.ID]):
+			t.Errorf("%s is listed in the README as handing over only a URL, and does not", tpl.ID)
+		}
+		delete(audited, tpl.ID)
+		if !lookedUp {
+			delete(unaudited, tpl.ID)
+		}
+	}
+	for id := range audited {
+		t.Errorf("the README lists %s as looked up, and it is not a URL-only template its image is known to read", id)
+	}
+	for id := range unaudited {
+		t.Errorf("the README lists %s, which is not a template here or has been looked up", id)
+	}
+}
+
+// TestNotesAndNeedsRootAgree: a template whose image starts as root says so
+// twice — needs_root, which the install acts on, and its notes, which are read
+// on the page the install lands on. The notes were once the only place, in 56
+// templates, and 200 more said it nowhere; hack/resolve_tags.py --users is what
+// found them. Either without the other is one of them being wrong.
+func TestNotesAndNeedsRootAgree(t *testing.T) {
+	for _, tpl := range All() {
+		needs := false
+		for _, svc := range tpl.Services {
+			needs = needs || svc.NeedsRoot
+		}
+		says := strings.Contains(tpl.Notes, "baseline")
+		switch {
+		case needs && !says:
+			t.Errorf("%s needs root and its notes do not say the environment needs the baseline level", tpl.ID)
+		case says && !needs:
+			t.Errorf("%s says the environment needs the baseline level, and no service has needs_root", tpl.ID)
+		}
+	}
+}
+
+// TestSlowStartersAreGivenTheTimeTheyNeed: a new instance has two minutes to
+// answer unless its template says otherwise, and software that migrates its
+// database or configures itself before it listens takes longer than that on
+// its first start. Its startup probe then restarts it part-way, again and
+// again, which FreeScout's notes describe and GitLab did. A template whose
+// notes say the first start takes minutes has to say so where the probe reads
+// it too.
+func TestSlowStartersAreGivenTheTimeTheyNeed(t *testing.T) {
+	takesMinutes := regexp.MustCompile(`(?i)\b(takes?|needs?)\s+(a|a few|several|some|about a)\s+minutes?\b`)
+	// Slow whatever their notes say: GitLab configures itself for minutes,
+	// SonarQube and Baserow migrate before they listen.
+	slow := map[string]bool{"gitlab": true, "sonarqube": true, "baserow": true}
+	for id := range slow {
+		if _, ok := Lookup(id); !ok {
+			t.Errorf("%s is not in the catalogue, and this test names it", id)
+		}
+	}
+	for _, tpl := range All() {
+		if !slow[tpl.ID] && !takesMinutes.MatchString(tpl.Notes) {
+			continue
+		}
+		longest := 0
+		for _, svc := range tpl.Services {
+			longest = max(longest, svc.HealthStartSeconds)
+		}
+		if longest <= kube.DefaultHealthStartSeconds {
+			t.Errorf("%s takes minutes to start the first time, and none of its services has longer than "+
+				"the default %d seconds: give the one that does the work health_start_seconds",
+				tpl.ID, kube.DefaultHealthStartSeconds)
+		}
+	}
+}
+
+// TestAHealthPathThatAsksTheDatabaseHasTimeToHearBack: a check waits three
+// seconds unless its template says otherwise. WordPress, installed on a server
+// 40 ms and some lost packets away from its MariaDB, answered its health path
+// slower than that, was killed at the end of its start budget, and its deploy
+// failed; on one server the same install passed. Each of these asks its
+// database on every check — read in its source, not guessed from its name.
+func TestAHealthPathThatAsksTheDatabaseHasTimeToHearBack(t *testing.T) {
+	asks := map[string]string{
+		"wordpress/wordpress":   "/wp-admin/install.php?step=1 asks MariaDB whether WordPress is installed",
+		"ghost/ghost":           "/ is the home page, read from MySQL",
+		"outline/outline":       "/_health runs SELECT 1 and pings Redis",
+		"ghostfolio/ghostfolio": "/api/v1/health asks PostgreSQL and Redis",
+		"authorizer/authorizer": "/healthz checks its storage",
+	}
+	seen := 0
+	for _, tpl := range All() {
+		for _, svc := range tpl.Services {
+			what, listed := asks[tpl.ID+"/"+svc.Name]
+			if !listed {
+				continue
+			}
+			seen++
+			if svc.HealthTimeoutSeconds <= kube.DefaultHealthTimeoutSeconds {
+				t.Errorf("%s/%s: %s, and waits only the default %d seconds for it",
+					tpl.ID, svc.Name, what, kube.DefaultHealthTimeoutSeconds)
+			}
+		}
+	}
+	if seen != len(asks) {
+		t.Errorf("%d of the %d services this names are in the catalogue", seen, len(asks))
+	}
 }
 
 // The catalogue is read from files at startup. A file that does not parse is a
@@ -302,4 +446,26 @@ func TestATemplateWithNoIconSaysSoRatherThanBreaking(t *testing.T) {
 	if _, _, ok := ReadIcon("a-template-that-does-not-exist"); ok {
 		t.Error("an icon was served for a template that does not exist")
 	}
+}
+
+// TestWordPressIsCheckedWithoutCallingOut: the install page's step 0, the
+// language chooser, asks api.wordpress.org for the translations on every
+// request until WordPress is installed — an https and then an http request of
+// up to three seconds each (wp-admin/includes/translation-install.php, 6.9.4),
+// with nowhere to keep the answer before the tables exist. On a server whose
+// way out was slow, every check of the bare page took longer than its ten
+// seconds and the deploy failed. Step 1 shows the form and asks only MariaDB.
+func TestWordPressIsCheckedWithoutCallingOut(t *testing.T) {
+	for _, tpl := range All() {
+		if tpl.ID != "wordpress" {
+			continue
+		}
+		for _, svc := range tpl.Services {
+			if svc.Name == "wordpress" && svc.HealthPath != "/wp-admin/install.php?step=1" {
+				t.Errorf("WordPress is checked at %q, which may call out to wordpress.org on every check", svc.HealthPath)
+			}
+		}
+		return
+	}
+	t.Fatal("the catalogue has no WordPress")
 }

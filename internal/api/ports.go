@@ -59,6 +59,15 @@ type NodeInfo struct {
 	// GPUPlugin is the panel's NVIDIA device plugin on this server, when it
 	// has been placed here.
 	GPUPlugin *GPUPluginState `json:"gpu_plugin,omitempty"`
+
+	// Entry is whether the server takes the traffic that reaches it on ports
+	// 80 and 443: "serving"; "not_serving", with EntryReason saying why; or
+	// "none", a server k3s's load balancer does not run on. Empty when the
+	// cluster cannot say, because something other than k3s's load balancer
+	// fronts the ingress. Round-robin DNS cannot tell a server that is up
+	// and not serving from one that is, and this can (kube/entry.go).
+	Entry       string `json:"entry,omitempty"`
+	EntryReason string `json:"entry_reason,omitempty"`
 }
 
 // NodeGPU is one vendor's cards on a server.
@@ -107,6 +116,28 @@ type InstanceInfo struct {
 	MemoryMB  int64     `json:"memory_mb"`
 	// UsageKnown is false when metrics-server had nothing for the instance.
 	UsageKnown bool `json:"usage_known"`
+	// DeploymentID is the deployment the instance was started for, and
+	// Deployment its number, which the status handler fills in from the
+	// store: zero when the instance names no deployment of this app that the
+	// panel still has.
+	DeploymentID string `json:"deployment_id,omitempty"`
+	Deployment   int    `json:"deployment"`
+	// LastReason and LastExitCode are how the instance last stopped, so the
+	// panel can say "out of memory" and point at Scaling rather than say
+	// "crashing". LastReason is empty for one that has not stopped.
+	LastReason   string `json:"last_reason,omitempty"`
+	LastExitCode int32  `json:"last_exit_code,omitempty"`
+	// LastExit is how the container before this one ended, for an instance
+	// that has restarted: out of memory, or an exit code.
+	LastExit *InstanceExit `json:"last_exit,omitempty"`
+}
+
+// InstanceExit is how an instance's previous container ended.
+type InstanceExit struct {
+	// Reason is the kubelet's: OOMKilled, Error, Completed.
+	Reason     string    `json:"reason"`
+	ExitCode   int       `json:"exit_code"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 }
 
 // AppRuntimeStatus is what the app page shows at the top.
@@ -124,17 +155,26 @@ type AppRuntimeStatus struct {
 	// InternalAddress is how the environment's other apps reach an internal
 	// one: its name and port, as in Compose.
 	InternalAddress string `json:"internal_address,omitempty"`
+	// PendingChanges are the saved settings and build-time variables the
+	// app's version was not built with, which the next deploy builds with.
+	PendingChanges []store.BuildChange `json:"pending_changes,omitempty"`
 }
 
 // LogOptions is what to read from an app's logs, and from where.
 type LogOptions struct {
-	// TailLines bounds how far back to read.
+	// TailLines bounds how far back to read, across every instance read.
 	TailLines int64
 	// Follow keeps the stream open.
 	Follow bool
 	// Previous reads the container that ran before the current one, which is
 	// the only copy of why a crash-looping app crashed.
 	Previous bool
+	// Instance reads one instance, by name. Empty reads every one that has
+	// started.
+	Instance string
+	// SinceSeconds reads only what was written in the last this many
+	// seconds; zero is no bound.
+	SinceSeconds int64
 }
 
 // ClusterSummary is the cluster overview for a team.
@@ -167,8 +207,8 @@ type Cluster interface {
 	// PublicAddress is where a domain of somebody's own should point. Empty
 	// when the panel cannot work it out and nobody has set it.
 	PublicAddress(ctx context.Context, teamID string) string
-	// AppLogs streams an app's logs.
-	AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (io.ReadCloser, error)
+	// AppLogs reads an app's logs: every instance's, merged, or one's.
+	AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (*kube.LogStream, error)
 	// RestartApp triggers a rolling restart without changing anything else.
 	RestartApp(ctx context.Context, namespace, appSlug string) error
 	// DeleteApp removes an app's Kubernetes objects.
@@ -487,9 +527,11 @@ type DatabaseManager interface {
 	Delete(ctx context.Context, databaseID string) error
 	// Credentials returns the connection details, decrypted.
 	Credentials(ctx context.Context, databaseID string) (DatabaseCredentials, error)
-	// Link injects a connection string into an app as a variable.
-	Link(ctx context.Context, databaseID, appID, varName string) error
-	// Unlink removes the injected variable.
+	// Link injects a connection string into an app as a variable, and the
+	// pieces of it pieces names as variables of their own. nil pieces keeps
+	// the ones the link has; a new link then has none.
+	Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error
+	// Unlink removes the injected variables.
 	Unlink(ctx context.Context, databaseID, appID string) error
 	// Status refreshes a database's state from the cluster.
 	Status(ctx context.Context, databaseID string) (string, string, error)
@@ -536,6 +578,11 @@ type CreateDatabaseRequest struct {
 	Version   string `json:"version,omitempty"`
 	StorageGB int    `json:"storage_gb,omitempty"`
 	Instances int    `json:"instances,omitempty"`
+	// Backup is whether the new database is backed up every day. Left out,
+	// the panel's own default decides (storage.default_backups); either way
+	// it needs backup storage and an engine the panel backs up. The
+	// database manager does not read it: see applyDefaultBackupPolicy.
+	Backup *bool `json:"backup,omitempty"`
 }
 
 // DatabaseCredentials is what an app needs to connect.
@@ -566,6 +613,10 @@ type BackupManager interface {
 	RestoreVolume(ctx context.Context, backupID string, overwrite bool) (store.Operation, error)
 	// Verify checks that configured storage is reachable and writable.
 	Verify(ctx context.Context) error
+	// Storage says whether backup storage is set up, from the settings
+	// alone: it does not reach the bucket, so it is cheap enough to ask on
+	// every database created. Verify is the check that it works.
+	Storage(ctx context.Context) (BackupStorage, error)
 	// BackupPanel copies the panel's own database to backup storage.
 	BackupPanel(ctx context.Context, kind string) (store.Backup, error)
 	// VerifyBackup downloads a backup, opens it and reads it through, in the
@@ -575,6 +626,15 @@ type BackupManager interface {
 	// The dump is read and staged before this returns; the rest is the
 	// operation's.
 	Import(ctx context.Context, req ImportRequest) (store.Operation, error)
+}
+
+// BackupStorage is whether backups have somewhere to go. It is shown to
+// every signed-in user, so it says nothing about where.
+type BackupStorage struct {
+	Configured bool `json:"configured"`
+	// Sealed is a backup passphrase being set: every backup is encrypted
+	// before it leaves the cluster.
+	Sealed bool `json:"sealed"`
 }
 
 // RunResult is how a one-off command ended: its exit status, once it has.

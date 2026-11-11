@@ -57,6 +57,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdGPUs(ctx, rest, stdout)
 	case "rollback":
 		err = cmdRollback(ctx, rest, stdout)
+	case "restart":
+		err = cmdRestart(ctx, rest, stdout)
+	case "promote":
+		err = cmdPromote(ctx, rest, stdout)
 	case "lock":
 		err = cmdLock(ctx, rest, stdout)
 	case "unlock":
@@ -67,6 +71,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = cmdRun(ctx, rest, stdout)
 	case "status":
 		err = cmdStatus(ctx, rest, stdout)
+	case "attention":
+		err = cmdAttention(ctx, rest, stdout)
 	case "events":
 		err = cmdEvents(ctx, rest, stdout)
 	case "drift":
@@ -128,6 +134,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// The command's own --help printed its flags; that is what was asked.
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
+	}
+	// Ctrl-C while a deploy was followed; what stopped was said already.
+	if errors.As(err, new(interrupted)) {
+		return 130
+	}
+	// The list said what is wrong; the status says whether anything is.
+	var needed attentionNeeded
+	if errors.As(err, &needed) {
+		return 1
 	}
 	var exit commandExit
 	if errors.As(err, &exit) {
@@ -249,8 +264,10 @@ Getting started:
   whoami                Show who you are signed in as
 
 Working with apps:
-  deploy                Deploy the current directory's app
+  deploy                Deploy the current directory's app; --cancel stops one under way
   status                Show an app's live state
+  status --all          What needs attention across the team; exits 1 if anything is broken
+  attention             The same as status --all
   logs                  Show or follow an app's logs
   events                What Kubernetes said about an app's instances, newest first
   drift                 What was changed outside the panel, with kubectl; --repair puts it back
@@ -262,14 +279,19 @@ Working with apps:
   files                 List, save or remove files the app reads, such as an nginx.conf
   ports                 Open or close a port that is not HTTP, such as a game server's
   preview               Preview a branch without a pull request, or --close it
-  rollback              Go back to a previous deployment
+  rollback              Go back to a previous deployment, after saying what it puts back
+  restart               Replace the app's instances one at a time; nothing is rebuilt
+  promote               Run the version this app runs in another environment, unbuilt
   scan                  Show the known vulnerabilities in the app's image, or scan it now
   lock, unlock          Stop every deploy and rollback of an app, and start them again
   maintenance           Show visitors a page instead of the app, and stop
   run                   Run a one-off command in the app's image
   apps                  List the apps in an environment
+  apps set              Change an app's port, commands, health check, build or resources
+  apps rm               Delete an app, with its disks
   open                  Print an app's URLs
   domains               List, add or remove an app's domains; --manage-dns creates the record
+  domains panel         Put the panel on a domain of its own, with HTTPS, or say where it answers
   git                   List Git connections, and the repositories and branches they read
 
 Described in a file:
@@ -291,9 +313,9 @@ Databases:
 Cluster:
   servers               List the servers in a team
   servers create        Create a server at Hetzner Cloud and join it to the cluster
-  cloud providers       List, add, test or remove the team's cloud connections
+  cloud providers       List, add, update, test or remove the team's cloud connections
   certs                 List, upload or remove the team's own TLS certificates
-  dns providers         List, connect, test or remove the team's DNS providers
+  dns providers         List, connect, update, test or remove the team's DNS providers
   drains                List, add, test or remove where the team's logs are shipped
   upgrade               Ask which release is the newest, and upgrade the panel to it
 
@@ -486,6 +508,14 @@ func cmdWhoami(ctx context.Context, args []string, out io.Writer) error {
 // --- apps and status ---
 
 func cmdApps(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "set":
+			return cmdAppsSet(ctx, args[1:], out)
+		case "rm", "remove", "delete":
+			return cmdAppsRm(ctx, args[1:], out)
+		}
+	}
 	flags := flag.NewFlagSet("apps", flag.ContinueOnError)
 	flags.SetOutput(out)
 	envID := flags.String("env", "", "the environment id")
@@ -539,6 +569,7 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("status", flag.ContinueOnError)
 	flags.SetOutput(out)
 	appID := flags.String("app", "", "the app id")
+	all := flags.Bool("all", false, "what needs attention across the team, rather than one app; exits 1 if anything is broken")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	explain := flags.String("explain", "", "print an error code's explanation for pasting into an AI assistant")
 	if err := flags.Parse(args); err != nil {
@@ -546,6 +577,9 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	}
 	if *explain != "" {
 		return explainError(out, *explain)
+	}
+	if *all {
+		return showAttention(ctx, *asJSON, out)
 	}
 
 	cfg, err := LoadConfig()
@@ -571,10 +605,22 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			Ready    bool   `json:"ready"`
 			Restarts int    `json:"restarts"`
 			Node     string `json:"node"`
+			// The number of the deployment the instance runs; 0 when unknown.
+			Deployment int `json:"deployment"`
+			// How the container before this one ended, when it restarted.
+			LastExit *instanceExit `json:"last_exit,omitempty"`
 		} `json:"instances"`
+		// LiveDeployment is not the status route's: it is read from the
+		// history, so that one command says what is serving.
+		LiveDeployment *store.Deployment   `json:"live_deployment,omitempty"`
+		PendingChanges []store.BuildChange `json:"pending_changes,omitempty"`
 	}
 	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/status", nil, &status); err != nil {
 		return err
+	}
+	live, isLive := readLive(ctx, client, app)
+	if isLive {
+		status.LiveDeployment = &live
 	}
 	if *asJSON {
 		return writeJSON(out, status)
@@ -584,6 +630,9 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 	if status.Detail != "" {
 		fmt.Fprintf(out, "%s\n", status.Detail)
 	}
+	if isLive {
+		fmt.Fprintf(out, "\nLive: %s\n", liveLine(live))
+	}
 	fmt.Fprintf(out, "\nInstances: %d of %d ready\n", status.ReadyReplicas, status.DesiredReplicas)
 	for _, instance := range status.Instances {
 		marker := "x"
@@ -591,8 +640,16 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			marker = "."
 		}
 		fmt.Fprintf(out, "  %s %s  %s  on %s", marker, instance.Name, instance.Status, instance.Node)
+		// Said only where it differs from the live one: during a rollout,
+		// which instances are still on the version before.
+		if instance.Deployment > 0 && (!isLive || instance.Deployment != live.Number) {
+			fmt.Fprintf(out, "  #%d", instance.Deployment)
+		}
 		if instance.Restarts > 0 {
 			fmt.Fprintf(out, "  (%d restarts)", instance.Restarts)
+		}
+		if exit := instance.LastExit; exit != nil {
+			fmt.Fprintf(out, "  last ended: %s, %s", exit.summary(), humanTime(exit.FinishedAt))
 		}
 		fmt.Fprintln(out)
 	}
@@ -602,8 +659,24 @@ func cmdStatus(ctx context.Context, args []string, out io.Writer) error {
 			fmt.Fprintf(out, "  %s\n", u)
 		}
 	}
+	if len(status.PendingChanges) > 0 {
+		fmt.Fprintf(out, "\nSaved, and waiting for a deploy to build with them:\n")
+		for _, change := range status.PendingChanges {
+			fmt.Fprintf(out, "  %s\n", describeBuildChange(change))
+		}
+		fmt.Fprintf(out, "Deploy with `%s deploy`.\n", version.Binary)
+	}
 	fmt.Fprintln(out)
 	return nil
+}
+
+// describeBuildChange is one change waiting for a deploy, as a line: a
+// setting from what to what, or a build-time variable by its name alone.
+func describeBuildChange(change store.BuildChange) string {
+	if change.Setting == "variable" {
+		return "the build-time variable " + change.Key
+	}
+	return fmt.Sprintf("%s: %s -> %s", change.Setting, orDefault(change.From, "(none)"), orDefault(change.To, "(none)"))
 }
 
 func cmdOpen(ctx context.Context, args []string, out io.Writer) error {
@@ -700,9 +773,14 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	follow := flags.Bool("follow", true, "stream the build log until the deploy finishes")
 	accept := flags.Bool("accept-vulnerabilities", false,
 		"deploy even if the image has a critical vulnerability with a fix, when the panel stops those; recorded in the activity log")
+	cancel := flags.Bool("cancel", false, "stop the deployment under way, or the one named by its number or id, instead of deploying")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	positional, err := parseInterspersed(flags, args)
+	if err != nil {
 		return err
+	}
+	if len(positional) > 0 && !*cancel {
+		return errdoc.BadRequest(fmt.Sprintf("%q is not something deploy takes. A commit is --commit; a deployment to stop is --cancel.", positional[0]))
 	}
 
 	cfg, err := LoadConfig()
@@ -713,6 +791,9 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	app, err := resolveApp(ctx, client, cfg, *appID)
 	if err != nil {
 		return err
+	}
+	if *cancel {
+		return cancelDeployment(ctx, client, app, positional, out, *asJSON)
 	}
 
 	var deployment store.Deployment
@@ -736,8 +817,7 @@ func cmdDeploy(ctx context.Context, args []string, out io.Writer) error {
 	if !*follow {
 		return nil
 	}
-	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
-	return printFollowed(out, *asJSON, final, err)
+	return followStarted(ctx, client, app, deployment, out, *asJSON)
 }
 
 // followPoll is how often followDeployment asks for the deployment's state
@@ -877,8 +957,11 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	flags.SetOutput(out)
 	appID := flags.String("app", "", "the app id")
 	follow := flags.Bool("follow", false, "keep the stream open")
-	tail := flags.Int("tail", 200, "how many lines to show first")
+	tail := flags.Int("tail", 200, "how many lines to show first, across every instance")
 	process := flags.String("process", "", "one of the app's other processes, such as worker")
+	instance := flags.String("instance", "", "one instance, by its name or the part after its last hyphen; every instance when left out")
+	since := flags.String("since", "", "only what was written this long ago or since, such as 10m, 1h or 2d")
+	timestamps := flags.Bool("timestamps", false, "put the time each line was written in front of it")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -893,39 +976,79 @@ func cmdLogs(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	printer := &logPrinter{out: out, timestamps: *timestamps}
+	query := []string{"tail", strconv.Itoa(*tail), "process", *process, "instance", *instance, "since", *since}
 
 	if *follow {
 		// With --json, one JSON object a line: a stream has no end to put a
 		// document's closing bracket after.
 		encoder := json.NewEncoder(out)
-		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(
-			"follow", "true", "tail", strconv.Itoa(*tail), "process", *process),
+		// A panel from before entries sends each line as a log event alone;
+		// one that sends entries sends that beside each, and it is skipped.
+		entries := false
+		return client.Stream(ctx, "/api/apps/"+app+"/logs"+Query(append([]string{"follow", "true"}, query...)...),
 			func(event, data string) bool {
-				var line string
-				if err := json.Unmarshal([]byte(data), &line); err != nil {
+				var line logLine
+				switch event {
+				case "instances":
+					var reading struct {
+						Instances []string `json:"instances"`
+						Omitted   int      `json:"omitted"`
+					}
+					if err := json.Unmarshal([]byte(data), &reading); err == nil && !*asJSON {
+						printer.reading(reading.Instances, reading.Omitted)
+					}
 					return true
+				case "entry":
+					if err := json.Unmarshal([]byte(data), &line); err != nil {
+						return true
+					}
+					entries = true
+				case "error":
+					var reason string
+					if json.Unmarshal([]byte(data), &reason) == nil {
+						fmt.Fprintf(out, "The log stopped: %s\n", reason)
+					}
+					return true
+				default:
+					if entries || json.Unmarshal([]byte(data), &line.Line) != nil {
+						return true
+					}
 				}
 				if *asJSON {
-					_ = encoder.Encode(map[string]string{"line": line})
+					_ = encoder.Encode(line)
 				} else {
-					fmt.Fprintln(out, line)
+					printer.print(line)
 				}
 				return true
 			})
 	}
 
 	var response struct {
-		Lines []string `json:"lines"`
+		Lines            []string  `json:"lines"`
+		Entries          []logLine `json:"entries,omitempty"`
+		Instances        []string  `json:"instances,omitempty"`
+		InstancesOmitted int       `json:"instances_omitted,omitempty"`
 	}
-	if err := client.Do(ctx, "GET",
-		"/api/apps/"+app+"/logs"+Query("tail", strconv.Itoa(*tail), "process", *process), nil, &response); err != nil {
+	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/logs"+Query(query...), nil, &response); err != nil {
 		return err
 	}
 	if *asJSON {
 		return writeJSON(out, response)
 	}
-	for _, line := range response.Lines {
-		fmt.Fprintln(out, line)
+	if response.Entries == nil {
+		for _, line := range response.Lines {
+			response.Entries = append(response.Entries, logLine{Line: line})
+		}
+	}
+	printer.reading(response.Instances, response.InstancesOmitted)
+	for _, line := range response.Entries {
+		if line.Instance != response.Entries[0].Instance {
+			printer.several = true
+		}
+	}
+	for _, line := range response.Entries {
+		printer.print(line)
 	}
 	return nil
 }
@@ -1092,8 +1215,8 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 			set = append(set, item)
 		}
 		var result struct {
-			Set             []store.Variable `json:"set"`
-			RequiresRebuild bool             `json:"requires_rebuild"`
+			Set []store.Variable `json:"set"`
+			variableEffect
 		}
 		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"set": set}, &result); err != nil {
 			return err
@@ -1101,12 +1224,7 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		if *asJSON {
 			return writeJSON(out, result)
 		}
-		names := strings.Join(order, ", ")
-		if result.RequiresRebuild {
-			fmt.Fprintf(out, "%s set. Used during the build, so the next deploy will rebuild.\n", names)
-		} else {
-			fmt.Fprintf(out, "%s set and rolled out, once. No rebuild was needed.\n", names)
-		}
+		fmt.Fprintf(out, "%s set. %s\n", strings.Join(order, ", "), result.note())
 		for _, variable := range result.Set {
 			if variable.IsSecret {
 				fmt.Fprintf(out, "%s is stored as a secret: it will not be shown again.\n", variable.Key)
@@ -1118,13 +1236,17 @@ func cmdEnv(ctx context.Context, args []string, out io.Writer) error {
 		if len(values) == 0 {
 			return errdoc.BadRequest("Give at least one variable name.")
 		}
-		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"unset": values}, nil); err != nil {
+		var result variableEffect
+		if err := client.Do(ctx, "POST", "/api/apps/"+app+"/variables/batch", map[string]any{"unset": values}, &result); err != nil {
 			return err
 		}
 		if *asJSON {
-			return writeJSON(out, map[string]any{"unset": values})
+			return writeJSON(out, struct {
+				Unset []string `json:"unset"`
+				variableEffect
+			}{values, result})
 		}
-		fmt.Fprintf(out, "%s removed.\n", strings.Join(values, ", "))
+		fmt.Fprintf(out, "%s removed. %s\n", strings.Join(values, ", "), result.note())
 		return nil
 
 	default:
@@ -1149,8 +1271,8 @@ func setFromSecretManager(ctx context.Context, client *Client, app, sub string, 
 		body["build_time"] = buildTime
 	}
 	var result struct {
-		Variable        store.Variable `json:"variable"`
-		RequiresRebuild bool           `json:"requires_rebuild"`
+		Variable store.Variable `json:"variable"`
+		variableEffect
 	}
 	if err := client.Do(ctx, "PUT", "/api/apps/"+app+"/variables", body, &result); err != nil {
 		return err
@@ -1164,11 +1286,7 @@ func setFromSecretManager(ctx context.Context, client *Client, app, sub string, 
 	}
 	fmt.Fprintf(out, "%s is read from %s at every deploy. It was read once to check it, and its value is not stored in the panel.\n",
 		values[0], where)
-	if result.RequiresRebuild {
-		fmt.Fprintln(out, "It is used during the build, so the next deploy will rebuild.")
-	} else {
-		fmt.Fprintln(out, "Rolled out. No rebuild was needed.")
-	}
+	fmt.Fprintln(out, result.note())
 	return nil
 }
 
@@ -1289,6 +1407,8 @@ func cmdRollback(ctx context.Context, args []string, out io.Writer) error {
 	appID := flags.String("app", "", "the app id")
 	to := flags.String("to", "", "the deployment id to go back to; defaults to the one before the current version")
 	list := flags.Bool("list", false, "show the deploy history")
+	yes := flags.Bool("yes", false, "roll back without asking, after saying what it puts back")
+	follow := flags.Bool("follow", true, "stream the rollout until it finishes")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -1345,15 +1465,38 @@ func cmdRollback(ctx context.Context, args []string, out io.Writer) error {
 		return errdoc.BadRequest("There is no earlier successful deployment to go back to.")
 	}
 
+	// What it puts back is read and said first. A rollback restores the
+	// settings that version ran with, not only its code, and finding that
+	// out afterwards — the port back to what it was, the start command too —
+	// is a second incident on top of the first.
+	var plan rollbackPlan
+	if err := client.Do(ctx, "GET", "/api/apps/"+app+"/rollback/"+target+"/plan", nil, &plan); err != nil {
+		return err
+	}
+	if !*asJSON {
+		printRollbackPlan(out, plan)
+		if !*yes && isInteractive() {
+			if answer := strings.ToLower(prompt(out, "Roll back? [y/N] ")); answer != "y" && answer != "yes" {
+				fmt.Fprintln(out, "Nothing was changed.")
+				return nil
+			}
+		}
+	}
+
 	var deployment store.Deployment
 	if err := client.Do(ctx, "POST", "/api/apps/"+app+"/rollback/"+target, nil, &deployment); err != nil {
 		return err
 	}
+	if *asJSON && !*follow {
+		return writeJSON(out, deployment)
+	}
 	if !*asJSON {
 		fmt.Fprintf(out, "Rolling back. Deployment #%d started.\n", deployment.Number)
 	}
-	final, err := followDeployment(ctx, client, app, deployment.ID, out, *asJSON)
-	return printFollowed(out, *asJSON, final, err)
+	if !*follow {
+		return nil
+	}
+	return followStarted(ctx, client, app, deployment, out, *asJSON)
 }
 
 func orDefault(v, fallback string) string {

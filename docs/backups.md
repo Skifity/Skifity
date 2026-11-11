@@ -5,13 +5,19 @@ Redis and Valkey — the volumes your apps write files to, and
 [its own database](#the-panel-itself). Dragonfly, ClickHouse and Memcached are
 not backed up, and [why](#what-is-not-backed-up) is below.
 
-Nothing is backed up until you say where to put it.
+Nothing is backed up until there is somewhere to put it. Once there is, every
+new database is backed up every day unless somebody says not to — see
+[schedules](#schedules).
 
 ## Storage
 
 Backups go to S3, or to anything that speaks S3 — MinIO, Backblaze B2,
-Cloudflare R2, Hetzner Object Storage. Set it up under **Settings → Backup
-storage**: an endpoint, a region, a bucket, and a key pair.
+Cloudflare R2, Hetzner Object Storage. A panel administrator sets it up under
+**Settings → General → Backup storage**: an endpoint, a region, a bucket, and a
+key pair. It is the panel's, not a team's: one bucket for everybody's backups,
+and the only people who can see or change it are the panel's administrators.
+Everybody else is told whether there is one, and who to ask when there is not
+— the Backups tab of a database and the form that creates one both say so.
 
 The bucket can be on a private address too: MinIO on one of the cluster's own
 servers, at home, on the office network or over a VPN. Apps are kept away from
@@ -36,7 +42,7 @@ there is nothing to hand out.
 ## Encryption
 
 Whoever runs the bucket can read what is in it. Set a **Backup passphrase**
-under **Settings → Backup storage** and every backup — databases, volumes and
+under **Settings → General → Backup storage** and every backup — databases, volumes and
 the panel's own — is encrypted before it leaves the cluster, with a key the
 bucket's owner never sees.
 
@@ -81,7 +87,31 @@ its key — and asking again while one is waiting or running is the same one.
 
 ## Schedules
 
-Each database has its own schedule, set on its Backups tab, written as cron:
+**A new database is backed up every day.** When there is backup storage, a
+database is given a schedule as it is made — by hand, with a new app, or by a
+template — at a minute between 02:00 and 05:00 UTC of its own, keeping the last
+seven. The minute comes from the database's id, so a panel's databases are not
+all dumped and uploaded at once. **Back up daily** in the form that creates one
+says no; through the API that is `"backup": false`. A preview's database never
+gets one, nor does an engine that is [not backed up](#what-is-not-backed-up), and
+a database copied by cloning an environment keeps its source's schedule, on or
+off.
+
+Creating one does not reach the bucket: it only checks that every setting it
+needs is filled in. A bucket that turns out to be wrong is reported by the
+first backup, as `backup.failed`.
+
+A panel administrator can turn the default off with **Back up new databases**,
+under Settings → General → Backup storage. A database made then has no
+schedule unless whoever made it asked for one.
+
+Databases made before there was storage have none. A team's owner or
+administrator gives every one of them the daily schedule at once from any of
+their Backups tabs — **Back up every database daily** — or with
+`POST /api/teams/{team}/backup-policies/defaults`. A schedule somebody turned
+off is left off.
+
+Each database's schedule can be changed on its Backups tab, written as cron:
 
 ```
 0 3 * * *      every day at 03:00
@@ -105,6 +135,10 @@ over 03:00 — is taken as soon as the panel is back, once, however many were
 missed, and the team is told it was late with `backup.missed`. It looks back a
 week. A backup started at or after the time it was due counts as taken, even
 one that failed: that failure was already reported.
+
+A schedule belongs to its database or volume and is deleted with it — whether
+it was deleted itself or went with its app, environment, project or team. The
+backups already taken are not deleted with it.
 
 ## What is backed up, and how
 
@@ -185,8 +219,30 @@ A failed backup is worth knowing about immediately, which is why
 channel — for volumes as well as databases. `backup.succeeded` is there for a
 channel that wants every one; a channel with no list of events is not sent it.
 
-**No storage configured.** Nothing has been backed up. Set it up under
-Settings → Backup storage.
+A scheduled backup that cannot even start is a failed backup too. It is in the
+list on the Backups tab with the reason, and `backup.failed` is sent for it,
+the same as for one that started and then failed. Those reasons are:
+
+* **No storage**, or storage the panel cannot read: an endpoint that is not an
+  address, a key it cannot decrypt.
+* **A backup passphrase that cannot be read**, so a sealed backup cannot be
+  made.
+* **The database is not running.** Before refusing, the panel asks the cluster
+  how the database is now, rather than going by what it saw last — which is
+  only brought up to date when somebody opens the database. A database that is
+  **degraded**, with some of its instances down, is still answering, and is
+  backed up.
+* **No cluster to run it on.**
+
+Two things are not failures, and are listed as **Skipped** with the reason
+instead, with nobody told: a database somebody **stopped**, which has nothing
+new to back up, and a database something else is being done to at the time —
+being created, restored, imported into or given a new password. A backup taken
+in the middle of a restore would be half of two databases; the next one on the
+schedule is taken as usual.
+
+**No storage configured.** Nothing has been backed up. A panel administrator
+sets it up under Settings → General → Backup storage.
 
 **Access denied, or the bucket does not exist.** The key pair cannot write to
 that bucket. Check the bucket name and the region — a wrong region often
@@ -206,7 +262,7 @@ history — is copied to the same bucket, on its own schedule, once backup stora
 is set up. It is a file on the first control plane server, and that server's
 disk is the thing that fails; a copy beside it goes with it.
 
-Under **Settings → Backup storage**:
+Under **Settings → General → Backup storage**:
 
 * **Back up this panel** is when, as cron in UTC. Empty is every day at 03:17;
   `off` turns it off.
@@ -255,6 +311,11 @@ was taken with at `/etc/skifity/master.key` before starting the panel, or pass
 the one you have with `--master-key`. A panel started with the wrong key comes
 up with every secret unreadable.
 
+Put back on a new server with a new cluster, the panel finds none of its apps,
+volumes or databases there. [What comes back onto a new
+cluster](troubleshooting.md#what-comes-back-onto-a-new-cluster) says which come
+back by themselves, and how to bring back the rest.
+
 ## The cluster's own state
 
 Everything Kubernetes knows — which apps exist, their configuration, the
@@ -266,12 +327,21 @@ keeps the last twelve, which is three days:
 ls /var/lib/rancher/k3s/server/db/snapshots/
 ```
 
-They are a copy on the same disk. They save you from a bad upgrade or an object
-somebody deleted; they do not save you from losing the server, which is what
-copying that folder somewhere else is for. Skifity does not do that for you.
+They are a copy on the same disk, and they are not sent to the backup bucket.
+They save you from a bad upgrade or an object somebody deleted, on the server
+that took them. They do not save you from losing that server: with one control
+plane server, which is what the installer makes, they go with it.
 
-To put one back on a single-server cluster, stop k3s and reset the cluster from
-the snapshot:
+**Losing that server is recovered from the panel's own backup**, not from these.
+Install Skifity on a new server, put [the panel's database](#the-panel-itself)
+and the master key back, and the panel applies what it has recorded to the new
+cluster. [Restoring after losing the panel's server](troubleshooting.md#restoring-after-losing-the-panels-server)
+says how, and what comes back by itself and what does not. With [three control
+plane servers](adding-servers.md#control-plane-servers), losing one loses
+nothing of etcd: the other two hold it.
+
+To put a snapshot back on a single-server cluster, stop k3s and reset the
+cluster from it:
 
 ```sh
 sudo systemctl stop k3s
@@ -282,6 +352,49 @@ sudo systemctl start k3s
 This has not been run against a real cluster by the people who wrote it. Read
 [k3s's own page on it](https://docs.k3s.io/datastore/backup-restore) first, and
 do it on a server you can rebuild.
+
+### Sending them somewhere else yourself
+
+k3s can upload each snapshot to a bucket as well. Skifity does not turn that on,
+for three reasons:
+
+* k3s uploads them itself, so it needs the bucket's key: in its configuration
+  on every control plane server, or in a Secret in the cluster, which is then
+  inside every snapshot. The panel's own backups never hand the key to anything
+  ([storage](#storage) says how).
+* A snapshot opens only with the server's token,
+  `/var/lib/rancher/k3s/server/token`, and whoever has both has the cluster's
+  certificate authorities and every Secret in it. The token needs a home of its
+  own, away from the bucket.
+* Put back on a new server, a snapshot brings back objects that point at the
+  old one: volumes held on a server that is gone, images in a registry whose
+  disk went with it. The panel's database has neither problem, because the
+  panel applies what it records to whatever cluster it finds.
+
+If you want them off the server anyway, use k3s's own options, in a file the
+installer does not write, with a bucket and a key of their own rather than the
+backup bucket's. On each control plane server:
+
+```yaml
+# /etc/rancher/k3s/config.yaml.d/30-etcd-s3.yaml, readable by root alone
+etcd-s3: true
+etcd-s3-endpoint: s3.example.com
+etcd-s3-bucket: example-cluster-etcd
+etcd-s3-folder: snapshots
+etcd-s3-access-key: EXAMPLEKEY
+etcd-s3-secret-key: example-secret
+```
+
+then `sudo systemctl restart k3s`. Each scheduled snapshot is then uploaded as
+well as kept on disk, and k3s keeps as many in the bucket as Skifity asks it to
+keep on disk — twelve, but for the whole cluster rather than for each server —
+unless `etcd-s3-retention` says otherwise. Keep a copy of the token somewhere
+else too. With this file in place, restoring from the bucket takes the
+snapshot's file name alone as `--cluster-reset-restore-path`, and restoring one
+from the disk needs `--etcd-s3=false` beside the full path; [k3s's page on
+snapshots](https://docs.k3s.io/cli/etcd-snapshot) has both, and restoring onto
+a new server with `--token`. None of this has been run by the people who wrote
+Skifity.
 
 ## What is not backed up
 

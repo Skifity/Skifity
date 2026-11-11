@@ -172,7 +172,7 @@ func (c *Cluster) installUpgradeController(ctx context.Context) error {
 			return err
 		}
 	}
-	if err := c.client.WaitForDeployment(ctx, kube.UpgradeNamespace, "system-upgrade-controller", 5*time.Minute); err != nil {
+	if err := c.client.WaitForDeployment(ctx, kube.UpgradeNamespace, upgradeControllerDeployment, 5*time.Minute); err != nil {
 		return fmt.Errorf("the upgrade controller was installed but did not start: %w", err)
 	}
 	return nil

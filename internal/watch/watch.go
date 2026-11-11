@@ -21,6 +21,7 @@ import (
 	"skifity/internal/events"
 	"skifity/internal/kube"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/runsafe"
 	"skifity/internal/settings"
 	"skifity/internal/store"
@@ -295,7 +296,7 @@ func (w *Watcher) checkServers(ctx context.Context) {
 				Title:  server.Name + " is back",
 				Body:   "The node is ready again and can run apps.",
 				Level:  "success",
-				Path:   "/servers/" + server.ID,
+				Path:   panelpath.Server(server.ID),
 				Fields: map[string]string{"Server": server.Name},
 			})
 
@@ -318,8 +319,9 @@ func (w *Watcher) checkServers(ctx context.Context) {
 				Title:  server.Name + " stopped answering",
 				Body:   detail,
 				Level:  "error",
-				Path:   "/servers/" + server.ID,
+				Path:   panelpath.Server(server.ID),
 				Fields: map[string]string{"Server": server.Name, "Node": server.NodeName},
+				Fix:    serverLostFix,
 			})
 		}
 	}
@@ -401,7 +403,7 @@ func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp, status ap
 			Title:  app.Name + " is serving again",
 			Body:   "Instances are ready and the app is answering.",
 			Level:  "success",
-			Path:   "/apps/" + app.ID,
+			Path:   panelpath.App(app.ID, ""),
 			Fields: map[string]string{"App": app.Name},
 		})
 		return
@@ -416,7 +418,7 @@ func (w *Watcher) checkApp(ctx context.Context, app store.DeployedApp, status ap
 		Title: app.Name + " has no running instances",
 		Body:  detail,
 		Level: "error",
-		Path:  "/apps/" + app.ID,
+		Path:  panelpath.App(app.ID, ""),
 		Fields: map[string]string{
 			"App":      app.Name,
 			"Expected": strconv.Itoa(status.DesiredReplicas),
@@ -514,8 +516,11 @@ func (w *Watcher) checkCertificate(ctx context.Context, app store.DeployedApp) {
 		Title:  "No certificate for " + secured[0].Hostname,
 		Body:   reason,
 		Level:  "error",
-		Path:   "/apps/" + app.ID + "/domains",
+		Path:   panelpath.App(app.ID, panelpath.AppDomains),
 		Fields: map[string]string{"App": app.Name, "Domain": secured[0].Hostname},
+		// cert-manager's reason is ACME's words; this is the panel's, about
+		// the DNS record, the port or the limit behind them.
+		Fix: kube.ExplainCertificate(state.Reason),
 	})
 }
 
@@ -594,6 +599,12 @@ func (w *Watcher) publish(teamID, kind string, data any) {
 	}
 	w.hub.Publish(events.TeamTopic(teamID), kind, data)
 }
+
+// serverLostFix is what to do about a server that stopped answering, as the
+// troubleshooting page's "A server says not responding" says it.
+const serverLostFix = "Check that the server is switched on, can be reached over the network and " +
+	"has free disk; it is taken back as soon as it answers. Its instances start on the other servers " +
+	"about five minutes after it stopped, where there is room. If it is gone for good, remove it on its page."
 
 // notifyTeam sends what the whole team hears about: a server, which runs every
 // project's apps. See notifyApp for everything that belongs to one app.

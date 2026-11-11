@@ -6,6 +6,7 @@ website: https://docs.linuxserver.io/images/docker-libreoffice/
 services:
 - name: libreoffice
   image: linuxserver/libreoffice:25.8.7
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -16,3 +17,4 @@ services:
   - name: libreoffice-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

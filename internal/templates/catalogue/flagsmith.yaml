@@ -8,6 +8,7 @@ services:
   image: flagsmith/flagsmith:2.278.0
   run_as_user: 65534
   port: 8000
+  health_start_seconds: 300
   public: true
   mem_request_mb: 256
   mem_limit_mb: 1024

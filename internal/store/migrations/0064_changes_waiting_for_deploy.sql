@@ -1,0 +1,17 @@
+-- What each deployment was built from, so the panel can say which saved
+-- settings the running version does not have yet.
+--
+-- Saving a new branch, build command or output folder applies nothing: those
+-- go into the image, and the next deploy builds with them. The page said only
+-- "Saved", and the app went on running the old build while everybody assumed
+-- it had changed. The fingerprint a deployment keeps cannot be worked out
+-- again to compare against — a deploy from the button fingerprints no commit —
+-- so the inputs themselves are recorded: the repository, branch, folder,
+-- builder, Dockerfile, build command, output folder or an image app's image,
+-- and each build-time variable's key with a digest of its value.
+--
+-- Sealed as a whole, to the app (store.BuildSpecContext): a digest of a short
+-- secret is a guess away from the secret, and sealed it says nothing without
+-- the master key. Rotation rewraps it with the rest. A deployment made before
+-- this has none, and says nothing is waiting.
+ALTER TABLE deployments ADD COLUMN build_spec_enc TEXT NOT NULL DEFAULT '';

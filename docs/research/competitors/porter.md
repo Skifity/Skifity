@@ -27,7 +27,9 @@ the customer's account, three default node groups (System 2×t3.medium,
 Monitoring 1×t3.large, Application from 1×t3.medium, autoscaled by Karpenter on
 AWS), ingress-nginx (Porter maintains a build of Chainguard's fork since
 January 2026), cert-manager, Prometheus (14-day retention) and Loki (7-day
-retention). Builds run in the customer's GitHub Actions, not in the cluster.
+retention). Builds run in the customer's GitHub Actions, not in the cluster;
+the CLI reference read on 2026-11-08 also documents `porter app build --remote`,
+marked experimental, which builds with kpack in the cluster instead.
 Environment-group secrets are synced to the cloud's secret manager rather than
 stored by Porter. In 2023 Porter replaced its Terraform-based provisioning with
 its own reconciler "to immediately reconcile drifts" (co-founder, Hacker News,
@@ -51,7 +53,9 @@ customers scale "individual clusters ... to hundreds of machines and terabytes
 of RAM" (same post). The hosted, eject-able Porter Cloud launched on Hacker News
 on 2024-05-23 (258 points, 95 comments); `porter.run/porter-cloud` now redirects
 to the homepage and neither the pricing page nor the docs mention it, so it
-appears to have been withdrawn — Porter has not said so that I could find.
+appears to have been withdrawn — Porter has not said so that I could find. On
+the day this was written, though, Porter's public chart repository gained charts
+for apps "on a Porter hosted cluster" (see "Since 2026-09-30").
 
 ## Feature inventory
 
@@ -192,7 +196,9 @@ appears to have been withdrawn — Porter has not said so that I could find.
   redacted), notifications, jobs, nodes, pods, load balancers; write tools
   `create_app`, `update_application` (**dry run by default**),
   `redeploy_application`, `trigger_job_run`; `connect_github` returns the exact
-  browser action a user must take. `curl -fsSL https://agents.porter.run | sh`
+  browser action a user must take. The reference read on 2026-11-08 also lists
+  tools that enable and run sandboxes and install add-ons (see "Since
+  2026-09-30"). `curl -fsSL https://agents.porter.run | sh`
   installs the CLI, registers the MCP server and installs Porter's skills.
 - **Sandboxes (AWS only):** isolated containers for untrusted or agent-written
   code, with Python and TypeScript SDKs, a warm pool for sub-second start,
@@ -544,6 +550,174 @@ a Viewer role, and cluster upgrades that are somebody's job.
   wanted, it is a plugin.
 - **Agent sandboxes.** A different product for a different buyer.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. Porter's platform is closed and its changelog and blog had
+nothing new, so most of this comes from three public places that do move: the
+docs (read as Markdown from docs.porter.run), the Homebrew tap that records each
+CLI release, and `porter-dev/porter-charts`, which a bot syncs from Porter's
+internal monorepo and which therefore shows what Porter's clusters run. GitHub's
+API and its web pages were refused from the sandbox this was written in, so the
+public repositories were cloned with git and stars were not read again. The docs
+carry no dates and no copy of them from 2026-09-30 could be reached (the Wayback
+Machine refused the connection), so a docs page is reported as "documented on
+2026-11-08", not as new, unless something dated backs it.
+
+### Releases and announcements
+
+- No changelog entry: the newest is still 2026-06-12 ("API Audit Logs, CLI and
+  Browser Session Management, Short-lived Cloud Credentials, and Secure Cloud
+  Access for Workloads"). No blog post since the Series A announcement of
+  2026-01-27.
+- Pricing is unchanged: $13 per vCPU-month, $6 per GB-RAM-month, Enterprise from
+  40 vCPU and 80 GB. The homepage still says "Startups get 6 months free"; the
+  pricing page names Y Combinator and a16z speedrun as investors with a Porter
+  deal, and non-profits still get 50% off.
+- Three CLI releases reached the Homebrew tap: v0.69.8 on 2026-10-09, v0.69.9 on
+  2026-10-29 and v0.69.10 on 2026-11-06. The binaries come from
+  `porter-dev/releases`, whose tags carry no notes, so what changed in them is
+  not public.
+- The homepage offers "Your customer's cloud: Deploy directly into your
+  customers' VPC". This file did not mention it on 2026-09-30; when it appeared
+  is not known.
+
+### What the charts show
+
+`porter-charts` had 17 commits between 2026-10-01 and 2026-11-07.
+
+- **Charts for a hosted cluster.** `hosted-web`, `hosted-worker` and
+  `hosted-job` were first committed on 2026-09-30, described as "Web service on
+  a Porter hosted cluster, exposed through the shared Gateway". They route
+  through the Gateway API (an HTTPRoute and a ListenerSet on a shared Gateway
+  named `edge`), get a certificate per host over HTTP-01 with HTTP redirected to
+  HTTPS (2026-10-01), and since 2026-10-06 take a `runtimeClassName` "such as
+  gvisor". Porter has announced no hosted product, and this file said on
+  2026-09-30 that Porter Cloud appeared withdrawn; the charts suggest a
+  multi-tenant, sandboxed hosted cluster is being built, and say nothing more.
+- **Disruption budgets.** On 2026-10-15 the web and worker charts' budgets
+  changed from `minAvailable` to `maxUnavailable` (20% unless set) with
+  `unhealthyPodEvictionPolicy: AlwaysAllow`, so an instance that is not ready
+  never holds up a node drain. The zero-downtime page read on 2026-11-08 says
+  "Porter keeps services with 2 or more instances available ... A service with a
+  single instance restarts briefly", while the cluster-upgrades page still asks
+  for three replicas.
+- **An eviction webhook.** On 2026-11-06 the Porter agent gained a validating
+  webhook on `pods/eviction`. In `enforce` mode it "defers the eviction of a
+  service's last ready pod and starts its replacement", for at most ten minutes,
+  and fails open if it is down; it ships in `audit` mode, which allows every
+  eviction and records how long Porter services were down, and only for the
+  `default` namespace.
+- **Network isolation per service.** On 2026-10-27 the web, worker and job
+  charts gained `networkPolicy.isolation`: ingress and egress rules for every
+  pod of a service, where an empty list denies that direction and egress rules
+  keep the cloud metadata address out. The docs do not describe it yet.
+- **Smaller changes.** Workers on EKS can run under a named RuntimeClass
+  (2026-10-05); the Grafana add-on moved from Grafana 12.2.1 to 13.2.3
+  (2026-10-05); the Cloud SQL proxy can run as a native sidecar (2026-10-23);
+  promtail runs above apps' priority (2026-11-05); EFS disks take NFS mount
+  options (2026-11-07). On 2026-11-03 an `ingress-nginx` add-on chart appeared,
+  built from Chainguard's fork (`chainguard-forks/ingress-nginx`, controller
+  v1.15.6, chart 4.15.12) — the fork this file says Porter has maintained since
+  January.
+
+### What the docs say on 2026-11-08 that this file did not
+
+- **QM, an agent harness, as an add-on.** `docs.porter.run/addons/qm`, not yet
+  in `llms.txt`: QM ("the open source multiplayer agent harness",
+  `yc-software/qm`, whose public history starts on 2026-07-29) installed on an
+  AWS cluster, every agent in a Porter Sandbox, with a Postgres database, an
+  optional S3 bucket, and sign-in by password, OpenID Connect or emailed links.
+  The MCP server and a `porter-qm` skill install it; apps the agents build are
+  published under the sandbox domain. A "use cases" page says Porter runs QM
+  itself and that a weekly rightsizing report from it cut Porter's AWS bill "by
+  upwards of 20%".
+- **MCP.** The tools reference adds `create_github_workflow`,
+  `get_cluster_pod`, `get_cluster_node_groups`, `get_node_group_metrics`,
+  `list_job_runs` and `get_job_run`; sandbox tools including
+  `enable_sandboxes`, `create_sandbox` and `exec_sandbox`; and add-on tools
+  (`install_addon`, `update_addon`, `delete_addon`) that only install QM. It
+  warns that "Secret values passed to `install_addon` or `update_addon` persist
+  in the conversation transcript."
+- **CLI.** `porter clusters create` provisions from the command line with
+  `--wait`, `--yes`, `--enable-sandboxes`, preflight checks and documented exit
+  codes (3 for a failed preflight); `porter app build --remote` builds in the
+  cluster with kpack ("EXPERIMENTAL"); `porter app yaml` writes an app's
+  `porter.yaml`; `porter sandbox` creates, execs into, snapshots and measures
+  sandboxes.
+- **Sandboxes** can be served over HTTPS on the customer's own domains; Azure
+  and GCP are a beta on request.
+- Unchanged and still as this file says: the DevOps Agent (alpha, Claude Sonnet
+  4.6, Opus 4.6 or Haiku 4.5 on the customer's key), the three roles, audit logs
+  for 30 days with CSV and NDJSON export capped at 10,000 rows, and the
+  twice-yearly cluster upgrades.
+
+### Security
+
+- No advisory or incident found. NVD keyword searches "porter-dev" and
+  "porter.run" still return nothing, and OSV has nothing for
+  `github.com/porter-dev/porter` (2026-11-08).
+- The changes in the period are defensive: budgets that let unready instances be
+  evicted, a webhook that keeps a service's last ready instance through a
+  drain, per-service network rules, and gVisor in the hosted charts.
+- The QM docs' warning that secrets passed to MCP tools stay in the transcript
+  is the honest version of a problem every MCP server that accepts a secret
+  has.
+
+### What users say
+
+- No Hacker News story or comment named porter.run between 2026-09-30 and
+  2026-11-08 (Algolia search API, exact match). The planned web search for
+  reviews could not be run: the search service's credits had run out.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- Most of what this file asked for is done: previews no longer inherit
+  production's database and can have their own, seeded (Phases 76, 93 and 107);
+  `skifity.yaml` with plan and apply (Phase 108); usage history and alerts
+  (Phases 95 and 99); the read-only Viewer role (Phase 85); k3s upgrades of
+  servers that already exist (Phase 109); `skifity db connect` (Phase 105); a
+  remote MCP endpoint with read-only annotations on its read tools (Phase 87,
+  `internal/mcpserver/server.go:360`); notification channels limited to
+  projects (`store.NotificationChannel.Projects`); cloning an environment
+  (`POST /api/environments/{envID}/clone`); and an automatic rollback when a
+  failed deploy has left an app with a volume down (`rollBackIfLeftDown`,
+  `internal/deploy/deployer.go`). Still missing: audit-log export, scaling on
+  queue length, and a command that runs only on the first deploy.
+- Porter's new eviction webhook is an idea Skifity already has. Removing a
+  server starts every app's only instance on another server before evicting it
+  (`moveSoleInstances`, `internal/provision/move.go`), always, where Porter's
+  ships in audit mode. Skifity's k3s upgrade cordons and does not drain
+  (Phase 109), so it has no drain to protect there.
+- **New gap, small: a budget that never blocks on an instance that is already
+  down.** `BuildPDB` (`internal/kube/manifests.go:515`) sets
+  `maxUnavailable: 1` and leaves `unhealthyPodEvictionPolicy` at Kubernetes'
+  default, under which an instance that is not ready can be evicted only while
+  the app is otherwise healthy. An app with two instances that are both crash
+  looping therefore blocks removing the server they run on, and the panel says
+  "An app would go down if this server is removed" and suggests scaling it to
+  more than one instance — which it already is. Porter set `AlwaysAllow` on
+  2026-10-15. One field, and a golden test.
+- **New gap: outbound rules per app.** Skifity fences each environment's
+  namespace (`internal/cluster/netpolicy.go`, `internal/kube/egress.go`):
+  private ranges, metadata addresses and the servers' own addresses are out of
+  reach and the rest of the internet is open, the same for every app. There is
+  no setting for an app that should reach nothing outside, or only a few
+  addresses. NetworkPolicy matches addresses, not names, so the honest version
+  is "no internet" or a list of CIDRs. Whether k3s's policy controller enforces
+  it needs a cluster.
+- **New gap, larger: a sandboxed runtime.** Every team's pods run under runc
+  on shared servers; the only RuntimeClass Skifity names is NVIDIA's
+  (`internal/kube/gpu.go:93`). gVisor for a team, or for apps marked untrusted,
+  would harden a panel that several teams share, at the cost of installing
+  `runsc` on every server and some compatibility.
+- QM, the sandboxes and deploying into customers' VPCs stay out of scope, as
+  "Things to deliberately not copy" already says of agent sandboxes. The
+  rightsizing report Porter describes is a good use of data Skifity already
+  keeps: its usage history (Phase 95) could name the apps whose reservation sits
+  far above their peak.
+
 ## Sources
 
 All read 2026-09-30.
@@ -582,3 +756,16 @@ All read 2026-09-30.
 - https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/
 - https://nvd.nist.gov (API keyword searches "porter-dev", "porter.run")
 - Skifity sources cited inline, read in this repository on 2026-09-30.
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- https://www.porter.run/changelog (newest entry 2026-06-12), https://www.porter.run/blog (newest post 2026-01-27), https://www.porter.run/pricing and https://www.porter.run/ (homepage)
+- https://docs.porter.run/llms.txt, and as Markdown: mcp/tools.md, addons/qm.md, addons/qm/use-cases.md, applications/observability/devops-agent.md, security-and-compliance/audit-logs.md and role-based-access-control.md, cloud-accounts/cluster-upgrades.md, applications/configure/zero-downtime-deployments.md, standard/cli/command-reference/porter-app.md and porter-clusters.md, sandboxes/overview.md
+- Git clone of https://github.com/porter-dev/homebrew-porter (formula commits for v0.69.8 on 2026-10-09, v0.69.9 on 2026-10-29, v0.69.10 on 2026-11-06)
+- Git clone of https://github.com/porter-dev/porter-charts (main at d83df6c3, 2026-11-07): the 17 commits since 2026-09-30, the `hosted-*` charts, `applications/{web,worker,job}` budgets and network policies, `addons/porter-agent/charts/eviction-webhook`, `addons/ingress-nginx/Chart.yaml`
+- Git clone of https://github.com/porter-dev/releases (tags only, no notes) and https://github.com/porter-dev/porter-docs (last commit 2023-05-16, not the current docs)
+- Git clone of https://github.com/yc-software/qm (first public commit 2026-07-29)
+- https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=porter-dev and keywordSearch=porter.run (no results); https://api.osv.dev/v1/query for `github.com/porter-dev/porter` (no results)
+- https://hn.algolia.com/api/v1/search_by_date?query="porter.run" (since 2026-09-30: no results)
+- Not reachable from this sandbox: the GitHub REST API and github.com pages for porter-dev, and web.archive.org
+- Skifity, for "For Skifity": `internal/kube/manifests.go`, `internal/provision/move.go`, `internal/provision/remove.go`, `internal/cluster/netpolicy.go`, `internal/kube/egress.go`, `internal/kube/gpu.go`, `internal/deploy/deployer.go`, `internal/mcpserver/server.go`, `internal/store/models.go`, `internal/api/api.go`, `docs/progress.md` (Phases 76, 85, 87, 93, 95, 99, 105, 107 to 109)

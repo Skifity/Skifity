@@ -6,6 +6,7 @@ website: https://github.com/vrtmrz/obsidian-livesync
 services:
 - name: obsidian-livesync
   image: oleduc/docker-obsidian-livesync-couchdb:1.0.3
+  needs_root: true
   port: 5984
   public: true
   volumes:

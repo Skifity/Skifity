@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 	"skifity/internal/tlscert"
 )
@@ -78,11 +79,11 @@ func expiryMessage(certificate store.Certificate, now time.Time) notify.Message 
 	}
 	return notify.Message{
 		Title: title,
-		Body: fmt.Sprintf("It runs out on %s, and browsers refuse every hostname it covers from then on. "+
-			"Renew it with the authority that issued it, and upload the new one under the same name in "+
-			"Settings, Certificates: every app using it is updated.", date),
+		Body:  fmt.Sprintf("It runs out on %s, and browsers refuse every hostname it covers from then on.", date),
+		Fix: "Renew it with the authority that issued it, and upload the new one under the same name in " +
+			"Settings, Certificates: every app using it is updated.",
 		Level: level,
-		Path:  "/settings?tab=certificates",
+		Path:  panelpath.Settings(panelpath.SettingsCertificates),
 		Fields: map[string]string{
 			"Certificate": certificate.Name,
 			"Expires":     date,

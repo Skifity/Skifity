@@ -205,6 +205,80 @@ else
   t_fail "install.sh no longer runs preflight before installing k3s"
 fi
 
+# --- the release's image, by digest ------------------------------------------
+
+# A tag can be moved by anybody who can push to the registry; a digest cannot.
+# The release workflow writes the digest of the image it pushed into the copy of
+# the installer it attaches (scripts/pin-installer-image.sh), and that copy
+# installs those bytes whatever the tag says later. In the repository the line
+# is empty, so an install from a clone pulls by tag as it always has.
+FAKE_DIGEST="sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+PINNED_REF="ghcr.io/$(printf '%s' "$PROJECT_REPO" | tr '[:upper:]' '[:lower:]'):${RELEASED_VERSION}@${FAKE_DIGEST}"
+if [ -z "$RELEASED_IMAGE" ] && [ "$(grep -c '^RELEASED_IMAGE=""$' "$ROOT/installer/install.sh")" = 1 ]; then
+  t_pass "the repository's installer names no digest, and has the one line a release fills in"
+else
+  t_fail "installer/install.sh should have exactly one empty RELEASED_IMAGE line, got: $(grep '^RELEASED_IMAGE=' "$ROOT/installer/install.sh")"
+fi
+pinned="$WORKDIR/pinned-install.sh"
+if sh "$ROOT/scripts/pin-installer-image.sh" "$PINNED_REF" "$ROOT/installer/install.sh" "$pinned" >/dev/null 2>"$WORKDIR/pin.err" &&
+  sh -n "$pinned"; then
+  t_pass "the installer is pinned to a release's image"
+else
+  t_fail "pinning the installer failed: $(cat "$WORKDIR/pin.err")"
+fi
+# pinned_image [VAR=value...] prints the image the pinned installer installs,
+# with what a person might set in its environment.
+pinned_image() {
+  # The script is in single quotes so the inner shell expands it.
+  # shellcheck disable=SC2016
+  env -i PATH="$PATH" "$@" sh -c 'SKIFITY_INSTALLER_LIB=1 . "$1" && printf "%s" "$IMAGE"' pinned "$pinned" 2>&1
+}
+got=$(pinned_image)
+if [ "$got" = "$PINNED_REF" ]; then
+  t_pass "a pinned installer installs its release's image by tag and digest"
+else
+  t_fail "the pinned installer should install $PINNED_REF, got: $got"
+fi
+got=$(pinned_image SKIFITY_VERSION="$RELEASED_VERSION")
+[ "$got" = "$PINNED_REF" ] && t_pass "and so does --version naming that same release" ||
+  t_fail "--version $RELEASED_VERSION should keep the digest, got: $got"
+got=$(pinned_image SKIFITY_VERSION=v9.9.9)
+case "$got" in
+*":v9.9.9") t_pass "another --version is pulled by its tag: this installer knows no digest for it" ;;
+*) t_fail "--version v9.9.9 should be the tag alone, got: $got" ;;
+esac
+got=$(pinned_image SKIFITY_IMAGE=registry.example.test/skifity:1.2.3)
+[ "$got" = "registry.example.test/skifity:1.2.3" ] && t_pass "an --image is installed as it was given" ||
+  t_fail "--image should win over the pinned image, got: $got"
+got=$(pinned_image SKIFITY_REPO=acme/skifity)
+[ "$got" = "ghcr.io/acme/skifity:${RELEASED_VERSION}" ] && t_pass "another repository's image is not given this one's digest" ||
+  t_fail "SKIFITY_REPO=acme/skifity should be ghcr.io/acme/skifity:${RELEASED_VERSION}, got: $got"
+
+# The pinning refuses rather than guesses, and leaves nothing behind when it does.
+for bad in "ghcr.io/skifity/skifity:${RELEASED_VERSION}" "ghcr.io/skifity/skifity@${FAKE_DIGEST}" \
+  "ghcr.io/someone-else/skifity:${RELEASED_VERSION}@${FAKE_DIGEST}" "ghcr.io/skifity/skifity:v1|x@${FAKE_DIGEST}"; do
+  rm -f "$WORKDIR/refused.sh"
+  if sh "$ROOT/scripts/pin-installer-image.sh" "$bad" "$ROOT/installer/install.sh" "$WORKDIR/refused.sh" >/dev/null 2>&1 ||
+    [ -e "$WORKDIR/refused.sh" ] || [ -e "$WORKDIR/refused.sh.pinning" ]; then
+    t_fail "pinning to $bad should be refused, with no file left behind"
+  else
+    t_pass "pinning refused: $bad"
+  fi
+done
+if sh "$ROOT/scripts/pin-installer-image.sh" "$PINNED_REF" "$pinned" "$WORKDIR/twice.sh" >/dev/null 2>&1; then
+  t_fail "an installer that is pinned already should not be pinned again"
+else
+  t_pass "an installer that is pinned already is not pinned again"
+fi
+
+# A copy taken before an upgrade is named for the tag, digest or not.
+for pair in "ghcr.io/skifity/skifity:v1.2.3@${FAKE_DIGEST}|v1.2.3" "registry.example.test/skifity@sha256:abc123|abc123" \
+  "registry.example.test:5000/skifity:0.0.0-test|0.0.0-test"; do
+  got=$(image_label "${pair%%|*}")
+  [ "$got" = "${pair##*|}" ] && t_pass "a copy before upgrading to ${pair%%|*} is named ${pair##*|}" ||
+    t_fail "image_label ${pair%%|*} should be ${pair##*|}, got: $got"
+done
+
 # --- the manifests render ---------------------------------------------------
 
 SOURCE_DIR="$ROOT"
@@ -339,6 +413,12 @@ case "$out" in
 *"skifity-uninstall"*) t_fail "the install names skifity-uninstall when it is not there" ;;
 *) t_pass "an uninstaller that is not there is not named" ;;
 esac
+# The way to HTTPS from a plain HTTP install is the panel's own card, or this
+# script again. It used to promise a control in Settings that did not exist.
+case "$out" in
+*"Settings, General, Panel address"*"--domain"*) t_pass "the plain HTTP install names the Panel address card and --domain" ;;
+*) t_fail "the plain HTTP install should name Settings, General, Panel address and --domain, got: $out" ;;
+esac
 
 # --- the options ------------------------------------------------------------
 
@@ -440,7 +520,7 @@ esac
 
 for bad in "--domain not_a_domain" "--domain localhost" "--email nobody" "--email a&b@example.test" \
   "--public-ip 300.1.2.3" "--public-ip example.test" "--pod-network calico" "--version v1;rm" \
-  "--image registry.example.test/a|b" "--staging=1"; do
+  "--image registry.example.test/a|b" "--staging=1" "--channel stable;id"; do
   # Word splitting into an option and its value is the point.
   # shellcheck disable=SC2086
   out=$( (parse_args $bad) 2>&1) && status=0 || status=$?
@@ -1166,7 +1246,8 @@ if [ -n "${STUB_K3S_DOWNLOAD_FAILS:-}" ]; then
   fi
 fi
 printf '%s\n' "$INSTALL_K3S_EXEC" >"$STUB_DIR/k3s-exec"
-printf '%s\n' "$INSTALL_K3S_CHANNEL" >"$STUB_DIR/k3s-channel"
+printf '%s\n' "${INSTALL_K3S_VERSION:-}" >"$STUB_DIR/k3s-version"
+printf '%s\n' "${INSTALL_K3S_CHANNEL:-}" >"$STUB_DIR/k3s-channel"
 mkdir -p "$STUB_ROOT/etc/systemd/system" "$STUB_ROOT/var/lib/rancher/k3s/server" "$STUB_ROOT/etc/rancher/k3s"
 for arg in $INSTALL_K3S_EXEC; do printf "    '%s' \\\\\n" "$arg"; done >"$STUB_ROOT/etc/systemd/system/k3s.service"
 printf 'K10fake::server:not-a-real-token\n' >"$STUB_ROOT/var/lib/rancher/k3s/server/token"
@@ -1250,6 +1331,40 @@ case "$status:$(cat "$FAKE/stub/k3s-attempts" 2>/dev/null):$out" in
 *) t_fail "a k3s download that keeps failing should stop after three attempts ($status, $(cat "$FAKE/stub/k3s-attempts" 2>/dev/null) attempts)" ;;
 esac
 
+# --channel is the way back to following k3s's own channel, asked for rather
+# than the default. One variable or the other: k3s's installer takes a version
+# over a channel, so passing both would ignore what was asked.
+FAKE="$WORKDIR/root-channel"
+fake_root "$FAKE"
+out=$(run_install "$FAKE" --image "$IMAGE_UNDER_TEST" --channel stable 2>&1) && status=0 || status=$?
+case "$status:$(cat "$FAKE/stub/k3s-channel" 2>/dev/null):$(cat "$FAKE/stub/k3s-version" 2>/dev/null)" in
+0:stable:) t_pass "--channel stable follows k3s's stable channel instead of the tested version" ;;
+*) t_fail "--channel stable should pass the channel and no version ($status, channel '$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)', version '$(cat "$FAKE/stub/k3s-version" 2>/dev/null)'):
+$out" ;;
+esac
+case "$out" in
+*"newest release on its stable channel, rather than the version this release of Skifity was tested with"*) t_pass "and says it is not the version this release was tested with" ;;
+*) t_fail "a channel install should say it is not the tested version, got:
+$out" ;;
+esac
+
+# The installer a release attaches, pinned: the Deployment it applies names the
+# image by digest, which is what the cluster then pulls.
+PINNED_SRC="$WORKDIR/pinned-src"
+mkdir -p "$PINNED_SRC/installer"
+cp "$pinned" "$PINNED_SRC/installer/install.sh"
+cp "$ROOT/installer/uninstall.sh" "$PINNED_SRC/installer/"
+cp -R "$ROOT/deploy" "$PINNED_SRC/deploy"
+FAKE="$WORKDIR/root-pinned"
+fake_root "$FAKE"
+out=$(ROOT="$PINNED_SRC"; run_install "$FAKE" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "image: ${PINNED_REF}\$" "$FAKE/stub/applied-panel.yaml" 2>/dev/null; then
+  t_pass "a pinned installer applies the panel with its release's image, by digest"
+else
+  t_fail "the pinned install should apply image: $PINNED_REF ($status): $(grep 'image:' "$FAKE/stub/applied-panel.yaml" 2>/dev/null)
+$out"
+fi
+
 # A fresh server behind NAT, no domain: the common case.
 FAKE="$WORKDIR/root-http"
 fake_root "$FAKE"
@@ -1275,6 +1390,15 @@ if grep -q -- "--flannel-backend=wireguard-native" "$FAKE/stub/k3s-exec" 2>/dev/
   t_pass "k3s is installed with embedded etcd and an encrypted pod network"
 else
   t_fail "k3s was not installed with the expected flags: $(cat "$FAKE/stub/k3s-exec" 2>/dev/null)"
+fi
+# The k3s this release was tested with, not whatever k3s's stable channel says
+# that day: the channel moves without a Skifity release.
+if printf '%s' "$K3S_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+$' &&
+  [ "$(cat "$FAKE/stub/k3s-version" 2>/dev/null)" = "$K3S_VERSION" ] &&
+  [ -z "$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)" ]; then
+  t_pass "k3s is installed at $K3S_VERSION, the version this release was tested with"
+else
+  t_fail "k3s should be installed at K3S_VERSION ($K3S_VERSION), got version '$(cat "$FAKE/stub/k3s-version" 2>/dev/null)' and channel '$(cat "$FAKE/stub/k3s-channel" 2>/dev/null)'"
 fi
 if [ -e "$FAKE/stub/k3s-read-stdin" ]; then
   t_fail "k3s's installer was handed the installer's stdin"
@@ -1611,6 +1735,21 @@ if [ "$status" = 0 ] && grep -q "host: panel.example.test" "$FAKE/stub/applied-i
   t_pass "a second run with --public-ip keeps the domain and its certificate"
 else
   t_fail "a second run with --public-ip lost the panel's domain ($status):
+$out"
+fi
+# A domain the panel was moved to from Settings: the route the panel writes
+# has the domain first, its certificate, the certificate of a domain it left,
+# and the sslip.io address over plain HTTP. A second run has to read the
+# domain, with a certificate, and keep it, or it puts the panel back on
+# sslip.io behind the administrator's back.
+out=$(export STUB_K3S_ACTIVE=0 STUB_CERT_MANAGER=0 STUB_NEEDS_SETUP=false \
+  STUB_ROUTE="panel.example.test skifity-panel-tls skifity-panel-tls-old-example-test" STUB_ISSUER_EMAIL=ops@example.test
+  run_install "$FAKE" --image "$IMAGE_UNDER_TEST" 2>&1) && status=0 || status=$?
+if [ "$status" = 0 ] && grep -q "host: panel.example.test" "$FAKE/stub/applied-ingress.yaml" 2>/dev/null &&
+  grep -q "tls:" "$FAKE/stub/applied-ingress.yaml" && grep -q "https://panel.example.test" "$FAKE/stub/applied-panel.yaml"; then
+  t_pass "a second run keeps a domain set in Settings, over HTTPS"
+else
+  t_fail "a second run lost the domain set in Settings ($status):
 $out"
 fi
 # The sslip.io name is the installer's own, made from the old address, and

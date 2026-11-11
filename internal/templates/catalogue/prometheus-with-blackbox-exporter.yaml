@@ -54,6 +54,7 @@ services:
               replacement: blackbox-exporter:9115
 - name: blackbox-exporter
   image: prom/blackbox-exporter:v0.28.0
+  needs_root: true
   port: 9115
   public: false
   health_path: /-/healthy

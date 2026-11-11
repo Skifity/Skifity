@@ -131,6 +131,30 @@ type RunChecker interface {
 	RunEnded(ctx context.Context, appID, name string) (RunResult, error)
 }
 
+// PendingReporter is a Deployer that can say which saved settings and
+// build-time variables the app's version was not built with: what is waiting
+// for a deploy.
+type PendingReporter interface {
+	PendingChanges(ctx context.Context, appID string) ([]store.BuildChange, error)
+}
+
+// pendingChanges is what the app's status says is waiting for a deploy. A
+// deployer that cannot say, or a failure to work it out, is nothing waiting:
+// the status is read every few seconds, and a wrong "nothing" costs less than
+// a status that fails.
+func (s *Server) pendingChanges(ctx context.Context, appID string) []store.BuildChange {
+	reporter, ok := s.deployer.(PendingReporter)
+	if !ok {
+		return nil
+	}
+	changes, err := reporter.PendingChanges(ctx, appID)
+	if err != nil {
+		s.log.Warn("could not tell which changes wait for a deploy", "app", appID, "error", err)
+		return nil
+	}
+	return changes
+}
+
 // deploymentWorking reports whether the deployer is still doing a deployment's
 // work. A deployer that cannot say is taken at the status's word.
 func (s *Server) deploymentWorking(deploymentID string) bool {

@@ -87,6 +87,7 @@ var Checks = []Check{
 	CheckWiring,
 	CheckFiles,
 	CheckDatabasePieces,
+	CheckKnownImages,
 }
 
 // Validate returns every reason a template cannot be installed, and nothing
@@ -180,6 +181,9 @@ func CheckServices(template Template) []string {
 			if svc.HealthPath != "" {
 				add("%s/%s has a health path and no port to check it on", template.ID, svc.Name)
 			}
+			if svc.HealthCheck != "" || svc.HealthStartSeconds != 0 || svc.HealthTimeoutSeconds != 0 {
+				add("%s/%s says how it is checked and has no port to check it on", template.ID, svc.Name)
+			}
 		} else if svc.Port < 1 || svc.Port > 65535 {
 			add("%s/%s listens on %d", template.ID, svc.Name, svc.Port)
 		}
@@ -198,6 +202,12 @@ func CheckServices(template Template) []string {
 		if svc.RunAsUser < 0 || svc.RunAsUser > 1<<31-1 {
 			add("%s/%s runs as %d, which is not a uid", template.ID, svc.Name, svc.RunAsUser)
 		}
+		// A uid is given so the image runs at the strictest level, and
+		// needs_root says it cannot: the two cannot both be true.
+		if svc.NeedsRoot && svc.RunAsUser > 0 {
+			add("%s/%s needs root and runs as %d; an image given a uid does not start as root",
+				template.ID, svc.Name, svc.RunAsUser)
+		}
 		if svc.GPU != nil {
 			vendor, count := svc.GPU.Wants()
 			if err := kube.ValidateGPURequest(kube.GPURequest{Count: count, Vendor: vendor}); err != nil || count < 1 {
@@ -207,6 +217,7 @@ func CheckServices(template Template) []string {
 		if svc.HealthPath != "" && !strings.HasPrefix(svc.HealthPath, "/") {
 			add("%s/%s has the health path %q, which is not a path", template.ID, svc.Name, svc.HealthPath)
 		}
+		problems = append(problems, checkHealth(template.ID, svc)...)
 		if svc.MemLimitMB > 0 && svc.MemRequestMB > svc.MemLimitMB {
 			add("%s/%s asks for more memory than it is allowed, so it can never be scheduled", template.ID, svc.Name)
 		}
@@ -222,6 +233,10 @@ func CheckServices(template Template) []string {
 			if !strings.HasPrefix(vol.MountPath, "/") {
 				add("%s/%s mounts %q, which is not an absolute path", template.ID, svc.Name, vol.MountPath)
 			}
+			if hostFile(vol.MountPath) {
+				add("%s/%s mounts a volume at %s, which in Compose was one of the server's own files; "+
+					"here it would be an empty directory where the image expects a file", template.ID, svc.Name, vol.MountPath)
+			}
 			if vol.SizeGB < 0 {
 				add("%s/%s asks for %d GB", template.ID, svc.Name, vol.SizeGB)
 			}
@@ -229,6 +244,34 @@ func CheckServices(template Template) []string {
 	}
 	if public == 0 {
 		add("%s has no public service, so nothing it installs can be opened", template.ID)
+	}
+	return problems
+}
+
+// checkHealth holds a service's health settings to the bounds an app's are
+// held to, because they become an app's: a value its settings would refuse is
+// one the install refuses too, on a template the catalogue offered as fine.
+// Zero is a setting left out, which the install fills with the default.
+func checkHealth(id string, svc Service) []string {
+	var problems []string
+	add := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
+	if svc.HealthCheck != "" && !kube.ValidHealthCheck(svc.HealthCheck) {
+		add("%s/%s is checked by %q, which is not http, tcp or none", id, svc.Name, svc.HealthCheck)
+	}
+	// An app falls back to a connect when it has no path to ask, which is not
+	// what a template that says http meant.
+	if svc.HealthCheck == kube.HealthHTTP && svc.HealthPath == "" {
+		add("%s/%s is checked over http and has no health path to ask", id, svc.Name)
+	}
+	if start := svc.HealthStartSeconds; start != 0 &&
+		(start < kube.MinHealthStartSeconds || start > kube.MaxHealthStartSeconds) {
+		add("%s/%s has %d seconds to start, which is not between %d and %d",
+			id, svc.Name, start, kube.MinHealthStartSeconds, kube.MaxHealthStartSeconds)
+	}
+	if timeout := svc.HealthTimeoutSeconds; timeout != 0 &&
+		(timeout < kube.MinHealthTimeoutSeconds || timeout > kube.MaxHealthTimeoutSeconds) {
+		add("%s/%s waits %d seconds for a check, which is not between %d and %d",
+			id, svc.Name, timeout, kube.MinHealthTimeoutSeconds, kube.MaxHealthTimeoutSeconds)
 	}
 	return problems
 }
@@ -269,10 +312,21 @@ func CheckDatabases(template Template) []string {
 	for _, svc := range template.Services {
 		services[svc.Name] = true
 	}
+	databases := map[string]bool{}
 	for _, db := range template.Databases {
 		if db.Name == "" || kube.Slugify(db.Name) != db.Name {
 			add("%s: the database name %q is not a slug", template.ID, db.Name)
 		}
+		// An app and a database in one environment share an address, so
+		// either of these is an install that cannot finish.
+		if services[db.Name] {
+			add("%s: the database %s has a service's name, and an app and a database in one environment share an address",
+				template.ID, db.Name)
+		}
+		if databases[db.Name] {
+			add("%s: two databases are called %s", template.ID, db.Name)
+		}
+		databases[db.Name] = true
 		if !Engines[db.Engine] {
 			add("%s: %q is not an engine Skifity runs", template.ID, db.Engine)
 		}
@@ -492,11 +546,20 @@ func CheckFiles(template Template) []string {
 
 // CheckDatabasePieces holds a database's pieces to their names. They arrive
 // as variables, so each needs a name a container can carry, and two pieces
-// under one name would leave one of them missing.
+// under one name would leave one of them missing. Each has to be a piece the
+// engine has on its own, or the link refuses it once the apps are made.
 func CheckDatabasePieces(template Template) []string {
 	var problems []string
 	for _, db := range template.Databases {
 		names := map[string]bool{db.VarName: db.VarName != ""}
+		kind, known := engine.Lookup(db.Engine)
+		for _, pair := range [][2]string{{engine.PieceHost, db.Vars.Host}, {engine.PiecePort, db.Vars.Port},
+			{engine.PieceName, db.Vars.Name}, {engine.PieceUser, db.Vars.User}, {engine.PiecePassword, db.Vars.Password}} {
+			if pair[1] != "" && known && !kind.OffersPiece(pair[0]) {
+				problems = append(problems, fmt.Sprintf("%s/%s asks for a %s, which %s does not have on its own",
+					template.ID, db.Name, pair[0], kind.Title))
+			}
+		}
 		for _, name := range []string{db.Vars.Host, db.Vars.Port, db.Vars.Name, db.Vars.User, db.Vars.Password} {
 			if name == "" {
 				continue
@@ -512,6 +575,16 @@ func CheckDatabasePieces(template Template) []string {
 		}
 	}
 	return problems
+}
+
+// hostFile is a path a Compose file mounts from the server it runs on: the
+// server's clock settings, or the socket of its container runtime. A
+// converter that turns every bind mount into a volume turns these into a
+// disk mounted over a file — eight Gitea and Forgejo templates mounted 5 GB at
+// /etc/timezone — and a socket has no business in an app at all.
+func hostFile(path string) bool {
+	path = strings.TrimSuffix(path, "/")
+	return path == "/etc/timezone" || path == "/etc/localtime" || strings.HasSuffix(path, ".sock")
 }
 
 func protocolOr(protocol string) string {

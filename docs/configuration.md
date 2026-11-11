@@ -63,7 +63,7 @@ to get started.
 | **General** | The panel's own URL, the default builder, and an explicit switch for usage reporting — which is off, and has always been off, and exists so that its absence is visible rather than assumed. |
 | **Cluster** | The k3s version a new cluster's first server is installed with (later servers join at the version the cluster runs), the pod network they join on, how long a preview environment lives, and how much history — deployments per app, activity log in days — is kept. |
 | **Domains and HTTPS** | A wildcard domain so every app gets a free subdomain, the address domains should point at, the ACME server certificates come from (Let's Encrypt unless you set one), the authority that signs a server of your own and an optional account email, a Cloudflare Tunnel token for a cluster with no public address, the proxies whose forwarded addresses are believed, and the country and network databases the firewall reads. |
-| **Backup storage** | S3 or anything that speaks S3, including MinIO. Credentials never leave the panel: a backup Job is handed a presigned URL that expires. |
+| **Backup storage** | S3 or anything that speaks S3, including MinIO. Credentials never leave the panel: a backup Job is handed a presigned URL that expires. Whether a new database is backed up every day by default (on). See [Backups](backups.md#schedules). |
 | **DNS** | A provider token, for wildcard certificates, which need a DNS challenge. |
 | **Email** | SMTP, for notifications. |
 | **Image registry** | Where built images go. An in-cluster registry is installed on first use if this is left empty. |
@@ -78,6 +78,32 @@ connections are the two settings for a Git host of your own, described next.
 There was a group here for a GitHub App — an app id, a client id, a client
 secret, a private key — and nothing ever read one of them, so it is gone until
 the code behind it exists.
+
+### Replacing a token
+
+A personal access token expires, and a token can be revoked. **Replace token**
+on the connection's row gives it a new one where it is: the connection keeps
+its id, so the webhook on every repository it registered one on still reaches
+the panel, signed with the same secret, and every app it serves keeps it. The
+next build clones with the new token, and the next list, commit status and
+pull request comment use it. A Bitbucket token, and its account's email, are
+checked with Bitbucket before anything is saved, as they are when it is
+connected.
+
+Disconnecting and connecting again is not the same thing. The apps it served
+are left with no connection, and the new connection has a new id, so every
+webhook on a repository, which is addressed to the old one, is refused from
+then on.
+
+A connection made before each had a webhook secret of its own signs its
+webhooks with its token. Replacing the token keeps the old one as the secret,
+so those webhooks are still accepted, and it is never shown; **Webhook** says
+so. Connecting the account again is still what gives it a secret of its own.
+
+`PATCH /api/teams/{team}/git-sources/{source}` does the same, with a `token`,
+and renames a connection with a `name`. Two of a team's connections cannot
+share a name: the CLI, `git:` in `skifity.yaml` and an assistant find one by
+it.
 
 ### Git hosts on your own network
 
@@ -136,6 +162,34 @@ settings above.
 Every one of them is sent from the panel through the same guarded client as a
 webhook, so none can be pointed at an address inside the cluster.
 
+A webhook, email, ntfy, Gotify and Mattermost are delivered to and read back
+by the crosscheck that installs the panel on a real server. **Telegram,
+Discord, Slack, Microsoft Teams and Pushover have never been seen end to
+end**: what each is sent is checked against a local listener in Go tests, but
+each is a service on the internet that needs an account, and the crosscheck
+runs none. The form marks them *Not tested end to end*. After adding one,
+press **Send a test** and check the message arrives before relying on it.
+
+### What a notification says
+
+A notification says what happened and, when there is something to do about it,
+what to do, on a line of its own: **What to do** is a field in Slack, Discord
+and Mattermost, a fact in Teams, a line in email, ntfy, Pushover, Gotify and
+Telegram, and the `fix` key a webhook receives beside `title`, `body`, `level`,
+`url` and `fields`. A certificate that cannot be issued says which of the usual
+causes it is — the name does not point here yet, port 80 is closed, Let's
+Encrypt's rate limit, a CAA record — and an app over a threshold says what to
+change for that threshold.
+
+Its link opens the page it is about, at the place it is about: a deployment
+that failed opens that deployment's build log, at the first line that says
+what went wrong; a backup, the database's backups with that one picked out; a
+certificate, the app's **Domains** tab; an alert, **Scaling** or **Logs**. A
+commit status's **Details** and a preview's pull request comment link to the
+deployment of that commit in the same way. Links sent by older releases, which
+put the tab in the path (`/apps/<id>/deployments`), still open the tab they
+name.
+
 ### Changing a channel
 
 **Edit** on a channel opens the form it was added with. Everything can change
@@ -193,10 +247,12 @@ Pending invitations are listed under Members, and can be withdrawn there.
 Somebody who already has an account here does not need a link. Add them by the
 same form and they join directly.
 
-Roles: **owner** administers the team and can delete it, **admin** can invite
-and configure, **member** can deploy, and **viewer** can see everything a member
-can — apps, deployments, logs, metrics, variables that are not secret — and
-change nothing. Nobody can invite somebody to a role above their own.
+Roles: **owner** administers the team and is the only one who can delete it,
+**admin** can invite, configure and rename the team, **member** can deploy, and
+**viewer** can see everything a member can — apps, deployments, logs, metrics,
+variables that are not secret — and change nothing. Nobody can invite somebody
+to a role above their own. Anybody can leave a team; see
+[Several teams](#several-teams).
 
 A viewer is for the client who wants to watch their site's deployments, the
 manager who wants the logs, or an assistant that should read and never act. A
@@ -236,6 +292,85 @@ definition. Deleting the last project somebody was limited to leaves them with
 no projects, not with all of them. Changing someone's role without ticking the
 box lifts the limit — the form always says the whole of what they can reach.
 
+## Several teams
+
+One panel can hold several teams, each with its own projects, servers,
+connections and people, and nobody in one sees the other.
+
+**Who may create a team** is a panel setting, under **Settings → Sign-in**. By
+default only a panel administrator can. Whoever creates a team is its owner,
+and an owner deploys onto the servers every team on this panel shares — nothing
+keeps a team's apps on machines of its own. Opened to **everyone who can sign
+in**, that includes an account single sign-on made by itself and somebody who is
+only a viewer in another team. Open it when the people who sign in here are
+people you would let run their own containers on your servers. Anybody else is
+refused with `team.creation_restricted`.
+
+The team menu at the top of the sidebar lists your teams and switches between
+them. **New team** there makes one, when you may, and takes you to it.
+
+**Renaming** is under **Settings → Members**, for the team's owners and admins.
+The name is what people see; the short name under it, which is part of every
+namespace the team has, stays as it was, so nothing running changes.
+
+**Leaving** is in the team menu, for anybody in the team, a viewer or somebody
+limited to some projects included. It takes your access away at once, and your
+API tokens made for that team stop working with it. The team's last owner
+cannot leave: make somebody else an owner first. Somebody who manages the team
+can add you again later.
+
+**Deleting** is at the bottom of **Settings → Members**, for owners only, after
+typing the team's name. It is refused while the team has a server, with
+`team.has_servers` naming them — a server is a machine every team's apps run
+on, so remove it under **Servers** first — and while anything in the team is
+being deployed. Otherwise every environment's namespace is removed from the
+cluster, then the projects, the team and everything recorded under it:
+members, invitations, connections, notification channels, API tokens made for
+it. Its activity log stays in the panel's database. Two things outside the
+panel are not removed: backups already in your storage bucket, and DNS records
+the team's DNS providers created. Remove those at the bucket and at the DNS
+provider if you no longer want them. A webhook the team's Git connections added
+to a repository stays there too, and its deliveries are refused from then on.
+
+Somebody whose last team is gone sees a note saying so on every page, with
+**New team** where they may make one.
+
+## Accounts
+
+**Settings → Accounts** lists everybody who can sign in to the panel, whatever
+team they are in: how each one signs in, the teams and roles they have, and when
+they last signed in. It is the panel administrator's, and it changes other
+people's accounts — your own is changed under Account.
+
+* **Disable** signs the account out everywhere at once, and its password,
+  passkeys, single sign-on and API tokens stop working. Nothing it made is
+  removed, and **Enable** gives it all back. Plugins the account installed run
+  with its API token, so they stop while it is disabled; the page says which.
+* **Delete** removes the account for good, with its memberships, API tokens and
+  passkeys. The activity log keeps what it did, under its address. It is
+  refused while the account is the only owner of a team — make somebody else an
+  owner first, or delete the team — and while it is the installer of a plugin,
+  which runs with the account's token and would stop without a word.
+* **Make panel administrator** gives somebody the panel-wide settings,
+  components, upgrades, plugins and the recovery key. Having more than one is
+  the point: with one, the whole panel depends on one person.
+  **Remove panel administrator** takes it back. The panel always keeps one
+  enabled administrator.
+* **Reset two-factor** is for somebody who has lost the phone and the recovery
+  codes with it. It turns their two-factor authentication off and signs them out
+  everywhere, and they turn it on again under Account. See
+  [I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator).
+
+Making somebody an administrator, enabling an account and resetting two-factor
+give access somebody keeps, so they ask for your password again and an API
+token cannot do them. Disabling, removing an administrator and deleting take
+access away, and ask you to confirm. Each change is written to the activity log
+of every team the account is in.
+
+When nobody who can sign in is an administrator any more — the only one has
+left — `skifity admin make-admin`, `revoke-admin`, `disable` and `enable` do the
+same from the server, as root. See [Recovering access](cli.md#recovering-access).
+
 ## Signing in
 
 **Passwords** are hashed with Argon2id, twelve characters minimum, and checked
@@ -249,9 +384,13 @@ accounts from one machine is stopped anyway.
 window is ninety seconds wide, so a code read over a shoulder or out of a screen
 share would otherwise work again. Turning it on shows a QR code for an
 authenticator app, the secret to type in instead, and eight recovery codes; each
-code works once, and they stay on screen until you say you have saved them.
+code works once, and they stay on screen until you say you have saved them. A
+recovery code signs in in place of the six-digit code — **Use a recovery code
+instead** on the sign-in page — and the panel then says how many are left.
 **Account → Two-factor authentication → Get new codes** replaces them when they
-run out or the paper is lost, and the old ones stop working at once. Turning
+run out or the paper is lost, and the old ones stop working at once. With the
+phone and the codes both gone, see
+[I have lost my authenticator](troubleshooting.md#i-have-lost-my-authenticator). Turning
 two-factor off asks first, deletes the recovery codes, and names any team that
 requires two-factor or single sign-on, because those teams will refuse the
 account afterwards.
@@ -357,9 +496,55 @@ if a cookie names a domain — so no page on a sibling subdomain can write them.
 That prefix requires HTTPS. The default install is plain HTTP on an sslip.io
 address (ADR-0015), and on plain HTTP the prefix cannot be used at all. This
 matters more here than on most products, because the applications this panel
-hosts can be on subdomains of the domain the panel answers on. Adding a domain
-in Settings is what closes it, and it is also what makes passkeys available:
-set the Panel URL to the new `https://` address once the domain is on.
+hosts can be on subdomains of the domain the panel answers on. A domain of the
+panel's own is what closes it, and it is also what makes passkeys available.
+
+**From the panel.** Settings → General → **Panel address**, as the panel's
+administrator. Type the domain, and the card shows the DNS record to create —
+an `A` record pointing at the server — and **Check DNS** says whether it does
+yet. Then **Move the panel**:
+
+1. cert-manager is installed if it is not, with its certificate issuer.
+2. The panel's route is written for the domain, with the address the panel
+   answers on now kept beside it.
+3. The panel waits up to five minutes for Let's Encrypt's certificate. Until it
+   is issued nothing about the panel itself changes, and it keeps answering
+   where it was.
+4. The Panel URL setting becomes the `https://` address and the panel restarts
+   there. The page you are on follows it. Everybody signs in again at the new
+   address, because a browser keeps a session per address.
+
+A domain whose record does not point at the server is refused with the record
+to create, because Let's Encrypt asks DNS the same question. When the name
+reaches the server some way the panel cannot see, such as a load balancer,
+**Move anyway** skips that check. An IP address, a wildcard, an `sslip.io` name
+and a domain an app already answers on are refused. The move is in the
+activity log as `panel.domain_set`.
+
+**The old address keeps answering.** A Git host delivers its webhooks to the
+address it was given, and does not follow a redirect on a POST. So the address
+the panel left stays on its route: webhooks and requests with an API token —
+the CLI, an assistant, a script — are served there as before, and a browser
+that opens it is sent to the domain. An `sslip.io` address stays plain HTTP; a
+domain the panel answered on before keeps a certificate of its own. Running the
+installer again writes its route for the domain alone; the panel puts the old
+address back within a few minutes.
+
+**If it stops.** A certificate that does not arrive in five minutes stops the
+move with what cert-manager said last (see [The panel is still waiting for its
+certificate](troubleshooting.md#the-panel-is-still-waiting-for-its-certificate)),
+and the panel is where it was. **Try again** picks it up; **Cancel the move**
+puts the route back. **Go back to** the `sslip.io` address takes the domain off
+again: the panel restarts there over plain HTTP, and webhooks registered at the
+domain stop arriving.
+
+**From the command line.** `skifity domains panel panel.example.com --check`
+says what the name's DNS says, `skifity domains panel panel.example.com` moves
+the panel and follows the move to the end, and `skifity domains panel --remove`
+cancels a move that stopped or goes back. **From the server**, the installer
+does the same: run it again with `--domain panel.example.com`. It is also the
+way for a panel that cannot change its own address, which is one not installed
+by the installer.
 
 Whether cookies are marked `Secure` follows `SKIFITY_PUBLIC_URL` rather than the
 build, because a `Secure` cookie is never stored over plain HTTP: marking them

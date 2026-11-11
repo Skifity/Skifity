@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -310,5 +311,72 @@ func TestDeletingTheMachineIsOnlyForOneThePanelCreated(t *testing.T) {
 	}
 	if len(provisioner.removed) != 1 || !provisioner.removed[0].DeleteMachine {
 		t.Errorf("the provisioner was asked for %+v", provisioner.removed)
+	}
+}
+
+// A connection that servers were created with could not be removed, so a
+// revoked token was a connection that could neither be used nor let go.
+// Its token is replaced where it is, and only by one the provider accepts,
+// that may write, and that can see the machines the panel made with it.
+func TestACloudTokenIsReplacedOnlyByOneThatSeesItsMachines(t *testing.T) {
+	h := newHarness(t)
+	fake := cloudtest.New(t)
+	h.withCloud(fake, &recordingProvisioner{})
+	acme := h.newTenant("acme")
+	status, view, body := h.addConnection(acme, cloudtest.Token)
+	if status != http.StatusCreated {
+		t.Fatalf("adding answered %d: %s", status, body)
+	}
+	machine := fake.AddServer(cloudtest.Server{Name: "web-1", Labels: map[string]string{"managed-by": "skifity"}})
+	node := h.node(acme, "web-1")
+	if err := h.db.CreateCloudServer(t.Context(), &store.CloudServer{
+		ServerID: node.ID, ProviderID: view.ID, MachineID: strconv.FormatInt(machine, 10),
+		Location: "fsn1", ServerType: "cx22", Image: "ubuntu-24.04",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := h.db.GetCloudProvider(t.Context(), acme.team.ID, view.ID)
+	if err != nil || before.Servers != 1 {
+		t.Fatalf("the connection is %+v (%v)", before, err)
+	}
+	path := "/api/teams/" + acme.team.ID + "/cloud-providers/" + view.ID
+	unchanged := func(why string) {
+		t.Helper()
+		row, err := h.db.GetCloudProvider(t.Context(), acme.team.ID, view.ID)
+		if err != nil || row.SealedToken != before.SealedToken || row.TokenHint != before.TokenHint {
+			t.Errorf("%s changed the connection: hint %q (%v)", why, row.TokenHint, err)
+		}
+	}
+
+	for token, code := range map[string]string{
+		"wrong-token":                   "cloud.token_invalid",
+		cloudtest.ReadOnlyToken:         "cloud.token_read_only",
+		cloudtest.OtherProjectToken:     "cloud.token_other_project",
+		"a token\nwith a line break in": "request.invalid",
+	} {
+		status, body := h.do(acme, http.MethodPatch, path, map[string]string{"token": token})
+		if status != http.StatusBadRequest || !strings.Contains(body, code) {
+			t.Errorf("%q answered %d, want %s: %s", token, status, code, body)
+		}
+		unchanged(code)
+	}
+
+	status, body = h.do(acme, http.MethodPatch, path, map[string]string{"token": cloudtest.RotatedToken})
+	var replaced cloudProviderView
+	if err := json.Unmarshal([]byte(body), &replaced); status != http.StatusOK || err != nil {
+		t.Fatalf("a good token answered %d: %s", status, body)
+	}
+	if strings.Contains(body, cloudtest.RotatedToken) || replaced.TokenHint != "0002" || replaced.Servers != 1 {
+		t.Errorf("the answer is %s", body)
+	}
+	row, err := h.db.GetCloudProvider(t.Context(), acme.team.ID, view.ID)
+	if err != nil || row.TokenHint != "0002" || !row.CheckedAt.After(before.CheckedAt) {
+		t.Errorf("after replacing, the connection is %+v (%v)", row.CloudProvider, err)
+	}
+	if plain, err := h.keyring.Open(row.SealedToken, store.CloudProviderContext(view.ID)); err != nil || string(plain) != cloudtest.RotatedToken {
+		t.Errorf("the stored token does not open to the new one: %v", err)
+	}
+	if events, _ := h.db.ListAudit(t.Context(), acme.team.ID, "cloud_provider.token_replaced", "", 5); len(events) != 1 {
+		t.Errorf("%d cloud_provider.token_replaced events", len(events))
 	}
 }

@@ -6,7 +6,8 @@ category: cms
 website: https://joomla.org
 services:
 - name: joomla
-  image: joomla:6.1
+  image: joomla:6.1.4-apache
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -24,3 +25,9 @@ databases:
   link_to:
   - joomla
   var_name: DATABASE_URL
+  vars:
+    host: JOOMLA_DB_HOST
+    name: JOOMLA_DB_NAME
+    user: JOOMLA_DB_USER
+    password: JOOMLA_DB_PASSWORD
+notes: The image starts as root, so the environment needs the baseline pod security level.

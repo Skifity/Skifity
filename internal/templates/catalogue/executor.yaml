@@ -6,6 +6,7 @@ website: https://executor.sh/docs/hosted/docker
 services:
 - name: executor
   image: ghcr.io/rhyssullivan/executor-selfhost:v1.6.8
+  needs_root: true
   port: 4788
   public: true
   mem_request_mb: 128
@@ -18,3 +19,4 @@ services:
   - name: executor-data
     mount_path: /data
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

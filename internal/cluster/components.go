@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -57,11 +58,11 @@ func (c *Cluster) installComponent(ctx context.Context, name string) error {
 	case "registry":
 		return c.installRegistry(ctx)
 	case "cloudnative-pg":
-		return c.installFromURL(ctx, name, kube.DatabaseOperatorNamespace, "cnpg-controller-manager")
+		return c.installFromURL(ctx, name, kube.DatabaseOperatorNamespace, cnpgOperatorDeployment)
 	case "keda":
 		return c.installKEDA(ctx)
 	case "longhorn":
-		return c.installFromURL(ctx, name, "longhorn-system", "longhorn-driver-deployer")
+		return c.installFromURL(ctx, name, "longhorn-system", longhornDeployerDeployment)
 	case "cloudflare-tunnel":
 		return c.installCloudflareTunnel(ctx)
 	case UpgradeComponent:
@@ -413,7 +414,7 @@ const registryImage = "registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826
 // installKEDA installs KEDA and its HTTP add-on, which together provide
 // scale-to-zero.
 func (c *Cluster) installKEDA(ctx context.Context) error {
-	if err := c.installFromURL(ctx, "keda", "keda", "keda-operator"); err != nil {
+	if err := c.installFromURL(ctx, "keda", "keda", kedaOperatorDeployment); err != nil {
 		return err
 	}
 	url, _, err := c.settingOr(ctx, "components.keda_http_url", defaultKEDAHTTPURL)
@@ -489,9 +490,13 @@ func (c *Cluster) UpgradePanel(ctx context.Context, target string) (string, erro
 	}
 
 	current := deployment.Spec.Template.Spec.Containers[0].Image
-	repository := current
-	if idx := lastIndexByte(current, ':'); idx > 0 {
-		repository = current[:idx]
+	// An installer pins its release's image by digest, name:tag@sha256:…, and
+	// the last colon of that is inside the digest. The target is a tag, so the
+	// digest goes: read as the repository it gave name:tag@sha256:<target>,
+	// which is not an image at all.
+	repository, _, _ := strings.Cut(current, "@")
+	if idx := lastIndexByte(repository, ':'); idx > 0 {
+		repository = repository[:idx]
 	}
 	deployment.Spec.Template.Spec.Containers[0].Image = repository + ":" + target
 

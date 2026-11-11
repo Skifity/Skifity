@@ -11,6 +11,8 @@ services:
   port: 3333
   public: true
   health_path: /api/v1/health
+  health_start_seconds: 300
+  health_timeout_seconds: 10
   mem_request_mb: 256
   mem_limit_mb: 1024
   cpu_request_m: 100

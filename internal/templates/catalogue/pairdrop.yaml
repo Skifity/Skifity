@@ -7,6 +7,7 @@ website: https://pairdrop.net/
 services:
 - name: pairdrop
   image: linuxserver/pairdrop:1.11.2
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -18,3 +19,4 @@ services:
     PGID: '1000'
     TZ: Europe/Madrid
     DEBUG_MODE: 'false'
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -7,7 +7,9 @@ website: https://www.monicahq.com
 services:
 - name: monica
   image: monica:4.1.2-apache
+  needs_root: true
   port: 80
+  health_start_seconds: 300
   public: true
   mem_request_mb: 192
   mem_limit_mb: 768

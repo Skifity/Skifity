@@ -39,6 +39,10 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
   const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
   const [needsCode, setNeedsCode] = useState(false)
+  // The same field takes a recovery code, for somebody whose phone is not to
+  // hand. It is letters as well as digits, so the field stops asking for a
+  // number pad when it is one.
+  const [recovery, setRecovery] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const resolver = useRef<Resolver | null>(null)
@@ -52,6 +56,7 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
     setPassword("")
     setCode("")
     setNeedsCode(false)
+    setRecovery(false)
     setBusy(false)
     setError(null)
   }, [])
@@ -67,6 +72,7 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
         setPassword("")
         setCode("")
         setNeedsCode(false)
+        setRecovery(false)
         setError(null)
         setOpen(true)
       })
@@ -139,15 +145,36 @@ export function ReauthProvider({ children }: { children: React.ReactNode }) {
 
             {needsCode && (
               <Field>
-                <FieldLabel htmlFor="reauth-code">{t("auth.twoFactorCode")}</FieldLabel>
+                <FieldLabel htmlFor="reauth-code">
+                  {recovery ? t("auth.recoveryCode") : t("auth.twoFactorCode")}
+                </FieldLabel>
                 <Input
+                  // Keyed by the mode, so switching starts an empty field with
+                  // the browser's hints for that mode rather than the other's.
+                  key={recovery ? "recovery" : "code"}
                   id="reauth-code"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
+                  inputMode={recovery ? undefined : "numeric"}
+                  autoComplete={recovery ? "off" : "one-time-code"}
+                  autoCapitalize={recovery ? "characters" : undefined}
+                  spellCheck={recovery ? false : undefined}
+                  className={recovery ? "font-mono" : undefined}
                   autoFocus
                 />
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto justify-start p-0"
+                  disabled={busy}
+                  onClick={() => {
+                    setRecovery(!recovery)
+                    setCode("")
+                  }}
+                >
+                  {recovery ? t("auth.useAuthenticator") : t("auth.useRecoveryCode")}
+                </Button>
               </Field>
             )}
 

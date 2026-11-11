@@ -15,17 +15,18 @@ services:
   cpu_request_m: 50
   cpu_limit_m: 1000
   variables:
-    DATABASE_PATH: /root/.flowise
     APIKEY_PATH: /root/.flowise
     SECRETKEY_PATH: /root/.flowise
     LOG_PATH: /root/.flowise/logs
     BLOB_STORAGE_PATH: /root/.flowise/storage
+    DATABASE_TYPE: postgres
   volumes:
   - name: flowise-data
     mount_path: /root/.flowise
     size_gb: 5
 - name: qdrant
   image: qdrant/qdrant:v1.19
+  needs_root: true
   port: 6333
   public: true
   mem_request_mb: 128
@@ -43,5 +44,11 @@ databases:
   link_to:
   - flowise
   var_name: DATABASE_URL
+  vars:
+    host: DATABASE_HOST
+    port: DATABASE_PORT
+    name: DATABASE_NAME
+    user: DATABASE_USER
+    password: DATABASE_PASSWORD
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The qdrant image starts as root, so the environment needs the baseline pod security level.

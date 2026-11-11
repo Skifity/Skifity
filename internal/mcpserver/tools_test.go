@@ -2,7 +2,11 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -114,6 +118,12 @@ var exampleCalls = map[string]map[string]any{
 	"get_events":          {"app_id": "app_1", "warnings_only": true},
 
 	"list_log_drains": {},
+
+	"update_app_settings": {"app_id": "app_1", "port": 3000, "build_command": "npm run build"},
+	"restart_app":         {"app_id": "app_1"},
+	"cancel_deployment":   {"app_id": "app_1", "deployment_id": "dep_2"},
+	"get_attention":       {},
+	"promote_app":         {"app_id": "app_1", "to_environment": "production"},
 }
 
 // Every tool, once, against a panel that hands over every secret it holds.
@@ -162,7 +172,8 @@ func TestEveryToolCallsADescribedRouteAndPassesOnNoSecret(t *testing.T) {
 		t.Fatalf("only %d requests reached the panel", len(requests))
 	}
 	for _, request := range requests {
-		if strings.HasSuffix(request.Path, "/credentials") || strings.Contains(request.Path, "/restore/") {
+		if strings.HasSuffix(request.Path, "/credentials") || strings.Contains(request.Path, "/restore/") ||
+			(request.Method == "DELETE" && appItself.MatchString(request.Path)) {
 			t.Errorf("a tool asked for %s %s", request.Method, request.Path)
 		}
 		if !isDescribed(routes, request.Method, request.Path) {
@@ -213,6 +224,14 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 		// Nothing else: a vendor, a model and the workloads default to
 		// what the app has, and the count is the whole question.
 		"set_gpus": {"app_id", "count"},
+		// Every setting is left as it is unless it is given.
+		"update_app_settings": {"app_id"},
+		"restart_app":         {"app_id"},
+		// The one under way, when none is named.
+		"cancel_deployment": {"app_id"},
+		"rollback_app":      {"app_id"},
+		// The version is the one running, unless another is named.
+		"promote_app": {"app_id", "to_environment"},
 	}
 	for name, required := range want {
 		tool := byName[name]
@@ -250,6 +269,104 @@ func TestTheToolsRequireWhatTheAPIRequires(t *testing.T) {
 	item, _ := set["items"].(map[string]any)
 	if got := schemaStrings(item["required"]); !slices.Equal(got, []string{"key", "value"}) {
 		t.Errorf("a variable in set_variables requires %v", got)
+	}
+}
+
+// appItself is the route of an app, as opposed to anything under it.
+var appItself = regexp.MustCompile(`^/api/apps/[^/]+/?$`)
+
+// Deleting an app takes its disks with it, for good, so no tool does it: the
+// person does, in the panel or with `skifity apps rm`. The comments at the top
+// of apps.go and databases.go say why; this keeps a tool from being added
+// that does it anyway, under any name.
+func TestNoToolDeletesAnApp(t *testing.T) {
+	for _, tool := range listTools(t, New(cli.Config{PanelURL: "https://panel.example", Token: "skf_test"})) {
+		if strings.Contains(tool.Name, "delete_app") || strings.Contains(tool.Name, "remove_app") {
+			t.Errorf("%s is offered, and deleting an app is the person's to do", tool.Name)
+		}
+	}
+}
+
+// A dry run reads the plan and changes nothing; a rollback says what it puts
+// back too, since that is what a person is surprised by afterwards.
+func TestARollbackSaysWhatItPutsBackAndADryRunDoesNothing(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "rollback_app", map[string]any{"app_id": "app_1", "deployment_id": "dep_1", "dry_run": true})
+	if failed || !strings.Contains(text, "port") || !strings.Contains(text, "8080") {
+		t.Fatalf("a dry run answered (error=%v): %s", failed, text)
+	}
+	for _, request := range panel.requests() {
+		if request.Method != "GET" {
+			t.Errorf("a dry run asked for %s %s", request.Method, request.Path)
+		}
+	}
+	text, failed = call(t, session, "rollback_app", map[string]any{"app_id": "app_1", "deployment_id": "dep_1"})
+	if failed || !strings.Contains(text, "8080") {
+		t.Fatalf("a rollback answered (error=%v): %s", failed, text)
+	}
+	if _, ok := panel.last("POST", "/api/apps/app_1/rollback/dep_1"); !ok {
+		t.Error("the rollback was not asked for")
+	}
+}
+
+// Only the settings given are sent, and the answer says which rolled out and
+// which wait for a deploy, so the assistant knows whether to call deploy_app.
+func TestUpdatingSettingsSendsOnlyWhatWasGivenAndSaysWhatWaits(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "update_app_settings", map[string]any{"app_id": "app_1", "port": 3000, "build_command": "npm run build"})
+	if failed {
+		t.Fatalf("update_app_settings failed: %s", text)
+	}
+	request, _ := panel.last("PATCH", "/api/apps/app_1")
+	if want := map[string]any{"port": 3000.0, "build_command": "npm run build"}; !reflect.DeepEqual(request.Body, want) {
+		t.Errorf("the settings sent were %v, want %v", request.Body, want)
+	}
+	if !strings.Contains(text, "deploy_app") || !strings.Contains(text, "build_command") {
+		t.Errorf("the answer does not say what waits for a deploy: %s", text)
+	}
+	if text, failed := call(t, session, "update_app_settings", map[string]any{"app_id": "app_1"}); !failed {
+		t.Errorf("no settings at all was sent on: %s", text)
+	}
+}
+
+// What waits for a deploy is said, by setting and by a variable's name, and
+// a build-time value that was rebuilt says which deployment is doing it.
+func TestTheStatusSaysWhatWaitsForADeployAndASetSaysItRebuilt(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "get_app_status", map[string]any{"app_id": "app_1"})
+	if failed || !strings.Contains(text, "build_command") || !strings.Contains(text, "NEXT_PUBLIC_API") ||
+		!strings.Contains(text, "deploy_app") {
+		t.Errorf("get_app_status answered (error=%v): %s", failed, text)
+	}
+	text, failed = call(t, session, "set_variable", map[string]any{"app_id": "app_1", "key": "NEXT_PUBLIC_API", "value": "x", "build_time": true})
+	if failed || !strings.Contains(text, "rebuilt") || !strings.Contains(text, "#3") {
+		t.Errorf("set_variable answered (error=%v): %s", failed, text)
+	}
+}
+
+// A version is promoted to the app of the same name in the environment named,
+// and an environment with none is said rather than guessed at.
+func TestPromoteFindsTheEnvironmentAndSaysWhenThereIsNone(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "promote_app", map[string]any{"app_id": "app_1", "to_environment": "production"})
+	if failed || !strings.Contains(text, "#4") {
+		t.Fatalf("promote_app answered (error=%v): %s", failed, text)
+	}
+	request, ok := panel.last("POST", "/api/apps/app_9/promote")
+	if !ok || request.Body["deployment_id"] != "dep_0" || request.Body["force"] != nil {
+		t.Errorf("the promotion sent %+v", request)
+	}
+	text, failed = call(t, session, "promote_app", map[string]any{"app_id": "app_1", "to_environment": "staging"})
+	if !failed || !strings.Contains(text, "Production") || !strings.Contains(text, "promote.not_possible") {
+		t.Errorf("promoting to an environment with no such app answered (error=%v): %s", failed, text)
 	}
 }
 
@@ -299,6 +416,11 @@ func TestWhatCanDestroySomethingSaysSo(t *testing.T) {
 		// Takes a database from its apps; restarts one, and grows a disk
 		// that cannot shrink again.
 		"stop_database", "resize_database",
+		// Rolls out over the running instances, or replaces them; and
+		// throws a build away.
+		"update_app_settings", "restart_app", "cancel_deployment",
+		// Replaces what the other environment runs.
+		"promote_app",
 	}
 	additive := []string{
 		"create_app", "install_template", "create_database", "add_domain", "open_port", "lock_deploys",
@@ -350,6 +472,62 @@ func TestInstallingATemplateSendsItsInputsAndRelaysItsNotes(t *testing.T) {
 	for _, expected := range []string{"ClickHouse", "app_9", "db_1"} {
 		if !strings.Contains(text, expected) {
 			t.Errorf("the answer does not mention %s: %s", expected, text)
+		}
+	}
+}
+
+// A dry run is passed on as one, and answered as what would be created rather
+// than as something installed: an assistant told "Installed" by a dry run
+// would tell the person their app exists.
+func TestADryRunOfATemplateIsPassedOnAndCreatesNothing(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "install_template", map[string]any{
+		"template_id": "plausible", "environment_id": "env_1", "name": "stats", "dry_run": true,
+	})
+	if failed {
+		t.Fatalf("install_template failed: %s", text)
+	}
+	request, _ := panel.last("POST", "/api/templates/plausible/install")
+	if want := map[string]any{"environment_id": "env_1", "name": "stats", "dry_run": true}; !reflect.DeepEqual(request.Body, want) {
+		t.Errorf("the dry run sent %v, want %v", request.Body, want)
+	}
+	if !strings.Contains(text, "Nothing was created") || strings.Contains(text, "Installed") ||
+		!strings.Contains(text, "plausible (ghcr.io/plausible/community-edition:v2.1.5)") {
+		t.Errorf("a dry run answered as an install: %s", text)
+	}
+}
+
+// A template whose image starts as root says so in the list, and accepting
+// root images is passed on only when asked for: it changes the whole
+// environment, and the tool's description tells an assistant to ask first.
+func TestATemplateThatNeedsRootSaysSoAndAllowRootIsPassedOn(t *testing.T) {
+	panel := newFakePanel(t)
+	s := New(panel.config())
+
+	_, out, _ := s.listTemplates(t.Context(), nil, listTemplatesInput{Query: "wordpress", Category: "cms"})
+	for _, template := range out.Templates {
+		if template.ID == "wordpress" && template.CatalogueID == "" && !template.NeedsRoot {
+			t.Errorf("the built-in WordPress does not say it needs root: %+v", template)
+		}
+		if template.CatalogueID != "" && template.NeedsRoot {
+			t.Errorf("a template that does not need root says it does: %+v", template)
+		}
+	}
+
+	session := connect(t, New(panel.config()))
+	for _, allow := range []bool{false, true} {
+		args := map[string]any{"template_id": "wordpress", "environment_id": "env_1"}
+		if allow {
+			args["allow_root"] = true
+		}
+		if text, failed := call(t, session, "install_template", args); failed {
+			t.Fatalf("install_template failed: %s", text)
+		}
+		request, _ := panel.last("POST", "/api/templates/wordpress/install")
+		if sent, _ := request.Body["allow_root"].(bool); sent != allow {
+			t.Errorf("asked with allow_root %v, the install sent %v", allow, request.Body)
 		}
 	}
 }
@@ -508,6 +686,53 @@ func TestABackupIsOfADatabaseOrAVolume(t *testing.T) {
 	}
 }
 
+// Creating a database passes on whether to back it up, only when the person
+// said, and says what was done about it.
+func TestCreatingADatabaseSaysWhetherItIsBackedUp(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "create_database", map[string]any{"environment_id": "env_1", "name": "db", "engine": "postgres"})
+	if failed || !strings.Contains(text, "backed up every day at 17 3 * * *") {
+		t.Errorf("create_database answered (error=%v): %s", failed, text)
+	}
+	request, _ := panel.last("POST", "/api/environments/env_1/databases")
+	if _, said := request.Body["backup"]; said {
+		t.Errorf("nothing was said about backups, and the request was %v", request.Body)
+	}
+
+	call(t, session, "create_database", map[string]any{"environment_id": "env_1", "name": "db", "engine": "postgres", "backup": false})
+	request, _ = panel.last("POST", "/api/environments/env_1/databases")
+	if request.Body["backup"] != false {
+		t.Errorf("no was not passed on: %v", request.Body)
+	}
+}
+
+// Linking with pieces passes them on, and says which the link delivers.
+func TestLinkingADatabaseCanGiveItsPieces(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, New(panel.config()))
+
+	text, failed := call(t, session, "link_database", map[string]any{
+		"database_id": "db_1", "app_id": "app_1", "variable": "DATABASE_URL",
+		"pieces": map[string]any{"host": "DB_HOST", "password": "DB_PASSWORD"},
+	})
+	if failed || !strings.Contains(text, "DB_HOST, DB_PASSWORD") {
+		t.Errorf("link_database answered (error=%v): %s", failed, text)
+	}
+	request, _ := panel.last("POST", "/api/databases/db_1/link")
+	pieces, _ := request.Body["pieces"].(map[string]any)
+	if pieces["host"] != "DB_HOST" || pieces["password"] != "DB_PASSWORD" || len(pieces) != 2 {
+		t.Errorf("the pieces were sent as %v", request.Body)
+	}
+
+	call(t, session, "link_database", map[string]any{"database_id": "db_1", "app_id": "app_1"})
+	request, _ = panel.last("POST", "/api/databases/db_1/link")
+	if _, sent := request.Body["pieces"]; sent {
+		t.Errorf("pieces nobody named were sent: %v", request.Body)
+	}
+}
+
 // The record somebody types into their DNS provider: the type follows the
 // value, and the address the panel gave the app needs none.
 func TestADomainSaysWhichDNSRecordToCreate(t *testing.T) {
@@ -536,5 +761,49 @@ func TestADomainSaysWhichDNSRecordToCreate(t *testing.T) {
 		map[string]any{"app_id": "app_1", "hostname": "shop.example.com"})
 	if failed || !strings.Contains(text, "type A, name shop.example.com, value 203.0.113.10") {
 		t.Errorf("add_domain answered (error=%v): %s", failed, text)
+	}
+}
+
+// A version that crashed as it started says why in the history, without an
+// assistant having to know to ask for the previous container's log.
+func TestDeploymentHistoryCarriesWhatACrashedVersionPrinted(t *testing.T) {
+	panel := newFakePanel(t)
+	session := connect(t, NewRemote(panel.config(), nil))
+
+	text, failed := call(t, session, "get_deployment_history", map[string]any{"app_id": "app_1"})
+	if failed {
+		t.Fatalf("the history failed: %s", text)
+	}
+	if !strings.Contains(text, `"error_code":"deploy.crashed"`) || !strings.Contains(text, `"last_lines":"Error: DATABASE_URL is not set"`) {
+		t.Errorf("the history does not carry the crashed version's last lines: %s", text)
+	}
+}
+
+// An app made from a public repository with no Git connection deploys on push
+// by default, and nothing registered a webhook to make that true. An
+// assistant is told, so it does not tell somebody that pushing deploys.
+func TestCreatingAnAppWithNoConnectionSaysPushesWillNotDeployIt(t *testing.T) {
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.Path != "/api/environments/env_1/apps" {
+			http.Error(w, `{"error":{"code":"resource.not_found","title":"no"}}`, http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"app":{"id":"app_1","name":"site"},"webhook":{"registered":false,
+			"reason":"no webhook was registered for this app, because it has no Git connection to register one with",
+			"reason_code":"no_connection"}}`)
+	}))
+	t.Cleanup(panel.Close)
+	session := connect(t, NewRemote(cli.Config{PanelURL: panel.URL, Token: "skf_test", TeamID: "team_1"}, nil))
+
+	text, failed := call(t, session, "create_app", map[string]any{
+		"name": "site", "repo_url": "https://github.com/acme/site", "environment_id": "env_1",
+	})
+	if failed {
+		t.Fatalf("create_app failed: %s", text)
+	}
+	if !strings.Contains(text, `"deploys_on_push":false`) || !strings.Contains(text, "no Git connection") {
+		t.Errorf("create_app answered %s", text)
 	}
 }

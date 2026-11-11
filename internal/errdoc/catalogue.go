@@ -108,6 +108,32 @@ func LastOwner() *Problem {
 		WithStatus(http.StatusConflict)
 }
 
+// TeamCreationRestricted is somebody who is not a panel administrator asking
+// for a team on a panel that lets only its administrators make one. The owner
+// of a team deploys onto the servers every team shares, so it is the panel's
+// decision, not the account's.
+func TeamCreationRestricted() *Problem {
+	return New("team.creation_restricted", "Only a panel administrator can create a team").
+		WithCause("This panel lets only its administrators create teams, and you are not one.").
+		WithImpact("No team was created.").
+		WithFix("Ask a panel administrator to create the team and add you to it, or to let everyone create teams under Settings, Sign-in.").
+		WithDocs("/docs/configuration#several-teams").
+		WithStatus(http.StatusForbidden)
+}
+
+// TeamHasServers is deleting a team that still has servers. A server is a
+// machine in the cluster, running every team's apps, and its row in the team
+// is the only record of it — the SSH key the panel reaches it with included.
+func TeamHasServers(servers []string) *Problem {
+	return New("team.has_servers", "This team still has servers").
+		WithCause("These servers belong to the team and are still in the cluster: %s.", strings.Join(servers, ", ")).
+		WithImpact("Nothing was deleted.").
+		WithFix("Remove each of them under Servers first, then delete the team again.").
+		WithDocs("/docs/configuration#several-teams").
+		WithStatus(http.StatusConflict).
+		With("servers", strings.Join(servers, ", "))
+}
+
 // PluginNeedsPerson is an API token installing, changing or removing a plugin.
 // Installing mints a token that outlives the request and is bound to no team,
 // which is what creating a token by hand refuses to a token too.
@@ -127,6 +153,57 @@ func PluginUnexpectedResponse(status string) *Problem {
 		WithImpact("Nothing was installed.").
 		WithFix("Check the address.").
 		WithStatus(http.StatusBadGateway)
+}
+
+// --- the accounts on the panel ---
+//
+// Settings → Accounts in the panel and `skifity admin` on the server change
+// accounts the same way, so they refuse the same things in the same words.
+
+// AccountLastAdmin is demoting, disabling or deleting the last enabled panel
+// administrator, which would leave the settings, the upgrades and the master
+// key with nobody who can reach them.
+func AccountLastAdmin() *Problem {
+	return New("account.last_admin", "This is the panel's last administrator").
+		WithCause("No other enabled account administers the panel, and without one nobody can change its settings, upgrade it or read its recovery key.").
+		WithImpact("Nothing was changed.").
+		WithFix("Make somebody else a panel administrator first, under Settings → Accounts or with `%s admin make-admin` on the server.", version.Binary).
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountSelf is a panel administrator using Settings → Accounts on their own
+// account. Locking yourself out is not something that page should be able to
+// do in one click.
+func AccountSelf() *Problem {
+	return New("account.self", "That is your own account").
+		WithCause("Settings → Accounts changes other people's accounts. Disabling, deleting or demoting your own there would lock you out with nobody to undo it.").
+		WithImpact("Nothing was changed.").
+		WithFix("Change how you sign in under Account. To stop being an administrator, make somebody else one and ask them to do it.").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountLastOwner is deleting an account that is the only owner of a team.
+// Removing or demoting that owner from inside the team is team.last_owner.
+func AccountLastOwner(teams string) *Problem {
+	return New("account.last_owner", "This account is the only owner of a team").
+		WithCause("Deleting it would leave %s with nobody who can administer it.", teams).
+		WithImpact("The account was not deleted.").
+		WithFix("Make somebody else an owner of each team under Settings → Members, or delete the team, then delete the account. Disabling it instead keeps everything as it is.").
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
+}
+
+// AccountOwnsPlugins is deleting the account that installed a plugin. A
+// plugin runs with an API token of its installer's, and the token would go
+// with the account.
+func AccountOwnsPlugins(plugins string) *Problem {
+	return New("account.owns_plugins", "This account installed plugins").
+		WithCause("%s run with an API token of this account's, which would be deleted with it and stop them without a word.", plugins).
+		WithImpact("The account was not deleted.").
+		WithFix("Remove those plugins under Plugins, and install them again from another administrator's account if they are still wanted. Then delete the account.").
+		WithDocs("/docs/configuration#accounts").
+		WithStatus(http.StatusConflict)
 }
 
 // --- the panel's own bugs ---
@@ -479,7 +556,7 @@ func TemplateNeedsBackups(app string) *Problem {
 	return New("template.needs_backups", "There is nowhere to back up to first").
 		WithCause("%s has disks or databases, and an update backs them up before it starts, but backups are not configured.", app).
 		WithImpact("Nothing was changed.").
-		WithFix("Set up backup storage under Settings, or update without a backup if you have one of your own.").
+		WithFix("Have a panel administrator set up backup storage under Settings → General → Backup storage, or update without a backup if you have one of your own.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/templates#updates")
 }
@@ -564,6 +641,76 @@ func TemplateNotInstallable(id, catalogue, why string) *Problem {
 		WithDocs("/docs/templates#private-catalogues")
 }
 
+// TemplateInputRequired is a template installed without a value it cannot
+// make up. It has a code of its own rather than request.invalid because the
+// install dialog asks for the same value in its own field, and leaves this
+// one out of what it shows from a dry run.
+func TemplateInputRequired(input, template string) *Problem {
+	return New("template.input_required", "The template needs a value nobody gave").
+		WithCause("%s is needed to install %s.", input, template).
+		WithImpact("Nothing was created.").
+		WithFix("Fill it in and install again.").
+		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/templates#installing-one")
+}
+
+// TemplateNeedsRootImages is a template whose image starts as root, installed
+// into an environment held to the strictest level, which refuses one. The
+// install would have made an app that never starts, and only an admin can
+// change the level, so the fix names who.
+func TemplateNeedsRootImages(apps, environment string) *Problem {
+	return New("template.needs_root_images", "This template's image starts as root, and this environment refuses that").
+		WithCause("The image of %s starts as root, and %s is held to the strictest level, which refuses an image that does.", apps, environment).
+		WithImpact("Nothing was created.").
+		WithFix("An owner or admin can install it and choose Accepts root images for %s, which still refuses a privileged container and anything of the server's. Or install it into an environment that already accepts root images.", environment).
+		WithStatus(http.StatusConflict).
+		WithDocs("/docs/concepts#how-strictly-an-environment-confines-its-apps").
+		With("environment", environment)
+}
+
+// TemplateInstallRolledBack is an install that failed after it had made
+// something, and removed everything it had made.
+//
+// The cause is the failure as it was, in its own words, so the person can see
+// what to fix; what this adds is that nothing was left behind for them to
+// clean up first.
+func TemplateInstallRolledBack(template string, cause error, removed []string) *Problem {
+	underlying := From(cause)
+	p := New("template.install_rolled_back", "The template could not be installed, and nothing of it was kept").
+		WithCause("Installing %s stopped at this: %s", template, underlying.Error()).
+		WithImpact("What the install had made was removed again, and nothing was deployed: %s.", strings.Join(removed, ", ")).
+		WithFix("Fix what the cause says, then install again.").
+		WithStatus(rolledBackStatus(underlying)).
+		WithDocs("/docs/templates#installing-one")
+	p.Retryable = underlying.Retryable
+	p.Err = cause
+	return p
+}
+
+// TemplateInstallLeftOver is an install that failed, and whose undo did not
+// remove everything either.
+func TemplateInstallLeftOver(template string, cause error, remains []string) *Problem {
+	underlying := From(cause)
+	p := New("template.install_left_over", "The template could not be installed, and part of it is still there").
+		WithCause("Installing %s stopped at this: %s", template, underlying.Error()).
+		WithImpact("Nothing was deployed, and what the install had made was removed, except %s, which could not be.", strings.Join(remains, ", ")).
+		WithFix("Delete what is left from the environment's page, fix what the cause says, then install again.").
+		WithStatus(rolledBackStatus(underlying)).
+		WithDocs("/docs/templates#installing-one")
+	p.Err = cause
+	return p
+}
+
+// rolledBackStatus answers an undone install with the status of what stopped
+// it: a name taken is still a conflict, a cluster that refused still a bad
+// gateway.
+func rolledBackStatus(cause *Problem) int {
+	if cause.Status == 0 {
+		return http.StatusInternalServerError
+	}
+	return cause.Status
+}
+
 // PromotionBuiltDifferently is an image built from other build settings or
 // build-time variables than the app it is promoted to has.
 func PromotionBuiltDifferently(app string) *Problem {
@@ -591,7 +738,7 @@ func BackupPassphraseMissing() *Problem {
 	return New("backup.passphrase_missing", "This backup is sealed, and there is no passphrase to open it").
 		WithCause("The backup was encrypted with the backup passphrase, and none is set now.").
 		WithImpact("Nothing was restored or changed.").
-		WithFix("Enter the passphrase it was sealed with under Settings, then Storage, and restore again.").
+		WithFix("Enter the passphrase it was sealed with under Settings → General → Backup storage, and restore again.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/backups#encryption")
 }
@@ -626,7 +773,7 @@ func BackupWrongPassphrase() *Problem {
 	return New("backup.wrong_passphrase", "The backup passphrase does not open this backup").
 		WithCause("This backup was sealed with a different passphrase than the one set now.").
 		WithImpact("Nothing was restored or changed.").
-		WithFix("Set the passphrase it was sealed with under Settings, then Storage, restore, and set the current one back.").
+		WithFix("Set the passphrase it was sealed with under Settings → General → Backup storage, restore, and set the current one back.").
 		WithStatus(http.StatusConflict).
 		WithDocs("/docs/backups#encryption")
 }
@@ -658,6 +805,17 @@ func BlueprintInvalid(detail string) *Problem {
 		WithImpact("Nothing was changed.").
 		WithFix("Correct the file and run `skifity plan` again.").
 		WithStatus(http.StatusBadRequest).
+		WithDocs("/docs/cli#describing-an-environment-in-a-file")
+}
+
+// BlueprintSecretsMissing is a secret skifity.yaml lists, and so requires,
+// that the environment does not have. missing names each, with its app.
+func BlueprintSecretsMissing(missing string) *Problem {
+	return New("blueprint.secrets_missing", "A secret skifity.yaml requires is not set").
+		WithCause("The file lists these under secrets, and the environment does not have them: %s.", missing).
+		WithImpact("No app was started or changed without them. An app the file makes waits for them before its first deploy.").
+		WithFix("Set each one with `skifity env set --secret KEY=... --app APP` and apply again, or mark it optional: true in the file if the app runs without it.").
+		WithStatus(http.StatusConflict).
 		WithDocs("/docs/cli#describing-an-environment-in-a-file")
 }
 
@@ -752,7 +910,7 @@ func PasskeysUnavailable(address string) *Problem {
 	p := New("auth.passkeys_unavailable", "Passkeys need the panel on HTTPS at a domain").
 		WithCause("A browser offers passkeys only to a page it reached over HTTPS at a domain name, or at localhost. This panel's address, the Panel URL setting or SKIFITY_PUBLIC_URL, is not one of those.").
 		WithImpact("Nobody can add a passkey or sign in with one. Passwords, two-factor authentication and single sign-on work as before.").
-		WithFix("Put a domain on the panel and set Settings → General → Panel URL to its https:// address.").
+		WithFix("Put the panel on a domain of its own under Settings → General → Panel address, which turns HTTPS on for it.").
 		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
 		WithStatus(http.StatusConflict)
 	if address != "" {
@@ -1254,9 +1412,23 @@ func CloudProviderInUse(count int) *Problem {
 	return New("cloud.provider_in_use", "Servers were created with this connection").
 		WithCause("%d server(s) in the panel were created with this connection, and deleting one of their machines needs it.", count).
 		WithImpact("The connection was not removed.").
-		WithFix("Remove those servers first, deleting their machines or keeping them. To use a new token, add a second connection.").
+		WithFix("Remove those servers first, deleting their machines or keeping them. To use a new token, replace this connection's token instead: that is allowed while its servers are there.").
 		WithDocs(cloudDocs).
 		WithStatus(http.StatusConflict)
+}
+
+// CloudTokenOtherProject is a replacement token that the provider accepts and
+// that cannot see a single machine the panel created with the connection: a
+// token for another project or account. Saved, it would leave those machines
+// where only the provider's console could delete them, and billed until then.
+func CloudTokenOtherProject(provider, connection string) *Problem {
+	return New("cloud.token_other_project", "That token is for another project").
+		WithCause("%s accepts the token, and it cannot see any of the machines the panel created with %s.", provider, connection).
+		WithImpact("The token was not replaced. The connection keeps the one it has.").
+		WithFix("Create the token in the project or account those servers are in, and replace the token with that one. If their machines were deleted in the provider's console, remove those servers in the panel first.").
+		WithDocs("/docs/adding-servers#replacing-the-token").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
 }
 
 // CloudNameTaken is a name the cluster already has a node or a server under.
@@ -1392,6 +1564,18 @@ func NoBuilderDetected(repo string) *Problem {
 		With("repository", repo)
 }
 
+// GitConnectionWrongHost refuses an app a Git connection that is for another
+// host than its repository's. The build would decline to send the token and
+// the webhook would be registered nowhere, both without a word.
+func GitConnectionWrongHost(connection, repo string) *Problem {
+	return New("git.connection_wrong_host", "That Git connection is for another host").
+		WithCause("%s is a connection to another host than the one %s is on.", connection, repo).
+		WithImpact("Nothing was changed. A build would not send that connection's token to this repository's host, and its webhook could not be registered there.").
+		WithFix("Choose a connection to the host the repository is on, or connect one under Settings, then Git.").
+		WithStatus(http.StatusBadRequest).
+		With("connection", connection).With("repository", repo)
+}
+
 // RolloutTimedOut reports a deploy whose pods never became ready.
 func RolloutTimedOut(app string, ready, want int, reason string) *Problem {
 	return New("deploy.rollout_timeout", "The new version did not start").
@@ -1415,15 +1599,28 @@ func ImagePullFailed(image, reason string) *Problem {
 		With("image", image)
 }
 
-// CrashLoop reports an app whose container keeps exiting.
-func CrashLoop(app string, restarts int, logTail string) *Problem {
-	return New("app.crash_loop", "This app keeps restarting").
-		WithCause("%s has restarted %d times in a row. Kubernetes is backing off between restarts.", app, restarts).
-		WithImpact("The app is not serving traffic reliably.").
-		WithFix("Read the last log lines below: the cause is almost always in them. Missing environment variables, a database that is not reachable, and a port the app does not actually listen on are the usual three.").
-		WithDocs("/docs/troubleshooting#an-app-is-crashing").
+// DeployCrashed reports a new version whose instances stopped as they
+// started, which ends the wait for it at once instead of at the rollout's
+// deadline.
+//
+// How it stopped decides the fix, so the cause carries it as the kubelet
+// recorded it — an exit code and the kubelet's word for it, OOMKilled — and
+// the fix says where each one is changed. The panel picks the one sentence and
+// the button that applies from kind and exit_code; the lines the container
+// printed before it stopped are in log_tail, already redacted.
+func DeployCrashed(app, instance string, stops, exitCode int, reason, kind, logTail string) *Problem {
+	return New("deploy.crashed", "The new version stopped as it started").
+		WithCause("The new version of %s stopped as it started. Stops so far: %d. The last ended with exit code %d (%s).",
+			app, stops, exitCode, reason).
+		WithImpact("The new version was not rolled out. If an earlier version worked, the app is put back on it.").
+		WithFix("The lines it printed before it stopped are in the deployment log, and usually say why. "+
+			"OOMKilled is a version that needs more memory, set under Scaling. Exit code 126 or 127 is a start command that cannot be run, set under Settings. "+
+			"Exit code 0 is a process that finished, and a web process has to keep running. Anything else is in those lines: most often a variable that is missing.").
+		WithDocs("/docs/troubleshooting#the-new-version-crashed-on-start").
 		WithStatus(http.StatusBadGateway).
-		With("app", app).With("restarts", itoa(restarts)).With("log_tail", tail(logTail, 4000))
+		With("app", app).With("instance", instance).With("stops", itoa(stops)).
+		With("exit_code", itoa(exitCode)).With("reason", reason).With("kind", kind).
+		With("log_tail", tail(logTail, 4000))
 }
 
 // AppNotStarted is an app whose log was asked for before any instance had
@@ -1433,6 +1630,19 @@ func AppNotStarted(instance, reason string) *Problem {
 		WithCause("%s has not started: %s", instance, reason).
 		WithImpact("There is nothing in its log until it starts.").
 		WithFix("If it does not start, the reason above says what it is waiting for, and the app's Advanced tab has what Kubernetes said about it.").
+		WithDocs("/docs/troubleshooting#what-kubernetes-said").
+		WithStatus(http.StatusConflict).
+		With("instance", instance)
+}
+
+// InstanceNotStarted is one instance's log asked for, by name, before that
+// instance has started. AppNotStarted says no instance has, which is not so
+// while the others are serving.
+func InstanceNotStarted(instance, reason string) *Problem {
+	return New("app.instance_not_started", "That instance has not started yet").
+		WithCause("%s has not started: %s", instance, reason).
+		WithImpact("There is nothing in its log until it starts. The app's other instances are not affected.").
+		WithFix("Read another instance's log, or all of them, in the meantime. If this one does not start, the reason above says what it is waiting for.").
 		WithDocs("/docs/troubleshooting#what-kubernetes-said").
 		WithStatus(http.StatusConflict).
 		With("instance", instance)
@@ -1766,6 +1976,137 @@ func DNSLookupFailed(hostname string, err error) *Problem {
 		Wrap(err)
 }
 
+// --- the panel's own domain ---
+//
+// Moving the panel to a domain of its own, from Settings → General: a
+// certificate is asked for, the panel's route is rewritten and the panel
+// restarts at the new address. The panel keeps answering where it did until
+// the certificate is there, so most of these leave it exactly where it was.
+
+// PanelDomainDNSMismatch is a domain whose DNS does not point at this server
+// when the panel is asked to move to it. Let's Encrypt checks the name the same
+// way, so moving would only wait five minutes for a certificate that cannot
+// come.
+func PanelDomainDNSMismatch(domain, found, target string) *Problem {
+	return New("panel.domain_dns_mismatch", "That domain does not point at this server yet").
+		WithCause("DNS for %s answers %s, and this server is %s.", domain, found, target).
+		WithImpact("Nothing was changed. The panel still answers at its current address.").
+		WithFix("Create an A record for %s pointing at %s, wait a few minutes, and move the panel again. "+
+			"If the name reaches this server another way the panel cannot see, such as a load balancer, move it anyway.", domain, target).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		With("domain", domain)
+}
+
+// PanelCertificatePending is a move that waited for the domain's certificate
+// and did not get it. The route keeps asking, so it can still arrive.
+func PanelCertificatePending(domain, said string) *Problem {
+	return New("panel.domain_certificate_pending", "The certificate for the panel's domain has not arrived").
+		WithCause("cert-manager was not issued a certificate for %s within five minutes. What it said last: %s", domain, said).
+		WithImpact("The panel still answers at its old address, and was not restarted. cert-manager keeps asking for the certificate.").
+		WithFix("Check that %s points at this server, and that ports 80 and 443 are open to the internet, then press Try again. "+
+			"`kubectl -n skifity-system describe certificate skifity-panel-tls` shows what the certificate authority answered.", domain).
+		WithDocs("/docs/troubleshooting#the-panel-is-still-waiting-for-its-certificate").
+		WithStatus(http.StatusGatewayTimeout).
+		Retry().
+		With("domain", domain)
+}
+
+// PanelDomainTaken is a domain an app already answers on.
+func PanelDomainTaken(domain string) *Problem {
+	return New("panel.domain_taken", "An app already answers on that domain").
+		WithCause("%s is a domain of one of the apps on this panel.", domain).
+		WithImpact("Nothing was changed. The panel and the app would answer on one hostname, and which one a visitor reached would be decided by the ingress, sign-in cookies included.").
+		WithFix("Choose another name for the panel, or take %s off the app first.", domain).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusBadRequest).
+		With("domain", domain)
+}
+
+// PanelDomainBusy is a second move, or a removal, while one is under way.
+func PanelDomainBusy(domain string) *Problem {
+	return New("panel.domain_busy", "The panel is already being moved").
+		WithCause("A move to %s has not finished yet.", domain).
+		WithImpact("Nothing was changed.").
+		WithFix("Wait for it to finish or stop. Settings → General → Panel address says where it stands.").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainUnsupported is a panel that cannot change its own address: it
+// does not run in the cluster it manages, or its route is not the one the
+// installer made.
+func PanelDomainUnsupported(detail string) *Problem {
+	return New("panel.domain_unsupported", "This panel cannot move itself to a domain").
+		WithCause("%s", detail).
+		WithImpact("Nothing was changed.").
+		WithFix("This works on a panel installed with install.sh, which runs inside the cluster it manages. " +
+			"Anywhere else, give the panel its domain where it runs and set SKIFITY_PUBLIC_URL to the new address.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithSeverity(SeverityInfo).
+		WithStatus(http.StatusBadRequest)
+}
+
+// PanelDomainMoveFailed is a step of a move that did not work.
+func PanelDomainMoveFailed(domain string, err error) *Problem {
+	return New("panel.domain_move_failed", "The panel could not be moved to its domain").
+		WithCause("Moving the panel to %s stopped: %s", domain, err.Error()).
+		WithImpact("The panel still answers at its old address, and was not restarted.").
+		WithFix("Fix what the cause says, then press Try again. What was done already is not done twice.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusBadGateway).
+		Retry().
+		Wrap(err)
+}
+
+// PanelDomainInterrupted is a move the panel restarted in the middle of,
+// before it was told to restart at the domain.
+func PanelDomainInterrupted(domain string) *Problem {
+	return New("panel.domain_interrupted", "Moving the panel was interrupted").
+		WithCause("The panel restarted before the certificate for %s was ready.", domain).
+		WithImpact("The panel still answers at its old address.").
+		WithFix("Press Try again. What was done already is not done twice.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainNotRestarted is a panel told to restart at its domain that
+// started somewhere else.
+func PanelDomainNotRestarted(domain, address string) *Problem {
+	return New("panel.domain_not_restarted", "The panel did not restart at its domain").
+		WithCause("It was told to restart at https://%s, and started at %s.", domain, address).
+		WithImpact("The certificate is issued and the domain reaches the panel, but its own links and sign-in cookies still use the address it started at.").
+		WithFix("Press Try again. If it happens again, run the installer again with --domain %s, which does the same from the server.", domain).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict).
+		Retry()
+}
+
+// PanelDomainNoFreeAddress is taking the domain off a panel that has no
+// sslip.io address to go back to and nothing to make one from.
+func PanelDomainNoFreeAddress() *Problem {
+	return New("panel.domain_no_free_address", "There is no address to go back to").
+		WithCause("The panel has no sslip.io address on record, and the cluster's public IP is not an IP address it can make one from.").
+		WithImpact("Nothing was changed. The panel still answers at its domain.").
+		WithFix("Set Settings → Domains and HTTPS → Cluster public IP to the server's public IP address, then try again.").
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusConflict)
+}
+
+// PanelMoved is a browser asking the panel at an address it has moved away
+// from. The address keeps answering webhooks and API tokens; a browser's
+// session belongs to the new one.
+func PanelMoved(url string) *Problem {
+	return New("panel.domain_moved", "This panel has moved").
+		WithCause("It answers at %s now.", url).
+		WithImpact("This address still takes webhooks and API tokens, but not a browser's session.").
+		WithFix("Open %s and sign in there.", url).
+		WithDocs("/docs/configuration#put-a-domain-on-the-panel").
+		WithStatus(http.StatusGone).
+		With("url", url)
+}
+
 // --- DNS providers ---
 //
 // A team connects Cloudflare, Hetzner, DigitalOcean or Route 53, and the panel
@@ -1808,6 +2149,20 @@ func DNSNoZones(provider string) *Problem {
 		WithImpact("Nothing was saved: a connection with no zones would never be used.").
 		WithFix("Give the token the zones it should manage — at Cloudflare, under Zone Resources, include the zones or every zone of the account — and connect it again.").
 		WithDocs("/docs/concepts#connecting-a-dns-provider").
+		WithStatus(http.StatusBadRequest).
+		With("provider", provider)
+}
+
+// DNSZonesUnseen is replacement credentials that cannot see a zone the panel
+// keeps records in through the connection: credentials for another account,
+// which would leave every record there one the panel could neither move nor
+// remove.
+func DNSZonesUnseen(provider, connection, zones string) *Problem {
+	return New("dns.zones_unseen", "These credentials cannot see every zone the panel keeps records in").
+		WithCause("%s accepted them, and they do not see %s, where the panel keeps records through %s.", provider, zones, connection).
+		WithImpact("Nothing was saved. The connection keeps its credentials, and its records are left as they are.").
+		WithFix("Give the credentials those zones too, or use credentials of the account the zones are in, and replace them again.").
+		WithDocs("/docs/concepts#replacing-the-credentials").
 		WithStatus(http.StatusBadRequest).
 		With("provider", provider)
 }
@@ -2181,11 +2536,25 @@ func GPUDevicePluginExists(foreign []string) *Problem {
 // --- storage and backups ---
 
 // StorageNotConfigured reports a backup with nowhere to go.
+//
+// The storage is the panel's, not a team's, and only a panel administrator
+// can open the page it is set on: telling a team member to open it sent them
+// looking for a tab they do not have.
 func StorageNotConfigured() *Problem {
 	return New("backup.storage_not_configured", "No backup storage is configured").
-		WithCause("This team has no S3-compatible storage set up yet.").
+		WithCause("No S3-compatible storage is set up for this panel yet.").
 		WithImpact("Backups cannot run, so nothing is being kept safe.").
-		WithFix("Open Settings, then Storage, and add an S3-compatible bucket. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself.").
+		WithFix("A panel administrator sets it up under Settings → General → Backup storage. Any provider works: AWS S3, Backblaze B2, Cloudflare R2, Wasabi, or a MinIO server you run yourself.").
+		WithDocs("/docs/backups#storage").
+		WithStatus(http.StatusBadRequest)
+}
+
+// StorageEndpointInvalid is backup storage whose endpoint is not an address.
+func StorageEndpointInvalid(endpoint, reason string) *Problem {
+	return New("backup.storage_endpoint_invalid", "The backup storage's endpoint is not an address").
+		WithCause("The endpoint %q could not be read: %s", endpoint, reason).
+		WithImpact("Backups cannot run, so nothing is being kept safe.").
+		WithFix("A panel administrator corrects the S3 endpoint under Settings → General → Backup storage: an address such as https://s3.eu-central-1.amazonaws.com.").
 		WithDocs("/docs/backups#storage").
 		WithStatus(http.StatusBadRequest)
 }
@@ -2457,6 +2826,40 @@ func DatabasePasswordNotOffered(database, engine string) *Problem {
 		WithDocs("/docs/databases#changing-the-password").
 		WithStatus(http.StatusConflict).
 		With("database", database).With("engine", engine)
+}
+
+// DatabaseVariableTaken is a link that would write a variable another
+// database's link already writes: its connection string or one of its
+// pieces. Two links on one name overwrite each other, and unlinking either
+// takes the other's away.
+func DatabaseVariableTaken(variable string) *Problem {
+	return New("database.variable_taken", "That variable already connects another database").
+		WithCause("This app's %s already carries the connection of another database linked to it.", variable).
+		WithImpact("Nothing was changed.").
+		WithFix("Link this database under another name, or unlink the other one first.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusConflict)
+}
+
+// DatabasePiecesClash is one variable named for two parts of a connection.
+func DatabasePiecesClash(variable string) *Problem {
+	return New("database.pieces_clash", "Two parts of the connection would share one variable").
+		WithCause("%s is named for more than one of the connection string, host, port, name, user and password.", variable).
+		WithImpact("Nothing was changed.").
+		WithFix("Give each its own variable, or leave out the ones the app does not read.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusBadRequest)
+}
+
+// DatabasePieceNotOffered is a piece of the connection an engine does not
+// have on its own: a Redis's user, a Memcached's password.
+func DatabasePieceNotOffered(engine, piece string) *Problem {
+	return New("database.piece_not_offered", "That part of the connection cannot be given on its own").
+		WithCause("%s has no %s a link can give an app as a variable of its own.", engine, piece).
+		WithImpact("Nothing was changed.").
+		WithFix("Leave it out. The app can read everything the database has from the connection string.").
+		WithDocs("/docs/databases#in-pieces").
+		WithStatus(http.StatusBadRequest)
 }
 
 // DatabasePasswordRejected is a password somebody chose that would break a

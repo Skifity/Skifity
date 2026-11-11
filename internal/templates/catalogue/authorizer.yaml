@@ -12,6 +12,7 @@ services:
   port: 8080
   public: true
   health_path: /healthz
+  health_timeout_seconds: 10
   mem_request_mb: 64
   mem_limit_mb: 256
   cpu_request_m: 50

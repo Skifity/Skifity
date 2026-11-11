@@ -6,6 +6,7 @@ website: https://www.bookstackapp.com/docs/
 services:
 - name: bookstack
   image: linuxserver/bookstack:26.05.20260608
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -26,3 +27,19 @@ databases:
   link_to:
   - bookstack
   var_name: DATABASE_URL
+  vars:
+    host: DB_HOST
+    port: DB_PORT
+    name: DB_DATABASE
+    user: DB_USERNAME
+    password: DB_PASSWORD
+inputs:
+- key: APP_URL
+  label: Public URL
+  help: The address BookStack is opened at, such as https://wiki.example.com. Its links are made from it.
+  required: true
+- key: APP_KEY
+  label: Session encryption key
+  secret: true
+  generate: true
+notes: The image starts as root, so the environment needs the baseline pod security level.

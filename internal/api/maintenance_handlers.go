@@ -220,7 +220,7 @@ func (s *Server) applyMaintenance(r *http.Request, app store.App) error {
 			// with the Ingress already changed, and the panel recorded the
 			// opposite of what visitors saw.
 			var problem *errdoc.Problem
-			if errors.As(err, &problem) && problem.Code == "deploy.rollout_timeout" {
+			if errors.As(err, &problem) && (problem.Code == "deploy.rollout_timeout" || problem.Code == "deploy.crashed") {
 				s.log.Info("maintenance changed while the app is not ready", "app", app.ID, "detail", problem.Cause)
 				return nil
 			}

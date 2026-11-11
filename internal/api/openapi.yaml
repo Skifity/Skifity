@@ -261,7 +261,8 @@ paths:
       description: >-
         Sets the session cookie. An account with two-factor authentication
         answers totp_required first; send the same request again with
-        totp_code.
+        totp_code, which may also be one of the account's recovery codes. A
+        recovery code is spent, and the answer says how many are left.
       security: []
       requestBody:
         required: true
@@ -920,7 +921,10 @@ paths:
       operationId: createTeam
       tags: [Teams]
       summary: Create a team
-      description: You become its owner. Refused to a token made for one team.
+      description: >-
+        You become its owner. Only a panel administrator may, unless the
+        signin.team_creation setting lets everyone (team.creation_restricted).
+        Refused to a token made for one team.
       requestBody:
         required: true
         content:
@@ -967,6 +971,34 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Team'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteTeam
+      tags: [Teams]
+      summary: Delete a team and everything in it
+      description: >-
+        Owner. Refused with team.has_servers while the team has a server, and
+        with environment.deploying while anything in it is being deployed.
+        Every environment's namespace is removed from the cluster first, then
+        the projects and the team. Backups already in the bucket, and DNS
+        records the team's DNS providers created, are not removed.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/leave:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    post:
+      operationId: leaveTeam
+      tags: [Teams]
+      summary: Leave a team
+      description: >-
+        Any role, a member limited to some projects included. The team's last
+        owner cannot (team.last_owner). Your tokens made for this team stop
+        working with the membership.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/teams/{teamID}/members:
@@ -1078,6 +1110,27 @@ paths:
               schema: {$ref: '#/components/schemas/AuditEventList'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/teams/{teamID}/backup-policies/defaults:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    post:
+      operationId: applyDefaultBackupPolicies
+      tags: [Backups]
+      summary: Back up every database of the team that has no schedule
+      description: >-
+        Owner or admin. Gives each of the team's databases with no backup schedule at all the daily one a
+        new database gets: a minute between 02:00 and 04:59 UTC of its own, keeping 7. A schedule somebody
+        turned off is left alone, as are previews and engines Skifity does not back up. Refused with
+        backup.storage_not_configured when there is no backup storage or it cannot be written to. Each
+        schedule made is in the audit log.
+      responses:
+        '200':
+          description: The databases that were given one.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DefaultedDatabaseList'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/teams/{teamID}/export:
     parameters:
       - $ref: '#/components/parameters/teamID'
@@ -1129,6 +1182,51 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/apps:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: listTeamApps
+      tags: [Apps]
+      summary: Every app in the team
+      description: >-
+        Every app in every environment of the team, previews included, with
+        the project and environment it lives in, its address and its newest
+        deployment. A member limited to some projects sees theirs.
+      responses:
+        '200':
+          description: The apps.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TeamAppList'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/teams/{teamID}/attention:
+    parameters:
+      - $ref: '#/components/parameters/teamID'
+    get:
+      operationId: teamAttention
+      tags: [Teams]
+      summary: What needs attention across the team
+      description: >-
+        What is wrong now, errors first, each with the panel page to deal with
+        it on: a failed deploy, an app with no instance running, an alert going
+        off, a database that failed, a backup that failed or was not taken
+        when due, a domain whose certificate could not be issued, a
+        vulnerable or drifted app. Built from what the panel has recorded, so
+        it answers with the cluster down. Previews are left out. A member
+        limited to some projects hears about theirs only; servers are for the
+        rest of the team, certificates and notification channels for whoever
+        can open the team's settings, and the panel's own backup for its
+        administrator.
+      responses:
+        '200':
+          description: The list, which is empty when nothing needs attention.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AttentionList'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/teams/{teamID}/servers:
@@ -1227,6 +1325,30 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/providerID'
+    patch:
+      operationId: replaceCloudProviderToken
+      tags: [Servers]
+      summary: Replace a cloud connection's token
+      description: >-
+        Admin. Allowed while servers created with the connection are in the
+        panel. The new token is checked as a new connection's is
+        (cloud.token_invalid, cloud.token_read_only), and when servers were
+        created with it, it has to see at least one of their machines, or it
+        is a token for another project (cloud.token_other_project). Nothing
+        changes unless every check passes. It is sealed under the same
+        connection and never shown again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReplaceCloudTokenRequest'}
+      responses:
+        '200':
+          description: The connection, with the new token's hint and when it was checked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CloudProvider'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteCloudProvider
       tags: [Servers]
@@ -1619,6 +1741,29 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/providerID'
+    patch:
+      operationId: replaceDNSProviderCredentials
+      tags: [Domains]
+      summary: Replace a DNS provider's credentials
+      description: >-
+        Admin. The connection, its name and the records the panel keeps
+        through it stay. The new credentials are checked as connecting checks
+        them (dns.cloudflare_global_key, dns.provider_refused, dns.no_zones),
+        and have to see every zone the panel keeps records in through this
+        connection, by the zone's id (dns.zones_unseen). Nothing is saved
+        unless they do. The zones they see are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReplaceDNSCredentialsRequest'}
+      responses:
+        '200':
+          description: The connection, with the zones the new credentials see.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSProvider'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteDNSProvider
       tags: [Domains]
@@ -1715,6 +1860,31 @@ paths:
     parameters:
       - $ref: '#/components/parameters/teamID'
       - $ref: '#/components/parameters/sourceID'
+    patch:
+      operationId: updateGitSource
+      tags: [Git]
+      summary: Replace a Git connection's token, or rename it
+      description: >-
+        Admin. The connection keeps its id, so the webhooks on its
+        repositories and the apps it serves are unchanged, and it keeps its
+        webhook secret. A connection made before each had a secret of its own
+        keeps the token it had as its secret, so the hooks signed with it are
+        still accepted; it is never shown. A Bitbucket token, email or
+        workspace is checked with Bitbucket before anything is saved. A name
+        another of the team's connections has answers 409. The kind and the
+        server address cannot change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateGitSourceRequest'}
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GitSource'}
+        default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteGitSource
       tags: [Git]
@@ -2649,7 +2819,11 @@ paths:
       operationId: createDatabase
       tags: [Databases]
       summary: Create a managed database
-      description: Member. Its operator is installed on first use. It answers at once, while the database is still being made.
+      description: >-
+        Member. Its operator is installed on first use. It answers at once, while the database is still being
+        made. It is backed up every day unless backup says no, there is no backup storage, the engine is not
+        backed up, the environment is a preview, or storage.default_backups is off and backup was left out;
+        backup in the answer says which.
       requestBody:
         required: true
         content:
@@ -2657,10 +2831,10 @@ paths:
             schema: {$ref: '#/components/schemas/CreateDatabaseRequest'}
       responses:
         '202':
-          description: The database, being created.
+          description: The database, being created, and what was done about its backups.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/Database'}
+              schema: {$ref: '#/components/schemas/CreatedDatabase'}
         default: {$ref: '#/components/responses/Error'}
 
   # --- apps ---
@@ -2685,7 +2859,8 @@ paths:
       summary: Change an app's settings
       description: >-
         Member. Only the fields sent change. A runtime setting is applied by a
-        rollout and never rebuilds the app.
+        rollout and never rebuilds the app; what goes into the image waits for
+        the next deploy, and the answer says which setting was which.
       requestBody:
         required: true
         content:
@@ -2693,10 +2868,14 @@ paths:
             schema: {$ref: '#/components/schemas/UpdateAppRequest'}
       responses:
         '200':
-          description: The app as it is now.
+          description: >-
+            The app as it is now, and when each setting that changed takes
+            effect. When the save gave it a Git connection, turned deploy on
+            push on or changed its trigger, the repository was asked for its
+            webhook, and webhook says what it answered.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/App'}
+              schema: {$ref: '#/components/schemas/AppUpdate'}
         default: {$ref: '#/components/responses/Error'}
     delete:
       operationId: deleteApp
@@ -2875,6 +3054,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Deployment'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/apps/{appID}/webhook:
+    parameters:
+      - $ref: '#/components/parameters/appID'
+    post:
+      operationId: registerAppWebhook
+      tags: [Apps]
+      summary: Ask the repository for the app's webhook again
+      description: >-
+        Member. For a Git app that deploys on push: after its connection's
+        token was given the scope to manage webhooks, or a hook was deleted at
+        the Git host. Never fails for the host's sake; what it answered is in
+        the result.
+      responses:
+        '200':
+          description: What the Git host answered.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookStatus'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/lock:
@@ -3172,15 +3371,23 @@ paths:
       tags: [Apps]
       summary: An app's logs
       description: >-
-        The recent lines as JSON, or with follow=true a server-sent event
-        stream: one `log` event per line, its data a JSON string, and an
-        `error` event if reading stops. Anything that looks like a credential
-        is scrubbed from every line.
+        Every instance that has started, up to twenty, merged in the order
+        the lines were written; or one instance. The recent lines as JSON, or
+        with follow=true a server-sent event stream: an `instances` event
+        first and whenever an instance starts or goes, its data
+        {instances, omitted}; for each line an `entry` event, its data
+        {instance, at, line}, followed by a `log` event with the line alone
+        as a JSON string, for clients that read only that; and an `error`
+        event if reading stops. Anything that looks like a credential is
+        scrubbed from every line.
       parameters:
-        - {name: follow, in: query, description: 'Keep the stream open and send lines as they come.', schema: {type: boolean}}
-        - {name: previous, in: query, description: 'The container that ran before the last restart, which is where a crash is explained.', schema: {type: boolean}}
-        - {name: tail, in: query, description: 'How many lines back to start.', schema: {type: integer, minimum: 1, maximum: 10000, default: 200}}
+        - {name: follow, in: query, description: 'Keep the stream open and send lines as they come. An instance that starts while it is open joins it.', schema: {type: boolean}}
+        - {name: previous, in: query, description: 'The container that ran before the last restart, which is where a crash is explained: the named instance''s, or the one that restarted most.', schema: {type: boolean}}
+        - {name: tail, in: query, description: 'How many lines back to start, across every instance read.', schema: {type: integer, minimum: 1, maximum: 10000, default: 200}}
         - {name: process, in: query, description: 'One of the app''s other processes, by name. The web process when left out.', schema: {type: string}}
+        - {name: instance, in: query, description: 'One instance, by its name or the part after its last hyphen. Every instance when left out.', schema: {type: string}}
+        - {name: since, in: query, description: 'Only what was written in this long before now: 90s, 15m, 1h, 2d. Up to 30 days.', schema: {type: string}}
+        - {name: timestamps, in: query, description: 'Put each line''s time in front of it in lines and in the log event, as kubectl --timestamps does. Entries carry it either way.', schema: {type: boolean}}
       responses:
         '200':
           description: The lines.
@@ -3338,8 +3545,10 @@ paths:
       tags: [Variables]
       summary: Set one variable
       description: >-
-        Member. A runtime variable is rolled out; a build-time one takes effect
-        at the next build, and the answer says which.
+        Member. A runtime variable is rolled out. A build-time one rebuilds the
+        version the app runs, at its commit; on an app whose deploys are locked,
+        or that has never been deployed, it waits for the next deploy. The
+        answer says which.
       requestBody:
         required: true
         content:
@@ -3351,11 +3560,12 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [variable, requires_rebuild]
-                properties:
-                  variable: {$ref: '#/components/schemas/Variable'}
-                  requires_rebuild: {type: boolean}
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - type: object
+                    required: [variable]
+                    properties:
+                      variable: {$ref: '#/components/schemas/Variable'}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/batch:
@@ -3377,16 +3587,17 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [set, unset, requires_rebuild]
-                properties:
-                  set:
-                    type: array
-                    items: {$ref: '#/components/schemas/Variable'}
-                  unset:
-                    type: [array, 'null']
-                    items: {type: string}
-                  requires_rebuild: {type: boolean}
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - type: object
+                    required: [set, unset]
+                    properties:
+                      set:
+                        type: array
+                        items: {$ref: '#/components/schemas/Variable'}
+                      unset:
+                        type: [array, 'null']
+                        items: {type: string}
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/refresh:
@@ -3418,9 +3629,16 @@ paths:
       operationId: deleteVariable
       tags: [Variables]
       summary: Remove a variable
-      description: Member.
+      description: Member. One the build read rebuilds the version the app runs without it.
       responses:
-        '200': {$ref: '#/components/responses/OK'}
+        '200':
+          description: Removed, and what that did to the app.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/VariableEffect'
+                  - $ref: '#/components/schemas/OK'
         default: {$ref: '#/components/responses/Error'}
 
   /api/apps/{appID}/variables/{key}/preview:
@@ -4358,7 +4576,9 @@ paths:
       operationId: linkDatabase
       tags: [Databases]
       summary: Give an app the database's connection string
-      description: Member, on both. As a secret variable, in the same environment only.
+      description: >-
+        Member, on both. As a secret variable, in the same environment only, and the pieces of it that pieces
+        names as variables of their own.
       requestBody:
         required: true
         content:
@@ -4570,7 +4790,7 @@ paths:
       operationId: storeCatalogue
       tags: [Plugins]
       summary: The plugin store's catalogue
-      description: Panel administrators only. Read from the configured store, and checked against its signing key when one is set.
+      description: Panel administrators only. Read from the configured store, and checked against its signing key when one is set. The Skifity store, which is not published yet, is not read, and the answer says so in not_published.
       responses:
         '200':
           description: The catalogue, and which of its plugins are installed here.
@@ -4632,6 +4852,24 @@ paths:
         default: {$ref: '#/components/responses/Error'}
 
   # --- templates ---
+
+  /api/backup-storage:
+    get:
+      operationId: getBackupStorage
+      tags: [Backups]
+      summary: Whether backups have somewhere to go
+      description: >-
+        Anybody signed in. Whether backup storage is set up, read from the settings without reaching the
+        bucket, whether backups are sealed with a passphrase, and whether a new database is backed up when
+        whoever creates it does not say. Never where the storage is or how it is reached: only a panel
+        administrator sets it, under Settings → General → Backup storage.
+      responses:
+        '200':
+          description: The answer.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackupStorage'}
+        default: {$ref: '#/components/responses/Error'}
 
   /api/database-engines:
     get:
@@ -4704,16 +4942,26 @@ paths:
       tags: [Templates]
       summary: Install a template into an environment
       description: >-
-        Member, in the environment named in the body. Its databases are made first,
-        then its apps. catalogue_id names the team catalogue the template is in; it
-        is looked for among the catalogues of the environment's team, so another
-        team's is not found.
+        Member, in the environment named in the body. catalogue_id names the team
+        catalogue the template is in; it is looked for among the catalogues of the
+        environment's team, so another team's is not found. An install is all or
+        nothing: every name, port and input is checked before anything is made, and
+        the first problem is the answer. A failure while it is being made, such as
+        the cluster refusing a database, removes what was made and answers
+        template.install_rolled_back. Its apps are announced and deployed only once
+        all of it exists. With dry_run, nothing is made, and the answer is the plan
+        with every problem found.
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/InstallTemplateRequest'}
       responses:
+        '200':
+          description: With dry_run, what the install would make and what stops it.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemplateInstallPlan'}
         '201':
           description: What was created.
           content:
@@ -5061,6 +5309,95 @@ paths:
               schema: {$ref: '#/components/schemas/UpgradeCheck'}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/panel/domain:
+    get:
+      operationId: getPanelDomain
+      tags: [Settings]
+      summary: Where the panel answers, and moving it to a domain of its own
+      description: >-
+        Panel administrators only. The address the panel was started with, the
+        domain set here and where moving to it stands, the addresses it keeps
+        answering on, its certificate, and the record a domain needs.
+      responses:
+        '200':
+          description: Where the panel answers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: setPanelDomain
+      tags: [Settings]
+      summary: Move the panel to a domain of its own, with HTTPS
+      description: >-
+        Panel administrators only. Refuses an IP address, a wildcard, an
+        sslip.io name, a domain an app answers on, and, unless ignore_dns is
+        set, a domain whose DNS does not point at the server. The move runs
+        after the answer: cert-manager is installed if it is not, the panel's
+        route is written for the domain with its current address kept beside
+        it, the certificate is waited for, and then the panel restarts at
+        https:// on the domain. Until the certificate is there nothing about
+        the panel changes. Poll GET for where it stands. Audited as
+        panel.domain_set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PanelDomainRequest'}
+      responses:
+        '202':
+          description: The move has started.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: removePanelDomain
+      tags: [Settings]
+      summary: Take the panel's domain off
+      description: >-
+        Panel administrators only. A move that stopped is cancelled, and its
+        route put back with nothing restarted (200, audited as
+        panel.domain_cancelled). A panel at its domain goes back to its
+        sslip.io address over plain HTTP and restarts there (202, audited as
+        panel.domain_removed).
+      responses:
+        '200':
+          description: The move that stopped was cancelled.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PanelDomain'}
+        '202':
+          description: The panel is restarting at the address it goes back to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, restarting]
+                properties:
+                  url: {type: string, format: uri, description: 'Where the panel answers once it has restarted.'}
+                  restarting: {type: boolean, const: true}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/panel/domain/check:
+    post:
+      operationId: checkPanelDomain
+      tags: [Settings]
+      summary: Check a domain's DNS before moving the panel to it
+      description: Panel administrators only. Nothing is changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PanelDomainRequest'}
+      responses:
+        '200':
+          description: What the domain's DNS says, against where it has to point.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DNSCheck'}
+        default: {$ref: '#/components/responses/Error'}
+
   /api/panel/backups:
     get:
       operationId: listPanelBackups
@@ -5117,6 +5454,83 @@ paths:
           content:
             text/plain:
               schema: {type: string}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/users:
+    get:
+      operationId: listAccounts
+      tags: [Settings]
+      summary: Every account on the panel
+      description: >-
+        Panel administrators only. Each account with its teams, how it signs
+        in, and what would stand in the way of deleting it.
+      responses:
+        '200':
+          description: The accounts, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Account'}
+                  total: {type: integer}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/users/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    patch:
+      operationId: updateAccount
+      tags: [Settings]
+      summary: Disable or enable an account, or make it a panel administrator or not
+      description: >-
+        Panel administrators only, and never on their own account. Disabling
+        signs the account out everywhere and stops its API tokens. Making an
+        account an administrator, or enabling one, wants a recent sign-in; a
+        token cannot. The last enabled administrator is kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAccountRequest'}
+      responses:
+        '200':
+          description: The account as it is now.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteAccount
+      tags: [Settings]
+      summary: Delete an account
+      description: >-
+        Panel administrators only, and never their own account. Its
+        memberships, sessions, tokens and passkeys go with it; the activity log
+        keeps what it did. Refused while it is a team's only owner, installed a
+        plugin, or is the last enabled administrator.
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/users/{userID}/two-factor/reset:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    post:
+      operationId: resetAccountTwoFactor
+      tags: [Settings]
+      summary: Turn somebody's two-factor authentication off
+      description: >-
+        Panel administrators, signed in within the last few minutes; a token
+        cannot. For a lost phone with the recovery codes gone: the secret and
+        the codes are deleted and the account is signed out everywhere.
+      security:
+        - sessionCookie: []
+      responses:
+        '200': {$ref: '#/components/responses/OK'}
         default: {$ref: '#/components/responses/Error'}
 
 components:
@@ -5373,6 +5787,56 @@ components:
         updated_at: {type: string, format: date-time}
         last_login_at: {type: string, format: date-time}
 
+    AccountTeam:
+      type: object
+      required: [id, name, role, require_strong_auth]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        role: {$ref: '#/components/schemas/Role'}
+        require_strong_auth: {type: boolean}
+
+    Account:
+      type: object
+      required: [user, teams, has_password, passkeys, tokens, sso_issuers, blockers, current]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        teams:
+          type: array
+          items: {$ref: '#/components/schemas/AccountTeam'}
+        has_password: {type: boolean, description: 'False for an account that signs in only through the identity provider.'}
+        passkeys: {type: integer}
+        tokens: {type: integer, description: 'API tokens that have not expired.'}
+        sso_issuers:
+          type: array
+          items: {type: string}
+          description: The identity providers the account is linked to.
+        blockers:
+          type: object
+          description: What has to change before the account can be deleted.
+          required: [sole_owner_of, plugins]
+          properties:
+            sole_owner_of:
+              type: array
+              items: {$ref: '#/components/schemas/AccountTeam'}
+            plugins:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string}
+                  name: {type: string}
+        current: {type: boolean, description: 'The administrator asking. Their own account is changed under Account, not here.'}
+
+    UpdateAccountRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        disabled: {type: boolean}
+        is_admin: {type: boolean}
+
     LoginRequest:
       type: object
       required: [email, password]
@@ -5389,6 +5853,8 @@ components:
         user: {$ref: '#/components/schemas/User'}
         csrf_token: {type: string, description: 'Send it as X-Skifity-CSRF on every request that changes something.'}
         expires_at: {type: string, format: date-time}
+        used_recovery_code: {type: boolean, description: 'Present, and true, when the second factor was a recovery code rather than the authenticator. That code is spent.'}
+        recovery_codes_left: {type: integer, minimum: 0, description: 'With used_recovery_code: how many unused recovery codes the account has left.'}
 
     TOTPRequired:
       type: object
@@ -5406,7 +5872,7 @@ components:
 
     Me:
       type: object
-      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth, has_password]
+      required: [user, teams, recovery_saved, recovery_codes_left, strong_auth, has_password, can_create_teams]
       properties:
         user: {$ref: '#/components/schemas/User'}
         teams:
@@ -5416,6 +5882,7 @@ components:
         recovery_codes_left: {type: integer, description: 'Unused two-factor recovery codes.'}
         strong_auth: {type: boolean, description: 'Whether this sign-in would satisfy a team that requires a second factor.'}
         has_password: {type: boolean, description: 'False for an account that signs in only through the identity provider.'}
+        can_create_teams: {type: boolean, description: 'Whether this account may create a team: a panel administrator, or anybody where the panel lets everyone. Never through a token made for one team.'}
 
     UpdateMeRequest:
       type: object
@@ -5858,6 +6325,75 @@ components:
         items: {type: array, items: {$ref: '#/components/schemas/Project'}}
         total: {type: integer}
 
+    TeamApp:
+      type: object
+      required: [id, name, slug, source_type, status, project_id, project_name, environment_id,
+                 environment_name, environment_kind, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        slug: {type: string}
+        source_type: {type: string, enum: [git, image, upload]}
+        status: {type: string}
+        project_id: {type: string}
+        project_name: {type: string}
+        environment_id: {type: string}
+        environment_name: {type: string}
+        environment_kind: {type: string, enum: [standard, preview]}
+        url: {type: string, description: 'Its address: a domain of the team''s own when there is one, else the panel''s. Absent for an internal app or one with no domain.'}
+        last_deployment:
+          type: object
+          description: The newest deployment, whatever became of it. Absent for an app never deployed.
+          required: [id, number, status, at]
+          properties:
+            id: {type: string}
+            number: {type: integer}
+            status: {type: string, enum: [queued, building, deploying, succeeded, failed, cancelled, superseded]}
+            commit_sha: {type: string}
+            at: {type: string, format: date-time, description: 'When it was asked for.'}
+            finished_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+
+    TeamAppList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/TeamApp'}}
+        total: {type: integer}
+
+    AttentionItem:
+      type: object
+      required: [kind, severity, code, params, message, target_type, target_id, target_label, path]
+      properties:
+        kind:
+          type: string
+          enum: [server_not_ready, deploy_failed, app_unhealthy, database_unwell, backup_failed, backup_missed,
+                 panel_backup_failed, domain_cert_failed, certificate_expiring, app_alert, server_alert,
+                 app_vulnerable, app_drifted, no_channel]
+        severity: {type: string, enum: [error, warning]}
+        code: {type: string, description: 'The sentence, as a translation key: attention.<code> in the panel.'}
+        params:
+          type: object
+          additionalProperties: {type: [string, integer]}
+          description: What fills the sentence in. alerts is a comma-separated list of alert names.
+        message: {type: string, description: 'The same sentence in English.'}
+        target_type: {type: string, enum: [app, domain, database, volume, server, certificate, team, panel]}
+        target_id: {type: string}
+        target_label: {type: string}
+        project_id: {type: string}
+        project_name: {type: string}
+        environment_id: {type: string}
+        environment_name: {type: string}
+        since: {type: string, format: date-time, description: 'When it started, where that is known; for a certificate, when it runs out.'}
+        path: {type: string, description: 'The panel page to deal with it on.'}
+
+    AttentionList:
+      type: object
+      required: [items, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/AttentionItem'}}
+        total: {type: integer}
+
     CreateProjectRequest:
       type: object
       required: [name]
@@ -6098,6 +6634,13 @@ components:
         name: {type: string, description: 'The provider''s name when left empty.'}
         token: {type: string, format: password, description: 'A Read & Write API token for one project.'}
 
+    ReplaceCloudTokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: {type: string, format: password, description: 'A Read & Write API token for the project the connection is for.'}
+
     CloudOptions:
       type: object
       required: [locations, server_types, images, default_image]
@@ -6215,6 +6758,19 @@ components:
           properties:
             ready: {type: boolean}
             reason: {type: string, description: 'Why it is not running, in the kubelet''s words.'}
+        entry:
+          type: string
+          enum: [serving, not_serving, none]
+          description: >-
+            Whether the server takes the traffic that reaches it on ports 80
+            and 443, as k3s's load balancer decides: its pod on the server
+            ready and, under the Local traffic policy, a ready Traefik there.
+            "none" is a server the load balancer does not run on. Absent when
+            the cluster cannot say, because something else fronts the ingress.
+        entry_reason:
+          type: string
+          enum: [node_not_ready, balancer_not_ready, no_ingress, no_ingress_here]
+          description: Why a server is not_serving.
 
     NodeGPU:
       type: object
@@ -6392,6 +6948,16 @@ components:
             to, to send the token with Basic auth. Left empty, the token is sent
             as a bearer token, which is how an access token is sent. Sealed
             with the token and never shown again.
+
+    UpdateGitSourceRequest:
+      type: object
+      additionalProperties: false
+      description: Every field is optional; one left out is kept.
+      properties:
+        name: {type: string, description: 'Empty keeps the name.'}
+        account: {type: string, description: 'For Bitbucket, the workspace.'}
+        token: {type: string, format: password, description: 'Replaces the stored token. Cannot be empty but for generic. Never shown again.'}
+        email: {type: string, format: password, description: 'Bitbucket only: the Atlassian account email an API token belongs to. Empty sends the token on its own, as an access token is.'}
 
     CreatedGitSource:
       type: object
@@ -6685,6 +7251,12 @@ components:
               options: {type: array, items: {type: string}}
               secret: {type: boolean}
               required: {type: boolean}
+        untested:
+          type: boolean
+          description: >-
+            A built-in kind whose delivery to the real service has never been
+            seen end to end: what it sends is checked against a local listener,
+            and the cluster crosscheck runs no server for it.
 
     ChannelKindList:
       type: object
@@ -6791,6 +7363,25 @@ components:
         items: {type: array, items: {$ref: '#/components/schemas/App'}}
         total: {type: integer}
 
+    AppUpdate:
+      allOf:
+        - $ref: '#/components/schemas/App'
+        - type: object
+          required: [rolled_out, next_deploy]
+          properties:
+            rolled_out:
+              type: array
+              description: The settings the running instances were given now, by a rollout.
+              items: {type: string}
+            next_deploy:
+              type: array
+              description: >-
+                The settings that wait for the next deploy: what goes into the
+                image, the release command, and on an app that runs nothing yet,
+                every change.
+              items: {type: string}
+            webhook: {$ref: '#/components/schemas/WebhookStatus'}
+
     AppDetail:
       allOf:
         - $ref: '#/components/schemas/App'
@@ -6880,6 +7471,7 @@ components:
               name: {type: string}
               error: {type: string}
               problem: {$ref: '#/components/schemas/Problem'}
+              backup: {$ref: '#/components/schemas/DatabaseBackup'}
         deployment: {$ref: '#/components/schemas/Deployment'}
 
     WebhookStatus:
@@ -6889,6 +7481,10 @@ components:
         registered: {type: boolean, description: 'Pushes will reach the panel with nothing more to set up.'}
         url: {type: string, description: 'Where the Git host should deliver, when somebody has to add it.'}
         reason: {type: string, description: 'Why it could not be registered.'}
+        reason_code:
+          type: string
+          enum: [no_connection]
+          description: 'no_connection is a Git app that deploys on push with no Git connection, so no webhook was registered for it. Give it one with PATCH git_source_id. Other reasons are the Git host''s own answer and have no code.'
 
     StackRequest:
       type: object
@@ -6953,6 +7549,7 @@ components:
         watch_paths: {type: string}
         deploy_trigger: {type: string, enum: [branch, tag]}
         tag_pattern: {type: string}
+        git_source_id: {type: string, description: 'The Git connection the app builds and registers its webhook with, which must be the team''s and for the repository''s host (400 otherwise); an empty string detaches it. Never rebuilds.'}
         run_as_user: {type: integer, minimum: 0, maximum: 2147483647, description: 'The uid for an image that names its user, so it runs at the strict confinement level; 0 leaves it to the image. Refused for an app built here, which runs as 1000.'}
         internal: {type: boolean}
         auto_deploy: {type: boolean}
@@ -7029,7 +7626,7 @@ components:
 
     InstanceInfo:
       type: object
-      required: [name, status, ready, restarts, node, cpu_m, memory_mb, usage_known]
+      required: [name, status, ready, restarts, node, cpu_m, memory_mb, usage_known, deployment]
       properties:
         name: {type: string}
         status: {type: string}
@@ -7041,6 +7638,18 @@ components:
         cpu_m: {type: integer}
         memory_mb: {type: integer}
         usage_known: {type: boolean}
+        deployment_id: {type: string, description: 'The deployment the instance was started for, read off the instance itself. Absent when it names none of this app''s.'}
+        deployment: {type: integer, description: 'That deployment''s number, which is the version the instance runs; 0 when unknown.'}
+        last_reason: {type: string, description: 'How the instance last stopped, in the kubelet''s word: OOMKilled, Error, Completed. Absent for one that has not stopped.'}
+        last_exit_code: {type: integer, description: 'The exit code it last stopped with, beside last_reason.'}
+        last_exit:
+          type: object
+          description: 'How the container before this one ended, for an instance that has restarted.'
+          required: [reason, exit_code]
+          properties:
+            reason: {type: string, description: 'The kubelet''s: OOMKilled, Error, Completed.'}
+            exit_code: {type: integer}
+            finished_at: {type: string, format: date-time}
 
     AppRuntimeStatus:
       type: object
@@ -7057,6 +7666,33 @@ components:
         image: {type: string}
         urls: {type: array, items: {type: string}}
         internal_address: {type: string, description: 'How the environment''s other apps reach an internal app, such as api:8080.'}
+        pending_changes:
+          type: array
+          description: >-
+            Saved settings and build-time variables the app's version was not
+            built with, which the next deploy builds with. Absent when nothing
+            waits.
+          items: {$ref: '#/components/schemas/BuildChange'}
+
+    BuildChange:
+      type: object
+      required: [setting]
+      properties:
+        setting: {type: string, description: 'A setting by its API name, such as branch or build_command, or variable.'}
+        key: {type: string, description: 'The build-time variable''s name, for the setting variable. Never its value.'}
+        from: {type: string}
+        to: {type: string}
+
+    VariableEffect:
+      type: object
+      required: [requires_rebuild]
+      properties:
+        requires_rebuild: {type: boolean, description: 'A build-time change that is being built now.'}
+        deployment: {$ref: '#/components/schemas/Deployment'}
+        not_rebuilt:
+          type: string
+          enum: [locked, not_deployed, failed]
+          description: Why a build-time change was not built now; it takes effect at the next deploy.
 
     AppMetrics:
       type: object
@@ -7148,11 +7784,24 @@ components:
 
     AppLogs:
       type: object
-      required: [app_id, lines, previous]
+      required: [app_id, lines, entries, previous, instances, instances_omitted]
       properties:
         app_id: {type: string}
-        lines: {type: array, items: {type: string}}
+        lines: {type: array, items: {type: string}, description: 'Each line''s text, in the same order as entries.'}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/LogEntry'}
         previous: {type: boolean}
+        instances: {type: array, items: {type: string}, description: 'The instances read.'}
+        instances_omitted: {type: integer, description: 'How many more had started and were not read.'}
+
+    LogEntry:
+      type: object
+      required: [instance, line]
+      properties:
+        instance: {type: string, description: 'The instance that wrote the line.'}
+        at: {type: string, format: date-time, description: 'When, by its server''s clock.'}
+        line: {type: string}
 
     RunLogs:
       type: object
@@ -7385,6 +8034,9 @@ components:
         error_code: {type: string}
         error_message: {type: string}
         error_hint: {type: string}
+        problem:
+          $ref: '#/components/schemas/Problem'
+          description: 'The whole of what a failed deployment was failed with, with its values and context. For deploy.crashed the context carries kind, exit_code, reason, stops and log_tail, the last lines the instance printed, redacted.'
         created_by: {type: string}
         accepted_vulnerabilities: {type: boolean, description: 'Deployed with critical vulnerabilities that have a fix accepted, past the check that stops those.'}
         created_at: {type: string, format: date-time}
@@ -7880,6 +8532,15 @@ components:
         access_key_id: {type: string, description: 'Route 53.'}
         secret_access_key: {type: string, description: 'Route 53.'}
 
+    ReplaceDNSCredentialsRequest:
+      type: object
+      additionalProperties: false
+      description: A token, or for Route 53 an access key. The kind is the connection's.
+      properties:
+        token: {type: string, format: password}
+        access_key_id: {type: string, description: 'Route 53.'}
+        secret_access_key: {type: string, format: password, description: 'Route 53.'}
+
     # --- scaling and processes ---
 
     Scaling:
@@ -8169,6 +8830,10 @@ components:
                 properties:
                   ready: {type: integer, description: 'Instances ready, when the cluster said.'}
                   phase: {type: string}
+                  instance_list:
+                    type: array
+                    description: 'Its instances, when the cluster said.'
+                    items: {$ref: '#/components/schemas/InstanceInfo'}
         total: {type: integer}
 
     SetProcessRequest:
@@ -8279,6 +8944,58 @@ components:
         version: {type: string}
         storage_gb: {type: integer}
         instances: {type: integer}
+        backup:
+          type: boolean
+          description: >-
+            Whether to back it up every day. Left out, the panel's own default decides
+            (storage.default_backups, on unless an administrator turned it off).
+
+    CreatedDatabase:
+      allOf:
+        - $ref: '#/components/schemas/Database'
+        - type: object
+          required: [backup]
+          properties:
+            backup: {$ref: '#/components/schemas/DatabaseBackup'}
+
+    DatabaseBackup:
+      type: object
+      required: [enabled]
+      description: What creating a database did about its backups.
+      properties:
+        enabled: {type: boolean, description: 'It is backed up on the schedule below.'}
+        reason:
+          type: string
+          enum: [declined, not_offered, preview, turned_off, no_storage, failed]
+          description: >-
+            Why it is not: backup was false; the engine is not backed up; the environment is a preview;
+            storage.default_backups is off; there is no backup storage; or the panel could not read its
+            settings or save the schedule, which its log says.
+        schedule: {type: string, description: 'Five cron fields, in UTC.'}
+        retention: {type: integer, description: 'How many scheduled backups are kept.'}
+
+    BackupStorage:
+      type: object
+      required: [configured, sealed, default_backups]
+      properties:
+        configured: {type: boolean, description: 'Every setting backups need is filled in. The bucket is not reached to say so.'}
+        sealed: {type: boolean, description: 'A backup passphrase is set, so every backup is encrypted before it leaves the cluster.'}
+        default_backups: {type: boolean, description: 'A new database is backed up when whoever creates it does not say.'}
+
+    DefaultedDatabaseList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [database_id, name, schedule]
+            properties:
+              database_id: {type: string}
+              name: {type: string}
+              schedule: {type: string, description: 'Five cron fields, in UTC.'}
+        total: {type: integer}
 
     DatabaseLink:
       type: object
@@ -8287,7 +9004,22 @@ components:
         database_id: {type: string}
         app_id: {type: string}
         var_name: {type: string}
+        pieces: {$ref: '#/components/schemas/LinkPieces'}
         created_at: {type: string, format: date-time}
+
+    LinkPieces:
+      type: object
+      additionalProperties: false
+      description: >-
+        The variables a link also delivers the connection in, piece by piece, for software that has no
+        setting for a URL. Each is rewritten with the URL when the password changes and removed with it.
+        A piece left out is not delivered; only the password is a secret.
+      properties:
+        host: {type: string}
+        port: {type: string}
+        name: {type: string, description: 'The database the app uses.'}
+        user: {type: string}
+        password: {type: string}
 
     LinkDatabaseRequest:
       type: object
@@ -8295,6 +9027,14 @@ components:
       additionalProperties: false
       properties:
         app_id: {type: string}
+        pieces:
+          allOf:
+            - $ref: '#/components/schemas/LinkPieces'
+          description: >-
+            Also deliver these pieces. Left out, a link being changed keeps the ones it has, and a new one has
+            none. Refused with database.piece_not_offered for a piece the engine does not have on its own (see
+            pieces in GET /api/database-engines), and with database.variable_taken for a name another
+            database's link already writes.
         var_name: {type: string, description: 'The engine''s own default when left out: DATABASE_URL for postgres, MYSQL_URL for mysql and mariadb, MONGODB_URI for mongodb, REDIS_URL for redis, valkey and dragonfly, CLICKHOUSE_URL for clickhouse and MEMCACHED_URL for memcached. GET /api/database-engines lists them.'}
 
     DatabaseCredentials:
@@ -8333,6 +9073,19 @@ components:
           type: array
           items: {type: string, enum: [sql, custom, archive, archive-gzip, rdb]}
           description: 'The dump formats a file can be imported in. Empty for an engine that imports none.'
+        pieces:
+          type: array
+          description: >-
+            The parts of its connection a link can also deliver as variables of their own, in the order host,
+            port, name, user, password, each with the variable the interface suggests: the one the engine's own
+            clients or images read. Redis, Valkey and Dragonfly have no name or user here, and Memcached only a
+            host and a port.
+          items:
+            type: object
+            required: [piece, variable]
+            properties:
+              piece: {type: string, enum: [host, port, name, user, password]}
+              variable: {type: string}
 
     DatabaseEngineList:
       type: object
@@ -8350,11 +9103,12 @@ components:
         id: {type: string}
         target_type: {type: string, enum: [database, volume, panel]}
         target_id: {type: string}
-        status: {type: string}
+        status: {type: string, enum: [running, succeeded, failed, skipped]}
         kind: {type: string, description: 'manual, scheduled, before_update and the like.'}
         location: {type: string}
         size_bytes: {type: integer}
         error_message: {type: string}
+        error_code: {type: string, description: 'Why it was skipped (database.stopped, database.busy) or could not start (the problem''s code).'}
         created_at: {type: string, format: date-time}
         finished_at: {type: string, format: date-time}
         encrypted: {type: boolean, description: 'Sealed with the backup passphrase.'}
@@ -8427,6 +9181,10 @@ components:
               cpu_request_m: {type: integer}
               cpu_limit_m: {type: integer}
               public: {type: boolean, description: 'Gets a domain. A worker does not.'}
+              needs_root: {type: boolean, description: 'Its image starts as root, which an environment at the strictest level refuses.'}
+              health_check: {type: string, enum: [http, tcp, none], description: 'How its instances are checked. Left out, http with a health_path and tcp without.'}
+              health_start_seconds: {type: integer, minimum: 10, maximum: 1800, description: 'How long a new instance may take to answer. Left out, two minutes.'}
+              health_timeout_seconds: {type: integer, minimum: 1, maximum: 60, description: 'How long one check waits for an answer. Left out, three seconds.'}
               gpu:
                 type: object
                 description: A card it uses when a server offers one; installed without on a cluster with none.
@@ -8487,6 +9245,56 @@ components:
           type: object
           description: The template's inputs, by key.
           additionalProperties: {type: string}
+        dry_run: {type: boolean, description: 'Answer the plan and make nothing.'}
+        allow_root:
+          type: boolean
+          description: >-
+            When the template has an image that starts as root and the environment is
+            at the strictest level, set the environment to accept root images, last of
+            what can fail and before anything deploys. Admin, as changing the level is:
+            a member asking for it is refused with 403 before anything is written.
+
+    TemplateInstallPlan:
+      type: object
+      required: [apps, databases, volumes, problems]
+      properties:
+        apps:
+          type: array
+          items:
+            type: object
+            required: [service, name, slug, image, public]
+            properties:
+              service: {type: string, description: 'The template''s own name for it.'}
+              name: {type: string}
+              slug: {type: string}
+              image: {type: string}
+              public: {type: boolean}
+              needs_root: {type: boolean}
+        databases:
+          type: array
+          items:
+            type: object
+            required: [name, engine, storage_gb, link_to]
+            properties:
+              name: {type: string, description: 'Named after the app when a template of one app is given a name of its own.'}
+              engine: {type: string}
+              storage_gb: {type: integer, description: 'Nothing for a cache.'}
+              link_to: {type: array, items: {type: string}, description: 'The apps it would be linked to, by name.'}
+        volumes:
+          type: array
+          items:
+            type: object
+            required: [app, name, mount_path, size_gb]
+            properties:
+              app: {type: string}
+              name: {type: string}
+              mount_path: {type: string}
+              size_gb: {type: integer}
+        problems:
+          type: array
+          description: Everything that stops the install, each as the install would answer it. Empty when it can go ahead.
+          items: {$ref: '#/components/schemas/Problem'}
+        accepts_root: {type: boolean, description: 'The install would set the environment to accept root images, as allow_root asked.'}
 
     TemplateCatalogue:
       type: object
@@ -8667,6 +9475,7 @@ components:
           type: array
           items: {type: string}
           description: The services that use a GPU when there is one and were installed without, because no server offers one.
+        accepts_root: {type: boolean, description: 'The environment was set to accept root images on the way.'}
 
     # --- plugins ---
 
@@ -8808,6 +9617,11 @@ components:
           type: object
           description: The installed version of each plugin, by id.
           additionalProperties: {type: string}
+        not_published:
+          type: boolean
+          description: >-
+            The address is the Skifity store and nothing is published there
+            yet. Nothing was fetched, and the catalogue is empty.
 
     # --- panel administration ---
 
@@ -8955,6 +9769,54 @@ components:
         built: {type: string}
         update_check: {type: string, const: manual}
         note: {type: string}
+
+    PanelDomainRequest:
+      type: object
+      required: [domain]
+      additionalProperties: false
+      properties:
+        domain: {type: string, description: 'A domain of your own, such as panel.example.com.'}
+        ignore_dns:
+          type: boolean
+          description: >-
+            Move although the DNS check says the domain does not point at the
+            server: it reaches the server some way the panel cannot see.
+
+    PanelDomain:
+      type: object
+      required: [url, host, scheme, previous, dns_target, movable]
+      properties:
+        url: {type: string, description: 'The address the panel was started with, and answers at.'}
+        host: {type: string}
+        scheme: {type: string, enum: [http, https]}
+        domain:
+          type: string
+          description: >-
+            The domain set here, while moving to it, once there, or after a
+            move to it stopped. Absent for a panel never moved from Settings.
+        state:
+          type: string
+          enum: [moving, restarting, live, failed]
+        problem: {$ref: '#/components/schemas/Problem'}
+        started_at: {type: string, format: date-time}
+        previous:
+          type: array
+          description: >-
+            Addresses the panel keeps answering on, for the webhooks registered
+            at them. A browser that opens one is sent to the panel's address.
+          items: {type: string}
+        certificate:
+          type: object
+          required: [state]
+          properties:
+            state: {type: string, enum: [none, issuing, ready]}
+            message: {type: string, description: 'What cert-manager said last, while it is not ready.'}
+            not_after: {type: string, format: date-time}
+        dns_target: {type: string, description: 'The address a record for the domain points at.'}
+        dns_target_ipv6: {type: string}
+        free_address: {type: string, description: 'The sslip.io address taking the domain off goes back to.'}
+        movable: {type: boolean, description: 'Whether the panel can change its own address.'}
+        reason: {$ref: '#/components/schemas/Problem'}
 
     UpgradeCheck:
       type: object

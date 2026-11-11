@@ -35,9 +35,13 @@ The panel shows these as they happen, and says what each one found.
 4. **Configuring the firewall.** The cluster's ports are opened to the other
    servers' addresses only, never to the world. The rules are checked before
    they are added, so running this again changes nothing.
-5. **Checking the network.** Both directions, before anything long-running
-   starts. Without this step, a firewall in the provider's control panel shows
-   up as a five-minute Kubernetes install that times out with no explanation.
+5. **Checking the network.** The new server opens a connection to a control
+   plane server on port 6443, before anything long-running starts. Without this
+   step, a firewall in the provider's control panel shows up as a five-minute
+   Kubernetes install that times out with no explanation. It is one port in one
+   direction: the pod network's UDP ports, etcd's ports between control plane
+   servers and connections towards the new server are not tested, here or
+   after the join. See [When a step fails](#when-a-step-fails).
 6. **Installing Kubernetes.** k3s joins the existing cluster, with the same pod
    network as every other server. That is normally WireGuard, which encrypts
    traffic between servers; a server whose kernel has no WireGuard module is
@@ -71,7 +75,8 @@ anything, before it keeps it — a read-only token is refused there, not at the
 first order. The token is sealed under that connection, is rotated with every
 other secret when the master key is, and is never shown again; the list shows
 its last four characters. A connection that servers were created with cannot
-be removed until they are, because deleting their machines needs it.
+be removed until they are, because deleting their machines needs it; its
+token can be replaced, below.
 
 **Pick what to order.** Locations, server types and images come from the
 provider as they are now: only types that can be ordered in the location picked
@@ -140,6 +145,22 @@ still carries the label the panel gave it (a tag, at DigitalOcean): a machine so
 any server that was added with an address rather than created, is never
 deleted — it is left for you to delete in the provider's console. Without the box
 ticked, the machine keeps running, and keeps being billed.
+
+### Replacing the token
+
+A token that expired, was revoked or is being rotated is replaced on the
+connection: **Replace token** under **Settings → Cloud providers**, or
+`skifity cloud providers update NAME --token-file FILE`. It is allowed while
+servers created with the connection are in the panel, which removing it is
+not.
+
+The provider is asked before anything is saved, as it is for a new
+connection: whether the token works, and whether it may write. When servers
+were created with the connection, the new token also has to see their
+machines. A token for another project passes every other check and sees none
+of them, and saving it would leave those machines where only the provider's
+console could delete them, still billed; it is refused. If the machines were
+deleted in the console, remove their servers in the panel first.
 
 ## The password
 
@@ -232,6 +253,52 @@ that is sick.** A machine that accepts the connection and then answers nothing
 is one DNS gives out for as long as the record exists. Good enough for a great
 many installs, and it costs nothing.
 
+#### Which servers are taking traffic
+
+The panel watches for the sick half, and says so; it does not act on it.
+
+**Servers** says of each server whether it takes traffic on ports 80 and 443,
+read from the cluster while the page is open. A server takes traffic while it
+is ready, the load balancer k3s runs on it (ServiceLB) is ready, and a Traefik
+on it is ready — Traefik answers only the visitors who reach the server it runs
+on, because that is how it keeps their address (see
+[Knowing who the visitor is](firewall.md#knowing-who-the-visitor-is)); with a
+Traefik you configured without that, a ready one anywhere will do. These are
+the rules k3s itself uses to decide which addresses its load balancer offers.
+A server that is up and fails one of them is marked **Not taking traffic**,
+counts among the servers that need attention, and its own page says which rule
+it fails. When Traefik is what is missing, such a server drops a connection
+rather than refusing it, so a browser sent there waits before it tries another
+address, if it tries at all.
+
+What it does not see:
+
+* **The outside.** This is the cluster's own view, not a request from the
+  internet. A provider's firewall closing port 443, a broken route between your
+  visitors and the server, or a Traefik that is ready and answers everything
+  with an error all look healthy here.
+* **Anything but k3s's load balancer.** With ServiceLB turned off — MetalLB, a
+  provider's load balancer — or Traefik replaced, the cluster does not say
+  which servers take traffic, and the panel says nothing rather than guess.
+* **Nobody is told.** It is shown, not sent: a server that is up and not
+  serving does not reach the team's notification channels. A server that stops
+  answering altogether does, as **not responding**.
+
+**It does not change your DNS.** The records at a round-robin name are yours,
+and the panel only ever changes or deletes a record it created (see
+[Connecting a DNS provider](concepts.md#connecting-a-dns-provider)); the
+records it creates name one address, not one per server. Take the sick
+server's address out of the name by hand until it is fixed. Doing that
+automatically was considered and left out: the panel would need to own every
+address at the name, a resolver keeps the old answer for the record's TTL
+after it changes, and a check from inside the cluster would remove an address
+for a reason the outside never saw, or keep one the outside cannot reach. A
+health-checking DNS service, below, does this properly from outside.
+
+> **Not run against a real cluster.** The rules are tested against a fake one;
+> no run has yet stopped Traefik on one server of several and watched
+> **Servers** say so.
+
 ### DNS with health checks — automatic, a few dollars
 
 Cloudflare Load Balancing, Route 53 health checks, and most managed DNS
@@ -268,15 +335,60 @@ connected DNS provider too (see
 
 ## Control plane servers
 
-The first server runs the control plane. Others join as workers unless you
-promote them.
+The first server runs the control plane: etcd, which holds the cluster's
+state, and the Kubernetes API. Others join as workers unless you add them as
+control plane servers or promote them.
 
-With one control plane server, rebooting it means the cluster cannot be changed
-for a few minutes. Your apps keep running the whole time; you just cannot deploy.
+**A fresh install has one control plane server, and it is a single point of
+failure for the whole cluster.** Rebooting it means the cluster cannot be
+changed for a few minutes; your apps keep running the whole time, you just
+cannot deploy. Losing it for good loses the cluster: nothing can be deployed,
+moved or restarted on another server, the panel goes with it, and the way back
+starts with a new install (see
+[Restoring after losing the panel's server](troubleshooting.md#restoring-after-losing-the-panels-server)).
+Adding workers adds capacity, not this.
 
 With three, losing one changes nothing at all *to the cluster*. Two is worse
 than one: a two-member etcd cluster cannot form a majority when either member is
 lost, so the panel refuses to leave you there.
+
+### Going to three
+
+Three control plane servers are what a cluster you depend on should have, and
+they ask more of the servers than workers do:
+
+* **An odd number.** Three, or five. etcd needs a majority of its members to
+  agree on every change, so three carry on with one lost and five with two.
+  Four survive no more than three do, and two, as above, are worse than one.
+* **One place.** Every change to the cluster waits until a majority has
+  written it, so the round trip between members is added to every change, and
+  a link that drops packets has members miss each other and elect a new
+  leader. Keep them in one region, a few milliseconds apart, as servers in one
+  data centre are. Servers far apart make good workers and poor control planes.
+* **A fast disk.** etcd waits for every write to reach the disk before it
+  answers. A local SSD keeps up; a virtual disk on shared network storage often
+  does not, and shows up as `slow fdatasync` in the k3s log and a cluster that
+  stalls (see [The cluster is unreachable](troubleshooting.md#the-cluster-is-unreachable)).
+* **Room.** 2 GB of memory, 20 GB of disk and two cores each, against 1 GB,
+  8 GB and one core for a worker, because etcd and the Kubernetes API run there
+  too. This is checked before anything is touched.
+
+The round trip, its jitter, lost packets and how fast the disk syncs are
+measured too, before a server becomes a control plane server, and shown as
+warnings rather than refusals; what is measured, and what it cannot show, is
+below.
+
+The first server is one; add two more. Tick **Control plane server** when you
+add each one, or when you order it at a cloud provider (`--control-plane` with
+`skifity servers create`), or add them as workers and press **Make it a control
+plane server** on each one's page, which the panel allows once the cluster has
+three servers.
+
+Neither way has been run on a real cluster yet: the `Two servers` workflow
+adds its second server as a worker, so joining or promoting a control plane
+server, and three of them surviving the loss of one, have unit tests but have
+not been seen working. Try it on servers you can rebuild before you depend on
+it.
 
 Three control planes do not make the panel highly available. The panel is one
 pod, with its database and master key on one server's disk, and it runs where
@@ -288,6 +400,26 @@ address.
 
 Promoting a server moves its instances elsewhere first, then rejoins it as a
 control plane member.
+
+Before a server becomes a control plane server, added as one or promoted, the
+panel measures it for etcd, which keeps the cluster's state and, on every
+change, waits for a majority of the control plane servers and for its own disk.
+It times 20 TCP connections from the server to port 6443 on each control plane
+server already there, and 200 small writes to its disk with `dd` and
+`oflag=dsync` under `/var/lib`, about half a megabyte that it removes again. An
+average round trip over 50 ms, round trips that vary by more than 10 ms, more
+than 1% of connections losing a packet, or a write that takes more than 10 ms
+on average to be made durable is shown as a warning: under the network check
+when adding, under the preflight when promoting. A warning never stops
+anything. The four thresholds are under **Settings → Cluster**, where 0 turns
+one off. What could not be measured, on a server without bash or one that
+cannot reach a control plane server's port 6443, is said as well rather than
+passed over.
+
+It is a few seconds of one link, timed from one side. It does not show that a
+link stays good, it does not time the other control plane servers against each
+other, and it is no substitute for etcd's own disk guidance, which uses fio and
+runs for longer.
 
 ## Hardening
 
@@ -355,6 +487,22 @@ press Retry.
 servers. Providers such as Hetzner and DigitalOcean have their own firewall in
 the control panel, which the server cannot see or change. That is the usual
 cause.
+
+**The server is ready, but apps on it cannot reach the others.** The network
+check tries only TCP 6443 from the new server to a control plane server, and
+a node reports ready without a single packet of pod traffic having crossed to
+another server. Instances on it then time out talking to a database or an app
+on another server, and requests through another server's ingress to an
+instance on it hang. That is the pod network: UDP 51820 and 51821 with
+WireGuard, the default, or UDP 8472 with vxlan, between every pair of servers
+and in both directions. A control plane server also needs TCP 2379 and 2380
+to and from the other control plane servers; without them etcd cannot take it
+in, and the join stops at the five-minute wait for the server to be ready. The
+new server's own firewall is opened to the other servers for all of these, and
+so is the provider firewall of every server the panel created at a cloud
+provider. Nothing else is: a firewall running on a server that was already in
+the cluster, or one in your provider's control panel in front of a server you
+brought yourself, has to let them in from the new server's address.
 
 **Kubernetes did not install.** The log at
 `/var/log/skifity/provision-<id>.log` on the panel's server has the installer's

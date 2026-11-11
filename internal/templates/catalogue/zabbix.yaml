@@ -22,6 +22,7 @@ services:
 - name: zabbix-server
   image: zabbix/zabbix-server-pgsql:alpine-7.4.15
   port: 10051
+  health_start_seconds: 900
   public: false
   mem_request_mb: 256
   mem_limit_mb: 1024

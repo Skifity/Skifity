@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -33,7 +32,13 @@ func cmdAdmin(ctx context.Context, args []string, out io.Writer) error {
 Usage:
   %s admin reset-password <email>   set a new password for an account
                                     (--remove-passkeys also removes its passkeys)
+  %s admin reset-2fa <email>        turn an account's two-factor authentication off,
+                                    for a lost phone with the recovery codes gone
   %s admin list-users               show the accounts on this panel
+  %s admin disable <email>          stop an account signing in, everywhere at once
+  %s admin enable <email>           let a disabled account sign in again
+  %s admin make-admin <email>       make an account a panel administrator
+  %s admin revoke-admin <email>     stop an account being one; the last is kept
   %s admin backup-db <path>         write a consistent copy of the database
   %s admin restore-db <file>        put a backup of the database back
   %s admin restore-key              write the master key back from a recovery key,
@@ -43,15 +48,20 @@ Usage:
 
 These run on the server the panel is installed on and read its database
 directly, so they work when nobody can sign in. They need to be run as root.
-`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
+`, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary,
+			version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary, version.Binary)
 		return nil
 	}
 
 	switch args[0] {
 	case "reset-password":
 		return adminResetPassword(ctx, args[1:], out)
+	case "reset-2fa":
+		return adminResetTwoFactor(ctx, args[1:], out)
 	case "list-users":
 		return adminListUsers(ctx, args[1:], out)
+	case "disable", "enable", "make-admin", "revoke-admin":
+		return adminChangeAccount(ctx, args[0], args[1:], out)
 	case "backup-db":
 		return adminBackupDatabase(ctx, args[1:], out)
 	case "restore-db":
@@ -121,14 +131,8 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 	}
 	defer db.Close()
 
-	user, err := db.GetUserByEmail(ctx, email)
+	user, err := accountByEmail(ctx, db, email)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return errdoc.New("admin.no_such_user", "No account with that address").
-				WithCause("Nobody on this panel uses %s.", email).
-				WithImpact("Nothing was changed.").
-				WithFix("Run `%s admin list-users` to see the accounts that do exist.", version.Binary)
-		}
 		return err
 	}
 
@@ -149,10 +153,12 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 	if err != nil {
 		return err
 	}
-	user.PasswordHash = hash
-	if err := db.UpdateUser(ctx, &user); err != nil {
+	// Only the hash: the panel may be running, and the rest of the row is
+	// not this command's to write back as it was a moment ago.
+	if err := db.UpdatePasswordHash(ctx, user.ID, hash); err != nil {
 		return err
 	}
+	user.PasswordHash = hash
 
 	// Anyone already signed in as this account is signed out. If the reason for
 	// the reset is that somebody else has the old password, leaving their
@@ -176,6 +182,9 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 	if err != nil {
 		return fmt.Errorf("count the account's passkeys: %w", err)
 	}
+	if err := recordAccountChange(ctx, db, "account.password_reset", user); err != nil {
+		return fmt.Errorf("the password was changed, but the activity log could not record it: %w", err)
+	}
 
 	if *asJSON {
 		return writeJSON(out, map[string]any{
@@ -187,7 +196,9 @@ func adminResetPassword(ctx context.Context, args []string, out io.Writer) error
 
 	fmt.Fprintf(out, "\nThe password for %s has been changed, and every signed-in device was signed out.\n", user.Email)
 	if user.TOTPEnabled {
-		fmt.Fprintln(out, "Two-factor authentication is still on for this account, so you will need your authenticator app.")
+		fmt.Fprintf(out, "Two-factor authentication is still on for this account: sign in with the authenticator\n"+
+			"app or one of the recovery codes. If both are gone, run `%s admin reset-2fa %s`.\n",
+			version.Binary, user.Email)
 	}
 	if removed > 0 {
 		fmt.Fprintf(out, "Removed %s.\n", plural(removed, "passkey"))

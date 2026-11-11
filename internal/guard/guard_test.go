@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"skifity/internal/edgerules"
 )
@@ -255,5 +256,116 @@ func TestTheHostnameIsMatchedLoosely(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("%q was not recognised as the protected host: %d", host, w.Code)
 		}
+	}
+}
+
+// keepOutOfAdmin is the rule the firewall's own page gives as its example.
+func keepOutOfAdmin() edgerules.RuleSet {
+	return edgerules.RuleSet{
+		Default: edgerules.ActionAllow,
+		Rules: []edgerules.Rule{{
+			ID: "admin", Name: "keep people out of the admin area", Action: edgerules.ActionBlock, Enabled: true,
+			Expr: edgerules.Expr{Test: &edgerules.Test{
+				Field: edgerules.FieldPath, Op: edgerules.OpStartsWith, Values: []string{"/admin"},
+			}},
+		}},
+	}
+}
+
+// Every spelling an app routes to /admin is stopped by a rule about /admin.
+// They arrive in X-Forwarded-Uri, still escaped, from the ingress.
+func TestEveryWayOfWritingThePathIsTheSamePath(t *testing.T) {
+	handler := newGuard(t, Config{Sets: map[string]Protected{"shop.example.com": {RuleSet: keepOutOfAdmin()}}}).Handler()
+	for _, path := range []string{
+		"/admin", "/%61dmin", "//admin", "/x/../admin", "/./admin", "/admin;jsessionid=1",
+		`\admin`, `\admin/users`, "/%2e%2e/admin", "/../../admin", "/%2E%2E%2Fadmin", "/ADMIN",
+		"/%61dmin/users?next=/", "/;x/admin",
+	} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, forwarded("shop.example.com", path, "198.51.100.9"))
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%q reached the admin area: %d", path, w.Code)
+		}
+	}
+
+	// And the rest of the site still answers, however it is spelled.
+	for _, path := range []string{"/", "/shop", "/%73hop", "/administrators-guide/../shop", "/login?next=/admin"} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, forwarded("shop.example.com", path, "198.51.100.9"))
+		if w.Code != http.StatusOK {
+			t.Errorf("%q was refused: %d", path, w.Code)
+		}
+	}
+}
+
+// A path that cannot be read one way is refused where the rules look at the
+// path, and only there.
+func TestAnUnreadablePathIsRefusedOnlyWhereThePathMatters(t *testing.T) {
+	addresses := allowlist().Sets["shop.example.com"].RuleSet
+	handler := newGuard(t, Config{Sets: map[string]Protected{
+		"paths.example.com":     {RuleSet: keepOutOfAdmin()},
+		"addresses.example.com": {RuleSet: addresses},
+		"nothing.example.com":   {RuleSet: edgerules.RuleSet{Default: edgerules.ActionAllow}},
+	}}).Handler()
+
+	ask := func(host, path, client string) int {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, forwarded(host, path, client))
+		return w.Code
+	}
+	for _, path := range []string{"/%zz", "/%61dmin%00", "/%252e%252e/admin", "/x%0a"} {
+		if got := ask("paths.example.com", path, "198.51.100.9"); got != http.StatusBadRequest {
+			t.Errorf("%q on a host whose rules read the path: %d, want 400", path, got)
+		}
+		// Judged by the address, as it always was.
+		if got := ask("addresses.example.com", path, "203.0.113.7"); got != http.StatusOK {
+			t.Errorf("%q from the office, on a host whose rules are about addresses: %d, want 200", path, got)
+		}
+		if got := ask("addresses.example.com", path, "198.51.100.9"); got != http.StatusForbidden {
+			t.Errorf("%q from elsewhere, on a host whose rules are about addresses: %d, want 403", path, got)
+		}
+		if got := ask("nothing.example.com", path, "198.51.100.9"); got != http.StatusOK {
+			t.Errorf("%q on a host with no rules: %d, want 200", path, got)
+		}
+		if got := ask("unprotected.example.com", path, "198.51.100.9"); got != http.StatusOK {
+			t.Errorf("%q on a host nobody protects: %d, want 200", path, got)
+		}
+	}
+}
+
+// One login page, two spellings, one count.
+func TestALimitCountsEverySpellingOfThePathTogether(t *testing.T) {
+	g := newGuard(t, Config{Sets: map[string]Protected{"shop.example.com": {RuleSet: edgerules.RuleSet{
+		Default: edgerules.ActionAllow,
+		Rules: []edgerules.Rule{{
+			ID: "login", Name: "the login page", Action: edgerules.ActionLimit, Enabled: true,
+			Limit: &edgerules.Limit{Requests: 2, PeriodSeconds: 60},
+			Expr: edgerules.Expr{Test: &edgerules.Test{
+				Field: edgerules.FieldPath, Op: edgerules.OpIn, Values: []string{"/login"},
+			}},
+		}},
+	}}}})
+	now := time.Unix(1_000_000, 0)
+	g.limits = newLimiter(func() time.Time { return now }, nil)
+
+	ask := func(path string) int {
+		w := httptest.NewRecorder()
+		g.Handler().ServeHTTP(w, forwarded("shop.example.com", path, "203.0.113.9"))
+		return w.Code
+	}
+	if got := ask("/login"); got != http.StatusOK {
+		t.Fatalf("the first attempt answered %d", got)
+	}
+	now = now.Add(10 * time.Second)
+	if got := ask("/%6cogin"); got != http.StatusOK {
+		t.Fatalf("the second attempt answered %d", got)
+	}
+	now = now.Add(10 * time.Second)
+	if got := ask("//login;jsessionid=2"); got != http.StatusTooManyRequests {
+		t.Errorf("a third attempt, spelled a third way, in the same minute answered %d, want 429", got)
+	}
+	now = now.Add(time.Minute)
+	if got := ask("/login"); got != http.StatusOK {
+		t.Errorf("after the window the attempt answered %d", got)
 	}
 }

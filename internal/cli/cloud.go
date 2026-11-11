@@ -38,6 +38,7 @@ var cloudStdin io.Reader = os.Stdin
 //	skifity cloud providers add --token-file token.txt        connect a Hetzner Cloud project
 //	skifity cloud providers add --name eu --token-file - < token.txt
 //	skifity cloud providers test NAME                         ask the provider again
+//	skifity cloud providers update NAME --token-file FILE     replace its token, servers and all
 //	skifity cloud providers remove NAME
 //
 // The token is read from a file or from standard input, never from the
@@ -55,7 +56,7 @@ func cmdCloud(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if len(positional) == 0 || positional[0] != "providers" {
-		return errdoc.BadRequest(fmt.Sprintf("Use `%s cloud providers`, with list, add, test or remove.", version.Binary))
+		return errdoc.BadRequest(fmt.Sprintf("Use `%s cloud providers`, with list, add, update, test or remove.", version.Binary))
 	}
 	positional = positional[1:]
 	action := "list"
@@ -118,7 +119,7 @@ func cmdCloud(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "Connected %s as %s. The token was checked and can create servers.\n", added.Title, added.Name)
 		return nil
 
-	case "test", "check", "remove", "rm", "delete":
+	case "test", "check", "update", "remove", "rm", "delete":
 		if len(positional) != 1 {
 			return errdoc.BadRequest(fmt.Sprintf("Name the connection: `%s cloud providers %s NAME`.", version.Binary, action))
 		}
@@ -129,6 +130,9 @@ func cmdCloud(ctx context.Context, args []string, out io.Writer) error {
 		connection, err := pickCloudProvider(listed, positional[0])
 		if err != nil {
 			return err
+		}
+		if action == "update" {
+			return replaceCloudToken(ctx, client, path, connection, *tokenFile, *asJSON, out)
 		}
 		if action == "test" || action == "check" {
 			var checked cloudProviderAnswer
@@ -150,7 +154,33 @@ func cmdCloud(ctx context.Context, args []string, out io.Writer) error {
 		fmt.Fprintf(out, "%s is removed. The token is gone from the panel; revoke it in the provider's console too.\n", connection.Name)
 		return nil
 	}
-	return errdoc.BadRequest(fmt.Sprintf("cloud providers takes list, add, test or remove, not %q.", action))
+	return errdoc.BadRequest(fmt.Sprintf("cloud providers takes list, add, update, test or remove, not %q.", action))
+}
+
+// replaceCloudToken gives a connection a new token where it is, which is
+// allowed while servers created with it are in the panel: removing it is not.
+// The panel checks the token first, and with servers, that it can see their
+// machines.
+func replaceCloudToken(ctx context.Context, client *Client, path string, connection cloudProviderAnswer,
+	tokenFile string, asJSON bool, out io.Writer) error {
+	if tokenFile == "" {
+		return errdoc.BadRequest("Name the file holding the new token with --token-file, or - to read it from standard input. " +
+			"The token is never given on the command line.")
+	}
+	token, err := readToken(tokenFile)
+	if err != nil {
+		return err
+	}
+	var replaced cloudProviderAnswer
+	if err := client.Do(ctx, "PATCH", path+"/"+url.PathEscape(connection.ID), map[string]string{"token": token}, &replaced); err != nil {
+		return err
+	}
+	if asJSON {
+		return writeJSON(out, replaced)
+	}
+	fmt.Fprintf(out, "%s has its new token (…%s), and it can create servers. Revoke the old one in the provider's console.\n",
+		replaced.Name, replaced.TokenHint)
+	return nil
 }
 
 func listCloudProviders(ctx context.Context, client *Client, path string) ([]cloudProviderAnswer, error) {

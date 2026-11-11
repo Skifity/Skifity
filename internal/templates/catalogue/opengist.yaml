@@ -6,6 +6,7 @@ website: https://opengist.io
 services:
 - name: opengist
   image: ghcr.io/thomiceli/opengist:1.15.2
+  needs_root: true
   port: 6157
   public: true
   health_path: /healthcheck

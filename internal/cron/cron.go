@@ -269,3 +269,37 @@ func NextRun(expression string, after time.Time) (time.Time, error) {
 	}
 	return time.Time{}, fmt.Errorf("this schedule never fires")
 }
+
+// CatchUpHorizon is how far back LastDue looks. A week covers a panel that was
+// down over a long weekend; a schedule whose last time is further back than
+// that is weekly or rarer, and its next time is soon.
+const CatchUpHorizon = 7 * 24 * time.Hour
+
+// LastDue is the most recent minute before now's own that a schedule was due
+// in, no earlier than changed — when the schedule was last set, since a time
+// before that belonged to another schedule — and no further back than
+// CatchUpHorizon. Now's own minute is left out because it belongs to the
+// minute tick, which runs it on time.
+//
+// Two things ask it the same question and must agree on the answer: the
+// backups a restarted panel catches up on, and the overview's list of what
+// needs attention, which says a backup was missed. One saying a backup was
+// missed that the other did not take late would be a contradiction a person
+// cannot resolve.
+func LastDue(expression string, changed, now time.Time) (time.Time, bool) {
+	schedule, err := ParseSchedule(expression)
+	if err != nil {
+		return time.Time{}, false
+	}
+	now = now.UTC().Truncate(time.Minute)
+	floor := now.Add(-CatchUpHorizon)
+	if changed.After(floor) {
+		floor = changed.UTC()
+	}
+	for at := now.Add(-time.Minute); at.After(floor); at = at.Add(-time.Minute) {
+		if schedule.Matches(at) {
+			return at, true
+		}
+	}
+	return time.Time{}, false
+}

@@ -79,7 +79,8 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		"database_id": record.ID, "database": record.Name,
 		"engine": record.Engine, "environment_id": record.EnvironmentID,
 	})
-	writeJSON(w, http.StatusAccepted, record)
+	backup := s.applyDefaultBackupPolicy(r.Context(), env, record, req.Backup)
+	writeJSON(w, http.StatusAccepted, createdDatabase{Database: record, Backup: backup})
 }
 
 func (s *Server) handleGetDatabase(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +178,9 @@ func (s *Server) handleDatabaseCredentials(w http.ResponseWriter, r *http.Reques
 type linkDatabaseRequest struct {
 	AppID   string `json:"app_id"`
 	VarName string `json:"var_name,omitempty"`
+	// Pieces names the variables the connection also arrives in, piece by
+	// piece. Left out, a link being changed keeps the ones it has.
+	Pieces *store.LinkPieces `json:"pieces,omitempty"`
 }
 
 func (s *Server) handleLinkDatabase(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +221,12 @@ func (s *Server) handleLinkDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errdoc.BadRequest(err.Error()))
 		return
 	}
-	if err := s.databases.Link(r.Context(), record.ID, app.ID, varName); err != nil {
+	if req.Pieces != nil {
+		for _, field := range []*string{&req.Pieces.Host, &req.Pieces.Port, &req.Pieces.Name, &req.Pieces.User, &req.Pieces.Password} {
+			*field = strings.TrimSpace(*field)
+		}
+	}
+	if err := s.databases.Link(r.Context(), record.ID, app.ID, varName, req.Pieces); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -329,7 +338,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backup, err := s.backups.Run(r.Context(), "database", record.ID, "manual")
@@ -448,7 +457,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 	backupID := chi.URLParam(r, "backupID")

@@ -7,7 +7,9 @@ website: https://evershop.io
 services:
 - name: evershop
   image: evershop/evershop:2.2.1
+  needs_root: true
   port: 3000
+  health_start_seconds: 300
   public: true
   mem_request_mb: 256
   mem_limit_mb: 1024

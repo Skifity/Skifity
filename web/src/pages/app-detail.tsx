@@ -1,12 +1,27 @@
 import { Link, useSearchParams, useParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
+import { useRef } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { BoxIcon, ExternalLinkIcon, InfoIcon, RefreshCwIcon, RocketIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { AdvancedTab } from "@/components/app/advanced-tab"
-import { DeployButton, DeploymentsTab } from "@/components/app/deployments-tab"
+import {
+  CRASH_FIX_TAB,
+  OpenTabButton,
+  stopKind,
+  type StopKind,
+} from "@/components/app/deploy-failure"
+import {
+  DeployButton,
+  DeploymentsTab,
+  deploymentLink,
+  liveDeployment,
+  TERMINAL,
+  useDeployments,
+} from "@/components/app/deployments-tab"
+import { announceFirstLive, DeploymentNotice, LiveVersionCard } from "@/components/app/live-version"
 import { SendFolderButton } from "@/components/folder-picker"
 import { DomainsTab } from "@/components/app/domains-tab"
 import { AppFirewall } from "@/components/app/firewall"
@@ -28,6 +43,7 @@ import { DeployLockButton, DeployLockNotice } from "@/components/app/deploy-lock
 import { PreviewBranchButton } from "@/components/app/preview-branch"
 import { DriftNotice } from "@/components/app/drift"
 import { MaintenanceNotice } from "@/components/app/maintenance"
+import { PendingChangesNotice } from "@/components/app/pending-changes"
 import { UsageCard } from "@/components/app/usage-card"
 import { Page, PageHeader } from "@/components/page"
 import { StatusBadge } from "@/components/status-badge"
@@ -49,8 +65,35 @@ import { useEvents } from "@/hooks/use-events"
 import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api"
 import { formatCPU, formatMemory, formatRelative } from "@/lib/format"
+import { exitWords } from "@/lib/instance-exit"
 import { queryClient } from "@/lib/query"
-import type { App, AppStatus, Environment, Instance, Project } from "@/lib/types"
+import type { App, AppStatus, Deployment, Environment, Instance, Project } from "@/lib/types"
+
+/**
+ * The tabs of an app's page, by the value each is opened with: ?tab= in the
+ * address, which is how a notification, a commit status or the overview links
+ * to one. internal/panelpath links to these, and its test reads this file.
+ */
+export const APP_TABS = [
+  "overview",
+  "deployments",
+  "logs",
+  "console",
+  "variables",
+  "domains",
+  "firewall",
+  "security",
+  "scaling",
+  "storage",
+  "settings",
+  "advanced",
+] as const
+
+export type AppTab = (typeof APP_TABS)[number]
+
+export function isAppTab(value: string | null | undefined): value is AppTab {
+  return APP_TABS.includes(value as AppTab)
+}
 
 export function AppDetailPage() {
   const { t } = useTranslation()
@@ -58,7 +101,10 @@ export function AppDetailPage() {
   const { team } = useSession()
   const confirm = useConfirm()
   const [params, setParams] = useSearchParams()
-  const tab = params.get("tab") ?? "overview"
+  // One the page does not have opened nothing at all, under a row of tabs
+  // none of which was selected: an old link, or one typed by hand.
+  const asked = params.get("tab")
+  const tab: AppTab = isAppTab(asked) ? asked : "overview"
   // A console run stays named in the address while other tabs are open, so
   // its output is there again when the console is: see ConsoleTab.
   const openTab = (next: string) =>
@@ -98,12 +144,19 @@ export function AppDetailPage() {
     enabled: Boolean(environment.data?.project_id),
   })
 
+  // The deployments this page has said went live, so that one published
+  // again as its last steps finish is not said twice.
+  const announced = useRef(new Set<string>())
+
   // The team's stream carries every project's events, so a member limited to
   // some projects is refused it; their page keeps up by polling instead.
   useEvents(
     team && !team.scoped ? [`team:${team.id}`] : [],
     {
-      deployment: () => {
+      deployment: (data) => {
+        // Before the list is read again: what it held is how the first
+        // version to go live is told from the ones after it.
+        announceFirstLive(t, appId, app.data?.name ?? "", data as Deployment, announced.current)
         void queryClient.invalidateQueries({ queryKey: ["app-status", appId] })
         void queryClient.invalidateQueries({ queryKey: ["deployments", appId] })
       },
@@ -244,6 +297,7 @@ export function AppDetailPage() {
       {restart.error != null && <ErrorDisplay error={restart.error} />}
       <DeployLockNotice app={current} />
       <MaintenanceNotice app={current} />
+      <PendingChangesNotice appId={appId} status={status.data} />
       {/* Not on the Advanced tab itself, which lists the same thing in full. */}
       {tab !== "advanced" && <DriftNotice app={current} onOpen={() => openTab("advanced")} />}
 
@@ -356,8 +410,12 @@ function phaseDetail(t: TFunction, status: AppStatus): string {
         ready: status.ready_replicas,
         desired: status.desired_replicas,
       })
+    case "crashing": {
+      const crash = crashOf(status)
+      if (crash) return t(`apps.detail.crashingKind.${crash.kind}`, { code: crash.code })
+      return t("apps.detail.crashing", { defaultValue: english })
+    }
     case "starting":
-    case "crashing":
     case "sleeping":
     case "stopped":
     case "not_deployed":
@@ -365,6 +423,21 @@ function phaseDetail(t: TFunction, status: AppStatus): string {
     default:
       return status.detail_key === "noCluster" ? t("apps.detail.noCluster") : english
   }
+}
+
+/**
+ * How a crash-looping app's instances last stopped, when the instance list
+ * says. "Crashing" was all the page said, and running out of memory and a
+ * start command that is not there are fixed on different tabs.
+ */
+function crashOf(status?: AppStatus): { kind: StopKind; code: number } | null {
+  if (status?.phase !== "crashing") return null
+  const stopped = status.instances?.find(
+    (instance) => instance.status.includes("CrashLoop") && instance.last_reason,
+  )
+  if (!stopped?.last_reason) return null
+  const code = stopped.last_exit_code ?? 0
+  return { kind: stopKind(stopped.last_reason, code), code }
 }
 
 /** What an instance's state is called and how loudly it reads. */
@@ -435,6 +508,14 @@ function Overview({
   onRetry: () => void
 }) {
   const { t } = useTranslation()
+  // The same query as the Deployments tab, so the two share what was read.
+  const deployments = useDeployments(app.id)
+  const history = deployments.data?.items ?? []
+  const newest = history.at(0)
+  const live = liveDeployment(history)
+  const underway = newest && !TERMINAL.has(newest.status) ? newest : undefined
+  // Failed with nothing ever having gone live: the app has no version to run.
+  const neverLive = !live && newest?.status === "failed" ? newest : undefined
 
   if (loading) return <Skeleton className="h-64" />
   // Without this a failed read showed "0 / 0" and "No instances", which is a
@@ -442,10 +523,13 @@ function Overview({
   if (error != null && !status) return <ErrorDisplay error={error} onRetry={onRetry} />
 
   const instances = status?.instances ?? []
+  const crash = crashOf(status)
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <DeploymentNotice newest={newest} live={live} />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -460,6 +544,7 @@ function Overview({
             <span className="text-muted-foreground"> / {status?.desired_replicas ?? 0}</span>
           </CardContent>
         </Card>
+        <LiveVersionCard live={live} loading={deployments.isLoading} />
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -493,7 +578,15 @@ function Overview({
       {status?.detail && (
         <Alert variant={detailTone(status.phase)}>
           <InfoIcon />
-          <AlertDescription>{phaseDetail(t, status)}</AlertDescription>
+          <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="min-w-0 flex-1">{phaseDetail(t, status)}</span>
+            {/* The same button as a deployment that crashed, to where this
+                crash is fixed; the reason itself is in the log from before
+                the restart, so a crash with no better place opens Logs. */}
+            {crash && (
+              <OpenTabButton tab={crash.kind === "exited" ? "logs" : CRASH_FIX_TAB[crash.kind]} />
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -525,7 +618,20 @@ function Overview({
               // The button's own label, so the sentence names what is actually
               // written at the top of the page: it says "Deploy sekarang" in
               // Indonesian and "立即部署" in Chinese.
-              description={t("apps.noInstancesHelp", { action: t("deploy.deployNow") })}
+              //
+              // Not while a deployment is under way, or after the only one
+              // failed: "press Deploy now" during the first build sent people
+              // to start a second.
+              description={
+                underway
+                  ? t("apps.noInstancesUntil", { number: underway.number })
+                  : neverLive
+                    ? t("apps.noInstancesFailed", {
+                        number: neverLive.number,
+                        action: t("deploy.deployNow"),
+                      })
+                    : t("apps.noInstancesHelp", { action: t("deploy.deployNow") })
+              }
             />
           ) : (
             <Table>
@@ -533,6 +639,9 @@ function Overview({
                 <TableRow>
                   <TableHead>{t("apps.instanceName")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
+                  {/* Which deployment each instance runs: during a rollout,
+                      which are new and which are still the version before. */}
+                  <TableHead>{t("apps.instanceVersion")}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t("apps.node")}</TableHead>
                   <TableHead className="hidden md:table-cell">{t("apps.restarts")}</TableHead>
                   {/* What the instance is using, not what it reserved: the
@@ -548,6 +657,7 @@ function Overview({
               <TableBody>
                 {instances.map((instance) => {
                   const state = instanceState(instance)
+                  const exit = instance.last_exit && exitWords(t, instance.last_exit)
                   return (
                     <TableRow key={instance.name}>
                       <TableCell className="font-mono text-xs">{instance.name}</TableCell>
@@ -556,6 +666,26 @@ function Overview({
                           status={state.tone}
                           label={t(`apps.instanceStatus.${state.key}`)}
                         />
+                        {/* Why the one before it ended: "Crashing" said that
+                            it keeps stopping and never why, and a container
+                            killed for its memory says nothing in its log. */}
+                        {exit && (
+                          <p className="mt-1 text-xs whitespace-normal text-muted-foreground">
+                            {t("apps.lastExit", { when: exit.when, reason: exit.reason })}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {instance.deployment && instance.deployment_id ? (
+                          <Link
+                            to={deploymentLink(instance.deployment_id)}
+                            className="inline-flex min-h-6 min-w-6 items-center underline-offset-4 hover:underline"
+                          >
+                            #{instance.deployment}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="hidden font-mono text-xs sm:table-cell">
                         {instance.node}

@@ -50,7 +50,15 @@ type Message struct {
 	ProjectID string `json:"-"`
 	// Fields carry structured detail such as the app and the commit.
 	Fields map[string]string `json:"fields,omitempty"`
+	// Fix is what to do about it, when there is something to do: every
+	// channel shows it apart from the body, so somebody reading the message on
+	// a phone has the cause and the remedy without opening the panel. Empty for
+	// news that asks nothing of anybody, like a deploy that worked.
+	Fix string `json:"fix,omitempty"`
 }
+
+// fixLabel introduces a message's Fix wherever it is written out.
+const fixLabel = "What to do"
 
 // Event names channels can subscribe to.
 const (
@@ -254,10 +262,14 @@ func sendDiscord(ctx context.Context, config map[string]string, msg Message) err
 	if msg.URL != "" {
 		embed["url"] = msg.URL
 	}
-	if len(msg.Fields) > 0 {
-		fields := make([]map[string]any, 0, len(msg.Fields))
-		for k, v := range msg.Fields {
-			fields = append(fields, map[string]any{"name": k, "value": v, "inline": true})
+	if len(msg.Fields) > 0 || msg.Fix != "" {
+		fields := make([]map[string]any, 0, len(msg.Fields)+1)
+		// First and the full width: it is the line somebody acts on.
+		if msg.Fix != "" {
+			fields = append(fields, map[string]any{"name": fixLabel, "value": msg.Fix, "inline": false})
+		}
+		for _, k := range sortedKeys(msg.Fields) {
+			fields = append(fields, map[string]any{"name": k, "value": msg.Fields[k], "inline": true})
 		}
 		embed["fields"] = fields
 	}
@@ -282,8 +294,11 @@ func sendSlack(ctx context.Context, config map[string]string, msg Message) error
 	if msg.URL != "" {
 		attachment["title_link"] = msg.URL
 	}
-	if len(msg.Fields) > 0 {
-		fields := make([]map[string]any, 0, len(msg.Fields))
+	if len(msg.Fields) > 0 || msg.Fix != "" {
+		fields := make([]map[string]any, 0, len(msg.Fields)+1)
+		if msg.Fix != "" {
+			fields = append(fields, map[string]any{"title": fixLabel, "value": msg.Fix, "short": false})
+		}
 		for _, k := range sortedKeys(msg.Fields) {
 			fields = append(fields, map[string]any{"title": k, "value": msg.Fields[k], "short": true})
 		}
@@ -313,8 +328,11 @@ func sendTeams(ctx context.Context, config map[string]string, msg Message) error
 	if msg.Body != "" {
 		body = append(body, map[string]any{"type": "TextBlock", "text": msg.Body, "wrap": true})
 	}
-	if len(msg.Fields) > 0 {
-		facts := make([]map[string]string, 0, len(msg.Fields))
+	if len(msg.Fields) > 0 || msg.Fix != "" {
+		facts := make([]map[string]string, 0, len(msg.Fields)+1)
+		if msg.Fix != "" {
+			facts = append(facts, map[string]string{"title": fixLabel, "value": msg.Fix})
+		}
 		for _, k := range sortedKeys(msg.Fields) {
 			facts = append(facts, map[string]string{"title": k, "value": msg.Fields[k]})
 		}
@@ -461,10 +479,16 @@ func gotifyPriority(level string) int {
 }
 
 // renderPlain is a message as plain text, for the services that show it as
-// that: the body, then the fields one to a line.
+// that: the body, what to do about it, then the fields one to a line.
 func renderPlain(msg Message) string {
 	var b strings.Builder
 	b.WriteString(msg.Body)
+	if msg.Fix != "" {
+		fmt.Fprintf(&b, "\n\n%s: %s", fixLabel, msg.Fix)
+	}
+	if msg.Fix != "" && len(msg.Fields) > 0 {
+		b.WriteString("\n")
+	}
 	for _, k := range sortedKeys(msg.Fields) {
 		fmt.Fprintf(&b, "\n%s: %s", k, msg.Fields[k])
 	}
@@ -555,7 +579,9 @@ func sendEmail(ctx context.Context, config map[string]string, msg Message) error
 	fmt.Fprintf(&body, "Subject: [%s] %s\r\n", version.Name, msg.Title)
 	fmt.Fprintf(&body, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	body.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n")
-	body.WriteString(msg.Body)
+	// The body, what to do and the details, as the push services have them;
+	// the SMTP client writes each line ending as the CRLF mail wants.
+	body.WriteString(renderPlain(msg))
 	if msg.URL != "" {
 		fmt.Fprintf(&body, "\r\n\r\n%s\r\n", msg.URL)
 	}
@@ -683,17 +709,45 @@ type statusError struct {
 
 func (e *statusError) Error() string { return e.text }
 
+// renderMarkdown is a message in the Markdown Telegram's parse_mode
+// "Markdown" reads: its first, legacy flavour.
+//
+// Everything the panel did not write as markup is escaped. Every id has an
+// underscore in it — app_…, dep_… — so a link to a deployment holds two, and
+// the text between them was taken for italics: the link was cut in half where
+// somebody clicked it. A body quoting an error with an asterisk or a bracket
+// in it was worse, refused by Telegram outright and never delivered.
+//
+// The link stays in the text, escaped, rather than becoming a [text](url)
+// entity: Telegram makes any address in a message clickable, and one it will
+// not accept as an entity's — a panel on a local name — still reads in full.
 func renderMarkdown(msg Message) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "*%s*\n%s", msg.Title, msg.Body)
-	for k, v := range msg.Fields {
-		fmt.Fprintf(&b, "\n%s: `%s`", k, v)
+	// Inside the bold, only an asterisk means anything, and nothing can be
+	// escaped there.
+	fmt.Fprintf(&b, "*%s*", strings.ReplaceAll(msg.Title, "*", ""))
+	if msg.Body != "" {
+		fmt.Fprintf(&b, "\n%s", telegramEscape(msg.Body))
+	}
+	if msg.Fix != "" {
+		fmt.Fprintf(&b, "\n\n*%s:* %s", fixLabel, telegramEscape(msg.Fix))
+	}
+	if len(msg.Fields) > 0 {
+		b.WriteString("\n")
+	}
+	for _, k := range sortedKeys(msg.Fields) {
+		// Inside the code span, only a backquote means anything.
+		fmt.Fprintf(&b, "\n%s: `%s`", telegramEscape(k), strings.ReplaceAll(msg.Fields[k], "`", "'"))
 	}
 	if msg.URL != "" {
-		fmt.Fprintf(&b, "\n%s", msg.URL)
+		fmt.Fprintf(&b, "\n\n%s", telegramEscape(msg.URL))
 	}
 	return b.String()
 }
+
+// telegramEscape keeps text outside an entity from starting one: legacy
+// Markdown's four markers, each behind a backslash.
+var telegramEscape = strings.NewReplacer("_", `\_`, "*", `\*`, "`", "\\`", "[", `\[`).Replace
 
 func discordColour(level string) int {
 	switch level {

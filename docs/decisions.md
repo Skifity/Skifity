@@ -143,8 +143,9 @@ rebuilding. Implemented in `internal/deploy`.
 auto-detection > prebuilt image. Nixpacks stays selectable.
 
 Compose is in that order as a reader, not a builder. A Compose file describes several services and an
-app runs one, so finding one means reading it and offering its services to choose from, with what did
-not carry over named against the service it came from. There is no `compose` build, and `compose` is
+app runs one, so finding one means reading it and offering its services — all of them at once as a
+stack of apps (`internal/api/stack_handlers.go`), or one to choose — with what did not carry over
+named against the service it came from. There is no `compose` build, and `compose` is
 not a source an app can have: the choice produces an ordinary Git or image app. For a while it was
 one — the API accepted it, stored it, and then deployed the app as a Git app with no repository.
 
@@ -322,9 +323,12 @@ Skifity bug. Skipping cert-manager until it is useful also keeps a fresh install
 smaller, which is the same reason every other component installs on first use.
 
 **Consequences.** The first sign-in is over HTTP, and the panel says so rather than
-hiding it. Adding a domain in Settings installs cert-manager and switches the
-Ingress, which is one step and needs no reinstall. An operator who wants HTTPS from
-the first minute passes `SKIFITY_DOMAIN` to the installer.
+hiding it. A domain is added under Settings → General → Panel address, or by running
+the installer again with `--domain`: either installs cert-manager, switches the
+Ingress and restarts the panel at the domain, and neither needs a reinstall. The
+panel keeps the sslip.io address on its route afterwards, over plain HTTP, for the
+webhooks Git hosts were given there. An operator who wants HTTPS from the first
+minute passes `SKIFITY_DOMAIN` to the installer.
 
 ---
 
@@ -896,3 +900,39 @@ environment nothing against its quota and passes the restricted profile. A pod
 created some other way — with kubectl, in a namespace the panel manages — has
 no fence, and the window is still there for it.
 
+---
+
+## ADR-0028 - etcd snapshots stay on their server; losing it is recovered from the panel's backup
+
+**Context.** k3s snapshots etcd onto each control plane server's own disk, and
+Skifity asks for one every six hours and keeps twelve. The installer makes one
+control plane server, so losing it loses the snapshots with it. k3s can upload
+them to a bucket itself (`etcd-s3`), and the panel already has a backup bucket.
+
+**Options.** (a) Write k3s's S3 options from the backup storage settings, at
+install and whenever they change. (b) Turn on `etcd-s3-config-secret` and keep
+the bucket's settings in a Secret in `kube-system`. (c) Leave the snapshots
+where they are, say plainly that the panel's own backup is the way back from a
+lost server, and show how to send them elsewhere by hand.
+
+**Decision.** (c).
+
+**Reason.** (a) puts the bucket's key in a file on every control plane server
+and (b) in etcd, which is then inside every snapshot; the panel's backups were
+built so that the key never leaves the panel and a job is handed one presigned
+URL instead. k3s reads its options only when it starts, so every change would
+restart k3s on every control plane server, including the first, which the panel
+did not install and has no SSH access to. A snapshot opens only with the
+server's token, which would need a home of its own beside the bucket and apart
+from it. And restored onto a new server, a snapshot brings back the old
+cluster's objects: local-path volumes pinned to a node that is gone, images in a
+registry whose disk was on it. For an app on Skifity that is not the way back
+anyway. The panel's database is: the panel applies what it records to whatever
+cluster it finds.
+
+**Consequences.** A lost single control plane server is recovered by installing
+again and restoring the panel's database, and docs/troubleshooting.md says what
+that does not bring back. The snapshots remain for a bad upgrade or a deleted
+object on the server that took them. Somebody who wants them elsewhere uses
+k3s's own options, which docs/backups.md shows and nobody here has run. Three
+control plane servers are how etcd survives losing one.

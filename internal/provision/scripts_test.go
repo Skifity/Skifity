@@ -2,6 +2,7 @@ package provision
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,6 +61,168 @@ func TestGeneratedScriptsAreValidShell(t *testing.T) {
 		JoinAgentScript("", "a-token", "https://203.0.113.10:6443", "203.0.113.12",
 			map[string]string{"skifity.com/location": "frankfurt", "skifity.com/size": "small"}))
 	checkShellSyntax(t, "ConnectivityScript", ConnectivityScript("203.0.113.10", 6443))
+	checkShellSyntax(t, "EtcdFitnessScript", EtcdFitnessScript([]string{"203.0.113.10", "203.0.113.11"}))
+	checkShellSyntax(t, "EtcdFitnessScript (no peers)", EtcdFitnessScript(nil))
+}
+
+// TestTheEtcdMeasurementRunsUnderDash runs the script that times a would-be
+// control plane server, under dash, against a port that is really listening
+// and a disk that is really there, and reads what it printed back. A script
+// that only passes `sh -n` can still time nothing: a bash-only expansion
+// outside bash, or a clock with no microseconds, prints no numbers, and every
+// server would then be warned about as unmeasured.
+func TestTheEtcdMeasurementRunsUnderDash(t *testing.T) {
+	dash, err := exec.LookPath("dash")
+	if err != nil {
+		t.Skip("dash is not installed here")
+	}
+	for _, tool := range []string{"bash", "timeout", "dd", "date", "mktemp"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed here", tool)
+		}
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	disk := t.TempDir()
+	peers := []string{"127.0.0.1"}
+	cmd := exec.Command(dash, "-c", etcdFitnessScript(peers, port, []string{filepath.Join(disk, "absent"), disk}))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the script failed under dash: %v\n%s", err, output)
+	}
+
+	fitness := ParseEtcdFitness(string(output), peers)
+	if got := len(fitness.Peers[0].Micros); got != etcdProbeConnects {
+		t.Fatalf("timed %d connects, want %d:\n%s", got, etcdProbeConnects, output)
+	}
+	if fitness.DiskWrites != etcdProbeWrites || fitness.DiskMicros <= 0 {
+		t.Fatalf("the disk was not timed:\n%s", output)
+	}
+	// Loopback answers in microseconds; the default thresholds have nothing
+	// to say about it, except perhaps the disk, which is this machine's.
+	limits := DefaultEtcdThresholds()
+	limits.DiskSyncMs = 0
+	if problems := EvaluateEtcd(fitness, limits); len(problems) != 0 {
+		t.Fatalf("loopback was warned about: %v\n%s", etcdCodes(problems), output)
+	}
+	// And the probe cleaned up after itself.
+	if left, _ := os.ReadDir(disk); len(left) != 0 {
+		t.Fatalf("the disk probe left %d entries behind", len(left))
+	}
+}
+
+// TestTheConnectivityCheckWorksWhereShIsDash: /bin/sh is dash on Debian and
+// Ubuntu, and dash has no /dev/tcp. The check's fallback for a server without
+// nc was `sh -c "exec 3<>/dev/tcp/..."`, so on exactly the distributions
+// Skifity is tested on, an open port was reported closed and joining stopped
+// with a "port blocked" that was not true.
+//
+// The script runs here the way it runs there: under dash, on a PATH whose sh
+// is dash and that has no nc, against a port that is really listening.
+func TestTheConnectivityCheckWorksWhereShIsDash(t *testing.T) {
+	dash, err := exec.LookPath("dash")
+	if err != nil {
+		t.Skip("dash is not installed here")
+	}
+	// A directory standing in for a Debian server's PATH, nc left out.
+	debian := t.TempDir()
+	if err := os.Symlink(dash, filepath.Join(debian, "sh")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range []string{"bash", "timeout"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			t.Skipf("%s is not installed here", tool)
+		}
+		if err := os.Symlink(path, filepath.Join(debian, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	open := listener.Addr().(*net.TCPAddr).Port
+
+	gone, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := gone.Addr().(*net.TCPAddr).Port
+	_ = gone.Close()
+
+	run := func(path, target string, port int) string {
+		t.Helper()
+		cmd := exec.Command(dash, "-c", ConnectivityScript(target, port))
+		cmd.Env = []string{"PATH=" + path}
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("the script failed under dash: %v\n%s", err, output)
+		}
+		return string(output)
+	}
+
+	t.Run("an open port without nc", func(t *testing.T) {
+		if got := run(debian, "127.0.0.1", open); !strings.Contains(got, "reachable=yes") {
+			t.Fatalf("a listening port was reported unreachable on a server without nc:\n%s", got)
+		}
+	})
+
+	t.Run("a closed port without nc", func(t *testing.T) {
+		if got := run(debian, "127.0.0.1", closed); !strings.Contains(got, "reachable=no") {
+			t.Fatalf("a closed port was not reported closed:\n%s", got)
+		}
+	})
+
+	// Some distributions ship an nc without -z, which fails the way a closed
+	// port does; that is not an answer, so the next probe gets its turn.
+	t.Run("an nc that cannot probe", func(t *testing.T) {
+		broken := t.TempDir()
+		fake := "#!" + dash + "\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(broken, "nc"), []byte(fake), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := broken + string(os.PathListSeparator) + debian
+		if got := run(path, "127.0.0.1", open); !strings.Contains(got, "reachable=yes") {
+			t.Fatalf("an nc that failed decided the answer for a listening port:\n%s", got)
+		}
+	})
+
+	// The old fallback spliced the address into the script `sh -c` ran, so it
+	// was parsed as shell a second time, after the quoting had done its work.
+	t.Run("the address is not run as shell", func(t *testing.T) {
+		marker := filepath.Join(t.TempDir(), "ran")
+		run(debian, "127.0.0.1$(: >"+marker+")", open)
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatal("a command substitution in the address was run on the server")
+		}
+	})
 }
 
 func TestFirewallScriptOpensOnlyToMembers(t *testing.T) {
@@ -343,6 +506,7 @@ func TestNothingATypedValueContainsBecomesACommand(t *testing.T) {
 		"InstallKeyScript":    InstallKeyScript("ssh-ed25519 AAAA test", hostile),
 		"FirewallScript":      FirewallScript([]string{hostile}, true),
 		"ConnectivityScript":  ConnectivityScript(hostile, 6443),
+		"EtcdFitnessScript":   EtcdFitnessScript([]string{hostile}),
 		"InstallServerScript": InstallServerScript(hostile, hostile, "203.0.113.10", "", nil),
 		"JoinAgentScript":     JoinAgentScript("", hostile, hostile, "203.0.113.12", nil),
 	}

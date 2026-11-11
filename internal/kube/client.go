@@ -3,7 +3,6 @@ package kube
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/netip"
 	"slices"
 	"sort"
@@ -41,6 +40,11 @@ type Client struct {
 	// inCluster is true for a panel running in the cluster it manages, with
 	// the ServiceAccount's token rather than a kubeconfig.
 	inCluster bool
+	// logOpener opens one instance's log; nil is through the API server.
+	// logRelist is how often a followed log looks for new instances; zero
+	// is every ten seconds. See logs.go.
+	logOpener logOpener
+	logRelist time.Duration
 }
 
 // Options configure a Client.
@@ -257,6 +261,7 @@ func (c *Client) Summary(ctx context.Context) (Summary, error) {
 		}
 	}
 	c.describeGPUs(ctx, out.Nodes)
+	c.describeEntry(ctx, out.Nodes)
 	sort.Slice(out.Nodes, func(i, j int) bool { return out.Nodes[i].Name < out.Nodes[j].Name })
 	// Embedded etcd needs three members to survive losing one.
 	out.HighAvailability = controlPlanes >= 3
@@ -313,6 +318,12 @@ type Node struct {
 	// GPUPlugin is the panel's device plugin on this server, when one has
 	// been placed here.
 	GPUPlugin *GPUPluginState
+
+	// Entry is whether the server takes the traffic that reaches it on ports
+	// 80 and 443, and EntryReason why not; see entry.go. Both are empty when
+	// the cluster cannot say.
+	Entry       string
+	EntryReason string
 }
 
 func describeNode(node corev1.Node) Node {
@@ -509,10 +520,56 @@ type Instance struct {
 	MemoryMB  int64
 	// UsageKnown is false when metrics-server had nothing for the pod.
 	UsageKnown bool
+	// DeploymentID is the panel's deployment this pod was started for, read
+	// from its own annotation. Not from its image: a variable-only redeploy
+	// and every image app run the same image under a new deployment, and a
+	// rollback runs an old image under a new one.
+	DeploymentID string
+	// LastReason and LastExitCode are how a container last stopped — OOMKilled
+	// and 137 — and LastReason is empty for one that has not stopped. A crash
+	// loop said only "crashing", and out of memory and a start command that is
+	// not there are different fixes on different tabs.
+	LastReason   string
+	LastExitCode int32
+	// LastExit is how the container before the current one ended, for an
+	// instance that has restarted. Nil when it has not.
+	LastExit *Exit
 }
 
+// Exit is how a container ended: the kubelet's reason (OOMKilled, Error,
+// Completed), its exit code, and when.
+type Exit struct {
+	Reason     string
+	ExitCode   int
+	FinishedAt time.Time
+}
+
+// lastExit is how an instance's previous container ended, the newest of its
+// containers' when it has more than one.
+//
+// It is the one place the reason survives: the instance list said only that
+// an app was crashing, and the log of the container that was killed for its
+// memory does not say so, because the process never got to.
+func lastExit(pod corev1.Pod) *Exit {
+	var exit *Exit
+	for _, cs := range pod.Status.ContainerStatuses {
+		last := cs.LastTerminationState.Terminated
+		if last == nil || (exit != nil && !last.FinishedAt.After(exit.FinishedAt)) {
+			continue
+		}
+		exit = &Exit{Reason: last.Reason, ExitCode: int(last.ExitCode), FinishedAt: last.FinishedAt.Time}
+	}
+	return exit
+}
+
+// DeploymentIDAnnotation names, on a pod, the deployment it was started for.
+var DeploymentIDAnnotation = version.LabelKey("deployment-id")
+
 func describePod(pod corev1.Pod) Instance {
-	inst := Instance{Name: pod.Name, Node: pod.Spec.NodeName, Status: string(pod.Status.Phase)}
+	inst := Instance{
+		Name: pod.Name, Node: pod.Spec.NodeName, Status: string(pod.Status.Phase),
+		DeploymentID: pod.Annotations[DeploymentIDAnnotation], LastExit: lastExit(pod),
+	}
 	if pod.Status.StartTime != nil {
 		inst.StartedAt = pod.Status.StartTime.Time
 	}
@@ -523,6 +580,17 @@ func describePod(pod corev1.Pod) Instance {
 	}
 	for _, cs := range pod.Status.ContainerStatuses {
 		inst.Restarts += int(cs.RestartCount)
+		if stopped := lastStop(cs); stopped != nil && inst.LastReason == "" {
+			inst.LastReason, inst.LastExitCode = stopped.Reason, stopped.ExitCode
+			if inst.LastReason == "" {
+				// The runtime always names it; a fake or an odd one may not,
+				// and the field doubles as "has stopped".
+				inst.LastReason = "Error"
+				if stopped.ExitCode == 0 {
+					inst.LastReason = "Completed"
+				}
+			}
+		}
 		switch {
 		case cs.State.Waiting != nil:
 			// The waiting reason is the single most useful thing on this
@@ -559,6 +627,34 @@ func describePod(pod corev1.Pod) Instance {
 	return inst
 }
 
+// lastStop is how a container last stopped: now, if it is stopped, or before
+// it was last started.
+func lastStop(cs corev1.ContainerStatus) *corev1.ContainerStateTerminated {
+	if cs.State.Terminated != nil {
+		return cs.State.Terminated
+	}
+	return cs.LastTerminationState.Terminated
+}
+
+// crashDetail is the sentence for a crash-looping instance, with how it last
+// stopped when that is known.
+func crashDetail(inst Instance) string {
+	if inst.LastReason == "" {
+		return "The app starts and then exits. The last log lines usually say why."
+	}
+	switch StopKind(inst.LastReason, inst.LastExitCode) {
+	case StopOutOfMemory:
+		return "The app keeps stopping: it ran out of memory. Give it more under Scaling."
+	case StopNotRunnable:
+		return fmt.Sprintf("The app keeps stopping: its start command could not be run (exit code %d). "+
+			"Check the start command under Settings.", inst.LastExitCode)
+	case StopExitedCleanly:
+		return "The app keeps stopping: it exited with code 0, and a web process has to keep running."
+	}
+	return fmt.Sprintf("The app keeps stopping: it exited with code %d. The last log lines usually say why.",
+		inst.LastExitCode)
+}
+
 // summarisePhase turns the Deployment's conditions into one sentence.
 func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, string) {
 	desired := int32(1)
@@ -584,7 +680,7 @@ func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, st
 	case status.ReadyReplicas == 0 && len(status.Instances) > 0:
 		for _, inst := range status.Instances {
 			if strings.Contains(inst.Status, "CrashLoop") {
-				return "crashing", "The app starts and then exits. The last log lines usually say why."
+				return "crashing", crashDetail(inst)
 			}
 			if strings.Contains(inst.Status, "ImagePull") || strings.Contains(inst.Status, "ErrImage") {
 				return "failed", ExplainImagePull(inst.Message)
@@ -617,8 +713,9 @@ func summarisePhase(deployment *appsv1.Deployment, status AppStatus) (string, st
 
 // LogOptions is what to read, and from where.
 type LogOptions struct {
-	// TailLines bounds how far back to read. Zero means everything the node
-	// still has.
+	// TailLines bounds how far back to read: the newest this many lines of
+	// every instance read, together. Zero means everything the node still
+	// has.
 	TailLines int64
 	// Follow keeps the stream open.
 	Follow bool
@@ -628,47 +725,58 @@ type LogOptions struct {
 	// that printed the reason has already been replaced, and its log is gone
 	// from the live stream the moment the new one starts.
 	Previous bool
+	// Instance reads one instance, by its name or the part of it after the
+	// last hyphen. Empty reads every instance that has started, up to
+	// MaxLogInstances; with Previous, the one that restarted most.
+	Instance string
+	// SinceSeconds reads only what was written in the last this many
+	// seconds. Zero is no bound but TailLines.
+	SinceSeconds int64
 }
 
-// AppLogs streams the logs of an app's instances.
-func (c *Client) AppLogs(ctx context.Context, namespace, appSlug string, opts LogOptions) (io.ReadCloser, error) {
-	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(map[string]string{"app.kubernetes.io/name": appSlug}).String(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("find the app's instances: %w", err)
-	}
-	if len(pods.Items) == 0 {
-		return io.NopCloser(strings.NewReader("")), nil
-	}
-
-	target := pickLogPod(pods.Items, opts.Previous)
-	// An instance that has never started has no log, and the API server's
-	// answer for it — "waiting to start", "does not have a host assigned" —
-	// came out of the panel as something gone wrong. What it is waiting for
-	// is the answer.
-	if !opts.Previous && !hasStarted(target) {
-		return nil, &NotStarted{Instance: target.Name, Reason: waitingFor(target)}
-	}
-
-	options := &corev1.PodLogOptions{
-		Follow:     opts.Follow && !opts.Previous,
-		Previous:   opts.Previous,
-		Timestamps: false,
-	}
-	if opts.TailLines > 0 {
-		options.TailLines = &opts.TailLines
-	}
-	stream, err := c.StreamClientset().CoreV1().Pods(namespace).GetLogs(target.Name, options).Stream(ctx)
-	if err != nil {
-		if opts.Previous {
-			// The API server answers 400 when there is no earlier container,
-			// which is the ordinary case for an app that has not crashed.
-			return nil, fmt.Errorf("%s has not restarted, so there is no earlier log to read", target.Name)
+// AppLogs reads an app's log: every instance's that has started, merged in
+// the order the lines were written, or the one opts names.
+//
+// name is a Deployment's — the app's slug, or one of its processes' — and
+// the instances read are the pods carrying it as their name label. Nothing
+// else does: a run of a command is named for the run. So an instance asked for
+// by name is only found among the app's own, or the process's own.
+func (c *Client) AppLogs(ctx context.Context, namespace, name string, opts LogOptions) (*LogStream, error) {
+	selector := labels.SelectorFromSet(map[string]string{"app.kubernetes.io/name": name}).String()
+	list := func(ctx context.Context) ([]corev1.Pod, error) {
+		pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			return nil, fmt.Errorf("find the app's instances: %w", err)
 		}
-		return nil, fmt.Errorf("read logs from %s: %w", target.Name, err)
+		return pods.Items, nil
 	}
-	return stream, nil
+	pods, err := list(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(pods) == 0 {
+		return NewLogStream(nil, 0, nil), nil
+	}
+
+	targets, omitted, err := logTargets(pods, opts)
+	if err != nil {
+		return nil, err
+	}
+	begun := time.Now()
+	entries, read, newest, err := c.readLogs(ctx, namespace, targets, opts)
+	if err != nil {
+		return nil, err
+	}
+	// The container before the restart has exited: a stream that stayed
+	// open on it would hang rather than end.
+	if !opts.Follow || opts.Previous {
+		return NewLogStream(read, omitted, entries), nil
+	}
+	only := ""
+	if opts.Instance != "" {
+		only = targets[0].Name
+	}
+	return c.followLogs(ctx, namespace, list, opts, only, entries, read, omitted, newest, begun), nil
 }
 
 // NotStarted is an app none of whose instances has started: there is no log
@@ -902,6 +1010,10 @@ var pullCheckAfter = 30 * time.Second
 // or a tag that does not exist used to be waited on until the rollout timed
 // out — five minutes and more of a deployment that could only ever fail, and a
 // timeout message where the node had said exactly what was wrong.
+//
+// It gives up early with a CrashError, too, when the new revision's instances
+// keep stopping as they start (see crashed), and otherwise with a
+// RolloutTimeout that names the instance it was still waiting for.
 func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, timeout time.Duration) error {
 	started := time.Now()
 	deadline := started.Add(timeout)
@@ -919,6 +1031,9 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 				return refused
 			}
 		}
+		if crash := c.crashed(ctx, deployment); crash != nil {
+			return crash
+		}
 		desired := int32(1)
 		if deployment.Spec.Replicas != nil {
 			desired = *deployment.Spec.Replicas
@@ -933,7 +1048,7 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		}
 		for _, cond := range deployment.Status.Conditions {
 			if cond.Type == appsv1.DeploymentProgressing && cond.Status == corev1.ConditionFalse {
-				return fmt.Errorf("the rollout stopped making progress: %s", cond.Message)
+				return c.rolloutTimeout(ctx, deployment, timeout, desired, true, cond.Message)
 			}
 			if cond.Type == appsv1.DeploymentReplicaFailure && cond.Status == corev1.ConditionTrue {
 				lastMessage = cond.Message
@@ -941,11 +1056,7 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		}
 
 		if time.Now().After(deadline) {
-			if lastMessage == "" {
-				lastMessage = fmt.Sprintf("%d of %d instances became ready",
-					deployment.Status.ReadyReplicas, desired)
-			}
-			return fmt.Errorf("the rollout did not finish in %s: %s", timeout, lastMessage)
+			return c.rolloutTimeout(ctx, deployment, timeout, desired, false, lastMessage)
 		}
 		select {
 		case <-ctx.Done():
@@ -953,6 +1064,28 @@ func (c *Client) WaitForRollout(ctx context.Context, namespace, name string, tim
 		case <-ticker.C:
 		}
 	}
+}
+
+// rolloutTimeout says which of the new revision's instances a rollout that
+// did not finish was still waiting for, and what for.
+func (c *Client) rolloutTimeout(ctx context.Context, deployment *appsv1.Deployment, timeout time.Duration,
+	desired int32, stalled bool, message string) *RolloutTimeout {
+	out := &RolloutTimeout{Timeout: timeout, Stalled: stalled, Message: message, Desired: desired}
+	// The new revision's own instances: the Deployment's ready count is the
+	// old revision's too, and "1 of 1 instances became ready" was what a
+	// rolling update that never started a working instance reported.
+	pods := c.newRevisionPods(ctx, deployment)
+	for _, pod := range pods {
+		if podReady(pod) {
+			out.Ready++
+		}
+	}
+	// A quota that refused the instances is the reason, and there is no
+	// instance to name: none was made.
+	if message == "" || stalled {
+		out.Instance, out.Waiting = c.stalledInstance(ctx, pods)
+	}
+	return out
 }
 
 // pullRefused reads a rolling Deployment's instances for one whose image,

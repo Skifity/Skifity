@@ -34,3 +34,13 @@ export function canOpenSettings(user: User | null | undefined, team: Team | null
 export function seesWholeTeam(team: Team | null | undefined): boolean {
   return Boolean(team && !team.scoped)
 }
+
+/**
+ * Whether this person may change how strictly an environment confines its
+ * apps, which the panel asks an owner or an admin for (authorizeEnvironment
+ * with RoleAdmin). Unlike the team's own business, an admin limited to some
+ * projects may, in the projects they reach.
+ */
+export function confinesEnvironments(team: Team | null | undefined): boolean {
+  return Boolean(team && (team.role === "owner" || team.role === "admin"))
+}

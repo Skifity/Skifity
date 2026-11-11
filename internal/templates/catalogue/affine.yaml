@@ -7,6 +7,7 @@ website: https://docs.affine.pro/docs/self-host-affine
 services:
 - name: affine
   image: ghcr.io/toeverything/affine:0.27.4
+  needs_root: true
   port: 3010
   public: true
   mem_request_mb: 128
@@ -32,4 +33,5 @@ databases:
   var_name: DATABASE_URL
 notes: 'This stack has a set-up step that runs once and exits — affine_migration. Skifity runs apps, not
   one-shot containers, so that step is not installed: do it yourself from the app''s Commands tab, or
-  follow the project''s own instructions, before expecting everything to work.'
+  follow the project''s own instructions, before expecting everything to work. The image starts as root,
+  so the environment needs the baseline pod security level.'

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"skifity/internal/kube"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/plugins"
 	"skifity/internal/registry"
 	"skifity/internal/runsafe"
@@ -35,9 +37,10 @@ import (
 // The API asks the last two only of a deployer that has them, so without
 // these a renamed method would compile and quietly stop being asked.
 var (
-	_ api.Deployer     = (*Deployer)(nil)
-	_ api.WorkReporter = (*Deployer)(nil)
-	_ api.RunChecker   = (*Deployer)(nil)
+	_ api.Deployer        = (*Deployer)(nil)
+	_ api.WorkReporter    = (*Deployer)(nil)
+	_ api.RunChecker      = (*Deployer)(nil)
+	_ api.PendingReporter = (*Deployer)(nil)
 )
 
 // Deployer implements api.Deployer.
@@ -172,6 +175,10 @@ func (d *Deployer) Deploy(ctx context.Context, req api.DeployRequest) (store.Dep
 		RuntimeSpec:             runtimeSpec,
 		CreatedBy:               req.CreatedBy,
 		AcceptedVulnerabilities: req.AcceptVulnerabilities,
+		// What this deploy builds with, to tell later which saved changes
+		// the version does not have. A promotion records this app's own:
+		// the image matched them, or somebody chose to run it anyway.
+		BuildSpec: d.sealedBuildSpec(ctx, app),
 	}
 
 	// The heart of ADR-0007: when the build inputs have not changed, the
@@ -489,38 +496,7 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 	defer stopWaking()
 	d.appendLog(ctx, deployment.ID, "Waiting for the new instances to become ready.")
 	if err := d.cluster.Client().WaitForRollout(ctx, env.Namespace, app.Slug, rolloutWait(spec)); err != nil {
-		status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, app.Slug)
-		// A cluster that stopped answering is not an app that did not start. The
-		// panel was told "the new version did not start: check the app's logs"
-		// when its own connection to the Kubernetes API was refused, which
-		// sent the person to an app that may have been fine and away from the
-		// server that was not.
-		if statusErr != nil && kube.IsUnreachable(err) && kube.IsUnreachable(statusErr) {
-			d.appendLog(ctx, deployment.ID, "The panel lost its connection to the cluster while waiting for the new version: "+err.Error())
-			return nil, errdoc.ClusterUnreachable(err)
-		}
-		// Said as what it is, as soon as it is certain, rather than five minutes
-		// later as a version that "did not start".
-		var pull *kube.ImagePullError
-		if errors.As(err, &pull) {
-			d.appendLog(ctx, deployment.ID, "The new version's image cannot be pulled: "+pull.Reason)
-			return nil, errdoc.ImagePullFailed(pull.Image, pull.Reason)
-		}
-		ready, wanted := 0, int(spec.DesiredReplicas())
-		reason := err.Error()
-		if statusErr == nil {
-			ready = status.ReadyReplicas
-			// The live number, not the configured one: an autoscaled app is
-			// waiting for however many instances the autoscaler has asked for,
-			// and saying "2 of 1 ready" helps nobody.
-			if status.DesiredReplicas > 0 {
-				wanted = status.DesiredReplicas
-			}
-			if status.Detail != "" {
-				reason = status.Detail
-			}
-		}
-		return nil, errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
+		return nil, d.rolloutFailed(ctx, deployment, app, env, out, err)
 	}
 	if !newVersion {
 		return processes, nil
@@ -543,6 +519,61 @@ func (d *Deployer) apply(ctx context.Context, deployment store.Deployment, app s
 		d.recordApplied(ctx, app.ID, processObjects, false)
 	}
 	return processes, nil
+}
+
+// rolloutFailed says why the app's own rollout did not finish, and does it as
+// soon as that is certain rather than at the deadline.
+func (d *Deployer) rolloutFailed(ctx context.Context, deployment store.Deployment, app store.App, env store.Environment,
+	out rendered, err error) *errdoc.Problem {
+	status, statusErr := d.cluster.AppStatus(ctx, env.Namespace, app.Slug)
+	// A cluster that stopped answering is not an app that did not start. The
+	// panel was told "the new version did not start: check the app's logs"
+	// when its own connection to the Kubernetes API was refused, which
+	// sent the person to an app that may have been fine and away from the
+	// server that was not.
+	if statusErr != nil && kube.IsUnreachable(err) && kube.IsUnreachable(statusErr) {
+		d.appendLog(ctx, deployment.ID, "The panel lost its connection to the cluster while waiting for the new version: "+err.Error())
+		return errdoc.ClusterUnreachable(err)
+	}
+	// Said as what it is, as soon as it is certain, rather than five minutes
+	// later as a version that "did not start".
+	var pull *kube.ImagePullError
+	if errors.As(err, &pull) {
+		d.appendLog(ctx, deployment.ID, "The new version's image cannot be pulled: "+pull.Reason)
+		return errdoc.ImagePullFailed(pull.Image, pull.Reason)
+	}
+	// The same for a version that stops as it starts: the kubelet knew
+	// on its second restart, and the lines it printed say why.
+	var crash *kube.CrashError
+	if errors.As(err, &crash) {
+		return d.crashed(ctx, deployment, app, env, out.variables, crash)
+	}
+	ready, wanted := 0, int(out.spec.DesiredReplicas())
+	reason := err.Error()
+	var timedOut *kube.RolloutTimeout
+	switch {
+	case errors.As(err, &timedOut):
+		// The new version's instances, and the one it was waiting for.
+		// The app's summary describes whatever is running, which during
+		// a rolling update is the old version: "1 instance(s) running"
+		// was the reason every deployment that timed out gave.
+		ready, reason = int(timedOut.Ready), timedOut.Reason()
+		if timedOut.Desired > 0 {
+			wanted = int(timedOut.Desired)
+		}
+	case statusErr == nil:
+		ready = status.ReadyReplicas
+		// The live number, not the configured one: an autoscaled app is
+		// waiting for however many instances the autoscaler has asked for,
+		// and saying "2 of 1 ready" helps nobody.
+		if status.DesiredReplicas > 0 {
+			wanted = status.DesiredReplicas
+		}
+		if status.Detail != "" {
+			reason = status.Detail
+		}
+	}
+	return errdoc.RolloutTimedOut(app.Name, ready, wanted, reason)
 }
 
 // processWait is how long a deployment waits for the app's other processes,
@@ -877,7 +908,9 @@ func (d *Deployer) Rollback(ctx context.Context, appID, deploymentID, actorID st
 		Image:            previous.Image,
 		BuildFingerprint: previous.BuildFingerprint,
 		RuntimeSpec:      previous.RuntimeSpec,
-		CreatedBy:        actorID,
+		// It runs the old image, so it was built from what that was.
+		BuildSpec: previous.BuildSpec,
+		CreatedBy: actorID,
 	}
 	if err := d.db.CreateDeployment(ctx, &deployment); err != nil {
 		return store.Deployment{}, err
@@ -1026,10 +1059,19 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	d.Metrics.Inc("skifity_deployments_total", "result", "failed")
 	_ = d.db.UpdateDeploymentStatus(ctx, deployment.ID, store.DeployFailed,
 		problem.Code, problem.Error(), problem.Fix)
+	if err := d.db.SetDeploymentProblem(ctx, deployment.ID, problem); err != nil {
+		d.log.Warn("could not keep a failed deployment's problem", "deployment", deployment.ID, "error", err)
+	}
 	_ = d.db.SetAppStatus(ctx, deployment.AppID, "failed")
 
+	// Without its log_tail: those lines are in this log already, just above —
+	// the build's own output, or what a crashed container printed — and a
+	// second copy under Details pushed the reason off the screen.
+	shown := *problem
+	shown.Context = maps.Clone(problem.Context)
+	delete(shown.Context, "log_tail")
 	d.appendLog(ctx, deployment.ID, "")
-	for _, line := range strings.Split(problem.Text(), "\n") {
+	for _, line := range strings.Split(shown.Text(), "\n") {
 		d.appendLog(ctx, deployment.ID, line)
 	}
 	d.hub.Publish(events.DeploymentTopic(deployment.ID), "failed", problem)
@@ -1046,9 +1088,10 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 	defer d.rollBackIfLeftDown(ctx, app, deployment, problem)
 	d.notify(ctx, app, deployment, notify.EventDeployFailed, notify.Message{
 		Title:  "Deploying " + app.Name + " failed",
-		Body:   problem.Error() + "\n\n" + problem.Fix,
+		Body:   problem.Error(),
 		Level:  "error",
 		Fields: map[string]string{"Reason": problem.Code},
+		Fix:    problem.Fix,
 	})
 	// A plugin that subscribed to deploy.failed was never told, because only
 	// the success path sent anything. A rollback plugin, or one that opens a
@@ -1069,7 +1112,7 @@ func (d *Deployer) fail(ctx context.Context, deployment store.Deployment, proble
 var rolloutFailures = map[string]bool{
 	"deploy.rollout_timeout":   true,
 	"deploy.image_pull_failed": true,
-	"app.crash_loop":           true,
+	"deploy.crashed":           true,
 }
 
 // rollBackIfLeftDown puts the last version that worked back, for an app that a
@@ -1078,7 +1121,9 @@ var rolloutFailures = map[string]bool{
 // Most apps are not left so: a rolling update starts the new instances beside
 // the old and stops the old only once the new are ready, so a version that does
 // not start leaves the previous one serving, and the deployment is reported
-// failed. An app with a volume is different. Two instances writing to one volume
+// failed. What it does leave is the new version's instances beside the old,
+// restarting for good, and putBackServing removes those. An app with a volume
+// is different. Two instances writing to one volume
 // would corrupt it, so its deploys stop the old instance first, and a version
 // that does not start is an app that is down until somebody notices and rolls
 // back by hand.
@@ -1088,11 +1133,20 @@ var rolloutFailures = map[string]bool{
 // when there is a version that worked and its image is still in the registry.
 // The failure has been reported already, and says what was done about it.
 func (d *Deployer) rollBackIfLeftDown(ctx context.Context, app store.App, failed store.Deployment, problem *errdoc.Problem) {
-	if !rolloutFailures[problem.Code] || failed.Trigger == "rollback" {
+	if !rolloutFailures[problem.Code] {
 		return
 	}
 	volumes, err := d.db.ListVolumes(ctx, app.ID)
-	if err != nil || len(volumes) == 0 {
+	if err != nil {
+		return
+	}
+	// A rolling app's live version is applied again, which records nothing
+	// and so cannot loop, whatever the failed deploy was.
+	if len(volumes) == 0 {
+		d.putBackServing(ctx, app, failed)
+		return
+	}
+	if failed.Trigger == "rollback" {
 		return
 	}
 	previous, err := d.db.LatestSuccessfulDeployment(ctx, app.ID)
@@ -1137,7 +1191,9 @@ func (d *Deployer) notify(ctx context.Context, app store.App, deployment store.D
 	if deployment.CommitSHA != "" {
 		msg.Fields["Commit"] = shortSHA(deployment.CommitSHA)
 	}
-	msg.Path = "/apps/" + app.ID + "/deployments"
+	// This deployment, open, rather than the list it is somewhere in: the one
+	// running opens itself there, which is not the one that just failed.
+	msg.Path = panelpath.AppDeployment(app.ID, deployment.ID)
 	d.notifier.Notify(ctx, teamID, event, msg)
 }
 

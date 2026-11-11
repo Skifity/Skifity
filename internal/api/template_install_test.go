@@ -2,13 +2,23 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"skifity/internal/dbsvc/engine"
+	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/kube"
 	"skifity/internal/store"
 	"skifity/internal/templates"
 )
@@ -75,12 +85,26 @@ func TestEveryTemplateDatabaseArrivesAsAVariable(t *testing.T) {
 	}
 }
 
-// piecesDatabases is fakeDatabases with a connection to hand out in pieces.
-type piecesDatabases struct{ fakeDatabases }
+// acceptRoot lets an environment run images that start as root, which two
+// thirds of the catalogue's templates have, for a test about something else.
+func (h *harness) acceptRoot(t *testing.T, as *tenant) {
+	t.Helper()
+	if err := h.db.SetEnvironmentPodSecurity(t.Context(), as.env.ID, "baseline"); err != nil {
+		t.Fatal(err)
+	}
+	as.env.PodSecurity = "baseline"
+}
 
-func (piecesDatabases) Credentials(context.Context, string) (DatabaseCredentials, error) {
-	return DatabaseCredentials{Engine: "mysql", Host: "assets-db-rw.acme.svc", Port: 3306,
-		Database: "assets", Username: "assets", Password: "not-a-real-password", URL: "mysql://x"}, nil
+// installDirectly plans and installs a template the way the handler does,
+// for a template that is not in any catalogue the handler could look it up in.
+func (h *harness) installDirectly(t *testing.T, as tenant, tpl templates.Template, name string, values map[string]string) (installedTemplate, error) {
+	t.Helper()
+	plan, err := h.api.planTemplateInstall(t.Context(), as.env, tpl, installTemplateRequest{Name: name, Values: values})
+	if err != nil {
+		return installedTemplate{}, err
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/templates/"+tpl.ID+"/install", nil).WithContext(t.Context())
+	return h.api.installTemplate(request, plan, as.user)
 }
 
 // A template can say how its image starts, give it the files it is
@@ -90,7 +114,7 @@ func (piecesDatabases) Credentials(context.Context, string) (DatabaseCredentials
 func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing.T) {
 	h := newHarness(t)
 	log := &recorder{}
-	h.api.databases = &piecesDatabases{fakeDatabases{log: log, db: h.db}}
+	h.api.databases = &fakeDatabases{log: log, db: h.db}
 	h.api.deployer = &fakeDeployer{log: log}
 	acme := h.newTenant("acme")
 
@@ -111,8 +135,7 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
 	defer stream.Close()
 
-	request := httptest.NewRequest(http.MethodPost, "/api/templates/assets/install", nil).WithContext(t.Context())
-	result, err := h.api.installTemplate(request, "", tpl, acme.env, acme.user, "", nil)
+	result, err := h.installDirectly(t, acme, tpl, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,28 +172,644 @@ func TestATemplateCanStartItsImageItsWayWithItsFilesAndDatabasePieces(t *testing
 		}
 	}
 
+	// The pieces are the link's to write, keep current and remove: the
+	// install hands them to it, and writes none of them itself.
+	want := store.LinkPieces{Host: "DB_HOST", Port: "DB_PORT", Name: "DB_DATABASE", User: "DB_USERNAME", Password: "DB_PASSWORD"}
 	for _, name := range []string{"web", "worker"} {
+		if pieces, ok := log.piecesOf(apps[name].ID); !ok || pieces != want {
+			t.Errorf("%s was linked with the pieces %+v (given %v)", name, pieces, ok)
+		}
 		rows, err := h.db.ListVariables(t.Context(), apps[name].ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := map[string]string{}
-		secret := map[string]bool{}
 		for _, row := range rows {
-			if value, err := h.keyring.Open(row.Sealed, variableContext(apps[name].ID, row.Key)); err == nil {
+			if slices.Contains(want.Names(), row.Key) {
+				t.Errorf("%s: the install wrote %s itself, outside the link", name, row.Key)
+			}
+		}
+	}
+}
+
+// A template says how long its software takes to start and how long a check
+// may wait, and the app it installs is given exactly that. Every templated app
+// had two minutes and three seconds before, so GitLab was restarted in a loop
+// before it ever listened, and WordPress on a server apart from its database
+// failed its deploy on a health check that timed out.
+func TestAnInstallGivesTheAppTheHealthSettingsItsTemplateSays(t *testing.T) {
+	h := newHarness(t)
+	h.api.deployer = &fakeDeployer{log: &recorder{}}
+	acme := h.newTenant("acme")
+
+	tpl := templates.Template{
+		ID: "forge", Name: "Forge",
+		Services: []templates.Service{
+			{Name: "forge", Image: "example/forge:19.1.8", Port: 80, Public: true,
+				HealthStartSeconds: 900, HealthTimeoutSeconds: 10},
+			// Says nothing, and gets what any app gets.
+			{Name: "docs", Image: "example/docs:2.0.1", Port: 8080, HealthPath: "/healthz"},
+		},
+	}
+	result, err := h.installDirectly(t, acme, tpl, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apps := map[string]store.App{}
+	for _, made := range result.Apps {
+		app, err := h.db.GetApp(t.Context(), made.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		apps[app.Name] = app
+	}
+	forge, docs := apps["forge"], apps["docs"]
+	// The check left out follows the path, as an app's settings derive it.
+	if forge.HealthCheck != kube.HealthTCP || forge.HealthStartSeconds != 900 || forge.HealthTimeoutSeconds != 10 {
+		t.Errorf("forge was stored with %q, %d s to start, %d s to answer",
+			forge.HealthCheck, forge.HealthStartSeconds, forge.HealthTimeoutSeconds)
+	}
+	if docs.HealthCheck != kube.HealthHTTP || docs.HealthStartSeconds != kube.DefaultHealthStartSeconds ||
+		docs.HealthTimeoutSeconds != kube.DefaultHealthTimeoutSeconds {
+		t.Errorf("docs said nothing and was stored with %q, %d s to start, %d s to answer",
+			docs.HealthCheck, docs.HealthStartSeconds, docs.HealthTimeoutSeconds)
+	}
+
+	// And the probe the cluster is given allows it: a budget that stayed in
+	// the panel's database would change nothing.
+	deployment := kube.BuildDeployment(kube.AppSpec{
+		Name: forge.Slug, Namespace: acme.env.Namespace, Image: forge.Image, Port: forge.Port,
+		HealthPath: forge.HealthPath, HealthCheck: forge.HealthCheck,
+		HealthStartSeconds: forge.HealthStartSeconds, HealthTimeoutSeconds: forge.HealthTimeoutSeconds,
+	})
+	var probe *corev1.Probe
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name == forge.Slug {
+			probe = container.StartupProbe
+		}
+	}
+	if probe == nil {
+		t.Fatal("the deployment has no startup probe for forge")
+	}
+	if allowed := probe.PeriodSeconds * probe.FailureThreshold; allowed < 900 {
+		t.Errorf("the startup probe allows %d s, and the template asked for 900", allowed)
+	}
+	if probe.TimeoutSeconds != 10 || probe.TCPSocket == nil {
+		t.Errorf("the startup probe waits %d s and connects %v", probe.TimeoutSeconds, probe.TCPSocket != nil)
+	}
+	if deadline := deployment.Spec.ProgressDeadlineSeconds; deadline == nil || *deadline < 900 {
+		t.Errorf("the rollout would be called failed while the app was still allowed to start: %v", deadline)
+	}
+}
+
+// WordPress, the template the two-servers-apart run failed on, arrives with
+// what its catalogue file says, through the handler a person installs with.
+func TestWordPressIsGivenTimeToHearBackFromItsDatabase(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+	tpl, ok := templates.Lookup("wordpress")
+	if !ok {
+		t.Fatal("the catalogue has no WordPress")
+	}
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("installing WordPress: %d %s", status, body)
+	}
+	apps, err := h.db.ListApps(t.Context(), acme.env.ID)
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("the install made %+v (%v)", apps, err)
+	}
+	want := tpl.Services[0]
+	got := apps[0]
+	if got.HealthTimeoutSeconds != want.HealthTimeoutSeconds || got.HealthStartSeconds != want.HealthStartSeconds ||
+		got.HealthTimeoutSeconds <= kube.DefaultHealthTimeoutSeconds || got.HealthCheck != kube.HealthHTTP {
+		t.Errorf("WordPress was given %q, %d s to start and %d s to answer; its template says %d and %d",
+			got.HealthCheck, got.HealthStartSeconds, got.HealthTimeoutSeconds,
+			want.HealthStartSeconds, want.HealthTimeoutSeconds)
+	}
+}
+
+// A template's health settings are refused before anything is made when an
+// app's settings would refuse them. A team's catalogue is checked when it is
+// read; the install does not take that on trust.
+func TestAHealthSettingAnAppCouldNotHaveStopsTheInstall(t *testing.T) {
+	h := newHarness(t)
+	acme := h.newTenant("acme")
+	before := h.rowCounts(t)
+	tpl := templates.Template{
+		ID: "slow", Name: "Slow",
+		Services: []templates.Service{
+			{Name: "slow", Image: "example/slow:1.2.3", Port: 80, Public: true, HealthStartSeconds: 4000},
+		},
+	}
+	_, err := h.installDirectly(t, acme, tpl, "", nil)
+	if problem := errdoc.From(err); problem == nil || problem.Code != "app.health_start_out_of_range" {
+		t.Fatalf("a start budget of 4000 s answered %v", err)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("a refused install changed %v into %v", before, after)
+	}
+}
+
+// An install is all or nothing.
+//
+// These hold the promise from both ends: everything that can be known before
+// anything is written is found by the plan, and stops the install with nothing
+// made; what can only fail while writing removes what was made. In between, a
+// dry run answers the plan and writes nothing.
+
+// storedDatabases keeps its databases in the panel's store, as the real
+// manager does, so a second install finds the names the first one took.
+type storedDatabases struct {
+	fakeDatabases
+	// failDelete makes removing a database fail, as a cluster that has gone
+	// away would.
+	failDelete bool
+}
+
+func (f *storedDatabases) Create(ctx context.Context, env store.Environment, req CreateDatabaseRequest) (store.Database, error) {
+	if req.Engine == f.failFor {
+		return store.Database{}, errdoc.ClusterUnreachable(errors.New("the cluster said no"))
+	}
+	record := store.Database{EnvironmentID: env.ID, Name: req.Name, Slug: kube.Slugify(req.Name),
+		Engine: req.Engine, Status: "creating", Instances: 1, StorageGB: req.StorageGB}
+	if err := f.db.CreateDatabase(ctx, &record); err != nil {
+		return store.Database{}, err
+	}
+	f.log.note("create " + record.Name)
+	return record, nil
+}
+
+func (f *storedDatabases) Link(ctx context.Context, databaseID, appID, varName string, pieces *store.LinkPieces) error {
+	if err := f.db.LinkDatabase(ctx, databaseID, appID, varName); err != nil {
+		return err
+	}
+	return f.fakeDatabases.Link(ctx, databaseID, appID, varName, pieces)
+}
+
+func (f *storedDatabases) Credentials(ctx context.Context, databaseID string) (DatabaseCredentials, error) {
+	record, err := f.db.GetDatabase(ctx, databaseID)
+	if err != nil {
+		return DatabaseCredentials{}, err
+	}
+	return DatabaseCredentials{Engine: record.Engine, Host: record.Slug + ".acme-production.svc", Port: 3306,
+		Database: "app", Username: "app", Password: "not-a-real-password", URL: "mysql://app@" + record.Slug}, nil
+}
+
+func (f *storedDatabases) Delete(ctx context.Context, databaseID string) error {
+	if f.failDelete {
+		return errors.New("the cluster is not answering")
+	}
+	f.log.note("delete " + databaseID)
+	return f.db.DeleteDatabase(ctx, databaseID)
+}
+
+func withStoredDatabases(t *testing.T) (*harness, *storedDatabases) {
+	t.Helper()
+	h := newHarness(t)
+	databases := &storedDatabases{fakeDatabases: fakeDatabases{log: &recorder{}, db: h.db}}
+	h.api.databases = databases
+	return h, databases
+}
+
+// rowCounts is how many of everything an install makes there are.
+func (h *harness) rowCounts(t *testing.T) map[string]int {
+	t.Helper()
+	counts := map[string]int{}
+	for _, table := range []string{"apps", "databases", "database_links", "volumes", "app_variables",
+		"app_ports", "app_files", "app_templates"} {
+		var n int
+		if err := h.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		counts[table] = n
+	}
+	return counts
+}
+
+// noAppAnnounced fails when anything was said about an app being created.
+func noAppAnnounced(t *testing.T, stream *events.Subscription) {
+	t.Helper()
+	for {
+		select {
+		case event := <-stream.Events():
+			if event.Type == "app.created" {
+				t.Errorf("an app was announced as created by an install that made nothing: %s", event.Data)
+			}
+		case <-time.After(200 * time.Millisecond):
+			return
+		}
+	}
+}
+
+// WordPress installed a second time, named shop, made the app shop and then
+// failed on the database name the template fixes — leaving shop behind with
+// no database, under an error that said nothing was created. A template of one
+// app installed under a name of its own names its databases after it.
+func TestASecondCopyOfATemplateTakesNamesOfItsOwn(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+
+	for _, name := range []string{"WordPress", "shop"} {
+		status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+			map[string]any{"environment_id": acme.env.ID, "name": name})
+		if status != http.StatusCreated {
+			t.Fatalf("installing WordPress as %s: %d %s", name, status, body)
+		}
+	}
+	apps, err := h.db.ListApps(t.Context(), acme.env.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slugs := map[string]string{}
+	for _, app := range apps {
+		slugs[app.Slug] = app.ID
+	}
+	databases, err := h.db.ListDatabases(t.Context(), acme.env.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked := map[string]string{}
+	for _, database := range databases {
+		links, err := h.db.ListLinksForDatabase(t.Context(), database.ID)
+		if err != nil || len(links) != 1 {
+			t.Fatalf("%s is linked %+v (%v)", database.Name, links, err)
+		}
+		linked[database.Slug] = links[0].AppID
+	}
+	if len(apps) != 2 || slugs["wordpress"] == "" || slugs["shop"] == "" {
+		t.Fatalf("the apps are %v", slugs)
+	}
+	if linked["wordpress-db"] != slugs["wordpress"] || linked["shop-db"] != slugs["shop"] {
+		t.Errorf("the databases are linked %v, and the apps are %v", linked, slugs)
+	}
+}
+
+// Another app's public port, wanted by the second of a template's services,
+// used to leave the first service's app behind. It is found before anything
+// is made, and nothing is announced.
+func TestAPortTakenStopsTheInstallBeforeAnythingIsMade(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	other := h.app(acme, "game-server")
+	if err := h.db.AddPort(t.Context(), &store.AppPort{AppID: other.ID, Port: 25565, Protocol: "tcp", PublicPort: 25565}); err != nil {
+		t.Fatal(err)
+	}
+	tpl := templates.Template{
+		ID: "arcade", Name: "Arcade",
+		Services: []templates.Service{
+			{Name: "lobby", Image: "example/lobby:1.2.3", Port: 8080, Public: true,
+				Volumes: []templates.VolumeSpec{{Name: "data", MountPath: "/data", SizeGB: 1}}},
+			{Name: "game", Image: "example/game:1.2.3", Ports: []templates.PortSpec{{Port: 25565}}},
+		},
+		Databases: []templates.DatabaseSpec{{Name: "arcade-db", Engine: "postgres", StorageGB: 5,
+			LinkTo: []string{"lobby"}, VarName: "DATABASE_URL"}},
+	}
+	before := h.rowCounts(t)
+	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
+	defer stream.Close()
+
+	_, err := h.installDirectly(t, acme, tpl, "", nil)
+	problem := errdoc.From(err)
+	if problem == nil || problem.Code != "port.taken" || problem.Status != http.StatusConflict {
+		t.Fatalf("the install answered %v", err)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("an install that was refused changed %v into %v", before, after)
+	}
+	noAppAnnounced(t, stream)
+}
+
+// What can only fail while writing — the cluster refusing a database — comes
+// after the apps exist. They are removed, and the answer says so.
+func TestADatabaseRefusedRemovesTheAppsMadeBeforeIt(t *testing.T) {
+	h, databases := withStoredDatabases(t)
+	databases.failFor = "mariadb"
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+	before := h.rowCounts(t)
+	stream := h.api.hub.Subscribe(t.Context(), 0, events.TeamTopic(acme.team.ID))
+	defer stream.Close()
+
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID})
+	// With the status of what stopped it, so a cluster that is not there is
+	// still a 503 and a name taken still a 409.
+	if code := problemCode(body); code != "template.install_rolled_back" || status != http.StatusServiceUnavailable {
+		t.Fatalf("a refused database answered %d %s", status, body)
+	}
+	if !strings.Contains(body, "The cluster is not responding") || !strings.Contains(body, "nothing was deployed: wordpress.") {
+		t.Errorf("the answer does not say what stopped it or what was removed: %s", body)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("an install that was undone changed %v into %v", before, after)
+	}
+	noAppAnnounced(t, stream)
+	if entries, err := h.db.ListAudit(t.Context(), acme.team.ID, "template.installed", "", 10); err != nil || len(entries) != 0 {
+		t.Errorf("an undone install was recorded as installed: %+v (%v)", entries, err)
+	}
+}
+
+// An undo that cannot finish says what is still there.
+func TestAnUndoThatCannotFinishNamesWhatIsLeft(t *testing.T) {
+	h, databases := withStoredDatabases(t)
+	databases.failFor, databases.failDelete = "redis", true
+	acme := h.newTenant("acme")
+	tpl := templates.Template{
+		ID: "board", Name: "Board",
+		Services: []templates.Service{{Name: "board", Image: "example/board:1.2.3", Port: 3000, Public: true}},
+		Databases: []templates.DatabaseSpec{
+			{Name: "board-db", Engine: "postgres", StorageGB: 5, LinkTo: []string{"board"}, VarName: "DATABASE_URL"},
+			{Name: "board-redis", Engine: "redis", StorageGB: 1, LinkTo: []string{"board"}, VarName: "REDIS_URL"},
+		},
+	}
+	_, err := h.installDirectly(t, acme, tpl, "", nil)
+	problem := errdoc.From(err)
+	if problem.Code != "template.install_left_over" || !strings.Contains(problem.Impact, "board-db") ||
+		strings.Contains(problem.Impact, "board,") {
+		t.Fatalf("an undo that could not remove the database answered %+v", problem)
+	}
+	if apps, _ := h.db.ListApps(t.Context(), acme.env.ID); len(apps) != 0 {
+		t.Errorf("the app was not removed: %+v", apps)
+	}
+}
+
+// An app and a database in one environment share an address, so an app whose
+// name a database already has is a name taken, found before anything is made.
+func TestTheAppsNameIsCheckedAgainstTheDatabases(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.database(acme, "notes")
+	tpl := templates.Template{ID: "notes", Name: "Notes",
+		Services: []templates.Service{{Name: "notes", Image: "example/notes:2.4.1", Port: 8080, Public: true}}}
+	before := h.rowCounts(t)
+
+	plan, err := h.api.planTemplateInstall(t.Context(), acme.env, tpl, installTemplateRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Problems) != 1 || plan.Problems[0].Code != "resource.name_taken" || plan.Problems[0].Context["taken_by"] != "database" {
+		t.Fatalf("the plan found %+v", plan.Problems)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("planning changed %v into %v", before, after)
+	}
+}
+
+// A dry run answers the plan — the names, the disks, what stops it — and makes
+// nothing, which is how the install dialog says a name is taken before Install
+// is pressed.
+func TestADryRunSaysWhatAnInstallWouldDoAndDoesNothing(t *testing.T) {
+	h, _ := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+	if status, body := h.do(acme, http.MethodPost, "/api/templates/homer/install",
+		map[string]any{"environment_id": acme.env.ID}); status != http.StatusCreated {
+		t.Fatalf("installing Homer: %d %s", status, body)
+	}
+	game := h.app(acme, "game")
+	if err := h.db.AddPort(t.Context(), &store.AppPort{AppID: game.ID, Port: 25565, Protocol: "tcp", PublicPort: 25565}); err != nil {
+		t.Fatal(err)
+	}
+	before := h.rowCounts(t)
+
+	var plan struct {
+		Apps     []plannedTemplateApp    `json:"apps"`
+		Volumes  []plannedTemplateVolume `json:"volumes"`
+		Problems []errdoc.Problem        `json:"problems"`
+	}
+	for _, c := range []struct{ template, name, problem string }{
+		{"homer", "", "resource.name_taken"},
+		{"minecraft", "", "port.taken"},
+		{"homer", "home", ""},
+	} {
+		status, body := h.do(acme, http.MethodPost, "/api/templates/"+c.template+"/install",
+			map[string]any{"environment_id": acme.env.ID, "name": c.name, "dry_run": true})
+		if status != http.StatusOK {
+			t.Fatalf("a dry run of %s answered %d %s", c.template, status, body)
+		}
+		plan.Problems = nil
+		if err := json.Unmarshal([]byte(body), &plan); err != nil {
+			t.Fatal(err)
+		}
+		codes := []string{}
+		for _, problem := range plan.Problems {
+			codes = append(codes, problem.Code)
+		}
+		want := []string{}
+		if c.problem != "" {
+			want = append(want, c.problem)
+		}
+		if !slices.Equal(codes, want) {
+			t.Errorf("a dry run of %s as %q found %v, want %v", c.template, c.name, codes, want)
+		}
+		if len(plan.Apps) != 1 || len(plan.Volumes) != 1 {
+			t.Errorf("a dry run of %s planned %+v and %+v", c.template, plan.Apps, plan.Volumes)
+		}
+	}
+	if plan.Apps[0].Slug != "home" || plan.Volumes[0].App != "home" || plan.Volumes[0].SizeGB != 1 {
+		t.Errorf("Homer as home is planned as %+v with %+v", plan.Apps, plan.Volumes)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("a dry run changed %v into %v", before, after)
+	}
+}
+
+// A database is named after the one app of its template when that app is
+// given a name of its own, by the last word of its own name.
+func TestADatabaseIsRenamedAfterItsApp(t *testing.T) {
+	two := []templates.DatabaseSpec{{Name: "outline-db"}, {Name: "outline-redis"}}
+	same := []templates.DatabaseSpec{{Name: "teable-db"}, {Name: "teable-cache-db"}}
+	for _, c := range []struct {
+		name string
+		all  []templates.DatabaseSpec
+		want string
+	}{
+		{"wordpress-db", []templates.DatabaseSpec{{Name: "wordpress-db"}}, "shop-db"},
+		{"wordpress-with-mariadb-db", []templates.DatabaseSpec{{Name: "wordpress-with-mariadb-db"}}, "shop-db"},
+		{"outline-redis", two, "shop-redis"},
+		{"teable-cache-db", same, "shop-teable-cache-db"},
+	} {
+		if got := renamedDatabase("shop", c.name, c.all); got != c.want {
+			t.Errorf("%s is renamed %s, want %s", c.name, got, c.want)
+		}
+	}
+}
+
+// A template whose image starts as root.
+//
+// The strictest level is the default and refuses such an image, and only an
+// admin can change it. The install used to make the app anyway, and the
+// person found out afterwards from an app that never started — and a member
+// could do nothing about it. Now it is said before anything is made, and an
+// admin can accept root images for the environment in the same step.
+
+// namespaceCluster records the namespaces it is asked to bring up to date.
+type namespaceCluster struct {
+	Cluster
+	mu      sync.Mutex
+	ensured []string
+}
+
+func (c *namespaceCluster) EnsureNamespace(_ context.Context, env store.Environment, _, _ string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensured = append(c.ensured, env.Namespace+"="+env.PodSecurity)
+	return nil
+}
+
+func withRootCluster(t *testing.T) (*harness, *namespaceCluster, *storedDatabases) {
+	t.Helper()
+	h := newHarness(t)
+	cluster := &namespaceCluster{}
+	h.withCluster(cluster)
+	databases := &storedDatabases{fakeDatabases: fakeDatabases{log: &recorder{}, db: h.db}}
+	h.api.databases = databases
+	return h, cluster, databases
+}
+
+func TestATemplateThatNeedsRootIsRefusedBeforeAnythingIsMade(t *testing.T) {
+	if tpl, _ := templates.Lookup("wordpress"); !tpl.Services[0].NeedsRoot {
+		t.Fatal("the WordPress template no longer says its image starts as root; pick another for this test")
+	}
+	h, cluster, databases := withRootCluster(t)
+	acme := h.newTenant("acme")
+	member := h.newMember(acme, "mia", store.RoleMember)
+	before := h.rowCounts(t)
+
+	status, body := h.do(member, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID})
+	if status != http.StatusConflict || problemCode(body) != "template.needs_root_images" ||
+		!strings.Contains(body, "wordpress") || !strings.Contains(body, "production") {
+		t.Fatalf("a member installing WordPress at the strictest level answered %d %s", status, body)
+	}
+	// Asking for the level to be lowered is an admin's to ask, and refused
+	// before anything is read or written.
+	status, body = h.do(member, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if status != http.StatusForbidden {
+		t.Fatalf("a member asking to accept root images answered %d %s", status, body)
+	}
+	if after := h.rowCounts(t); !maps.Equal(before, after) {
+		t.Errorf("a refused install changed %v into %v", before, after)
+	}
+	if events := databases.log.all(); len(events) != 0 {
+		t.Errorf("a refused install asked for a database: %v", events)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity == "baseline" || len(cluster.ensured) != 0 {
+		t.Errorf("a refused install changed the level to %q, applying %v", env.PodSecurity, cluster.ensured)
+	}
+}
+
+func TestAnAdminCanAcceptRootImagesAsPartOfTheInstall(t *testing.T) {
+	h, cluster, _ := withRootCluster(t)
+	acme := h.newTenant("acme")
+
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if status != http.StatusCreated || !strings.Contains(body, `"accepts_root":true`) {
+		t.Fatalf("an owner accepting root images answered %d %s", status, body)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity != "baseline" {
+		t.Errorf("the environment is at %q", env.PodSecurity)
+	}
+	if !slices.Equal(cluster.ensured, []string{"acme-production=baseline"}) {
+		t.Errorf("the namespace was brought up to date as %v", cluster.ensured)
+	}
+	entries, err := h.db.ListAudit(t.Context(), acme.team.ID, "environment.pod_security_changed", acme.env.ID, 10)
+	if err != nil || len(entries) != 1 {
+		t.Errorf("the change of level is recorded as %+v (%v)", entries, err)
+	}
+	if apps, _ := h.db.ListApps(t.Context(), acme.env.ID); len(apps) != 1 {
+		t.Errorf("the install made %+v", apps)
+	}
+
+	// Into an environment that accepts root images already, nothing has to
+	// be asked, and the level is not touched again.
+	if status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "name": "shop"}); status != http.StatusCreated ||
+		strings.Contains(body, "accepts_root") {
+		t.Fatalf("a second WordPress into an environment that accepts root answered %d %s", status, body)
+	}
+	if len(cluster.ensured) != 1 {
+		t.Errorf("the level was applied again: %v", cluster.ensured)
+	}
+}
+
+// An install that fails after the level was lowered — or that would have —
+// leaves the environment as it was, because the level changes last of what
+// can fail.
+func TestAnInstallThatFailsLeavesTheLevelAsItWas(t *testing.T) {
+	h, cluster, databases := withRootCluster(t)
+	databases.failFor = "mariadb"
+	acme := h.newTenant("acme")
+
+	status, body := h.do(acme, http.MethodPost, "/api/templates/wordpress/install",
+		map[string]any{"environment_id": acme.env.ID, "allow_root": true})
+	if problemCode(body) != "template.install_rolled_back" {
+		t.Fatalf("a refused database answered %d %s", status, body)
+	}
+	env, _ := h.db.GetEnvironment(t.Context(), acme.env.ID)
+	if env.PodSecurity == "baseline" || len(cluster.ensured) != 0 {
+		t.Errorf("an install that was undone left the level at %q, applying %v", env.PodSecurity, cluster.ensured)
+	}
+}
+
+// WordPress and Ghost read their database piece by piece, and were handed a
+// URL neither reads: the database was made, and the app could not reach it.
+// Installed from the built-in catalogue, each now gets the pieces its image
+// reads, from the database's own credentials, the password as a secret.
+func TestWordPressAndGhostGetTheirDatabaseInThePiecesTheyRead(t *testing.T) {
+	h, databases := withStoredDatabases(t)
+	acme := h.newTenant("acme")
+	h.acceptRoot(t, &acme)
+
+	// The pieces are the link's: the database manager writes them from the
+	// database's own connection and keeps them current after a password
+	// change (internal/dbsvc tests the values). What the install owes is
+	// that each image's link names the variables that image reads.
+	for _, c := range []struct {
+		template string
+		want     store.LinkPieces
+		plain    map[string]string
+	}{
+		{"wordpress", store.LinkPieces{Host: "WORDPRESS_DB_HOST", Name: "WORDPRESS_DB_NAME",
+			User: "WORDPRESS_DB_USER", Password: "WORDPRESS_DB_PASSWORD"}, nil},
+		{"ghost", store.LinkPieces{Host: "database__connection__host", Port: "database__connection__port",
+			Name: "database__connection__database", User: "database__connection__user",
+			Password: "database__connection__password"}, map[string]string{"database__client": "mysql"}},
+	} {
+		status, body := h.do(acme, http.MethodPost, "/api/templates/"+c.template+"/install",
+			map[string]any{"environment_id": acme.env.ID})
+		if status != http.StatusCreated {
+			t.Fatalf("installing %s answered %d %s", c.template, status, body)
+		}
+		var installed installedTemplate
+		if err := json.Unmarshal([]byte(body), &installed); err != nil || len(installed.Apps) != 1 {
+			t.Fatalf("installing %s made %s", c.template, body)
+		}
+		app := installed.Apps[0]
+		if pieces, ok := databases.log.piecesOf(app.ID); !ok || pieces != c.want {
+			t.Errorf("%s was linked with the pieces %+v (given %v), want %+v", c.template, pieces, ok, c.want)
+		}
+		rows, err := h.db.ListVariables(t.Context(), app.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		for _, row := range rows {
+			if value, err := h.keyring.Open(row.Sealed, variableContext(app.ID, row.Key)); err == nil {
 				got[row.Key] = string(value)
 			}
-			secret[row.Key] = row.IsSecret
 		}
-		want := map[string]string{"DB_HOST": "assets-db-rw.acme.svc", "DB_PORT": "3306", "DB_DATABASE": "assets",
-			"DB_USERNAME": "assets", "DB_PASSWORD": "not-a-real-password"}
-		for key, value := range want {
+		for key, value := range c.plain {
 			if got[key] != value {
-				t.Errorf("%s: %s is %q, want %q", name, key, got[key], value)
+				t.Errorf("%s: %s is %q, want %q", c.template, key, got[key], value)
 			}
-		}
-		if !secret["DB_PASSWORD"] || secret["DB_HOST"] {
-			t.Errorf("%s: the password is secret %v, the host %v", name, secret["DB_PASSWORD"], secret["DB_HOST"])
 		}
 	}
 }

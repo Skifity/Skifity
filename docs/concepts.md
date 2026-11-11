@@ -75,7 +75,10 @@ Nextcloud, MediaWiki and phpMyAdmin all start as root and drop privileges
 themselves, which is an ordinary and long-standing thing for a container to do,
 and this level has no way to permit it. An app like that never starts, and the
 panel says exactly that on the app's page rather than leaving you with the
-kubelet's wording.
+kubelet's wording. A template knows which of its images start as root, so
+installing one says so before anything is made, and an owner or admin can let
+the environment accept root images in the same step; see
+[Templates](templates.md#an-image-that-starts-as-root).
 
 **Accepts root images** is the other level, chosen per environment under the
 project. It permits that one thing and nothing else. Still refused, at both
@@ -125,11 +128,42 @@ and the difference matters:
   restarts the app with the new value. That takes seconds, and no rebuild.
 * A **build-time variable** is baked into the image, which front-end builds do
   with things like a public API URL. Changing one means the image is wrong, so
-  the app is rebuilt.
+  the version the app runs is built again with it — at the commit it runs,
+  when its deploy recorded one, rather than whatever the branch holds now —
+  and the answer names the deployment doing it. Removing one is a rebuild too. An app whose deploys are locked is not
+  rebuilt: the value waits for the first deploy after the unlock, and an app
+  never deployed gets it at its first.
 
 Skifity works this out from a fingerprint of everything that actually affects
 the image. The panel tells you which kind you are setting before you save it,
 and says afterwards whether it rebuilt.
+
+A variable is changed from its own row: **Edit** opens it with its value, and
+whether it is a secret and read while building, already filled in. A secret's
+box starts empty, because its value is never shown again, and an empty box
+leaves it as it is. **Edit as text** opens with every plain variable as a
+`KEY=value` line and a comment for each secret, and saves only the lines you
+add or change, so saving it untouched restarts nothing. Removing a line there
+does not delete the variable; the row's delete button does.
+### What rolls out, and what waits for a deploy
+
+Settings divide the same way. What the running app reads is given to it the
+moment it is saved, by a rollout of the image it already has: the port, the
+start command, the health check, the CPU and memory, the user it runs as, and
+whether it is internal. What goes into the image waits for the next deploy,
+which builds with it: the repository, the branch, the root directory, the
+builder, the Dockerfile, the build command, the output folder, and an image
+app's image. So does the release command, which only ever runs in a deploy.
+
+Saving says which was which, in the panel, in `skifity apps set` and to an
+assistant. And until a deploy has built with them, the app's page says what is
+waiting — **Changes waiting for a deploy: Branch, Build command** — with a
+button to deploy now. Each deployment records what it was built from, so this
+is a comparison, not a guess; `skifity status` and the `pending_changes` of
+`GET /api/apps/{app}/status` say the same. A build-time variable is named there
+and never shown: the record keeps a digest of its value, sealed with the
+panel's master key. A value read from a secret manager is compared by where it
+is read from; one that changed inside the manager is what **Refresh** finds.
 
 How a build-time variable reaches the build depends on how the app is built,
 and none of them writes its value anywhere a person can read it afterwards —
@@ -418,6 +452,22 @@ tunnel, or a wildcard one that covers it. A zone at another provider cannot
 point at a tunnel; there the record gets the cluster's address if it has one,
 and is refused if it does not.
 
+### Replacing the credentials
+
+A token that expired or was revoked, or a key that was rotated, is replaced on
+the connection: **Replace credentials** under **Settings → DNS providers**, or
+`skifity dns providers update NAME --credentials FILE`. The connection keeps
+its name and the records the panel created through it. Removing it and
+connecting again would not: the records would stay at the provider, and the
+panel would forget them, so it would neither point them at a new address nor
+remove them with their domains.
+
+The new credentials are checked as connecting checks them, and one thing
+more: they have to see every zone the panel keeps records in through this
+connection, by the zone's own id. Credentials for another account can list a
+zone of the same name and still not reach those records, so they are refused,
+naming the zones they cannot see. Nothing is saved until every check passes.
+
 ### What is not here
 
 Wildcard certificates. A certificate for `*.example.com` needs the DNS-01
@@ -476,9 +526,17 @@ for the other environment. **Promote anyway** runs it as it was built; deploying
 normally builds it with the app's own. Make those variables runtime ones, or
 the same in both, and promotion is always the same build.
 
+A version goes to the app of the same name and kind, so production needs a
+`web` before staging's `web` can be promoted to it. When no other environment
+of the project has one, **Promote** is shown greyed out on the version that is
+live, saying so, with the two ways to make one: create the app there, or clone
+the environment.
+
 Only a version whose image is still kept can be promoted, the same ten as for a
-rollback. `POST /api/apps/{app}/promote` with the version's `deployment_id` is
-the same for a script; `GET` lists where an app's versions can go.
+rollback. `skifity promote --to production` does it from a terminal, with
+`--force` for a version built differently, and `promote_app` from an assistant.
+`POST /api/apps/{app}/promote` with the version's `deployment_id` is the same
+for a script; `GET` lists where an app's versions can go.
 
 ## Release command
 
@@ -841,7 +899,24 @@ its own if you turned those on.
 
 If the token cannot manage that repository's webhooks — a read-only token is
 the right token for somebody who deploys by hand — the panel says so and gives
-you the URL to add yourself. It never fails creating the app over it.
+you the URL to add yourself. It never fails creating the app over it. Once the
+token can, **Register the webhook again** on the app's **Settings** asks once
+more, and `POST /api/apps/{id}/webhook` does the same.
+
+**An app with no Git connection gets no webhook.** One made from a public
+repository without choosing a connection — the quickest start — has deploy on
+push switched on, and nothing asks the repository to tell the panel about a
+push. The panel says so when the app is made, and its **Settings** say so under
+**Deploy on push**. Give it a connection there, in **Git connection**, once the
+account is connected under **Settings → Git**: saving registers the webhook,
+and the app is not built again for it. The connection has to be the team's and
+for the host the repository is on. `git:` in [`skifity.yaml`](cli.md#describing-an-environment-in-a-file)
+does the same for an app that exists. Removing a connection leaves the apps it
+served with none, and the same applies to them.
+
+A push can still reach such an app: the panel matches a delivery to apps by
+repository, so a webhook another of the team's connections registered on the
+same repository deploys it too. What it cannot do is register one of its own.
 
 Only the app's own branch deploys. A push to any other branch is read, matched
 against nothing, and ignored.
@@ -883,6 +958,11 @@ Before the connection is saved the panel asks Bitbucket what the token can
 read, so a token Bitbucket refuses, or a workspace it cannot see, is said then
 rather than at the first deploy. The token and the email are stored encrypted
 and never shown again.
+
+An API token has an expiry date. When it is near, **Replace token** on the
+connection under **Settings → Git** takes the new one, with its account's
+email, and Bitbucket is asked about it before it is saved; the webhooks and
+the apps stay as they are. See [Replacing a token](configuration.md#replacing-a-token).
 
 A build clones with the token and Bitbucket's own user name for one,
 `x-token-auth`; the email never goes into the build.
@@ -1256,12 +1336,60 @@ crossed and once when over:
 An admin sets them on the server's page. `GET /api/servers/{server}/usage` and
 `/api/servers/{server}/alerts` are the same for a script.
 
+## What needs attention
+
+The overview opens with **Needs attention**: what is wrong across the team
+now, errors first, each a sentence that links to the page to deal with it on.
+The bell in the header shows the same list from anywhere, with how many things
+are on it, red when one of them is an error.
+
+* **Errors**: a deploy that failed (until one after it works), an app with no
+  instance running, a database that failed, a backup that failed or that was
+  due and not taken, a domain whose certificate could not be issued, a server
+  that stopped answering or could not be added, and — for the panel's
+  administrator — the panel's own backup of itself having failed.
+* **Warnings**: a usage alert going off, on an app or a server; an app running
+  an image with a critical vulnerability nobody deployed past on purpose; an
+  app changed outside the panel; one of the team's own certificates within 21
+  days of running out (an error in its last day); and a team with no
+  notification channel, where nobody hears about any of the above.
+
+It is built from what the panel has already recorded — the watcher's checks,
+the deploys, the backups, the scans — so it answers with the cluster down, and
+it lists what is wrong now: an alert that has stopped, or a backup that failed
+and then ran, is no longer on it. A backup counts as missed once it is ten
+minutes past due with nothing started, which is the same question the panel
+asks when it [catches up](backups.md#schedules) after a restart. Previews are left out:
+a pull request's build is reported on the pull request.
+
+Each person sees what they could open. A member limited to some projects sees
+those projects' apps, databases and backups, and nothing about servers; the
+team's certificates and its notification channels are for whoever can open the
+team's settings. Somebody limited to projects is not on the team's live
+updates, so their list is asked for again every thirty seconds instead.
+
+Whoever starts a deploy is also told when it ends, wherever in the panel they
+are: one message, with a link to its build, unless they are on that app's page
+watching it already.
+
+`skifity status --all` prints the same list, and exits 1 when anything on it is
+an error, so a cron job or a CI step can ask whether anything is broken; an
+assistant asks with `get_attention`. `GET /api/teams/{team}/attention` is the
+same for a script.
+
 ## Deploys and downtime
 
 A deploy starts the new instance, waits for it to answer its readiness check,
 moves traffic, and only then stops the old one. Nothing is dropped: the old
 instance also pauses for five seconds before it is told to stop, so every proxy
 has seen it leave before it goes.
+
+A new version that stops as it starts is not waited on: the deploy fails as soon
+as an instance has stopped twice, or once for running out of memory, says how
+it stopped, and keeps the lines it printed. The old version is serving the
+whole time, and its configuration is applied again so the new instance that
+keeps restarting goes. See
+[The new version crashed on start](troubleshooting.md#the-new-version-crashed-on-start).
 
 **Except when the app has a disk.** One disk can only be written by one
 instance at a time, so the old instance has to stop before the new one starts,
@@ -1373,7 +1501,9 @@ writing an instance count of its own. It would otherwise put the app back to its
 minimum every time you changed a variable.
 
 Instances are spread across servers where possible, so losing a server does not
-take an app down.
+take an app down. An app with a volume is the exception: the default storage
+keeps a volume on the server that made it, so the app waits for that server to
+come back rather than starting on another.
 
 An app, or any of its processes, can also be given GPUs: a card each for every
 instance, on servers that have one. [GPUs](gpus.md) has how a server is set up
@@ -1436,13 +1566,59 @@ names are made to fit — `Celery_Beat` becomes `celery-beat` — and a line tha
 becomes a name an earlier line already has, or an eleventh, is left out and said,
 rather than stopping the app from being created.
 
+## Logs
+
+An app's **Logs** tab, `skifity logs` and an assistant's `get_app_logs` read
+every instance of the app that has started, and merge their lines in the order
+they were written. Once more than one instance is being read, each line says
+which wrote it: the end of the instance's name, as in `[x7k2p]`, which is also
+what to pass to read that instance alone. An instance that starts while the log
+is being followed joins it within ten seconds; one that is stopped or replaced
+is let go. Twenty instances are read at once; past that, the log says how many
+it left out, and choosing one reads it.
+
+The newest 200 lines are shown first, counted across every instance read, and
+1,000 or 5,000 can be asked for instead. A time range — the last 15 minutes, the
+last hour, six hours, a day — reads only what was written in it. The times are
+the server's own, shown in your time zone or in UTC, and **Download** saves the
+lines loaded as a `.log` file with each line's time and instance.
+
+A line an app writes as a JSON object, as structured loggers do, opens to show
+its fields one to a line. A line that says it is an error — a `level` or
+`severity` of `error` or `fatal` in JSON, `level=error` in logfmt, `ERROR` in
+capitals near its start, or something a runtime threw — is shown in red, and a
+warning in amber; **Errors only** hides the rest.
+
+```sh
+skifity logs --follow                 # every instance, as it is written
+skifity logs --instance x7k2p         # one of them
+skifity logs --since 15m --tail 1000  # the last 15 minutes, up to 1,000 lines
+skifity logs --timestamps             # each line with its time, in UTC
+```
+
+**Before the restart** reads the container that ran before the current one: the
+instance that restarted most, or the one chosen. When an app keeps restarting,
+the container that printed the reason has already been replaced, and this is
+the only copy of it. Above its lines is how that container ended — out of
+memory, or the exit code it stopped with — which its own log often cannot say:
+a process killed for its memory never gets to write anything. The same is said
+under each instance on the Overview, in `skifity status` and in
+`get_app_status`.
+
+Anything in a line that looks like a credential — a bearer token, a private key,
+a cloud access key — is replaced with `[redacted]` before the line leaves the
+panel. Logs are read from the servers as they are asked for and are not kept by
+the panel; to keep them, [ship them to a log drain](log-drains.md).
+
 ## Servers
 
 The first server runs the control plane: the Kubernetes API, the panel and its
 database. Others join it.
 
 With one control plane server, a reboot means a few minutes of downtime for the
-cluster's control — your apps keep running. With three, losing one changes
+cluster's control — your apps keep running — and losing it for good loses the
+cluster; [Control plane servers](adding-servers.md#control-plane-servers) has
+the way to three and what they need. With three, losing one changes
 nothing *for the cluster*: the panel itself is one pod with its database on one
 server's disk, and it is not replicated. If that server is lost the panel is
 down until you put it back on another (see
@@ -1491,3 +1667,10 @@ installed the first time you need them.
 | Log collector | You add a [log drain](log-drains.md) | 100 MB per server |
 
 Settings shows what is installed and what each one costs before you agree to it.
+
+Cross-node storage is the one that does not fit small servers. Its 700 MB is
+paid on every server: most of what a 2 GB server has left once Kubernetes and
+the panel are running, and on a 1 GB worker nothing is left for apps. On
+servers that size, keep data that must survive a server in a PostgreSQL with
+three instances, which copies it between servers without it
+([Databases](databases.md)).

@@ -124,9 +124,11 @@ and do not change that. If its server is lost, apps keep serving and the panel i
 down until its database and key are restored elsewhere. Nothing watches the
 panel from outside: use an uptime check on its address.
 
-**Backups are opt-in, and data is on one server.** Nothing is backed up until a
-backup storage is set. k3s's default storage keeps a volume on the server that
-made it: a server lost is its volumes lost, and an app with one waits for it. A
+**Backups need a bucket, and data is on one server.** Nothing is backed up until
+a panel administrator sets backup storage; from then on every new database is
+backed up daily unless somebody says not to, and a team's older databases get
+the same with one button. Volumes are still backed up only on a schedule
+somebody sets. k3s's default storage keeps a volume on the server that made it: a server lost is its volumes lost, and an app with one waits for it. A
 managed Postgres can have several instances; the other engines have one. There is
 no point-in-time recovery. etcd is snapshotted every six hours onto the same disk,
 which is not a backup of the server.

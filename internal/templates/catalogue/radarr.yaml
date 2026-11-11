@@ -6,6 +6,7 @@ website: https://hub.docker.com/r/linuxserver/radarr
 services:
 - name: radarr
   image: linuxserver/radarr:6.4.4
+  needs_root: true
   port: 7878
   public: true
   mem_request_mb: 128
@@ -19,3 +20,4 @@ services:
   - name: radarr-config
     mount_path: /config
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -20,11 +20,12 @@ Pricing is per server: Free (up to 3 projects, unlimited services, basic
 monitoring), Hobby $10.90/server/month billed yearly ($14.90 monthly), Growth
 $16.90 ($23.90), Business $29.90 ($37.90); cancelling drops back to the free
 plan and running projects keep running. Maturity: 2.36.0 released 2026-09-24,
-78 releases listed on the changelog, roughly monthly minor releases, a public
-API/CLI/MCP only since 2.33.0 (2026-07-31). Adoption: the site claims "145,000+
-self-hosters"; `easypanel/easypanel` has 7,489,914 Docker Hub pulls; the
-templates repository has 206 stars and 195 forks; the panel is not on GitHub
-(all as of 2026-09-30, sources below).
+then 2.37.0 (2026-10-14) and 2.38.0 (2026-10-22); 80 releases listed on the
+changelog on 2026-11-08 (151 with patch releases), roughly monthly minor
+releases, a public API/CLI/MCP only since 2.33.0 (2026-07-31). Adoption: the
+site claims "145,000+ self-hosters"; `easypanel/easypanel` has 7,489,914 Docker
+Hub pulls; the templates repository has 206 stars and 195 forks; the panel is
+not on GitHub (all as of 2026-09-30, sources below).
 
 ## Feature inventory
 
@@ -49,7 +50,8 @@ templates repository has 206 stars and 195 forks; the panel is not on GitHub
 * Auto-deploy through a GitHub webhook, plus a per-service **deployment
   trigger URL** for CI. Saving settings does not deploy; the panel asks.
 * **No rollback.** The 2.36.0 API has 372 operations and none rolls a service
-  back; "Deployments" is a history list. (Read from the bundle, 2026-09-30.)
+  back; "Deployments" is a history list. (Read from the bundle, 2026-09-30; the
+  2.38.0 bundle has 374 and still none, 2026-11-08.)
 
 ### Domains, TLS and routing
 
@@ -129,7 +131,12 @@ templates repository has 206 stars and 195 forks; the panel is not on GitHub
   services by type, custom domains and backup schedules to
   `https://t.easypanel.io/api`, unless `telemetryDisabled` is set. Licence
   validation talks to `portal.easypanel.io`. (Read from `backend.js` in the
-  published image, 2026-09-30.)
+  published image, 2026-09-30.) It also posts a `procedure_called` event for
+  every mutation that goes through its RPC or MCP handlers, with the
+  operation's name and which of the two it came through, and
+  `mcp_procedures_searched` for each MCP search (without the query); this file
+  missed both, which are in the 2.36.0 and 2.38.0 bundles alike (read
+  2026-11-08).
 
 ### Preview environments and branches
 
@@ -264,15 +271,20 @@ knowing, all read from the 2.36.0 image or docs:
 * Bind mounts, added capabilities and sysctls are per-service settings; the
   documentation does not describe a restriction for non-admin users. Portainer
   shipped CVE-2026-33590 and CVE-2026-44850 for exactly this class.
-* Default-on telemetry with a machine ID and resource counts (above).
+* Default-on telemetry with a machine ID, resource counts and the name of every
+  mutation (above).
 * The MCP endpoint accepts the API key in the URL path, where proxies and
   history record it; Portainer's CVE-2026-44883 is the same shape (JWT in
   `?token=`).
 
 ## Against Skifity
 
-Skifity rows marked "Written" follow `docs/checklist.md`: the code and unit
-tests exist and have never run against a real cluster (ADR-0010).
+The Skifity column is Skifity on 2026-09-30, when it was unreleased; rows
+marked "Written" follow `docs/checklist.md`: the code and unit tests existed and
+had never run against a real cluster (ADR-0010). Since then v0.1.0 (2026-10-06)
+and v0.1.1 (2026-10-21) have been released, the `Cluster` workflow runs it on a
+real k3s on every push to `main`, and a dozen rows below have changed; "Since
+2026-09-30" says which.
 
 | Capability | Easypanel | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -418,6 +430,132 @@ yes.
   architecture exists to avoid; the lesson is that multi-server must be the
   default path, not an upsell.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's repository API refused this sandbox for
+repositories not attached to it, so GitHub figures come from its search API;
+the changelog, the pricing page, the sitemap, Docker Hub and the `/app` layer of
+the published 2.36.0 and 2.38.0 images were read directly.
+
+### Releases
+
+* **2.37.0 (2026-10-14)**: "added Trusted Proxies settings for Traefik", the
+  whole entry. The 2.38.0 bundle shows what it is: which addresses Traefik
+  believes `X-Forwarded-*` headers from, with presets for Cloudflare's and
+  Fastly's published ranges and for a proxy on the same server, applied by
+  redeploying Traefik, and offered on the API, the CLI (`traefik proxyTrust get`
+  and `set`) and MCP. Until then Traefik ran with
+  `forwardedHeaders.insecure=true` on both entry points (read from the 2.36.0
+  bundle), so any visitor could write the address an app was given. A new
+  install now stores "trust nobody"; a server installed earlier has no stored
+  value and falls back to the old default, `insecure: true`, until somebody
+  changes the setting. The changelog says neither.
+* **2.38.0 (2026-10-22)**: Node.js 22.23.4 "for security fixes"; Cloudflared
+  2026.10.2 and phpMyAdmin 5.2.3, with existing tunnel services and running
+  phpMyAdmin instances updated automatically; and Force Rebuild without the
+  Docker cache for Box and WordPress services, "to … pick up PHP security
+  updates". App services had it already.
+* No templates were added in either release. No pull request to
+  `easypanel-io/templates` has been merged since 2026-09-30 and 76 are open,
+  among them the vendor's own of 2026-11-06, "Pushed 179 updates out of 334"
+  (GitHub search API, 2026-11-08). The site still lists 845.
+* The 2.38.0 API has 374 operations; the two new ones are the proxy-trust pair.
+  None rolls a service back. The MCP endpoint still takes the key in the path
+  (`/api/mcp/:apiKey`).
+
+### Pricing and adoption
+
+* Pricing unchanged on 2026-11-08: Free (3 projects); Hobby $10.90 a server a
+  month billed yearly or $14.90 monthly; Growth $16.90 or $23.90; Business
+  $29.90 or $37.90; still "Join 145,000+ self-hosters".
+* 7,776,354 Docker Hub pulls of `easypanel/easypanel` (2026-11-08; 7,489,914 on
+  2026-09-30). `easypanel-io/templates` has 208 stars and 211 forks;
+  `easypanel-io/community` has 22 open issues (GitHub search API, 2026-11-08).
+
+### What users say
+
+* Issue #121 (2026-10-22, open, two comments), on 2.38.0: a deploy from a
+  public GitHub repository makes unauthenticated calls to api.github.com; when
+  the server's 60 an hour run out the error is not caught, the panel exits with
+  code 1, Swarm restarts it, and "every deployment that was running is marked
+  `killed`". A configured GitHub token is not used for public repositories, so
+  it does not help. The reporter links #118 (2026-07-31, still open), the
+  `AbortError` that does the same, and names the pattern: "Ending in-flight work
+  this way on any uncaught error seems to be the common thread".
+* Little else: one Hacker News comment (2026-11-06) from somebody who built a
+  PaaS of their own after "using tools like portainer, easypanel, coolify, etc
+  but there was still a lot of work to setup and maintain those", and, in a web
+  search of the last month, install guides and directory listings.
+
+### Security
+
+* No CVE or advisory (NVD keyword "easypanel": 0 results, 2026-11-08). The
+  2.37.0 change is a security fix in all but name, shipped without saying that
+  servers installed before it keep trusting anybody's headers.
+* Not in this file before, and corrected above: the telemetry is more than the
+  hourly counts. Every mutation through the RPC and MCP handlers is reported by
+  name.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* Closed since this file was written, of its table and its gaps: Compose stacks
+  (Phase 101); maintenance mode, answered by the guard (Phase 98); usage history
+  and charts for apps and servers, with disk usage and alerts (Phases 95 and
+  99); a read-only role and members limited to projects (Phases 85 and 86); the
+  MCP server at `/api/mcp` in the panel, 46 tools each marked read-only or not
+  and destructive or not, the token in a header only (Phase 87); template
+  updates offered after install (Phase 102); nine database engines, MongoDB
+  among them (`internal/dbsvc`); Slack, Mattermost, ntfy, Pushover, Teams and
+  Gotify (`internal/notify`); requests, errors and response times per app
+  (`internal/traffic`); and logs kept and searched through a log drain
+  (`docs/log-drains.md`) rather than in the panel.
+* Still open: post-install notes on 143 of 374 templates and generated secrets
+  on 55 (`internal/templates/catalogue`; Easypanel, 390 and 392 of 845); zip
+  uploads (`internal/upload` takes a tar.gz); backups anywhere but S3
+  (`docs/backups.md`).
+* Skifity never had Easypanel's old default. It sets nothing that makes Traefik
+  believe anybody's `X-Forwarded-*`, and its firewall reads the visitor's
+  address from the right of the chain (`internal/edgerules/clientip.go`).
+* **New gap — the trusted proxies setting reaches the firewall and not
+  Traefik.** Settings → Domains and HTTPS → Trusted proxies
+  (`domains.trusted_proxies`) is read only by the guard
+  (`internal/cluster/edgeguard.go`). Traefik never passes the guard more than
+  the address that connected to it: nothing in `internal/` or `installer/` sets
+  its entry points' `forwardedHeaders.trustedIPs` (the installer's
+  HelmChartConfig in `configure_ingress` has none), so it drops the
+  `X-Forwarded-For` a balancer sends, and the guard's forwardAuth middleware
+  (`BuildGuardMiddleware`, `internal/kube/namespace.go`) does not set
+  `trustForwardHeader`, so Traefik's forwardAuth writes `X-Forwarded-For` as
+  that one address (Traefik's `pkg/middlewares/auth/forward.go`). Behind a load
+  balancer of one's own, or a domain proxied by Cloudflare without the tunnel,
+  the guard is handed the balancer's address whatever range is added, which
+  `docs/firewall.md` says is the fix; every address, country and rate-limit
+  rule then judges the balancer, and every app sees it as the visitor. Read
+  from the code, not run. The fix: render the setting into Traefik's entry
+  points as `forwardedHeaders.trustedIPs`, which means the panel and not only
+  the installer writing Traefik's configuration, and set `trustForwardHeader`
+  on the guard's middleware, which is safe once the entry points strip what an
+  untrusted peer sends; then Easypanel's presets, Cloudflare's published ranges
+  first.
+* **New gap — no build without the cache.** `skifity deploy --force`, the
+  API's and MCP's `force`, "rebuild even when nothing about the build has
+  changed", and that is all they do: they stop the deployer reusing an image
+  with the same build fingerprint (`internal/deploy/deployer.go`). The build Job
+  always imports the registry cache (`--import-cache`,
+  `internal/builder/job.go`) and nothing in its spec turns that off, so a forced
+  build reuses every cached layer, an `apt-get install` that a security update
+  has since replaced included — the reason Easypanel 2.38.0 gave for adding the
+  switch to Box and WordPress, and Dokku 0.38.34 for `ps:rebuild --no-cache`.
+  The panel has no rebuild button at all: "Rebuild from scratch" and "Ignores
+  the cache and builds again even if nothing changed" (`deploy.rebuild`,
+  `deploy.rebuildHelp`) are in the locale files and used by no component in
+  `web/src`. The fix: a `no_cache` flag carried into the build spec that leaves
+  out `--import-cache` while still exporting, so the build after it is warm; the
+  button those strings describe, saying what it does; and a test of the
+  rendered Job.
+
 ## Sources
 
 All read 2026-09-30.
@@ -445,3 +583,17 @@ All read 2026-09-30.
 * https://www.bitdoze.com/easypanel-modern-server-control-panel/ (updated 2026-07-10) and https://www.bitdoze.com/best-self-hosted-panels/
 * https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=easypanel — 0 results
 * https://nvd.nist.gov/vuln/detail/CVE-2026-33590, CVE-2026-44850, CVE-2026-44883 (Portainer, cited for the vulnerability classes)
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://easypanel.io/changelog and https://easypanel.io/changelog?patches=show (80 releases, 151 with patches; 2.38.0 latest)
+* https://easypanel.io/changelog/2-37-0 (2026-10-14) and https://easypanel.io/changelog/2-38-0 (2026-10-22)
+* https://easypanel.io/pricing (plans and prices unchanged, "145,000+ self-hosters")
+* https://easypanel.io/sitemap.xml (845 template pages; no new blog post or guide)
+* https://hub.docker.com/v2/repositories/easypanel/easypanel/ and /tags (7,776,354 pulls; 2.37.0 pushed 2026-10-14, 2.38.0 pushed 2026-10-22)
+* Docker Hub registry manifests and the `/app` layer of `easypanel/easypanel:2.36.0` and `:2.38.0` (amd64) — `backend.js` read for the proxy-trust setting and its defaults, Traefik's forwarded-header variables, the telemetry events, the MCP routes and the operation count
+* GitHub search API: `repo:easypanel-io/community is:issue` (issues #121 and #118), `repo:easypanel-io/templates is:pr` (76 open, none merged since 2026-09-30, #1714), `org:easypanel-io` repositories (stars, forks, open issues)
+* https://hn.algolia.com/api/v1/search_by_date?query=easypanel (comments and stories since 2026-09-30; item 50392771)
+* A web search for Easypanel reviews, comparisons, outages and vulnerabilities in the last month (install guides and listings only)
+* https://raw.githubusercontent.com/traefik/traefik/master/pkg/middlewares/auth/forward.go and /pkg/middlewares/forwardedheaders/forwarded_header.go (what forwardAuth sends as `X-Forwarded-For` and `X-Forwarded-Uri`, and which headers an untrusted peer loses)
+* https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=easypanel (0 results)

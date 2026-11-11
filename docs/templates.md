@@ -24,6 +24,63 @@ connection string exists by the time the app looks for it. That is the
 difference between a template that works on the first try and one that
 crash-loops until somebody redeploys it.
 
+Software that is slow to start is given the time. Where a template knows its
+first start migrates a database, installs itself or warms up a JVM before it
+listens — GitLab, SonarQube, Baserow, Ghost and others — it gives the app
+a longer **Time to start** than the default two minutes, and where its health
+path asks the database on every check, as WordPress's does, a longer **Check
+timeout**. Both are the app's own settings afterwards; see
+[Health checks](concepts.md#health-checks).
+
+### An image that starts as root
+
+Two thirds of the catalogue run an image that starts as root and drops to its
+own user — the official WordPress, Ghost and Nextcloud images, everything from
+linuxserver.io, a good part of what is written in PHP. That is ordinary for a container, and
+it is exactly what the strictest confinement level refuses, which is the level
+every environment starts at; see
+[How strictly an environment confines its apps](concepts.md#how-strictly-an-environment-confines-its-apps).
+
+So the install dialog says so before anything is made, for the environment you
+chose. An owner or an admin sees a checkbox to let that environment accept root
+images, and Install waits until it is ticked; the install then changes the
+environment's level on the way, which the activity log records like any other
+change of level. A member is told that only an owner or an admin can do that,
+and environments that already accept root images are listed first. Without one of
+those, the install is refused with nothing made, rather than leaving an app that
+never starts. From a terminal or an assistant, the install takes `"allow_root":
+true` to do the same, from an owner or an admin only; `skifity templates` marks
+these templates in its ROOT column, and the assistant's `list_templates` says
+`needs_root`.
+
+If the install then fails, the environment keeps the level it had: the level is
+changed last of everything that can fail.
+
+### All or nothing
+
+An install either makes everything the template describes or leaves nothing
+behind. Before anything is made, the panel works out every name the install
+takes, every public port it opens and every value it needs, and checks each one
+against what is already there — an app and a database in one environment share
+an address, so the two are checked together. The dialog asks for that check as
+you choose where to install and what to call it, so a name that is taken is said
+beside the name, before **Install** is pressed.
+
+What can only fail while the install is being made — the cluster refusing a
+database, say — removes what it had made, and the error names what was removed
+as well as what stopped it. Nothing is deployed, and nothing appears in the
+activity log as created, until all of it exists.
+
+A template of one app can be installed again in the same environment under a
+name of its own. Its databases are then named after it: WordPress installed a
+second time as `shop` gets the database `shop-db`, beside the first copy's
+`wordpress-db`. A template of several apps keeps the names its apps reach each
+other by, so a second copy of one goes in another environment.
+
+From a terminal or an assistant, `"dry_run": true` on the install answers the
+same check — the apps, databases and disks it would make, and every problem that
+would stop it — and makes nothing.
+
 ## What is in the catalogue
 
 **374 applications**, grouped by what they are for: productivity, developer
@@ -56,7 +113,8 @@ What the conversion added:
   refused.
 * **The database wiring was taken out.** A Compose file points an app at a
   sibling container (`DB_HOST=mariadb`); here the database is a managed one and
-  arrives as a connection string, so the old variables would point at nothing.
+  arrives as a connection string, or in the pieces its image reads, so the old
+  variables would point at nothing.
 * **A port comes from the source, never from a guess.** A template's own domain
   marker, an `expose` or `ports` entry, the port a sibling service dials, a short
   table of ports that are documented facts about an image, or the port the
@@ -69,9 +127,21 @@ What the conversion added:
 
 ### What that does not mean
 
-None of these has been deployed by us, because nothing in this product has been
-deployed by us yet — see the Status section of the README. What is checked is
-that each template is structurally sound and that its image exists. Treat a
+What is checked for every template, on every build, is that it is structurally
+sound, that its image exists, that its notes and `needs_root` say the same
+thing about the user its image starts as, and — for the few dozen images whose
+settings are known, WordPress, Ghost, Nextcloud, Gitea, Forgejo, n8n and others —
+that its database arrives in the variables the image actually reads. That last
+check exists because WordPress, Ghost, n8n and every Gitea, Forgejo and
+Nextcloud with a database created their database and handed it over as a URL
+none of them reads. The catalogue's README lists the templates that hand over a
+URL whose images have not been looked up yet.
+
+What is not checked is that each one runs. The `Cluster` workflow installs the
+panel on a real single-server k3s for every change to `main` and installs
+templates from this catalogue there: Homer, and WordPress with its database into
+an environment that accepts root images, whose installer has to answer. The other
+three hundred and seventy-odd have not been started by anyone here. Treat a
 template as a well-informed starting point, not as a guarantee.
 
 ## Versions
@@ -202,6 +272,10 @@ templates:
         storage_gb: 5
         link_to: [wiki]
         var_name: DATABASE_URL
+        # The connection in pieces as well, for software with no setting
+        # for a URL. Each is the link's: kept current when the password
+        # changes, removed when the database is unlinked.
+        vars: {host: DB_HOST, port: DB_PORT, name: DB_NAME, user: DB_USER, password: DB_PASSWORD}
     inputs:
       - key: SESSION_SECRET
         label: Session secret
@@ -215,8 +289,10 @@ Every template in a catalogue is held to the checks the built-in ones are held
 to in the panel's own tests: an id that is a slug, an https website, at least
 one service somebody can open, an image that names a release — never `latest`,
 a branch or a bare major version — mount paths that are absolute, databases of
-an engine Skifity runs and linked to services the template has, no database
-wired by hand, ports and files that can be opened and mounted, and inputs that
+an engine Skifity runs and linked to services the template has, pieces of a
+database's connection that engine has on its own (see
+[databases](databases.md#in-pieces)), no database wired by hand, ports and files that can be opened and mounted, health
+settings an app could have, and inputs that
 are asked for or filled in. A field the panel does not know is refused rather
 than ignored, so a misspelt `mount_path` is an error rather than a volume that
 is mounted nowhere.
@@ -294,7 +370,7 @@ letter.
 Everything a template sets is editable afterwards: variables on the app's
 Variables tab, size and scaling on its settings, the database on its own page.
 Reinstalling the template does not reconcile anything — it installs a second
-copy under a new name.
+copy under a new name; see [All or nothing](#all-or-nothing).
 
 If you outgrow a template, nothing has to be undone. It left you an app and a
 database, and those are the things Skifity actually runs.

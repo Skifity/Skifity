@@ -173,6 +173,9 @@ func (s *Server) cloneInto(r *http.Request, source, env store.Environment) (clon
 			return out, err
 		}
 		out.Databases = append(out.Databases, made)
+		if err := s.copyBackupPolicy(ctx, database, made); err != nil {
+			return out, err
+		}
 		links, err := s.db.ListLinksForDatabase(ctx, database.ID)
 		if err != nil {
 			return out, err
@@ -182,7 +185,7 @@ func (s *Server) cloneInto(r *http.Request, source, env store.Environment) (clon
 			if !ok {
 				continue
 			}
-			if err := s.databases.Link(ctx, made.ID, copied.ID, link.VarName); err != nil {
+			if err := s.databases.Link(ctx, made.ID, copied.ID, link.VarName, &link.Pieces); err != nil {
 				return out, err
 			}
 		}
@@ -203,7 +206,9 @@ func (s *Server) cloneApp(r *http.Request, from, to store.App, notes *[]cloneNot
 	}
 	linked := map[string]bool{}
 	for _, link := range links {
-		linked[link.VarName] = true
+		for _, name := range link.Variables() {
+			linked[name] = true
+		}
 	}
 	variables, err := s.db.ListVariables(ctx, from.ID)
 	if err != nil {

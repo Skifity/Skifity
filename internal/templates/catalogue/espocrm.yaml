@@ -7,7 +7,9 @@ website: https://www.espocrm.com
 services:
 - name: espocrm
   image: espocrm/espocrm:10.0.9-apache
+  needs_root: true
   port: 80
+  health_start_seconds: 300
   public: true
   mem_request_mb: 256
   mem_limit_mb: 1024

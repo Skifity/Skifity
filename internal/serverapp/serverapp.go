@@ -102,6 +102,12 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 			if clusterVersion, err := kubeClient.Version(ctx); err == nil {
 				log.Info("connected to the cluster", "kubernetes_version", clusterVersion)
 			}
+			// A database restored onto a new server has components down as
+			// installed that this cluster never had; they are offered again
+			// rather than taken on the record's word. Each is logged.
+			if _, err := clusterAdapter.SettleComponents(ctx); err != nil {
+				log.Warn("could not check the components against the cluster", "error", err)
+			}
 			// What the installer set up for certificates, recorded where the
 			// panel shows and changes it, and the issuer made for a
 			// cert-manager that has none. Not being able to is no reason not
@@ -160,6 +166,7 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	databases := dbsvc.New(db, keyring, hub, clusterAdapter, deployer, log)
 	backups := backup.New(db, keyring, hub, clusterAdapter, dispatcher, log)
 	backups.Plugins = pluginEvents
+	backups.Status = databases.Status
 	watcher := watch.New(db, watchCluster(clusterAdapter), hub, dispatcher, log)
 	// Every few minutes each app is compared with what the deployer would
 	// apply, which only means something with a cluster to compare with.
@@ -200,10 +207,20 @@ func Run(ctx context.Context, cfg config.Config, frontend http.Handler) error {
 	if err := markInterruptedWork(ctx, db, log); err != nil {
 		return err
 	}
+	// A move of the panel to a domain of its own ends by restarting the
+	// panel, so it is this start that sees it through, or says it did not.
+	server.SettlePanelDomain(ctx)
 	if resumed, err := deployer.ResumeInterrupted(ctx); err != nil {
 		log.Warn("could not pick up interrupted deployments", "error", err)
 	} else if resumed > 0 {
 		log.Info("picked up deployments a restart interrupted", "count", resumed)
+	}
+	// Once: the database links template installs made before a link kept
+	// its pieces are given them, so a password change reaches them too.
+	if attached, err := databases.AttachTemplatePieces(ctx, server.InstalledTemplate); err != nil {
+		log.Warn("could not give template apps' database links their pieces", "error", err)
+	} else if attached > 0 {
+		log.Info("gave template apps' database links their pieces", "links", attached)
 	}
 
 	background, stopBackground := context.WithCancel(ctx)

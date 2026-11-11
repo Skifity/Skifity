@@ -6,6 +6,7 @@ import {
   CheckIcon,
   ClipboardIcon,
   GitBranchIcon,
+  KeyRoundIcon,
   PlusIcon,
   Trash2Icon,
   WebhookIcon,
@@ -19,6 +20,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -70,6 +79,8 @@ export function GitSources() {
   // Shown after connecting, and again on asking: a self-hosted Gitea or
   // GitLab whose token cannot register a webhook needs these pasted in by hand.
   const [webhook, setWebhook] = useState<Webhook | null>(null)
+  // The connection whose token is being replaced.
+  const [replacing, setReplacing] = useState<GitSource | null>(null)
 
   const sources = useQuery({
     queryKey: ["git-sources", team?.id],
@@ -106,6 +117,13 @@ export function GitSources() {
 
       {webhook && <WebhookNotice webhook={webhook} onDismiss={() => setWebhook(null)} />}
       {reveal.error != null && <ErrorDisplay error={reveal.error} compact />}
+      {replacing && (
+        <ReplaceTokenDialog
+          key={replacing.id}
+          source={replacing}
+          onClose={() => setReplacing(null)}
+        />
+      )}
 
       {items.length === 0 && !adding ? (
         <EmptyState
@@ -150,6 +168,12 @@ export function GitSources() {
                       <WebhookIcon className="size-4" />
                       {t("git.showWebhook")}
                     </Button>
+                    {source.kind !== "generic" && (
+                      <Button variant="ghost" size="sm" onClick={() => setReplacing(source)}>
+                        <KeyRoundIcon className="size-4" />
+                        {t("git.replaceToken")}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -408,6 +432,98 @@ function ConnectForm({ onDone }: { onDone: (webhook?: Webhook) => void }) {
         </form>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Giving a connection a new token where it is, for one that expired or was
+ * revoked. Only the credential is asked for: the connection keeps its id, so
+ * the webhooks on its repositories, their secret and the apps it serves are
+ * all as they were. A Bitbucket API token comes with its account's email.
+ */
+function ReplaceTokenDialog({ source, onClose }: { source: GitSource; onClose: () => void }) {
+  const { t } = useTranslation()
+  const { team } = useSession()
+  const [token, setToken] = useState("")
+  const [email, setEmail] = useState("")
+  const bitbucket = source.kind === "bitbucket"
+
+  const replace = useMutation({
+    mutationFn: () =>
+      api.patch<GitSource>(`/api/teams/${team!.id}/git-sources/${source.id}`, {
+        token: token.trim(),
+        // What is in the box, empty included: an access token is sent on its
+        // own, and an API token that replaced it needs its email again.
+        ...(bitbucket ? { email: email.trim() } : {}),
+      }),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: ["git-sources", team?.id] })
+      toast.success(t("git.tokenReplaced", { name: updated.name }))
+      onClose()
+    },
+  })
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            replace.mutate()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("git.replaceTokenTitle", { name: source.name })}</DialogTitle>
+            <DialogDescription>{t("git.replaceTokenHelp")}</DialogDescription>
+          </DialogHeader>
+          {bitbucket && (
+            <Field>
+              <FieldLabel htmlFor="git-replace-email">
+                {t("git.bitbucket.email")}{" "}
+                <span className="text-muted-foreground">({t("common.optional")})</span>
+              </FieldLabel>
+              <Input
+                id="git-replace-email"
+                type="email"
+                autoComplete="off"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <FieldDescription>{t("git.bitbucket.emailHelp")}</FieldDescription>
+            </Field>
+          )}
+          <Field>
+            <FieldLabel htmlFor="git-replace-token">
+              {bitbucket ? t("git.bitbucket.token") : t("git.token")}
+            </FieldLabel>
+            <Input
+              id="git-replace-token"
+              type="password"
+              autoComplete="off"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              required
+            />
+            {bitbucket ? (
+              <BitbucketTokenHelp />
+            ) : (
+              <FieldDescription>{t("git.tokenHelp")}</FieldDescription>
+            )}
+          </Field>
+          {replace.error != null && <ErrorDisplay error={replace.error} compact />}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={!token.trim() || replace.isPending}>
+              {replace.isPending && <Spinner />}
+              {t("git.replaceToken")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

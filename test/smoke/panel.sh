@@ -347,7 +347,7 @@ pass "variables are listed"
 
 # A .env file goes in as one change, all of it or none of it.
 printf '# comment\nREGION=eu\nexport FEATURE_FLAGS="a,b"\n' >"$WORKDIR/import.env"
-"$BINARY" env import --app "$APP_ID" "$WORKDIR/import.env" | grep -q 'rolled out, once' \
+"$BINARY" env import --app "$APP_ID" "$WORKDIR/import.env" | grep -qi 'rolled out, once' \
   || fail "importing a .env file did not say it rolled out once"
 LISTED=$("$BINARY" env --app "$APP_ID" list)
 echo "$LISTED" | grep -q 'REGION' || fail "an imported .env file's REGION is not listed"

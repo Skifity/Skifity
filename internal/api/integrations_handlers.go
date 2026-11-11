@@ -134,7 +134,7 @@ func (s *Server) handleCreateGitSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	sealed, err := s.keyring.Seal(config, "git_source:"+teamID+":"+source.Name)
+	sealed, err := s.keyring.Seal(config, gitSourceContext(teamID, source.Name))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -171,22 +171,194 @@ func (s *Server) handleGetGitSourceWebhook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	answer := map[string]any{"url": s.webhookURL(r, source.ID), "secret": "", "secret_is_token": false}
-	if source.ConfigEnc != "" {
-		raw, err := s.keyring.Open(source.ConfigEnc, "git_source:"+source.TeamID+":"+source.Name)
+	config, err := s.gitSourceConfig(source)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	switch {
+	case config[secretIsOldToken] != "":
+		// The token the connection had before it was replaced. It may still
+		// be valid somewhere, so it is no more shown than the token is.
+		answer["secret_is_token"] = true
+	case config["webhook_secret"] != "":
+		answer["secret"] = config["webhook_secret"]
+	default:
+		answer["secret_is_token"] = config["token"] != ""
+	}
+	s.audit(r, teamID, "git_source.webhook_viewed", "git_source", source.ID, source.Name)
+	writeJSON(w, http.StatusOK, answer)
+}
+
+// gitSourceContext is what a connection's settings are sealed under. The name
+// is part of it, so a renamed connection's settings are sealed again.
+func gitSourceContext(teamID, name string) string {
+	return "git_source:" + teamID + ":" + name
+}
+
+// secretIsOldToken marks a webhook secret that is the token a connection had
+// before it was replaced. See handleUpdateGitSource.
+const secretIsOldToken = "webhook_secret_is_old_token"
+
+// gitSourceConfig opens a connection's sealed settings: its token, its
+// webhook secret, and a Bitbucket API token's email. A connection with none
+// stored, a plain Git one, answers an empty map.
+func (s *Server) gitSourceConfig(source store.GitSource) (map[string]string, error) {
+	config := map[string]string{}
+	if source.ConfigEnc == "" {
+		return config, nil
+	}
+	raw, err := s.keyring.Open(source.ConfigEnc, gitSourceContext(source.TeamID, source.Name))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return nil, err
+	}
+	if config == nil {
+		config = map[string]string{}
+	}
+	return config, nil
+}
+
+// updateGitSourceRequest changes a connection where it is. A field left out
+// is kept. The kind and the server address are not in it: the webhooks on the
+// connection's repositories are on the host it was made for, and its apps'
+// repositories are there too.
+type updateGitSourceRequest struct {
+	Name    *string `json:"name,omitempty"`
+	Account *string `json:"account,omitempty"`
+	// Token replaces the stored one. For every kind but generic it cannot be
+	// empty; a generic connection sent an empty one keeps none.
+	Token *string `json:"token,omitempty"`
+	// Email is a Bitbucket API token's Atlassian account, and is read for no
+	// other kind. Sent empty, the token is sent on its own, as an access
+	// token is.
+	Email *string `json:"email,omitempty"`
+}
+
+// handleUpdateGitSource replaces a connection's token, or renames it, without
+// removing it.
+//
+// Removing it was the only way to give it a new token, and that cost more
+// than the token: every app it served was left with no connection, and the
+// connection that replaced it had a new id, so the webhook on every
+// repository — delivered to /api/webhooks/git/{the old id} — was refused from
+// then on. Here the id stays, and so does the webhook secret.
+func (s *Server) handleUpdateGitSource(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	sourceID := chi.URLParam(r, "sourceID")
+	source, err := s.db.GetGitSource(r.Context(), sourceID)
+	if err != nil || source.TeamID != teamID {
+		writeError(w, r, errdoc.NotFound("git source", sourceID))
+		return
+	}
+	var req updateGitSourceRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	config, err := s.gitSourceConfig(source)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	updated := source
+	if req.Name != nil {
+		if name := strings.TrimSpace(*req.Name); name != "" {
+			updated.Name = name
+		}
+	}
+	// A connection is named by the CLI, by skifity.yaml's git: and by an
+	// assistant, all of which find it by its name, so two cannot share one.
+	if !strings.EqualFold(updated.Name, source.Name) {
+		others, err := s.db.ListGitSources(r.Context(), teamID)
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
-		var config map[string]string
-		if err := json.Unmarshal(raw, &config); err != nil {
+		for _, other := range others {
+			if other.ID != source.ID && strings.EqualFold(other.Name, updated.Name) {
+				writeError(w, r, errdoc.Conflict("The team already has a Git connection called "+other.Name+".",
+					"Choose another name for this one."))
+				return
+			}
+		}
+	}
+	if req.Account != nil {
+		updated.Account = strings.TrimSpace(*req.Account)
+	}
+
+	token, hasToken := config["token"], req.Token != nil
+	if hasToken {
+		token = strings.TrimSpace(*req.Token)
+		if token == "" && source.Kind != "generic" {
+			writeError(w, r, errdoc.BadRequest("A token is needed so Skifity can read the repository and register a webhook."))
+			return
+		}
+	}
+	email := config["email"]
+	if source.Kind == "bitbucket" && req.Email != nil {
+		email = *req.Email
+	}
+	// Whatever changed what Bitbucket is asked with is asked again, before
+	// anything is saved, as connecting asks.
+	if source.Kind == "bitbucket" && (hasToken || req.Email != nil || req.Account != nil) {
+		if email, err = s.checkBitbucketSource(r, &updated, token, email); err != nil {
 			writeError(w, r, err)
 			return
 		}
-		answer["secret"] = config["webhook_secret"]
-		answer["secret_is_token"] = config["webhook_secret"] == "" && config["token"] != ""
 	}
-	s.audit(r, teamID, "git_source.webhook_viewed", "git_source", source.ID, source.Name)
-	writeJSON(w, http.StatusOK, answer)
+
+	if hasToken && token != config["token"] {
+		// A connection made before each had a secret of its own signs its
+		// webhooks with its token, and the hooks already on its repositories
+		// were registered with that one. It becomes the secret, so they keep
+		// being accepted; it is never shown as one.
+		if config["webhook_secret"] == "" && config["token"] != "" {
+			config["webhook_secret"] = config["token"]
+			config[secretIsOldToken] = "true"
+		}
+		if token == "" {
+			delete(config, "token")
+		} else {
+			config["token"] = token
+		}
+	}
+	if source.Kind == "bitbucket" {
+		if email == "" {
+			delete(config, "email")
+		} else {
+			config["email"] = email
+		}
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	// Sealed again whatever changed: the name is part of what it is sealed
+	// with, and a renamed connection whose settings kept the old seal would
+	// never open again.
+	if updated.ConfigEnc, err = s.keyring.Seal(raw, gitSourceContext(teamID, updated.Name)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := s.db.UpdateGitSource(r.Context(), &updated); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	detail := updated.Name
+	if updated.Name != source.Name {
+		detail = source.Name + " → " + updated.Name
+	}
+	s.audit(r, teamID, "git_source.updated", "git_source", source.ID, detail)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleDeleteGitSource(w http.ResponseWriter, r *http.Request) {
@@ -627,6 +799,13 @@ type installTemplateRequest struct {
 	CatalogueID string            `json:"catalogue_id,omitempty"`
 	Name        string            `json:"name,omitempty"`
 	Values      map[string]string `json:"values,omitempty"`
+	// DryRun answers what the install would make and what stops it, and
+	// makes nothing.
+	DryRun bool `json:"dry_run,omitempty"`
+	// AllowRoot sets the environment to accept images that start as root
+	// when the template has one and the environment refuses it. An admin's to
+	// ask for, as changing the level is.
+	AllowRoot bool `json:"allow_root,omitempty"`
 }
 
 func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
@@ -640,6 +819,16 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, err)
 		return
+	}
+	// Accepting root images is a decision about the whole environment, and an
+	// admin's (see handleUpdateEnvironment). Asking for it takes one, whether
+	// or not this template turns out to need it, and a member is refused
+	// before anything is read or written.
+	if req.AllowRoot {
+		if _, _, err := s.authorizeEnvironment(r, env.ID, store.RoleAdmin); err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 	// The template is found by the catalogue it is in and the team of the
 	// environment it is going into, so a catalogue of another team is not
@@ -655,7 +844,16 @@ func (s *Server) handleInstallTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.installTemplate(r, strings.TrimSpace(req.CatalogueID), tpl, env, user, req.Name, req.Values)
+	plan, err := s.planTemplateInstall(r.Context(), env, tpl, req)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if req.DryRun {
+		writeJSON(w, http.StatusOK, plan)
+		return
+	}
+	created, err := s.installTemplate(r, plan, user)
 	if err != nil {
 		writeError(w, r, err)
 		return

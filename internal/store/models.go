@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"skifity/internal/errdoc"
+)
 
 // Role is a team membership role. Roles are ordered:
 // owner > admin > member > viewer.
@@ -515,7 +519,12 @@ type Deployment struct {
 	ErrorCode        string `json:"error_code,omitempty"`
 	ErrorMessage     string `json:"error_message,omitempty"`
 	ErrorHint        string `json:"error_hint,omitempty"`
-	CreatedBy        string `json:"created_by"`
+	// Problem is the whole of what a failed deployment was failed with: the
+	// sentences, the values that go into them and the context — an exit code,
+	// the last lines a crashed container printed. Absent for one that did not
+	// fail, and for one that failed before it was kept (migration 0063).
+	Problem   *errdoc.Problem `json:"problem,omitempty"`
+	CreatedBy string          `json:"created_by"`
 	// AcceptedVulnerabilities is a deploy somebody asked to go ahead even if
 	// its image has a critical vulnerability with a fix, when the panel is set
 	// to stop those. See migration 0048.
@@ -523,6 +532,10 @@ type Deployment struct {
 	CreatedAt               time.Time `json:"created_at"`
 	StartedAt               time.Time `json:"started_at,omitzero"`
 	FinishedAt              time.Time `json:"finished_at,omitzero"`
+	// BuildSpec is what the deployment was built from, as a sealed BuildSpec
+	// (see buildspec.go). Never answered: it is for telling which saved
+	// settings the running version does not have, which the API says by name.
+	BuildSpec string `json:"-"`
 
 	// CanRollback is worked out when a list is built, not stored. The panel
 	// keeps far more deployment records than the registry keeps images, so an
@@ -579,10 +592,61 @@ type Database struct {
 
 // DatabaseLink injects a database's connection string into an app.
 type DatabaseLink struct {
-	DatabaseID string    `json:"database_id"`
-	AppID      string    `json:"app_id"`
-	VarName    string    `json:"var_name"`
-	CreatedAt  time.Time `json:"created_at"`
+	DatabaseID string `json:"database_id"`
+	AppID      string `json:"app_id"`
+	VarName    string `json:"var_name"`
+	// Pieces are the variables the connection also arrives in, piece by
+	// piece, kept current with the URL: a password change gives the app its
+	// new password in both.
+	Pieces    LinkPieces `json:"pieces,omitzero"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// Variables are every variable the link writes: its URL's, then its pieces'.
+func (l DatabaseLink) Variables() []string {
+	return append([]string{l.VarName}, l.Pieces.Names()...)
+}
+
+// LinkPieces names the variables a link delivers a database's connection in,
+// piece by piece, for software that asks for a host, a port, a user and a
+// password and has no setting for a URL. A piece left empty is not delivered.
+type LinkPieces struct {
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// PiecePair is one delivered piece of a connection and the variable it
+// arrives as.
+type PiecePair struct {
+	// Piece is host, port, name, user or password.
+	Piece    string
+	Variable string
+}
+
+// Pairs are the delivered pieces, each with its variable, in the order host,
+// port, name, user, password.
+func (p LinkPieces) Pairs() []PiecePair {
+	var out []PiecePair
+	for _, pair := range []PiecePair{
+		{"host", p.Host}, {"port", p.Port}, {"name", p.Name}, {"user", p.User}, {"password", p.Password},
+	} {
+		if pair.Variable != "" {
+			out = append(out, pair)
+		}
+	}
+	return out
+}
+
+// Names are the delivered pieces' variables, in the same order.
+func (p LinkPieces) Names() []string {
+	var out []string
+	for _, pair := range p.Pairs() {
+		out = append(out, pair.Variable)
+	}
+	return out
 }
 
 // BackupPolicy schedules backups for a database or a volume.
@@ -600,16 +664,19 @@ type BackupPolicy struct {
 
 // Backup is one stored copy of a database or volume.
 type Backup struct {
-	ID           string    `json:"id"`
-	TargetType   string    `json:"target_type"`
-	TargetID     string    `json:"target_id"`
-	Status       string    `json:"status"`
-	Kind         string    `json:"kind"`
-	Location     string    `json:"location"`
-	SizeBytes    int64     `json:"size_bytes"`
-	ErrorMessage string    `json:"error_message,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	FinishedAt   time.Time `json:"finished_at,omitzero"`
+	ID           string `json:"id"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	Status       string `json:"status"`
+	Kind         string `json:"kind"`
+	Location     string `json:"location"`
+	SizeBytes    int64  `json:"size_bytes"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	// ErrorCode is why it was skipped or could not start, as a code the
+	// panel translates: database.stopped, database.busy, or the problem's.
+	ErrorCode  string    `json:"error_code,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 	// Encrypted is sealed with the backup passphrase. See backup/seal.go.
 	Encrypted bool `json:"encrypted"`
 	// VerifiedAt is when it was last downloaded, opened and read through;

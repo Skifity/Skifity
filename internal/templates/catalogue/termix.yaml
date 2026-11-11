@@ -6,6 +6,7 @@ website: https://docs.termix.site/install/server/docker
 services:
 - name: termix
   image: ghcr.io/lukegus/termix:2.6.1
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -30,4 +31,4 @@ services:
   cpu_request_m: 50
   cpu_limit_m: 1000
 notes: This template installs 2 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The termix image starts as root, so the environment needs the baseline pod security level.

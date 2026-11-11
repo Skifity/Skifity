@@ -5,7 +5,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -66,6 +65,10 @@ type Cluster struct {
 	// fenceImage is the panel's own image, read once; see FenceImage.
 	fenceMu    sync.Mutex
 	fenceImage string
+
+	// panelWait is how long moving the panel waits for its certificate, in
+	// a test; zero is panelCertificateWait.
+	panelWait time.Duration
 }
 
 // New builds a Cluster.
@@ -109,6 +112,7 @@ func (c *Cluster) Summary(ctx context.Context) (api.ClusterSummary, error) {
 			Labels: n.Labels, Schedulable: n.Schedulable,
 			GPUs: nodeGPUs(n.GPUs), GPUHardware: n.GPUHardware, NFD: n.NFD, GPULabelled: n.GPULabelled,
 			GPUPlugin: pluginState(n.GPUPlugin),
+			Entry:     n.Entry, EntryReason: n.EntryReason,
 		})
 	}
 	return out, nil
@@ -160,19 +164,26 @@ func (c *Cluster) AppStatus(ctx context.Context, namespace, appSlug string) (api
 		Image: raw.Image,
 	}
 	for _, inst := range raw.Instances {
-		out.Instances = append(out.Instances, api.InstanceInfo{
+		info := api.InstanceInfo{
 			Name: inst.Name, Status: inst.Status, Ready: inst.Ready,
 			Restarts: inst.Restarts, Node: inst.Node, StartedAt: inst.StartedAt,
 			Message: inst.Message, CPUM: inst.CPUM, MemoryMB: inst.MemoryMB, UsageKnown: inst.UsageKnown,
-		})
+			DeploymentID: inst.DeploymentID,
+			LastReason:   inst.LastReason, LastExitCode: inst.LastExitCode,
+		}
+		if exit := inst.LastExit; exit != nil {
+			info.LastExit = &api.InstanceExit{Reason: exit.Reason, ExitCode: exit.ExitCode, FinishedAt: exit.FinishedAt}
+		}
+		out.Instances = append(out.Instances, info)
 	}
 	return out, nil
 }
 
-// AppLogs streams an app's logs.
-func (c *Cluster) AppLogs(ctx context.Context, namespace, appSlug string, opts api.LogOptions) (io.ReadCloser, error) {
+// AppLogs reads an app's logs: every instance's, merged, or one's.
+func (c *Cluster) AppLogs(ctx context.Context, namespace, appSlug string, opts api.LogOptions) (*kube.LogStream, error) {
 	return c.client.AppLogs(ctx, namespace, appSlug, kube.LogOptions{
 		TailLines: opts.TailLines, Follow: opts.Follow, Previous: opts.Previous,
+		Instance: opts.Instance, SinceSeconds: opts.SinceSeconds,
 	})
 }
 

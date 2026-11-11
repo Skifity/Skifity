@@ -22,6 +22,7 @@ services:
     MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=rs0
 - name: mongodb
   image: mongo:7.0.43
+  needs_root: true
   port: 27017
   public: false
   mem_request_mb: 128
@@ -36,7 +37,8 @@ services:
   - name: mongodb-data
     mount_path: /data/db
     size_gb: 5
-notes: Rocket.Chat reaches its MongoDB by name, and the MongoDB app starts itself as a one-member
-  replica set, which Rocket.Chat needs. Set ROOT_URL on the rocketchat app to the address it is reached
-  at, or links in its emails point at localhost. This template installs 2 apps. They reach each other
-  by name inside the environment, so keep them together.
+notes: Rocket.Chat reaches its MongoDB by name, and the MongoDB app starts itself as a one-member replica
+  set, which Rocket.Chat needs. Set ROOT_URL on the rocketchat app to the address it is reached at, or
+  links in its emails point at localhost. This template installs 2 apps. They reach each other by name
+  inside the environment, so keep them together. The mongodb image starts as root, so the environment
+  needs the baseline pod security level.

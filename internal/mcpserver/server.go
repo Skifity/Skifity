@@ -158,7 +158,10 @@ type createAppOutput struct {
 	Name         string `json:"name"`
 	URL          string `json:"url,omitempty"`
 	DeploymentID string `json:"deployment_id,omitempty"`
-	Note         string `json:"note"`
+	// DeploysOnPush is whether a push to the repository will reach the
+	// panel, for an app built from one; the note says why not.
+	DeploysOnPush *bool  `json:"deploys_on_push,omitempty"`
+	Note          string `json:"note"`
 }
 
 type environmentInput struct {
@@ -191,13 +194,42 @@ type statusOutput struct {
 	ReadyInstances  int      `json:"ready_instances"`
 	WantedInstances int      `json:"wanted_instances"`
 	URLs            []string `json:"urls,omitempty"`
-	Instances       []struct {
+	// WaitingForDeploy are saved settings and build-time variables the
+	// running version was not built with: deploy_app builds with them.
+	WaitingForDeploy []store.BuildChange `json:"waiting_for_deploy,omitempty"`
+	Instances        []struct {
 		Name     string `json:"name"`
 		Status   string `json:"status"`
 		Ready    bool   `json:"ready"`
 		Restarts int    `json:"restarts"`
 		Node     string `json:"node"`
+		// The number of the deployment the instance runs.
+		Deployment int `json:"deployment,omitempty"`
+		// How the container before this one ended, for an instance that
+		// has restarted: OOMKilled is the answer a log cannot give.
+		LastExit *instanceExit `json:"last_exit,omitempty"`
 	} `json:"instances,omitempty"`
+	LiveDeployment *liveDeployment `json:"live_deployment,omitempty"`
+}
+
+type instanceExit struct {
+	Reason     string `json:"reason"`
+	ExitCode   int    `json:"exit_code"`
+	FinishedAt string `json:"finished_at,omitempty"`
+}
+
+// liveDeployment is the version an app serves: its newest deployment that
+// succeeded, which after a rollback is not its newest code.
+type liveDeployment struct {
+	ID            string `json:"id"`
+	Number        int    `json:"number"`
+	Trigger       string `json:"trigger,omitempty"`
+	RollbackOf    int    `json:"rollback_of,omitempty"`
+	Commit        string `json:"commit,omitempty"`
+	CommitMessage string `json:"commit_message,omitempty"`
+	CommitAuthor  string `json:"commit_author,omitempty"`
+	Image         string `json:"image,omitempty"`
+	LiveSince     string `json:"live_since,omitempty"`
 }
 
 type deployInput struct {
@@ -235,9 +267,11 @@ type runCommandOutput struct {
 
 type logsInput struct {
 	AppID    string `json:"app_id" jsonschema:"the app's id"`
-	Lines    int    `json:"lines,omitempty" jsonschema:"how many lines to return, up to 500"`
+	Lines    int    `json:"lines,omitempty" jsonschema:"how many lines to return, up to 500, across every instance read"`
 	Previous bool   `json:"previous,omitempty" jsonschema:"read the container that ran before the current one; this is where a crash-looping app printed why it crashed"`
 	Process  string `json:"process,omitempty" jsonschema:"one of the app's other processes, such as worker; leave empty for the app itself"`
+	Instance string `json:"instance,omitempty" jsonschema:"one instance, by the name get_app_status gives or the part after its last hyphen; leave empty for every instance, merged"`
+	Since    string `json:"since,omitempty" jsonschema:"only what was written this long ago or since, such as 15m, 1h or 2d"`
 }
 
 type setProcessInput struct {
@@ -249,6 +283,17 @@ type setProcessInput struct {
 
 type logsOutput struct {
 	Lines []string `json:"lines"`
+	// Entries says which instance wrote each line, and when.
+	Entries   []logEntry `json:"entries,omitempty"`
+	Instances []string   `json:"instances,omitempty"`
+	// InstancesOmitted is how many instances had started and were not read.
+	InstancesOmitted int `json:"instances_omitted,omitempty"`
+}
+
+type logEntry struct {
+	Instance string `json:"instance"`
+	At       string `json:"at,omitempty"`
+	Line     string `json:"line"`
 }
 
 type listVariablesOutput struct {
@@ -305,18 +350,38 @@ type scaleOutput struct {
 type rollbackInput struct {
 	AppID        string `json:"app_id" jsonschema:"the app's id"`
 	DeploymentID string `json:"deployment_id,omitempty" jsonschema:"which deployment to go back to; omitted means the one before the current version"`
+	DryRun       bool   `json:"dry_run,omitempty" jsonschema:"only say what it would change, and roll nothing back"`
+}
+
+// rollbackOutput is a rollback, or with dry_run the plan of one: what it puts
+// back is in both, because a rollback restores settings as well as code.
+type rollbackOutput struct {
+	DeploymentID string             `json:"deployment_id,omitempty"`
+	Number       int                `json:"number,omitempty"`
+	Status       string             `json:"status,omitempty"`
+	GoesBackTo   int                `json:"goes_back_to"`
+	PutsBack     []store.SpecChange `json:"puts_back"`
+	LeavesAsIs   []string           `json:"leaves_as_is"`
+	Note         string             `json:"note"`
 }
 
 type historyOutput struct {
-	Deployments []struct {
-		ID      string `json:"id"`
-		Number  int    `json:"number"`
-		Status  string `json:"status"`
-		Commit  string `json:"commit,omitempty"`
-		Error   string `json:"error,omitempty"`
-		Hint    string `json:"hint,omitempty"`
-		Created string `json:"created"`
-	} `json:"deployments"`
+	Deployments []historyEntry `json:"deployments"`
+}
+
+type historyEntry struct {
+	ID        string `json:"id"`
+	Number    int    `json:"number"`
+	Status    string `json:"status"`
+	Commit    string `json:"commit,omitempty"`
+	ErrorCode string `json:"error_code,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Hint      string `json:"hint,omitempty"`
+	// LastLines is what a version that crashed as it started printed before
+	// it stopped, redacted: the reason is nearly always in it, and without
+	// it an assistant had to know to ask for the previous container's log.
+	LastLines string `json:"last_lines,omitempty"`
+	Created   string `json:"created"`
 }
 
 type clusterOutput struct {
@@ -336,6 +401,10 @@ type serverSummary struct {
 	Ready  bool     `json:"ready"`
 	Roles  []string `json:"roles"`
 	Reason string   `json:"reason,omitempty"`
+	// Entry is whether it takes the traffic that reaches it: a server can be
+	// ready and not serving, which round-robin DNS cannot tell.
+	Entry       string `json:"entry,omitempty"`
+	EntryReason string `json:"entry_reason,omitempty"`
 }
 
 type readinessOutput struct {
@@ -413,7 +482,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_status",
 		Annotations: reads("Get an app's status"),
-		Description: "Describe an app's live state: whether it is running, how many instances are ready, and its URLs. Use this after a deploy to find out what happened.",
+		Description: "Describe an app's live state: whether it is running, how many instances are ready, its URLs, and which deployment is live (live_deployment) and which each instance runs. Use this after a deploy to find out what happened.",
 	}, s.getAppStatus)
 
 	addTool(s, &mcp.Tool{
@@ -448,7 +517,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_app_logs",
 		Annotations: reads("Read an app's logs"),
-		Description: "Read an app's recent log lines. This is where the cause of a crash or a failed start is. For an app that keeps restarting, pass previous=true: the container that printed the reason has already been replaced and the live log no longer has it.",
+		Description: "Read an app's recent log lines: every instance's, merged in the order they were written, each marked with the instance that wrote it when there is more than one. This is where the cause of a crash or a failed start is. For an app that keeps restarting, pass previous=true: the container that printed the reason has already been replaced and the live log no longer has it. Pass instance to read one instance, and since to read only the last 15m, 1h or 2d.",
 	}, s.getAppLogs)
 
 	addTool(s, &mcp.Tool{
@@ -460,7 +529,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "set_variable",
 		Annotations: changes("Set a variable", true, true),
-		Description: "Set an environment variable. A runtime variable is rolled out without rebuilding; a build-time variable causes a rebuild on the next deploy.",
+		Description: "Set an environment variable. A runtime variable is rolled out without rebuilding; a build-time variable rebuilds the version the app runs, with it. The answer says which happened.",
 	}, s.setVariable)
 
 	addTool(s, &mcp.Tool{
@@ -478,13 +547,15 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "rollback_app",
 		Annotations: changes("Roll an app back", true, false),
-		Description: "Go back to a previous deployment. This restores the image and the settings that version ran with.",
+		Description: "Go back to a previous deployment. This restores the image and the settings that version ran with — the port, the start command, the health check, scaling and resources — and leaves variables, domains and disks as they are. " +
+			"The answer lists each setting it puts back. Pass dry_run=true first to see that list without rolling anything back, and tell the person.",
 	}, s.rollbackApp)
 
 	addTool(s, &mcp.Tool{
 		Name:        "get_deployment_history",
 		Annotations: reads("Get deployment history"),
-		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed.",
+		Description: "List an app's recent deployments with their outcome, and the reason and suggested fix for any that failed. " +
+			"A version that crashed as it started (error_code deploy.crashed) carries the last lines it printed, which usually say why.",
 	}, s.getHistory)
 
 	// Servers are read here and changed nowhere in this server, deliberately.
@@ -500,7 +571,7 @@ func (s *Server) register() {
 	addTool(s, &mcp.Tool{
 		Name:        "get_cluster_status",
 		Annotations: reads("Get the cluster's status"),
-		Description: "Describe the servers in the cluster: how many are ready, whether it survives losing one, and how much capacity is left.",
+		Description: "Describe the servers in the cluster: how many are ready, which take traffic on ports 80 and 443, whether it survives losing one, and how much capacity is left.",
 	}, s.getCluster)
 
 	addTool(s, &mcp.Tool{
@@ -520,6 +591,8 @@ func (s *Server) register() {
 	s.registerVulnerabilities()
 	s.registerEvents()
 	s.registerLogDrains()
+	s.registerApps()
+	s.registerAttention()
 }
 
 // --- handlers ---
@@ -593,6 +666,12 @@ func (s *Server) createApp(ctx context.Context, _ *mcp.CallToolRequest, in creat
 		Name       string            `json:"name"`
 		App        *store.App        `json:"app"`
 		Deployment *store.Deployment `json:"deployment"`
+		Webhook    *struct {
+			Registered bool   `json:"registered"`
+			URL        string `json:"url"`
+			Reason     string `json:"reason"`
+			ReasonCode string `json:"reason_code"`
+		} `json:"webhook"`
 	}
 	if err := s.client.Do(ctx, "POST", "/api/environments/"+environment+"/apps", body, &response); err != nil {
 		return errorResult(err), createAppOutput{}, nil
@@ -610,6 +689,25 @@ func (s *Server) createApp(ctx context.Context, _ *mcp.CallToolRequest, in creat
 			"call get_app_status or get_deployment_history to see the outcome."
 	default:
 		out.Note = "The app exists but has never been deployed. Call deploy_app to start it."
+	}
+	// Whether a push will deploy it, said now: an assistant that tells
+	// somebody "push and it deploys" about an app with no Git connection has
+	// told them something that will not happen.
+	if in.RepoURL != "" && response.Webhook != nil {
+		hook := response.Webhook
+		deploys := hook.Registered
+		out.DeploysOnPush = &deploys
+		switch {
+		case hook.Registered:
+			out.Note += " A push to its branch deploys it."
+		case hook.ReasonCode == "no_connection":
+			out.Note += " Pushes will not deploy it yet: it has no Git connection, so no webhook was registered. " +
+				"The person connects their Git account in the panel under Settings, Git, and chooses that connection " +
+				"in the app's settings; until then, call deploy_app after each push."
+		case hook.URL != "":
+			out.Note += " Pushes will not deploy it until the repository has a webhook: " + hook.Reason +
+				". It can be added by hand at the Git host, delivering to " + hook.URL + "."
+		}
 	}
 	return textResult(fmt.Sprintf("Created %s (%s). %s", out.Name, out.AppID, out.Note)), out, nil
 }
@@ -650,12 +748,16 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 		ReadyReplicas   int      `json:"ready_replicas"`
 		URLs            []string `json:"urls"`
 		Instances       []struct {
-			Name     string `json:"name"`
-			Status   string `json:"status"`
-			Ready    bool   `json:"ready"`
-			Restarts int    `json:"restarts"`
-			Node     string `json:"node"`
+			Name       string `json:"name"`
+			Status     string `json:"status"`
+			Ready      bool   `json:"ready"`
+			Restarts   int    `json:"restarts"`
+			Node       string `json:"node"`
+			Deployment int    `json:"deployment,omitempty"`
+			// Read for the summary below as well as passed on.
+			LastExit *instanceExit `json:"last_exit,omitempty"`
 		} `json:"instances"`
+		PendingChanges []store.BuildChange `json:"pending_changes"`
 	}
 	if err := s.client.Do(ctx, "GET", "/api/apps/"+in.AppID+"/status", nil, &raw); err != nil {
 		return errorResult(err), statusOutput{}, nil
@@ -664,10 +766,48 @@ func (s *Server) getAppStatus(ctx context.Context, _ *mcp.CallToolRequest, in ap
 	out := statusOutput{
 		Phase: raw.Phase, Explanation: raw.Detail,
 		ReadyInstances: raw.ReadyReplicas, WantedInstances: raw.DesiredReplicas,
-		URLs: raw.URLs, Instances: raw.Instances,
+		URLs: raw.URLs, Instances: raw.Instances, WaitingForDeploy: raw.PendingChanges,
 	}
 	summary := fmt.Sprintf("%s: %d of %d instances ready. %s",
 		raw.Phase, raw.ReadyReplicas, raw.DesiredReplicas, raw.Detail)
+	for _, instance := range raw.Instances {
+		if exit := instance.LastExit; exit != nil {
+			summary = strings.TrimSpace(summary) + fmt.Sprintf(" %s's previous container ended %s: %s, exit code %d.",
+				instance.Name, exit.FinishedAt, exit.Reason, exit.ExitCode)
+		}
+	}
+
+	// Which version that is, from the history: the status alone said an app
+	// was running and not whether it was running the deploy just made.
+	// Without the history the status is still worth answering with.
+	var history struct {
+		Items []store.Deployment `json:"items"`
+	}
+	if err := s.client.Do(ctx, "GET", "/api/apps/"+in.AppID+"/deployments?limit=50", nil, &history); err == nil {
+		if live, ok := cli.LiveDeployment(history.Items); ok {
+			out.LiveDeployment = &liveDeployment{
+				ID: live.ID, Number: live.Number, Trigger: live.Trigger, RollbackOf: live.RollbackOf,
+				Commit: live.CommitSHA, CommitMessage: live.CommitMessage, CommitAuthor: live.CommitAuthor,
+				Image: live.Image,
+			}
+			if !live.FinishedAt.IsZero() {
+				out.LiveDeployment.LiveSince = live.FinishedAt.Format(time.RFC3339)
+			}
+			summary = strings.TrimSpace(summary) + fmt.Sprintf(" Deployment #%d is live.", live.Number)
+		}
+	}
+	if len(raw.PendingChanges) > 0 {
+		waiting := make([]string, 0, len(raw.PendingChanges))
+		for _, change := range raw.PendingChanges {
+			if change.Setting == "variable" {
+				waiting = append(waiting, "the build-time variable "+change.Key)
+			} else {
+				waiting = append(waiting, change.Setting)
+			}
+		}
+		summary += fmt.Sprintf(" Saved and not built yet: %s. The running version does not have them until deploy_app builds with them.",
+			strings.Join(waiting, ", "))
+	}
 	return textResult(summary), out, nil
 }
 
@@ -780,18 +920,44 @@ func (s *Server) getAppLogs(ctx context.Context, _ *mcp.CallToolRequest, in logs
 	if lines <= 0 || lines > 500 {
 		lines = 200
 	}
-	var response struct {
-		Lines []string `json:"lines"`
-	}
+	var response logsOutput
 	path := fmt.Sprintf("/api/apps/%s/logs?tail=%d&previous=%t", in.AppID, lines, in.Previous)
-	if in.Process != "" {
-		path += "&process=" + url.QueryEscape(in.Process)
+	for _, param := range [][2]string{{"process", in.Process}, {"instance", in.Instance}, {"since", in.Since}} {
+		if param[1] != "" {
+			path += "&" + param[0] + "=" + url.QueryEscape(param[1])
+		}
 	}
 	if err := s.client.Do(ctx, "GET", path, nil, &response); err != nil {
 		return errorResult(err), logsOutput{}, nil
 	}
-	out := logsOutput{Lines: response.Lines}
-	return textResult(strings.Join(response.Lines, "\n")), out, nil
+	if response.Lines == nil {
+		response.Lines = []string{}
+	}
+
+	// Several instances' lines interleave, and which wrote one is often the
+	// whole question: the one that crashed, the one on the old version.
+	text := response.Lines
+	if len(response.Instances) > 1 && len(response.Entries) == len(response.Lines) {
+		text = make([]string, len(response.Entries))
+		for i, entry := range response.Entries {
+			text[i] = "[" + shortInstance(entry.Instance) + "] " + entry.Line
+		}
+	}
+	summary := strings.Join(text, "\n")
+	if response.InstancesOmitted > 0 {
+		summary = fmt.Sprintf("Read %d of %d instances; pass instance to read one of the others.\n",
+			len(response.Instances), len(response.Instances)+response.InstancesOmitted) + summary
+	}
+	return textResult(summary), response, nil
+}
+
+// shortInstance is the part of an instance's name after its last hyphen,
+// which tells an app's instances apart and is what instance accepts.
+func shortInstance(name string) string {
+	if i := strings.LastIndexByte(name, '-'); i >= 0 && i < len(name)-1 {
+		return name[i+1:]
+	}
+	return name
 }
 
 func (s *Server) setProcess(ctx context.Context, _ *mcp.CallToolRequest, in setProcessInput) (*mcp.CallToolResult, store.AppProcess, error) {
@@ -850,17 +1016,12 @@ func (s *Server) setVariable(ctx context.Context, _ *mcp.CallToolRequest, in set
 	if in.IsSecret != nil {
 		body["is_secret"] = *in.IsSecret
 	}
-	var response struct {
-		RequiresRebuild bool `json:"requires_rebuild"`
-	}
+	var response variableEffect
 	if err := s.client.Do(ctx, "PUT", "/api/apps/"+in.AppID+"/variables", body, &response); err != nil {
 		return errorResult(err), setVariableOutput{}, nil
 	}
 
-	note := "Rolled out to the running instances without rebuilding."
-	if response.RequiresRebuild {
-		note = "This value is used during the build, so the next deploy will rebuild the image."
-	}
+	note := response.note()
 	out := setVariableOutput{Key: in.Key, RequiresRebuild: response.RequiresRebuild, Note: note}
 	return textResult(in.Key + " set. " + note), out, nil
 }
@@ -908,26 +1069,54 @@ func (s *Server) scaleApp(ctx context.Context, _ *mcp.CallToolRequest, in scaleI
 	return textResult(summary), out, nil
 }
 
-func (s *Server) rollbackApp(ctx context.Context, _ *mcp.CallToolRequest, in rollbackInput) (*mcp.CallToolResult, deployOutput, error) {
+func (s *Server) rollbackApp(ctx context.Context, _ *mcp.CallToolRequest, in rollbackInput) (*mcp.CallToolResult, rollbackOutput, error) {
 	target := in.DeploymentID
 	if target == "" {
 		resolved, err := s.previousDeployment(ctx, in.AppID)
 		if err != nil {
-			return errorResult(err), deployOutput{}, nil
+			return errorResult(err), rollbackOutput{}, nil
 		}
 		target = resolved
 	}
 
+	// What it puts back is read first, either way: a rollback that changes
+	// the port back is something the person should hear about from the
+	// assistant, not find out.
+	var plan struct {
+		Target struct {
+			Number int `json:"number"`
+		} `json:"target"`
+		Changes   []store.SpecChange `json:"changes"`
+		Unchanged []string           `json:"unchanged"`
+	}
+	if err := s.client.Do(ctx, "GET", appPath(in.AppID, "/rollback/"+url.PathEscape(target)+"/plan"), nil, &plan); err != nil {
+		return errorResult(err), rollbackOutput{}, nil
+	}
+	out := rollbackOutput{GoesBackTo: plan.Target.Number, PutsBack: plan.Changes, LeavesAsIs: plan.Unchanged}
+	if out.PutsBack == nil {
+		out.PutsBack = []store.SpecChange{}
+	}
+	puts := "no settings, only the code"
+	if len(plan.Changes) > 0 {
+		var changes []string
+		for _, change := range plan.Changes {
+			changes = append(changes, fmt.Sprintf("%s %q → %q", change.Field, change.From, change.To))
+		}
+		puts = strings.Join(changes, ", ")
+	}
+	if in.DryRun {
+		out.Note = fmt.Sprintf("Nothing was rolled back. Going back to #%d would put back %s, and leave %s as they are now.",
+			plan.Target.Number, puts, strings.Join(plan.Unchanged, ", "))
+		return textResult(out.Note), out, nil
+	}
+
 	var deployment store.Deployment
-	if err := s.client.Do(ctx, "POST", "/api/apps/"+in.AppID+"/rollback/"+target, nil, &deployment); err != nil {
-		return errorResult(err), deployOutput{}, nil
+	if err := s.client.Do(ctx, "POST", appPath(in.AppID, "/rollback/"+url.PathEscape(target)), nil, &deployment); err != nil {
+		return errorResult(err), rollbackOutput{}, nil
 	}
-	out := deployOutput{
-		DeploymentID: deployment.ID, Number: deployment.Number,
-		Status: string(deployment.Status),
-		Note:   "The previous image and its settings are being rolled out. No rebuild is needed, so this is fast.",
-	}
-	return textResult(fmt.Sprintf("Rolling back. Deployment #%d started.", deployment.Number)), out, nil
+	out.DeploymentID, out.Number, out.Status = deployment.ID, deployment.Number, string(deployment.Status)
+	out.Note = fmt.Sprintf("Rolling back to #%d, which puts back %s. No rebuild is needed, so this is fast.", plan.Target.Number, puts)
+	return textResult(fmt.Sprintf("Deployment #%d started. %s", deployment.Number, out.Note)), out, nil
 }
 
 func (s *Server) getHistory(ctx context.Context, _ *mcp.CallToolRequest, in appIDInput) (*mcp.CallToolResult, historyOutput, error) {
@@ -940,19 +1129,15 @@ func (s *Server) getHistory(ctx context.Context, _ *mcp.CallToolRequest, in appI
 
 	var out historyOutput
 	for _, deployment := range response.Items {
-		out.Deployments = append(out.Deployments, struct {
-			ID      string `json:"id"`
-			Number  int    `json:"number"`
-			Status  string `json:"status"`
-			Commit  string `json:"commit,omitempty"`
-			Error   string `json:"error,omitempty"`
-			Hint    string `json:"hint,omitempty"`
-			Created string `json:"created"`
-		}{
+		entry := historyEntry{
 			ID: deployment.ID, Number: deployment.Number, Status: string(deployment.Status),
-			Commit: deployment.CommitSHA, Error: deployment.ErrorMessage,
+			Commit: deployment.CommitSHA, ErrorCode: deployment.ErrorCode, Error: deployment.ErrorMessage,
 			Hint: deployment.ErrorHint, Created: deployment.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}
+		if deployment.Problem != nil && deployment.ErrorCode == "deploy.crashed" {
+			entry.LastLines = deployment.Problem.Context["log_tail"]
+		}
+		out.Deployments = append(out.Deployments, entry)
 	}
 	return textResult(fmt.Sprintf("%d deployment(s).", len(out.Deployments))), out, nil
 }

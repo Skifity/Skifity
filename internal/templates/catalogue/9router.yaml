@@ -6,6 +6,7 @@ website: https://github.com/decolua/9router
 services:
 - name: ninerouter
   image: decolua/9router:0.5.91
+  needs_root: true
   port: 20128
   public: true
   variables:

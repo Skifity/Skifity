@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
+import { createHmac } from "node:crypto"
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -98,6 +99,45 @@ test("the shell is there, and the empty states say what to do next", async ({ pa
   // The promise that the password is not kept has to be on the screen where
   // the password is typed.
   await expect(page.getByText(/never stored/i)).toBeVisible()
+})
+
+// The overview's first answer is whether anything is wrong, and on a fresh
+// panel with no servers it still gives it: a team with no notification
+// channel is told that nobody would hear about a failure, here and on the
+// bell, and once there is a channel, that nothing needs attention.
+test("the overview and the bell say what needs attention", async ({ page }) => {
+  await signIn(page)
+  await expect(page.getByText("No servers yet")).toBeVisible()
+
+  const nobody = page.getByRole("link", { name: /Nobody is told when something breaks/ })
+  await expect(nobody).toBeVisible()
+  await expect(page.getByTestId("attention-count")).toHaveText("1")
+
+  // The bell opens the same list, which links to where the fix is.
+  await page.getByRole("button", { name: "1 thing needs attention" }).click()
+  await expect(page.getByRole("dialog").getByRole("link", { name: /Nobody is told/ })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  const cookies = await page.context().cookies()
+  const me = await (await page.request.get("/api/me")).json()
+  const created = await page.request.post(`/api/teams/${me.teams[0].id}/notifications`, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+    },
+    data: {
+      kind: "telegram",
+      name: "ops",
+      config: { bot_token: "123456:fake-bot-token-for-e2e", chat_id: "-100" },
+      events: ["deploy.failed"],
+    },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+
+  await page.reload()
+  await expect(page.getByText("Nothing needs attention")).toBeVisible()
+  await expect(page.getByText("No servers yet")).toBeVisible()
+  await expect(page.getByTestId("attention-count")).toHaveCount(0)
 })
 
 test("every language is complete on the pages a new user sees", async ({ page }) => {
@@ -290,6 +330,55 @@ test("the template catalogue narrows by category and by search", async ({ page }
   await expect(sections).toHaveCount(1)
 })
 
+// An install is all or nothing, and what would stop one is said before Install
+// is pressed: a second Homer in the same environment would have the first
+// one's name, and the dialog says so beside the name rather than after a click.
+test("the install dialog says a name is taken before Install is pressed", async ({ page }) => {
+  await signIn(page)
+  const environment = await firstEnvironment(page)
+  const installed = await page.request.post("/api/templates/homer/install", {
+    headers: await csrfHeaders(page),
+    data: { environment_id: environment },
+  })
+  expect(installed.ok(), await installed.text()).toBeTruthy()
+
+  await page.goto("/templates")
+  await page.getByPlaceholder("Search templates").fill("homer")
+  await page.getByRole("button", { name: "Install Homer" }).click()
+  const dialog = page.getByRole("dialog")
+  const install = dialog.getByRole("button", { name: "Install", exact: true })
+  await expect(dialog.getByText("That name is already used here")).toBeVisible()
+  await expect(install).toBeDisabled()
+
+  await dialog.getByLabel("App name").fill("homer-two")
+  await expect(dialog.getByText("That name is already used here")).toHaveCount(0)
+  await expect(install).toBeEnabled()
+})
+
+// WordPress starts as root, and the environment first-run setup made is at the
+// strictest level, which refuses that. The dialog says so before anything is
+// made, and the owner can accept root images for it in the same step: Install
+// waits for the box. Nothing is installed here, so the level stays as it was
+// for every test after this one.
+test("a template that starts as root asks the owner before it is installed", async ({ page }) => {
+  await signIn(page)
+  await page.goto("/templates")
+  await page.getByPlaceholder("Search templates").fill("wordpress")
+  await page.getByRole("button", { name: "Install WordPress", exact: true }).click()
+
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByText("This image starts as root")).toBeVisible()
+  const accept = dialog.getByRole("checkbox", { name: /Accept root images in Production/ })
+  const install = dialog.getByRole("button", { name: "Install", exact: true })
+  await expect(accept).not.toBeChecked()
+  await expect(install).toBeDisabled()
+
+  await accept.check()
+  await expect(install).toBeEnabled()
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  await expect(dialog).toBeHidden()
+})
+
 test("the documentation is served from the binary", async ({ page }) => {
   await page.goto("/docs/")
   await expect(page.getByRole("heading", { level: 1 })).toContainText("documentation")
@@ -351,6 +440,7 @@ test("every page in the navigation renders", async ({ page }) => {
     ["/activity", "Activity"],
     ["/account", "Account"],
     ["/settings", "Settings"],
+    ["/settings?tab=accounts", "Accounts"],
   ] as const) {
     await page.goto(path)
     // The heading, not networkidle: two of these are lazy chunks behind a
@@ -370,6 +460,76 @@ test("every page in the navigation renders", async ({ page }) => {
   }
 
   expect(crashes, "a page threw while rendering").toEqual([])
+})
+
+test("a new database says why it cannot be backed up, and where that is fixed", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  // This panel has no bucket, which is the state a new panel is in.
+  const storage = await (await page.request.get("/api/backup-storage")).json()
+  expect(storage.configured).toBe(false)
+
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  await page.goto(`/projects/${projects.items[0].id}`)
+  await page.getByRole("button", { name: "New database" }).first().click()
+
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByRole("switch", { name: "Back up daily" })).toBeDisabled()
+  await expect(dialog.getByText("Not until this panel has backup storage.")).toBeVisible()
+  // The panel's administrator is sent to the page it is set on.
+  await expect(
+    dialog.getByRole("link", { name: "Set it up under Settings → General → Backup storage." }),
+  ).toHaveAttribute("href", "/settings?tab=panel")
+})
+
+// With one place an app can go, New app is already pointed there and says
+// so: a source is all Create waits for. The breadcrumb is named from the form,
+// and nothing asks the API for an app called "new".
+test("New app with one place to put it is already pointed there", async ({ page }) => {
+  await signIn(page)
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  await page.goto("/apps/new")
+  await expect(page.getByRole("combobox", { name: "Create it in" })).toContainText(" · Production")
+  await expect(page.getByText(/^In .+ · Production$/)).toBeVisible()
+  const create = page.getByRole("button", { name: /^create and deploy$/i })
+  await expect(create).toBeDisabled()
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/example/site")
+  await expect(create).toBeEnabled()
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Production")
+  expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
+})
+
+// The environment in the address goes into the path of the request Create
+// sends, with the person's session. One the list does not offer is treated as
+// none: "../teams/..." used to become the path itself, and point Create at
+// another route of the API.
+test("New app takes no environment from the address that the team does not have", async ({
+  page,
+}) => {
+  await signIn(page)
+  await page.goto(`/apps/new?environment=${encodeURIComponent("../teams/x/tokens?")}`)
+  await expect(page.getByRole("combobox", { name: "Create it in" })).toContainText(" · Production")
+})
+
+// An id in a page's address becomes part of the path of every request the page
+// sends, with the session and the CSRF header. "..%2F" in it used to be
+// resolved by the browser into another route of the API; such a path is
+// refused before anything is sent.
+test("a page opened with dot segments in its address sends nothing elsewhere", async ({ page }) => {
+  await signIn(page)
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  // One ".." from /api/apps/ is /api/teams/elsewhere: a route of the API.
+  await page.goto(`/apps/${encodeURIComponent("../teams/elsewhere")}`)
+  await page.waitForLoadState("networkidle")
+  expect(asked.filter((path) => path.startsWith("/api/teams/elsewhere"))).toEqual([])
+  await expect(page.getByText("The request was not sent").first()).toBeVisible()
 })
 
 test("a folder on this computer becomes an app, with no terminal", async ({ page }) => {
@@ -414,9 +574,15 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
   // The button says what it will do, and deploying straight away is the default.
   await page.getByRole("button", { name: /^create and deploy$/i }).click()
 
-  await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
-  await expect(page.getByText("An uploaded folder")).toBeVisible()
+  // The page opens on the build it started, with that deployment open, not on
+  // an Overview that says nothing is running.
+  await expect(page).toHaveURL(/\/apps\/app_\w+\?tab=deployments&deployment=dep_/, {
+    timeout: 30_000,
+  })
+  await expect(page.getByRole("button", { name: /^#1\b/ })).toHaveAttribute("aria-expanded", "true")
   await expect(page.getByRole("button", { name: "Send a new version" })).toBeVisible()
+  await page.getByRole("tab", { name: "Overview" }).click()
+  await expect(page.getByText("An uploaded folder")).toBeVisible()
 
   const appID = page.url().split("/apps/")[1].split(/[/?#]/)[0]
   const variables = await (await page.request.get(`/api/apps/${appID}/variables`)).json()
@@ -428,6 +594,60 @@ test("a folder on this computer becomes an app, with no terminal", async ({ page
   expect(deployments.items[0]?.commit_sha, "the deploy does not name the upload").toMatch(
     /^[a-f0-9]{64}$/,
   )
+})
+
+test("a first deployment that failed is said on the Overview, with its reason", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  // Deployed at once, on a panel with no cluster to deploy to: the deployment
+  // fails, and nothing ever goes live.
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "never-live", source_type: "image", image: "nginx:1.27", port: 80, deploy: true },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/apps/${appID}/deployments`)).json()).items[0]?.status,
+      { timeout: 30_000 },
+    )
+    .toBe("failed")
+  const failed = (await (await page.request.get(`/api/apps/${appID}/deployments`)).json()).items[0]
+
+  await page.goto(`/apps/${appID}`)
+  const en = localeStrings("en")
+  const apps = en.apps as Record<string, string>
+  const notice = page.getByRole("alert").filter({ hasText: "Deployment #1 failed" })
+  await expect(notice).toBeVisible()
+  // Its reason in the words the Deployments tab uses: the catalogue's title
+  // for its code, or what the server recorded when the title needs values the
+  // record does not keep.
+  const catalogue = (en.errors as Record<string, Record<string, { title?: string }>>).catalogue
+  const title = catalogue[String(failed.error_code).replaceAll(".", "_")]?.title
+  await expect(notice).toContainText(title && !title.includes("{{") ? title : failed.error_message)
+  // Not the empty state that sends people to start another deploy as though
+  // none had been tried.
+  await expect(page.getByText(apps.noInstancesTitle)).toBeVisible()
+  await expect(page.getByText(/builds the app and starts the first one/)).toHaveCount(0)
+  await expect(page.getByText(apps.liveNone)).toBeVisible()
+
+  await page.getByRole("link", { name: apps.viewBuildLog }).click()
+  await expect(page).toHaveURL(/\?tab=deployments&deployment=dep_/)
+  await expect(page.getByRole("button", { name: /^#1\b/ })).toHaveAttribute("aria-expanded", "true")
 })
 
 test("an app can be put behind a password, and the password never comes back", async ({ page }) => {
@@ -473,6 +693,397 @@ test("an app can be put behind a password, and the password never comes back", a
   )
 })
 
+test("a variable is changed in place, and Edit as text sends only what changed", async ({
+  page,
+}) => {
+  await signIn(page)
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "configured", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+  for (const variable of [
+    { key: "GREETING", value: "hello there", is_secret: false },
+    { key: "API_TOKEN", value: "tok_e2e_not_a_real_token", is_secret: true },
+  ]) {
+    const set = await page.request.put(`/api/apps/${appID}/variables`, { headers, data: variable })
+    expect(set.ok(), await set.text()).toBeTruthy()
+  }
+
+  const en = localeStrings("en")
+  const words = en.variables as Record<string, string>
+  const common = en.common as Record<string, string>
+  const named = (sentence: string, values: Record<string, string>) =>
+    sentence.replace(/\{\{(\w+)\}\}/g, (_, name: string) => values[name])
+  // Every batch the page sends, which is what "nothing changed" is checked by.
+  const batches: string[] = []
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith(`/apps/${appID}/variables/batch`)) {
+      batches.push(request.postData() ?? "")
+    }
+  })
+
+  await page.goto(`/apps/${appID}?tab=variables`)
+
+  // A plain value is copied whole.
+  await page.getByRole("button", { name: named(common.copyValue, { name: "GREETING" }) }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("hello there")
+
+  // Edited in place, from what it is, without typing its name again.
+  await page.getByRole("button", { name: named(words.editKey, { key: "GREETING" }) }).click()
+  // The form opens in the variable's own row.
+  const form = page.getByRole("row").filter({ has: page.locator("#variable-value") })
+  await expect(form.locator("#variable-key")).toHaveValue("GREETING")
+  await expect(form.locator("#variable-value")).toHaveValue("hello there")
+  await form.locator("#variable-value").fill("hello again")
+  await form.getByRole("button", { name: common.save, exact: true }).click()
+  await expect(page.getByText((en.deploy as Record<string, string>).noRebuildNeeded)).toBeVisible()
+  await expect(page.getByRole("button", { name: "hello again", exact: true })).toBeVisible()
+
+  // A secret's value is never sent back, so its box starts empty.
+  await page.getByRole("button", { name: named(words.editKey, { key: "API_TOKEN" }) }).click()
+  await expect(form.locator("#variable-value")).toHaveValue("")
+  await form.getByRole("button", { name: common.cancel, exact: true }).click()
+
+  // The box opens with what is there: the plain line, and a comment for the
+  // secret it leaves alone.
+  await page.getByRole("button", { name: words.bulkEdit }).click()
+  const box = page.locator("#bulk-variables")
+  const bulk = page.locator('[data-slot="card"]').filter({ has: box })
+  await expect(box).toHaveValue(/^GREETING=hello again$/m)
+  const comment = `# ${named(words.textSecret, { key: "API_TOKEN" })}`
+  const escaped = comment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  await expect(box).toHaveValue(new RegExp(`^${escaped}$`, "m"))
+
+  // Saved as it opened: nothing to send, so nothing is sent.
+  await bulk.getByRole("button", { name: common.save, exact: true }).click()
+  await expect(page.getByText(words.nothingChanged)).toBeVisible()
+  expect(batches).toEqual([])
+
+  // One line changed: that line, and only it.
+  await page.getByRole("button", { name: words.bulkEdit }).click()
+  await box.fill((await box.inputValue()).replace("GREETING=hello again", "GREETING=hello, text"))
+  await bulk.getByRole("button", { name: common.save, exact: true }).click()
+  await expect.poll(() => batches.length).toBe(1)
+  expect(JSON.parse(batches[0])).toEqual({ set: [{ key: "GREETING", value: "hello, text" }] })
+  await expect(page.getByRole("button", { name: "hello, text", exact: true })).toBeVisible()
+
+  const after = await (await page.request.get(`/api/apps/${appID}/variables`)).json()
+  const secret = after.items.find((v: { key: string }) => v.key === "API_TOKEN")
+  expect(secret?.is_secret, "the secret was lost or made plain").toBe(true)
+  expect(JSON.stringify(after)).not.toContain("tok_e2e_not_a_real_token")
+})
+
+// The folder deployed above failed, with no cluster to build it on, and so did
+// every app the tests before made. The overview says so, and a line opens its
+// app's deployments.
+test("a failed deploy is on the overview, and opens its deployments", async ({ page }) => {
+  await signIn(page)
+  const failed = page.getByRole("link", { name: /Deployment #\d+ of .+ failed/ }).first()
+  await expect(failed).toBeVisible({ timeout: 60_000 })
+  await failed.click()
+  await expect(page).toHaveURL(/\/apps\/app_[^/?#]+\?tab=deployments/)
+  await expect(page.getByRole("tab", { name: "Deployments" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+})
+
+// Links sent before the tab moved into the query string put it in the path:
+// notifications, commit statuses, pull request comments. Those are in inboxes
+// and on commits for good, so they still open the tab they name, and anything
+// else under an app opens the app rather than "Page not found".
+test("an old link to an app's tab opens that tab, and nonsense opens the app", async ({ page }) => {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  const appID: string = apps.items[0].id
+
+  await page.goto(`/apps/${appID}/deployments`)
+  await expect(page).toHaveURL(new RegExp(`/apps/${appID}\\?tab=deployments$`))
+  await expect(page.getByRole("tab", { name: "Deployments" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+
+  await page.goto(`/apps/${appID}/nonsense`)
+  await expect(page).toHaveURL(new RegExp(`/apps/${appID}$`))
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByText("That page does not exist")).toHaveCount(0)
+})
+
+// A failed deploy's notification links to that deployment. It opens, at the
+// first line of its build that went wrong, even with another one running;
+// clicking another opens that one instead; and a link to one the list does
+// not have opens the tab as it would have opened anyway.
+test("a link to a deployment opens its build at the line that went wrong", async ({ page }) => {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  const appID: string = apps.items[0].id
+  const at = new Date().toISOString()
+  const deployment = (id: string, number: number, status: string) => ({
+    id,
+    app_id: appID,
+    number,
+    status,
+    trigger: "manual",
+    commit_sha: "",
+    commit_message: `Release ${number}`,
+    commit_author: "",
+    image: "",
+    build_fingerprint: "",
+    created_by: "",
+    created_at: at,
+  })
+  const log = (lines: string[], finished: boolean) => ({
+    lines: lines.map((line, index) => ({ seq: index + 1, stream: "stdout", line, at })),
+    finished,
+  })
+  await page.route(`**/api/apps/${appID}/deployments`, (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          deployment("dep_e2e_running", 3, "building"),
+          deployment("dep_e2e_failed", 2, "failed"),
+        ],
+        total: 2,
+      },
+    }),
+  )
+  await page.route(`**/api/apps/${appID}/deployments/dep_e2e_failed/logs*`, (route) =>
+    route.fulfill({
+      json: log(
+        ["Preparing the builder.", "> shop@1.0.0 build", "npm ERR! missing script: build", "Done."],
+        true,
+      ),
+    }),
+  )
+  await page.route(`**/api/apps/${appID}/deployments/dep_e2e_running/logs*`, (route) =>
+    route.fulfill({ json: log(["Preparing the builder.", "Installing the dependencies."], false) }),
+  )
+
+  await page.goto(`/apps/${appID}?tab=deployments&deployment=dep_e2e_failed`)
+  await expect(page.getByTestId("first-error-line")).toHaveText("npm ERR! missing script: build")
+  await expect(page.getByText("Installing the dependencies.")).toHaveCount(0)
+
+  await page.getByRole("button", { name: /Release 3/ }).click()
+  await expect(page.getByText("Installing the dependencies.")).toBeVisible()
+  await expect(page.getByTestId("first-error-line")).toHaveCount(0)
+
+  await page.goto(`/apps/${appID}?tab=deployments&deployment=dep_e2e_gone`)
+  await expect(page.getByText("Installing the dependencies.")).toBeVisible()
+  await expect(page.getByText(/this page stopped working/i)).toHaveCount(0)
+})
+
+// The apps are on the overview once it is past first-run setup, each with the
+// project and environment it lives in. This panel has no servers, so one is
+// put in the answer to make it past that.
+test("the overview lists the team's apps with where they live", async ({ page }) => {
+  await page.route("**/api/teams/*/servers", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "srv_e2e",
+            name: "node-1",
+            host: "203.0.113.9",
+            role: "control-plane",
+            status: "ready",
+            cpu_cores: 2,
+            memory_mb: 4096,
+          },
+        ],
+        total: 1,
+      },
+    }),
+  )
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const apps = await (await page.request.get(`/api/teams/${me.teams[0].id}/apps`)).json()
+  expect(apps.items.length, "the suite has made apps by now").toBeGreaterThan(0)
+
+  await page.goto("/")
+  await expect(page.getByRole("heading", { name: "Your apps", level: 2 })).toBeVisible()
+  for (const app of apps.items as {
+    name: string
+    project_name: string
+    environment_name: string
+  }[]) {
+    await expect(
+      page
+        .getByRole("link")
+        .filter({ hasText: app.name })
+        .filter({ hasText: `${app.project_name} · ${app.environment_name}` })
+        .first(),
+      `${app.name} with where it lives`,
+    ).toBeVisible()
+  }
+})
+
+test("the logs tab reads every instance, and says when the stream fails", async ({ page }) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "chatty", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  const apps = localeStrings("en").apps as Record<string, string>
+  await page.goto(`/apps/${appID}?tab=logs`)
+
+  // Every instance by default, with a way to choose one, and the lines that
+  // were loaded to take away.
+  await expect(page.getByRole("combobox", { name: apps.logsInstance })).toContainText(
+    apps.logsInstanceAll,
+  )
+  await expect(page.getByRole("button", { name: apps.logsDownload })).toBeVisible()
+  // There is no cluster here, so the stream cannot be opened, and that is
+  // said rather than looking like an app with nothing to say.
+  await expect(page.getByText(apps.logsStreamFailed)).toBeVisible({ timeout: 15_000 })
+})
+
+test("a log names the instance behind each line, and how the one that restarted ended", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "restarting", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  // No cluster here, so the cluster's side is played: two instances, one of
+  // which keeps being killed for its memory.
+  const ended = new Date(Date.now() - 12 * 60_000).toISOString()
+  const [calm, crashing] = ["restarting-5d8f-aaaaa", "restarting-5d8f-bbbbb"]
+  const instance = {
+    ready: true,
+    status: "Running",
+    restarts: 0,
+    node: "s1",
+    cpu_m: 0,
+    memory_mb: 0,
+    deployment: 0,
+  }
+  await page.route(`**/api/apps/${appID}/status`, (route) =>
+    route.fulfill({
+      json: {
+        phase: "updating",
+        desired_replicas: 2,
+        ready_replicas: 1,
+        instances: [
+          { ...instance, name: calm },
+          {
+            ...instance,
+            name: crashing,
+            ready: false,
+            status: "CrashLoopBackOff",
+            restarts: 4,
+            last_exit: { reason: "OOMKilled", exit_code: 137, finished_at: ended },
+          },
+        ],
+      },
+    }),
+  )
+  await page.route(
+    (url) => url.pathname === `/api/apps/${appID}/logs`,
+    (route) => {
+      if (new URL(route.request().url()).searchParams.get("previous") === "true") {
+        return route.fulfill({
+          json: {
+            app_id: appID,
+            previous: true,
+            instances: [crashing],
+            instances_omitted: 0,
+            lines: ["allocating the cache"],
+            entries: [{ instance: crashing, at: ended, line: "allocating the cache" }],
+          },
+        })
+      }
+      const event = (name: string, data: unknown) =>
+        `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
+      return route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+        body:
+          "retry: 600000\n\n" +
+          event("instances", { instances: [calm, crashing], omitted: 0 }) +
+          event("entry", { instance: calm, at: ended, line: "listening on 80" }) +
+          event("entry", { instance: crashing, at: ended, line: "ERROR the cache does not fit" }),
+      })
+    },
+  )
+
+  const apps = localeStrings("en").apps as Record<string, string>
+  await page.goto(`/apps/${appID}?tab=logs`)
+
+  // Each line says which instance wrote it, by the end of its name.
+  const log = page.getByRole("log")
+  await expect(log.getByText("listening on 80")).toBeVisible()
+  await expect(log.getByText("aaaaa", { exact: true })).toBeVisible()
+  await expect(log.getByText("bbbbb", { exact: true })).toBeVisible()
+
+  // Either can be read alone.
+  await page.getByRole("combobox", { name: apps.logsInstance }).click()
+  await expect(page.getByRole("option", { name: calm })).toBeVisible()
+  await expect(page.getByRole("option", { name: crashing })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // An error is told apart from the rest, and can be all that is shown.
+  await page.getByRole("button", { name: apps.logsErrorsOnly }).click()
+  await expect(log.getByText("listening on 80")).toHaveCount(0)
+  await expect(log.getByText("ERROR the cache does not fit")).toBeVisible()
+
+  // Before the restart: what it printed, and how it ended, which its own log
+  // cannot say.
+  await page.getByRole("button", { name: apps.logsErrorsOnly }).click()
+  await page.getByRole("button", { name: apps.logsPrevious }).click()
+  await expect(log.getByText("allocating the cache")).toBeVisible()
+  await expect(page.getByText(new RegExp(`${crashing} ended .+: out of memory`))).toBeVisible()
+
+  // And on the Overview, under the instance it happened to.
+  await page.getByRole("tab", { name: "Overview" }).click()
+  await expect(page.getByText(/Ended .+: out of memory/)).toBeVisible()
+})
+
 test("Settings asks about new releases only when the button is pressed", async ({ page }) => {
   // Every request the page makes is watched, so the promise is checked rather
   // than read: the panel never asks which release is the newest on its own.
@@ -495,6 +1106,455 @@ test("Settings asks about new releases only when the button is pressed", async (
   expect(asked).toEqual(["POST"])
 })
 
+// A recovery code on the sign-in page.
+//
+// The second factor was six boxes for digits, which cut a fourteen-character
+// recovery code short and sent what was left as a wrong guess, so the codes the
+// panel hands out "for when you lose your phone" could not be used. This is a
+// second account, made here through an invitation, because turning two-factor
+// on for the setup account would lock every test after this one out.
+test("a recovery code signs in when the phone is gone", async ({ page }) => {
+  const email = "phoneless@example.test"
+  const password = "another reasonable passphrase"
+  const codes = await accountWithTwoFactor(page, email, password)
+
+  const attempts: string[] = []
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/auth/login")) attempts.push(request.method())
+  })
+
+  // The way to it is there in another language too, not only in English.
+  const russian = localeStrings("ru").auth as Record<string, string>
+  await page.goto("/")
+  await page.evaluate(() => localStorage.setItem("skifity-language", "ru"))
+  await page.reload()
+  await page.locator("#email").fill(email)
+  await page.locator("#password").fill(password)
+  await page.locator('form button[type="submit"]').click()
+  await expect(page.getByRole("button", { name: russian.useRecoveryCode })).toBeVisible()
+
+  await page.evaluate(() => localStorage.setItem("skifity-language", "en"))
+  await page.reload()
+  await page.getByLabel(/^email$/i).fill(email)
+  await page.getByLabel(/^password$/i).fill(password)
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  // Six digits in the boxes still send themselves.
+  const boxes = page.locator('[data-slot="input-otp"]')
+  await expect(boxes).toBeVisible()
+  const before = attempts.length
+  await boxes.pressSequentially("000000")
+  await expect.poll(() => attempts.length, "six digits did not send themselves").toBe(before + 1)
+  await expect(page.getByText("Email or password is not correct")).toBeVisible()
+
+  // A recovery code waits for the button, however many characters are in.
+  await page.getByRole("button", { name: "Use a recovery code instead" }).click()
+  const field = page.getByLabel("Recovery code", { exact: true })
+  await field.pressSequentially(codes[0].slice(0, 6))
+  await page.waitForTimeout(1000)
+  expect(attempts.length, "six characters of a recovery code were sent on their own").toBe(
+    before + 1,
+  )
+  await field.pressSequentially(codes[0].slice(6))
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  await expect(page.locator('[data-slot="account-menu"]')).toBeVisible()
+  await expect(page.getByText(`${codes.length - 1} codes are left`, { exact: false })).toBeVisible()
+})
+
+// Settings → Accounts, in every language, and the reason it exists: somebody
+// who left could be taken out of each team, one at a time, and still sign in.
+test("an administrator disables an account, and it cannot sign in", async ({ page, request }) => {
+  const email = "leaver@example.test"
+  const password = "a passphrase for leaving"
+  const token = await invite(page, email)
+  // Accepted on a request context of its own, so this page stays signed in as
+  // the setup account.
+  const accepted = await request.post(`/api/invitations/${token}/accept`, {
+    data: { name: "Leaver", password },
+  })
+  expect(accepted.ok(), await accepted.text()).toBeTruthy()
+
+  await page.goto("/settings?tab=accounts")
+  for (const language of LANGUAGES) {
+    await page.locator('[data-slot="language-switcher"]').click()
+    await page.getByRole("menuitem", { name: language.name }).click()
+    const words = localeStrings(language.code).accounts as Record<string, string>
+    await expect(page.getByText(words.description), `the tab in ${language.name}`).toBeVisible()
+    const body = (await page.locator("body").innerText()).trim()
+    expect(body, `untranslated key visible in ${language.name}`).not.toMatch(
+      /\baccounts\.[a-zA-Z]+\b/,
+    )
+  }
+  // The last switch was to Chinese; English again, saved to the account, so
+  // what follows reads it.
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/me") && response.request().method() === "PATCH",
+  )
+  await page.locator('[data-slot="language-switcher"]').click()
+  await page.getByRole("menuitem", { name: "English" }).click()
+  await saved
+
+  const row = page.locator(`tr[data-account="${email}"]`)
+  await row.getByRole("button", { name: /^Actions for/ }).click()
+  await page.getByRole("menuitem", { name: "Disable" }).click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Disable" }).click()
+  await expect(row.getByText("Disabled", { exact: true })).toBeVisible()
+
+  // The session the invitation started is over, and the password opens
+  // nothing: refused the way a wrong one is.
+  expect((await request.get("/api/me")).status()).toBe(401)
+  const refused = await request.post("/api/auth/login", { data: { email, password } })
+  expect(refused.status(), await refused.text()).toBe(401)
+})
+
+// A team was made at setup and nothing in the panel could make another,
+// rename one or remove one: the switcher only appeared with two teams.
+test("a team is made, renamed and deleted from the panel", async ({ page }) => {
+  await signIn(page)
+
+  // One team, and the switcher is there: it is where a new one is made.
+  const switcher = page.locator("[data-team-switcher]")
+  await expect(switcher).toBeVisible()
+  await expect(switcher).toContainText("Acme")
+
+  await switcher.click()
+  await page.getByRole("menuitem", { name: "New team" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Team name").fill("Side project")
+  await dialog.getByRole("button", { name: "Create team" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(switcher).toContainText("Side project")
+
+  // Renamed by its owner, under Members.
+  await page.goto("/settings?tab=members")
+  const name = page.getByLabel("Team name", { exact: true })
+  await expect(name).toHaveValue("Side project")
+  await name.fill("Side quest")
+  await page.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(switcher).toContainText("Side quest")
+
+  // Deleted after typing its name, and the panel is back on the first team.
+  await page.getByRole("button", { name: "Delete team" }).click()
+  const confirm = page.getByRole("alertdialog")
+  await confirm.getByRole("textbox").fill("Side quest")
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click()
+  await expect(switcher).toContainText("Acme")
+  const me = await (await page.request.get("/api/me")).json()
+  expect(me.teams.map((team: { name: string }) => team.name)).toEqual(["Acme"])
+})
+
+/**
+ * Makes a second account through an invitation from the setup account, turns
+ * two-factor on for it, and leaves the browser signed out. Answers the
+ * recovery codes.
+ */
+async function accountWithTwoFactor(page: Page, email: string, password: string) {
+  const token = await invite(page, email)
+  await page.context().clearCookies()
+  const accepted = await page.request.post(`/api/invitations/${token}/accept`, {
+    data: { name: "Phoneless", password },
+  })
+  expect(accepted.ok(), await accepted.text()).toBeTruthy()
+
+  // Signed in a moment ago, so turning two-factor on does not ask again.
+  const headers = await csrfHeaders(page)
+  const started = await page.request.post("/api/me/totp", { headers, data: {} })
+  expect(started.ok(), await started.text()).toBeTruthy()
+  const setup = (await started.json()) as { secret: string; recovery_codes: string[] }
+  const confirmed = await page.request.post("/api/me/totp/confirm", {
+    headers,
+    data: { code: totp(setup.secret) },
+  })
+  expect(confirmed.ok(), await confirmed.text()).toBeTruthy()
+
+  await page.context().clearCookies()
+  return setup.recovery_codes
+}
+
+/** Invites an address to the setup account's team, and answers the link's token. */
+async function invite(page: Page, email: string): Promise<string> {
+  await signIn(page)
+  const me = await (await page.request.get("/api/me")).json()
+  const invited = await page.request.post(`/api/teams/${me.teams[0].id}/invitations`, {
+    headers: await csrfHeaders(page),
+    data: { email, role: "member" },
+  })
+  expect(invited.ok(), await invited.text()).toBeTruthy()
+  const { url } = (await invited.json()) as { url: string }
+  return url.split("/invite/").pop()!
+}
+
+/** What a request that changes something carries, for this browser's session. */
+async function csrfHeaders(page: Page) {
+  const cookies = await page.context().cookies()
+  return {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+}
+
+/** The six-digit code an authenticator app would show now, RFC 6238. */
+function totp(secret: string): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+  let bits = ""
+  for (const char of secret.replace(/[\s=]/g, "").toUpperCase()) {
+    bits += alphabet.indexOf(char).toString(2).padStart(5, "0")
+  }
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)))
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)))
+  const mac = createHmac("sha1", key).update(counter).digest()
+  const offset = mac[mac.length - 1] & 0x0f
+  return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0")
+}
+test("a version that crashed says why first, and opens the tab that fixes it", async ({ page }) => {
+  await signIn(page)
+
+  // No cluster here to crash on, so the deployment is the panel's answer for
+  // one: the history an out-of-memory crash leaves, as the API serves it.
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  const created = await page.request.post(`/api/environments/${envs.items[0].id}/apps`, {
+    headers,
+    data: { name: "crashes", source_type: "image", image: "nginx:1.27", port: 80 },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const appID = (await created.json()).app.id
+
+  const at = new Date().toISOString()
+  const crashed = {
+    id: "dep_e2e_crashed",
+    app_id: appID,
+    number: 1,
+    status: "failed",
+    trigger: "manual",
+    commit_sha: "",
+    commit_message: "",
+    commit_author: "",
+    image: "nginx:1.27",
+    build_fingerprint: "image:nginx:1.27",
+    error_code: "deploy.crashed",
+    error_message:
+      "The new version stopped as it started: The new version of crashes stopped as it started. Stops so far: 1. The last ended with exit code 137 (OOMKilled).",
+    error_hint: "The lines it printed before it stopped are in the deployment log.",
+    created_by: "",
+    created_at: at,
+    started_at: at,
+    finished_at: at,
+    can_rollback: false,
+    problem: {
+      code: "deploy.crashed",
+      title: "The new version stopped as it started",
+      cause:
+        "The new version of crashes stopped as it started. Stops so far: 1. The last ended with exit code 137 (OOMKilled).",
+      args: { cause: ["crashes", "1", "137", "OOMKilled"] },
+      severity: "error",
+      retryable: false,
+      at,
+      context: {
+        kind: "out_of_memory",
+        exit_code: "137",
+        reason: "OOMKilled",
+        stops: "1",
+        log_tail: "allocating the cache\nFATAL: out of memory",
+      },
+    },
+  }
+  await page.route(
+    (url) => url.pathname === `/api/apps/${appID}/deployments`,
+    (route) => route.fulfill({ json: { items: [crashed], total: 1 } }),
+  )
+
+  for (const language of LANGUAGES) {
+    await page.goto(`/apps/${appID}?tab=deployments`)
+    await page.locator('[data-slot="language-switcher"]').click()
+    await page.getByRole("menuitem", { name: language.name }).click()
+
+    const words = localeStrings(language.code)
+    const failure = words.deploy.failure as Record<string, Record<string, string> | string>
+    const common = words.common as Record<string, string>
+    const shown = page.locator('[data-slot="deploy-failure"]')
+
+    // The cause comes first after the headline, in the reader's language,
+    // and says what it was rather than "did not start".
+    await expect(shown.locator("p").nth(1), `the cause in ${language.name}`).toHaveText(
+      (failure.crashed as Record<string, string>).out_of_memory,
+    )
+    await expect(
+      shown.getByRole("link", { name: (failure.open as Record<string, string>).scaling }),
+      `the button to Scaling in ${language.name}`,
+    ).toBeVisible()
+    await expect(
+      shown.getByRole("button", {
+        name: common.copyValue.replace("{{name}}", failure.diagnosis as string),
+      }),
+      `Copy diagnosis in ${language.name}`,
+    ).toBeVisible()
+  }
+
+  // In English again, saved to the account, for every test after this one;
+  // then the button goes where the memory limit is.
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith("/api/me") && response.request().method() === "PATCH",
+  )
+  await page.locator('[data-slot="language-switcher"]').click()
+  await page.getByRole("menuitem", { name: "English" }).click()
+  await saved
+
+  await page.getByRole("link", { name: "Open Scaling" }).click()
+  await expect(page).toHaveURL(/[?&]tab=scaling/)
+})
+
+test("an app from a public repository says pushes will not deploy it, and where to fix that", async ({
+  page,
+}) => {
+  await signIn(page)
+
+  // The quick start's own path: a public repository, no Git connection, and
+  // deploy on push on by default. Nothing registers a webhook for it, and
+  // that is said when the app is made rather than after a push does nothing.
+  await page.goto(`/environments/${await firstEnvironment(page)}/apps/new`)
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/acme/public-site")
+  await page.getByRole("button", { name: /^create and deploy$/i }).click()
+
+  await expect(page.getByText("Pushes will not deploy this app yet")).toBeVisible({
+    timeout: 30_000,
+  })
+  await expect(page).toHaveURL(/\/apps\/app_/)
+
+  // The app's settings say the same where it is fixed, with the connection
+  // to choose.
+  const appID = page.url().split("/apps/")[1].split(/[/?#]/)[0]
+  await page.goto(`/apps/${appID}?tab=settings`)
+  await expect(page.getByText("No webhook is registered for this app")).toBeVisible()
+  await expect(page.getByLabel("Git connection", { exact: true })).toBeVisible()
+})
+
+test("a Git connection's token is replaced where it is", async ({ page }) => {
+  await signIn(page)
+
+  // Made through the API with an obviously fake token: creating a GitHub
+  // connection asks GitHub nothing, and nor does replacing its token.
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const connected = await page.request.post(`/api/teams/${me.teams[0].id}/git-sources`, {
+    headers,
+    data: {
+      kind: "github_pat",
+      name: "Expiring GitHub",
+      token: "ghp_e2efaketoken0000000000000000000000",
+    },
+  })
+  expect(connected.ok(), await connected.text()).toBeTruthy()
+  const sourceID = (await connected.json()).source.id
+
+  await page.goto("/settings?tab=git")
+  const card = page.locator('[data-slot="card"]').filter({ hasText: "Expiring GitHub" })
+  await card.getByRole("button", { name: "Replace token" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog
+    .getByLabel("Access token", { exact: true })
+    .fill("ghp_e2efaketoken1111111111111111111111")
+  await dialog.getByRole("button", { name: "Replace token" }).click()
+  await expect(page.getByText("Expiring GitHub has its new token.")).toBeVisible()
+  await expect(dialog).toHaveCount(0)
+
+  // The same connection, and the token is never sent back.
+  const sources = await (await page.request.get(`/api/teams/${me.teams[0].id}/git-sources`)).text()
+  expect(sources).toContain(sourceID)
+  expect(sources).not.toContain("ghp_e2efaketoken")
+})
+
+/** The environment first-run setup made: Production of the first project. */
+async function firstEnvironment(page: Page): Promise<string> {
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const envs = await (
+    await page.request.get(`/api/projects/${projects.items[0].id}/environments`)
+  ).json()
+  return envs.items[0].id
+}
+
+test("Settings shows the record a domain for the panel needs, and what DNS says", async ({
+  page,
+}) => {
+  // The panel under test runs outside any cluster, so it cannot move itself:
+  // where it answers and what DNS says are stubbed. What is checked is the
+  // card, which is what somebody on a fresh install uses to leave plain HTTP.
+  await page.route("**/api/panel/domain", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: {
+            url: "http://203-0-113-10.sslip.io",
+            host: "203-0-113-10.sslip.io",
+            scheme: "http",
+            previous: [],
+            dns_target: "203.0.113.10",
+            free_address: "203-0-113-10.sslip.io",
+            movable: true,
+          },
+        })
+      : route.fallback(),
+  )
+  await page.route("**/api/panel/domain/check", (route) =>
+    route.fulfill({
+      json: {
+        hostname: "panel.example.com",
+        status: "missing",
+        points_here: false,
+        found: [],
+        expected: ["203.0.113.10"],
+        checked_at: new Date().toISOString(),
+      },
+    }),
+  )
+
+  await signIn(page)
+  await page.goto("/settings?tab=panel")
+  const card = page.locator("#panel-address")
+  await expect(card.getByText("Panel address", { exact: true })).toBeVisible()
+  await expect(card.getByText("Plain HTTP", { exact: true })).toBeVisible()
+
+  // The record to create is there as soon as the name is, before anything
+  // is asked of anybody.
+  await card.getByLabel("Domain", { exact: true }).fill("panel.example.com")
+  await expect(card.getByText("203.0.113.10", { exact: true })).toBeVisible()
+  await card.getByRole("button", { name: "Check DNS" }).click()
+  await expect(card.getByText("No DNS record yet")).toBeVisible()
+})
+
+test("an administrator on plain HTTP is told, and taken to where it changes", async ({
+  page,
+  baseURL,
+}) => {
+  // 127.0.0.1 is this machine, where plain HTTP is development and nothing is
+  // said; *.localhost reaches the same panel under a name that is not.
+  const elsewhere = new URL(baseURL ?? "http://127.0.0.1")
+  elsewhere.hostname = "panel.localhost"
+  await page.goto(elsewhere.toString())
+  await page.getByLabel(/^email$/i).fill(EMAIL)
+  await page.getByLabel(/^password$/i).fill(PASSWORD)
+  await page.getByRole("button", { name: /^sign in$/i }).click()
+
+  await expect(page.getByText("This panel is served over plain HTTP")).toBeVisible()
+  await page.getByRole("link", { name: "Set up HTTPS" }).click()
+  await expect(page).toHaveURL(/\/settings\?tab=panel/)
+  await expect(page.locator("#panel-address")).toBeVisible()
+})
+
 /** Signs in, unless this context already has a session. */
 async function signIn(page: Page) {
   await page.goto("/")
@@ -513,3 +1573,57 @@ async function signIn(page: Page) {
   }
   await expect(accountMenu).toBeVisible()
 }
+
+// With more than one place, New app on the overview chooses none: Create
+// waits for a choice, and the choice is said under the title and in the
+// breadcrumb. From a project's environment, that one is chosen, and choosing
+// another keeps what was typed.
+test("New app asks which project and environment when there is a choice", async ({ page }) => {
+  await signIn(page)
+  const cookies = await page.context().cookies()
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Skifity-CSRF": cookies.find((c) => c.name === "skifity_csrf")?.value ?? "",
+  }
+  const me = await (await page.request.get("/api/me")).json()
+  const projects = await (await page.request.get(`/api/teams/${me.teams[0].id}/projects`)).json()
+  const first = projects.items[0] as { id: string; name: string }
+  const second = await page.request.post(`/api/teams/${me.teams[0].id}/projects`, {
+    headers,
+    data: { name: "Second project" },
+  })
+  expect(second.ok(), await second.text()).toBeTruthy()
+  const asked: string[] = []
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname))
+
+  await page.goto("/")
+  await page.getByRole("link", { name: "New app", exact: true }).first().click()
+  await expect(page).toHaveURL(/\/apps\/new$/)
+  await page.getByRole("button", { name: "Container image" }).click()
+  await page.getByLabel("Image", { exact: true }).fill("nginx:1.27")
+  await expect(page.getByRole("button", { name: /^create and deploy$/i })).toBeDisabled()
+  await expect(page.getByText(/production and staging are not the same place/)).toBeVisible()
+
+  await page.getByRole("combobox", { name: "Create it in" }).click()
+  await page.getByRole("option", { name: "Second project · Production" }).click()
+  await expect(page.getByText("In Second project · Production")).toBeVisible()
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Second project")
+  expect(asked, "the breadcrumb asked for an app called new").not.toContain("/api/apps/new")
+
+  // No cluster here to build on, so it is made without a deploy.
+  await page.getByRole("checkbox", { name: "Deploy now" }).uncheck()
+  await page.getByRole("button", { name: /^create$/i }).click()
+  await expect(page).toHaveURL(/\/apps\/app_/, { timeout: 30_000 })
+  await expect(page.locator('nav[data-slot="breadcrumb"]')).toContainText("Second project")
+
+  await page.goto(`/projects/${first.id}`)
+  await page.getByRole("link", { name: "New app", exact: true }).first().click()
+  await expect(page.getByText(`In ${first.name} · Production`)).toBeVisible()
+  await page.getByLabel("Repository", { exact: true }).fill("https://github.com/example/kept")
+  await page.getByRole("combobox", { name: "Create it in" }).click()
+  await page.getByRole("option", { name: "Second project · Production" }).click()
+  await expect(page.getByText("In Second project · Production")).toBeVisible()
+  await expect(page.getByLabel("Repository", { exact: true })).toHaveValue(
+    "https://github.com/example/kept",
+  )
+})

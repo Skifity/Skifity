@@ -6,6 +6,7 @@ website: https://matomo.org
 services:
 - name: matomo
   image: matomo:5.14.0-apache
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 256

@@ -6,6 +6,7 @@ website: https://couchdb.apache.org
 services:
 - name: couchdb
   image: couchdb:3.5.2
+  needs_root: true
   port: 5984
   public: true
   health_path: /_up

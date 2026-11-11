@@ -6,6 +6,7 @@ website: https://docs.swetrix.com/selfhosting/how-to
 services:
 - name: swetrix
   image: swetrix/swetrix-fe:v4.0.5
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 128
@@ -22,6 +23,7 @@ services:
   cpu_limit_m: 1000
 - name: clickhouse
   image: clickhouse/clickhouse-server:24.10-alpine
+  needs_root: true
   port: 8123
   public: false
   mem_request_mb: 128
@@ -41,4 +43,5 @@ databases:
   - swetrix-api
   var_name: DATABASE_URL
 notes: This template installs 3 apps. They reach each other by name inside the environment, so keep them
-  together.
+  together. The swetrix and clickhouse images start as root, so the environment needs the baseline pod
+  security level.

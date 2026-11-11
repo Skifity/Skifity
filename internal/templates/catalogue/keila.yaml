@@ -6,6 +6,7 @@ website: https://www.keila.io
 services:
 - name: keila
   image: pentacent/keila:0.30.3
+  needs_root: true
   port: 4000
   public: true
   mem_request_mb: 256

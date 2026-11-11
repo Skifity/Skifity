@@ -37,7 +37,8 @@
 #   --image REFERENCE    SKIFITY_IMAGE         a full image reference, overriding --version
 #   --pod-network NAME   SKIFITY_POD_NETWORK   wireguard-native or vxlan; default: wireguard-native
 #                                              when the kernel has the module, vxlan otherwise
-#   --channel NAME       SKIFITY_CHANNEL       the k3s channel (default: stable)
+#   --channel NAME       SKIFITY_CHANNEL       follow a k3s release channel, such as stable, instead
+#                                              of K3S_VERSION below, the k3s this release was tested with
 #   --skip-k3s           SKIFITY_SKIP_K3S=1    k3s is already installed and configured
 #   --skip-firewall      SKIFITY_SKIP_FIREWALL=1  leave the host firewall alone
 #   --no-snapshot        SKIFITY_NO_SNAPSHOT=1    do not copy the panel's database before an upgrade
@@ -69,6 +70,24 @@ PROJECT_REPO="${SKIFITY_REPO:-Skifity/Skifity}"
 # anything on this machine changes rather than after k3s is installed.
 RELEASED_VERSION="v0.1.1"
 
+# The k3s release a fresh install gets: the one this release was tested with.
+# The Cluster and Two servers workflows install with this file, so this is the
+# version they passed on, and tag.yml tags no commit they have not passed. A
+# release that moves to a newer k3s changes this line and nothing else: the
+# panel reads it too (installer/embed.go), for a server it installs as the
+# first of a new cluster. Following k3s's stable channel instead moved every
+# fresh install to a Kubernetes no Skifity release had run on, the day k3s
+# published it. --channel still does that, for whoever asks.
+K3S_VERSION="v1.37.2+k3s1"
+
+# The image RELEASED_VERSION was published as, by tag and digest. Empty here,
+# in the repository: the digest exists only once the image is pushed, so the
+# release workflow writes this line into the copy of this file it attaches to
+# the release (scripts/pin-installer-image.sh). A tag is a name anybody who can
+# push to the registry can move; a digest is the bytes. Pinned, an installer
+# installs the image its release built, whatever the tag says later.
+RELEASED_IMAGE=""
+
 # derive_release works out what is installed and where its objects come from.
 # It runs when this file is read and again after the options are parsed,
 # because --version and --image change all of it.
@@ -79,6 +98,12 @@ derive_release() {
 	# capitals, so it is lowered here rather than assumed.
 	IMAGE_REPO="ghcr.io/$(printf '%s' "$PROJECT_REPO" | tr '[:upper:]' '[:lower:]')"
 	IMAGE="${SKIFITY_IMAGE:-${IMAGE_REPO}:${VERSION}}"
+	# This installer's own release, from where it was published: by digest.
+	# Another --version, an --image or another SKIFITY_REPO names an image
+	# this file knows no digest for, and is pulled by the name it was given.
+	if [ -z "${SKIFITY_IMAGE:-}" ] && [ -n "$RELEASED_IMAGE" ] && [ "$IMAGE" = "${RELEASED_IMAGE%@*}" ]; then
+		IMAGE=$RELEASED_IMAGE
+	fi
 
 	# The manifests come from the release being installed, not from a branch. A
 	# branch moves; an install that pulled v1's image and main's objects would
@@ -94,7 +119,8 @@ CONFIG_DIR="/etc/skifity"
 DATA_DIR="/var/lib/skifity"
 LOG_FILE="/var/log/skifity-install.log"
 MANIFEST_DIR="/var/lib/skifity/manifests"
-K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
+# A k3s release channel to follow instead of K3S_VERSION; empty unless asked.
+K3S_CHANNEL="${SKIFITY_CHANNEL:-}"
 # The pod network. Decided in pick_pod_network below, unless it is set here.
 POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
@@ -701,7 +727,8 @@ Options:
   --image REFERENCE    a full image reference, overriding --version
   --pod-network NAME   wireguard-native or vxlan (default: wireguard-native when
                        the kernel has the module)
-  --channel NAME       the k3s release channel (default: stable)
+  --channel NAME       follow a k3s release channel, such as stable, instead of
+                       k3s ${K3S_VERSION}, the version this release was tested with
   --skip-k3s           use the k3s already installed here as it is
   --skip-firewall      leave the host firewall alone
   --no-snapshot        do not copy the panel's database before an upgrade; without
@@ -860,7 +887,7 @@ validate_settings() {
 		printf '%s' "$SKIFITY_CHANNEL" | grep -Eq '^[A-Za-z0-9._+-]+$' ||
 			usage_error "\"$SKIFITY_CHANNEL\" is not a k3s channel, such as stable or latest."
 	fi
-	K3S_CHANNEL="${SKIFITY_CHANNEL:-stable}"
+	K3S_CHANNEL="${SKIFITY_CHANNEL:-}"
 	POD_NETWORK="${SKIFITY_POD_NETWORK:-}"
 }
 
@@ -1652,6 +1679,15 @@ install_k3s() {
 
 	write_kubelet_config
 	write_etcd_config
+	# One variable or the other, never both: k3s's installer takes a version
+	# over a channel, so passing both would quietly ignore --channel.
+	if [ -n "$K3S_CHANNEL" ] || [ -z "$K3S_VERSION" ]; then
+		k3s_wanted="INSTALL_K3S_CHANNEL=${K3S_CHANNEL:-stable}"
+		note "k3s: the newest release on its ${K3S_CHANNEL:-stable} channel, rather than the version this release of Skifity was tested with"
+	else
+		k3s_wanted="INSTALL_K3S_VERSION=${K3S_VERSION}"
+		note "k3s ${K3S_VERSION}, the version this release of Skifity was tested with"
+	fi
 	note "This downloads and starts k3s, which takes a minute or two."
 	download https://get.k3s.io "$TMP_DIR/k3s-install.sh" 120 || fail \
 		"Could not download the k3s installer from get.k3s.io." \
@@ -1668,7 +1704,7 @@ install_k3s() {
 	# from the beginning each time and is safe to run again.
 	k3s_attempt=1
 	until with_progress "Installing Kubernetes (k3s)" k3s_install_detail \
-		env INSTALL_K3S_CHANNEL="$K3S_CHANNEL" \
+		env "$k3s_wanted" \
 		INSTALL_K3S_EXEC="server --cluster-init --flannel-backend=${POD_NETWORK} --write-kubeconfig-mode=0600 --secrets-encryption" \
 		sh "$TMP_DIR/k3s-install.sh"; do
 		case "$LAST_OUTPUT" in
@@ -1681,7 +1717,7 @@ install_k3s() {
 
 To see the error on its own, run k3s's installer by hand:
 
-  curl -sfL https://get.k3s.io | sh -"
+  curl -sfL https://get.k3s.io | ${k3s_wanted} sh -"
 		k3s_attempt=$((k3s_attempt + 1))
 		note "Downloading k3s failed; trying again (attempt ${k3s_attempt} of 3)."
 		sleep "$K3S_RETRY_WAIT"
@@ -2085,7 +2121,8 @@ choose_hostname() {
 		PANEL_HOST="$(printf '%s' "$PUBLIC_IP" | tr '.:' '--').sslip.io"
 		PANEL_SCHEME="http"
 		ok "No domain given, so the panel will answer on $PANEL_HOST"
-		note "Add your own domain later in Settings, and HTTPS is turned on for it automatically."
+		note "For HTTPS, point a domain at this server and put the panel on it under"
+		note "Settings, General, Panel address, or run this again with --domain <name>."
 	fi
 	PUBLIC_URL="${PANEL_SCHEME}://${PANEL_HOST}"
 }
@@ -2290,9 +2327,7 @@ snapshot_before_upgrade() {
 		return 0
 	fi
 
-	# What the copy is named for: the tag the new image carries, cleaned of
-	# anything a file name would not want.
-	label=$(printf '%s' "${IMAGE##*[:/@]}" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40)
+	label=$(image_label "$IMAGE")
 	target="${database}.before-upgrade-$(date -u +%Y%m%d-%H%M%S)-to-${label}"
 
 	# Every release up to 0.1.1 failed to put the CLI on the server, so a
@@ -2325,6 +2360,19 @@ Check that there is room on the disk and that ${CLI_PATH} runs:
   ${CLI_PATH} admin backup-db /root/panel-backup.db
 
 If you accept having nothing to go back to, run the installer again with --no-snapshot."
+}
+
+# image_label is what a copy taken before an upgrade is named for: the tag the
+# new image carries, or its digest when it has no tag, cleaned of anything a
+# file name would not want. An image pinned by digest still has its tag, and
+# the tag is what somebody looking for the copy remembers.
+image_label() {
+	tagged=${1%%@*}
+	case "${tagged##*/}" in
+	*:*) label=${tagged##*:} ;;
+	*) label=${1##*[:/@]} ;;
+	esac
+	printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40
 }
 
 # prune_snapshots keeps the three newest copies taken before an upgrade, the
@@ -2604,8 +2652,9 @@ finish() {
 	fi
 
 	if [ "$PANEL_SCHEME" = "http" ]; then
-		printf '  %sThis address has no certificate yet.%s Add a domain in Settings and\n' "$YELLOW" "$RESET"
-		printf '  Skifity turns on HTTPS for it by itself.\n\n'
+		printf '  %sThis address has no certificate.%s For HTTPS, point a domain at this server\n' "$YELLOW" "$RESET"
+		printf '  and put the panel on it under Settings, General, Panel address, or run the\n'
+		printf '  installer again with --domain <name>.\n\n'
 	else
 		printf '  If the page does not load, the DNS record for %s\n' "$PANEL_HOST"
 		printf '  may not have reached your computer yet. Give it a few minutes.\n\n'

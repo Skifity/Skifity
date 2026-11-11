@@ -6,6 +6,7 @@ website: https://github.com/itzg/docker-minecraft-server
 services:
 - name: mc
   image: itzg/minecraft-server:2026.9.1
+  needs_root: true
   # Minecraft is not HTTP, so there is no domain: players join on port 25565
   # of any server.
   port: 0

@@ -222,7 +222,7 @@ func (s *Server) handleImportDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		writeError(w, r, errdoc.NotConfigured("Backups", "Settings, then Storage"))
+		writeError(w, r, errdoc.NotConfigured("Backups", "Settings → General → Backup storage"))
 		return
 	}
 

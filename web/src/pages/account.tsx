@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -17,6 +17,7 @@ import { toast } from "sonner"
 
 import { useConfirm } from "@/components/confirm-dialog"
 import { ErrorDisplay } from "@/components/error-display"
+import { PANEL_ADDRESS_LINK } from "@/components/settings/panel-domain"
 import { Page, PageHeader } from "@/components/page"
 import { copyText } from "@/lib/clipboard"
 import { downloadText } from "@/lib/download"
@@ -565,7 +566,7 @@ function TwoFactorCard() {
  */
 function PasskeysCard() {
   const { t } = useTranslation()
-  const { meta } = useSession()
+  const { meta, user } = useSession()
   const confirmRemove = useConfirm()
   const [name, setName] = useState("")
   const [renaming, setRenaming] = useState<Passkey | null>(null)
@@ -698,12 +699,23 @@ function PasskeysCard() {
         {!available ? (
           <p className="text-sm text-muted-foreground">
             {t("auth.passkeys.unavailable")}{" "}
-            <a
-              href="/docs/configuration#put-a-domain-on-the-panel"
-              className="underline underline-offset-4 hover:text-foreground"
-            >
-              {t("auth.passkeys.unavailableLink")}
-            </a>
+            {/* The administrator can do it, from the card that does; anybody
+                else can read how, and ask them. */}
+            {user?.is_admin ? (
+              <Link
+                to={PANEL_ADDRESS_LINK}
+                className="underline underline-offset-4 hover:text-foreground"
+              >
+                {t("auth.passkeys.unavailableLink")}
+              </Link>
+            ) : (
+              <a
+                href="/docs/configuration#put-a-domain-on-the-panel"
+                className="underline underline-offset-4 hover:text-foreground"
+              >
+                {t("auth.passkeys.unavailableLink")}
+              </a>
+            )}
           </p>
         ) : !supported ? (
           <p className="text-sm text-muted-foreground">{t("auth.passkeys.unsupported")}</p>

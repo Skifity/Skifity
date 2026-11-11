@@ -297,3 +297,92 @@ func TestASettingSaysWhatUnsetMeans(t *testing.T) {
 		t.Errorf("a stored switch reads value %q, default %q", view.Value, view.Default)
 	}
 }
+
+// TestARecoveryCodeSignsInAndSaysHowManyAreLeft: the sign-in page took the
+// second factor only in six boxes, which cut a recovery code short and
+// counted it as a wrong guess. The panel accepted the code all along; what it
+// did not do was say so, so the page could not tell somebody they had just
+// spent one — or their last.
+func TestARecoveryCodeSignsInAndSaysHowManyAreLeft(t *testing.T) {
+	const password = "correct horse battery staple"
+	h := newHarness(t)
+	user := h.person(t, "phoneless@example.test", password)
+	codes := h.withTwoFactor(t, &user)
+
+	login := func(code string) (int, string) {
+		t.Helper()
+		return h.send(t, browser{}, http.MethodPost, "/api/auth/login", "", map[string]string{
+			"email": user.Email, "password": password, "totp_code": code,
+		})
+	}
+	type answer struct {
+		UsedRecoveryCode  bool `json:"used_recovery_code"`
+		RecoveryCodesLeft *int `json:"recovery_codes_left"`
+	}
+
+	// Typed the way it is read off paper: lower case, without the dashes.
+	typed := strings.ToLower(strings.ReplaceAll(codes[0], "-", ""))
+	status, body := login(typed)
+	if status != http.StatusOK {
+		t.Fatalf("a recovery code answered %d: %s", status, body)
+	}
+	var got answer
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !got.UsedRecoveryCode || got.RecoveryCodesLeft == nil || *got.RecoveryCodesLeft != auth.RecoveryCodeCount-1 {
+		t.Errorf("the answer to a recovery code was %s", body)
+	}
+
+	// Spent: the same code a second time is a wrong code.
+	status, body = login(codes[0])
+	if status != http.StatusUnauthorized || !strings.Contains(body, "auth.invalid_credentials") {
+		t.Errorf("a spent recovery code answered %d: %s", status, body)
+	}
+
+	// The log has it apart from the sign-in it came with.
+	events, err := h.db.ListAudit(t.Context(), "", "auth.recovery_code_used", user.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].ActorID != user.ID {
+		t.Errorf("the activity log has %d entries for the recovery code: %+v", len(events), events)
+	}
+
+	// The last one says zero, rather than leaving the number out.
+	for _, code := range codes[1 : len(codes)-1] {
+		if status, body := login(code); status != http.StatusOK {
+			t.Fatalf("recovery code answered %d: %s", status, body)
+		}
+	}
+	status, body = login(codes[len(codes)-1])
+	if status != http.StatusOK || !strings.Contains(body, `"recovery_codes_left":0`) {
+		t.Errorf("the last recovery code answered %d: %s", status, body)
+	}
+
+	// The authenticator's own code says nothing about recovery codes.
+	secret := h.totpSecret(t, user.ID)
+	code, err := auth.TOTPCode(secret, time.Now().Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body = login(code)
+	if status != http.StatusOK || strings.Contains(body, "used_recovery_code") {
+		t.Errorf("an authenticator code answered %d: %s", status, body)
+	}
+}
+
+// totpSecret reads an account's two-factor secret back, the way the
+// authenticator app has it.
+func (h *harness) totpSecret(t *testing.T, userID string) string {
+	t.Helper()
+	user, err := h.db.GetUser(t.Context(), userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, err := h.keyring.Open(user.TOTPSecretEnc, "totp:"+user.ID)
+	if err != nil {
+		t.Fatalf("open the two-factor secret: %v", err)
+	}
+	return string(secret)
+}

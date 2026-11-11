@@ -6,6 +6,7 @@ website: https://distribution.github.io/distribution/
 services:
 - name: registry
   image: registry:3.1.2
+  needs_root: true
   port: 5000
   public: true
   mem_request_mb: 128
@@ -20,3 +21,4 @@ services:
   - name: registry-data
     mount_path: /var/lib/registry
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

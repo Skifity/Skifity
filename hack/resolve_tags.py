@@ -7,8 +7,20 @@ much as `latest` does within its line, and the catalogue's tests refuse one, so
 this asks the registry for the newest exact semver release.
 
 Run: python3 hack/resolve_tags.py < images.json > resolved.json
+
+It also says which user each image in the catalogue starts as, because the
+strictest confinement level refuses an image that starts as root, and refuses
+one whose user is a name, which the kubelet cannot see is not root:
+
+    python3 hack/resolve_tags.py --users
+
+prints every service whose template does not already say so — needs_root for
+the first, run_as_user with the name's uid for the second — and writes
+users.json in the work directory (see hack/workdir.py). Run by hand, like the
+rest of this file; nothing in `make check` asks a registry anything.
 """
 import json
+import os
 import re
 import sys
 import time
@@ -377,7 +389,152 @@ def exists(image):
     return False
 
 
+# The users an image can name that are root. An image that names none starts as
+# root too.
+ROOT_USERS = {"", "0", "root"}
+
+# A USER line as Docker Hub's history has it: `USER 1000` from BuildKit, or
+# `/bin/sh -c #(nop)  USER [node]` from the classic builder.
+USER_LINE = re.compile(r'(?:^|#\(nop\)\s+)USER\s+\[?([^\]\s]+)\]?')
+
+
+def starts_as_root(user):
+    """Whether an image's configured user is root: none, uid 0, or root by name,
+    with or without a group after it."""
+    return user.split(":", 1)[0] in ROOT_USERS
+
+
+def image_user(image):
+    """The user an image's configuration says it starts as, "" when it names none.
+
+    Docker Hub's own API answers an image's history, USER lines and all, without
+    counting against the anonymous pull limit — ten an hour, which a catalogue
+    of three hundred images would spend in a minute. Every other registry is
+    asked for the image's configuration, as `docker inspect` reads it.
+    """
+    ref = strip_variable_tag(image.split("@")[0])
+    for prefix in ("index.docker.io/", "docker.io/", "registry-1.docker.io/"):
+        if ref.startswith(prefix):
+            ref = ref[len(prefix):]
+    name, _, tag = ref.rpartition(":")
+    if not name or "/" in tag:
+        name, tag = ref, "latest"
+    parts = name.split("/")
+    if "." in parts[0] or ":" in parts[0]:
+        host = "ghcr.io" if parts[0] == "lscr.io" else parts[0]
+        return registry_user(host, "/".join(parts[1:]), tag)
+    return hub_user(name if "/" in name else "library/" + name, tag)
+
+
+def hub_user(repo, tag):
+    images = get(f"https://hub.docker.com/v2/repositories/{repo}/tags/{urllib.parse.quote(tag, safe='')}/images")
+    if not images:
+        raise Undetermined(f"Docker Hub has no image for {repo}:{tag}")
+    image = next((i for i in images if i.get("os") == "linux" and i.get("architecture") == "amd64"), images[0])
+    if not image.get("layers"):
+        # No history is not the same as no USER line, which would read as root.
+        raise Undetermined(f"Docker Hub has no history for {repo}:{tag}")
+    user = ""
+    for layer in image.get("layers") or []:
+        instruction = (layer.get("instruction") or "").split(" # buildkit")[0].strip()
+        match = USER_LINE.search(instruction)
+        if match:
+            user = match.group(1)
+    return user
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A registry answers a blob with a redirect to its storage, whose signed
+    address is the credential there. Following it with the registry's token as
+    well is refused by most of them, so the redirect is followed by hand,
+    without it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def registry_get(host, repo, path, accept, token=None):
+    url = f"https://{host}/v2/{repo}/{path}"
+    headers = {"Accept": accept}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    opener = urllib.request.build_opener(NoRedirect)
+    for _ in range(2):
+        try:
+            with opener.open(urllib.request.Request(url, headers=headers), timeout=TIMEOUT) as response:  # nosec B310
+                return json.load(response), token
+        except urllib.error.HTTPError as err:
+            if err.code in (301, 302, 303, 307, 308):
+                location = urllib.parse.urljoin(url, err.headers.get("Location", ""))
+                return get(location), token
+            if err.code != 401 or token:
+                raise
+            token = token_for(err.headers.get("WWW-Authenticate", ""), repo)
+            if not token:
+                raise Undetermined(f"{host} would not hand out an anonymous token") from err
+            headers["Authorization"] = "Bearer " + token
+    raise Undetermined(f"{host} would not answer for {repo}")
+
+
+def registry_user(host, repo, tag):
+    accept = ("application/vnd.oci.image.index.v1+json,"
+              "application/vnd.docker.distribution.manifest.list.v2+json,"
+              "application/vnd.oci.image.manifest.v1+json,"
+              "application/vnd.docker.distribution.manifest.v2+json")
+    manifest, token = registry_get(host, repo, f"manifests/{tag}", accept)
+    if "manifests" in manifest:
+        chosen = next((m for m in manifest["manifests"]
+                       if m.get("platform", {}).get("os") == "linux"
+                       and m.get("platform", {}).get("architecture") == "amd64"), None)
+        if chosen is None:
+            raise Undetermined(f"{host}/{repo}:{tag} has no linux/amd64 image")
+        manifest, token = registry_get(host, repo, f"manifests/{chosen['digest']}", accept, token)
+    config, _ = registry_get(host, repo, f"blobs/{manifest['config']['digest']}", "*/*", token)
+    return (config.get("config") or {}).get("User") or ""
+
+
+def catalogue_users():
+    """Every service in the catalogue whose template does not say what its
+    image's user means for the strictest level."""
+    import yaml  # only this mode reads the catalogue, and only it needs PyYAML
+
+    import workdir
+
+    catalogue = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "internal", "templates", "catalogue")
+    users, out = {}, {}
+    for name in sorted(os.listdir(catalogue)):
+        if not name.endswith(".yaml"):
+            continue
+        with open(os.path.join(catalogue, name), encoding="utf-8") as handle:
+            tpl = yaml.safe_load(handle)
+        for svc in tpl["services"]:
+            image, where = svc["image"], f"{tpl['id']}/{svc['name']}"
+            if image not in users:
+                try:
+                    users[image] = image_user(image)
+                except Exception as exc:  # a registry that will not say is reported, not guessed at
+                    users[image] = None
+                    print(f"UNKN {where:44} {image}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+            user = users[image]
+            out[where] = {"image": image, "user": user}
+            if user is None:
+                continue
+            runs_as, needs_root = svc.get("run_as_user"), svc.get("needs_root", False)
+            if starts_as_root(user):
+                if not runs_as and not needs_root:
+                    print(f"ROOT {where:44} {image}: starts as root and says nothing", flush=True)
+            elif not user.split(":", 1)[0].isdigit():
+                if not runs_as and not needs_root:
+                    print(f"NAME {where:44} {image}: starts as {user}; give run_as_user its uid", flush=True)
+            if needs_root and not starts_as_root(user):
+                print(f"NOTR {where:44} {image}: needs_root, and it starts as {user}", flush=True)
+    workdir.write_json("users.json", out)
+
+
 def main():
+    if sys.argv[1:] == ["--users"]:
+        catalogue_users()
+        return
     images = json.load(sys.stdin)
     out = {}
     for key, image in images.items():

@@ -46,6 +46,25 @@ export type Team = {
 /** One person in a team, as the members list shows them. */
 export type Member = { user: User; role: Role; scoped: boolean; projects?: string[] }
 
+/** A team an account is in, as Settings → Accounts lists it. */
+export type AccountTeam = { id: string; name: string; role: Role; require_strong_auth: boolean }
+
+/** One account on the panel, for its administrator. */
+export type Account = {
+  user: User
+  teams: AccountTeam[]
+  /** False for an account that signs in only through the identity provider. */
+  has_password: boolean
+  passkeys: number
+  /** API tokens that have not expired. */
+  tokens: number
+  sso_issuers: string[]
+  /** What has to change before the account can be deleted. */
+  blockers: { sole_owner_of: AccountTeam[]; plugins: { id: string; name: string }[] }
+  /** The administrator looking, whose own account is changed under Account. */
+  current: boolean
+}
+
 export type Project = {
   id: string
   team_id: string
@@ -294,6 +313,33 @@ export type Instance = {
   message?: string
   cpu_m: number
   memory_mb: number
+  /** The deployment this instance was started for; absent when unknown. */
+  deployment_id?: string
+  /** That deployment's number, which is the version it runs; 0 when unknown. */
+  deployment: number
+  /** How it last stopped, in the kubelet's word: OOMKilled, Error, Completed. */
+  last_reason?: string
+  /** The exit code it last stopped with; absent means 0. */
+  last_exit_code?: number
+  /** How the container before this one ended, for an instance that has restarted. */
+  last_exit?: InstanceExit
+}
+
+/** How a container ended: the kubelet's reason (OOMKilled, Error, Completed) and its code. */
+export type InstanceExit = {
+  reason: string
+  exit_code: number
+  finished_at?: string
+}
+
+/** What saving an app's settings answers: the app, and when each change takes effect. */
+export type AppUpdate = App & {
+  /** Settings the running instances were given at once, by a rollout. */
+  rolled_out: string[]
+  /** Settings that wait for the next deploy: what goes into the image, and the release command. */
+  next_deploy: string[]
+  /** Present when the save asked the repository for its webhook. */
+  webhook?: WebhookStatus
 }
 
 export type AppStatus = {
@@ -308,6 +354,23 @@ export type AppStatus = {
   urls?: string[]
   /** How the environment's other apps reach an internal one: name and port. */
   internal_address?: string
+  /** Saved settings and build-time variables the running version was not built with. */
+  pending_changes?: BuildChange[]
+}
+
+/** One saved change waiting for a deploy: a setting, or a build-time variable by its key. */
+export type BuildChange = {
+  setting: string
+  key?: string
+  from?: string
+  to?: string
+}
+
+/** What changing variables did: a rebuild of the version the app runs, or why there was none. */
+export type VariableEffect = {
+  requires_rebuild?: boolean
+  deployment?: Deployment
+  not_rebuilt?: "locked" | "not_deployed" | "failed"
 }
 
 export type DeploymentStatus =
@@ -329,6 +392,12 @@ export type Deployment = {
   error_code?: string
   error_message?: string
   error_hint?: string
+  /**
+   * The whole problem a failed deployment was failed with: its values, and
+   * a context that for deploy.crashed says how the instance stopped and holds
+   * the last lines it printed. Absent on one that failed before it was kept.
+   */
+  problem?: Problem
   created_by: string
   /** Deployed past the check that stops critical vulnerabilities with a fix. */
   accepted_vulnerabilities?: boolean
@@ -615,7 +684,16 @@ export type DatabaseEngine = {
   password_restarts: boolean
   /** The dump formats it imports; empty for none. */
   imports: DumpFormat[]
+  /** The parts of its connection a link can also deliver on their own, each
+   * with the variable suggested for it. */
+  pieces: { piece: LinkPiece; variable: string }[]
 }
+
+/** A part of a database's connection a link can deliver on its own. */
+export type LinkPiece = "host" | "port" | "name" | "user" | "password"
+
+/** The variables a link delivers the connection in, piece by piece. */
+export type LinkPieces = Partial<Record<LinkPiece, string>>
 
 /** A dump format an import takes. */
 export type DumpFormat = "sql" | "custom" | "archive" | "archive-gzip" | "rdb"
@@ -660,12 +738,14 @@ export type Backup = {
   id: string
   target_type: string
   target_id: string
-  /** Skipped is a scheduled backup of a stopped database. */
+  /** Skipped is a scheduled backup of a stopped or busy database. */
   status: "running" | "succeeded" | "failed" | "skipped"
   kind: string
   location: string
   size_bytes: number
   error_message?: string
+  /** Why it was skipped (database.stopped, database.busy) or could not start. */
+  error_code?: string
   created_at: string
   finished_at?: string
   /** Sealed with the backup passphrase. */
@@ -684,6 +764,30 @@ export type BackupPolicy = {
   retention: number
   destination: string
   enabled: boolean
+}
+
+/**
+ * Whether backups have somewhere to go, which anybody may know. Where they go
+ * is a panel administrator's, under Settings → General → Backup storage.
+ */
+export type BackupStorage = {
+  configured: boolean
+  /** A backup passphrase is set, so every backup is encrypted. */
+  sealed: boolean
+  /** A new database is backed up when whoever creates it does not say. */
+  default_backups: boolean
+}
+
+/** Why a new database was not given a daily backup schedule. */
+export type DatabaseBackupReason =
+  "declined" | "not_offered" | "preview" | "turned_off" | "no_storage" | "failed"
+
+/** What creating a database did about its backups. */
+export type DatabaseBackup = {
+  enabled: boolean
+  reason?: DatabaseBackupReason
+  schedule?: string
+  retention?: number
 }
 
 export type NodeInfo = {
@@ -715,7 +819,20 @@ export type NodeInfo = {
   gpu_labelled?: boolean
   /** The panel's NVIDIA device plugin on this server, once placed here. */
   gpu_plugin?: { ready: boolean; reason?: string }
+  /**
+   * Whether it takes the traffic that reaches it on ports 80 and 443. Absent
+   * when the cluster cannot say: something other than k3s's load balancer
+   * fronts the ingress.
+   */
+  entry?: ServerEntry
+  /** Why it is not_serving. */
+  entry_reason?: ServerEntryReason
 }
+
+export type ServerEntry = "serving" | "not_serving" | "none"
+
+export type ServerEntryReason =
+  "node_not_ready" | "balancer_not_ready" | "no_ingress" | "no_ingress_here"
 
 export type GPUVendor = "nvidia" | "amd" | "intel"
 
@@ -873,6 +990,34 @@ export type UpgradeStarted = {
   rollback: string[]
 }
 
+/**
+ * Where the panel answers, and moving it to a domain of its own: what GET
+ * /api/panel/domain answers.
+ */
+export type PanelDomain = {
+  /** The address the panel was started with, which it answers at. */
+  url: string
+  host: string
+  scheme: "http" | "https"
+  /** The domain set here: being moved to, answered on, or a move that stopped. */
+  domain?: string
+  state?: "moving" | "restarting" | "live" | "failed"
+  /** Why a move stopped. */
+  problem?: Problem
+  started_at?: string
+  /** Addresses the panel keeps answering on for the webhooks registered there. */
+  previous: string[]
+  certificate?: { state: "none" | "issuing" | "ready"; message?: string; not_after?: string }
+  /** Where a record for the domain points, and the IPv6 address beside it. */
+  dns_target: string
+  dns_target_ipv6?: string
+  /** The sslip.io address taking the domain off goes back to. */
+  free_address?: string
+  /** Whether the panel can change its own address, and why not. */
+  movable: boolean
+  reason?: Problem
+}
+
 export type K3sUpgradePlan = {
   target: string
   steps: {
@@ -903,7 +1048,14 @@ export type Template = {
   beta?: boolean
   /** The logo's file name, when the panel has one for this template. */
   icon?: string
-  services: { name: string; image: string; port: number; public: boolean }[]
+  services: {
+    name: string
+    image: string
+    port: number
+    public: boolean
+    /** The image starts as root, which the strictest level refuses. */
+    needs_root?: boolean
+  }[]
   databases: { name: string; engine: string }[]
   inputs?: {
     key: string
@@ -1016,6 +1168,8 @@ export type DatabaseLink = {
   database_id: string
   app_id: string
   var_name: string
+  /** Kept current with the URL: a password change reaches them too. */
+  pieces?: LinkPieces
   created_at: string
 }
 
@@ -1162,6 +1316,8 @@ export type NotificationKind = {
   description?: string
   provider?: string
   fields?: NotificationField[]
+  /** A built-in kind whose delivery to the real service has never been seen end to end. */
+  untested?: boolean
 }
 
 /** A command that runs on a schedule, in the app's own image. */
@@ -1362,6 +1518,8 @@ export type StoreCatalogue = {
   unsigned: boolean
   url: string
   installed: Record<string, string>
+  /** The address is the Skifity store, and nothing is published there yet. */
+  not_published?: boolean
 }
 
 /** One repository a Git connection can read, as the create form offers it. */
@@ -1383,6 +1541,11 @@ export type WebhookStatus = {
   registered: boolean
   url?: string
   reason?: string
+  /**
+   * no_connection: a Git app that deploys on push with no Git connection, so
+   * no webhook was registered. Other reasons are the Git host's, uncoded.
+   */
+  reason_code?: "no_connection"
 }
 
 /** An app answering visitors with a page instead of itself. */
@@ -1525,6 +1688,27 @@ export type AppProcess = {
   /** How many are running, when the cluster could say. */
   ready?: number
   phase?: string
+  /** Its instances as the cluster has them, when it could say. */
+  instance_list?: Instance[]
+}
+
+/** One line of an app's log: which instance wrote it, and when by its server's clock. */
+export type LogEntry = {
+  instance: string
+  at?: string
+  line: string
+}
+
+/** A read of an app's log, every instance's merged or one's. */
+export type AppLogs = {
+  app_id: string
+  /** Each line's text alone, in the order of entries. */
+  lines: string[]
+  entries: LogEntry[]
+  previous: boolean
+  /** The instances read, and how many more had started and were not. */
+  instances: string[]
+  instances_omitted: number
 }
 
 /** How an app's objects in the cluster compare with what the panel applies. */
@@ -1568,4 +1752,52 @@ export type ObjectEvent = {
   explanation?: string
   explanation_code?: string
   explanation_args?: string[]
+}
+
+/**
+ * One thing that needs attention across a team, as GET
+ * /api/teams/{team}/attention answers it. code is the sentence,
+ * attention.<code>, with params filled in; message is the same in English.
+ */
+export type AttentionItem = {
+  kind: string
+  severity: "error" | "warning"
+  code: string
+  params: Record<string, string | number>
+  message: string
+  target_type: string
+  target_id: string
+  target_label: string
+  project_id?: string
+  project_name?: string
+  environment_id?: string
+  environment_name?: string
+  /** When it started where that is known; for a certificate, when it runs out. */
+  since?: string
+  /** The panel page to deal with it on. */
+  path: string
+}
+
+/** An app with where it lives, from GET /api/teams/{team}/apps. */
+export type TeamApp = {
+  id: string
+  name: string
+  slug: string
+  source_type: App["source_type"]
+  status: string
+  project_id: string
+  project_name: string
+  environment_id: string
+  environment_name: string
+  environment_kind: "standard" | "preview"
+  url?: string
+  last_deployment?: {
+    id: string
+    number: number
+    status: Deployment["status"]
+    commit_sha?: string
+    at: string
+    finished_at?: string
+  }
+  created_at: string
 }

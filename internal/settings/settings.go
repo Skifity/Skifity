@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"skifity/installer"
 	"skifity/internal/cron"
 	"skifity/internal/pluginstore"
 )
@@ -54,7 +55,7 @@ type Definition struct {
 	// Default is what the panel does while the setting is unset, written as
 	// the value that would say the same thing: "true" for a switch that is on
 	// until somebody turns it off. Empty when unset means "nothing", or
-	// something no value can say, such as following k3s's stable channel.
+	// something no value can say.
 	//
 	// It is not written anywhere. The code that reads the setting decides
 	// what unset means, and this has to agree with it — the panel drew
@@ -106,6 +107,14 @@ const (
 	FlannelVXLAN = "vxlan"
 )
 
+// Who may create a team: KeyTeamCreation's two values.
+const (
+	// TeamCreationAdmins is panel administrators only. The default.
+	TeamCreationAdmins = "admins"
+	// TeamCreationEveryone is any account that can sign in.
+	TeamCreationEveryone = "everyone"
+)
+
 // IngressServiceAddress is what a Cloudflare tunnel's public hostname points at.
 //
 // k3s ships Traefik in kube-system under this name. It is the address of the
@@ -155,6 +164,7 @@ const (
 	KeyS3Bucket              = "storage.s3_bucket"
 	KeyPanelBackupSchedule   = "storage.panel_backup_schedule"
 	KeyPanelBackupKeep       = "storage.panel_backup_keep"
+	KeyDefaultBackups        = "storage.default_backups"
 	KeyBackupPassphrase      = "storage.backup_passphrase"
 	KeyS3AccessKey           = "storage.s3_access_key"
 	KeyS3SecretKey           = "storage.s3_secret_key"
@@ -177,8 +187,13 @@ const (
 	KeySSOGroupsClaim        = "signin.oidc_groups_claim"
 	KeySSOGroupRoles         = "signin.oidc_group_roles"
 	KeyAPIAllowedNetworks    = "signin.api_allowed_networks"
+	KeyTeamCreation          = "signin.team_creation"
 	KeyBuilderDefault        = "general.default_builder"
 	KeyBuildConcurrency      = "cluster.build_concurrency"
+	KeyEtcdRoundTripMs       = "cluster.etcd_round_trip_ms"
+	KeyEtcdJitterMs          = "cluster.etcd_jitter_ms"
+	KeyEtcdLossPercent       = "cluster.etcd_loss_percent"
+	KeyEtcdDiskSyncMs        = "cluster.etcd_disk_sync_ms"
 	KeyGitPrivateHosts       = "git.private_hosts"
 	KeyGitCABundle           = "git.ca_bundle"
 	KeyTelemetryDisabled     = "general.telemetry_disabled"
@@ -200,6 +215,10 @@ const (
 	// KeyPanelID is this panel's own name for itself, made once by migration
 	// 0057, which a DNS record it creates carries in its note.
 	KeyPanelID = "maintenance.panel_id"
+	// KeyTemplatePiecesAttached is when the links template installs made
+	// before a link kept its pieces were given them, once (migration 0063,
+	// internal/dbsvc/pieces.go).
+	KeyTemplatePiecesAttached = "maintenance.template_pieces_attached"
 )
 
 // Definitions is the whole catalogue, in display order.
@@ -279,11 +298,27 @@ var Definitions = []Definition{
 		Validate:    validateNetworks,
 	},
 	{
+		// Making a team makes its owner, and an owner deploys onto the
+		// servers every team shares: nothing pins a team's apps to machines
+		// of its own. Open to every account, that was a viewer of one team,
+		// or an account single sign-on made on its own, running containers on
+		// the cluster with a request of their own writing.
+		Key: KeyTeamCreation, Label: "Who may create teams", Group: GroupSignIn,
+		Help: "Panel administrators can always create a team. Everyone lets any account do it — one single sign-on " +
+			"created, or a viewer in another team — and become the owner of a team that deploys onto this panel's servers.",
+		Options:  []string{TeamCreationAdmins, TeamCreationEveryone},
+		Validate: validateOneOf(TeamCreationAdmins, TeamCreationEveryone),
+		Default:  TeamCreationAdmins,
+	},
+	{
 		Key: KeyK3sVersion, Label: "Kubernetes version", Group: GroupCluster,
-		Help: "The k3s version the first server of a new cluster is installed with. Leave empty to follow the stable channel. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported.",
+		Help: "The k3s version the first server of a new cluster is installed with. Leave empty for the version this release of Skifity was tested with. A server added later joins at the version the cluster is running, whatever this says, because a server newer than its cluster is not supported.",
 		// A k3s release, which is a Kubernetes version with a k3s suffix.
 		Placeholder: "v1.34.1+k3s1",
 		Validate:    validateK3sVersion,
+		// What the installer pins, read from it: the field shows it while
+		// empty, and it moves with every release that moves the installer.
+		Default: installer.K3sVersion,
 	},
 	{
 		Key: KeyPreviewTTLDays, Label: "Remove preview environments after", Group: GroupCluster,
@@ -312,6 +347,48 @@ var Definitions = []Definition{
 		Kind:        KindNumber,
 		Validate:    validateBuildConcurrency,
 		Default:     strconv.Itoa(DefaultBuildConcurrency),
+	},
+	// What a server that is about to run etcd is measured against. Warnings
+	// only: a threshold here never stops a server being added or promoted.
+	{
+		Key: KeyEtcdRoundTripMs, Label: "Warn when control plane servers are further apart than", Group: GroupCluster,
+		Help: "Milliseconds. Before a server becomes a control plane server, added as one or promoted, the panel times 20 connections " +
+			"from it to each control plane server already there, and warns when the average round trip is longer than this. " +
+			"etcd, which keeps the cluster's state, waits for a majority of them on every change, so they belong in one location. " +
+			"A warning never stops anything; 0 turns it off.",
+		Placeholder: strconv.Itoa(DefaultEtcdRoundTripMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdRoundTripMs),
+	},
+	{
+		Key: KeyEtcdJitterMs, Label: "Warn when their round trip varies by more than", Group: GroupCluster,
+		Help: "Milliseconds: the standard deviation of those same round trips. A link that is usually quick and sometimes slow " +
+			"makes some changes wait far longer than its average says, and a spike long enough to delay etcd's heartbeats " +
+			"makes it hold elections instead of answering. 0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdJitterMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdJitterMs),
+	},
+	{
+		Key: KeyEtcdLossPercent, Label: "Warn when more of their connections are lost than", Group: GroupCluster,
+		Help: "Per cent of those connections that took a second or more, which is what a lost packet costs a new connection. " +
+			"0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdLossPercent),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(100),
+		Default:     strconv.Itoa(DefaultEtcdLossPercent),
+	},
+	{
+		Key: KeyEtcdDiskSyncMs, Label: "Warn when a control plane server's disk syncs slower than", Group: GroupCluster,
+		Help: "Milliseconds for one small write to be made durable: the average of 200, timed with dd on the server before it " +
+			"becomes a control plane server. etcd waits for this on every change, and its own guidance is under 10 ms for nearly " +
+			"all of them, so an average near that is already slow. 0 turns the warning off.",
+		Placeholder: strconv.Itoa(DefaultEtcdDiskSyncMs),
+		Kind:        KindNumber,
+		Validate:    validateWarningThreshold(10000),
+		Default:     strconv.Itoa(DefaultEtcdDiskSyncMs),
 	},
 	{
 		Key: KeyGitPrivateHosts, Label: "Git hosts on your own network", Group: GroupGit, Multiline: true,
@@ -515,6 +592,12 @@ var Definitions = []Definition{
 		Placeholder: "14",
 		Kind:        KindNumber, Validate: validatePanelBackupKeep,
 		Default: "14",
+	},
+	{
+		Key: KeyDefaultBackups, Label: "Back up new databases", Group: GroupStorage,
+		Help: "On by default. A database created while the bucket above is set up is backed up every day, at a minute between 02:00 and 05:00 UTC of its own, keeping the last 7. " +
+			"Its Backups tab changes that or turns it off, and whoever creates one can say no. Previews and engines the panel does not back up never get one.",
+		Kind: KindBool, Validate: validateBool, Default: "true",
 	},
 	{Key: KeySMTPHost, Label: "SMTP host", Group: GroupEmail, Placeholder: "smtp.example.com",
 		Help: "Needed for email notifications and for password reset emails."},
@@ -1025,6 +1108,38 @@ func validateInt(value string) error {
 
 // DefaultBuildConcurrency is how many builds run at once when nobody said.
 const DefaultBuildConcurrency = 2
+
+// What a server about to run etcd is warned about when nobody said otherwise.
+//
+// k3s runs etcd with a half-second heartbeat and a five-second election
+// timeout, well clear of etcd's own 100 ms and one second, so 50 ms is not
+// where elections start. It is where every change to the cluster, which waits
+// for a majority to answer across that link, starts to wait noticeably, and
+// far beyond what servers in one location see. A disk that takes 10 ms to sync
+// is etcd's own line for "too slow". One lost connection in twenty is already
+// more than the 1 per cent here, which is the point: on the link etcd uses,
+// any loss is worth a look.
+const (
+	DefaultEtcdRoundTripMs = 50
+	DefaultEtcdJitterMs    = 10
+	DefaultEtcdLossPercent = 1
+	DefaultEtcdDiskSyncMs  = 10
+)
+
+// validateWarningThreshold accepts a whole number from 0, which turns the
+// warning off, up to max.
+func validateWarningThreshold(maxValue int) func(string) error {
+	return func(value string) error {
+		if value == "" {
+			return nil
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n < 0 || n > maxValue {
+			return fmt.Errorf("enter a number between 0 and %d", maxValue)
+		}
+		return nil
+	}
+}
 
 // DefaultScanSchedule is when running apps are scanned again when nobody
 // said: once a day, at a minute nobody else picked, in the quiet hours of

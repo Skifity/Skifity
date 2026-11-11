@@ -22,19 +22,26 @@ and a managed CoreDNS, on top of a required Cilium CNI, with Kata Containers
 (microVMs) or gVisor as the workload runtime; for an imported cluster the
 documentation says the control plane reaches the Kubernetes API with a
 `cluster-admin` service account it creates. Pricing is
-usage-based with no seat fees: a free Developer Sandbox (2 services, 1 database,
-2 cron jobs, card required), then $0.01667 per vCPU-hour and $0.00833 per
-GB-hour (the 1 vCPU / 2 GB plan is $24/month), $0.15/GB-month disk, $0.06/GB
-egress, GPUs from $0.80/hour (L4) to $2.74/hour (H100); on BYOC the cloud bills
-the customer directly and Northflank adds $0.01389 per vCPU-hour and $0.00139
-per GB-hour. Adoption: $22.3M raised (a $16M Series A led by Bain Capital
-Ventures plus a $6.3M seed led by Vertex, announced November 2024) and "more
+usage-based with no seat fees: a free Sandbox (2 services, 2 jobs and 1
+database, up to $20 a month of resources, and one BYOC cluster of up to 12 vCPU
+and 48 GB; "No card needed" on 2026-11-08, where the "Developer Sandbox" read on
+2026-09-30 required a card), then $0.01667 per vCPU-hour and $0.00833 per
+GB-hour (the 1 vCPU / 2 GB plan is $24/month), $0.11657 per GiB-month of NVMe
+disk with IOPS above 3,000 and throughput above 140 MiB/s billed apart
+($0.15/GB-month on 2026-09-30), $0.06/GB egress, GPUs from $0.80/hour (L4) to
+$5.87/hour (B200); on BYOC the cloud bills the customer directly and Northflank
+adds $0.02083 per node vCPU-hour, with memory not billed (on 2026-09-30,
+$0.01389 per vCPU-hour and $0.00139 per GB-hour). Adoption: $22.3M raised (a
+$16M Series A led by Bain Capital Ventures plus a $6.3M seed led by Vertex,
+announced November 2024) and "more
 than 30,000 developers", with Sentry, Writer and Chai Discovery named as
 customers in the same announcement. The product ships very fast: its
 bimonthly 2026 changelogs each list dozens of features. Its public GitHub
 presence is small (the largest repository is an agent skill with 35 stars),
-because the platform itself is not open source. (Figures read 2026-09-30;
-sources at the end.)
+because the platform itself is not open source. (Figures read 2026-09-30,
+the pricing again on 2026-11-08; sources at the end.) On 2026-10-30 Northflank
+disclosed that secrets held in its control plane had been decrypted by an
+attacker; see "Security record" and "Since 2026-09-30".
 
 **Why it matters most to Skifity:** it is the one competitor that is also
 "Kubernetes underneath, hidden behind a product vocabulary", and it has spent
@@ -182,8 +189,13 @@ its costs are exactly what Skifity was built to avoid.
 * OpenTofu nodes inside templates for external infrastructure (AWS, GCP,
   Azure, Akamai), including destroy nodes.
 * An official agent skill repository (`northflank/skills`, created April
-  2026). No first-party MCP server was found; a third-party one exists via
-  Composio.
+  2026), and a first-party, hosted MCP server at
+  `https://mcp.northflank.com/mcp`: Streamable HTTP, a team API token, and "no
+  OAuth login". `nf agent setup` wires it and the skill into Claude Code,
+  Codex, Cursor or OpenCode since CLI 0.14.0 (2026-10-23). None was found on
+  2026-09-30, when only a third-party server via Composio existed; when the
+  hosted endpoint itself went live was not established. See "Since
+  2026-09-30".
 
 ### Notifications
 
@@ -255,11 +267,14 @@ patterns across few voices rather than statistics.
 * **Networking limits** (VPC, load balancing, VPN) were a G2 con; several of
   these were addressed in 2026 (L4 load balancers, VPC load balancers,
   Tailscale).
-* **Incidents** are fewer than Fly's on the public record, but exist: a
-  platform partial outage of about an hour on 2025-05-21 (a database migration
-  triggered rescheduling that overloaded the underlying GCP nodes; four
-  databases needed manual recovery), a logs-and-metrics outage on 2025-08-05,
-  and a 50-minute London incident on 2026-05-13.
+* **Incidents** were fewer than Fly's on the public record until October
+  2026: a platform partial outage of about an hour on 2025-05-21 (a database
+  migration triggered rescheduling that overloaded the underlying GCP nodes;
+  four databases needed manual recovery), a logs-and-metrics outage on
+  2025-08-05, a 50-minute London incident on 2026-05-13, a control-plane
+  degradation of 6 hours 51 minutes on 2026-10-20 (VM-to-VM traffic failing in
+  one zone of GCP europe-west2; running workloads unaffected), and the security
+  incident of 2026-10-30 (Security record).
 * **BYOK carries sharp edges by Northflank's own account**: "Do not import
   clusters that run production workloads … there is currently no full
   deinstallation process", and deleting an imported cluster by default deletes
@@ -268,13 +283,27 @@ patterns across few voices rather than statistics.
 
 ## Security record
 
+* **2026-10-30, secrets decrypted from the control plane.** Per Northflank's
+  status page, the first known decryption of secrets took place between 02:39
+  and 03:08 UTC; Northflank's first alert, from Wiz, came at 11:43 UTC; it says
+  the exploit was patched within 60 minutes of that alert and customers were
+  told within two hours. From 13:58 UTC its advice was "Assume all environment
+  variables have been decrypted" and rotate everything: workload secrets,
+  secret groups, global secrets and integration credentials. Customers reported
+  their AI provider keys being used the same evening. Running workloads were
+  not affected, nor were customers on "forward-deployed or dedicated control
+  planes". No root cause had been published by 2026-11-08; an independent
+  forensic review was still under way. Detail in "Since 2026-09-30".
 * **No CVEs or published advisories found.** Searched NVD and the web for
   Northflank, and GitHub for advisories; the platform is closed source, so there
-  is no advisory database to check beyond that (2026-09-30).
+  is no advisory database to check beyond that (2026-09-30). NVD still had none
+  for Northflank on 2026-11-08.
 * Northflank's security page states "Northflank has not experienced a
   security breach since the company's formation on April 1st, 2019", SOC 2
   Type 2 and HIPAA; it also says "We plan to begin penetration tests on a
-  recurring basis over the next year" and lists no bug bounty.
+  recurring basis over the next year" and lists no bug bounty. On 2026-11-08
+  the page still carried that sentence, under a banner on the same page
+  announcing the security incident; it also listed ISO 27001.
 * Architecturally, workloads run under Kata Containers (microVMs) by default,
   with gVisor as the fallback, and Cilium network policies between project
   namespaces. The BYOK path needs a kubeconfig with `cluster-admin`, from which
@@ -285,6 +314,15 @@ patterns across few voices rather than statistics.
 
 **Works** has a test that runs on every push; **Written** has never run on a
 real cluster (ADR-0010, `docs/checklist.md`).
+
+The Skifity column below, and the gaps after it, are Skifity on 2026-09-30.
+Since then it has been released (v0.1.0 on 2026-10-06, v0.1.1 on 2026-10-21),
+the `Cluster` workflow installs it on a real k3s on every push to `main`, and
+most of those gaps are closed; "Since 2026-09-30" says which. The preview row's
+"No TTL" disagrees with `vercel.md`, written the same day, which says previews
+were removed after 7 idle days; the history was later squashed, so which was
+right cannot be checked. On 2026-11-08 the code removes a preview after 7 idle
+days by default (`internal/watch/watch.go`).
 
 | Capability | Northflank | Skifity (evidence) | Verdict |
 |---|---|---|---|
@@ -525,6 +563,213 @@ real cluster (ADR-0010, `docs/checklist.md`).
 * **A free tier that needs a card.** Not applicable to self-hosting, but a
   reminder that the first minute is where people leave.
 
+## Since 2026-09-30
+
+Read on 2026-11-08: Northflank's status page and its history feed, the
+changelog index, the blog's RSS feed, the pricing and security pages, the docs
+sitemap and the pages named below, the npm registry for `@northflank/cli` (the
+0.13.0, 0.14.0 and 0.15.0 packages were unpacked and read, not run), NVD and
+Hacker News through the Algolia API. GitHub's API refused this session for
+repositories other than Skifity's, so the `northflank` organisation's
+repositories and stars were not read again. web.archive.org refused too, so
+when the pricing page changed could not be established.
+
+### The security incident
+
+- **2026-10-30.** The first known decryption of secrets took place between 02:39
+  and 03:08 UTC. Wiz alerted Northflank at 11:43 UTC; a first network policy
+  patch went out at 12:02, more at 12:50 and 13:05, and Wiz's incident team was
+  called in at 13:00. At 13:40 the status page said "Rotate environment
+  variables immediately", and at 13:58 "Assume all environment variables have
+  been decrypted". Rotation of PostgreSQL and MongoDB addon credentials was
+  switched on for everyone at 15:12, with the advice to turn off public access
+  to addons. At 23:38, "Users have reported unauthorised use of AI API keys
+  supplied to the Northflank platform", with a pointer to Wiz's "Black October"
+  report on attacks against AI credentials.
+- **2026-10-31.** Audit logs were switched on for every customer, free ones
+  included (01:04 UTC); until then the pricing page sold audit logging with
+  Enterprise, and on 2026-11-08 its comparison table still does. Credential
+  rotation followed for MySQL and Redis (13:34), MinIO (22:32) and RabbitMQ
+  (23:31) addons.
+- **2026-11-02.** "We believe the attack vector was contained within an hour of
+  the first alert." Evidence "suggests it was focused on secrets held in our
+  control plane"; running workloads were not affected; customers on
+  forward-deployed or dedicated control planes were not affected. Where it
+  could, Northflank revoked its own access tokens and sessions, Git
+  integrations, and cross-account IAM roles and service accounts, so customers
+  had to sign in and reconnect. Separately, it patched CVE-2026-98432 across
+  its fleet, BYOC clusters with an active integration included. That CVE is a
+  Linux kernel flaw in IPv4 TCP handling, published on NVD on 2026-10-15, which
+  Vercel's bulletin of 2026-11-01 describes as remote code execution through
+  crafted packets; Northflank did not say it was how the attacker got in.
+- **2026-11-06.** "The exploit was patched within 60 minutes of notification,
+  and customers were notified within two hours." Platform degradation in the
+  days after came from customers redeploying at once and from Northflank's own
+  key rotation. It asked upstream providers for "API endpoints for credential
+  revocation, IP restrictions, and enforceable budget limits". The independent
+  forensic review was still running, and no root cause had been published by
+  2026-11-08.
+- **The context.** Railway had disclosed an incident involving its customers'
+  environment variables on 2026-10-21. On 2026-10-22 Northflank published "How
+  to migrate off of Railway"; after 2026-10-30 that page opens with "Northflank
+  has experienced a similar attack as Railway's October 21 incident". The blog
+  had published comparison and agent articles almost every day; none appeared
+  after 2026-10-29. No changelog followed "August & September 2026" (published
+  2026-09-24).
+- **On Hacker News**, "Northflank Breached" reached 485 points (2026-10-30). One
+  customer with an Anthropic key in a plain variable "only found out about the
+  incident from the HN front page 6 hours later (I didn't even get an email)".
+  Others pointed out that the marketing promised "Secure execution from the
+  first sandbox"; that "Audit logs being behind-paid-plan feature is crazy";
+  that a BYOC customer should ask "if the vendor gets hacked, what can the
+  attacker do in my account?"; and that a management interface which shows
+  variable values back has to be able to decrypt them. Northflank's own
+  variable editor lets a member "view arguments and variables"
+  (`secure/inject-secrets`). One commenter counted six attacks on multi-tenant
+  platforms since September: PingCAP/TiDB, Fireworks AI, Zeabur, OpenCode
+  Console, Railway and Northflank.
+
+### Product
+
+- **CLI 0.14.0 (2026-10-23).** `nf agent setup`, `status`, `update` and
+  `remove` install Northflank's skill, from `northflank/skills`, into Claude
+  Code, Cursor or OpenCode, or its plugin into Codex. Unmodified copies are
+  replaced, modified ones left alone, and `--dry-run` previews. MCP was opt-in,
+  through a local stdio bridge (`nf agent mcp serve`) that reads the CLI's
+  saved login, so the agent's configuration holds no token. A read-only
+  "workload token-file" context reads a rotating token from
+  `NORTHFLANK_API_TOKEN_FILE` on every request.
+- **CLI 0.15.0 (2026-10-27).** MCP is on by default and points at the hosted
+  server. Setup checks authentication and tool discovery before it saves
+  anything, and backs up a conflicting entry before replacing it;
+  `status --check` checks the live connection. The docs page says the endpoint
+  takes a team API token as a bearer token, does not support OAuth, and does
+  not accept personal or organisation logins.
+- **Audit log sinks** send a team's or an organisation's audit events, as
+  gzipped newline-delimited JSON, to S3 or S3-compatible storage, and pause
+  after repeated failures (`observe/audit-logs`, read 2026-11-08). They were not
+  recorded on 2026-09-30; when they shipped was not established.
+- **Customer-managed encryption keys** are Enterprise-only and apply to new
+  writes. By Northflank's account they protect secrets in its database and
+  "do not cover volumes, other workload storage, your application data, addon
+  databases, or backups" (`secure/manage-encryption`). The security page lists
+  external secret managers, which keep values out of Northflank's database,
+  as a beta.
+- **Judoscale** integrates with Northflank (2026-10-18), scaling web services
+  on request queue time and workers on job queue latency (Sidekiq, Celery,
+  BullMQ). Northflank's own autoscaler already scales on CPU, memory, requests
+  per second and custom Prometheus metrics.
+- **Pricing**, read 2026-11-08 and corrected in place above: a free Sandbox
+  with no card, cheaper disk, a BYOC fee per node vCPU only, and GPUs up to the
+  B200. The October uptime of the Northflank App component was 99.50% on the
+  status page.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- **The breach is the case Skifity's design answers, in part.** A panel is
+  one team's installation rather than a control plane that holds thousands of
+  customers' keys. Secret variables are write-only: nothing in the API returns
+  a value, and each is sealed with its context (`internal/crypto`). A variable
+  can be a reference to Vault, OpenBao, Infisical, Doppler or AWS Secrets
+  Manager, read at deploy time and never stored (`internal/secretmgr`), which
+  Northflank offers only as a beta. The audit log is every team's, not a paid
+  extra.
+- **And in part it does not.** The panel decrypts every secret to write it into
+  the app's Secret in the cluster, so a compromised panel exposes its team's
+  secrets in the same way. Self-hosting makes the blast radius one
+  installation, not zero, and the operator is the one who has to notice.
+- **The recovery tools Northflank built during the incident already exist.**
+  A database's password can be changed for every engine that has one
+  (`POST /api/databases/{id}/password`, `internal/dbsvc/password.go`); MySQL,
+  Redis and Valkey keep the old password working until the linked apps have
+  rolled out. The master key can be rotated (`handleRotateMasterKey`,
+  `internal/api/settings_handlers.go`).
+- **CVE-2026-98432 lands on the operator.** Skifity's servers are the
+  operator's. The hardening report says whether automatic updates are on and
+  whether a reboot is pending (`internal/provision/hardening.go`), but the
+  panel cannot install them; that is new gap 4 in `coolify.md`.
+
+This file's gaps, against the code:
+
+- P0, a fork's preview got the project's shared secrets: **closed** (Phase 78).
+- P1, promote: **closed** (Phase 103, `POST /api/apps/{app}/promote`), with
+  locks beside it (Phase 94).
+- P1, project variables per environment: **half**. A variable can have a
+  preview value of its own or none (Phase 93), but `SharedVariable`
+  (`internal/store/models.go`) still has no environment, so a project-wide
+  value cannot differ between staging and production.
+- P1, preview lifecycle: **partly**. Previews expire after 7 idle days, a
+  cluster setting (`cluster.preview_ttl_days`); fork previews are capped per
+  project (`forkPreviewRoom`, `internal/api/webhook_handlers.go`); a preview
+  can be started by hand (Phase 112). A smaller size for previews was not found.
+- P1, threshold alerts: **closed**. `app.alert` and `server.alert` (Phases 95
+  and 99), server-error thresholds (`internal/watch/traffic.go`),
+  `backup.missed` and `certificate.expiring` (`internal/notify/notify.go`).
+- P1, metric history and logs that outlive the pod: **closed** (usage history,
+  Phase 95; log drains through Vector, `internal/logdrain`).
+- P2, back up first: **half**. A template update backs up the app's disks and
+  databases before it deploys (`internal/api/template_updates.go`); an ordinary
+  deploy's release command does not (`runRelease`, `internal/deploy/run.go`).
+- P2, seed a preview's database: **closed** (Phase 107).
+- P2, canary rollouts: **open**; nothing in `internal/kube` splits traffic.
+- P2, scaling on request rate or a custom metric: **open**; HPA on CPU and
+  memory and KEDA's HTTP scale to zero only.
+- P2, sign in with the panel to see a preview: **open**; the guard still holds
+  no session (`internal/guard`).
+- P2, audit entries with a diff: **open**; `AuditEvent` still has a free-form
+  `Metadata` (`internal/store/models.go`).
+
+Rows of the table above that no longer describe Skifity:
+
+- **Release process:** promotion (Phase 103) and locked deploys (Phase 94).
+- **Domains and routing:** public TCP and UDP ports (Phase 112); a rate-limit
+  action in the firewall (`internal/guard/limiter.go`, `docs/firewall.md`).
+- **Databases:** nine engines (`internal/dbsvc/engine/engine.go`); stop,
+  resize, change the password, import a dump (Phase 112).
+- **Backups:** sealed with a passphrase and verified (Phase 104).
+- **Observability:** usage history and alerts (Phases 95 and 99); requests,
+  errors and response times per app (`internal/traffic`); log drains
+  (`internal/logdrain`).
+- **Security and roles:** a viewer role (Phase 85), members limited to
+  projects (86), a team that requires two factors (91), teams that follow the
+  identity provider's groups (92), passkeys and secret managers (Phase 112).
+- **CLI, API, IaC:** `skifity.yaml` with plan and apply (Phase 108), the MCP
+  endpoint at `/api/mcp` (Phase 87), `skifity db connect` (Phase 105).
+- **Catalogue:** 374 templates (`internal/templates/catalogue`).
+- **Notifications:** ten kinds (`internal/notify/notify.go`).
+- **Servers:** ordered at Hetzner Cloud and DigitalOcean (`internal/cloud`).
+- **Developer experience:** released, and run on a real cluster by the
+  `Cluster` workflow (`docs/progress.md`, "A real cluster, at last").
+
+New gaps:
+
+1. **Set up an assistant in one command.** *What:* `skifity agent setup
+   --agent claude|codex|cursor|opencode` writes the MCP entry, installs a short
+   skill, shows the change first (`--dry-run`) and backs up a conflicting
+   entry; `skifity agent status --check` lists the tools through the
+   connection. Pointed at the local `skifity mcp`, which already reads the
+   CLI's saved login, the agent's configuration holds no token, as
+   Northflank's bridge does. *Evidence:* Northflank CLI 0.14.0 and 0.15.0;
+   Vercel's plugin reached OpenCode (2026-10-28) and Antigravity (2026-10-29).
+   Skifity's `docs/cli.md` tells people to run `claude mcp add` by hand with a
+   pasted token; there is no `agent` command in `internal/cli/commands.go`, and
+   no skill (still open in `sealos.md`). *Size:* S–M. *Without a cluster:* yes.
+2. **Forward the audit log.** *What:* send a team's audit events, as they
+   happen, to S3 or an HTTP endpoint, so a record survives the panel and
+   reaches the place a security team already searches. *Evidence:*
+   Northflank's audit log sinks; Vercel's audit-log drains (Enterprise).
+   Skifity's audit events live only in its SQLite (`store.AuditEvent`), and
+   drains carry container logs only (`internal/logdrain`); `porter.md` and
+   `hakopod.md` name an export. `internal/sigv4` already signs S3 requests.
+   *Size:* S–M. *Without a cluster:* yes.
+
+Worth not copying, from this period: rotation built under fire during an
+incident, which Skifity already has; a security page that still says "has not
+experienced a security breach" beneath a banner announcing one; and finding
+out from Hacker News before the email.
+
 ## Sources
 
 All read 2026-09-30.
@@ -581,3 +826,23 @@ All read 2026-09-30.
 * https://github.com/northflank/skills and the `northflank` GitHub organisation (via GitHub search API)
 * https://www.npmjs.com/package/@northflank/cli
 * https://composio.dev/toolkits/northflank (third-party MCP)
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://status.northflank.com/cmvv0rn5a092f14rutwccodpp (the security incident, updates from 2026-10-30 to 2026-11-06)
+* https://status.northflank.com/history and https://status.northflank.com/history.rss (2026-10-20 control-plane degradation; monthly uptime)
+* https://northflank.com/changelog (no entry after 2026-09-24) and https://northflank.com/blog/rss (no post after 2026-10-29)
+* https://northflank.com/blog/how-to-migrate-off-of-railway (2026-10-22, with the later note)
+* https://northflank.com/blog/judoscale-now-supports-northflank (2026-10-18)
+* https://northflank.com/pricing
+* https://northflank.com/security
+* https://northflank.com/docs/sitemap.xml
+* https://northflank.com/docs/v1/application/ai-agents/mcp-server
+* https://northflank.com/docs/v1/application/secure/inject-secrets
+* https://northflank.com/docs/v1/application/observe/audit-logs
+* https://northflank.com/docs/v1/application/secure/manage-encryption
+* https://registry.npmjs.org/@northflank%2fcli (release dates; the 0.13.0, 0.14.0 and 0.15.0 tarballs, README and `dist/agent`, unpacked and read)
+* https://services.nvd.nist.gov/rest/json/cves/2.0 (CVE-2026-98432; keyword "northflank", none)
+* https://vercel.com/kb/bulletin/linux-kernel-security-advisory-cve-2026-98432 (2026-11-01, what CVE-2026-98432 allows)
+* https://news.ycombinator.com/item?id=50305025 ("Northflank Breached", 2026-10-30) and https://hn.algolia.com/api/v1/search_by_date?query=northflank (since 2026-09-30)
+* Skifity, for "For Skifity": `internal/store/models.go`, `internal/dbsvc/password.go`, `internal/api/api.go`, `internal/api/settings_handlers.go`, `internal/api/webhook_handlers.go`, `internal/api/template_updates.go`, `internal/deploy/run.go`, `internal/watch/watch.go`, `internal/watch/traffic.go`, `internal/notify/notify.go`, `internal/guard`, `internal/secretmgr`, `internal/logdrain`, `internal/provision/hardening.go`, `internal/cli/commands.go`, `docs/cli.md`, `docs/firewall.md`, `docs/progress.md`

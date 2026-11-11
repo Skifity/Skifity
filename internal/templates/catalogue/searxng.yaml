@@ -7,6 +7,7 @@ website: https://docs.searxng.org
 services:
 - name: searxng
   image: searxng/searxng:2026.9.17-c49771992
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -20,3 +21,4 @@ databases:
   link_to:
   - searxng
   var_name: DATABASE_URL
+notes: The image starts as root, so the environment needs the baseline pod security level.

@@ -6,6 +6,7 @@ website: https://roundcube.net
 services:
 - name: roundcube
   image: roundcube/roundcubemail:1.7.4-apache
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128

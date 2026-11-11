@@ -18,6 +18,7 @@ import (
 	"skifity/internal/docsite"
 	"skifity/internal/errdoc"
 	"skifity/internal/events"
+	"skifity/internal/gitsrc"
 	"skifity/internal/logdrain"
 	"skifity/internal/metrics"
 	"skifity/internal/notify"
@@ -46,9 +47,17 @@ type Server struct {
 	// latestRelease asks which release is the newest. Nil means GitHub, through
 	// the guarded client; a test puts its own here.
 	latestRelease func(ctx context.Context, repository string) (string, error)
+	// registerHook asks a Git host to deliver a repository's pushes here. Nil
+	// is gitsrc.EnsureWebhook, through the guarded client, which will not dial
+	// the loopback a test's host listens on; a test puts its own here.
+	registerHook func(ctx context.Context, req gitsrc.HookRequest) gitsrc.HookResult
 
 	// setup guards first-run: it holds the one-time token until an admin exists.
 	setup *setupState
+
+	// moves is what is kept about moving the panel to a domain of its own:
+	// see panel_domain_handlers.go.
+	moves panelMoves
 
 	// cluster is the Kubernetes-facing side of the panel. It is an interface so
 	// the API can be tested, and started, without a cluster.
@@ -234,6 +243,9 @@ func (s *Server) routes() chi.Router {
 	r.Use(s.recoverer)
 	r.Use(s.accessLog)
 	r.Use(s.securityHeaders)
+	// A browser at an address the panel moved away from is sent on to the
+	// one it answers at; webhooks and API tokens are served where they are.
+	r.Use(s.sendOnFromLeftAddresses)
 
 	r.Route("/api", func(api chi.Router) {
 		// First: a caller over the line costs the panel nothing more than this.
@@ -330,12 +342,21 @@ func (s *Server) routes() chi.Router {
 				sensitive.Delete("/me/passkeys/{passkeyID}", s.handleRemovePasskey)
 			})
 
+			// Whether backups have somewhere to go: anybody may know, and
+			// only a panel administrator can open the page that changes it.
+			authed.Get("/backup-storage", s.handleGetBackupStorage)
+
 			authed.Get("/teams", s.handleListTeams)
 			authed.Post("/teams", s.handleCreateTeam)
 
 			authed.Route("/teams/{teamID}", func(team chi.Router) {
 				team.Get("/", s.handleGetTeam)
 				team.Patch("/", s.handleUpdateTeam)
+				// The owner's, and refused while the team has a server or
+				// a deployment under way. See handleDeleteTeam.
+				team.Delete("/", s.handleDeleteTeam)
+				// Any member's own, the last owner's excepted.
+				team.Post("/leave", s.handleLeaveTeam)
 				team.Get("/members", s.handleListMembers)
 				team.Post("/members", s.handleAddMember)
 				team.Post("/invitations", s.handleInvite)
@@ -343,12 +364,22 @@ func (s *Server) routes() chi.Router {
 				team.Delete("/invitations/{invitationID}", s.handleRevokeInvitation)
 				team.Delete("/members/{userID}", s.handleRemoveMember)
 				team.Get("/audit", s.handleListAudit)
+				// The daily schedule a new database gets, for the team's
+				// databases that have none. See backup_defaults.go.
+				team.Post("/backup-policies/defaults", s.handleApplyDefaultBackupPolicies)
 				// Everything this team has, in one answer, so that leaving is
 				// a command rather than a project. See export_handlers.go.
 				team.With(refuseScopedTokens).Get("/export", s.handleExportTeam)
 
 				team.Get("/projects", s.handleListProjects)
 				team.Post("/projects", s.handleCreateProject)
+				// Every app in the team, wherever it lives, so nothing has to
+				// walk projects and environments to find them. See
+				// team_lists_handlers.go.
+				team.Get("/apps", s.handleListTeamApps)
+				// What needs somebody's attention across the team, built
+				// from what the panel has recorded. See attention_handlers.go.
+				team.Get("/attention", s.handleTeamAttention)
 
 				team.Get("/servers", s.handleListServers)
 				team.Post("/servers", s.handleAddServer)
@@ -357,6 +388,7 @@ func (s *Server) routes() chi.Router {
 				team.Post("/servers/cloud", s.handleCreateCloudServer)
 				team.Get("/cloud-providers", s.handleListCloudProviders)
 				team.Post("/cloud-providers", s.handleAddCloudProvider)
+				team.Patch("/cloud-providers/{providerID}", s.handleReplaceCloudProviderToken)
 				team.Delete("/cloud-providers/{providerID}", s.handleDeleteCloudProvider)
 				team.Post("/cloud-providers/{providerID}/test", s.handleTestCloudProvider)
 				team.Get("/cloud-providers/{providerID}/options", s.handleCloudProviderOptions)
@@ -386,11 +418,13 @@ func (s *Server) routes() chi.Router {
 				// domains' records. See dns_providers.go.
 				team.Get("/dns-providers", s.handleListDNSProviders)
 				team.Post("/dns-providers", s.handleConnectDNSProvider)
+				team.Patch("/dns-providers/{providerID}", s.handleReplaceDNSProviderCredentials)
 				team.Delete("/dns-providers/{providerID}", s.handleDeleteDNSProvider)
 				team.Post("/dns-providers/{providerID}/test", s.handleTestDNSProvider)
 				team.Get("/dns-providers/{providerID}/zones", s.handleListDNSZones)
 				team.Get("/git-sources", s.handleListGitSources)
 				team.Post("/git-sources", s.handleCreateGitSource)
+				team.Patch("/git-sources/{sourceID}", s.handleUpdateGitSource)
 				team.Delete("/git-sources/{sourceID}", s.handleDeleteGitSource)
 				team.Get("/git-sources/{sourceID}/webhook", s.handleGetGitSourceWebhook)
 				// What a connection can read, so the app form offers it.
@@ -478,6 +512,8 @@ func (s *Server) routes() chi.Router {
 				app.Put("/password", s.handleSetPassword)
 				app.Delete("/password", s.handleRemovePassword)
 				app.Post("/deploy", s.handleDeployApp)
+				// Deploy on push: ask the repository for its webhook again.
+				app.Post("/webhook", s.handleRegisterWebhook)
 				app.Put("/lock", s.handleLockDeploys)
 				app.Delete("/lock", s.handleUnlockDeploys)
 				app.Get("/template", s.handleGetAppTemplate)
@@ -632,6 +668,12 @@ func (s *Server) routes() chi.Router {
 				// The one place the panel asks anybody about new releases, and
 				// only because an administrator pressed the button.
 				admin.Post("/upgrade/check", s.handleUpgradeCheck)
+				// Where the panel answers, and moving it to a domain of its
+				// own. See panel_domain_handlers.go.
+				admin.Get("/panel/domain", s.handleGetPanelDomain)
+				admin.Post("/panel/domain", s.handleSetPanelDomain)
+				admin.Delete("/panel/domain", s.handleRemovePanelDomain)
+				admin.Post("/panel/domain/check", s.handleCheckPanelDomain)
 				admin.Get("/panel/backups", s.handleListPanelBackups)
 				admin.Post("/panel/backups", s.handleBackUpPanel)
 				admin.Post("/panel/backups/{backupID}/verify", s.handleVerifyPanelBackup)
@@ -641,6 +683,15 @@ func (s *Server) routes() chi.Router {
 				// anybody who can reach the port. Prometheus scrapes it with
 				// an API token, the same way the CLI talks to the panel.
 				admin.Get("/metrics", s.handleMetrics)
+				// The accounts on the panel. Taking access away asks only for
+				// a confirmation, on the page; giving it — an administrator,
+				// an account enabled again, a second factor taken off — asks
+				// for the password again too: in the handler for a change, on
+				// the route for a reset. See users_handlers.go.
+				admin.Get("/users", s.handleListAccounts)
+				admin.Patch("/users/{userID}", s.handleUpdateAccount)
+				admin.Delete("/users/{userID}", s.handleDeleteAccount)
+				admin.With(s.requireRecentAuth).Post("/users/{userID}/two-factor/reset", s.handleResetAccountTwoFactor)
 			})
 		})
 
@@ -944,6 +995,7 @@ func (s *Server) Background(ctx context.Context) {
 
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
+	runsafe.Go(s.log, "keeping the panel's route", func() { s.KeepPanelRoute(ctx) })
 	for {
 		select {
 		case <-ctx.Done():
@@ -953,6 +1005,7 @@ func (s *Server) Background(ctx context.Context) {
 				s.log.Debug("forgot the history of finished topics", "topics", dropped)
 			}
 			s.flood.sweep()
+			runsafe.Go(s.log, "keeping the panel's route", func() { s.KeepPanelRoute(ctx) })
 		case <-ticker.C:
 			// A panic costs one hour of housekeeping, not the housekeeping.
 			func() {

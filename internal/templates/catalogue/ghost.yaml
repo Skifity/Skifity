@@ -6,8 +6,11 @@ website: https://ghost.org
 services:
 - name: ghost
   image: ghost:5.130.6-alpine
+  needs_root: true
   port: 2368
   health_path: /
+  health_start_seconds: 600
+  health_timeout_seconds: 10
   variables:
     NODE_ENV: production
     database__client: mysql
@@ -27,4 +30,11 @@ databases:
   link_to:
   - ghost
   var_name: DATABASE_URL
-notes: Set the mail settings in Ghost's admin area, or it cannot send member emails.
+  vars:
+    host: database__connection__host
+    port: database__connection__port
+    name: database__connection__database
+    user: database__connection__user
+    password: database__connection__password
+notes: Set the mail settings in Ghost's admin area, or it cannot send member emails. The image starts
+  as root, so the environment needs the baseline pod security level.

@@ -6,6 +6,7 @@ website: https://docs.openwebui.com
 services:
 - name: open-webui
   image: ghcr.io/open-webui/open-webui:0.1
+  needs_root: true
   port: 8080
   public: true
   mem_request_mb: 128
@@ -16,3 +17,4 @@ services:
   - name: open-webui
     mount_path: /app/backend/data
     size_gb: 5
+notes: The image starts as root, so the environment needs the baseline pod security level.

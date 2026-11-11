@@ -22,11 +22,13 @@ declares `provider = "sqlite"`; the chart mounts `/app/server/db` from a PVC) �
 the README's "all data is stored on your Kubernetes etcd without an extra
 database" is out of date. Licence GPL-3.0. Pricing: none — no paid tier, cloud
 or support offering was found on kubero.dev. Maturity: v3.1.1, released
-2025-09-17, is the **latest release a year later**; the main branch has 6
-commits in 2026 (a LibreDB Studio template with its fixes and merge, and one
-dependency bump with its merge; the last on 2026-06-24) and 10 in the twelve months to 2026-09-30 and the operator has had **no commit since
-2025-09-17**. Adoption: 4,428 stars, 212 forks, 127 open issues and pull
-requests (GitHub API, 2026-09-30); its "Show HN" in August 2025 scored 3 points.
+2025-09-17, is the **latest release a year later**; on 2026-09-30 the main
+branch had 6 commits in 2026 (a LibreDB Studio template with its fixes and
+merge, and one dependency bump with its merge; the last on 2026-06-24) and 10 in
+the twelve months to that day, and one more merge of the same template's
+commits on 2026-10-13 brought 2026 to 16 (see "Since 2026-09-30"). The operator
+has had **no commit since 2025-09-17**. Adoption: 4,428 stars, 212 forks, 127
+open issues and pull requests (GitHub API, 2026-09-30); its "Show HN" in August 2025 scored 3 points.
 About 95% of the 2,206 commits on main are by one person, Gianni Carafa
 (git history, 2026-09-30). **Status in one line: feature-rich, single-maintainer,
 effectively dormant since September 2025, with an unpatched critical CVE.**
@@ -236,7 +238,7 @@ effectively dormant since September 2025, with an unpatched critical CVE.**
 
 | Date | Identifier | What | Status on 2026-09-30 |
 |---|---|---|---|
-| 2026-09-16 | **CVE-2026-92720**, CVSS 3.1 **9.1** / CVSS 4.0 **9.3** (VulnCheck, CWE-306) | "Kubero through 3.1.1 fails to apply authentication guards to the notifications API endpoints" — unauthenticated `GET/POST/PUT/DELETE /api/notifications` returns webhook secrets and Slack/Discord URLs in plaintext and lets anyone register a webhook subscribed to every event or delete alerting | **No fixed release.** Filed publicly as #753 (June 2026), unanswered; the controller at main still has no guard. OSV's record lists a fix commit that is in fact the v3.1.1 tag commit, while NVD says "through 3.1.1" — the NVD wording matches the code. |
+| 2026-09-16 | **CVE-2026-92720**, CVSS 3.1 **9.1** / CVSS 4.0 **9.3** (VulnCheck, CWE-306) | "Kubero through 3.1.1 fails to apply authentication guards to the notifications API endpoints" — unauthenticated `GET/POST/PUT/DELETE /api/notifications` returns webhook secrets and Slack/Discord URLs in plaintext and lets anyone register a webhook subscribed to every event or delete alerting | **No fixed release.** Filed publicly as #753 (June 2026), unanswered; the controller at main still has no guard. On 2026-09-30 OSV's record listed as the fix a commit that is in fact the v3.1.1 tag commit, while NVD said "through 3.1.1"; OSV changed its record on 2026-10-28 and now names that commit as the last affected one, which matches NVD and the code. |
 | 2026-08-26 | #786, no CVE | A **hardcoded JWT fallback secret** ("DO NOT USE THIS VALUE ...") in `auth.module.ts`, `jwt.strategy.ts` and `auth.service.ts`; if `JWT_SECRET` is unset anyone can mint an admin token with arbitrary role and permission claims | Open, unanswered; the string is still in main (verified by grep). |
 | 2026-08-26 | #787, no CVE | The console endpoint execs into any `podName` the caller names, without checking it belongs to the app; everything in a pipeline phase shares a namespace, so `app:write` on one app is a shell in every other app of that phase | Open, unanswered. |
 | 2026-06-24 | #755, no CVE | OAuth2 login configured per the docs is not enforced | Open, unanswered. |
@@ -434,6 +436,89 @@ Kubero had the features. It lost on everything around them:
   and loses fields (#796). Skifity's rollback restores settings from the
   deployment record; any "edit YAML" feature must merge, not replace.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. GitHub's API and pages could not be reached from the sandbox
+this update was written in, so stars, forks, issue comments and the security
+tab were not read again. The three repositories were cloned with git instead,
+and the heads of recent pull requests were fetched through `refs/pull/*`;
+kubero.dev, NVD, OSV and the Hacker News search API were read directly.
+
+### Releases and code
+
+- No release. v3.1.1 (2025-09-17) is still the newest tag of `kubero`;
+  `kubero-operator` is still at v0.2.2 (2025-09-17), and `kubero-cli`'s newest
+  commit is still f009221 (2025-09-17).
+- One merge reached main: #758, merged by Gianni Carafa on 2026-10-13. It
+  carries nine commits by an outside contributor, written between 2026-07-20 and
+  2026-10-09, all to one file, `services/libredb-studio/app.yaml`. The pinned
+  tag moved from 0.9.59 to 0.18.2, amd64 and arm64 were declared, and the
+  template stopped shipping shared defaults: `ADMIN_PASSWORD: changeme-admin`
+  and `JWT_SECRET: change-this-jwt-secret-min-32-characters` are now empty, and
+  the app generates both on first start. Main has 16 commits in 2026; apart from
+  one dependency bump and the merges, all are this template.
+- Nothing under `server/` has changed since v3.1.1 except `server/yarn.lock`
+  (diff of bcb5237, the v3.1.1 commit, against 11c5abf, main on 2026-11-08).
+- Opened and not merged by 2026-11-08: #801, a SolidPing template (2026-10-12),
+  and #802, LibreDB Studio 1.0.0 and 1.2.0 (2026-10-18 and 2026-11-01). #799 and
+  #800 from 2026-09-14 (an `.env.template` fix and the contributing guide's
+  development setup) are still not merged. Dependabot has opened no branch
+  since 2026-09-09.
+- The catalogue still has 173 templates.
+- kubero.dev's newest blog post is still the v3.0.0 announcement of 2025-08-01.
+  kubero.dev and demo.kubero.dev answered HTTP 200 on 2026-11-08. No pricing
+  appeared; the licence is still GPL-3.0.
+
+### Security
+
+- CVE-2026-92720 is still not fixed. At main on 2026-11-08,
+  `server/src/notifications/notifications.controller.ts` declares
+  `@Controller('api/notifications')` with no guard, as in v3.1.1. NVD's record
+  is "Deferred", last modified 2026-09-24. OSV changed its record on 2026-10-28:
+  the v3.1.1 commit is now `last_affected` rather than a fix, which ends the
+  disagreement this file noted.
+- The hardcoded JWT fallback ("DO NOT USE THIS VALUE ...") is still in
+  `auth.module.ts`, `auth.service.ts` and `jwt.strategy.ts` at main.
+- No new CVE: NVD's keyword search "kubero" still returns one result. Whether
+  #753, #755, #786 or #787 have had a reply could not be read from here; the
+  code shows none of them has been fixed.
+- The one security-relevant change in the period is a contributor's: the LibreDB
+  Studio template no longer gives every install the same admin password and
+  signing secret.
+
+### What users say
+
+- No Hacker News story or comment mentioned Kubero between 2026-09-30 and
+  2026-11-08 (Algolia search API, exact match). Nothing else was found.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+- Kubero shipped no feature in this period, so it adds no gap.
+- Every gap this file named is closed: component and k3s upgrades
+  (`internal/cluster/upgrades.go`, Phase 109); previews no longer copy the
+  source's linked database (Phase 76) and can have their own, seeded (Phase
+  107); members limited to some projects and a read-only role (Phases 85 and
+  86); image vulnerability scanning (`internal/vulnscan`); usage history
+  (`app_samples` and `server_samples`, Phases 95 and 99); Bitbucket
+  (`internal/gitsrc`, `505b79d`). Skifity has a `SECURITY.md` (Phase 90), which
+  "Things to deliberately not copy" said it lacked.
+- The comparison's "Written, never run" on the installer and on adding a server
+  is out of date: since October 2026 the `Cluster` workflow installs every push
+  to `main` on a fresh server, and the `Two servers` workflow adds a second one
+  through the panel (`docs/progress.md`, "A real cluster, at last").
+- Kubero's staged pipelines are matched by promoting a version from one
+  environment to the next (Phase 103). GitOps through custom resources still
+  has no counterpart; `skifity.yaml` with plan and apply (Phase 108) is the
+  answer chosen instead.
+- The LibreDB Studio fix is the lesson "a secret with a published default"
+  turning up in a template. A scan of Skifity's 375 templates on 2026-11-08
+  found none with a default on a password, secret or token, but nothing enforces
+  it: `CheckInputs` (`internal/templates/validate.go`) refuses an input that is
+  both generated and defaulted, and does not refuse a default on an input
+  marked `secret: true`. One more line there keeps it that way.
+
 ## Sources
 
 All read 2026-09-30.
@@ -470,3 +555,17 @@ All read 2026-09-30.
 - https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/ (ingress-nginx retirement, March 2026)
 - https://www.linuxlinks.com/kubero-self-hosted-paas/ and https://dev.to/shoksuno/kubero-vs-coolify-3po0 (search-result summaries only)
 - Skifity, for the comparison: `internal/cluster/components.go`, `internal/settings/settings.go`, `internal/provision/scripts.go`, `internal/api/webhook_handlers.go`, `internal/dbsvc/manager.go`, `internal/kube/namespace.go`, `internal/api/api.go`, `internal/notify/provider.go`, `internal/store/migrations/0017_app_password.sql`, `internal/mcpserver/server.go`, `docs/roadmap.md`, `docs/faq.md`, `docs/checklist.md`
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+- Git clone of https://github.com/kubero-dev/kubero (main at 11c5abf, 2026-10-13): tags, first-parent history of main, the diff of bcb5237 (v3.1.1) against main under `server/`, `services/libredb-studio/app.yaml`, `server/src/notifications/notifications.controller.ts`, `server/src/auth/*`, the count of `services/*/app.yaml`, `LICENSE`, remote branches by date
+- Pull request heads #788 to #794 and #799 to #802 through `git fetch origin refs/pull/<n>/head` (authors, dates, files changed)
+- Git clones of https://github.com/kubero-dev/kubero-operator (ea8327a, v0.2.2) and https://github.com/kubero-dev/kubero-cli (f009221)
+- https://www.kubero.dev/ and https://www.kubero.dev/blog (newest post 2025-08-01)
+- https://demo.kubero.dev (HTTP 200)
+- https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=kubero (one result: CVE-2026-92720, "Deferred", last modified 2026-09-24)
+- https://api.osv.dev/v1/vulns/CVE-2026-92720 (modified 2026-10-28; `last_affected` bcb5237)
+- https://hn.algolia.com/api/v1/search_by_date?query=kubero (exact match, since 2026-09-30: no results)
+- A web search for news of the project and its CVE in the last month (no results)
+- Not reachable from this sandbox: the GitHub REST API and github.com pages for kubero-dev (stars, issues, the security tab)
+- Skifity, for "For Skifity": `internal/cluster/upgrades.go`, `internal/vulnscan`, `internal/gitsrc`, `internal/templates/validate.go`, `internal/templates/catalogue/*.yaml`, `internal/store/migrations`, `SECURITY.md`, `docs/progress.md` (Phases 76, 85, 86, 90, 95, 99, 103, 107 to 109, and "A real cluster, at last")

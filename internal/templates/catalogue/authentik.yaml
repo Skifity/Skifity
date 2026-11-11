@@ -10,6 +10,7 @@ services:
   port: 9000
   public: true
   health_path: /-/health/live/
+  health_start_seconds: 600
   mem_request_mb: 512
   mem_limit_mb: 2048
   cpu_request_m: 100

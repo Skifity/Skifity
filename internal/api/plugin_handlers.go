@@ -559,6 +559,9 @@ type storeCatalogueResponse struct {
 	// Installed maps a plugin id to the version that is here, so the page can
 	// show "installed" and "upgrade" without a second request.
 	Installed map[string]string `json:"installed"`
+	// NotPublished is true when the address is the Skifity store and nothing
+	// is published there yet. Nothing was fetched, and the catalogue is empty.
+	NotPublished bool `json:"not_published,omitempty"`
 }
 
 // handleStoreCatalogue reads the store's index.
@@ -579,6 +582,19 @@ func (s *Server) handleStoreCatalogue(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(indexURL) == "" {
 		indexURL = pluginstore.DefaultIndexURL
+	}
+	// A store that does not exist yet is said to be one, rather than dialled
+	// and reported as unreachable with a fix about this cluster's network.
+	if indexURL == pluginstore.DefaultIndexURL && !pluginstore.DefaultPublished {
+		writeJSON(w, http.StatusOK, storeCatalogueResponse{
+			Catalogue: pluginstore.Catalogue{
+				Index: pluginstore.Index{Version: pluginstore.IndexVersion, Plugins: []pluginstore.Entry{}},
+				URL:   indexURL,
+			},
+			Installed:    map[string]string{},
+			NotPublished: true,
+		})
+		return
 	}
 	key, _, _ := s.db.GetSetting(r.Context(), settings.KeyPluginStoreKey)
 

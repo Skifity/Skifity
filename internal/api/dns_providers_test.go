@@ -298,3 +298,81 @@ func TestAProxiedDomainIsNotElsewhere(t *testing.T) {
 		t.Errorf("a proxied domain the panel cannot see behind was checked as %+v", other.DNS)
 	}
 }
+
+// Removing a connection forgets every record the panel made through it, so a
+// token that expired is replaced where it is — and only by credentials that
+// can see every zone those records are in, by the zone's own id.
+func TestADNSProvidersCredentialsAreReplacedWhereItIs(t *testing.T) {
+	h := newHarness(t)
+	memory := h.withDNS(dnsprov.Cloudflare, "example.com", "example.org")
+	const narrow = "cf-test-token-not-real-sees-example-org"
+	const rotated = "cf-test-token-not-real-rotated-00000000"
+	memory.Accept(narrow, "example.org")
+	memory.Accept(rotated, "example.com")
+	acme := h.newTenant("acme")
+	id := connectDNS(t, h, acme)
+	// The record belongs to a domain, as every record the panel keeps does.
+	// One with no domain is an orphan, and the sync the connection started in
+	// the background releases it: on a slow runner it was gone before the
+	// narrow credentials were tried, and they were taken.
+	domain := store.Domain{AppID: h.app(acme, "shop").ID, Hostname: "shop.example.com", Path: "/", TLS: true, Status: "pending"}
+	if err := h.db.CreateDomain(t.Context(), &domain); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.SaveDNSRecord(t.Context(), &store.DNSRecord{
+		TeamID: acme.team.ID, ProviderID: id, DomainID: domain.ID, ZoneID: "zone-example.com", ZoneName: "example.com",
+		Hostname: "shop.example.com", Type: "A", Content: "203.0.113.10", RemoteID: "mem1", Keep: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := h.db.DNSProviderCredentials(t.Context(), acme.team.ID, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/teams/" + acme.team.ID + "/dns-providers/" + id
+	unchanged := func(why string) {
+		t.Helper()
+		sealed, _ := h.db.DNSProviderCredentials(t.Context(), acme.team.ID, id)
+		provider, _ := h.db.GetDNSProvider(t.Context(), acme.team.ID, id)
+		if sealed != before || len(provider.Zones) != 2 {
+			t.Errorf("%s changed the connection: %d zone(s)", why, len(provider.Zones))
+		}
+	}
+
+	status, body := h.do(acme, http.MethodPatch, path, map[string]any{"token": "cf-test-token-not-real-refused-000000"})
+	if status != http.StatusBadRequest || !strings.Contains(body, "dns.provider_refused") {
+		t.Errorf("refused credentials answered %d\n%s", status, body)
+	}
+	unchanged("refused credentials")
+
+	status, body = h.do(acme, http.MethodPatch, path, map[string]any{"token": narrow})
+	if status != http.StatusBadRequest || !strings.Contains(body, "dns.zones_unseen") || !strings.Contains(body, "example.com") {
+		t.Errorf("credentials that cannot see example.com answered %d\n%s", status, body)
+	}
+	unchanged("credentials that cannot see a zone with records")
+
+	status, body = h.do(acme, http.MethodPatch, path, map[string]any{"token": rotated})
+	var replaced struct {
+		Zones []struct {
+			Name string `json:"name"`
+		} `json:"zones"`
+		Records int `json:"records"`
+	}
+	if err := json.Unmarshal([]byte(body), &replaced); status != http.StatusOK || err != nil {
+		t.Fatalf("good credentials answered %d\n%s", status, body)
+	}
+	if strings.Contains(body, rotated) || len(replaced.Zones) != 1 || replaced.Zones[0].Name != "example.com" || replaced.Records != 1 {
+		t.Errorf("the answer is %s", body)
+	}
+	sealed, _ := h.db.DNSProviderCredentials(t.Context(), acme.team.ID, id)
+	plain, err := h.keyring.Open(sealed, store.DNSProviderContext(acme.team.ID, id))
+	if err != nil || !strings.Contains(string(plain), rotated) {
+		t.Errorf("the stored credentials do not open to the new token: %v", err)
+	}
+	if provider, _ := h.db.GetDNSProvider(t.Context(), acme.team.ID, id); len(provider.Zones) != 1 {
+		t.Errorf("the zones kept are %+v", provider.Zones)
+	}
+	if events, _ := h.db.ListAudit(t.Context(), acme.team.ID, "dns_provider.credentials_replaced", "", 5); len(events) != 1 {
+		t.Errorf("%d dns_provider.credentials_replaced events", len(events))
+	}
+}

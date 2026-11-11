@@ -6,6 +6,7 @@ website: https://github.com/anse-app/anse
 services:
 - name: anse
   image: ddiu8081/anse:v1.1.11
+  needs_root: true
   port: 3000
   public: true
   mem_request_mb: 64

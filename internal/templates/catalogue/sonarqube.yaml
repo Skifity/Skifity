@@ -10,6 +10,7 @@ services:
   # The image's USER is sonarqube; the number lets the strict level check it.
   run_as_user: 1000
   port: 9000
+  health_start_seconds: 600
   public: true
   mem_request_mb: 2048
   mem_limit_mb: 4096

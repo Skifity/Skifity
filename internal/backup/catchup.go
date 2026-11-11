@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"skifity/internal/cron"
@@ -9,11 +10,6 @@ import (
 	"skifity/internal/notify"
 	"skifity/internal/store"
 )
-
-// catchUpHorizon is how far back a missed backup is looked for. A week covers
-// a panel that was down over a long weekend; a policy whose last time is
-// further back than that is weekly or rarer, and its next time is soon.
-const catchUpHorizon = 7 * 24 * time.Hour
 
 // Missed is one scheduled backup whose time passed with nothing taken.
 type Missed struct {
@@ -41,7 +37,7 @@ func (m *Manager) CatchUp(ctx context.Context, now time.Time) []Missed {
 	}
 	var missed []Missed
 	for _, policy := range policies {
-		due, ok := lastDue(policy, now)
+		due, ok := LastDue(policy, now)
 		if !ok {
 			continue
 		}
@@ -59,45 +55,45 @@ func (m *Manager) CatchUp(ctx context.Context, now time.Time) []Missed {
 	return missed
 }
 
-// lastDue is the most recent minute before now's own a policy was due in,
-// no earlier than the policy was last changed and no further back than the
-// horizon. Now's minute is the tick's, which runs it on time.
-func lastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
-	schedule, err := cron.ParseSchedule(policy.Schedule)
-	if err != nil {
-		return time.Time{}, false
-	}
-	now = now.UTC().Truncate(time.Minute)
-	floor := now.Add(-catchUpHorizon)
-	if policy.UpdatedAt.After(floor) {
-		floor = policy.UpdatedAt.UTC()
-	}
-	for at := now.Add(-time.Minute); at.After(floor); at = at.Add(-time.Minute) {
-		if schedule.Matches(at) {
-			return at, true
-		}
-	}
-	return time.Time{}, false
+// LastDue is the most recent minute before now's own a policy was due in, no
+// earlier than the policy was last changed and no further back than
+// cron.CatchUpHorizon. Now's minute is the tick's, which runs it on time. The
+// overview's list of what needs attention asks cron.LastDue the same question,
+// so a backup it calls missed is one this would have caught up on.
+func LastDue(policy store.BackupPolicy, now time.Time) (time.Time, bool) {
+	return cron.LastDue(policy.Schedule, policy.UpdatedAt, now)
 }
 
 // takeMissed starts the late backup and tells the team, with the reason when
 // it could not start.
+//
+// One that could not start is written down as failed, as the tick does, so a
+// second restart finds it and does not say the same night was missed twice.
+// Plugins hear it as the failed backup it is; channels hear it once, as
+// missed, with the reason.
 func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due time.Time) {
 	m.log.Info("taking a scheduled backup that was missed",
 		"target", policy.TargetID, "due", due.Format(time.RFC3339))
-	taken, runErr := m.Run(ctx, policy.TargetType, policy.TargetID, "scheduled")
+	taken, runErr := m.runScheduled(ctx, policy)
+	if errors.Is(runErr, errTargetGone) {
+		return
+	}
+	name := m.targetName(ctx, policy)
+	if runErr != nil && taken.ID != "" {
+		m.finish(ctx, taken, name, runErr, false)
+	}
 
-	// A stopped database's backup was skipped, not missed: there was nothing
-	// new to copy then, and there is nothing now.
+	// A stopped or busy database's backup was skipped, not missed: there was
+	// nothing new to copy then, or it was not the time to copy it.
 	if m.notifier == nil || (runErr == nil && taken.Status == "skipped") {
 		return
 	}
-	probe := store.Backup{TargetType: policy.TargetType, TargetID: policy.TargetID}
+	// The late backup itself when it started, so the link opens on it.
+	probe := store.Backup{ID: taken.ID, TargetType: policy.TargetType, TargetID: policy.TargetID}
 	teamID, projectID, err := m.ownerOfBackup(ctx, probe)
 	if err != nil || teamID == "" {
 		return
 	}
-	name := m.targetName(ctx, policy)
 	msg := notify.Message{
 		Title: "The " + due.Format("15:04 MST") + " backup of " + name + " was missed",
 		Body: "The panel was not running when it was due, on " + due.Format("Monday 2 January") +
@@ -110,7 +106,8 @@ func (m *Manager) takeMissed(ctx context.Context, policy store.BackupPolicy, due
 	if runErr != nil {
 		problem := errdoc.From(runErr)
 		msg.Body = "The panel was not running when it was due, on " + due.Format("Monday 2 January") +
-			", and it could not be taken now either: " + problem.Error() + "\n\n" + problem.Fix
+			", and it could not be taken now either: " + problem.Error()
+		msg.Fix = problem.Fix
 		msg.Level = "error"
 		msg.Fields["Reason"] = problem.Code
 	}

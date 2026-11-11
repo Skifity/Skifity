@@ -35,7 +35,8 @@ apps:
     resources: {cpu: 100, memory: 256}
     variables:
       LOG_LEVEL: info
-    secrets: [STRIPE_KEY]
+    secrets:
+      STRIPE_KEY: {optional: true}
     processes:
       worker: npm run worker
     domains: [shop.example.com]
@@ -79,12 +80,13 @@ func newBlueprintRun(t *testing.T) blueprintRun {
 	h := newHarness(t)
 	acme := h.newTenant("acme")
 	deployer := &storingDeployer{recordingDeployer: recordingDeployer{fakeDeployer: fakeDeployer{log: &recorder{}}}, db: h.db}
-	h.server.Config.Handler = New(Options{
+	h.api = New(Options{
 		DB: h.db, Keyring: h.keyring, Auth: h.auth,
 		Hub: events.NewHub(16), Logger: slog.New(slog.DiscardHandler),
 		Databases: &previewDatabaseManager{fakeDatabases: fakeDatabases{log: &recorder{}, db: h.db}, keyring: h.keyring},
 		Deployer:  deployer,
 	})
+	h.server.Config.Handler = h.api
 	t.Setenv("SKIFITY_CONFIG", filepath.Join(t.TempDir(), "none.json"))
 	t.Setenv("SKIFITY_URL", h.server.URL)
 	t.Setenv("SKIFITY_TOKEN", acme.token)
@@ -347,5 +349,118 @@ apps:
 	b.run(t, "apply")
 	if len(b.deployer.requests) != 1 {
 		t.Fatalf("%d deploys after finishing", len(b.deployer.requests))
+	}
+}
+
+// A secret the file lists is one the app needs. An app that is here is not
+// touched while it lacks one — any change would roll it out without it — and
+// an app the file makes is made and not started until it has them.
+func TestARequiredSecretStopsAnApply(t *testing.T) {
+	b := newBlueprintRun(t)
+	const web = "apps:\n  web:\n    repo: https://github.com/acme/shop\n"
+	b.write(t, web)
+	b.run(t, "apply")
+	apps, _ := b.h.db.ListApps(t.Context(), b.acme.env.ID)
+	app := apps[0]
+
+	b.write(t, web+"    instances: 2\n    secrets: [STRIPE_KEY]\n")
+	if plan := b.run(t, "plan"); !strings.Contains(plan, "! web: secret STRIPE_KEY — is required and not set") ||
+		!strings.Contains(plan, "--app "+app.ID) || !strings.Contains(plan, "apply changes nothing") {
+		t.Fatalf("the plan does not say the secret is missing:\n%s", plan)
+	}
+	out, errs, code := b.cli(t, "apply")
+	if code == 0 || !strings.Contains(errs, "blueprint.secrets_missing") || !strings.Contains(errs, "web ("+app.ID+"): STRIPE_KEY") {
+		t.Fatalf("an apply missing a required secret exited %d:\n%s\n%s", code, out, errs)
+	}
+	if now, _ := b.h.db.GetApp(t.Context(), app.ID); now.Replicas != 1 || len(b.deployer.requests) != 1 {
+		t.Fatalf("the refused apply changed the app: %d instances, %d deploys", now.Replicas, len(b.deployer.requests))
+	}
+
+	// Optional, it is said and the rest is applied.
+	b.write(t, web+"    instances: 2\n    secrets:\n      STRIPE_KEY: {optional: true}\n")
+	if applied := b.run(t, "apply"); !strings.Contains(applied, "· web: secret STRIPE_KEY — is not set") {
+		t.Fatalf("an optional secret is not said:\n%s", applied)
+	}
+	if now, _ := b.h.db.GetApp(t.Context(), app.ID); now.Replicas != 2 {
+		t.Fatalf("web runs %d", now.Replicas)
+	}
+
+	// Set, it is required and there: nothing stops the apply.
+	if status, body := b.h.do(b.acme, "PUT", "/api/apps/"+app.ID+"/variables",
+		map[string]any{"key": "STRIPE_KEY", "value": "sk_test_fake", "is_secret": true}); status >= 400 {
+		t.Fatalf("setting the secret answered %d: %s", status, body)
+	}
+	b.write(t, web+"    instances: 3\n    secrets: [STRIPE_KEY]\n")
+	b.run(t, "apply")
+	if now, _ := b.h.db.GetApp(t.Context(), app.ID); now.Replicas != 3 {
+		t.Fatalf("web runs %d", now.Replicas)
+	}
+}
+
+func TestANewAppWaitsForItsSecretsBeforeItsFirstDeploy(t *testing.T) {
+	b := newBlueprintRun(t)
+	b.write(t, "apps:\n  api:\n    repo: https://github.com/acme/api\n    secrets: [API_TOKEN]\n")
+	if plan := b.run(t, "plan"); !strings.Contains(plan, "· deploy api — its first deploy waits for API_TOKEN") {
+		t.Fatalf("the plan deploys an app without its secret:\n%s", plan)
+	}
+	out, errs, code := b.cli(t, "apply")
+	apps, _ := b.h.db.ListApps(t.Context(), b.acme.env.ID)
+	if code == 0 || len(apps) != 1 || !strings.Contains(errs, "blueprint.secrets_missing") ||
+		!strings.Contains(errs, "api ("+apps[0].ID+"): API_TOKEN") || len(b.deployer.requests) != 0 {
+		t.Fatalf("exited %d with %d apps and %d deploys:\n%s\n%s", code, len(apps), len(b.deployer.requests), out, errs)
+	}
+
+	// Once it is set, the next apply gives it the deploy it is owed.
+	if status, body := b.h.do(b.acme, "PUT", "/api/apps/"+apps[0].ID+"/variables",
+		map[string]any{"key": "API_TOKEN", "value": "tok_fake", "is_secret": true}); status >= 400 {
+		t.Fatalf("setting the secret answered %d: %s", status, body)
+	}
+	if plan := b.run(t, "plan"); !strings.Contains(plan, "+ deploy api") {
+		t.Fatalf("the plan once the secret is set:\n%s", plan)
+	}
+	b.run(t, "apply")
+	if len(b.deployer.requests) != 1 {
+		t.Fatalf("%d deploys once the secret was set", len(b.deployer.requests))
+	}
+}
+
+// What the file says of the build and of a secret manager reaches the panel:
+// a variable the build reads, made one; a secret read by reference, whose
+// value the file never has and the panel never stores.
+func TestTheBuildAndASecretManagerAreSaidInTheFile(t *testing.T) {
+	b := newBlueprintRun(t)
+	vault := b.h.withVault()
+	if status, body := b.h.do(b.acme, "POST", "/api/teams/"+b.acme.team.ID+"/secret-managers",
+		vaultConnection("company-vault", vault.URL, apiVaultToken)); status != 201 {
+		t.Fatalf("connecting Vault answered %d: %s", status, body)
+	}
+	b.write(t, `
+apps:
+  web:
+    repo: https://github.com/acme/shop
+    variables:
+      LOG_LEVEL: info
+      NEXT_PUBLIC_API: {value: https://api.example.com, build: true}
+    secrets:
+      STRIPE_KEY: {from: company-vault:shop#stripe_key}
+`)
+	b.run(t, "apply")
+	apps, _ := b.h.db.ListApps(t.Context(), b.acme.env.ID)
+	variables, _ := b.h.db.ListVariables(t.Context(), apps[0].ID)
+	got := map[string]store.Variable{}
+	for _, row := range variables {
+		got[row.Key] = row.Variable
+		if strings.Contains(row.Sealed, referencedValue) {
+			t.Fatal("a value read from the secret manager was stored")
+		}
+	}
+	if got["LOG_LEVEL"].BuildTime || !got["NEXT_PUBLIC_API"].BuildTime {
+		t.Errorf("build-time: LOG_LEVEL %v, NEXT_PUBLIC_API %v", got["LOG_LEVEL"].BuildTime, got["NEXT_PUBLIC_API"].BuildTime)
+	}
+	if ref := got["STRIPE_KEY"].Reference; ref == nil || ref.Path != "shop" || ref.Key != "stripe_key" || !got["STRIPE_KEY"].IsSecret {
+		t.Fatalf("STRIPE_KEY is %+v", got["STRIPE_KEY"])
+	}
+	if again := b.run(t, "plan"); !strings.Contains(again, "Nothing to change") {
+		t.Fatalf("a plan straight after the apply:\n%s", again)
 	}
 }

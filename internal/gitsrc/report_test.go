@@ -93,7 +93,7 @@ func TestACommitStatusIsSetOnEachHostInItsOwnWords(t *testing.T) {
 				RepoURL: "https://git.example.test/acme/site", Kind: tc.kind, BaseURL: server.URL,
 				Token: "a-token", CommitSHA: commit, State: StateFailure,
 				Context: "skifity/production/web", Description: "The build failed",
-				TargetURL: "https://panel.example.test/apps/app_1/deployments",
+				TargetURL: "https://panel.example.test/apps/app_1?tab=deployments&deployment=dep_1",
 			})
 			if err != nil {
 				t.Fatalf("the status was not set: %v", err)
@@ -116,7 +116,7 @@ func TestACommitStatusIsSetOnEachHostInItsOwnWords(t *testing.T) {
 			if write.Body[tc.nameKey] != "skifity/production/web" {
 				t.Errorf("the check was named %v", write.Body[tc.nameKey])
 			}
-			if write.Body["target_url"] != "https://panel.example.test/apps/app_1/deployments" {
+			if write.Body["target_url"] != "https://panel.example.test/apps/app_1?tab=deployments&deployment=dep_1" {
 				t.Errorf("the status links to %v", write.Body["target_url"])
 			}
 		})
@@ -307,11 +307,11 @@ func TestAnUnchangedCommentIsNotRewritten(t *testing.T) {
 func TestThePreviewCommentSaysWhatAReviewerNeeds(t *testing.T) {
 	ready := PreviewComment{
 		App: "web", State: StateSuccess, URL: "https://web-pr-12.example.test",
-		LogsURL: "https://panel.example.test/apps/app_9/deployments", Commit: commit,
+		LogsURL: "https://panel.example.test/apps/app_9?tab=deployments&deployment=dep_9", Commit: commit,
 	}.Markdown()
 	for _, want := range []string{
 		"Ready", "[web-pr-12.example.test](https://web-pr-12.example.test)",
-		"([logs](https://panel.example.test/apps/app_9/deployments))", "`0123456`",
+		"([logs](https://panel.example.test/apps/app_9?tab=deployments&deployment=dep_9))", "`0123456`",
 	} {
 		if !strings.Contains(ready, want) {
 			t.Errorf("a ready preview's comment is missing %q:\n%s", want, ready)

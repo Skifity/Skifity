@@ -7,6 +7,7 @@ website: https://github.com/seaweedfs/seaweedfs
 services:
 - name: seaweedfs-master
   image: chrislusf/seaweedfs:4.41
+  needs_root: true
   port: 8333
   public: true
   mem_request_mb: 128
@@ -19,6 +20,7 @@ services:
     size_gb: 5
 - name: seaweedfs-admin
   image: chrislusf/seaweedfs:4.41
+  needs_root: true
   port: 23646
   public: true
   mem_request_mb: 128
@@ -32,4 +34,5 @@ services:
 notes: In the original this stack shares /data between seaweedfs-admin and seaweedfs-master. Skifity gives
   each app storage of its own, so those are separate directories here. If the apps need to see the same
   files, point them at object storage — MinIO is in this catalogue — rather than a path. This template
-  installs 2 apps. They reach each other by name inside the environment, so keep them together.
+  installs 2 apps. They reach each other by name inside the environment, so keep them together. Their
+  images start as root, so the environment needs the baseline pod security level.

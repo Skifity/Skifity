@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -390,5 +391,109 @@ func TestPreflightReadsTheUDPPorts(t *testing.T) {
 	report := ParsePreflight("os_id=ubuntu\nudp_ports_in_use=8472 51820\n")
 	if len(report.UDPPortsInUse) != 2 {
 		t.Fatalf("parsed %v, want two ports", report.UDPPortsInUse)
+	}
+}
+
+// etcdOutput writes what EtcdFitnessScript prints: one line per connect, in
+// milliseconds here for readability, and the disk's line when there is one.
+func etcdOutput(peer string, connectsMs []float64, diskWrites int, diskTotalMs float64) string {
+	var b strings.Builder
+	for _, ms := range connectsMs {
+		fmt.Fprintf(&b, "etcd_peer=%s connect_us=%d\n", peer, int64(ms*1000))
+	}
+	if diskWrites > 0 {
+		fmt.Fprintf(&b, "disk_writes=%d disk_us=%d\n", diskWrites, int64(diskTotalMs*1000))
+	}
+	return b.String()
+}
+
+func etcdCodes(problems []Problem) []string {
+	var codes []string
+	for _, p := range problems {
+		codes = append(codes, p.Code)
+	}
+	return codes
+}
+
+// TestAControlPlaneIsWarnedAboutWhatEtcdIsSensitiveTo: before B5 a server was
+// made a control plane server on memory, disk space and cores alone, and etcd
+// cares about none of those as much as the round trip to the other members,
+// how much it varies, whether packets are lost on the way, and how long the
+// disk takes to sync. Each is checked, each is a warning, and none stops
+// anything.
+func TestAControlPlaneIsWarnedAboutWhatEtcdIsSensitiveTo(t *testing.T) {
+	peer := "203.0.113.10"
+	steady := func(ms float64) []float64 {
+		out := make([]float64, 20)
+		for i := range out {
+			out[i] = ms
+		}
+		return out
+	}
+	limits := DefaultEtcdThresholds()
+
+	cases := []struct {
+		name   string
+		output string
+		want   []string
+	}{
+		{"a server next door with a fast disk", etcdOutput(peer, steady(0.6), 200, 200*0.8), nil},
+		{"a server on another continent", etcdOutput(peer, steady(92), 200, 200*0.8), []string{"etcd_round_trip"}},
+		{"a link that is quick, then slow", etcdOutput(peer,
+			[]float64{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 40, 40, 40, 40, 40, 40, 2, 2, 2, 2}, 200, 200*0.8),
+			[]string{"etcd_jitter"}},
+		{"a link that drops packets", etcdOutput(peer,
+			append(steady(3)[:18], 1003, 1004), 200, 200*0.8), []string{"etcd_loss"}},
+		{"a disk on network storage", etcdOutput(peer, steady(0.6), 200, 200*24), []string{"etcd_disk_sync"}},
+		{"nothing came back at all", "", []string{"etcd_round_trip_unmeasured", "etcd_disk_sync_unmeasured"}},
+		{"refused, every time", strings.Repeat("etcd_peer="+peer+" connect_failed=yes\n", 20) + "disk_writes=200 disk_us=160000\n",
+			[]string{"etcd_round_trip_unmeasured"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := EvaluateEtcd(ParseEtcdFitness(tc.output, []string{peer}), limits)
+			if got := etcdCodes(problems); strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for _, p := range problems {
+				if p.Fatal {
+					t.Errorf("%s stops the server being added; it has to be a warning", p.Code)
+				}
+				if p.Detail == "" || p.Fix == "" {
+					t.Errorf("%s says nothing", p.Code)
+				}
+			}
+		})
+	}
+}
+
+// The numbers in a warning are the ones measured and the threshold that was
+// crossed, in the order the translations expect them.
+func TestAnEtcdWarningCarriesItsNumbers(t *testing.T) {
+	problems := EvaluateEtcd(ParseEtcdFitness(etcdOutput("203.0.113.10", []float64{80, 80, 80, 80}, 200, 200*0.5), []string{"203.0.113.10"}),
+		EtcdThresholds{RoundTripMs: 50, DiskSyncMs: 10})
+	if len(problems) != 1 {
+		t.Fatalf("got %v", etcdCodes(problems))
+	}
+	if got := strings.Join(problems[0].Args.Detail, "|"); got != "203.0.113.10|80.0|50" {
+		t.Fatalf("the warning's values are %q", got)
+	}
+	if !strings.Contains(problems[0].Detail, "averaged 80.0 ms, more than the 50 ms") {
+		t.Fatalf("the warning reads %q", problems[0].Detail)
+	}
+}
+
+// Zero turns a warning off, and a peer the script was not asked about is
+// ignored rather than invented.
+func TestEtcdThresholdsAtZeroSayNothing(t *testing.T) {
+	output := etcdOutput("203.0.113.10", []float64{500, 1500}, 200, 200*90) +
+		"etcd_peer=198.51.100.7 connect_us=900000\n"
+	problems := EvaluateEtcd(ParseEtcdFitness(output, []string{"203.0.113.10"}), EtcdThresholds{})
+	if len(problems) != 0 {
+		t.Fatalf("thresholds of zero still warned: %v", etcdCodes(problems))
+	}
+	fitness := ParseEtcdFitness(output, []string{"203.0.113.10"})
+	if len(fitness.Peers) != 1 || len(fitness.Peers[0].Micros) != 2 {
+		t.Fatalf("parsed %+v", fitness)
 	}
 }

@@ -28,3 +28,19 @@ export function parseDotEnv(text: string): Record<string, string> {
   }
   return out
 }
+
+/**
+ * One KEY=value line that parseDotEnv reads back as exactly that value, or
+ * null for a value no line can hold: one over several lines.
+ *
+ * Quoted only where the reader would otherwise change it — spaces at either
+ * end, which it trims, and a value that is itself wrapped in quotes, which it
+ * strips — so the lines read the way somebody would have written them.
+ */
+export function dotEnvLine(key: string, value: string): string | null {
+  // The two separators too: the reader's quote stripping does not reach
+  // across them.
+  if (/[\r\n\u2028\u2029]/.test(value)) return null
+  const altered = value !== value.trim() || /^(["']).*\1$/.test(value)
+  return `${key}=${altered ? `"${value}"` : value}`
+}

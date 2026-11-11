@@ -6,6 +6,7 @@ website: https://www.limesurvey.org/manual/
 services:
 - name: limesurvey
   image: adamzammit/limesurvey:7.1.1
+  needs_root: true
   port: 80
   public: true
   mem_request_mb: 128
@@ -32,3 +33,4 @@ databases:
     name: LIMESURVEY_DB_NAME
     user: LIMESURVEY_DB_USER
     password: LIMESURVEY_DB_PASSWORD
+notes: The image starts as root, so the environment needs the baseline pod security level.

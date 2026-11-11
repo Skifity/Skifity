@@ -147,6 +147,54 @@ func (s *Server) handleConnectDNSProvider(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, s.dnsProviderView(provider, 0))
 }
 
+// replaceDNSCredentialsRequest is a connection's new credentials: a token,
+// or Route 53's access key. The kind and the name stay as they are.
+type replaceDNSCredentialsRequest struct {
+	Token           string `json:"token,omitempty"`
+	AccessKeyID     string `json:"access_key_id,omitempty"`
+	SecretAccessKey string `json:"secret_access_key,omitempty"`
+}
+
+// handleReplaceDNSProviderCredentials gives a connection new credentials
+// where it is.
+//
+// Removing it and connecting again was the only way, and removing it forgets
+// every record the panel created through it: they stay at the provider, and
+// the panel no longer follows the cluster's address with them nor removes
+// them with their domains. See dnsprov.Manager.Replace for what is checked.
+func (s *Server) handleReplaceDNSProviderCredentials(w http.ResponseWriter, r *http.Request) {
+	teamID := chi.URLParam(r, "teamID")
+	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	id := chi.URLParam(r, "providerID")
+	var req replaceDNSCredentialsRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dnsConnectTimeout)
+	defer cancel()
+	provider, err := s.dns.Replace(ctx, teamID, id, dnsprov.Credentials{
+		Token: req.Token, AccessKeyID: req.AccessKeyID, SecretAccessKey: req.SecretAccessKey,
+	})
+	if err != nil {
+		writeError(w, r, dnsProviderNotFound(err, id))
+		return
+	}
+	s.audit(r, teamID, "dns_provider.credentials_replaced", "team", teamID, provider.Name+" ("+dnsprov.Title(provider.Kind)+")")
+	// A record that could not be kept while the old credentials were refused
+	// is tried again now rather than at the next sync.
+	s.syncDNSSoon(false)
+	counts, err := s.db.CountDNSRecords(r.Context(), teamID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.dnsProviderView(provider, counts[provider.ID]))
+}
+
 func (s *Server) handleDeleteDNSProvider(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	if _, err := s.authorizeTeam(r, teamID, store.RoleAdmin); err != nil {

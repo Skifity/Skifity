@@ -7,6 +7,7 @@ beta: true
 services:
 - name: bazarr
   image: linuxserver/bazarr:1.6.2
+  needs_root: true
   port: 6767
   public: true
   mem_request_mb: 128

@@ -2,11 +2,13 @@ package watch
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"skifity/internal/api"
 	"skifity/internal/notify"
+	"skifity/internal/panelpath"
 	"skifity/internal/store"
 )
 
@@ -114,6 +116,11 @@ func TestAnAlertIsSaidOnceAndSoIsItsEnd(t *testing.T) {
 	if firing := db.alerts["app_1"].Firing; len(firing) != 1 || firing[0] != "memory" {
 		t.Fatalf("firing is %v", firing)
 	}
+	// Where the limit is changed, and what to change.
+	if msg := notifier.message(t, notify.EventAppAlert); msg.Path != "/apps/app_1?tab=scaling" ||
+		!strings.Contains(msg.Fix, "memory limit") {
+		t.Errorf("the memory alert links to %q and says %q to do", msg.Path, msg.Fix)
+	}
 
 	// One minute under it after a gap — the panel restarted — is too few to
 	// say it is over.
@@ -190,5 +197,26 @@ func TestAnAlertDoesNotEndJustUnderItsThreshold(t *testing.T) {
 		store.AppSample{MemoryPeakPct: 60}, store.AppSample{MemoryPeakPct: 61}, store.AppSample{MemoryPeakPct: 62}), now)
 	if !slices.Contains(clear, "memory") {
 		t.Fatal("well under the line for three minutes did not end it")
+	}
+}
+
+// Every threshold that can go off says what to do about it, and opens the tab
+// it is done on: the limit under Scaling, the reason under Logs.
+func TestEveryAlertSaysWhatToDoAndWhere(t *testing.T) {
+	fixes := map[string]string{}
+	for _, name := range []string{"memory", "cpu", "restarts", "errors"} {
+		if !slices.Contains(panelpath.AppTabs, alertTab(name)) {
+			t.Errorf("the %s alert opens %q, which is not a tab of an app's page", name, alertTab(name))
+		}
+		fix := alertFix(name)
+		if other, said := fixes[fix]; fix == "" || said {
+			t.Errorf("the %s alert says %q to do, as %s does", name, fix, other)
+		}
+		fixes[fix] = name
+	}
+	for _, name := range []string{"disk", "memory", "cpu"} {
+		if serverAlertFix(name) == "" {
+			t.Errorf("the server's %s alert says nothing to do", name)
+		}
 	}
 }

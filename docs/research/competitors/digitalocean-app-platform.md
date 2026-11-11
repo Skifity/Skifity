@@ -2,7 +2,9 @@
 
 > **Status.** Written on 2026-09-30 against the code as it was that day. Several gaps and
 > defects named here were closed the same day; [the summary](../competitors.md#what-the-research-found-in-skifity-and-what-was-done-about-it)
-> lists them with their commits, and `docs/progress.md` has the detail.
+> lists them with their commits, and `docs/progress.md` has the detail. Brought up to date on
+> 2026-11-08: facts about App Platform that changed are corrected in place, and "Since
+> 2026-09-30" says what changed, with its sources.
 
 App Platform is DigitalOcean's managed platform-as-a-service, launched on
 2020-10-06 (HN 24698334): it builds from GitHub, GitLab, Bitbucket or a
@@ -13,7 +15,9 @@ spec**. It is for developers and small teams already on DigitalOcean who want a
 Heroku-like experience next to DO's Managed Databases and Spaces. It is a
 closed, hosted product; DigitalOcean describes it as a Kubernetes-managed
 container runtime (TechTarget, 2021), builds use Cloud Native Buildpacks or a
-Dockerfile on a builder with 8 CPUs, 15 GiB of memory and a one-hour limit,
+Dockerfile on a builder with 8 CPUs, 15 GiB of memory (20 GiB now that the XL
+build is every app's default, by the release notes on 2026-11-08) and a one-hour
+limit,
 Cloudflare's CDN sits in front of every app, and a 2021 review traced its poor
 file I/O to a gVisor sandbox (whether that is still the runtime is not
 documented). Its own state lives in DigitalOcean's control plane; what a user
@@ -39,7 +43,10 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
   push per branch; monorepos through `source_dir`.
 * Buildpacks for Node.js, Python, Go, PHP, Ruby, Hugo, .NET (2026-01-20), Rust
   (2026-02-06), Bun (2025-10-29) and static sites, or a Dockerfile; build and
-  run commands overridable; an "XL build" size in private preview (July 2025).
+  run commands overridable; an "XL build" size in private preview (July 2025),
+  which by 2026-11-08 is on for every app (8 CPUs, 20 GiB) with its `xl-build`
+  flag deprecated (release notes, "Upcoming Changes", undated; the limits page
+  still says 15 GiB).
 * `doctl app dev build` runs the **same buildpack or Dockerfile build on a
   laptop** from the app spec, and can push to DOCR for CI use.
 * No upload of a local folder without Git or a registry.
@@ -66,6 +73,10 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
   **development database** that lives inside the app.
 * Connection details arrive as **bindable variables** (see CLI, API, IaC)
   rather than copied strings.
+* Managed Databases changed underneath: from 2026-10-15 for new accounts and
+  2026-11-30 for all, PostgreSQL and MySQL Standard Edition offer no plan above
+  4 GiB of RAM and no standby or read-only nodes, which move to Advanced
+  Edition (launched 2026-09-17); existing clusters are not affected.
 
 ### Storage and backups
 
@@ -95,7 +106,10 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
 * Log forwarding to Managed OpenSearch, OpenSearch, Datadog, Better Stack (and
   Papertrail in the spec).
 * Insights: CPU and memory percentage per component, also via the monitoring
-  API.
+  API. Since 2026-10-01 App Platform's metrics also reach **DigitalOcean
+  Insights** (public preview: dashboards, PromQL, metric alerts, traces), but
+  its logs do not, so runtime logs are still kept only when forwarded; see
+  "Since 2026-09-30".
 * Alerts: deployment started/failed/cancelled/succeeded, domain failed/ok,
   failed to scale, failed job invocation; metric alerts on CPU, RAM, restart
   count, request rate and P95 duration; delivered by **email or Slack**.
@@ -105,7 +119,9 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
 
 * DigitalOcean Teams: predefined roles (owner, biller, billing viewer, member,
   modifier, resource viewer) and **custom roles** from fine-grained
-  permissions; SSO for teams with IdP attributes mapped to roles.
+  permissions; SSO for teams with IdP attributes mapped to roles, and since
+  2026-11-02 with Microsoft Entra ID and a default role for people whose IdP
+  sends no `team_role` claim.
 * Environment variables marked **Encrypt** are hidden from logs and stored in
   the app spec as ciphertext (`EV[1:…]`), so a spec can be exported and
   re-applied without exposing the value.
@@ -192,7 +208,11 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
   review"): "this feature is already available on the DigitalOcean Kubernetes
   platform", "the 2gb disk limit makes it almost unusable for any project that
   allows users to upload large files". A 2024 question, "Deploying app wipes out
-  sqlite DB", is the same complaint from the other end.
+  sqlite DB", is the same complaint from the other end. On 2026-03-10
+  DigitalOcean answered on the idea that volumes were "expected to be in released
+  (private preview) within weeks"; on 2026-11-08 the idea is still "under review"
+  and the limits page still says "App Platform does not support volumes" (missed
+  here on 2026-09-30).
 * **Slow and stuck builds.** "Deployment always takes about 20 minutes+ for a
   simple nestjs API" (2021) through "deployment is hanging for almost 1 hour on
   Build step" (2026-02-11); a Node.js buildpack failure broke builds globally
@@ -213,6 +233,10 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
 
 ## Security record
 
+* **2026-10-21 — two PHP remote code execution bugs** (CVE-2026-109618 and
+  CVE-2026-109619, public exploit code) left every PHP app on App Platform
+  affected until its owner rebuilt it on the buildpack patched on 2026-10-22.
+  "Since 2026-09-30" has the detail.
 * **No CVE or advisory specific to App Platform or `doctl` was found**
   (searched NVD/OpenCVE for "digitalocean" and the web, 2026-09-30).
   DigitalOcean-wide CVEs in the period concern other products: CVE-2026-24516
@@ -227,6 +251,10 @@ provider has 568 stars. (Read 2026-09-30; sources at the end.)
 **Works** has a test that runs on every push; **Written** has never run on a
 real cluster (ADR-0010, `docs/checklist.md`).
 
+The App Platform column was brought up to 2026-11-08. The Skifity column is as
+read on 2026-09-30, and "Since 2026-09-30" lists the rows it no longer
+describes.
+
 | Capability | App Platform | Skifity (evidence) | Verdict |
 |---|---|---|---|
 | Deploy sources and builds | GitHub, GitLab, Bitbucket, git URL, images; buildpacks or Dockerfile; local build with the same builder | GitHub, GitLab, Gitea (`internal/gitsrc/hooks.go`), images, **folder upload with no Git** (`internal/cli/up.go`, `PUT /api/apps/{app}/source`), Railpack/Nixpacks/Dockerfile in-cluster (`internal/builder`); no local build command. Written | Parity (Skifity ahead on no-Git upload) |
@@ -235,8 +263,8 @@ real cluster (ADR-0010, `docs/checklist.md`).
 | Databases and services | Attach Managed Databases or a $7 dev DB; bindable variables | Postgres (CloudNativePG, HA), MySQL, Redis in the same cluster (`internal/dbsvc`); link copies the connection string into a secret variable (`internal/dbsvc/manager.go:347-353`). Written | Parity; behind on references |
 | Storage and backups | **No volumes**; 4 GiB ephemeral disk | Volumes as PVCs, optional Longhorn replication, scheduled backups of volumes and databases to the user's S3 with restore (`internal/backup`, ADR-0012). Written | Skifity ahead |
 | Scaling and HA | Manual to 250; CPU autoscale on dedicated; request-based autoscale; scale to zero (preview, idle 10 min-24 h) | HPA on CPU/memory, scale-to-zero through KEDA with a fixed 300 s idle (`internal/kube/scaletozero.go`), scaling readiness checker (`internal/deploy/scaling.go`). Written | Parity; behind on request-based and idle setting |
-| Observability | Build/deploy logs 90 days, runtime logs only if forwarded, 4 destinations, CPU/memory insights, metric alerts | Build logs stored per build (last 20 kept, `docs/checklist.md` item 2); runtime tail from kubelet (`internal/api/stream_handlers.go`); current usage only; no forwarding, no metric alerts | Behind |
-| Security, auth, roles, SSO, audit | Team roles incl. resource viewer, custom roles, SSO; encrypted spec values | Argon2id, TOTP, OIDC SSO, 3 roles, scoped team-bound tokens, audit, sealed write-only secrets, route-walk tenant test (**Works**); per-app password in front of an app (commit `7865bc8`, Written) | Parity; behind on custom/viewer roles |
+| Observability | Build/deploy logs 90 days, runtime logs only if forwarded, 4 destinations, CPU/memory insights, metric alerts; since 2026-10-01 metrics in DigitalOcean Insights (public preview) | Build logs stored per build (last 20 kept, `docs/checklist.md` item 2); runtime tail from kubelet (`internal/api/stream_handlers.go`); current usage only; no forwarding, no metric alerts | Behind |
+| Security, auth, roles, SSO, audit | Team roles incl. resource viewer, custom roles, SSO (Entra ID and a default role since 2026-11-02); encrypted spec values | Argon2id, TOTP, OIDC SSO, 3 roles, scoped team-bound tokens, audit, sealed write-only secrets, route-walk tenant test (**Works**); per-app password in front of an app (commit `7865bc8`, Written) | Parity; behind on custom/viewer roles |
 | Preview environments | GitHub Action per PR; clone app | Built in per PR/branch, an empty database of its own per linked database, fork previews get no app secrets, cleanup on close, commit status and PR comment (`internal/api/webhook_handlers.go`, `internal/deploy/gitreport.go`). Written; one open defect, shared secrets reaching fork previews, is the P0 in `northflank.md` | Skifity ahead |
 | Templates and catalogue | Sample apps, Deploy button | 282 one-click apps (`internal/templates/catalogue`) | Skifity ahead |
 | CLI, API, IaC | App spec everywhere, `doctl`, Terraform, GitHub Action, remote MCP | API, 17-command CLI, MCP server with 15 tools, `skifity export` (**Works**), but `skifity.toml` stores only ids (`internal/cli/project.go:18-31`) and nothing reads a spec back in | Behind on config-as-code; ahead on MCP depth for deploy/debug |
@@ -422,9 +450,164 @@ written up in `northflank.md` to avoid listing them twice.)
   submit it whole; a partial or stale spec silently removes things. A Skifity
   spec should always show what applying it will change first.
 
+## Since 2026-09-30
+
+Read on 2026-11-08. App Platform's release notes and documentation (in their
+Markdown versions), DigitalOcean's release notes for every product, its blog
+feed, its status page's API and the ideas board were read; `doctl` and the
+neighbouring repositories through the GitHub search API; NVD and OSV; Hacker
+News through Algolia. The investor site refused the request (so the third
+quarter's results were not read), GitHub's repository endpoints were refused
+from this sandbox, and a web search was not available.
+
+### Product
+
+* **Little changed in App Platform itself.** The one dated release note since
+  2026-09-30 is a buildpack update on 2026-10-22: PHP 8.5.12, 8.4.27, 8.3.36,
+  8.2.35 and 8.1.34 with the fixes for CVE-2026-109618 and CVE-2026-109619,
+  reached only by forcing a rebuild, and only if `composer.json` does not pin an
+  exact version; Node.js 25 deprecated; Python 3.14 the default where no version
+  is given; and the Go buildpack accepting Go modules only.
+* The release notes' "Upcoming Changes", undated, say the XL build resources
+  (8 CPUs and 20 GiB) are now on for every app and the `xl-build` flag is
+  deprecated; the limits page still says 15 GiB. Corrected in place above.
+* Unchanged on 2026-11-08: scale to zero is still in private preview (since
+  2026-03-25), request-based autoscaling generally available, volumes absent,
+  and the runtime logs page still says to forward logs to keep them.
+* **DigitalOcean Insights** (release note 2026-10-01, announced 2026-10-12), in
+  public preview and free until general availability, when DigitalOcean expects
+  to charge for it and to fold Monitoring into it: dashboards, a metrics
+  explorer with PromQL, logs, traces, and metric alerts routed to notification
+  channels, built on OpenTelemetry, with an API. App Platform reports its
+  metrics there; logs are for DOKS ("DOKS and App Platform report their metrics
+  into the same views, along with logs for DOKS"). The docs say it is not meant
+  as the primary observability for production during the preview, shows one
+  region at a time, and keeps alert history for 30 days.
+* **Secrets Manager** (public preview, 2026-11-02): named secrets in a region,
+  the last five versions kept and any of them restorable, `doctl secrets`; 25
+  secret-months and 100,000 reads a month included, then $0.40 a secret-month
+  and $0.05 per 10,000 reads. "Updating a value in Secrets Manager does not
+  automatically rotate the credential." No App Platform integration is
+  documented on 2026-11-08.
+* Teams: single sign-on with Microsoft Entra ID, and a default role for people
+  whose provider sends no `team_role` claim (2026-11-02); each person's session
+  length, 1 hour to 30 days, and organization-wide resource limits per team
+  (2026-09-30). Corrected in place above.
+* `doctl` reached 2.0.0 by 2026-10-18 (issue #2053 names it); `doctl auth
+  login` signs in through the browser with OAuth (merged 2026-10-13) and then
+  prints a prompt to paste into a coding agent, "Fetch
+  https://docs.digitalocean.com/get-started.md and follow it" (2026-10-29). Of
+  66 pull requests merged since 2026-09-30 one concerns App Platform, a newer
+  local buildpack builder image (#2036); the rest are for agents, MicroVMs and
+  Insights. `doctl` has 3,455 stars and 193 open issues (169 on 2026-09-30);
+  `app_action` 158 stars; `mcp-digitalocean` 137; the Terraform provider 568
+  stars and 212 open issues.
+* **Where DigitalOcean is going.** The blog has had no App Platform post since
+  2026-09-30. Its releases are for agents: Managed Agents (2026-09-22), Harness
+  Runtime sandboxes, Agent Droplets (2026-10-01), and MicroVMs (public preview,
+  2026-10-09), "a container image in its own kernel" that pauses when idle and
+  resumes "with memory, files, and processes intact", with checkpoints to start
+  more from.
+* DigitalOcean ended its Open Source Credits program without an announcement:
+  projects such as Node.js were told by email that no new credits or renewals
+  would be granted (It's FOSS, 2026-10-05; Hacker News, 50 points).
+
+### Incidents and security
+
+* **2026-10-13, 04:34 to 12:15 UTC:** for 7 hours 41 minutes nobody could
+  deploy or scale an app on App Platform, in any region, because "a software
+  update ... prevented application containers from starting on newly
+  provisioned infrastructure nodes"; running apps were unaffected. The status
+  page has only a resolved notice, posted at 17:09 UTC.
+* **2026-10-03, 11:59 to 13:02 UTC:** BLR1 lost its upstream paths, the
+  redundant ones included, and App Platform there was among the products
+  degraded.
+* **PHP, CVE-2026-109618 and CVE-2026-109619**, disclosed 2026-10-21 with
+  public proof-of-concept code. DigitalOcean's post lists App Platform as
+  "Affected — Redeploy after our update": the buildpack was patched the next day,
+  and an app built from a Dockerfile or an image needed its owner to patch it.
+  Cloudways was patched for its customers; Marketplace images were delisted.
+* NVD has no CVE naming DigitalOcean published between 2026-09-30 and
+  2026-11-08, and OSV has no advisory for `doctl` or `godo`. On 2026-11-04 doctl
+  #2099 asked the maintainers for a private way to report "a security issue in
+  this project"; it was open on 2026-11-08.
+
+### What users say
+
+* Volumes: DigitalOcean's "within weeks" of 2026-03-10 had not arrived by
+  2026-11-08 (corrected in place above); the idea has 35 votes and 16 comments.
+* `doctl apps console` turns every non-ASCII character typed into it into
+  replacement characters, while the panel's console works (#2053, 2026-10-18,
+  open).
+* Hacker News had no thread about App Platform in the period.
+
+### For Skifity
+
+Checked against the code on 2026-11-08.
+
+* **Rows of "Against Skifity" that no longer describe Skifity.** Deploy
+  sources: Bitbucket Cloud too (`505b79d`). Component model: processes from one
+  build (Phase 106); still no job after a deploy or after a failed one, only a
+  preview's seed after its first deploy (`runSeed` in
+  `internal/deploy/run.go`). Domains: hostname redirects (`6308052`), still no
+  path rewrites or CDN. Databases: nine engines (`f4f9d09`); a link still copies
+  the connection string, but changing the password now gives every linked app
+  the new one in a rollout (`docs/databases.md`, "Changing the password").
+  Observability: log drains (`3731416`), three days of usage per app with
+  thresholds (Phase 95); nothing of an app's own log kept in the panel. Security:
+  a viewer role (Phase 85) and members limited to projects (Phase 86); no
+  custom roles. Previews: the whole environment, seeded (Phase 107). Templates:
+  374 catalogue files. CLI, API, IaC: `skifity.yaml` with `plan` and `apply`
+  (Phase 108), 46 MCP tools also at `/api/mcp` (Phase 87). Notifications: Slack,
+  Mattermost, ntfy, Pushover, Teams and Gotify too (Phase 88, `faeecc1`). Developer experience: a rollback says
+  what it will change (Phase 94), maintenance mode (Phase 98), v0.1.1 released;
+  still no archive.
+* **This file's gaps.** Closed: the declarative spec (Phase 108); rollback that
+  says what it changes (Phase 94; the dialog does not pause deploy-on-push, but
+  a deploy lock with a reason makes pushes be skipped, also Phase 94);
+  maintenance mode (Phase 98); cloning an environment (`c09ffc9`,
+  `internal/api/envclone_handlers.go`: new empty databases, no custom domains,
+  no deploy on push). Half closed: variables that reference rather than copy (a
+  rotated password no longer leaves a stale copy; references between apps and
+  databases still do not exist). Still open: jobs after a deploy and after a
+  failed one; archive; the idle period before scale to zero
+  (`ScaleDownAfterSeconds = 300`, `internal/kube/scaletozero.go`); and a build
+  on the laptop (no `build` command in `internal/cli/commands.go`).
+* **Already there, against this period.** What DigitalOcean told PHP users to
+  do is `skifity deploy --force`, or `force` on `POST /api/apps/{app}/deploy`,
+  which skips the build fingerprint's reuse (`internal/deploy/deployer.go`), and
+  the nightly image scan (`internal/deploy/scan.go`) reports a running image
+  with a new critical once Trivy's database has it. Variables can already be read from Vault, OpenBao,
+  Infisical, Doppler or AWS Secrets Manager and refreshed with a rollout of only
+  what changed (`internal/deploy/references.go`), which DigitalOcean's own
+  Secrets Manager does not yet do for App Platform. Volumes, which App Platform
+  still lacks.
+* **Corroborated, not new.** The pre-build advisory list holds two Next.js CVEs
+  (`internal/builder/advisories.go`), which `netlify.md` already asks to keep
+  current; the PHP pair is another reason. Traces through an OpenTelemetry
+  collector, which Insights now has, are absent in Skifity, as `railway.md`
+  found.
+* **Found on the way — the panel cannot force a rebuild.** `web/src/locales`
+  has "Rebuild from scratch" and its help text (`deploy.rebuild`,
+  `deploy.rebuildHelp`), and `DeployButton` in
+  `web/src/components/app/deployments-tab.tsx` takes a `force` prop, but no
+  component uses the strings and nothing passes `force`, so a forced rebuild
+  is the CLI's and the API's only. "Deploy now" builds a Git app's branch again,
+  but an app deployed from an upload reuses its image while the fingerprint is
+  unchanged, so from the panel a patched runtime cannot reach it. Size S; no
+  cluster.
+* **New gap — say which apps a runtime fix needs rebuilt.** When a language
+  runtime is patched, DigitalOcean can say only "force rebuild and deploy your
+  app", app by app. Skifity's scan finds the vulnerable package in each running
+  image (the app's security tab, `web/src/components/app/security-tab.tsx`),
+  but the tab offers no rebuild. A "rebuild these apps" action on the report
+  for the apps whose fixable finding is in the base layers Railpack or the
+  Dockerfile chose, one build at a time through the build queue. Size M; the
+  selection without a cluster, the builds with one.
+
 ## Sources
 
-All read 2026-09-30.
+All read 2026-09-30 unless marked.
 
 * https://www.digitalocean.com/pricing/app-platform
 * https://docs.digitalocean.com/products/app-platform/details/pricing/
@@ -470,3 +653,23 @@ All read 2026-09-30.
 * https://www.digitalocean.com/blog/regresshion-vulnerability-recommended-action
 * https://app.intigriti.com/programs/digitalocean/digitalocean
 * https://investors.digitalocean.com/news/news-details/2026/DigitalOcean-Announces-Second-Quarter-2026-Financial-Results/default.aspx
+
+Read 2026-11-08, for "Since 2026-09-30":
+
+* https://docs.digitalocean.com/products/app-platform/index.html.md (Latest Updates, with the undated Upcoming Changes) and https://docs.digitalocean.com/release-notes/app-platform/
+* https://docs.digitalocean.com/release-notes/ (every product, 2026-09-25 to 2026-11-05)
+* https://docs.digitalocean.com/products/app-platform/details/limits/index.html.md, .../how-to/scale-to-zero/index.html.md, .../how-to/view-logs/index.html.md and .../details/pricing/index.html.md (updated 2026-11-05; prices unchanged)
+* https://docs.digitalocean.com/products/insights/ (index, features, availability, limits, pricing, how-to/view-logs)
+* https://docs.digitalocean.com/products/secrets-manager/ (index, features, limits, pricing)
+* https://www.digitalocean.com/blog/rss, in particular:
+  * https://www.digitalocean.com/blog/introducing-insights (2026-10-12)
+  * https://www.digitalocean.com/blog/critical-php-rce-vulnerabilities-patch-now (2026-10-21)
+  * https://www.digitalocean.com/blog/microvms-public-preview (2026-10-09)
+  * https://www.digitalocean.com/blog/introducing-agent-droplets (2026-10-01)
+* https://status.digitalocean.com/api/v2/incidents.json (incidents from 2026-04-28 to 2026-10-27)
+* https://ideas.digitalocean.com/app-platform/p/allow-app-platform-apps-to-use-block-storage-volumes (status, votes and dated comments)
+* GitHub search API: `digitalocean/doctl`, `digitalocean/terraform-provider-digitalocean`, `digitalocean/app_action` and `digitalocean-labs/mcp-digitalocean` (stars, open issues); `repo:digitalocean/doctl` pull requests merged since 2026-09-30 (#2012, #2036, #2087 among them) and issues #2053 and #2099
+* https://services.nvd.nist.gov/rest/json/cves/2.0 (keyword "digitalocean", published 2026-09-30 to 2026-11-08: none) and https://api.osv.dev/v1/query (`github.com/digitalocean/doctl`, `github.com/digitalocean/godo`: no advisories)
+* https://hn.algolia.com/api/v1/search_by_date (stories since 2026-09-30) and https://itsfoss.com/news/digitalocean-open-source-credits-end/ (2026-10-05)
+* Not reachable from this sandbox: investors.digitalocean.com (the third quarter's results), GitHub's repository endpoints, and web search
+* Skifity: the files named under "Since 2026-09-30", read in this repository on 2026-11-08

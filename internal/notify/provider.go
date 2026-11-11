@@ -64,6 +64,10 @@ type ChannelKind struct {
 	// help: the panel has those translated, looked up by the kind and the
 	// key. A provided kind's carry the plugin author's English.
 	Fields []Field `json:"fields,omitempty"`
+	// Untested marks a built-in kind whose delivery to the real service has
+	// never been seen: what it sends is checked against a local listener,
+	// and the cluster crosscheck runs no server for it. See untested.
+	Untested bool `json:"untested,omitempty"`
 }
 
 // Field is one input in a provider's form.
@@ -130,6 +134,16 @@ var builtInForms = map[string][]Field{
 	"email": {{Key: "to", Required: true}},
 }
 
+// untested is the built-in kinds the cluster crosscheck
+// (test/cluster/verify.sh) does not deliver to, so a message reaching the
+// real service has never been seen. Each is a service on the internet that
+// needs an account. The panel says so where a channel is added, rather than
+// letting the list of kinds imply all ten are proven the same way; a test
+// holds this to what verify.sh actually does.
+var untested = map[string]bool{
+	"telegram": true, "discord": true, "slack": true, "teams": true, "pushover": true,
+}
+
 // IsBuiltIn reports whether this package can send a kind without help.
 func IsBuiltIn(kind string) bool {
 	for _, known := range BuiltIn {
@@ -166,7 +180,7 @@ func SplitProvidedKind(kind string) (pluginID, providerID string, ok bool) {
 func BuiltInKinds() []ChannelKind {
 	kinds := make([]ChannelKind, 0, len(BuiltIn))
 	for _, kind := range BuiltIn {
-		kinds = append(kinds, ChannelKind{Kind: kind, Fields: slices.Clone(builtInForms[kind])})
+		kinds = append(kinds, ChannelKind{Kind: kind, Fields: slices.Clone(builtInForms[kind]), Untested: untested[kind]})
 	}
 	return kinds
 }

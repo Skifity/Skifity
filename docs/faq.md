@@ -3,8 +3,14 @@
 ## Is this production-ready?
 
 Depends on your production. A single Skifity server runs real applications with
-HTTPS, automatic certificates, health checks, backups and rollback. Three
-control plane servers survive losing one.
+HTTPS, automatic certificates, health checks, backups and rollback.
+
+A fresh install has one control plane server, and it is a single point of
+failure: lose that server for good and you lose the cluster, however many
+workers there are. Three control plane servers survive losing one, if they are
+in one place and on fast disks; [Control plane
+servers](adding-servers.md#control-plane-servers) has what they need and how to
+get there.
 
 What it is not is a managed service: nobody is on call for you. If the server
 goes down at 3am, that is your 3am.
@@ -16,8 +22,13 @@ gets them wherever there is room, and a stateless app whose server dies is
 restarted elsewhere without you doing anything. An app with a volume is not: the
 default storage keeps a volume on the server that made it, so the app waits for
 that server to come back. For data that must survive a server, use a managed
-Postgres with more than one instance, or install Longhorn. Adding a server adds capacity; nothing
-has to be told which app lives where.
+PostgreSQL with three instances, which copies the data between servers itself
+([Databases](databases.md)). Cross-node storage (Longhorn, under **Settings →
+Components**) lets any volume move, but it costs about 700 MB of memory on
+every server, which is impractical on 2 GB servers: Kubernetes and the panel
+already use about 1 GB of the first, and on a 1 GB worker it leaves nothing for
+apps. No cluster run has installed it yet. Adding a server adds capacity;
+nothing has to be told which app lives where.
 
 The trade is that Kubernetes needs more memory than running containers on one
 machine. Skifity keeps that down by installing almost nothing until you use it.
@@ -69,7 +80,10 @@ that traffic goes through Cloudflare and your domain lives on their DNS.
 
 Otherwise: round-robin DNS is free and handles a server that is *off* but not
 one that is *sick*; managed DNS with health checks fixes that for a few dollars;
-a floating IP or a provider load balancer is the most reliable.
+a floating IP or a provider load balancer is the most reliable. **Servers**
+marks a server that is up and not taking traffic, so you know which address to
+take out of a round-robin name; the panel does not change those records itself
+([why](adding-servers.md#which-servers-are-taking-traffic)).
 
 **kube-vip and MetalLB will not work** on most VPS — they hold an address by
 answering ARP, which does not cross a router, so the nodes must share a network
@@ -136,22 +150,25 @@ take the whole thing.
 
 ## Does it support Docker Compose?
 
-It reads one. Paste the repository address when you create an app and press
+Yes, as a stack. Paste the repository address when you create an app and press
 "Check this repository": if there is a Compose file, Skifity lists the services
-it found — what each one runs, the port it listens on, the variables it sets —
-and you pick the service this app is. The form fills itself in from it, the
-variables come with it, and the app is created like any other.
+it found — what each one runs, the port it listens on, the variables it sets.
+**Create all as a stack** then makes every service an app in the environment in
+one action and deploys them, the ones a service `depends_on` first. They reach
+each other by name and port, as they do in Compose; a service the file publishes
+gets an address, and the rest are internal. Or pick one service, and the form
+fills itself in from it. [A Compose file](concepts.md#a-compose-file) has what
+carries over and how.
 
-What it does not do is import the whole file in one action. Skifity runs one
-service per app, so several services means creating the app several times, once
-per service, in the same environment. There they reach each other by name, which
-is what the links in a Compose file become. A service that is really a database
-is better created as a managed database in the panel, which gets you backups.
+A database in the file comes over as an app running its image with a disk, as
+it was in Compose, without the backups a managed database gets. For production,
+create a managed database in the panel and point the app's variable at it.
 
 Whatever cannot carry over is named rather than dropped: `privileged`,
 `cap_add`, `devices`, host networking and `extends` are listed against the
-service they came from, because a conversion that half-works is worse than one
-that clearly needs attention.
+service they came from, and so is a folder mounted from the machine that ran
+Compose, because a conversion that half-works is worse than one that clearly
+needs attention.
 
 ## Can an AI assistant use it?
 

@@ -6,6 +6,7 @@ website: https://docs.rsshub.app
 services:
 - name: rsshub
   image: diygod/rsshub:39ace33f1268e19714278d7dbc7eee2d58e985f1
+  needs_root: true
   port: 1200
   public: true
   health_path: /healthz

@@ -246,8 +246,8 @@ test("capture", async ({ page, request }) => {
   await go("/plugins", /plugins/i)
   await shoot(page, "plugins")
 
-  // The store, which on a panel that cannot reach one says so. That is the
-  // honest picture until something is published at plugins.skifity.com, and a
+  // The store, which says it is not published yet. That is the honest
+  // picture until something is published at plugins.skifity.com, and a
   // screenshot of it is better than none.
   await page.getByRole("tab", { name: /store/i }).click()
   await shoot(page, "plugins-store")
